@@ -82,7 +82,7 @@ A React TypeScript frontend with FastAPI backend for displaying ESPN Fantasy Bas
 - `GET /api/teams/{team_name}` - Individual team details
 - `GET /api/league/summary` - League overview statistics
 - `GET /api/charts/heatmap` - Heatmap visualization data
-- `GET /api/raw-data` - Raw ESPN API data
+- `GET /api/totals` - Totals and processed ESPN API data
 
 ## Development
 

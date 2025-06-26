@@ -1,11 +1,25 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.api.rankings import router as rankings_router
 from app.api.stats import router as stats_router
 from dotenv import load_dotenv
 from config import PORT
+import logging
 
 app = FastAPI(title="Fantasy League Dashboard API", version="1.0.0")
+
+# Global exception handler for unhandled server errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.error(f"Unhandled exception in {request.url}: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "message": "An unexpected error occurred. Please try again later."
+        }
+    )
 
 app.add_middleware(
     CORSMiddleware,
