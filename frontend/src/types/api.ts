@@ -64,3 +64,20 @@ export interface HeatmapData {
   data: number[][];
   normalized_data: number[][];
 }
+
+export interface TeamShotStats {
+  team: string;
+  fgm: number;
+  fga: number;
+  fg_percentage: number;
+  ftm: number;
+  fta: number;
+  ft_percentage: number;
+  gp: number;
+}
+
+export interface LeagueShotsData {
+  shots: TeamShotStats[];
+  last_updated: string;
+}
+

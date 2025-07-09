@@ -1,12 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData } from '../../types/api';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
   baseQuery: fetchBaseQuery({
     baseUrl: 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string }>({
       query: ({ sortBy, order = 'desc' } = {}) => ({
@@ -31,6 +31,10 @@ export const fantasyApi = createApi({
       query: (category) => `/rankings/category/${category}`,
       providesTags: ['Rankings'],
     }),
+    getLeagueShots: builder.query<LeagueShotsData, void>({
+      query: () => '/league/shots',
+      providesTags: ['Shots'],
+    }),
   }),
 });
 
@@ -40,4 +44,5 @@ export const {
   useGetLeagueSummaryQuery,
   useGetHeatmapDataQuery,
   useGetCategoryRankingsQuery,
+  useGetLeagueShotsQuery,
 } = fantasyApi;
