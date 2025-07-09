@@ -39,7 +39,7 @@ const Dashboard = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Top 5 Teams</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Top 5 Teams (average)</h2>
         <div className="space-y-3">
           {topTeams.map((team, index) => (
             <div
