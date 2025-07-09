@@ -3,7 +3,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from app.models.fantasy import (
     ShotChartStats, RawAverageStats, RankingStats,
-    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData
+    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, 
+    TeamShotStats, LeagueShotsData
 )
 from app.utils.constants import RANKING_CATEGORIES
 from app.services.stats_calculator import StatsCalculator
@@ -149,8 +150,8 @@ class ResponseBuilder:
                 .sort_values(category, ascending=False)
                 .to_dict('records'))
     
-    def build_totals_response(self, totals_df: pd.DataFrame, averages_df: pd.DataFrame,
-                            rankings_df: pd.DataFrame, espn_timestamp: Optional[int] = None) -> Dict:
+    def build_totals_response(self, totals_df: Optional[pd.DataFrame], averages_df: Optional[pd.DataFrame],
+                            rankings_df: Optional[pd.DataFrame], espn_timestamp: Optional[int] = None) -> Dict:
         """
         Build totals/debug response with all processed data
         Args:
@@ -162,28 +163,28 @@ class ResponseBuilder:
             Dictionary with all processed data
         """
         return {
-            'totals_data': totals_df.reset_index().to_dict('records'),
-            'averages_data': averages_df.reset_index().to_dict('records'),
-            'ranking_data': rankings_df.to_dict('records'),
+            'totals_data': totals_df.reset_index().to_dict('records') if totals_df is not None else [],
+            'averages_data': averages_df.reset_index().to_dict('records') if averages_df is not None else [],
+            'ranking_data': rankings_df.to_dict('records') if rankings_df is not None else [],
             'last_updated': datetime.now().isoformat(),
-            'total_teams': len(totals_df),
+            'total_teams': len(totals_df) if totals_df is not None else 0,
             'espn_timestamp': espn_timestamp
         }
     
     def _create_ranking_stats(self, row: pd.Series) -> RankingStats:
         """Create RankingStats object from dataframe row"""
         return RankingStats(
-            team=row['Team'],
-            fg_percentage=float(row.get('FG%', 0.0)),
-            ft_percentage=float(row.get('FT%', 0.0)),
-            three_pm=float(row.get('3PM', 0.0)),
-            ast=float(row.get('AST', 0.0)),
-            reb=float(row.get('REB', 0.0)),
-            stl=float(row.get('STL', 0.0)),
-            blk=float(row.get('BLK', 0.0)),
-            pts=float(row.get('PTS', 0.0)),
-            total_points=float(row.get('Total_Points', 0.0)),
-            rank=int(row.get('Rank', 0))
+            team=str(row['Team']),
+            fg_percentage=float(row['FG%']),
+            ft_percentage=float(row['FT%']),
+            three_pm=float(row['3PM']),
+            ast=float(row['AST']),
+            reb=float(row['REB']),
+            stl=float(row['STL']),
+            blk=float(row['BLK']),
+            pts=float(row['PTS']),
+            total_points=float(row['Total_Points']),
+            rank=int(row['Rank'])
         )
     
     def _create_ranking_stats_from_averages(self, team_name: str, team_data: pd.Series) -> RankingStats:
@@ -227,4 +228,30 @@ class ResponseBuilder:
             blk=float(avg_data['BLK']),
             pts=float(avg_data['PTS']),
             gp=int(avg_data['GP'])
+        )
+    
+    def build_league_shots_response(self, totals_df: pd.DataFrame) -> LeagueShotsData:
+        """
+        Build LeagueShotsData response from totals DataFrame
+        Args:
+            totals_df: DataFrame with total stats
+        Returns:
+            LeagueShotsData response object
+        """
+        shots = []
+        for team_name, totals_data in totals_df.iterrows():
+            shots.append(TeamShotStats(
+                team=str(team_name),
+                fgm=int(totals_data['FGM']),
+                fga=int(totals_data['FGA']),
+                fg_percentage=float(totals_data['FG%']),
+                ftm=int(totals_data['FTM']),
+                fta=int(totals_data['FTA']),
+                ft_percentage=float(totals_data['FT%']),
+                gp=int(totals_data['GP'])
+            ))
+        
+        return LeagueShotsData(
+            shots=shots,
+            last_updated=datetime.now()
         )

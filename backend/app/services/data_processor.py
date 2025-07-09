@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, Dict, List
 import pandas as pd
 from app.models.fantasy import (
-    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData
+    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, LeagueShotsData
 )
 from app.services.cache_manager import CacheManager
 from app.services.espn_fetcher import ESPNFetcher
@@ -144,6 +144,19 @@ class DataProcessor:
         rankings_df = self._get_rankings_df(espn_timestamp, espn_data)
         
         if totals_df is None:
+            # Since totals_df is None, we can't return any meaningful data
             return {}
         
         return self.response_builder.build_totals_response(totals_df, averages_df, rankings_df, espn_timestamp)
+    
+    def get_league_shots_data(self) -> LeagueShotsData:
+        """Get league-wide shooting statistics with caching"""
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        if espn_data is None or espn_timestamp is None:
+            return LeagueShotsData(shots=[], last_updated=datetime.now())
+        
+        totals_df = self._get_totals_df(espn_timestamp, espn_data)
+        if totals_df is None:
+            return LeagueShotsData(shots=[], last_updated=datetime.now())
+        
+        return self.response_builder.build_league_shots_response(totals_df)
