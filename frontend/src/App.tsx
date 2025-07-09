@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Rankings from './pages/Rankings'
+import Shots from './pages/Shots'
 import TeamDetail from './pages/TeamDetail'
 import Analytics from './pages/Analytics'
 
@@ -12,6 +13,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="rankings" element={<Rankings />} />
+          <Route path="shots" element={<Shots />} />
           <Route path="team/:teamName" element={<TeamDetail />} />
           <Route path="analytics" element={<Analytics />} />
         </Route>

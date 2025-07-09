@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.models.fantasy import TeamDetail, LeagueSummary, HeatmapData
+from app.models.fantasy import TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData
 from app.services.data_processor import DataProcessor
 from typing import Annotated
 from fastapi import Depends
@@ -32,6 +32,13 @@ async def get_heatmap_data(
 ):
     """Get data for heatmap visualization"""
     return data_processor.get_heatmap_data()
+
+@router.get("/league/shots", response_model=LeagueShotsData)
+async def get_league_shots(
+    data_processor: DataProcessorDep
+):
+    """Get league-wide shooting statistics"""
+    return data_processor.get_league_shots_data()
 
 @router.get("/totals")
 async def get_totals_data(

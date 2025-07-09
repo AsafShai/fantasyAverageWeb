@@ -53,7 +53,7 @@ class LeagueSummary(BaseModel):
     total_teams: int
     total_games_played: int
     category_leaders: Dict[str, RankingStats]
-    league_averages: RawAverageStats
+    league_averages: Optional[RawAverageStats] = None
     last_updated: datetime
 
 class HeatmapData(BaseModel):
@@ -61,3 +61,17 @@ class HeatmapData(BaseModel):
     categories: List[str]
     data: List[List[float]]
     normalized_data: List[List[float]]
+
+class TeamShotStats(BaseModel):
+    team: str
+    fgm: int  # Field Goals Made
+    fga: int  # Field Goals Attempted
+    fg_percentage: float  # Field Goal Percentage
+    ftm: int  # Free Throws Made
+    fta: int  # Free Throws Attempted
+    ft_percentage: float  # Free Throw Percentage
+    gp: int  # Games Played
+
+class LeagueShotsData(BaseModel):
+    shots: List[TeamShotStats]
+    last_updated: datetime
