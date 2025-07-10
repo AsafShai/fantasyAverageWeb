@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, Dict, List
 import pandas as pd
 from app.models.fantasy import (
-    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, LeagueShotsData
+    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers
 )
 from app.services.cache_manager import CacheManager
 from app.services.espn_fetcher import ESPNFetcher
@@ -34,9 +34,16 @@ class DataProcessor:
         """Get totals DataFrame - simple single responsibility"""
         return self.cache_manager.get_totals(
             espn_timestamp, 
-            lambda: self.data_transformer.raw_to_totals_df(espn_data)
+            lambda: self.data_transformer.raw_standings_to_totals_df(espn_data)
         )
     
+    def _get_players_df(self, espn_timestamp: int, espn_data: Dict, teams_mapping: Dict) -> Optional[pd.DataFrame]:
+        """Get players DataFrame - simple single responsibility"""
+        return self.cache_manager.get_players(
+            espn_timestamp, 
+            lambda: self.data_transformer.raw_players_to_df(espn_data, teams_mapping)
+        )
+
     def _get_averages_df(self, espn_timestamp: int, espn_data: Dict) -> Optional[pd.DataFrame]:
         """Get averages DataFrame - calculates totals if needed"""
         def calculate_averages():
@@ -59,7 +66,7 @@ class DataProcessor:
     
     def get_rankings(self, sort_by: Optional[str] = None, order: str = "desc") -> LeagueRankings:
         """Get league rankings with caching"""
-        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
         if espn_data is None or espn_timestamp is None:
             return LeagueRankings(rankings=[], categories=[], last_updated=datetime.now())
         
@@ -71,7 +78,7 @@ class DataProcessor:
     
     def get_category_rankings(self, category: str) -> List[Dict]:
         """Get rankings for a specific category with caching"""
-        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
         if espn_data is None or espn_timestamp is None:
             return []
         
@@ -83,7 +90,7 @@ class DataProcessor:
     
     def get_team_detail(self, team_name: str) -> TeamDetail:
         """Get detailed team statistics with caching"""
-        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
         if espn_data is None or espn_timestamp is None:
             raise ValueError("Unable to fetch ESPN data")
         
@@ -98,7 +105,7 @@ class DataProcessor:
     
     def get_league_summary(self) -> LeagueSummary:
         """Get league summary statistics with caching"""
-        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
         if espn_data is None or espn_timestamp is None:
             return LeagueSummary(
                 total_teams=0,
@@ -122,7 +129,7 @@ class DataProcessor:
     
     def get_heatmap_data(self) -> HeatmapData:
         """Get data formatted for heatmap visualization with caching"""
-        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
         if espn_data is None or espn_timestamp is None:
             return HeatmapData(teams=[], categories=[], data=[], normalized_data=[])
         
@@ -134,7 +141,7 @@ class DataProcessor:
     
     def get_totals_data(self) -> Dict:
         """Get totals and processed data for debugging purposes with caching"""
-        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
         if espn_data is None or espn_timestamp is None:
             return {}
         
@@ -151,7 +158,7 @@ class DataProcessor:
     
     def get_league_shots_data(self) -> LeagueShotsData:
         """Get league-wide shooting statistics with caching"""
-        espn_data, espn_timestamp = self.espn_fetcher.fetch_data_with_timestamp()
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
         if espn_data is None or espn_timestamp is None:
             return LeagueShotsData(shots=[], last_updated=datetime.now())
         
@@ -160,3 +167,40 @@ class DataProcessor:
             return LeagueShotsData(shots=[], last_updated=datetime.now())
         
         return self.response_builder.build_league_shots_response(totals_df)
+
+
+    def get_teams_list(self) -> List[str]:
+        """Get list of teams with caching"""
+        espn_data, espn_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
+        if espn_data is None or espn_timestamp is None:
+            return []
+        
+        totals_df = self._get_totals_df(espn_timestamp, espn_data)
+        if totals_df is None:
+            return []
+        
+        return totals_df.index.tolist()
+    
+    def get_team_players(self, team_name: str) -> TeamPlayers:
+        """Get list of players for a specific team with caching"""
+        espn_players_data, espn_players_timestamp = self.espn_fetcher.fetch_players_data_with_timestamp()
+        if espn_players_data is None or espn_players_timestamp is None:
+            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
+        
+
+        espn_standings_data, espn_standings_timestamp = self.espn_fetcher.fetch_standings_data_with_timestamp()
+        if espn_standings_data is None or espn_standings_timestamp is None:
+            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
+        
+        totals_df = self._get_totals_df(espn_standings_timestamp, espn_standings_data)
+        if totals_df is None:
+            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
+
+        teams_mapping = {k + 1: v for k, v in enumerate(totals_df.index)}
+        players_df = self._get_players_df(espn_players_timestamp, espn_players_data, teams_mapping)
+        if players_df is None:
+            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
+
+
+        team_players = players_df[players_df['Team'] == team_name]
+        return self.response_builder.build_team_players_response(team_name, team_players)        

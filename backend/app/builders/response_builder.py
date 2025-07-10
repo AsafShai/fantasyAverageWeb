@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 from app.models.fantasy import (
     ShotChartStats, RawAverageStats, RankingStats,
     TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, 
-    TeamShotStats, LeagueShotsData
+    TeamShotStats, LeagueShotsData, TeamPlayers, Player, PlayerStats
 )
 from app.utils.constants import RANKING_CATEGORIES
 from app.services.stats_calculator import StatsCalculator
@@ -255,3 +255,36 @@ class ResponseBuilder:
             shots=shots,
             last_updated=datetime.now()
         )
+    
+    def build_team_players_response(self, team_name: str, team_players: pd.Series) -> TeamPlayers:
+        """
+        Build TeamPlayers response from players DataFrame
+        Args:
+            team_name: Name of the team
+            players_df: DataFrame with player stats
+        Returns:
+            TeamPlayers response object
+        """
+        players = []
+        for _, row in team_players.iterrows():
+            players.append(Player(
+                player_name=str(row['Name']),
+                pro_team=str(row['Pro Team']),
+                positions=str(row['Positions']).split(', '),
+                stats=PlayerStats(
+                    pts=float(row['PTS']),
+                    reb=float(row['REB']),
+                    ast=float(row['AST']),
+                    stl=float(row['STL']),
+                    blk=float(row['BLK']),
+                    fgm=float(row['FGM']),
+                    fga=float(row['FGA']),
+                    ftm=float(row['FTM']),
+                    fta=float(row['FTA']),
+                    fg_percentage=float(row['FG%']),
+                    ft_percentage=float(row['FT%']),
+                    three_pm=float(row['3PM']),
+                    gp=int(row['GP'])
+                )
+            ))
+        return TeamPlayers(team=team_name, players=players, last_updated=datetime.now())
