@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 from typing import Dict, Optional
 from app.utils.constants import (
     ESPN_COLUMN_MAP, ALL_CATEGORIES, PER_GAME_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP
@@ -7,6 +8,9 @@ from app.utils.constants import (
 
 class DataTransformer:
     """Transforms raw ESPN data into clean pandas DataFrames"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
     
     def raw_players_to_df(self, espn_players_data: Dict, teams_mapping: Dict) -> Optional[pd.DataFrame]:
         """
@@ -29,7 +33,7 @@ class DataTransformer:
             df = df.reindex(columns=['Name', 'Team', 'Pro Team', 'Positions'] + stat_columns)
             return df
         except Exception as e:
-            print(f"Error transforming ESPN data to totals DataFrame: {e}")
+            self.logger.error(f"Error transforming ESPN players data to DataFrame: {e}")
             return None
 
     def _get_player_stats(self, entry: Dict, team_id: int) -> Dict:
@@ -76,7 +80,7 @@ class DataTransformer:
             return df
             
         except Exception as e:
-            print(f"Error transforming ESPN data to totals DataFrame: {e}")
+            self.logger.error(f"Error transforming ESPN standings data to totals DataFrame: {e}")
             return None
     
     def totals_to_averages_df(self, totals_df: pd.DataFrame) -> pd.DataFrame:

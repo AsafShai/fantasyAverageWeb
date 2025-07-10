@@ -150,27 +150,6 @@ class ResponseBuilder:
                 .sort_values(category, ascending=False)
                 .to_dict('records'))
     
-    def build_totals_response(self, totals_df: Optional[pd.DataFrame], averages_df: Optional[pd.DataFrame],
-                            rankings_df: Optional[pd.DataFrame], espn_timestamp: Optional[int] = None) -> Dict:
-        """
-        Build totals/debug response with all processed data
-        Args:
-            totals_df: DataFrame with total stats
-            averages_df: DataFrame with averages
-            rankings_df: DataFrame with rankings
-            espn_timestamp: ESPN timestamp
-        Returns:
-            Dictionary with all processed data
-        """
-        return {
-            'totals_data': totals_df.reset_index().to_dict('records') if totals_df is not None else [],
-            'averages_data': averages_df.reset_index().to_dict('records') if averages_df is not None else [],
-            'ranking_data': rankings_df.to_dict('records') if rankings_df is not None else [],
-            'last_updated': datetime.now().isoformat(),
-            'total_teams': len(totals_df) if totals_df is not None else 0,
-            'espn_timestamp': espn_timestamp
-        }
-    
     def _create_ranking_stats(self, row: pd.Series) -> RankingStats:
         """Create RankingStats object from dataframe row"""
         return RankingStats(

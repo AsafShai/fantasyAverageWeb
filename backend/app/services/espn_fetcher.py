@@ -1,4 +1,6 @@
 import requests
+import logging
+import time
 from typing import Optional, Dict, Tuple
 from config import ESPN_STANDINGS_URL, ESPN_PLAYERS_URL
 
@@ -9,6 +11,7 @@ class ESPNFetcher:
     def __init__(self):
         self._espn_standings_url = ESPN_STANDINGS_URL
         self._espn_players_url = ESPN_PLAYERS_URL
+        self.logger = logging.getLogger(__name__)
     
 
     def fetch_standings_data_with_timestamp(self) -> Tuple[Optional[Dict], Optional[int]]:
@@ -23,7 +26,7 @@ class ESPNFetcher:
             return self.fetch_data_with_timestamp(self._espn_standings_url)
         
         except requests.RequestException as e:
-            print(f"Error fetching standings data from ESPN API: {e}")
+            self.logger.error(f"Error fetching standings data from ESPN API: {e}")
             return None, None
 
 
@@ -39,7 +42,7 @@ class ESPNFetcher:
             return self.fetch_data_with_timestamp(self._espn_players_url)
         
         except requests.RequestException as e:
-            print(f"Error fetching players data from ESPN API: {e}")
+            self.logger.error(f"Error fetching players data from ESPN API: {e}")
             return None, None
 
 
@@ -62,11 +65,11 @@ class ESPNFetcher:
             return api_data, timestamp
             
         except requests.RequestException as e:
-            print(f"Error fetching data from ESPN API: {e}")
+            self.logger.error(f"Error fetching data from ESPN API: {e}")
             return None, None
         except (KeyError, ValueError) as e:
-            print(f"Error parsing ESPN API response: {e}")
+            self.logger.error(f"Error parsing ESPN API response: {e}")
             return None, None
         except Exception as e:
-            print(f"Unexpected error fetching ESPN data: {e}")
+            self.logger.error(f"Unexpected error fetching ESPN data: {e}")
             return None, None

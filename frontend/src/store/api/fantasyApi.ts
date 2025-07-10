@@ -24,7 +24,7 @@ export const fantasyApi = createApi({
       providesTags: ['League'],
     }),
     getHeatmapData: builder.query<HeatmapData, void>({
-      query: () => '/charts/heatmap',
+      query: () => '/analytics/heatmap',
       providesTags: ['Heatmap'],
     }),
     getCategoryRankings: builder.query<any, string>({
