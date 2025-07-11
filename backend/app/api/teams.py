@@ -50,6 +50,9 @@ async def get_team_players(
     """Get list of players for a specific team"""
     if not team_name or len(team_name.strip()) == 0:
         raise HTTPException(status_code=400, detail="Team name cannot be empty")
+    list_teams = team_service.get_teams_list()
+    if list_teams and team_name.strip() not in list_teams:
+        raise HTTPException(status_code=404, detail="Team not found")
     
     try: 
         return team_service.get_team_players(team_name.strip())

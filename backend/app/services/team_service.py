@@ -53,10 +53,13 @@ class TeamService:
         if totals_df is None:
             return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
 
+    
+        if team_name not in totals_df.index:
+            raise ValueError(f"Team {team_name} not found")
+        
         teams_mapping = {k + 1: v for k, v in enumerate(totals_df.index)}
         players_df = self.data_provider.get_players_df(espn_players_timestamp, espn_players_data, teams_mapping)
         if players_df is None:
             return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
-
         team_players = players_df[players_df['Team'] == team_name]
         return self.response_builder.build_team_players_response(team_name, team_players)

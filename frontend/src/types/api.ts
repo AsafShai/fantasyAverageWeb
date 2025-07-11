@@ -81,3 +81,32 @@ export interface LeagueShotsData {
   last_updated: string;
 }
 
+export interface PlayerStats {
+  pts: number;
+  reb: number;
+  ast: number;
+  stl: number;
+  blk: number;
+  fgm: number;
+  fga: number;
+  ftm: number;
+  fta: number;
+  fg_percentage: number;
+  ft_percentage: number;
+  three_pm: number;
+  gp: number;
+}
+
+export interface Player {
+  player_name: string;
+  pro_team: string;
+  positions: string[];
+  stats: PlayerStats;
+}
+
+export interface TeamPlayers {
+  team: string;
+  players: Player[];
+  last_updated: string;
+}
+

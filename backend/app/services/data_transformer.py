@@ -72,7 +72,7 @@ class DataTransformer:
         """
         try:
             # Extract team data from ESPN response
-            teams_data = {team['name']: team['valuesByStat'] for team in espn_standings_data['teams']}
+            teams_data = {team['name'].strip(): team['valuesByStat'] for team in espn_standings_data['teams']}
             df = pd.DataFrame(teams_data).transpose()
             
             # Apply transformations
