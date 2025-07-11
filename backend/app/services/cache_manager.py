@@ -23,6 +23,7 @@ class CacheManager:
             self.totals_cache: Dict = {'timestamp': None, 'data': None}
             self.averages_cache: Dict = {'timestamp': None, 'data': None}
             self.rankings_cache: Dict = {'timestamp': None, 'data': None}
+            self.players_cache: Dict = {'timestamp': None, 'data': None}
             self._initialized = True
     
     def get_totals(self, current_timestamp: int, calculator_func) -> Optional[pd.DataFrame]:
@@ -70,19 +71,37 @@ class CacheManager:
             }
         return rankings_df
     
+    def get_players(self, current_timestamp: int, calculator_func) -> Optional[pd.DataFrame]:
+    
+        if (self.players_cache['timestamp'] == current_timestamp and 
+            self.players_cache['data'] is not None):
+            return self.players_cache['data']
+        
+        # Calculate fresh and cache
+        players_df = calculator_func()
+        if players_df is not None:
+            self.players_cache = {
+                'timestamp': current_timestamp,
+                'data': players_df.copy()
+            }
+        return players_df
+    
     def invalidate_cache(self):
         """Clear all cached data"""
         self.totals_cache = {'timestamp': None, 'data': None}
         self.averages_cache = {'timestamp': None, 'data': None}
         self.rankings_cache = {'timestamp': None, 'data': None}
-    
+        self.players_cache = {'timestamp': None, 'data': None}
+
     def get_cache_info(self) -> dict:
         """Get cache status information"""
         return {
             'totals_timestamp': self.totals_cache['timestamp'],
             'averages_timestamp': self.averages_cache['timestamp'],
             'rankings_timestamp': self.rankings_cache['timestamp'],
+            'players_timestamp': self.players_cache['timestamp'],
             'has_totals': self.totals_cache['data'] is not None,
             'has_averages': self.averages_cache['data'] is not None,
-            'has_rankings': self.rankings_cache['data'] is not None
+            'has_rankings': self.rankings_cache['data'] is not None,
+            'has_players': self.players_cache['data'] is not None
         }

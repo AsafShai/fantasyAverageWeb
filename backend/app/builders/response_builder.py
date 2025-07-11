@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 from app.models.fantasy import (
     ShotChartStats, RawAverageStats, RankingStats,
     TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, 
-    TeamShotStats, LeagueShotsData
+    TeamShotStats, LeagueShotsData, TeamPlayers, Player, PlayerStats
 )
 from app.utils.constants import RANKING_CATEGORIES
 from app.services.stats_calculator import StatsCalculator
@@ -150,27 +150,6 @@ class ResponseBuilder:
                 .sort_values(category, ascending=False)
                 .to_dict('records'))
     
-    def build_totals_response(self, totals_df: Optional[pd.DataFrame], averages_df: Optional[pd.DataFrame],
-                            rankings_df: Optional[pd.DataFrame], espn_timestamp: Optional[int] = None) -> Dict:
-        """
-        Build totals/debug response with all processed data
-        Args:
-            totals_df: DataFrame with total stats
-            averages_df: DataFrame with averages
-            rankings_df: DataFrame with rankings
-            espn_timestamp: ESPN timestamp
-        Returns:
-            Dictionary with all processed data
-        """
-        return {
-            'totals_data': totals_df.reset_index().to_dict('records') if totals_df is not None else [],
-            'averages_data': averages_df.reset_index().to_dict('records') if averages_df is not None else [],
-            'ranking_data': rankings_df.to_dict('records') if rankings_df is not None else [],
-            'last_updated': datetime.now().isoformat(),
-            'total_teams': len(totals_df) if totals_df is not None else 0,
-            'espn_timestamp': espn_timestamp
-        }
-    
     def _create_ranking_stats(self, row: pd.Series) -> RankingStats:
         """Create RankingStats object from dataframe row"""
         return RankingStats(
@@ -255,3 +234,36 @@ class ResponseBuilder:
             shots=shots,
             last_updated=datetime.now()
         )
+    
+    def build_team_players_response(self, team_name: str, team_players: pd.Series) -> TeamPlayers:
+        """
+        Build TeamPlayers response from players DataFrame
+        Args:
+            team_name: Name of the team
+            players_df: DataFrame with player stats
+        Returns:
+            TeamPlayers response object
+        """
+        players = []
+        for _, row in team_players.iterrows():
+            players.append(Player(
+                player_name=str(row['Name']),
+                pro_team=str(row['Pro Team']),
+                positions=str(row['Positions']).split(', '),
+                stats=PlayerStats(
+                    pts=float(row['PTS']),
+                    reb=float(row['REB']),
+                    ast=float(row['AST']),
+                    stl=float(row['STL']),
+                    blk=float(row['BLK']),
+                    fgm=float(row['FGM']),
+                    fga=float(row['FGA']),
+                    ftm=float(row['FTM']),
+                    fta=float(row['FTA']),
+                    fg_percentage=float(row['FG%']),
+                    ft_percentage=float(row['FT%']),
+                    three_pm=float(row['3PM']),
+                    gp=int(row['GP'])
+                )
+            ))
+        return TeamPlayers(team=team_name, players=players, last_updated=datetime.now())

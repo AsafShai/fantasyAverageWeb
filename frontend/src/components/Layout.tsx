@@ -8,6 +8,7 @@ const Layout = () => {
     { path: '/rankings', label: 'Rankings', icon: '🏆' },
     { path: '/shots', label: 'Shots', icon: '🎯' },
     { path: '/analytics', label: 'Analytics', icon: '📈' },
+    { path: '/trade', label: 'Trade', icon: '🔄' },
   ]
 
   return (

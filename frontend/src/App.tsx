@@ -5,6 +5,7 @@ import Rankings from './pages/Rankings'
 import Shots from './pages/Shots'
 import TeamDetail from './pages/TeamDetail'
 import Analytics from './pages/Analytics'
+import { Trade } from './pages/Trade'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="shots" element={<Shots />} />
           <Route path="team/:teamName" element={<TeamDetail />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="trade" element={<Trade />} />
         </Route>
       </Routes>
     </div>
