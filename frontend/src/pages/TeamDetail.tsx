@@ -4,20 +4,21 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 
 const TeamDetail = () => {
-  const { teamName } = useParams<{ teamName: string }>()
-  const { data: team, error, isLoading } = useGetTeamDetailQuery(teamName!)
+  const { teamId } = useParams<{ teamId: string }>()
+  const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
+  const { data: team_detail, error, isLoading } = useGetTeamDetailQuery(teamIdNumber)
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message="Failed to load team details" />
-  if (!team) return <ErrorMessage message="Team not found" />
+  if (!team_detail) return <ErrorMessage message="Team not found" />
 
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">{team.team}</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">{team_detail.team.team_name}</h1>
         <div className="flex items-center space-x-4 mb-10">
           <span className="text-gray-600">Total Games Played:</span>
-          <span className="font-semibold">{team.raw_averages.gp}</span>
+          <span className="font-semibold">{team_detail.raw_averages.gp}</span>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -26,11 +27,11 @@ const TeamDetail = () => {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span>Field Goals:</span>
-                <span>{team.shot_chart.fgm}/{team.shot_chart.fga} ({(team.shot_chart.fg_percentage * 100).toFixed(4)}%)</span>
+                <span>{team_detail.shot_chart.fgm}/{team_detail.shot_chart.fga} ({(team_detail.shot_chart.fg_percentage * 100).toFixed(4)}%)</span>
               </div>
               <div className="flex justify-between">
                 <span>Free Throws:</span>
-                <span>{team.shot_chart.ftm}/{team.shot_chart.fta} ({(team.shot_chart.ft_percentage * 100).toFixed(4)}%)</span>
+                <span>{team_detail.shot_chart.ftm}/{team_detail.shot_chart.fta} ({(team_detail.shot_chart.ft_percentage * 100).toFixed(4)}%)</span>
               </div>
             </div>
           </div>
@@ -40,27 +41,27 @@ const TeamDetail = () => {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span>Points:</span>
-                <span>{team.raw_averages.pts.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.pts.toFixed(4)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Rebounds:</span>
-                <span>{team.raw_averages.reb.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.reb.toFixed(4)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Assists:</span>
-                <span>{team.raw_averages.ast.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.ast.toFixed(4)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Steals:</span>
-                <span>{team.raw_averages.stl.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.stl.toFixed(4)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Blocks:</span>
-                <span>{team.raw_averages.blk.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.blk.toFixed(4)}</span>
               </div>
               <div className="flex justify-between">
                 <span>3-Pointers:</span>
-                <span>{team.raw_averages.three_pm.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.three_pm.toFixed(4)}</span>
               </div>
             </div>
           </div>
@@ -71,11 +72,11 @@ const TeamDetail = () => {
           <div className="bg-blue-50 p-4 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="text-lg font-medium">Overall Rank:</span>
-              <span className="text-2xl font-bold text-blue-600">#{team.ranking_stats.rank}</span>
+              <span className="text-2xl font-bold text-blue-600">#{team_detail.ranking_stats.rank}</span>
             </div>
             <div className="flex justify-between items-center mt-2">
               <span className="text-lg font-medium">Total Points:</span>
-              <span className="text-2xl font-bold text-blue-600">{team.ranking_stats.total_points}</span>
+              <span className="text-2xl font-bold text-blue-600">{team_detail.ranking_stats.total_points}</span>
             </div>
           </div>
         </div>

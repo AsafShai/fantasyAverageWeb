@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Player } from '../../../types/api';
+import type { Player, Team } from '../../../types/api';
 import { PlayerStatsCard } from './PlayerStatsCard';
 import { PlayerDropdown } from './PlayerDropdown';
 import LoadingSpinner from '../../../components/LoadingSpinner';
@@ -7,9 +7,9 @@ import ErrorMessage from '../../../components/ErrorMessage';
 
 interface TeamTradeSectionProps {
   title: string;
-  teams: string[];
-  selectedTeam: string;
-  onTeamChange: (team: string) => void;
+  teams: Team[];
+  selectedTeam: Team | null;
+  onTeamChange: (team: Team | null) => void;
   players: Player[];
   selectedPlayers: Player[];
   onPlayerSelect: (player: Player) => void;
@@ -60,14 +60,14 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
           <ErrorMessage message="Failed to load teams" />
         ) : (
           <select
-            value={selectedTeam}
-            onChange={(e) => onTeamChange(e.target.value)}
+            value={selectedTeam?.team_id ?? ''}
+            onChange={(e) => onTeamChange(teams.find(team => team.team_id === parseInt(e.target.value)) || null)}
             className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
           >
             <option value="">Choose a team...</option>
             {teams.map((team) => (
-              <option key={team} value={team}>
-                {team}
+              <option key={team.team_id} value={team.team_id}>
+                {team.team_name}
               </option>
             ))}
           </select>

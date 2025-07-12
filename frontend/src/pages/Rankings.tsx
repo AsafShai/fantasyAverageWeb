@@ -25,25 +25,17 @@ const Rankings = () => {
 
   const rawRankings = data?.rankings || []
   
-  // Sort the data client-side
   const rankings = [...rawRankings].sort((a, b) => {
     let aValue = a[sortBy as keyof RankingStats]
     let bValue = b[sortBy as keyof RankingStats]
-    
-    // Handle string sorting (team names)
-    if (typeof aValue === 'string' && typeof bValue === 'string') {
-      aValue = aValue.toLowerCase()
-      bValue = bValue.toLowerCase()
-    }
-    
-    // Handle numeric sorting
+        
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
     }
-    
-    // Handle string sorting
-    if (aValue && bValue && aValue < bValue) return sortOrder === 'asc' ? -1 : 1
-    if (aValue && bValue && aValue > bValue) return sortOrder === 'asc' ? 1 : -1
+    let aTeamName = a.team.team_name.toLowerCase()
+    let bTeamName = b.team.team_name.toLowerCase()
+    if (aTeamName && bTeamName && aTeamName < bTeamName) return sortOrder === 'asc' ? -1 : 1
+    if (aTeamName && bTeamName && aTeamName > bTeamName) return sortOrder === 'asc' ? 1 : -1
     return 0
   })
 
@@ -97,21 +89,21 @@ const Rankings = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {rankings.map((team: RankingStats, index: number) => (
-              <tr key={team.team} className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
+              <tr key={team.team.team_id} className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
                 <td className="table-cell font-bold text-blue-600">
                   #{team.rank || index + 1}
                 </td>
                 <td className="table-cell">
                   <Link
-                    to={`/team/${encodeURIComponent(team.team)}`}
+                    to={`/team/${team.team.team_id}`}
                     className="text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-150 hover:underline"
                   >
-                    {team.team}
+                    {team.team.team_name}
                   </Link>
                 </td>
                 {columns.slice(2).map((column) => (
                   <td key={column.key} className="table-cell font-medium">
-                    {team[column.key as keyof RankingStats]}
+                    {team[column.key as keyof RankingStats] as number}
                   </td>
                 ))}
               </tr>

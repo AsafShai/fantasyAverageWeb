@@ -1,49 +1,44 @@
 import { useGetTeamsListQuery, useGetTeamPlayersQuery } from '../store/api/fantasyApi';
+import type { Team, TeamPlayers } from '../types/api';
 
 interface UseTradeDataReturn {
-  // Teams data
-  teams: string[];
+  teams: Team[];
   isLoadingTeams: boolean;
   teamsError: unknown;
   
-  // Team A data
-  teamAData: { players: any[] } | undefined;
-  isLoadingTeamA: boolean;
+  teamAData: TeamPlayers | undefined;
+  isFetchingTeamA: boolean;
   teamAError: unknown;
   
-  // Team B data
-  teamBData: { players: any[] } | undefined;
-  isLoadingTeamB: boolean;
+  teamBData: TeamPlayers | undefined;
+  isFetchingTeamB: boolean;
   teamBError: unknown;
 }
 
-export const useTradeData = (teamA: string, teamB: string): UseTradeDataReturn => {
-  // API queries
+export const useTradeData = (teamA: Team | null, teamB: Team | null): UseTradeDataReturn => {
   const { data: teams = [], isLoading: isLoadingTeams, error: teamsError } = useGetTeamsListQuery();
   
   const { 
     data: teamAData, 
-    isLoading: isLoadingTeamA,
     isFetching: isFetchingTeamA,
     error: teamAError 
-  } = useGetTeamPlayersQuery(teamA, { skip: !teamA });
+  } = useGetTeamPlayersQuery(teamA?.team_id || 0, { skip: !teamA });
   
   const { 
     data: teamBData, 
-    isLoading: isLoadingTeamB,
     isFetching: isFetchingTeamB,
     error: teamBError 
-  } = useGetTeamPlayersQuery(teamB, { skip: !teamB });
+  } = useGetTeamPlayersQuery(teamB?.team_id || 0, { skip: !teamB });
 
   return {
     teams,
     isLoadingTeams,
     teamsError,
     teamAData,
-    isLoadingTeamA: isFetchingTeamA,
-    teamAError,
+    isFetchingTeamA,
+    teamAError, 
     teamBData,
-    isLoadingTeamB: isFetchingTeamB,
+    isFetchingTeamB,
     teamBError,
   };
 };

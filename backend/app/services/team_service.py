@@ -1,10 +1,8 @@
 import logging
 from typing import List
-from datetime import datetime
-from app.models.fantasy import TeamDetail, TeamPlayers
+from app.models import TeamDetail, TeamPlayers, Team
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
-
 
 class TeamService:
     """Service for team-related operations"""
@@ -14,52 +12,56 @@ class TeamService:
         self.response_builder = ResponseBuilder()
         self.logger = logging.getLogger(__name__)
     
-    def get_team_detail(self, team_name: str) -> TeamDetail:
+    def get_team_detail(self, team_id: int) -> TeamDetail:
         """Get detailed team statistics"""
-        espn_data, espn_timestamp = self.data_provider.get_standings_data_with_timestamp()
-        if espn_data is None or espn_timestamp is None:
-            raise ValueError("Unable to fetch ESPN data")
-        
-        totals_df, averages_df, rankings_df = self.data_provider.get_all_dataframes(espn_timestamp, espn_data)
+        totals_df, averages_df, rankings_df = self.data_provider.get_all_dataframes()
         
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ValueError("Unable to process ESPN data")
         
-        return self.response_builder.build_team_detail_response(team_name, totals_df, averages_df, rankings_df)
+        if not self._team_exists(team_id, totals_df):
+            raise ValueError(f"Team with ID {team_id} not found")
+        
+        return self.response_builder.build_team_detail_response(team_id, totals_df, averages_df, rankings_df)
     
-    def get_teams_list(self) -> List[str]:
+    def get_teams_list(self) -> List[Team]:
         """Get list of all teams"""
-        espn_data, espn_timestamp = self.data_provider.get_standings_data_with_timestamp()
-        if espn_data is None or espn_timestamp is None:
-            return []
-        
-        totals_df = self.data_provider.get_totals_df(espn_timestamp, espn_data)
+        totals_df = self.data_provider.get_totals_df()
         if totals_df is None:
-            return []
+            raise Exception("Unable to fetch teams data from ESPN API")
         
-        return totals_df.index.tolist()
+        teams = self._extract_teams_from_dataframe(totals_df)
+        
+        if not teams:
+            raise ValueError("No teams found in the data")
+        
+        return teams
     
-    def get_team_players(self, team_name: str) -> TeamPlayers:
-        """Get players for a specific team"""
-        espn_players_data, espn_players_timestamp = self.data_provider.get_players_data_with_timestamp()
-        if espn_players_data is None or espn_players_timestamp is None:
-            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
-
-        espn_standings_data, espn_standings_timestamp = self.data_provider.get_standings_data_with_timestamp()
-        if espn_standings_data is None or espn_standings_timestamp is None:
-            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
-        
-        totals_df = self.data_provider.get_totals_df(espn_standings_timestamp, espn_standings_data)
-        if totals_df is None:
-            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
-
-    
-        if team_name not in totals_df.index:
-            raise ValueError(f"Team {team_name} not found")
-        
-        teams_mapping = {k + 1: v for k, v in enumerate(totals_df.index)}
-        players_df = self.data_provider.get_players_df(espn_players_timestamp, espn_players_data, teams_mapping)
+    def get_team_players(self, team_id: int) -> TeamPlayers:
+        """Get players for a specific team by team ID"""
+        players_df = self.data_provider.get_players_df()
         if players_df is None:
-            return TeamPlayers(team=team_name, players=[], last_updated=datetime.now())
-        team_players = players_df[players_df['Team'] == team_name]
-        return self.response_builder.build_team_players_response(team_name, team_players)
+            raise Exception("Unable to process player data")
+        
+        team_players = self._filter_team_players(players_df, team_id)
+        
+        if team_players.empty:
+            raise ValueError(f"No players found for team ID {team_id}")
+        
+        return self.response_builder.build_team_players_response(team_players)
+    
+    def _team_exists(self, team_id: int, totals_df) -> bool:
+        """Check if team exists in the data"""
+        return team_id in totals_df['team_id'].unique()
+    
+    def _extract_teams_from_dataframe(self, totals_df) -> List[Team]:
+        """Extract teams list from dataframe with validation"""
+        teams = []
+        for team_id, team_name in zip(totals_df['team_id'], totals_df['team_name']):
+            if team_id and team_name:
+                teams.append(Team(team_id=int(team_id), team_name=str(team_name).strip()))
+        return teams
+    
+    def _filter_team_players(self, players_df, team_id: int):
+        """Filter players for a specific team"""
+        return players_df.loc[players_df['team_id'] == team_id]
