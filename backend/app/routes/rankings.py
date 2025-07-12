@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import Optional, Annotated
-from app.models.fantasy import LeagueRankings
+from app.models import LeagueRankings
 from app.models.requests import SortOrder
 from app.services.ranking_service import RankingService
 import logging
@@ -18,7 +18,7 @@ async def get_rankings(
 ):
     """Get league rankings with optional sorting"""
     try:
-        return ranking_service.get_rankings(sort_by=sort_by, order=order.value)
+        return ranking_service.get_league_rankings(sort_by=sort_by, order=order.value)
     except Exception as e:
         logger.error(f"Error getting rankings: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve rankings")

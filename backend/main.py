@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api.rankings import router as rankings_router
-from app.api.teams import router as teams_router
-from app.api.league import router as league_router
-from app.api.analytics import router as analytics_router
+from app.routes.rankings import router as rankings_router
+from app.routes.teams import router as teams_router
+from app.routes.league import router as league_router
+from app.routes.analytics import router as analytics_router
 from dotenv import load_dotenv
 from config import PORT
 import logging

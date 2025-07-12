@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.models.fantasy import LeagueSummary, LeagueShotsData
+from app.models import LeagueSummary, LeagueShotsData
 from app.services.league_service import LeagueService
 from typing import Annotated
 import logging

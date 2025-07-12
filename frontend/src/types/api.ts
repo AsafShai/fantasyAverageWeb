@@ -1,5 +1,10 @@
+export interface Team {
+  team_id: number;
+  team_name: string;
+}
+
 export interface RankingStats {
-  team: string;
+  team: Team;
   fg_percentage: number;
   ft_percentage: number;
   three_pm: number;
@@ -19,7 +24,7 @@ export interface LeagueRankings {
 }
 
 export interface ShotChartStats {
-  team: string;
+  team: Team;
   fgm: number;
   fga: number;
   fg_percentage: number;
@@ -29,8 +34,7 @@ export interface ShotChartStats {
   gp: number;
 }
 
-export interface RawAverageStats {
-  team: string;
+export interface AverageStats {
   fg_percentage: number;
   ft_percentage: number;
   three_pm: number;
@@ -42,10 +46,14 @@ export interface RawAverageStats {
   gp: number;
 }
 
+export interface TeamAverageStats extends AverageStats {
+  team: Team;
+}
+
 export interface TeamDetail {
-  team: string;
+  team: Team;
   shot_chart: ShotChartStats;
-  raw_averages: RawAverageStats;
+  raw_averages: TeamAverageStats;
   ranking_stats: RankingStats;
   category_ranks: Record<string, number>;
 }
@@ -54,19 +62,19 @@ export interface LeagueSummary {
   total_teams: number;
   total_games_played: number;
   category_leaders: Record<string, RankingStats>;
-  league_averages: RawAverageStats;
+  league_averages: AverageStats;
   last_updated: string;
 }
 
 export interface HeatmapData {
-  teams: string[];
+  teams: Team[];
   categories: string[];
   data: number[][];
   normalized_data: number[][];
 }
 
 export interface TeamShotStats {
-  team: string;
+  team: Team;
   fgm: number;
   fga: number;
   fg_percentage: number;
@@ -105,7 +113,7 @@ export interface Player {
 }
 
 export interface TeamPlayers {
-  team: string;
+  team_id: number;
   players: Player[];
   last_updated: string;
 }

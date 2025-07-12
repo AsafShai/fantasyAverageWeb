@@ -1,36 +1,33 @@
 import { useState, useCallback } from 'react';
-import type { Player } from '../types/api';
+import type { Player, Team } from '../types/api';
 
 interface UseTradeStateReturn {
-  teamA: string;
-  teamB: string;
+  teamA: Team | null;
+  teamB: Team | null;
   selectedPlayersA: Player[];
   selectedPlayersB: Player[];
   viewMode: 'totals' | 'averages';
   setViewMode: (mode: 'totals' | 'averages') => void;
   
-  // Team A handlers
-  handleTeamAChange: (team: string) => void;
+  handleTeamAChange: (team: Team | null) => void;
   handlePlayerASelect: (player: Player) => void;
   handlePlayerARemove: (player: Player) => void;
   
-  // Team B handlers
-  handleTeamBChange: (team: string) => void;
+  handleTeamBChange: (team: Team | null) => void;
   handlePlayerBSelect: (player: Player) => void;
   handlePlayerBRemove: (player: Player) => void;
 }
 
 export const useTradeState = (): UseTradeStateReturn => {
-  const [teamA, setTeamA] = useState('');
-  const [teamB, setTeamB] = useState('');
+  const [teamA, setTeamA] = useState<Team | null>(null);
+  const [teamB, setTeamB] = useState<Team | null>(null);
   const [selectedPlayersA, setSelectedPlayersA] = useState<Player[]>([]);
   const [selectedPlayersB, setSelectedPlayersB] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<'totals' | 'averages'>('totals');
 
-  // Team A handlers
-  const handleTeamAChange = useCallback((team: string) => {
+  const handleTeamAChange = useCallback((team: Team | null) => {
     setTeamA(team);
-    setSelectedPlayersA([]); // Clear selections when changing team
+    setSelectedPlayersA([]);
   }, []);
 
   const handlePlayerASelect = useCallback((player: Player) => {
@@ -46,10 +43,9 @@ export const useTradeState = (): UseTradeStateReturn => {
     setSelectedPlayersA(prev => prev.filter(p => p.player_name !== player.player_name));
   }, []);
 
-  // Team B handlers
-  const handleTeamBChange = useCallback((team: string) => {
+  const handleTeamBChange = useCallback((team: Team | null) => {
     setTeamB(team);
-    setSelectedPlayersB([]); // Clear selections when changing team
+    setSelectedPlayersB([]);
   }, []);
 
   const handlePlayerBSelect = useCallback((player: Player) => {
