@@ -1,9 +1,10 @@
 import logging
-from typing import Optional, Dict, Tuple
+import requests
+from typing import Optional, Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
-from app.services.espn_fetcher import ESPNFetcher
 from app.services.data_transformer import DataTransformer
+from config import ESPN_STANDINGS_URL, ESPN_PLAYERS_URL
 
 
 class DataProvider:
@@ -20,57 +21,100 @@ class DataProvider:
     def __init__(self):
         if not DataProvider._initialized:
             self.cache_manager = CacheManager()
-            self.espn_fetcher = ESPNFetcher()
+            self._validate_urls()
             self.data_transformer = DataTransformer()
             self.logger = logging.getLogger(__name__)
             DataProvider._initialized = True
     
-    def get_standings_data_with_timestamp(self) -> Tuple[Optional[Dict], Optional[int]]:
-        """Get ESPN standings data with timestamp"""
-        return self.espn_fetcher.fetch_standings_data_with_timestamp()
-    
-    def get_players_data_with_timestamp(self) -> Tuple[Optional[Dict], Optional[int]]:
-        """Get ESPN players data with timestamp"""
-        return self.espn_fetcher.fetch_players_data_with_timestamp()
-    
-    def get_totals_df(self, espn_timestamp: int, espn_data: Dict) -> Optional[pd.DataFrame]:
+    def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching"""
-        return self.cache_manager.get_totals(
-            espn_timestamp, 
-            lambda: self.data_transformer.raw_standings_to_totals_df(espn_data)
-        )
-    
-    def get_players_df(self, espn_timestamp: int, espn_data: Dict, teams_mapping: Dict) -> Optional[pd.DataFrame]:
-        """Get players DataFrame with caching"""
-        return self.cache_manager.get_players(
-            espn_timestamp, 
-            lambda: self.data_transformer.raw_players_to_df(espn_data, teams_mapping)
-        )
+        try:
+            headers = {}
+            if self.cache_manager.totals_cache['etag']:
+                headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
+            
+            response = requests.get(ESPN_STANDINGS_URL, headers=headers, timeout=10)
+            
+            if response.status_code == 304:
+                return self.cache_manager.totals_cache['data']
+            
+            response.raise_for_status()
+            api_data = response.json()
+            
+            # Transform data
+            totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
+            
+            # Cache the result
+            self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
+            self.cache_manager.totals_cache['data'] = totals_df
+            
+            return totals_df
+            
+        except requests.RequestException as e:
+            self.logger.error(f"Error fetching data from ESPN API: {e}")
+            raise Exception("Error fetching data from ESPN API")
+        except (KeyError, ValueError) as e:
+            self.logger.error(f"Error parsing ESPN API response: {e}")
+            raise Exception("Error parsing ESPN API response")
+        except Exception as e:
+            self.logger.error(f"Unexpected error fetching ESPN data: {e}")
+            raise Exception("Unexpected error fetching ESPN data")
 
-    def get_averages_df(self, espn_timestamp: int, espn_data: Dict) -> Optional[pd.DataFrame]:
+    def get_players_df(self) -> pd.DataFrame:
+        """Get players DataFrame with caching"""
+        try:
+            headers = {}
+            if self.cache_manager.players_cache['etag']:
+                headers['If-None-Match'] = self.cache_manager.players_cache['etag']
+            
+            response = requests.get(ESPN_PLAYERS_URL, headers=headers, timeout=10)
+            
+            if response.status_code == 304:
+                return self.cache_manager.players_cache['data']
+            
+            response.raise_for_status()
+            api_data = response.json()
+            
+            # Transform data
+            players_df = self.data_transformer.raw_players_to_df(api_data)
+            
+            # Cache the result
+            self.cache_manager.players_cache['etag'] = response.headers.get('ETag')
+            self.cache_manager.players_cache['data'] = players_df
+            
+            return players_df
+            
+        except requests.RequestException as e:
+            self.logger.error(f"Error fetching players data from ESPN API: {e}")
+            raise Exception("Error fetching players data from ESPN API")
+        except (KeyError, ValueError) as e:
+            self.logger.error(f"Error parsing ESPN API response: {e}")
+            raise Exception("Error parsing ESPN API response")
+        except Exception as e:
+            self.logger.error(f"Unexpected error fetching ESPN players data: {e}")
+            raise Exception("Unexpected error fetching ESPN players data")
+
+    def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
-        def calculate_averages():
-            totals_df = self.get_totals_df(espn_timestamp, espn_data)
-            if totals_df is None:
-                return None
-            return self.data_transformer.totals_to_averages_df(totals_df)
-        
-        return self.cache_manager.get_averages(espn_timestamp, calculate_averages)
+        totals_df = self.get_totals_df()
+        return self.data_transformer.totals_to_averages_df(totals_df)
     
-    def get_rankings_df(self, espn_timestamp: int, espn_data: Dict) -> Optional[pd.DataFrame]:
+    def get_rankings_df(self) -> pd.DataFrame:
         """Get rankings DataFrame with caching"""
-        def calculate_rankings():
-            averages_df = self.get_averages_df(espn_timestamp, espn_data)
-            if averages_df is None:
-                return None
-            return self.data_transformer.averages_to_rankings_df(averages_df)
-        
-        return self.cache_manager.get_rankings(espn_timestamp, calculate_rankings)
+        averages_df = self.get_averages_df()
+        return self.data_transformer.averages_to_rankings_df(averages_df)
     
-    def get_all_dataframes(self, espn_timestamp: int, espn_data: Dict) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Get all three main DataFrames at once (optimized for endpoints that need multiple)"""
-        totals_df = self.get_totals_df(espn_timestamp, espn_data)
-        averages_df = self.get_averages_df(espn_timestamp, espn_data)
-        rankings_df = self.get_rankings_df(espn_timestamp, espn_data)
+        totals_df = self.get_totals_df()
+        averages_df = self.get_averages_df()
+        rankings_df = self.get_rankings_df()
         
         return totals_df, averages_df, rankings_df
+    
+    def _validate_urls(self):
+        """Validate that required URLs are configured"""
+        if not ESPN_STANDINGS_URL:
+            raise ValueError("ESPN_STANDINGS_URL is not configured")
+        if not ESPN_PLAYERS_URL:
+            raise ValueError("ESPN_PLAYERS_URL is not configured")

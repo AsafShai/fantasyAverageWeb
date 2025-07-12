@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Player } from '../../../types/api';
+import type { Player, Team } from '../../../types/api';
 import { 
   aggregatePlayerStats, 
   calculateTeamAverages, 
@@ -8,8 +8,8 @@ import {
 import { STAT_KEYS } from '../constants';
 
 interface TradeSummaryPanelProps {
-  teamA: string;
-  teamB: string;
+  teamA: Team | null;
+  teamB: Team | null;
   playersA: Player[];
   playersB: Player[];
   viewMode: 'totals' | 'averages';
@@ -108,7 +108,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               ))}
               
               <div className="bg-blue-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                {teamA || 'Team A'}
+                {teamA?.team_name || 'Team A'}
               </div>
               {STAT_KEYS.map((key) => {
                 const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';
@@ -124,7 +124,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               })}
               
               <div className="bg-green-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                {teamB || 'Team B'}
+                {teamB?.team_name || 'Team B'}
               </div>
               {STAT_KEYS.map((key) => {
                 const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';

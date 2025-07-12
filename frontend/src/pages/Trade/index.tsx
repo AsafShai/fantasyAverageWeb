@@ -26,10 +26,10 @@ export const Trade: React.FC = () => {
     isLoadingTeams,
     teamsError,
     teamAData,
-    isLoadingTeamA,
+    isFetchingTeamA,
     teamAError,
     teamBData,
-    isLoadingTeamB,
+    isFetchingTeamB,
     teamBError,
   } = useTradeData(teamA, teamB);
 
@@ -61,7 +61,7 @@ export const Trade: React.FC = () => {
           onPlayerSelect={handlePlayerASelect}
           onPlayerRemove={handlePlayerARemove}
           isLoadingTeams={isLoadingTeams}
-          isLoadingPlayers={isLoadingTeamA}
+          isLoadingPlayers={isFetchingTeamA}
           teamsError={teamsError}
           playersError={teamAError}
           viewMode={viewMode}
@@ -78,7 +78,7 @@ export const Trade: React.FC = () => {
           onPlayerSelect={handlePlayerBSelect}
           onPlayerRemove={handlePlayerBRemove}
           isLoadingTeams={isLoadingTeams}
-          isLoadingPlayers={isLoadingTeamB}
+          isLoadingPlayers={isFetchingTeamB}
           teamsError={teamsError}
           playersError={teamBError}
           viewMode={viewMode}
