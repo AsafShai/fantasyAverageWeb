@@ -5,7 +5,7 @@ from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats
 from app.services.data_provider import DataProvider
 from app.services.stats_calculator import StatsCalculator
 from app.builders.response_builder import ResponseBuilder
-
+from app.exceptions import ResourceNotFoundError
 
 class LeagueService:
     """Service for league-wide statistics and analytics operations"""
@@ -20,7 +20,7 @@ class LeagueService:
         """Get league summary statistics"""        
         averages_df = self.data_provider.get_averages_df()
         if averages_df is None:
-            raise Exception("Unable to fetch averages data from ESPN API")
+            raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
         
         # Business logic: calculate category leaders and league averages
         category_leaders = self._calculate_category_leaders(averages_df)
@@ -38,7 +38,7 @@ class LeagueService:
         """Get data for heatmap visualization"""
         averages_df = self.data_provider.get_averages_df()
         if averages_df is None:
-            raise Exception("Unable to fetch averages data from ESPN API")
+            raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
         
         # Business logic: prepare heatmap data
         teams_data = self._extract_teams_data(averages_df)
@@ -55,7 +55,7 @@ class LeagueService:
         """Get league-wide shooting statistics"""
         totals_df = self.data_provider.get_totals_df()
         if totals_df is None:
-            raise Exception("Unable to fetch totals data from ESPN API")
+            raise ResourceNotFoundError("Unable to fetch totals data from ESPN API")
         
         # Business logic: extract shooting data
         shots_data = self._extract_shots_data(totals_df)

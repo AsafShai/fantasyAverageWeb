@@ -27,13 +27,13 @@ class StatsCalculator:
         ranked_stats = ranked[ranking_cols].rank()
         
         # Add total points
-        ranked_stats['Total_Points'] = ranked_stats.sum(axis=1)
+        ranked_stats['TOTAL_POINTS'] = ranked_stats.sum(axis=1)
         
         # Sort by total points
-        ranked_stats.sort_values(by='Total_Points', ascending=False, inplace=True)
+        ranked_stats.sort_values(by='TOTAL_POINTS', ascending=False, inplace=True)
         
         # Add rank column
-        ranked_stats['Rank'] = ranked_stats['Total_Points'].rank(method='min', ascending=False).astype(int)
+        ranked_stats['RANK'] = ranked_stats['TOTAL_POINTS'].rank(method='min', ascending=False).astype(int)
         
         # Reset index and merge with team info
         ranked_stats.reset_index(inplace=True)

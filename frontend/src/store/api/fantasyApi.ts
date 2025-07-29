@@ -27,10 +27,10 @@ export const fantasyApi = createApi({
       query: () => '/analytics/heatmap',
       providesTags: ['Heatmap'],
     }),
-    getCategoryRankings: builder.query<any, string>({
-      query: (category) => `/rankings/category/${category}`,
-      providesTags: ['Rankings'],
-    }),
+    // getCategoryRankings: builder.query<any, string>({
+    //   query: (category) => `/rankings/category/${category}`,
+    //   providesTags: ['Rankings'],
+    // }),
     getLeagueShots: builder.query<LeagueShotsData, void>({
       query: () => '/league/shots',
       providesTags: ['Shots'],
@@ -51,7 +51,7 @@ export const {
   useGetTeamDetailQuery,
   useGetLeagueSummaryQuery,
   useGetHeatmapDataQuery,
-  useGetCategoryRankingsQuery,
+  // useGetCategoryRankingsQuery,
   useGetLeagueShotsQuery,
   useGetTeamsListQuery,
   useGetTeamPlayersQuery,

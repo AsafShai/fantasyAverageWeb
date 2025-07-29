@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from app.models import TeamDetail, TeamPlayers, Team
+from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.team_service import TeamService
 from typing import Annotated, List
 import logging
@@ -17,7 +18,9 @@ async def get_teams_list(
     """Get list of all teams"""
     try:
         return team_service.get_teams_list()
-    except ValueError as e:
+    except InvalidParameterError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting teams list: {e}")
@@ -35,7 +38,9 @@ async def get_team_detail(
     
     try:
         return team_service.get_team_detail(team_id)
-    except ValueError as e:
+    except InvalidParameterError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting team stats for {team_id}: {e}")
@@ -53,7 +58,9 @@ async def get_team_players(
     
     try: 
         return team_service.get_team_players(team_id)
-    except ValueError as e:
+    except InvalidParameterError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting players for team ID {team_id}: {e}")
