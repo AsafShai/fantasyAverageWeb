@@ -1,6 +1,7 @@
 import logging
 from typing import List
 from app.models import TeamDetail, TeamPlayers, Team
+from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
 
@@ -17,10 +18,10 @@ class TeamService:
         totals_df, averages_df, rankings_df = self.data_provider.get_all_dataframes()
         
         if totals_df is None or averages_df is None or rankings_df is None:
-            raise ValueError("Unable to process ESPN data")
+            raise ResourceNotFoundError("Unable to process ESPN data")
         
         if not self._team_exists(team_id, totals_df):
-            raise ValueError(f"Team with ID {team_id} not found")
+            raise ResourceNotFoundError(f"Team with ID {team_id} not found")
         
         return self.response_builder.build_team_detail_response(team_id, totals_df, averages_df, rankings_df)
     
@@ -33,7 +34,7 @@ class TeamService:
         teams = self._extract_teams_from_dataframe(totals_df)
         
         if not teams:
-            raise ValueError("No teams found in the data")
+            raise ResourceNotFoundError("No teams found in the data")
         
         return teams
     
@@ -46,7 +47,7 @@ class TeamService:
         team_players = self._filter_team_players(players_df, team_id)
         
         if team_players.empty:
-            raise ValueError(f"No players found for team ID {team_id}")
+            raise ResourceNotFoundError(f"No players found for team ID {team_id}")
         
         return self.response_builder.build_team_players_response(team_players)
     
