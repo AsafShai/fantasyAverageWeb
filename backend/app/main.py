@@ -7,13 +7,13 @@ from app.routes.teams import router as teams_router
 from app.routes.league import router as league_router
 from app.routes.analytics import router as analytics_router
 from dotenv import load_dotenv
-from config import PORT
+from app.config import settings
 import logging
 from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, settings.log_level.upper()),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -38,7 +38,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=[origin.strip() for origin in settings.cors_origins_list],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,9 +53,17 @@ app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"]
 async def root():
     return {"message": "Fantasy League Dashboard API"}
 
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "Fantasy League Dashboard API"
+    }
+
 load_dotenv()
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info(f"Starting Fantasy League Dashboard API on port {PORT}")
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    logger.info(f"Starting Fantasy League Dashboard API on port {settings.port}")
+    uvicorn.run(app, host="0.0.0.0", port=settings.port)
