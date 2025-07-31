@@ -14,7 +14,7 @@ class ResponseBuilder:
     
     def build_rankings_response(self, rankings_df: pd.DataFrame, 
                               sort_by: Optional[str] = None, 
-                              order: str = "desc") -> LeagueRankings:
+                              order: str = "asc") -> LeagueRankings:
         """Build LeagueRankings response from rankings DataFrame"""
         # Apply sorting if requested, otherwise sort by rank
         sort_by = "RANK" if sort_by is None else sort_by.upper()

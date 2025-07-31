@@ -1,7 +1,7 @@
 import logging
 from typing import List
 from app.models import TeamDetail, TeamPlayers, Team
-from app.exceptions import InvalidParameterError, ResourceNotFoundError
+from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
 

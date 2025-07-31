@@ -1,6 +1,5 @@
 from app.main import app
 from app.models import HeatmapData
-import pytest
 from fastapi.testclient import TestClient
 
 client = TestClient(app)

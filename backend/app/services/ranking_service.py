@@ -13,7 +13,7 @@ class RankingService:
         self.response_builder = ResponseBuilder()
         self.logger = logging.getLogger(__name__)
     
-    def get_league_rankings(self, sort_by: Optional[str] = None, order: str = "desc") -> LeagueRankings:
+    def get_league_rankings(self, sort_by: Optional[str] = None, order: str = "asc") -> LeagueRankings:
         """Get league rankings with optional sorting"""
         rankings_df = self.data_provider.get_rankings_df()
         if rankings_df is None:

@@ -20,6 +20,7 @@ interface StatValueProps {
   comparedTo: number;
   isPercentage?: boolean;
   viewMode: 'totals' | 'averages';
+  field: (typeof STAT_KEYS)[number];
 }
 
 const STAT_HEADERS = [
@@ -40,12 +41,9 @@ const STAT_HEADERS = [
 
 
 
-const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage = false, viewMode }) => {
-  const getValueStyles = () => {
-    const diff = Math.abs(value - comparedTo);
-    const threshold = isPercentage ? 0.01 : 0.1;
-    
-    if (diff < threshold) {
+const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage = false, viewMode, field }) => {
+  const getValueStyles = () => {    
+    if (value === comparedTo) {
       return { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' };
     }
     
@@ -55,11 +53,10 @@ const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage =
   };
 
   const styles = getValueStyles();
-
   return (
     <div className={`${styles.bg} rounded p-1 text-center flex items-center justify-center space-x-1`}>
       <span className={`font-bold ${styles.text} text-xs`}>
-        {formatStatValue(value, isPercentage, viewMode)}
+        {field !== 'gp' ? formatStatValue(value, isPercentage, viewMode) : value}
       </span>
       <span className={`${styles.text} text-xs`}>{styles.indicator}</span>
     </div>
@@ -119,6 +116,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                     comparedTo={displayStatsB[key as keyof typeof displayStatsB]} 
                     viewMode={viewMode} 
                     isPercentage={isPercentage}
+                    field={key}
                   />
                 );
               })}
@@ -135,6 +133,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                     comparedTo={displayStatsA[key as keyof typeof displayStatsA]} 
                     viewMode={viewMode} 
                     isPercentage={isPercentage}
+                    field={key}
                   />
                 );
               })}
