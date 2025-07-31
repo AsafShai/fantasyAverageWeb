@@ -2,7 +2,7 @@
 
 A React TypeScript frontend with FastAPI backend for displaying ESPN Fantasy Basketball league statistics.
 
-## Features
+## Features check
 
 - **Team Rankings**: Sortable table showing team performance across multiple categories
 - **Data Visualizations**: Charts and heatmaps for league analysis
