@@ -1,0 +1,58 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    env:
+      ESPN_STANDINGS_URL: ${{ vars.ESPN_STANDINGS_URL }}
+      ESPN_PLAYERS_URL: ${{ vars.ESPN_PLAYERS_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version-file: 'backend/.python-version'
+
+      - name: Install dependencies
+        run: |
+          cd backend 
+          pip install uv
+          uv sync --frozen
+
+      - name: Run tests
+        run: |
+          cd backend
+          PYTHONPATH=. uv run pytest
+
+  build-backend:
+    needs: test-backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build backend
+        run: |
+          cd backend
+          docker build -t fantasy-backend:latest .
+
+  build-frontend:
+    needs: test-backend
+    runs-on: ubuntu-latest
+    steps:  
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
