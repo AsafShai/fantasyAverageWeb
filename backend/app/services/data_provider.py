@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
-from config import ESPN_STANDINGS_URL, ESPN_PLAYERS_URL
+from app.config import settings
 
 
 class DataProvider:
@@ -33,7 +33,7 @@ class DataProvider:
             if self.cache_manager.totals_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
             
-            response = requests.get(ESPN_STANDINGS_URL, headers=headers, timeout=10)
+            response = requests.get(settings.espn_standings_url, headers=headers, timeout=10)
             
             if response.status_code == 304:
                 return self.cache_manager.totals_cache['data']
@@ -67,7 +67,7 @@ class DataProvider:
             if self.cache_manager.players_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.players_cache['etag']
             
-            response = requests.get(ESPN_PLAYERS_URL, headers=headers, timeout=10)
+            response = requests.get(settings.espn_players_url, headers=headers, timeout=10)
             
             if response.status_code == 304:
                 return self.cache_manager.players_cache['data']
@@ -114,7 +114,7 @@ class DataProvider:
     
     def _validate_urls(self):
         """Validate that required URLs are configured"""
-        if not ESPN_STANDINGS_URL:
+        if not settings.espn_standings_url:
             raise ValueError("ESPN_STANDINGS_URL is not configured")
-        if not ESPN_PLAYERS_URL:
+        if not settings.espn_players_url:
             raise ValueError("ESPN_PLAYERS_URL is not configured")
