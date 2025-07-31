@@ -27,27 +27,3 @@ async def get_rankings(
     except Exception as e:
         logger.error(f"Error getting rankings: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve rankings: {e}" )
-
-@router.get("/rankings/category/{category}")
-async def get_category_rankings(
-    category: str,
-    ranking_service: RankingServiceDep
-):
-    """Get rankings for a specific category"""
-    if not category or len(category.strip()) == 0:
-        raise HTTPException(status_code=400, detail="Category cannot be empty")
-    
-    try:
-        result = ranking_service.get_category_rankings(category)
-        if not result:
-            raise HTTPException(status_code=404, detail=f"Category '{category}' not found or no data available")
-        return result
-    except HTTPException:
-        raise
-    except InvalidParameterError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except ResourceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error getting category rankings for {category}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve category rankings")
