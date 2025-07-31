@@ -20,11 +20,13 @@ jobs:
 
       - name: Install dependencies
         run: |
+          cd backend 
           pip install uv
           uv sync --frozen
 
       - name: Run tests
         run: |
+          cd backend
           uv run pytest
 
   build-backend:
