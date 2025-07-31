@@ -41,7 +41,8 @@ jobs:
 
       - name: Build backend
         run: |
-          docker build -t fantasy-backend:latest -f backend/Dockerfile .
+          cd backend
+          docker build -t fantasy-backend:latest .
 
   build-frontend:
     needs: test-backend
