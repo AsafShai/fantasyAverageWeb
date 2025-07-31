@@ -55,20 +55,15 @@ const Shots = () => {
     let aValue = a[sortBy as keyof TeamShotStats]
     let bValue = b[sortBy as keyof TeamShotStats]
     
-    // Handle string sorting (team names)
-    if (typeof aValue === 'string' && typeof bValue === 'string') {
-      aValue = aValue.toLowerCase()
-      bValue = bValue.toLowerCase()
-    }
-    
     // Handle numeric sorting
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
     }
     
-    // Handle string sorting
-    if (aValue && bValue && aValue < bValue) return sortOrder === 'asc' ? -1 : 1
-    if (aValue && bValue && aValue > bValue) return sortOrder === 'asc' ? 1 : -1
+    let aTeamName = a.team.team_name.toLowerCase()
+    let bTeamName = b.team.team_name.toLowerCase()
+    if (aTeamName && bTeamName && aTeamName < bTeamName) return sortOrder === 'asc' ? -1 : 1
+    if (aTeamName && bTeamName && aTeamName > bTeamName) return sortOrder === 'asc' ? 1 : -1
     return 0
   })
 
@@ -119,13 +114,13 @@ const Shots = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {shots.map((team: TeamShotStats) => (
-              <tr key={team.team} className="hover:bg-orange-50 transition-colors duration-150 border-b border-gray-100">
+              <tr key={team.team.team_id} className="hover:bg-orange-50 transition-colors duration-150 border-b border-gray-100">
                 <td className="table-cell">
                   <Link
-                    to={`/team/${encodeURIComponent(team.team)}`}
+                    to={`/team/${team.team.team_id}`}
                     className="text-orange-600 hover:text-orange-800 font-semibold transition-colors duration-150 hover:underline"
                   >
-                    {team.team}
+                    {team.team.team_name}
                   </Link>
                 </td>
                 <td className="table-cell font-medium">{team.fgm}</td>

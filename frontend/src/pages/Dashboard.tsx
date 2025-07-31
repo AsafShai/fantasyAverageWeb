@@ -43,14 +43,14 @@ const Dashboard = () => {
         <div className="space-y-3">
           {topTeams.map((team, index) => (
             <div
-              key={team.team}
+              key={team.team.team_id}
               className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
             >
               <div className="flex items-center space-x-3">
                 <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-medium">
                   {index + 1}
                 </span>
-                <span className="font-medium">{team.team}</span>
+                <span className="font-medium">{team.team.team_name}</span>
               </div>
               <div className="text-right">
                 <span className="text-lg font-bold text-gray-900">
