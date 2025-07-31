@@ -14,19 +14,19 @@ class ResponseBuilder:
     
     def build_rankings_response(self, rankings_df: pd.DataFrame, 
                               sort_by: Optional[str] = None, 
-                              order: str = "desc") -> LeagueRankings:
+                              order: str = "asc") -> LeagueRankings:
         """Build LeagueRankings response from rankings DataFrame"""
-        # Apply sorting if requested
-        if sort_by and sort_by in rankings_df.columns:
-            ascending = order == "asc"
-            rankings_df = rankings_df.sort_values(sort_by, ascending=ascending)
+        # Apply sorting if requested, otherwise sort by rank
+        sort_by = "RANK" if sort_by is None else sort_by.upper()
+        ascending = order == "asc"
+        rankings_df = rankings_df.sort_values(sort_by, ascending=ascending)
         
         # Convert to RankingStats objects
         rankings = [self._create_ranking_stats(row) for _, row in rankings_df.iterrows()]
         
         return LeagueRankings(
             rankings=rankings,
-            categories=RANKING_CATEGORIES + ['Total_Points'],
+            categories=RANKING_CATEGORIES + ['TOTAL_POINTS'],
             last_updated=datetime.now()
         )
     
@@ -177,8 +177,8 @@ class ResponseBuilder:
             stl=float(row['STL']),
             blk=float(row['BLK']),
             pts=float(row['PTS']),
-            total_points=float(row['Total_Points']),
-            rank=int(row['Rank'])
+            total_points=float(row['TOTAL_POINTS']),
+            rank=int(row['RANK'])
         )
     
     def _create_shot_chart_stats(self, totals_data: pd.Series) -> ShotChartStats:

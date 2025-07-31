@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
 from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
 from app.routes.league import router as league_router
