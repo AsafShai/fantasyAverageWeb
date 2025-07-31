@@ -9,7 +9,7 @@ export const fantasyApi = createApi({
   tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string }>({
-      query: ({ sortBy, order = 'desc' } = {}) => ({
+      query: ({ sortBy, order = 'asc' } = {}) => ({
         url: '/rankings',
         params: { sort_by: sortBy, order },
       }),

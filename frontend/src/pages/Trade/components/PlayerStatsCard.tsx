@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Player } from '../../../types/api';
+import type { Player, PlayerStats } from '../../../types/api';
 import { calculatePlayerAverages, formatStatValue, getStatColor } from '../utils/tradeCalculations';
 
 interface PlayerStatsCardProps {
@@ -11,19 +11,23 @@ interface PlayerStatsCardProps {
   viewMode?: 'totals' | 'averages';
 }
 
-interface StatItemProps {
+interface StatsItemData {
   label: string;
   value: number;
   icon: string;
   isPercentage?: boolean;
+  field: keyof PlayerStats;
 }
 
-const StatItem: React.FC<StatItemProps & { viewMode?: 'totals' | 'averages' }> = ({ 
+type StatItemProps = StatsItemData & { viewMode: 'totals' | 'averages' }
+
+const StatItem: React.FC<StatItemProps> = ({ 
   label, 
   value, 
-  icon, 
-  isPercentage = false, 
-  viewMode = 'totals' 
+  icon,
+  isPercentage = false,
+  viewMode = 'totals',
+  field,
 }) => (
   <div className="flex flex-col items-center p-1 bg-gray-50 rounded text-center">
     <div className="flex items-center space-x-0.5 mb-0.5">
@@ -31,7 +35,7 @@ const StatItem: React.FC<StatItemProps & { viewMode?: 'totals' | 'averages' }> =
       <span className="text-xs font-medium text-gray-600">{label}</span>
     </div>
     <span className={`text-xs font-bold ${getStatColor(value, isPercentage)}`}>
-      {formatStatValue(value, isPercentage, viewMode)}
+      {field !== 'gp' ? formatStatValue(value, isPercentage, viewMode) : value}
     </span>
   </div>
 );
@@ -47,6 +51,22 @@ export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
   const displayStats = viewMode === 'averages' 
     ? calculatePlayerAverages(player.stats)
     : player.stats;
+
+  const statsItemsData: StatsItemData[] = [
+    { label: "PTS", value: displayStats.pts, icon: "🏀", field: "pts" },
+    { label: "REB", value: displayStats.reb, icon: "🏀", field: "reb" },
+    { label: "AST", value: displayStats.ast, icon: "🤝", field: "ast" },
+    { label: "STL", value: displayStats.stl, icon: "🥷", field: "stl" },
+    { label: "BLK", value: displayStats.blk, icon: "🛡️", field: "blk" },
+    { label: "3PM", value: displayStats.three_pm, icon: "🎯", field: "three_pm" },
+    { label: "FGM", value: displayStats.fgm, icon: "🎯", field: "fgm" },
+    { label: "FGA", value: displayStats.fga, icon: "🏹", field: "fga" },
+    { label: "FG%", value: displayStats.fg_percentage, icon: "📈", isPercentage: true, field: "fg_percentage" },
+    { label: "FTM", value: displayStats.ftm, icon: "🆓", field: "ftm" },
+    { label: "FTA", value: displayStats.fta, icon: "🎯", field: "fta" },
+    { label: "FT%", value: displayStats.ft_percentage, icon: "📊", isPercentage: true, field: "ft_percentage" },
+    { label: "GP", value: displayStats.gp, icon: "📅", field: "gp" }
+  ]
 
   if (showStats) {
     return (
@@ -82,19 +102,17 @@ export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-13 gap-1">
-          <StatItem label="PTS" value={displayStats.pts} icon="🏀" viewMode={viewMode} />
-          <StatItem label="REB" value={displayStats.reb} icon="🏀" viewMode={viewMode} />
-          <StatItem label="AST" value={displayStats.ast} icon="🤝" viewMode={viewMode} />
-          <StatItem label="STL" value={displayStats.stl} icon="🥷" viewMode={viewMode} />
-          <StatItem label="BLK" value={displayStats.blk} icon="🛡️" viewMode={viewMode} />
-          <StatItem label="3PM" value={displayStats.three_pm} icon="🎯" viewMode={viewMode} />
-          <StatItem label="FGM" value={displayStats.fgm} icon="🎯" viewMode={viewMode} />
-          <StatItem label="FGA" value={displayStats.fga} icon="🏹" viewMode={viewMode} />
-          <StatItem label="FG%" value={displayStats.fg_percentage} icon="📈" isPercentage viewMode={viewMode} />
-          <StatItem label="FTM" value={displayStats.ftm} icon="🆓" viewMode={viewMode} />
-          <StatItem label="FTA" value={displayStats.fta} icon="🎯" viewMode={viewMode} />
-          <StatItem label="FT%" value={displayStats.ft_percentage} icon="📊" isPercentage viewMode={viewMode} />
-          <StatItem label="GP" value={displayStats.gp} icon="📅" viewMode={viewMode} />
+          {statsItemsData.map((stat) => (
+            <StatItem
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              icon={stat.icon}
+              isPercentage={stat.isPercentage}
+              viewMode={viewMode}
+              field={stat.field}
+            />
+          ))}
         </div>
       </div>
     );
