@@ -17,4 +17,28 @@
   .table-cell {
     @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
   }
+  
+  /* Trade specific styles */
+  .trade-stat-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3;
+  }
+  
+  .trade-stat-item {
+    @apply flex items-center justify-between p-2 bg-gray-50 rounded-lg;
+  }
+  
+  .trade-comparison-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 gap-4;
+  }
+  
+  /* Mobile improvements */
+  @media (max-width: 640px) {
+    .trade-stat-grid {
+      @apply grid-cols-1 gap-2;
+    }
+    
+    .trade-comparison-grid {
+      @apply grid-cols-1 gap-3;
+    }
+  }
 }

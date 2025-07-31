@@ -4,7 +4,7 @@ from app.utils.constants import RANKING_CATEGORIES
 
 
 class StatsCalculator:
-    """Handles statistical calculations, rankings, and derived metrics"""
+    """Pure statistical calculations and derived metrics"""
     
     def calculate_rankings(self, averages_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -14,26 +14,37 @@ class StatsCalculator:
         Returns:
             DataFrame with rankings and total points
         """
-        # Create copy and remove non-ranking columns
+        if averages_df.empty:
+            raise ValueError("Cannot calculate rankings for empty DataFrame")
+        
         ranked = averages_df.copy()
-        ranked.drop(['GP'], axis=1, inplace=True)
         
-        # Rank each category (higher is better)
-        ranked = ranked.rank()
+        # Keep team_id and team_name for reference, drop GP for ranking calculations
+        ranking_cols = [col for col in ranked.columns if col not in ['team_id', 'team_name', 'GP']]
+        team_info = ranked[['team_id', 'team_name']].copy()
         
-        # Calculate total points (sum of all rankings)
-        ranked['Total_Points'] = ranked.sum(axis=1)
+        # Calculate rankings only for statistical categories
+        ranked_stats = ranked[ranking_cols].rank()
         
-        # Sort by total points (descending)
-        ranked.sort_values(by='Total_Points', ascending=False, inplace=True)
+        # Add total points
+        ranked_stats['TOTAL_POINTS'] = ranked_stats.sum(axis=1)
         
-        # Add overall rank
-        ranked['Rank'] = ranked['Total_Points'].rank(method='min', ascending=False).astype(int)
+        # Sort by total points
+        ranked_stats.sort_values(by='TOTAL_POINTS', ascending=False, inplace=True)
         
-        # Reset index to get Team as a column
-        ranked.reset_index(inplace=True)
+        # Add rank column
+        ranked_stats['RANK'] = ranked_stats['TOTAL_POINTS'].rank(method='min', ascending=False).astype(int)
         
-        return ranked
+        # Reset index and merge with team info
+        ranked_stats.reset_index(inplace=True)
+        final_ranked = pd.merge(ranked_stats, team_info, left_on='index', right_index=True, how='left')
+        final_ranked.drop('index', axis=1, inplace=True)
+        
+        # Reorder columns to have team info first
+        cols = ['team_id', 'team_name'] + [col for col in final_ranked.columns if col not in ['team_id', 'team_name']]
+        final_ranked = final_ranked[cols]
+        
+        return final_ranked
     
     def find_category_leaders(self, averages_df: pd.DataFrame) -> Dict:
         """
@@ -43,16 +54,21 @@ class StatsCalculator:
         Returns:
             Dictionary with category leaders
         """
+        if averages_df.empty:
+            return {}
+        
         leaders = {}
         
         for category in RANKING_CATEGORIES:
             if category in averages_df.columns:
                 # Find team with highest value in this category
-                best_team = averages_df[category].idxmax()
-                best_value = averages_df.loc[best_team, category]
+                best_team_idx = averages_df[category].idxmax()
+                best_team_row = averages_df.iloc[best_team_idx]
+                best_value = best_team_row[category]
                 
                 leaders[f'{category}_leader'] = {
-                    'team': best_team,
+                    'team_id': int(best_team_row['team_id']),
+                    'team_name': str(best_team_row['team_name']),
                     'value': float(best_value)
                 }
         
@@ -66,6 +82,9 @@ class StatsCalculator:
         Returns:
             Dictionary with league averages
         """
+        if averages_df.empty:
+            return {}
+        
         league_stats = {}
         
         for category in RANKING_CATEGORIES + ['GP']:
@@ -82,6 +101,9 @@ class StatsCalculator:
         Returns:
             Normalized data matrix for heatmap
         """
+        if averages_df.empty:
+            return []
+        
         normalized_data = []
         
         for category in RANKING_CATEGORIES:
@@ -101,31 +123,23 @@ class StatsCalculator:
         # Transpose so each row represents a team
         return list(map(list, zip(*normalized_data)))
     
-    def get_team_stats(self, team_name: str, totals_df: pd.DataFrame, 
-                      averages_df: pd.DataFrame, rankings_df: pd.DataFrame) -> Dict:
+    def calculate_per_game_averages(self, totals_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Get comprehensive stats for a specific team
+        Calculate per-game averages from totals DataFrame
         Args:
-            team_name: Name of the team
             totals_df: DataFrame with total stats
-            averages_df: DataFrame with averages
-            rankings_df: DataFrame with rankings
         Returns:
-            Dictionary with all team statistics
+            DataFrame with per-game averages
         """
-        if team_name not in totals_df.index:
-            raise ValueError(f"Team '{team_name}' not found")
+        if totals_df.empty:
+            raise ValueError("Cannot calculate averages for empty DataFrame")
         
-        # Get data for this team
-        totals_data = totals_df.loc[team_name]
-        avg_data = averages_df.loc[team_name]
-        rank_data = rankings_df[rankings_df['Team'] == team_name].iloc[0]
+        from app.utils.constants import PER_GAME_CATEGORIES
         
-        return {
-            'team': team_name,
-            'totals': totals_data.to_dict(),
-            'averages': avg_data.to_dict(),
-            'rankings': {col: int(rank_data[col]) for col in RANKING_CATEGORIES if col in rank_data},
-            'total_points': float(rank_data['Total_Points']),
-            'overall_rank': int(rank_data['Rank'])
-        }
+        # Create copy without raw counting stats (keep percentages)
+        averages = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
+        
+        # Calculate per-game averages for counting stats
+        averages[PER_GAME_CATEGORIES] = averages[PER_GAME_CATEGORIES].div(averages['GP'], axis=0)
+        
+        return averages

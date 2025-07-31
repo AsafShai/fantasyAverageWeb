@@ -1,33 +1,82 @@
 import pandas as pd
-from typing import Dict, Optional
+import logging
+from typing import Dict
 from app.utils.constants import (
-    ESPN_COLUMN_MAP, ALL_CATEGORIES, PER_GAME_CATEGORIES, INTEGER_COLUMNS
+    ESPN_COLUMN_MAP, ALL_CATEGORIES, PER_GAME_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP
 )
+from app.services.stats_calculator import StatsCalculator
 
 
 class DataTransformer:
     """Transforms raw ESPN data into clean pandas DataFrames"""
     
-    def raw_to_totals_df(self, espn_data: Dict) -> Optional[pd.DataFrame]:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.stats_calculator = StatsCalculator()
+    
+    def raw_players_to_df(self, espn_players_data: Dict) -> pd.DataFrame:
         """
-        Convert raw ESPN API data to totals DataFrame
+        Convert raw ESPN API players data to DataFrame
         Args:
-            espn_data: Raw ESPN API response
+            espn_players_data: Raw ESPN API response
+        Returns:
+            Clean DataFrame with proper columns and types
+        """
+        try:
+            if not espn_players_data or 'teams' not in espn_players_data:
+                raise ValueError("Invalid ESPN players data structure")
+            
+            all_players = []
+            for team in espn_players_data['teams']:
+                team_id = team['id']
+                if 'roster' in team and 'entries' in team['roster']:
+                    for entry in team['roster']['entries']:
+                        player_stats = self._extract_player_stats(entry, team_id)
+                        if player_stats:  # Only add if we got valid stats
+                            all_players.append(player_stats)
+            
+            if not all_players:
+                raise ValueError("No valid player data found")
+                
+            df = pd.DataFrame(all_players)
+            return self._organize_player_columns(df)
+            
+        except Exception as e:
+            self.logger.error(f"Error transforming ESPN players data to DataFrame: {e}")
+            raise Exception("Error transforming ESPN players data to DataFrame")
+
+    def raw_standings_to_totals_df(self, espn_standings_data: Dict) -> pd.DataFrame:
+        """
+        Convert raw ESPN API standings data to totals DataFrame
+        Args:
+            espn_standings_data: Raw ESPN API response
         Returns:
             Clean totals DataFrame with proper columns and types
         """
         try:
-            # Extract team data from ESPN response
-            teams_data = {team['name']: team['valuesByStat'] for team in espn_data['teams']}
-            df = pd.DataFrame(teams_data).transpose()
+            if not espn_standings_data or 'teams' not in espn_standings_data:
+                raise ValueError("Invalid ESPN standings data structure")
             
-            # Apply transformations
-            df = self._transform_dataframe(df)
-            return df
+            # Extract team data from ESPN response
+            teams_data = []
+            for team in espn_standings_data['teams']:
+                if 'id' in team and 'name' in team and 'valuesByStat' in team:
+                    team_data = {
+                        "team_id": team['id'], 
+                        "team_name": team['name'].strip(), 
+                        **team['valuesByStat']
+                    }
+                    teams_data.append(team_data)
+            
+            if not teams_data:
+                raise ValueError("No valid team data found")
+                
+            df = pd.DataFrame(teams_data)
+            return self._transform_standings_dataframe(df)
             
         except Exception as e:
-            print(f"Error transforming ESPN data to totals DataFrame: {e}")
-            return None
+            self.logger.error(f"Error transforming ESPN standings data to totals DataFrame: {e}")
+            raise Exception("Error transforming ESPN standings data to totals DataFrame")
     
     def totals_to_averages_df(self, totals_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -37,13 +86,7 @@ class DataTransformer:
         Returns:
             DataFrame with per-game averages
         """
-        # Create copy without raw counting stats (keep percentages)
-        averages = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
-        
-        # Calculate per-game averages for counting stats
-        averages[PER_GAME_CATEGORIES] = averages[PER_GAME_CATEGORIES].div(averages['GP'], axis=0)
-        
-        return averages.round(4)
+        return self.stats_calculator.calculate_per_game_averages(totals_df)
     
     def averages_to_rankings_df(self, averages_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -53,21 +96,62 @@ class DataTransformer:
         Returns:
             DataFrame with rankings and total points
         """
-        ranked = averages_df.copy()
-        ranked.drop(['GP'], axis=1, inplace=True)
-        
-        ranked = ranked.rank()
-        
-        ranked['Total_Points'] = ranked.sum(axis=1)
-        
-        ranked.sort_values(by='Total_Points', ascending=False, inplace=True)
+        return self.stats_calculator.calculate_rankings(averages_df)
     
-        ranked['Rank'] = ranked['Total_Points'].rank(method='min', ascending=False).astype(int)
-        ranked.reset_index(inplace=True)
-        
-        return ranked
+    def _extract_player_stats(self, entry: Dict, team_id: int) -> Dict:
+        """Extract player stats from ESPN API data"""
+        try:
+            if 'playerPoolEntry' not in entry or 'player' not in entry['playerPoolEntry']:
+                return {}
+            
+            player = entry['playerPoolEntry']['player']
+            
+            # Extract basic player info
+            player_name = player.get('fullName', 'Unknown')
+            pro_team_id = player.get('proTeamId', 0)
+            pro_team = PRO_TEAM_MAP.get(pro_team_id, 'Unknown')
+            
+            # Extract positions
+            positions = "Unknown"
+            if 'eligibleSlots' in player:
+                slots = [POSITION_MAP.get(slot, '') for slot in player['eligibleSlots'] if 0 <= slot <= 4]
+                positions = ", ".join(filter(None, slots)) or "Unknown"
+            
+            # Extract stats
+            stats = player.get('stats', [])
+            for stat in stats:
+                if stat.get('scoringPeriodId') == 0 and stat.get('statSplitTypeId') == 0:
+                    player_stats = stat.get('stats', {})
+                    # Map ESPN column names to our names
+                    mapped_stats = {
+                        ESPN_COLUMN_MAP.get(key, key): value 
+                        for key, value in player_stats.items() 
+                        if key in ESPN_COLUMN_MAP
+                    }
+                    
+                    # Add player info
+                    mapped_stats.update({
+                        'Name': player_name,
+                        'team_id': team_id,
+                        'Pro Team': pro_team,
+                        'Positions': positions
+                    })
+                    
+                    return mapped_stats
+            
+            return {}
+            
+        except Exception as e:
+            self.logger.warning(f"Error extracting player stats: {e}")
+            return {}
     
-    def _transform_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _organize_player_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Organize player DataFrame columns in logical order"""
+        info_cols = ['Name', 'team_id', 'Pro Team', 'Positions']
+        stat_cols = [col for col in df.columns if col not in info_cols]
+        return df.reindex(columns=info_cols + stat_cols)
+    
+    def _transform_standings_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Transform raw DataFrame with proper column names and types
         Args:
@@ -75,18 +159,17 @@ class DataTransformer:
         Returns:
             Clean DataFrame with proper structure
         """
-        # Rename columns using ESPN mapping
+        # Apply column mapping
         df = df.rename(columns=ESPN_COLUMN_MAP)
         
-        # Select only the columns we need in the correct order
-        df = df[ALL_CATEGORIES]
+        # Select only required columns
+        available_cols = ['team_id', 'team_name'] + [col for col in ALL_CATEGORIES if col in df.columns]
+        df = df[available_cols]
         
-        # Convert integer columns to proper types
-        df[INTEGER_COLUMNS] = df[INTEGER_COLUMNS].astype(int)
-        
-        # Set up proper indexing
-        df.reset_index(inplace=True)
-        df.rename(columns={'index': 'Team'}, inplace=True)
-        df.set_index('Team', inplace=True)
+        # Convert integer columns
+        int_cols = [col for col in INTEGER_COLUMNS if col in df.columns]
+        df[int_cols] = df[int_cols].astype(int)
         
         return df
+
+    
