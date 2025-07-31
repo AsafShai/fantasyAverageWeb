@@ -17,9 +17,11 @@ async def get_league_summary(
     """Get league overview and summary statistics"""
     try:
         return league_service.get_league_summary()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting league summary: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve league summary")
+        raise HTTPException(status_code=500, detail="Failed to retrieve league summary") from e
 
 
 @router.get("/shots", response_model=LeagueShotsData)
@@ -29,8 +31,10 @@ async def get_league_shots(
     """Get league-wide shooting statistics"""
     try:
         return league_service.get_league_shots_data()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting league shots data: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve league shots data")
+        raise HTTPException(status_code=500, detail="Failed to retrieve league shots data") from e
 
 

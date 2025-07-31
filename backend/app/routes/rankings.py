@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import Optional, Annotated
 from app.models import LeagueRankings
+from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.models.requests import SortOrder
 from app.services.ranking_service import RankingService
 import logging
@@ -19,9 +20,13 @@ async def get_rankings(
     """Get league rankings with optional sorting"""
     try:
         return ranking_service.get_league_rankings(sort_by=sort_by, order=order.value)
+    except InvalidParameterError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting rankings: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve rankings")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve rankings: {e}" )
 
 @router.get("/rankings/category/{category}")
 async def get_category_rankings(
@@ -39,6 +44,10 @@ async def get_category_rankings(
         return result
     except HTTPException:
         raise
+    except InvalidParameterError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting category rankings for {category}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve category rankings")
