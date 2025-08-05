@@ -6,10 +6,13 @@ from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
 from app.routes.league import router as league_router
 from app.routes.analytics import router as analytics_router
+from app.routes.trades import router as trades_router, limiter
 from dotenv import load_dotenv
 from app.config import settings
 import logging
 from datetime import datetime
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +26,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Fantasy League Dashboard API", version="1.0.0")
+
+# Add rate limiter to app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Global exception handler for unhandled server errors
 @app.exception_handler(Exception)
@@ -48,6 +55,7 @@ app.include_router(rankings_router, prefix="/api", tags=["Rankings"])
 app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
 app.include_router(league_router, prefix="/api/league", tags=["League"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(trades_router, prefix="/api/trades", tags=["Trades"])
 
 @app.get("/")
 async def root():

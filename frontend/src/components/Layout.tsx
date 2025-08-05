@@ -9,6 +9,7 @@ const Layout = () => {
     { path: '/shots', label: 'Shots', icon: '🎯' },
     { path: '/analytics', label: 'Analytics', icon: '📈' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
+    { path: '/trade-suggestions', label: 'AI Trades', icon: '🤖' },
   ]
 
   return (
