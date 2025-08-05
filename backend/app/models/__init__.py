@@ -4,6 +4,7 @@ from .league import *
 from .stats import *
 from .team import *
 from .requests import *
+from .trades import *
 
 __all__ = [
     "Team",
@@ -22,5 +23,9 @@ __all__ = [
     
     "TeamDetail",
     "Player",
-    "TeamPlayers"
+    "TeamPlayers",
+    "TradeSuggestionsResponse",
+    "TradeSuggestion",
+    "TradeSuggestionAI",
+    "TradeSuggestionAIResponse"
 ]

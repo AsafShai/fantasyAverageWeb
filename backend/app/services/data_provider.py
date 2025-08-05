@@ -1,11 +1,11 @@
 import logging
 import requests
-from typing import Optional, Tuple
+from typing import Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
 from app.config import settings
-
+from app.exceptions import DataSourceError
 
 class DataProvider:
     """Centralized data provider with caching for all ESPN data operations"""
@@ -86,13 +86,13 @@ class DataProvider:
             
         except requests.RequestException as e:
             self.logger.error(f"Error fetching players data from ESPN API: {e}")
-            raise Exception("Error fetching players data from ESPN API")
+            raise DataSourceError("Error fetching players data from ESPN API")
         except (KeyError, ValueError) as e:
             self.logger.error(f"Error parsing ESPN API response: {e}")
-            raise Exception("Error parsing ESPN API response")
+            raise DataSourceError("Error parsing ESPN API response")
         except Exception as e:
             self.logger.error(f"Unexpected error fetching ESPN players data: {e}")
-            raise Exception("Unexpected error fetching ESPN players data")
+            raise DataSourceError("Unexpected error fetching ESPN players data")
 
     def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
@@ -118,3 +118,7 @@ class DataProvider:
             raise ValueError("ESPN_STANDINGS_URL is not configured")
         if not settings.espn_players_url:
             raise ValueError("ESPN_PLAYERS_URL is not configured")
+
+def get_data_provider() -> DataProvider:
+    """Factory function for DataProvider dependency injection"""
+    return DataProvider()
