@@ -7,75 +7,14 @@ from app.models import (
     LeagueShotsData, TeamPlayers, AverageStats, RankingStats, Team
 )
 
-
 @pytest.fixture
 def response_builder():
     """Create ResponseBuilder instance"""
     return ResponseBuilder()
 
-
 @pytest.fixture
-def sample_rankings_df():
-    """Sample rankings DataFrame for testing"""
-    return pd.DataFrame({
-        'team_id': [1, 2, 3],
-        'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
-        'FG%': [2, 3, 1],
-        'FT%': [3, 1, 2],
-        '3PM': [2, 1, 3],
-        'AST': [2, 3, 1],
-        'REB': [2, 3, 1],
-        'STL': [2, 3, 1],
-        'BLK': [3, 1, 2],
-        'PTS': [2, 1, 3],
-        'TOTAL_POINTS': [18, 17, 15],
-        'RANK': [1, 2, 3]
-    })
-
-
-@pytest.fixture
-def sample_totals_df():
-    """Sample totals DataFrame for testing"""
-    return pd.DataFrame({
-        'team_id': [1, 2, 3],
-        'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
-        'FGM': [3842, 3756, 3699],
-        'FGA': [8234, 8456, 8123],
-        'FG%': [46.7, 44.4, 45.5],
-        'FTM': [1523, 1645, 1456],
-        'FTA': [2034, 2156, 1923],
-        'FT%': [74.9, 76.3, 75.7],
-        '3PM': [1245, 1367, 1123],
-        'AST': [2345, 2267, 2456],
-        'REB': [3567, 3423, 3678],
-        'STL': [756, 689, 823],
-        'BLK': [456, 534, 423],
-        'PTS': [9452, 9924, 8977],
-        'GP': [82, 82, 82]
-    })
-
-
-@pytest.fixture
-def sample_averages_df():
-    """Sample averages DataFrame for testing"""
-    return pd.DataFrame({
-        'team_id': [1, 2, 3],
-        'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
-        'FG%': [46.7, 44.4, 45.5],
-        'FT%': [74.9, 76.3, 75.7],
-        '3PM': [15.2, 16.7, 13.7],
-        'AST': [28.6, 27.6, 30.0],
-        'REB': [43.5, 41.7, 44.9],
-        'STL': [9.2, 8.4, 10.0],
-        'BLK': [5.6, 6.5, 5.2],
-        'PTS': [115.3, 121.0, 109.5],
-        'GP': [82, 82, 82]
-    })
-
-
-@pytest.fixture
-def sample_players_df():
-    """Sample players DataFrame for testing"""
+def response_builder_players_df():
+    """Sample players DataFrame specific to response builder tests - 2 players for team 1"""
     return pd.DataFrame({
         'Name': ['Player A', 'Player B'],
         'team_id': [1, 1],
@@ -108,14 +47,12 @@ class TestResponseBuilder:
         assert len(result.rankings) == 3, "Should have 3 rankings"
         
         # Verify default sorting is by RANK ascending (best rank first)
-        # Sample data: Team Alpha=1, Team Beta=2, Team Gamma=3
         ranks = [ranking.rank for ranking in result.rankings]
         team_names = [ranking.team.team_name for ranking in result.rankings]
         
         assert ranks == [1, 2, 3], "Should be sorted by rank ascending (best rank first)"
         assert team_names == ['Team Alpha', 'Team Beta', 'Team Gamma'], "Should be in correct team order"
         
-        # Verify first ranking details
         first_ranking = result.rankings[0]
         assert first_ranking.team.team_id == 1, "First ranking should be Team Alpha"
         assert first_ranking.team.team_name == 'Team Alpha', "First ranking should be Team Alpha"
@@ -125,7 +62,6 @@ class TestResponseBuilder:
         """Test build_rankings_response with custom sorting by PTS descending"""
         result = response_builder.build_rankings_response(sample_rankings_df, sort_by='PTS', order='desc')
         
-        # Sample PTS data: Team Alpha=2, Team Beta=1, Team Gamma=3
         # Descending order should be: Team Gamma(3), Team Alpha(2), Team Beta(1)
         pts_values = [ranking.pts for ranking in result.rankings]
         team_names = [ranking.team.team_name for ranking in result.rankings]
@@ -137,7 +73,6 @@ class TestResponseBuilder:
         """Test build_rankings_response with FG% ascending order"""
         result = response_builder.build_rankings_response(sample_rankings_df, sort_by='FG%', order='asc')
         
-        # Sample FG% data: Team Alpha=2, Team Beta=3, Team Gamma=1
         # Ascending order should be: Team Gamma(1), Team Alpha(2), Team Beta(3)
         fg_values = [ranking.fg_percentage for ranking in result.rankings]
         team_names = [ranking.team.team_name for ranking in result.rankings]
@@ -149,7 +84,6 @@ class TestResponseBuilder:
         """Test build_rankings_response with TOTAL_POINTS sorting"""
         result = response_builder.build_rankings_response(sample_rankings_df, sort_by='TOTAL_POINTS', order='desc')
         
-        # Sample TOTAL_POINTS: Team Alpha=18, Team Beta=17, Team Gamma=15
         # Descending order should be: Team Alpha(18), Team Beta(17), Team Gamma(15)
         total_points = [ranking.total_points for ranking in result.rankings]
         team_names = [ranking.team.team_name for ranking in result.rankings]
@@ -166,17 +100,14 @@ class TestResponseBuilder:
         assert result.team.team_id == team_id, "Should have correct team_id"
         assert result.team.team_name == 'Team Alpha', "Should have correct team_name"
         
-        # Verify nested objects
         assert hasattr(result, 'shot_chart'), "Should have shot_chart"
         assert hasattr(result, 'raw_averages'), "Should have raw_averages"
         assert hasattr(result, 'ranking_stats'), "Should have ranking_stats"
         assert hasattr(result, 'category_ranks'), "Should have category_ranks"
         
-        # Verify shot_chart data
         assert result.shot_chart.fgm == 3842, "Should have correct FGM"
         assert result.shot_chart.fg_percentage == 46.7, "Should have correct FG%"
         
-        # Verify category_ranks structure
         assert isinstance(result.category_ranks, dict), "category_ranks should be dict"
         assert 'FG%' in result.category_ranks, "Should have FG% rank"
         assert result.category_ranks['FG%'] == 2, "Should have correct FG% rank"
@@ -252,28 +183,25 @@ class TestResponseBuilder:
         assert len(result.shots) == 2, "Should have 2 team shots"
         assert isinstance(result.last_updated, datetime), "Should have last_updated datetime"
         
-        # Verify first shot stats
         first_shot = result.shots[0]
         assert first_shot.team.team_id == 1, "First shot should be Team Alpha"
         assert first_shot.fgm == 3842, "Should have correct FGM"
         assert first_shot.fg_percentage == 46.7, "Should have correct FG%"
     
-    def test_build_team_players_response_success(self, response_builder, sample_players_df):
+    def test_build_team_players_response_success(self, response_builder, response_builder_players_df):
         """Test successful team players response building"""
-        result = response_builder.build_team_players_response(sample_players_df)
+        result = response_builder.build_team_players_response(response_builder_players_df)
         
         assert isinstance(result, TeamPlayers), "Should return TeamPlayers object"
         assert result.team_id == 1, "Should have correct team_id"
         assert len(result.players) == 2, "Should have 2 players"
         assert isinstance(result.last_updated, datetime), "Should have last_updated datetime"
         
-        # Verify first player
         first_player = result.players[0]
         assert first_player.player_name == 'Player A', "Should have correct player name"
         assert first_player.pro_team == 'LAL', "Should have correct pro team"
         assert first_player.positions == ['PG', 'SG'], "Should have correct positions"
         
-        # Verify player stats
         assert first_player.stats.pts == 1213.0, "Should have correct PTS"
         assert first_player.stats.gp == 78, "Should have correct GP"
     

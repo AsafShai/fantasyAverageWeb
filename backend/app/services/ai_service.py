@@ -47,6 +47,7 @@ class AIService:
             2. Player count difference between sides must be ≤ 1 (e.g., 2-for-3 is valid, 1-for-3 is not)
             3. All players on each side must be from the same team
             4. Provide reasoning for each trade
+            5. On your reasoning, mention the team name and not team id (not the real life team, the fantasy)
             
             {format_instructions}
             

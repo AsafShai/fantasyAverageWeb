@@ -6,6 +6,7 @@ from app.services.ai_service import AIService, get_ai_service
 from fastapi import Depends
 from typing import Annotated, List
 import logging
+import asyncio
 
 # Dependency type aliases
 DataProviderDep = Annotated[DataProvider, Depends(get_data_provider)]
@@ -18,16 +19,22 @@ class TradesService:
         self.ai_service = ai_service
         self.logger = logging.getLogger(__name__)
 
-    def get_trades_suggestions_by_team_id(self, team_id: int) -> TradeSuggestionsResponse:
+    async def get_trades_suggestions_by_team_id(self, team_id: int) -> TradeSuggestionsResponse:
         try:
-            totals_df, averages_df, rankings_df = self.data_provider.get_all_dataframes()
+            standings_task = self.data_provider.get_all_dataframes()
+            players_task = self.data_provider.get_players_df()
+            
+            (totals_df, averages_df, rankings_df), players_df = await asyncio.gather(
+                standings_task,
+                players_task
+            )
+            
             if not is_team_exists(team_id, totals_df):
                 self.logger.warning(f"Team {team_id} not found in data")
                 raise ResourceNotFoundError(f"Team with ID {team_id} not found")
             
             team_name = totals_df[totals_df['team_id'] == team_id]['team_name'].values[0]
             
-            players_df = self.data_provider.get_players_df()
             if players_df is None:
                 self.logger.error("Failed to load players data from ESPN API")
                 raise DataSourceError("Unable to process players data from ESPN API")
@@ -56,7 +63,7 @@ class TradesService:
             
         for i, trade_ai in enumerate(ai_response.trade_suggestions):
             try:
-                opponent_team = self._get_team_by_id(trade_ai.opponent_team, totals_df)
+                opponent_team = self._get_team_by_name(trade_ai.opponent_team, totals_df)
                 players_to_give = self._get_players_from_names_list(trade_ai.players_to_give, players_df)
                 players_to_receive = self._get_players_from_names_list(trade_ai.players_to_receive, players_df)
                     
@@ -72,12 +79,12 @@ class TradesService:
         return trade_suggestions
         
 
-    def _get_team_by_id(self, team_id: int, totals_df) -> Team:
+    def _get_team_by_name(self, team_name: str, totals_df) -> Team:
         """Get Team object by team ID"""
-        team_row = totals_df[totals_df['team_id'] == team_id]
+        team_row = totals_df[totals_df['team_name'] == team_name]
         if team_row.empty:
-            raise ResourceNotFoundError(f"Team with ID {team_id} not found")
-        team_name = team_row['team_name'].iloc[0]
+            raise ResourceNotFoundError(f"Team with Name {team_name} not found")
+        team_id = team_row['team_id'].iloc[0]
         return Team(team_id=team_id, team_name=team_name)
 
     def _get_players_from_names_list(self, names_list: List[str], players_df) -> List[Player]:
