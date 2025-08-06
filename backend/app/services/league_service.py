@@ -16,17 +16,15 @@ class LeagueService:
         self.response_builder = ResponseBuilder()
         self.logger = logging.getLogger(__name__)
     
-    def get_league_summary(self) -> LeagueSummary:
+    async def get_league_summary(self) -> LeagueSummary:
         """Get league summary statistics"""        
-        averages_df = self.data_provider.get_averages_df()
+        averages_df = await self.data_provider.get_averages_df()
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
         
-        # Business logic: calculate category leaders and league averages
         category_leaders = self._calculate_category_leaders(averages_df)
         league_averages = self._calculate_league_averages(averages_df)
         
-        # Use builder only for response formatting
         return self.response_builder.build_league_summary_response(
             total_teams=len(averages_df),
             total_games_played=int(averages_df['GP'].sum()),
@@ -34,13 +32,12 @@ class LeagueService:
             league_averages=league_averages
         )
     
-    def get_heatmap_data(self) -> HeatmapData:
+    async def get_heatmap_data(self) -> HeatmapData:
         """Get data for heatmap visualization"""
-        averages_df = self.data_provider.get_averages_df()
+        averages_df = await self.data_provider.get_averages_df()
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
         
-        # Business logic: prepare heatmap data
         teams_data = self._extract_teams_data(averages_df)
         categories_data = self._extract_categories_data(averages_df)
         normalized_data = self.stats_calculator.normalize_for_heatmap(averages_df)
@@ -51,13 +48,12 @@ class LeagueService:
             normalized_data=normalized_data
         )
     
-    def get_league_shots_data(self) -> LeagueShotsData:
+    async def get_league_shots_data(self) -> LeagueShotsData:
         """Get league-wide shooting statistics"""
-        totals_df = self.data_provider.get_totals_df()
+        totals_df = await self.data_provider.get_totals_df()
         if totals_df is None:
             raise ResourceNotFoundError("Unable to fetch totals data from ESPN API")
         
-        # Business logic: extract shooting data
         shots_data = self._extract_shots_data(totals_df)
         
         return self.response_builder.build_league_shots_response(shots_data)

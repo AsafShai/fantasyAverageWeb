@@ -18,10 +18,11 @@ TradeServiceDep = Annotated[TradesService, Depends(get_trades_service)]
 @router.get("/suggestions/{team_id}", response_model=TradeSuggestionsResponse)
 @limiter.limit("5/minute")
 async def get_trades_suggestions_by_team_id(request: Request, team_id: int, trades_service: TradeServiceDep):
+    if team_id is None or team_id < 0:
+        raise HTTPException(status_code=400, detail="Team ID must be positive")
+    
     try:
-        if team_id is None or team_id <= 0:
-            raise HTTPException(status_code=400, detail="Team ID must be positive")
-        return trades_service.get_trades_suggestions_by_team_id(team_id)
+        return await trades_service.get_trades_suggestions_by_team_id(team_id)
     except DataSourceError as e:
         logger.error(f"Data source error for team {team_id}: {e}")
         raise HTTPException(

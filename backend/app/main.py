@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,6 +14,7 @@ import logging
 from datetime import datetime
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from app.services.data_provider import DataProvider
 
 # Configure logging
 logging.basicConfig(
@@ -25,13 +27,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Fantasy League Dashboard API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan for proper resource cleanup"""
+    # Startup
+    logger.info("Starting Fantasy League Dashboard API")
+    yield
+    # Shutdown
+    try:
+        data_provider = DataProvider()
+        await data_provider.close()
+        logger.info("Closed httpx client connections")
+    except Exception as e:
+        logger.error(f"Error during shutdown cleanup: {e}")
 
-# Add rate limiter to app
+app = FastAPI(
+    title="Fantasy League Dashboard API", 
+    version="1.0.0",
+    lifespan=lifespan
+)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Global exception handler for unhandled server errors
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception in {request.url}: {str(exc)}", exc_info=True)
@@ -56,6 +74,8 @@ app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
 app.include_router(league_router, prefix="/api/league", tags=["League"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(trades_router, prefix="/api/trades", tags=["Trades"])
+
+
 
 @app.get("/")
 async def root():

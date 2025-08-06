@@ -1,33 +1,38 @@
 # Fantasy League Dashboard
 
-A React TypeScript frontend with FastAPI backend for displaying ESPN Fantasy Basketball league statistics.
+A full-stack fantasy basketball application featuring AI-powered trade suggestions, real-time ESPN data integration, and comprehensive team analytics.
 
-## Features
+## 🏀 Features
 
-- **Team Rankings**: Sortable table showing team performance across multiple categories
-- **Data Visualizations**: Charts and heatmaps for league analysis
-- **Team Details**: Individual team statistics and performance metrics
-- **Real-time Data**: Live ESPN Fantasy API integration
+- **Team Rankings**: Sortable rankings across all statistical categories
+- **AI Trade Suggestions**: GPT-powered trade recommendations with impact analysis
+- **Team Analytics**: Performance visualizations and detailed statistics
+- **Player Data**: Comprehensive player statistics and roster management
+- **Real-time Data**: Live ESPN Fantasy Basketball API integration
 
-## Tech Stack
+## 🛠 Tech Stack
 
 ### Backend
-- **FastAPI** with Python
-- **uv** for dependency management
-- **pandas** for data processing
-- **Pydantic** for data validation
+- **Python 3.12+** - Programming language
+- **FastAPI** - Python web framework
+- **LangChain + OpenAI** - AI trade suggestions
+- **pandas** - Data processing
+- **pytest** - Testing
+- **Docker** - Containerization
 
 ### Frontend
-- **React 19** with TypeScript
-- **Redux Toolkit** with RTK Query
-- **Tailwind CSS 3.x** for styling
-- **React Router** for navigation
-- **Recharts** for data visualization
+- **React 19** - Frontend framework
+- **TypeScript** - Type safety
+- **Redux Toolkit** - State management
+- **TanStack Query (React Query)** - Server state management
+- **Recharts** - Data visualization
+- **Tailwind CSS** - Styling
+- **Vite** - Build tool
 
 ## Setup
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.12+
 - Node.js 18+
 - uv (Python package manager)
 
@@ -39,103 +44,91 @@ A React TypeScript frontend with FastAPI backend for displaying ESPN Fantasy Bas
    cd fantasyAverageWeb
    ```
 
-2. **Backend Setup**
+2. **Environment Setup**
+   
+   **Backend** - Create `.env` in `backend` directory:
+   ```env
+   ESPN_STANDINGS_URL=your_espn_standings_url
+   ESPN_PLAYERS_URL=your_espn_players_url
+   OPENAI_API_KEY=your_openai_api_key
+   CORS_ORIGINS=localhost:5173,others
+   ENVIRONMENT=production/development
+   ```
+   
+   **Frontend** - Create `.env` in `frontend` directory:
+   ```env
+   VITE_API_BASE_URL=http://localhost:8000
+   ```
+
+3. **Backend Setup**
    ```bash
    cd backend
    uv sync
    ```
 
-3. **Frontend Setup**
+4. **Frontend Setup**
    ```bash
-   cd frontend1
+   cd frontend
    npm install
    ```
 
-## Running the Application
+## 🚀 Running the Application
 
-### Development Mode
-
-1. **Set Up the Backend Environment (First Time Only)**
-   ```powershell
-   cd backend
-   uv venv           # Create the virtual environment (only once)
-   .venv\Scripts\Activate  # Activate the virtual environment (every new terminal)
-   uv sync           # Install dependencies from lock file
-   ```
-
-2. **Start the Backend**
-   ```powershell
-   uv run python main.py
-   ```
-   Backend will run on http://localhost:8000
-
-2. **Start the Frontend**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   Frontend will run on http://localhost:5173
-
-### API Endpoints
-
-- `GET /api/rankings` - Team rankings with sorting
-- `GET /api/teams/{team_name}` - Individual team details
-- `GET /api/league/summary` - League overview statistics
-- `GET /api/charts/heatmap` - Heatmap visualization data
-- `GET /api/totals` - Totals and processed ESPN API data
-
-## Development
-
-### Backend Commands
+### Option 1: Backend Docker Setup
 ```bash
 cd backend
-uv add <package>        # Add new dependency
-uv sync --upgrade       # Upgrade dependencies
-uv run python main.py   # Start development server
+docker-compose up --build
+```
+Backend: http://localhost:8000
+
+*Note: Docker setup is currently available for backend only. Frontend runs locally.*
+
+### Option 2: Local Development
+
+**Backend:**
+```bash
+cd backend
+uv run -m app.main
 ```
 
-### Frontend Commands
+**Frontend:**
 ```bash
 cd frontend
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run lint     # Run ESLint
-npm run preview  # Preview production build
+npm run dev
 ```
 
-## Data Sources
+## 🧪 Testing
 
-The application fetches data from ESPN Fantasy Basketball API and processes it to provide:
-- Per-game averages for all statistical categories
-- Team rankings based on category performance
-- Total points calculation from ranking positions
-
-## Project Structure
-
-```
-fantasyAverageWeb/
-├── backend/
-│   ├── app/
-│   │   ├── models/fantasy.py      # Pydantic data models
-│   │   └── services/data_processor.py  # ESPN API integration
-│   ├── main.py                    # FastAPI application
-│   └── pyproject.toml            # Python dependencies
-└── frontend/
-    ├── src/
-    │   ├── components/           # React components
-    │   ├── pages/               # Page components
-    │   ├── store/               # Redux store and API
-    │   └── types/               # TypeScript definitions
-    ├── package.json             # Node dependencies
-    └── tailwind.config.js       # Tailwind configuration
+```bash
+# Backend tests
+cd backend
+uv run pytest
 ```
 
-### Backend Environment Configuration
+## 📊 Data & AI
 
-You can configure the backend server port by creating a `.env` file in the `backend` directory:
+- **ESPN Fantasy API** - Live team and player statistics
+- **OpenAI GPT-4o-mini** - AI-powered trade analysis
+- **Smart Caching** - ETag-based HTTP caching for performance
+
+
+## ⚙️ Environment Variables
+
+### Backend
+`.env` file in `backend/` directory:
 
 ```env
-PORT=8000
+ESPN_STANDINGS_URL=your_espn_standings_url
+ESPN_PLAYERS_URL=your_espn_players_url
+OPENAI_API_KEY=your_openai_api_key
+CORS_ORIGINS=localhost:5173,others
+ENVIRONMENT=production/development
 ```
 
-If not set, the default port is 8000.
+### Frontend
+Optional `.env` file in `frontend/` directory:
+
+```env
+# API Configuration
+VITE_API_BASE_URL=http://localhost:8000
+```

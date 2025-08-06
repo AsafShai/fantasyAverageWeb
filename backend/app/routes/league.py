@@ -16,7 +16,7 @@ async def get_league_summary(
 ):
     """Get league overview and summary statistics"""
     try:
-        return league_service.get_league_summary()
+        return await league_service.get_league_summary()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -30,7 +30,7 @@ async def get_league_shots(
 ):
     """Get league-wide shooting statistics"""
     try:
-        return league_service.get_league_shots_data()
+        return await league_service.get_league_shots_data()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

@@ -15,7 +15,7 @@ class TradeSuggestionsResponse(BaseModel):
     trade_suggestions: List[TradeSuggestion]
 
 class TradeSuggestionAI(BaseModel):
-    opponent_team: int = Field(description="The team id of the opponent team")
+    opponent_team: str = Field(description="The team name of the opponent team")
     players_to_give: List[str] = Field(description="The list of player names to give to the opponent team")
     players_to_receive: List[str] = Field(description="The list of player names to receive from the opponent team")
     reasoning: str = Field(description="The reasoning for the trade")
