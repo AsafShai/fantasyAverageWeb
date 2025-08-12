@@ -1,11 +1,11 @@
 import logging
-import requests
-from typing import Optional, Tuple
+import httpx
+from typing import Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
 from app.config import settings
-
+from app.exceptions import DataSourceError
 
 class DataProvider:
     """Centralized data provider with caching for all ESPN data operations"""
@@ -24,16 +24,21 @@ class DataProvider:
             self._validate_urls()
             self.data_transformer = DataTransformer()
             self.logger = logging.getLogger(__name__)
+            # Create httpx client with connection pooling
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+            )
             DataProvider._initialized = True
     
-    def get_totals_df(self) -> pd.DataFrame:
+    async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching"""
         try:
             headers = {}
             if self.cache_manager.totals_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
             
-            response = requests.get(settings.espn_standings_url, headers=headers, timeout=10)
+            response = await self._client.get(settings.espn_standings_url, headers=headers)
             
             if response.status_code == 304:
                 return self.cache_manager.totals_cache['data']
@@ -41,16 +46,14 @@ class DataProvider:
             response.raise_for_status()
             api_data = response.json()
             
-            # Transform data
             totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
             
-            # Cache the result
             self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
             self.cache_manager.totals_cache['data'] = totals_df
             
             return totals_df
             
-        except requests.RequestException as e:
+        except httpx.RequestError as e:
             self.logger.error(f"Error fetching data from ESPN API: {e}")
             raise Exception("Error fetching data from ESPN API")
         except (KeyError, ValueError) as e:
@@ -60,14 +63,14 @@ class DataProvider:
             self.logger.error(f"Unexpected error fetching ESPN data: {e}")
             raise Exception("Unexpected error fetching ESPN data")
 
-    def get_players_df(self) -> pd.DataFrame:
+    async def get_players_df(self) -> pd.DataFrame:
         """Get players DataFrame with caching"""
         try:
             headers = {}
             if self.cache_manager.players_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.players_cache['etag']
             
-            response = requests.get(settings.espn_players_url, headers=headers, timeout=10)
+            response = await self._client.get(settings.espn_players_url, headers=headers)
             
             if response.status_code == 304:
                 return self.cache_manager.players_cache['data']
@@ -75,40 +78,38 @@ class DataProvider:
             response.raise_for_status()
             api_data = response.json()
             
-            # Transform data
             players_df = self.data_transformer.raw_players_to_df(api_data)
             
-            # Cache the result
             self.cache_manager.players_cache['etag'] = response.headers.get('ETag')
             self.cache_manager.players_cache['data'] = players_df
             
             return players_df
             
-        except requests.RequestException as e:
+        except httpx.RequestError as e:
             self.logger.error(f"Error fetching players data from ESPN API: {e}")
-            raise Exception("Error fetching players data from ESPN API")
+            raise DataSourceError("Error fetching players data from ESPN API")
         except (KeyError, ValueError) as e:
             self.logger.error(f"Error parsing ESPN API response: {e}")
-            raise Exception("Error parsing ESPN API response")
+            raise DataSourceError("Error parsing ESPN API response")
         except Exception as e:
             self.logger.error(f"Unexpected error fetching ESPN players data: {e}")
-            raise Exception("Unexpected error fetching ESPN players data")
+            raise DataSourceError("Unexpected error fetching ESPN players data")
 
-    def get_averages_df(self) -> pd.DataFrame:
+    async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
-        totals_df = self.get_totals_df()
+        totals_df = await self.get_totals_df()
         return self.data_transformer.totals_to_averages_df(totals_df)
     
-    def get_rankings_df(self) -> pd.DataFrame:
+    async def get_rankings_df(self) -> pd.DataFrame:
         """Get rankings DataFrame with caching"""
-        averages_df = self.get_averages_df()
+        averages_df = await self.get_averages_df()
         return self.data_transformer.averages_to_rankings_df(averages_df)
     
-    def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    async def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Get all three main DataFrames at once (optimized for endpoints that need multiple)"""
-        totals_df = self.get_totals_df()
-        averages_df = self.get_averages_df()
-        rankings_df = self.get_rankings_df()
+        totals_df = await self.get_totals_df()
+        averages_df = self.data_transformer.totals_to_averages_df(totals_df)
+        rankings_df = self.data_transformer.averages_to_rankings_df(averages_df)
         
         return totals_df, averages_df, rankings_df
     
@@ -118,3 +119,12 @@ class DataProvider:
             raise ValueError("ESPN_STANDINGS_URL is not configured")
         if not settings.espn_players_url:
             raise ValueError("ESPN_PLAYERS_URL is not configured")
+    
+    async def close(self):
+        """Close the httpx client to clean up connections"""
+        if hasattr(self, '_client'):
+            await self._client.aclose()
+
+def get_data_provider() -> DataProvider:
+    """Factory function for DataProvider dependency injection"""
+    return DataProvider()

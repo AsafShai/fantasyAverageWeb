@@ -1,12 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse } from '../../types/api';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:8000/api',
+    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string }>({
       query: ({ sortBy, order = 'asc' } = {}) => ({
@@ -43,6 +43,10 @@ export const fantasyApi = createApi({
       query: (teamId) => `/teams/${teamId}/players`,
       providesTags: ['Team'],
     }),
+    getTradeSuggestions: builder.query<TradeSuggestionsResponse, number>({
+      query: (teamId) => `/trades/suggestions/${teamId}`,
+      keepUnusedDataFor: 0, // Don't cache the results
+    }),
   }),
 });
 
@@ -55,4 +59,5 @@ export const {
   useGetLeagueShotsQuery,
   useGetTeamsListQuery,
   useGetTeamPlayersQuery,
+  useGetTradeSuggestionsQuery,
 } = fantasyApi;
