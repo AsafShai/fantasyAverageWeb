@@ -14,7 +14,7 @@ LeagueServiceDep = Annotated[LeagueService, Depends(LeagueService)]
 async def get_heatmap(league_service: LeagueServiceDep):
     """Get heatmap data for visualization"""
     try:
-        return league_service.get_heatmap_data()
+        return await league_service.get_heatmap_data()
     except ResourceNotFoundError as e:
         logger.warning(f"Invalid request for heatmap: {e}")
         raise HTTPException(status_code=404, detail=str(e))

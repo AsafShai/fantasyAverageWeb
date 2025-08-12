@@ -4,6 +4,7 @@ from app.models import TeamDetail, TeamPlayers, Team
 from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
+from app.utils.utils import is_team_exists
 
 class TeamService:
     """Service for team-related operations"""
@@ -13,21 +14,21 @@ class TeamService:
         self.response_builder = ResponseBuilder()
         self.logger = logging.getLogger(__name__)
     
-    def get_team_detail(self, team_id: int) -> TeamDetail:
+    async def get_team_detail(self, team_id: int) -> TeamDetail:
         """Get detailed team statistics"""
-        totals_df, averages_df, rankings_df = self.data_provider.get_all_dataframes()
+        totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
         
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ResourceNotFoundError("Unable to process ESPN data")
         
-        if not self._team_exists(team_id, totals_df):
+        if not is_team_exists(team_id, totals_df):
             raise ResourceNotFoundError(f"Team with ID {team_id} not found")
         
         return self.response_builder.build_team_detail_response(team_id, totals_df, averages_df, rankings_df)
     
-    def get_teams_list(self) -> List[Team]:
+    async def get_teams_list(self) -> List[Team]:
         """Get list of all teams"""
-        totals_df = self.data_provider.get_totals_df()
+        totals_df = await self.data_provider.get_totals_df()
         if totals_df is None:
             raise Exception("Unable to fetch teams data from ESPN API")
         
@@ -38,9 +39,9 @@ class TeamService:
         
         return teams
     
-    def get_team_players(self, team_id: int) -> TeamPlayers:
+    async def get_team_players(self, team_id: int) -> TeamPlayers:
         """Get players for a specific team by team ID"""
-        players_df = self.data_provider.get_players_df()
+        players_df = await self.data_provider.get_players_df()
         if players_df is None:
             raise Exception("Unable to process player data")
         
@@ -50,10 +51,6 @@ class TeamService:
             raise ResourceNotFoundError(f"No players found for team ID {team_id}")
         
         return self.response_builder.build_team_players_response(team_players)
-    
-    def _team_exists(self, team_id: int, totals_df) -> bool:
-        """Check if team exists in the data"""
-        return team_id in totals_df['team_id'].unique()
     
     def _extract_teams_from_dataframe(self, totals_df) -> List[Team]:
         """Extract teams list from dataframe with validation"""

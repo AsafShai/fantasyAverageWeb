@@ -19,7 +19,7 @@ async def get_rankings(
 ):
     """Get league rankings with optional sorting"""
     try:
-        return ranking_service.get_league_rankings(sort_by=sort_by, order=order.value)
+        return await ranking_service.get_league_rankings(sort_by=sort_by, order=order.value)
     except InvalidParameterError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:

@@ -118,3 +118,15 @@ export interface TeamPlayers {
   last_updated: string;
 }
 
+export interface TradeSuggestion {
+  opponent_team: Team;
+  players_to_give: Player[];
+  players_to_receive: Player[];
+  reasoning: string;
+}
+
+export interface TradeSuggestionsResponse {
+  user_team: Team;
+  trade_suggestions: TradeSuggestion[];
+}
+
