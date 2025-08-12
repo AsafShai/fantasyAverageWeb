@@ -17,7 +17,7 @@ async def get_teams_list(
 ):
     """Get list of all teams"""
     try:
-        return team_service.get_teams_list()
+        return await team_service.get_teams_list()
     except InvalidParameterError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:
@@ -37,7 +37,7 @@ async def get_team_detail(
         raise HTTPException(status_code=400, detail="Team ID must be positive")
     
     try:
-        return team_service.get_team_detail(team_id)
+        return await team_service.get_team_detail(team_id)
     except InvalidParameterError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:
@@ -57,7 +57,7 @@ async def get_team_players(
         raise HTTPException(status_code=400, detail="Team ID must be positive")
     
     try: 
-        return team_service.get_team_players(team_id)
+        return await team_service.get_team_players(team_id)
     except InvalidParameterError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:
