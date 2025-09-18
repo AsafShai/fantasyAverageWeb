@@ -1,6 +1,7 @@
 # Fantasy League Dashboard
 
 A full-stack fantasy basketball application featuring AI-powered trade suggestions, real-time ESPN data integration, and comprehensive team analytics.
+Link to the app: https://fantasyleagueinfo.onrender.com/
 
 ## 🏀 Features
 
