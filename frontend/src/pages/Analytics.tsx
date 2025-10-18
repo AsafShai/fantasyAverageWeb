@@ -157,16 +157,6 @@ const Analytics = () => {
           "Visual representation of team performance across different categories. Darker colors indicate better performance relative to other teams. Click column headers to sort by team name or category values."
         )}
 
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="font-semibold mb-2">Coming Soon:</h3>
-          <ul className="text-sm text-gray-600 space-y-1">
-            <li>• Tab navigation: League Average | Above Gaps | Below Gaps</li>
-            <li>• Category gap heatmaps showing rank improvement targets</li>
-            <li>• Interactive charts with Recharts</li>
-            <li>• Team comparison tool</li>
-            <li>• Trend analysis over time</li>
-          </ul>
-        </div>
       </div>
     </div>
   )

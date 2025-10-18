@@ -61,6 +61,9 @@ class StatsCalculator:
         
         for category in RANKING_CATEGORIES:
             if category in averages_df.columns:
+                if averages_df[category].isnull().all():
+                    continue
+
                 # Find team with highest value in this category
                 best_team_idx = averages_df[category].idxmax()
                 best_team_row = averages_df.iloc[best_team_idx]
@@ -138,8 +141,6 @@ class StatsCalculator:
         
         # Create copy without raw counting stats (keep percentages)
         averages = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
-        
         # Calculate per-game averages for counting stats
-        averages[PER_GAME_CATEGORIES] = averages[PER_GAME_CATEGORIES].div(averages['GP'], axis=0)
-        
+        averages[PER_GAME_CATEGORIES] = averages[PER_GAME_CATEGORIES].div(averages['GP'], axis=0).fillna(0)
         return averages
