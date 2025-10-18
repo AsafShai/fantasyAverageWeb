@@ -23,6 +23,40 @@ const Analytics = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery()
 
+  const getHeatmapColor = (normalizedValue: number): string => {
+    // Red (bad) -> White (middle) -> Green (good)
+    // normalizedValue ranges from 0 to 1, with 0.5 being pure white
+    
+    // Apply a power function to expand the white zone
+    // This makes values near 0.5 closer to white
+    const adjustedValue = normalizedValue < 0.5 
+      ? 0.5 * Math.pow(normalizedValue * 2, 1.5) 
+      : 1 - 0.5 * Math.pow((1 - normalizedValue) * 2, 1.5);
+    
+    if (adjustedValue <= 0.5) {
+      const ratio = adjustedValue * 2;
+      const r = Math.round(215 + (255 - 215) * ratio); // 215 -> 255
+      const g = Math.round(48 + (255 - 48) * ratio);   // 48 -> 255
+      const b = Math.round(39 + (255 - 39) * ratio);   // 39 -> 255
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      const ratio = (adjustedValue - 0.5) * 2;
+      const r = Math.round(255 - (255 - 34) * ratio);  // 255 -> 34
+      const g = Math.round(255 - (255 - 197) * ratio); // 255 -> 197
+      const b = Math.round(255 - (255 - 94) * ratio);  // 255 -> 94
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  }
+
+  const getTextColor = (normalizedValue: number): string => {
+    if (normalizedValue < 0.25) {
+      return 'white';
+    } else if (normalizedValue > 0.75) {
+      return 'white';
+    }
+    return 'black';
+  }
+
   const handleSort = (column: string) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -129,8 +163,8 @@ const Analytics = () => {
                         key={catIndex}
                         className="px-2 py-2 text-center text-xs"
                         style={{
-                          backgroundColor: `rgba(59, 130, 246, ${value})`,
-                          color: value > 0.5 ? 'white' : 'black'
+                          backgroundColor: getHeatmapColor(value),
+                          color: getTextColor(value)
                         }}
                       >
                         {cellValue?.toFixed(4) ?? '0.0000'}
@@ -154,7 +188,7 @@ const Analytics = () => {
         {renderHeatmapTable(
           heatmapData,
           "Performance Heatmap",
-          "Visual representation of team performance across different categories. Darker colors indicate better performance relative to other teams. Click column headers to sort by team name or category values."
+          "Visual representation of team performance across different categories. Red indicates below-average performance, white indicates league-average performance, and green indicates above-average performance. Click column headers to sort by team name or category values."
         )}
 
       </div>
