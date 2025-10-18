@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     
-    openai_api_key: str = Field(alias="OPENAI_API_KEY")
     
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
