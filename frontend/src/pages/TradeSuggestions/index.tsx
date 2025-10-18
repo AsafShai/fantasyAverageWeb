@@ -62,14 +62,21 @@ export const TradeSuggestions: React.FC = () => {
     }
   }, [suggestions, queryLoading]);
 
+  // Stop generating state on error so UI buttons/spinner reset and show error
+  useEffect(() => {
+    if (error && !queryLoading) {
+      setIsGenerating(false);
+    }
+  }, [error, queryLoading]);
+
   const isAnalyzing = isGenerating || queryLoading;
+  const showError = Boolean(error) && !queryLoading && !isGenerating;
 
   const handleGenerateTrades = (): void => {
     if (!selectedTeam || isAnalyzing) return;
     setIsGenerating(true);
     setCurrentSuggestions(null);
     setShouldFetch(true);
-    refetch();
   };
 
   const handleReset = (): void => {
@@ -172,7 +179,7 @@ export const TradeSuggestions: React.FC = () => {
         </div>
       )}
 
-      {error && (
+      {showError && (
         <div className="max-w-md mx-auto mb-8">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
             <div className="text-red-600 font-medium mb-2">Failed to Generate Trades</div>

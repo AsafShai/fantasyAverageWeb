@@ -143,3 +143,6 @@ class StatsCalculator:
         averages[PER_GAME_CATEGORIES] = averages[PER_GAME_CATEGORIES].div(averages['GP'], axis=0)
         
         return averages
+    
+def get_stats_calculator() -> StatsCalculator:
+    return StatsCalculator()
