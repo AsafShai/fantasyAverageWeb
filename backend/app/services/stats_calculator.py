@@ -98,7 +98,8 @@ class StatsCalculator:
     
     def normalize_for_heatmap(self, averages_df: pd.DataFrame) -> List[List[float]]:
         """
-        Normalize data for heatmap visualization
+        Normalize data for heatmap visualization using diverging scale
+        centered on the league average (average = 0.5 = white)
         Args:
             averages_df: DataFrame with per-game averages
         Returns:
@@ -112,13 +113,27 @@ class StatsCalculator:
         for category in RANKING_CATEGORIES:
             if category in averages_df.columns:
                 col_data = averages_df[category]
+                mean_val = col_data.mean()
                 min_val, max_val = col_data.min(), col_data.max()
                 
-                # Normalize to 0-1 range
                 if max_val - min_val > 0:
-                    normalized_col = ((col_data - min_val) / (max_val - min_val)).tolist()
+                    # Values below mean map to 0.0-0.5, values above mean map to 0.5-1.0
+                    normalized_col = []
+                    for val in col_data:
+                        if val < mean_val:
+                            # Below average: scale from min to mean -> 0.0 to 0.5
+                            if mean_val - min_val > 0:
+                                norm_val = 0.5 * (val - min_val) / (mean_val - min_val)
+                            else:
+                                norm_val = 0.5
+                        else:
+                            # Above average: scale from mean to max -> 0.5 to 1.0
+                            if max_val - mean_val > 0:
+                                norm_val = 0.5 + 0.5 * (val - mean_val) / (max_val - mean_val)
+                            else:
+                                norm_val = 0.5
+                        normalized_col.append(norm_val)
                 else:
-                    # If all values are the same, set to 0.5
                     normalized_col = [0.5] * len(col_data)
                 
                 normalized_data.append(normalized_col)
