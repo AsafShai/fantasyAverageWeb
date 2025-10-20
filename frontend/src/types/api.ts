@@ -110,6 +110,7 @@ export interface Player {
   pro_team: string;
   positions: string[];
   stats: PlayerStats;
+  team_id: number;
 }
 
 export interface TeamPlayers {

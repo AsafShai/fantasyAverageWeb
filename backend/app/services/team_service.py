@@ -44,12 +44,12 @@ class TeamService:
         players_df = await self.data_provider.get_players_df()
         if players_df is None:
             raise Exception("Unable to process player data")
-        
+
         team_players = self._filter_team_players(players_df, team_id)
-        
+
         if team_players.empty:
             raise ResourceNotFoundError(f"No players found for team ID {team_id}")
-        
+
         return self.response_builder.build_team_players_response(team_players)
     
     def _extract_teams_from_dataframe(self, totals_df) -> List[Team]:
