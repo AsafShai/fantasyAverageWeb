@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from app.models import (
     ShotChartStats, AverageStats, TeamAverageStats, RankingStats,
-    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, 
+    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData,
     TeamShotStats, LeagueShotsData, TeamPlayers, Player, PlayerStats, Team
 )
 from app.utils.constants import RANKING_CATEGORIES
@@ -127,11 +127,12 @@ class ResponseBuilder:
                     ft_percentage=float(row['FT%']),
                     three_pm=float(row['3PM']),
                     gp=int(row['GP'])
-                )
+                ),
+                team_id=int(row['team_id'])
             ))
         return TeamPlayers(
-            team_id=team_players.iloc[0]['team_id'], 
-            players=players, 
+            team_id=team_players.iloc[0]['team_id'],
+            players=players,
             last_updated=datetime.now()
         )
     
@@ -208,3 +209,30 @@ class ResponseBuilder:
             pts=float(avg_data['PTS']),
             gp=int(avg_data['GP'])
         )
+
+    def build_all_players_response(self, players_df: pd.DataFrame) -> List[Player]:
+        """Build list of all players from players DataFrame"""
+        players = []
+        for _, row in players_df.iterrows():
+            players.append(Player(
+                player_name=str(row['Name']),
+                pro_team=str(row['Pro Team']),
+                positions=str(row['Positions']).split(', '),
+                stats=PlayerStats(
+                    pts=float(row['PTS']),
+                    reb=float(row['REB']),
+                    ast=float(row['AST']),
+                    stl=float(row['STL']),
+                    blk=float(row['BLK']),
+                    fgm=float(row['FGM']),
+                    fga=float(row['FGA']),
+                    ftm=float(row['FTM']),
+                    fta=float(row['FTA']),
+                    fg_percentage=float(row['FG%']),
+                    ft_percentage=float(row['FT%']),
+                    three_pm=float(row['3PM']),
+                    gp=int(row['GP'])
+                ),
+                team_id=int(row['team_id'])
+            ))
+        return players
