@@ -144,6 +144,34 @@ uv run pytest
 - **OpenAI GPT-4o-mini** - AI-powered trade analysis
 - **Smart Caching** - ETag-based HTTP caching for performance
 
+## 🔌 API Endpoints
+
+The backend provides the following REST API endpoints:
+
+### Core Endpoints
+- `GET /` - API welcome message
+- `GET /health` - Health check endpoint
+
+### Rankings
+- `GET /api/rankings` - Get league rankings with optional sorting
+  - Query params: `sort_by` (category), `order` (asc/desc)
+
+### Teams
+- `GET /api/teams` - Get list of all teams
+- `GET /api/teams/{team_id}` - Get detailed stats for a specific team
+- `GET /api/teams/{team_id}/players` - Get players for a specific team
+
+### League
+- `GET /api/league/summary` - Get league overview and summary statistics
+- `GET /api/league/shots` - Get league-wide shooting statistics
+
+### Analytics
+- `GET /api/analytics/heatmap` - Get performance heatmap data for visualization
+
+### Players
+- `GET /api/players` - Get list of all players in the league
+
+**Note:** Interactive API documentation is available at `/docs` (Swagger UI) when running the backend.
 
 ## ⚙️ Environment Variables
 

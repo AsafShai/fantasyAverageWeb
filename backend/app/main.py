@@ -7,6 +7,7 @@ from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
 from app.routes.league import router as league_router
 from app.routes.analytics import router as analytics_router
+from app.routes.players import router as players_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
@@ -39,9 +40,9 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error during shutdown cleanup: {e}")
 
 app = FastAPI(
-    title="Fantasy League Dashboard API", 
+    title="Fantasy League Dashboard API",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 @app.exception_handler(Exception)
@@ -67,6 +68,7 @@ app.include_router(rankings_router, prefix="/api", tags=["Rankings"])
 app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
 app.include_router(league_router, prefix="/api/league", tags=["League"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(players_router, prefix="/api/players", tags=["Players"])
 
 
 
