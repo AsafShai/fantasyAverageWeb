@@ -2,6 +2,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
@@ -25,6 +28,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan for proper resource cleanup"""
@@ -44,6 +49,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -73,11 +81,13 @@ app.include_router(players_router, prefix="/api/players", tags=["Players"])
 
 
 @app.get("/")
-async def root():
+@limiter.limit("20/minute")
+async def root(request: Request):
     return {"message": "Fantasy League Dashboard API"}
 
 @app.get("/health")
-async def health_check():
+@limiter.limit("60/minute")
+async def health_check(request: Request):
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
