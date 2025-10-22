@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useGetTeamDetailQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -8,10 +9,74 @@ const TeamDetail = () => {
   const navigate = useNavigate()
   const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
   const { data: team_detail, error, isLoading } = useGetTeamDetailQuery(teamIdNumber)
+  const [sortBy, setSortBy] = useState<string>('player_name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(column)
+      setSortOrder('asc')
+    }
+  }
+
+  const formatNumber = (num: number) => {
+    const rounded = Math.round(num * 10000) / 10000
+    if (rounded === Math.round(rounded * 10) / 10) {
+      return rounded.toFixed(1)
+    }
+    return rounded.toString()
+  }
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message="Failed to load team details" />
   if (!team_detail) return <ErrorMessage message="Team not found" />
+
+  const columns = [
+    { key: 'player_name', label: 'Player', align: 'left' },
+    { key: 'positions', label: 'Position', align: 'left' },
+    { key: 'pro_team', label: 'Pro Team', align: 'left' },
+    { key: 'minutes', label: 'Min', align: 'right' },
+    { key: 'fg_percentage', label: 'FG%', align: 'right' },
+    { key: 'ft_percentage', label: 'FT%', align: 'right' },
+    { key: 'three_pm', label: '3PM', align: 'right' },
+    { key: 'reb', label: 'REB', align: 'right' },
+    { key: 'ast', label: 'AST', align: 'right' },
+    { key: 'stl', label: 'STL', align: 'right' },
+    { key: 'blk', label: 'BLK', align: 'right' },
+    { key: 'pts', label: 'PTS', align: 'right' },
+    { key: 'gp', label: 'GP', align: 'right' },
+  ]
+
+  const sortedPlayers = [...team_detail.players].sort((a, b) => {
+    let aVal: string | number | null
+    let bVal: string | number | null
+
+    if (sortBy === 'player_name') {
+      aVal = a.player_name
+      bVal = b.player_name
+    } else if (sortBy === 'positions') {
+      aVal = a.positions.join(', ')
+      bVal = b.positions.join(', ')
+    } else if (sortBy === 'pro_team') {
+      aVal = a.pro_team
+      bVal = b.pro_team
+    } else {
+      aVal = a.stats[sortBy as keyof typeof a.stats] ?? -1
+      bVal = b.stats[sortBy as keyof typeof b.stats] ?? -1
+    }
+
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      return sortOrder === 'asc'
+        ? aVal.localeCompare(bVal)
+        : bVal.localeCompare(aVal)
+    }
+
+    const aNum = aVal as number
+    const bNum = bVal as number
+    return sortOrder === 'asc' ? aNum - bNum : bNum - aNum
+  })
 
   return (
     <div className="max-w-7xl mx-auto px-4 space-y-6">
@@ -115,36 +180,39 @@ const TeamDetail = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Player</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pro Team</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Min</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">FG%</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">FT%</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">3PM</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">REB</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">AST</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">STL</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">BLK</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">PTS</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">GP</th>
+                {columns.map((column) => (
+                  <th
+                    key={column.key}
+                    onClick={() => handleSort(column.key)}
+                    className={`px-4 py-3 text-${column.align} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors duration-150`}
+                  >
+                    <div className={`flex items-center ${column.align === 'right' ? 'justify-end' : ''}`}>
+                      {column.label}
+                      {sortBy === column.key && (
+                        <span className="ml-1">
+                          {sortOrder === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {team_detail.players.map((player, idx) => (
+              {sortedPlayers.map((player, idx) => (
                 <tr key={idx} className="hover:bg-gray-50">
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{player.player_name}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.minutes?.toFixed(1) ?? '-'}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{(player.stats.fg_percentage * 100).toFixed(1)}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{(player.stats.ft_percentage * 100).toFixed(1)}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.three_pm.toFixed(1)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.reb.toFixed(1)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.ast.toFixed(1)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.stl.toFixed(1)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.blk.toFixed(1)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.pts.toFixed(1)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.minutes ? player.stats.minutes.toFixed(1) : '-'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.fg_percentage * 100)}%</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.ft_percentage * 100)}%</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.three_pm)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.reb)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.ast)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.stl)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.blk)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.pts)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
                 </tr>
               ))}
