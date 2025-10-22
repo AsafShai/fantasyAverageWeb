@@ -77,10 +77,11 @@ class ResponseBuilder:
         """Build HeatmapData response from prepared data"""
         team_objects = [Team(team_id=team['team_id'], team_name=team['team_name']) 
                        for team in teams]
-        
+        categories_with_gp = RANKING_CATEGORIES + ['GP']
+
         return HeatmapData(
             teams=team_objects,
-            categories=RANKING_CATEGORIES,
+            categories=categories_with_gp,
             data=categories,
             normalized_data=normalized_data
         )
@@ -149,7 +150,8 @@ class ResponseBuilder:
             stl=float(team_data['STL']),
             blk=float(team_data['BLK']),
             pts=float(team_data['PTS']),
-            total_points=0.0  # Not applicable for category leaders
+            gp=int(team_data['GP']),
+            total_points=0.0
         )
     
     def create_average_stats(self, league_avg_data: Dict) -> AverageStats:
@@ -178,6 +180,7 @@ class ResponseBuilder:
             stl=float(row['STL']),
             blk=float(row['BLK']),
             pts=float(row['PTS']),
+            gp=int(row['GP']),
             total_points=float(row['TOTAL_POINTS']),
             rank=int(row['RANK'])
         )

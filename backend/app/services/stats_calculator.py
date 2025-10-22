@@ -18,11 +18,11 @@ class StatsCalculator:
             raise ValueError("Cannot calculate rankings for empty DataFrame")
         
         ranked = averages_df.copy()
-        
-        # Keep team_id and team_name for reference, drop GP for ranking calculations
+
+        # Keep team_id, team_name, and GP for reference
         ranking_cols = [col for col in ranked.columns if col not in ['team_id', 'team_name', 'GP']]
-        team_info = ranked[['team_id', 'team_name']].copy()
-        
+        team_info = ranked[['team_id', 'team_name', 'GP']].copy()
+
         # Calculate rankings only for statistical categories
         ranked_stats = ranked[ranking_cols].rank()
         
@@ -41,9 +41,9 @@ class StatsCalculator:
         final_ranked.drop('index', axis=1, inplace=True)
         
         # Reorder columns to have team info first
-        cols = ['team_id', 'team_name'] + [col for col in final_ranked.columns if col not in ['team_id', 'team_name']]
+        cols = ['team_id', 'team_name', 'GP'] + [col for col in final_ranked.columns if col not in ['team_id', 'team_name', 'GP']]
         final_ranked = final_ranked[cols]
-        
+
         return final_ranked
     
     def find_category_leaders(self, averages_df: pd.DataFrame) -> Dict:
@@ -107,27 +107,25 @@ class StatsCalculator:
         """
         if averages_df.empty:
             return []
-        
+
         normalized_data = []
-        
-        for category in RANKING_CATEGORIES:
+        categories_with_gp = RANKING_CATEGORIES + ['GP']
+
+        for category in categories_with_gp:
             if category in averages_df.columns:
                 col_data = averages_df[category]
                 mean_val = col_data.mean()
                 min_val, max_val = col_data.min(), col_data.max()
-                
+
                 if max_val - min_val > 0:
-                    # Values below mean map to 0.0-0.5, values above mean map to 0.5-1.0
                     normalized_col = []
                     for val in col_data:
                         if val < mean_val:
-                            # Below average: scale from min to mean -> 0.0 to 0.5
                             if mean_val - min_val > 0:
                                 norm_val = 0.5 * (val - min_val) / (mean_val - min_val)
                             else:
                                 norm_val = 0.5
                         else:
-                            # Above average: scale from mean to max -> 0.5 to 1.0
                             if max_val - mean_val > 0:
                                 norm_val = 0.5 + 0.5 * (val - mean_val) / (max_val - mean_val)
                             else:
@@ -135,10 +133,9 @@ class StatsCalculator:
                         normalized_col.append(norm_val)
                 else:
                     normalized_col = [0.5] * len(col_data)
-                
+
                 normalized_data.append(normalized_col)
-        
-        # Transpose so each row represents a team
+
         return list(map(list, zip(*normalized_data)))
     
     def calculate_per_game_averages(self, totals_df: pd.DataFrame) -> pd.DataFrame:

@@ -51,6 +51,7 @@ const Rankings = () => {
     { key: 'blk', label: 'BLK', sortable: true },
     { key: 'pts', label: 'PTS', sortable: true },
     { key: 'total_points', label: 'Total', sortable: true },
+    { key: 'gp', label: 'GP', sortable: true },
   ]
 
   return (
@@ -101,11 +102,14 @@ const Rankings = () => {
                     {team.team.team_name}
                   </Link>
                 </td>
-                {columns.slice(2).map((column) => (
-                  <td key={column.key} className="table-cell font-medium">
-                    {team[column.key as keyof RankingStats] as number}
-                  </td>
-                ))}
+                {columns.slice(2).map((column) => {
+                  const value = team[column.key as keyof RankingStats] as number
+                  return (
+                    <td key={column.key} className="table-cell font-medium">
+                      {column.key === 'gp' ? value : typeof value === 'number' ? value.toFixed(column.key.includes('percentage') ? 3 : 2) : value}
+                    </td>
+                  )
+                })}
               </tr>
             ))}
           </tbody>
