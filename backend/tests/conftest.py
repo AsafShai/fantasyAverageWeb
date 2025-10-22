@@ -80,7 +80,8 @@ class MockDataProvider:
             'BLK': [3, 1, 2],
             'PTS': [2, 1, 3],
             'TOTAL_POINTS': [18, 17, 15],
-            'RANK': [1, 2, 3]
+            'RANK': [1, 2, 3],
+            'GP': [82, 82, 82]
         })
         
         self.sample_players_df = pd.DataFrame({
@@ -101,7 +102,8 @@ class MockDataProvider:
             'FG%': [46.9, 48.6, 46.0, 47.1, 48.4, 46.5],
             'FT%': [81.6, 80.0, 84.4, 80.8, 80.6, 80.0],
             '3PM': [2.8, 1.2, 3.4, 0.8, 0.9, 1.6],
-            'GP': [72, 68, 75, 70, 74, 69]
+            'GP': [72, 68, 75, 70, 74, 69],
+            'MIN': [28.5, 27.4, 30.1, 26.8, 29.6, 27.8]
         })
     
     async def get_totals_df(self):
@@ -203,7 +205,8 @@ def sample_rankings_df():
         'BLK': [3, 1, 2],
         'PTS': [2, 1, 3],
         'TOTAL_POINTS': [18, 17, 15],
-        'RANK': [1, 2, 3]
+        'RANK': [1, 2, 3],
+        'GP': [82, 82, 82]
     })
 
 @pytest.fixture

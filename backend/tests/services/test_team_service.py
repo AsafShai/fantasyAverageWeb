@@ -39,7 +39,8 @@ def team_service_players_df():
         'STL': [89, 67, 78, 56, 87],
         'BLK': [23, 134, 45, 34, 78],
         'PTS': [1213, 1369, 1290, 1064, 1166],
-        'GP': [78, 82, 79, 75, 80]
+        'GP': [78, 82, 79, 75, 80],
+        'MIN': [2345.6, 2567.8, 2456.3, 2234.5, 2389.1]
     })
 
 class TestTeamService:
@@ -47,21 +48,24 @@ class TestTeamService:
     
     
     @pytest.mark.asyncio
-    async def test_get_team_detail_success(self, team_service, sample_totals_df, sample_averages_df, sample_rankings_df):
+    async def test_get_team_detail_success(self, team_service, sample_totals_df, sample_averages_df, sample_rankings_df, team_service_players_df):
         """Test successful team detail retrieval"""
+        from unittest.mock import ANY
         team_id = 1
         expected_team_detail = Mock(spec=TeamDetail)
         
         team_service.data_provider.get_all_dataframes.return_value = (
             sample_totals_df, sample_averages_df, sample_rankings_df
         )
+        team_service.data_provider.get_players_df.return_value = team_service_players_df
+        team_service.response_builder.build_players_list.return_value = []
         team_service.response_builder.build_team_detail_response.return_value = expected_team_detail
         
         result = await team_service.get_team_detail(team_id)
         assert result == expected_team_detail
         team_service.data_provider.get_all_dataframes.assert_called_once()
         team_service.response_builder.build_team_detail_response.assert_called_once_with(
-            team_id, sample_totals_df, sample_averages_df, sample_rankings_df
+            team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY
         )
     
     @pytest.mark.asyncio

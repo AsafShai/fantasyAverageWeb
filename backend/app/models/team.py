@@ -7,6 +7,8 @@ from .player import Player
 
 class TeamDetail(BaseModel):
     team: Team
+    espn_url: str
+    players: List[Player]
     shot_chart: ShotChartStats
     raw_averages: TeamAverageStats
     ranking_stats: RankingStats
