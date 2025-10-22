@@ -53,6 +53,7 @@ export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
     : player.stats;
 
   const statsItemsData: StatsItemData[] = [
+    { label: "Min", value: displayStats.minutes, icon: "⏱️", field: "minutes" },
     { label: "PTS", value: displayStats.pts, icon: "🏀", field: "pts" },
     { label: "REB", value: displayStats.reb, icon: "🏀", field: "reb" },
     { label: "AST", value: displayStats.ast, icon: "🤝", field: "ast" },
@@ -101,7 +102,7 @@ export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-13 gap-1">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-14 gap-1">
           {statsItemsData.map((stat) => (
             <StatItem
               key={stat.label}

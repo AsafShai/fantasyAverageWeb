@@ -24,41 +24,46 @@ interface StatValueProps {
 }
 
 const STAT_HEADERS = [
-  { label: 'PTS', icon: '🏀' },
-  { label: 'REB', icon: '🏀' },
-  { label: 'AST', icon: '🤝' },
-  { label: 'STL', icon: '🥷' },
-  { label: 'BLK', icon: '🛡️' },
-  { label: '3PM', icon: '🎯' },
+  { label: 'MIN', icon: '⏰' },
   { label: 'FGM', icon: '🎯' },
   { label: 'FGA', icon: '🏹' },
   { label: 'FG%', icon: '📈' },
   { label: 'FTM', icon: '🆓' },
   { label: 'FTA', icon: '🎯' },
   { label: 'FT%', icon: '📊' },
+  { label: '3PM', icon: '🎯' },
+  { label: 'REB', icon: '🏀' },
+  { label: 'AST', icon: '🤝' },
+  { label: 'STL', icon: '🥷' },
+  { label: 'BLK', icon: '🛡️' },
+  { label: 'PTS', icon: '🏀' },
   { label: 'GP', icon: '📅' }
 ] as const;
 
 
 
 const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage = false, viewMode, field }) => {
-  const getValueStyles = () => {    
+  const getValueStyles = () => {
     if (value === comparedTo) {
       return { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' };
     }
-    
-    return value > comparedTo 
+
+    return value > comparedTo
       ? { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' }
       : { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
   };
 
   const styles = getValueStyles();
+  const displayValue = (field === 'gp' || field === 'minutes')
+    ? (viewMode === 'averages' && field === 'minutes' ? value.toFixed(1) : Math.round(value).toString())
+    : formatStatValue(value, isPercentage, viewMode);
+
   return (
-    <div className={`${styles.bg} rounded p-1 text-center flex items-center justify-center space-x-1`}>
-      <span className={`font-bold ${styles.text} text-xs`}>
-        {field !== 'gp' ? formatStatValue(value, isPercentage, viewMode) : value}
+    <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px]`}>
+      <span className={`font-bold ${styles.text} text-xs leading-tight`}>
+        {displayValue}
       </span>
-      <span className={`${styles.text} text-xs`}>{styles.indicator}</span>
+      <span className={`${styles.text} text-[10px]`}>{styles.indicator}</span>
     </div>
   );
 };
@@ -94,18 +99,21 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
             📊 Trade Comparison
           </h2>
           
-          <div className="overflow-x-auto">
-            <div className="grid grid-cols-[150px_repeat(13,1fr)] gap-1 min-w-[1400px]">
+          <div className="w-full overflow-x-auto">
+            <div className="grid gap-1" style={{ gridTemplateColumns: '220px repeat(14, minmax(42px, 1fr))' }}>
               {/* Header row */}
               <div className="font-semibold text-gray-700 p-2 text-sm">Team</div>
               {STAT_HEADERS.map(({ label, icon }) => (
-                <div key={label} className="font-semibold text-gray-700 p-2 text-center text-xs">
-                  {icon} {label}
+                <div key={label} className="font-semibold text-gray-700 p-2 text-center text-xs leading-tight">
+                  <div className="text-sm">{icon}</div>
+                  <div>{label}</div>
                 </div>
               ))}
-              
+
               <div className="bg-blue-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                {teamA?.team_name || 'Team A'}
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={teamA?.team_name || 'Team A'}>
+                  {teamA?.team_name || 'Team A'}
+                </span>
               </div>
               {STAT_KEYS.map((key) => {
                 const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';
@@ -122,7 +130,9 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               })}
               
               <div className="bg-green-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                {teamB?.team_name || 'Team B'}
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={teamB?.team_name || 'Team B'}>
+                  {teamB?.team_name || 'Team B'}
+                </span>
               </div>
               {STAT_KEYS.map((key) => {
                 const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';

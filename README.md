@@ -6,9 +6,12 @@ Link to the app: https://fantasyleagueinfo.onrender.com/
 ## 🏀 Features
 
 - **Team Rankings**: Sortable rankings across all statistical categories
+- **Teams Browser**: Browse all teams with detailed roster views and ESPN integration
+- **Team Details**: Comprehensive team statistics with player rosters and minutes tracking
 - **AI Trade Suggestions**: GPT-powered trade recommendations with impact analysis
+- **Manual Trade Analyzer**: Interactive tool to compare players between teams with detailed stats
 - **Team Analytics**: Performance visualizations and detailed statistics
-- **Player Data**: Comprehensive player statistics and roster management
+- **Player Data**: Comprehensive player statistics including minutes played
 - **Real-time Data**: Live ESPN Fantasy Basketball API integration
 
 ## 📸 Screenshots
@@ -158,8 +161,12 @@ The backend provides the following REST API endpoints:
 
 ### Teams
 - `GET /api/teams` - Get list of all teams
-- `GET /api/teams/{team_id}` - Get detailed stats for a specific team
-- `GET /api/teams/{team_id}/players` - Get players for a specific team
+- `GET /api/teams/{team_id}` - Get detailed stats for a specific team including:
+  - Team statistics (totals and averages)
+  - Complete roster with player stats (including minutes played)
+  - ESPN team page URL for external reference
+  - Shot chart stats and ranking information
+- `GET /api/teams/{team_id}/players` - Get players for a specific team (lightweight endpoint)
 
 ### League
 - `GET /api/league/summary` - Get league overview and summary statistics
@@ -169,7 +176,12 @@ The backend provides the following REST API endpoints:
 - `GET /api/analytics/heatmap` - Get performance heatmap data for visualization
 
 ### Players
-- `GET /api/players` - Get list of all players in the league
+- `GET /api/players` - Get list of all players in the league with comprehensive stats including:
+  - Points, rebounds, assists, steals, blocks
+  - Field goal and free throw shooting stats
+  - Three-pointers made
+  - Minutes played
+  - Games played
 
 **Note:** Interactive API documentation is available at `/docs` (Swagger UI) when running the backend.
 
