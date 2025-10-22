@@ -2,9 +2,10 @@ import pandas as pd
 import logging
 from typing import Dict
 from app.utils.constants import (
-    ESPN_COLUMN_MAP, ALL_CATEGORIES, PER_GAME_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP
+    ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP
 )
 from app.services.stats_calculator import StatsCalculator
+from app.config import settings
 
 
 class DataTransformer:
@@ -120,7 +121,7 @@ class DataTransformer:
             # Extract stats
             stats = player.get('stats', [])
             for stat in stats:
-                if stat.get('scoringPeriodId') == 0 and stat.get('statSplitTypeId') == 0:
+                if stat.get('scoringPeriodId') == 0 and stat.get('statSplitTypeId') == 0 and stat.get('seasonId') == settings.season_id:
                     player_stats = stat.get('stats', {})
                     # Map ESPN column names to our names
                     mapped_stats = {
