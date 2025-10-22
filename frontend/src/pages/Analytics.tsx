@@ -158,6 +158,10 @@ const Analytics = () => {
                   <td className="px-4 py-2 font-medium">{team.team_name}</td>
                   {sortedData.normalized_data[teamIndex]?.map((value: number, catIndex: number) => {
                     const cellValue: number | undefined = sortedData.data[teamIndex]?.[catIndex]
+                    const category = sortedData.categories[catIndex]
+                    const displayValue = category === 'GP'
+                      ? Math.round(cellValue ?? 0)
+                      : (cellValue?.toFixed(4) ?? '0.0000')
                     return (
                       <td
                         key={catIndex}
@@ -167,7 +171,7 @@ const Analytics = () => {
                           color: getTextColor(value)
                         }}
                       >
-                        {cellValue?.toFixed(4) ?? '0.0000'}
+                        {displayValue}
                       </td>
                     )
                   })}

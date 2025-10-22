@@ -36,6 +36,7 @@ class RankingStats(BaseModel):
     stl: float
     blk: float
     pts: float
+    gp: int
     total_points: float
     rank: Optional[int] = None
 

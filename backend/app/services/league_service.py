@@ -82,7 +82,8 @@ class LeagueService:
     def _extract_categories_data(self, averages_df) -> List:
         """Extract categories data for heatmap"""
         from app.utils.constants import RANKING_CATEGORIES
-        return averages_df[RANKING_CATEGORIES].values.tolist()
+        categories_with_gp = RANKING_CATEGORIES + ['GP']
+        return averages_df[categories_with_gp].values.tolist()
     
     def _extract_shots_data(self, totals_df) -> List:
         """Extract shots data for league shots"""

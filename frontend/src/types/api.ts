@@ -13,6 +13,7 @@ export interface RankingStats {
   stl: number;
   blk: number;
   pts: number;
+  gp: number;
   total_points: number;
   rank?: number;
 }
