@@ -8,11 +8,12 @@ import asyncio
 
 # Mock environment variables for testing
 os.environ.update({
-    "ESPN_STANDINGS_URL": "https://mock.espn.com/standings",
-    "ESPN_PLAYERS_URL": "https://mock.espn.com/players", 
+    "SEASON_ID": "2026",
+    "LEAGUE_ID": "1234567890",
     "CORS_ORIGINS": "http://localhost:3000,http://localhost:5173",
     "ENVIRONMENT": "test",
-    "LOG_LEVEL": "WARNING"
+    "LOG_LEVEL": "WARNING",
+    "PORT": "8000"
 })
 
 # Import after setting environment variables

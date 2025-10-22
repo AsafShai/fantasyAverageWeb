@@ -10,8 +10,8 @@ jobs:
   test-backend:
     runs-on: ubuntu-latest
     env:
-      ESPN_STANDINGS_URL: ${{ vars.ESPN_STANDINGS_URL }}
-      ESPN_PLAYERS_URL: ${{ vars.ESPN_PLAYERS_URL }}
+      SEASON_ID: ${{ vars.SEASON_ID }}
+      LEAGUE_ID: ${{ vars.LEAGUE_ID }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
