@@ -53,6 +53,8 @@ export interface TeamAverageStats extends AverageStats {
 
 export interface TeamDetail {
   team: Team;
+  espn_url: string;
+  players: Player[];
   shot_chart: ShotChartStats;
   raw_averages: TeamAverageStats;
   ranking_stats: RankingStats;
@@ -103,6 +105,7 @@ export interface PlayerStats {
   fg_percentage: number;
   ft_percentage: number;
   three_pm: number;
+  minutes: number;
   gp: number;
 }
 

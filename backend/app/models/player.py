@@ -14,6 +14,7 @@ class PlayerStats(BaseModel):
     fg_percentage: float
     ft_percentage: float
     three_pm: float
+    minutes: float
     gp: int
 
 class Player(BaseModel):
