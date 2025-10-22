@@ -33,10 +33,14 @@ export const PlayerDropdown: React.FC<PlayerDropdownProps> = ({
 
   const formatPlayerOption = (player: Player) => {
     const displayStats = viewMode === 'averages' 
-      ? {
+      ? player.stats.gp > 0 ? {
           pts: player.stats.pts / player.stats.gp,
           reb: player.stats.reb / player.stats.gp,
-          ast: player.stats.ast / player.stats.gp,
+          ast: player.stats.ast / player.stats.gp
+        } : {
+          pts: 0,
+          reb: 0,
+          ast: 0
         }
       : player.stats;
 

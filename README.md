@@ -78,11 +78,11 @@ Interactive trade analysis tool for comparing players between teams with compreh
    ```
 
 2. **Environment Setup**
-   
+
    **Backend** - Create `.env` in `backend` directory:
    ```env
-   ESPN_STANDINGS_URL=your_espn_standings_url
-   ESPN_PLAYERS_URL=your_espn_players_url
+   SEASON_ID=your_season_id
+   LEAGUE_ID=your_league_id
    OPENAI_API_KEY=your_openai_api_key
    CORS_ORIGINS=localhost:5173,others
    ENVIRONMENT=production/development
@@ -179,8 +179,8 @@ The backend provides the following REST API endpoints:
 `.env` file in `backend/` directory:
 
 ```env
-ESPN_STANDINGS_URL=your_espn_standings_url
-ESPN_PLAYERS_URL=your_espn_players_url
+SEASON_ID=your_season_id
+LEAGUE_ID=your_league_id
 OPENAI_API_KEY=your_openai_api_key
 CORS_ORIGINS=localhost:5173,others
 ENVIRONMENT=production/development
