@@ -33,18 +33,19 @@ export const STAT_ICONS = {
 } as const;
 
 export const STAT_KEYS = [
-  'pts',
-  'reb',
-  'ast',
-  'stl',
-  'blk',
-  'three_pm',
+  'minutes',
   'fgm',
   'fga',
   'fg_percentage',
   'ftm',
   'fta',
   'ft_percentage',
+  'three_pm',
+  'reb',
+  'ast',
+  'stl',
+  'blk',
+  'pts',
   'gp',
 ] as const;
 
@@ -53,7 +54,7 @@ export const GRID_BREAKPOINTS = {
   MD: 'md:grid-cols-6',
   LG: 'lg:grid-cols-8',
   XL: 'xl:grid-cols-10',
-  '2XL': '2xl:grid-cols-13',
+  '2XL': '2xl:grid-cols-14',
 } as const;
 
 export const DECIMAL_PLACES = {

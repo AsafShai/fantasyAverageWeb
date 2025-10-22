@@ -31,29 +31,32 @@ class ResponseBuilder:
         )
     
     def build_team_detail_response(self, team_id: int, totals_df: pd.DataFrame,
-                                 averages_df: pd.DataFrame, rankings_df: pd.DataFrame) -> TeamDetail:
+                                 averages_df: pd.DataFrame, rankings_df: pd.DataFrame,
+                                 players: List[Player], espn_url: str) -> TeamDetail:
         """Build TeamDetail response for a specific team"""
         # Find team data
         team_row = totals_df[totals_df['team_id'] == team_id]
         if team_row.empty:
             raise ValueError(f"Team '{team_id}' not found")
         totals_data = team_row.iloc[0]
-        
+
         avg_row = averages_df[averages_df['team_id'] == team_id]
         if avg_row.empty:
             raise ValueError(f"Team '{team_id}' not found in averages")
         avg_data = avg_row.iloc[0]
-        
+
         rank_data = rankings_df[rankings_df['team_id'] == team_id].iloc[0]
-        
+
         # Transform data to response objects
         team = Team(team_id=team_id, team_name=totals_data['team_name'])
         shot_chart = self._create_shot_chart_stats(totals_data)
         raw_averages = self._create_raw_average_stats(avg_data)
         ranking_stats = self._create_ranking_stats(rank_data)
-        
+
         return TeamDetail(
             team=team,
+            espn_url=espn_url,
+            players=players,
             shot_chart=shot_chart,
             raw_averages=raw_averages,
             ranking_stats=ranking_stats,
@@ -106,8 +109,8 @@ class ResponseBuilder:
             last_updated=datetime.now()
         )
     
-    def build_team_players_response(self, team_players: pd.DataFrame) -> TeamPlayers:
-        """Build TeamPlayers response from players DataFrame"""
+    def build_players_list(self, team_players: pd.DataFrame) -> List[Player]:
+        """Build list of Player objects from players DataFrame"""
         players = []
         for _, row in team_players.iterrows():
             players.append(Player(
@@ -127,10 +130,16 @@ class ResponseBuilder:
                     fg_percentage=float(row['FG%']),
                     ft_percentage=float(row['FT%']),
                     three_pm=float(row['3PM']),
+                    minutes=float(row['MIN']),
                     gp=int(row['GP'])
                 ),
                 team_id=int(row['team_id'])
             ))
+        return players
+
+    def build_team_players_response(self, team_players: pd.DataFrame) -> TeamPlayers:
+        """Build TeamPlayers response from players DataFrame"""
+        players = self.build_players_list(team_players)
         return TeamPlayers(
             team_id=team_players.iloc[0]['team_id'],
             players=players,
@@ -234,6 +243,7 @@ class ResponseBuilder:
                     fg_percentage=float(row['FG%']),
                     ft_percentage=float(row['FT%']),
                     three_pm=float(row['3PM']),
+                    minutes=float(row['MIN']),
                     gp=int(row['GP'])
                 ),
                 team_id=int(row['team_id'])

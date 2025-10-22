@@ -5,6 +5,7 @@ from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
 from app.utils.utils import is_team_exists
+from app.config import settings
 
 class TeamService:
     """Service for team-related operations"""
@@ -15,16 +16,27 @@ class TeamService:
         self.logger = logging.getLogger(__name__)
     
     async def get_team_detail(self, team_id: int) -> TeamDetail:
-        """Get detailed team statistics"""
+        """Get detailed team statistics including roster and ESPN link"""
         totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
-        
+        players_df = await self.data_provider.get_players_df()
+
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ResourceNotFoundError("Unable to process ESPN data")
-        
+
+        if players_df is None:
+            raise ResourceNotFoundError("Unable to process player data")
+
         if not is_team_exists(team_id, totals_df):
             raise ResourceNotFoundError(f"Team with ID {team_id} not found")
-        
-        return self.response_builder.build_team_detail_response(team_id, totals_df, averages_df, rankings_df)
+
+        team_players_df = self._filter_team_players(players_df, team_id)
+        players_list = self.response_builder.build_players_list(team_players_df)
+
+        espn_url = f"https://fantasy.espn.com/basketball/team?leagueId={settings.league_id}&teamId={team_id}"
+
+        return self.response_builder.build_team_detail_response(
+            team_id, totals_df, averages_df, rankings_df, players_list, espn_url
+        )
     
     async def get_teams_list(self) -> List[Team]:
         """Get list of all teams"""

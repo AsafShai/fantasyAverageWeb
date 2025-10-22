@@ -13,12 +13,13 @@ export interface AggregatedStats {
   fg_percentage: number;
   ft_percentage: number;
   three_pm: number;
+  minutes: number;
   gp: number;
 }
 
 export const calculatePlayerAverages = (stats: PlayerStats): PlayerStats => {
   if (stats.gp === 0) return stats;
-  
+
   return {
     pts: stats.pts / stats.gp,
     reb: stats.reb / stats.gp,
@@ -32,6 +33,7 @@ export const calculatePlayerAverages = (stats: PlayerStats): PlayerStats => {
     fg_percentage: stats.fg_percentage,
     ft_percentage: stats.ft_percentage,
     three_pm: stats.three_pm / stats.gp,
+    minutes: stats.minutes / stats.gp,
     gp: stats.gp,
   };
 };
@@ -51,6 +53,7 @@ export const aggregatePlayerStats = (players: Player[]): AggregatedStats => {
       fg_percentage: 0,
       ft_percentage: 0,
       three_pm: 0,
+      minutes: 0,
       gp: 0,
     };
   }
@@ -68,6 +71,7 @@ export const aggregatePlayerStats = (players: Player[]): AggregatedStats => {
       ftm: acc.ftm + stats.ftm,
       fta: acc.fta + stats.fta,
       three_pm: acc.three_pm + stats.three_pm,
+      minutes: acc.minutes + stats.minutes,
       gp: acc.gp + stats.gp,
     };
   }, {
@@ -81,6 +85,7 @@ export const aggregatePlayerStats = (players: Player[]): AggregatedStats => {
     ftm: 0,
     fta: 0,
     three_pm: 0,
+    minutes: 0,
     gp: 0,
   });
 
@@ -96,7 +101,7 @@ export const aggregatePlayerStats = (players: Player[]): AggregatedStats => {
 
 export const calculateTeamAverages = (aggregatedStats: AggregatedStats): AggregatedStats => {
   if (aggregatedStats.gp === 0) return aggregatedStats;
-  
+
   return {
     pts: aggregatedStats.pts / aggregatedStats.gp,
     reb: aggregatedStats.reb / aggregatedStats.gp,
@@ -110,6 +115,7 @@ export const calculateTeamAverages = (aggregatedStats: AggregatedStats): Aggrega
     fg_percentage: aggregatedStats.fg_percentage,
     ft_percentage: aggregatedStats.ft_percentage,
     three_pm: aggregatedStats.three_pm / aggregatedStats.gp,
+    minutes: aggregatedStats.minutes / aggregatedStats.gp,
     gp: aggregatedStats.gp,
   };
 };
