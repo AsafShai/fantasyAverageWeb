@@ -21,7 +21,6 @@ class DataProvider:
     def __init__(self):
         if not DataProvider._initialized:
             self.cache_manager = CacheManager()
-            self._validate_urls()
             self.data_transformer = DataTransformer()
             self.logger = logging.getLogger(__name__)
             # Create httpx client with connection pooling
@@ -30,6 +29,10 @@ class DataProvider:
                 limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
             )
             DataProvider._initialized = True
+            if not settings.season_id or not settings.league_id:
+                raise ValueError("Season ID and league ID are not configured")
+            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam'
+            self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mRoster'
     
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching"""
@@ -38,7 +41,7 @@ class DataProvider:
             if self.cache_manager.totals_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
             
-            response = await self._client.get(settings.espn_standings_url, headers=headers)
+            response = await self._client.get(self.espn_standings_url, headers=headers)
             
             if response.status_code == 304:
                 return self.cache_manager.totals_cache['data']
@@ -70,7 +73,7 @@ class DataProvider:
             if self.cache_manager.players_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.players_cache['etag']
             
-            response = await self._client.get(settings.espn_players_url, headers=headers)
+            response = await self._client.get(self.espn_players_url, headers=headers)
             
             if response.status_code == 304:
                 return self.cache_manager.players_cache['data']
@@ -112,13 +115,6 @@ class DataProvider:
         rankings_df = self.data_transformer.averages_to_rankings_df(averages_df)
         
         return totals_df, averages_df, rankings_df
-    
-    def _validate_urls(self):
-        """Validate that required URLs are configured"""
-        if not settings.espn_standings_url:
-            raise ValueError("ESPN_STANDINGS_URL is not configured")
-        if not settings.espn_players_url:
-            raise ValueError("ESPN_PLAYERS_URL is not configured")
     
     async def close(self):
         """Close the httpx client to clean up connections"""
