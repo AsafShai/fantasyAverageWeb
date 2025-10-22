@@ -37,8 +37,8 @@ class DataTransformer:
             
             if not all_players:
                 raise ValueError("No valid player data found")
-                
             df = pd.DataFrame(all_players)
+            df = df.fillna(0)
             return self._organize_player_columns(df)
             
         except Exception as e:
