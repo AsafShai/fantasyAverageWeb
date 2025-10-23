@@ -203,7 +203,7 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
           value={statFilter.stat || ''}
           onChange={(e) => setStatFilter({ ...statFilter, stat: e.target.value as any })}
         >
-          <option value="">Select stat...</option>
+          <option value="">Filter by stat</option>
           <option value="pts">PTS</option>
           <option value="reb">REB</option>
           <option value="ast">AST</option>
@@ -218,7 +218,7 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
           value={statFilter.operator || ''}
           onChange={(e) => setStatFilter({ ...statFilter, operator: e.target.value as any })}
         >
-          <option value="">Operator...</option>
+          <option value="">Select operator</option>
           <option value="eq">=</option>
           <option value="gt">&gt;</option>
           <option value="gte">&gt;=</option>
