@@ -104,9 +104,13 @@ const Rankings = () => {
                 </td>
                 {columns.slice(2).map((column) => {
                   const value = team[column.key as keyof RankingStats] as number
+                  const formatValue = (val: number) => {
+                    if (column.key === 'gp') return val
+                    return val % 1 === 0 ? val.toString() : val.toFixed(1)
+                  }
                   return (
                     <td key={column.key} className={`table-cell font-medium ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''}`}>
-                      {column.key === 'gp' ? value : typeof value === 'number' ? value.toFixed(column.key.includes('percentage') ? 3 : 2) : value}
+                      {typeof value === 'number' ? formatValue(value) : value}
                     </td>
                   )
                 })}
