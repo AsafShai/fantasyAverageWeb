@@ -11,7 +11,7 @@ class AverageStats(BaseModel):
     stl: float  # Steals
     blk: float  # Blocks
     pts: float  # Points
-    gp: int  # Games Played
+    gp: float  # Games Played
 
 class TeamAverageStats(AverageStats):
     team: Team
