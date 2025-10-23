@@ -9,8 +9,9 @@ const TeamDetail = () => {
   const navigate = useNavigate()
   const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
   const { data: team_detail, error, isLoading } = useGetTeamDetailQuery(teamIdNumber)
-  const [sortBy, setSortBy] = useState<string>('player_name')
+  const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [showAverages, setShowAverages] = useState(true)
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -29,6 +30,16 @@ const TeamDetail = () => {
     return rounded.toString()
   }
 
+  const formatStat = (value: number, gp: number, isPercentage: boolean = false) => {
+    if (isPercentage) {
+      return formatNumber(value * 100) + '%'
+    }
+    if (showAverages) {
+      return gp > 0 ? formatNumber(value / gp) : '0.0'
+    }
+    return formatNumber(value)
+  }
+
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message="Failed to load team details" />
   if (!team_detail) return <ErrorMessage message="Team not found" />
@@ -37,46 +48,59 @@ const TeamDetail = () => {
     { key: 'player_name', label: 'Player', align: 'left' },
     { key: 'positions', label: 'Position', align: 'left' },
     { key: 'pro_team', label: 'Pro Team', align: 'left' },
-    { key: 'minutes', label: 'Min', align: 'right' },
+    { key: 'minutes', label: showAverages ? 'MPG' : 'Min', align: 'right' },
     { key: 'fg_percentage', label: 'FG%', align: 'right' },
     { key: 'ft_percentage', label: 'FT%', align: 'right' },
-    { key: 'three_pm', label: '3PM', align: 'right' },
-    { key: 'reb', label: 'REB', align: 'right' },
-    { key: 'ast', label: 'AST', align: 'right' },
-    { key: 'stl', label: 'STL', align: 'right' },
-    { key: 'blk', label: 'BLK', align: 'right' },
-    { key: 'pts', label: 'PTS', align: 'right' },
+    { key: 'three_pm', label: showAverages ? '3PG' : '3PM', align: 'right' },
+    { key: 'reb', label: showAverages ? 'RPG' : 'REB', align: 'right' },
+    { key: 'ast', label: showAverages ? 'APG' : 'AST', align: 'right' },
+    { key: 'stl', label: showAverages ? 'SPG' : 'STL', align: 'right' },
+    { key: 'blk', label: showAverages ? 'BPG' : 'BLK', align: 'right' },
+    { key: 'pts', label: showAverages ? 'PPG' : 'PTS', align: 'right' },
     { key: 'gp', label: 'GP', align: 'right' },
   ]
 
-  const sortedPlayers = [...team_detail.players].sort((a, b) => {
-    let aVal: string | number | null
-    let bVal: string | number | null
+  const getPositionOrder = (positions: string[]): number => {
+    const positionRank = { 'PG': 1, 'SG': 2, 'SF': 3, 'PF': 4, 'C': 5 }
+    const firstPos = positions[0]
+    return positionRank[firstPos as keyof typeof positionRank] ?? 99
+  }
 
-    if (sortBy === 'player_name') {
-      aVal = a.player_name
-      bVal = b.player_name
-    } else if (sortBy === 'positions') {
-      aVal = a.positions.join(', ')
-      bVal = b.positions.join(', ')
-    } else if (sortBy === 'pro_team') {
-      aVal = a.pro_team
-      bVal = b.pro_team
-    } else {
-      aVal = a.stats[sortBy as keyof typeof a.stats] ?? -1
-      bVal = b.stats[sortBy as keyof typeof b.stats] ?? -1
-    }
+  const sortedPlayers = sortBy === null 
+    ? team_detail.players 
+    : [...team_detail.players].sort((a, b) => {
+        let aVal: string | number | null
+        let bVal: string | number | null
 
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
-      return sortOrder === 'asc'
-        ? aVal.localeCompare(bVal)
-        : bVal.localeCompare(aVal)
-    }
+        if (sortBy === 'player_name') {
+          aVal = a.player_name
+          bVal = b.player_name
+        } else if (sortBy === 'positions') {
+          const aPosOrder = getPositionOrder(a.positions)
+          const bPosOrder = getPositionOrder(b.positions)
+          return sortOrder === 'asc' ? aPosOrder - bPosOrder : bPosOrder - aPosOrder
+        } else if (sortBy === 'pro_team') {
+          aVal = a.pro_team
+          bVal = b.pro_team
+        } else {
+          aVal = a.stats[sortBy as keyof typeof a.stats] ?? -1
+          bVal = b.stats[sortBy as keyof typeof b.stats] ?? -1
+        }
 
-    const aNum = aVal as number
-    const bNum = bVal as number
-    return sortOrder === 'asc' ? aNum - bNum : bNum - aNum
-  })
+        if (sortBy === 'positions') {
+          return 0 // Already handled above
+        }
+
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          return sortOrder === 'asc'
+            ? aVal.localeCompare(bVal)
+            : bVal.localeCompare(aVal)
+        }
+
+        const aNum = aVal as number
+        const bNum = bVal as number
+        return sortOrder === 'asc' ? aNum - bNum : bNum - aNum
+      })
 
   return (
     <div className="max-w-7xl mx-auto px-4 space-y-6">
@@ -175,7 +199,23 @@ const TeamDetail = () => {
         </div>
       </div>
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Roster</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
+          <div className="stats-toggle">
+            <button
+              className={showAverages ? 'active' : ''}
+              onClick={() => setShowAverages(true)}
+            >
+              Per Game
+            </button>
+            <button
+              className={!showAverages ? 'active' : ''}
+              onClick={() => setShowAverages(false)}
+            >
+              Totals
+            </button>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -204,15 +244,15 @@ const TeamDetail = () => {
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{player.player_name}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.minutes ? player.stats.minutes.toFixed(1) : '-'}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.fg_percentage * 100)}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.ft_percentage * 100)}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.three_pm)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.reb)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.ast)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.stl)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.blk)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatNumber(player.stats.pts)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.minutes, player.stats.gp)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.fg_percentage, player.stats.gp, true)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ft_percentage, player.stats.gp, true)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.three_pm, player.stats.gp)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.reb, player.stats.gp)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ast, player.stats.gp)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.stl, player.stats.gp)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.blk, player.stats.gp)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.pts, player.stats.gp)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
                 </tr>
               ))}

@@ -24,6 +24,7 @@ __all__ = [
 
     "TeamDetail",
     "Player",
+    "PaginatedPlayers",
     "TeamPlayers",
     "TradeSuggestionsResponse",
     "TradeSuggestion",

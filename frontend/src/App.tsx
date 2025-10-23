@@ -7,6 +7,7 @@ import Teams from './pages/Teams'
 import TeamDetail from './pages/TeamDetail'
 import Analytics from './pages/Analytics'
 import { Trade } from './pages/Trade'
+import Players from './pages/Players'
 import NotFound from './pages/NotFound'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
           <Route path="team/:teamId" element={<TeamDetail />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="trade" element={<Trade />} />
+          <Route path="players" element={<Players />} />
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
           <Route path="*" element={<NotFound />} />
         </Route>
