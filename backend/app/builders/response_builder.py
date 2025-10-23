@@ -133,7 +133,8 @@ class ResponseBuilder:
                     minutes=float(row['MIN']),
                     gp=int(row['GP'])
                 ),
-                team_id=int(row['team_id'])
+                team_id=int(row['team_id']),
+                status=str(row.get('status', 'ONTEAM'))
             ))
         return players
 
@@ -246,6 +247,7 @@ class ResponseBuilder:
                     minutes=float(row['MIN']),
                     gp=int(row['GP'])
                 ),
-                team_id=int(row['team_id'])
+                team_id=int(row['team_id']),
+                status=str(row.get('status', 'ONTEAM'))
             ))
         return players
