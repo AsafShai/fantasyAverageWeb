@@ -26,8 +26,8 @@ const Dashboard = () => {
             <p className="text-2xl font-bold text-blue-600">{summary?.total_teams}</p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-green-900">Games Played</h3>
-            <p className="text-2xl font-bold text-green-600">{summary?.total_games_played}</p>
+            <h3 className="font-semibold text-green-900">Avg GP</h3>
+            <p className="text-2xl font-bold text-green-600">{summary?.league_averages.gp.toFixed(4)}</p>
           </div>
           <div className="bg-purple-50 p-4 rounded-lg">
             <h3 className="font-semibold text-purple-900">Avg FG%</h3>

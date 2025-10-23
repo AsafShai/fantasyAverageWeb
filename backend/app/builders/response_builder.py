@@ -174,7 +174,7 @@ class ResponseBuilder:
             stl=league_avg_data['STL'],
             blk=league_avg_data['BLK'],
             pts=league_avg_data['PTS'],
-            gp=int(league_avg_data['GP'])
+            gp=float(league_avg_data['GP'])
         )
     
     def _create_ranking_stats(self, row: pd.Series) -> RankingStats:
