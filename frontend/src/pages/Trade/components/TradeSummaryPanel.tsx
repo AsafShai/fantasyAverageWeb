@@ -1,8 +1,9 @@
 import React from 'react';
 import type { Player, Team } from '../../../types/api';
-import { 
-  aggregatePlayerStats, 
-  calculateTeamAverages, 
+import type { TradeMode } from '../../../hooks/useTradeState';
+import {
+  aggregatePlayerStats,
+  calculateTeamAverages,
   formatStatValue
 } from '../utils/tradeCalculations';
 import { STAT_KEYS } from '../constants';
@@ -13,6 +14,7 @@ interface TradeSummaryPanelProps {
   playersA: Player[];
   playersB: Player[];
   viewMode: 'totals' | 'averages';
+  tradeMode: TradeMode;
 }
 
 interface StatValueProps {
@@ -75,13 +77,20 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   playersA,
   playersB,
   viewMode,
+  tradeMode,
 }) => {
   if (playersA.length === 0 && playersB.length === 0) {
+    const emptyMessage = tradeMode === 'freeAgent'
+      ? 'Select players from your team and free agents to see comparison'
+      : 'Select players from both teams to see trade analysis';
+
     return (
       <div className="text-center py-12 text-gray-500">
-        <div className="text-4xl mb-4">🔄</div>
-        <h3 className="text-lg font-medium mb-2">No Trade Selected</h3>
-        <p className="text-sm">Select players from both teams to see trade analysis</p>
+        <div className="text-4xl mb-4">{tradeMode === 'freeAgent' ? '🔍' : '🔄'}</div>
+        <h3 className="text-lg font-medium mb-2">
+          {tradeMode === 'freeAgent' ? 'No Comparison Selected' : 'No Trade Selected'}
+        </h3>
+        <p className="text-sm">{emptyMessage}</p>
       </div>
     );
   }
@@ -91,12 +100,16 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   const displayStatsA = viewMode === 'averages' ? calculateTeamAverages(statsA) : statsA;
   const displayStatsB = viewMode === 'averages' ? calculateTeamAverages(statsB) : statsB;
 
+  const comparisonTitle = tradeMode === 'freeAgent'
+    ? '📊 Player Comparison: Your Team vs Free Agents'
+    : '📊 Trade Comparison';
+
   return (
     <div className="space-y-6">
       {playersA.length > 0 && playersB.length > 0 && (
         <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-            📊 Trade Comparison
+            {comparisonTitle}
           </h2>
           
           <div className="w-full overflow-x-auto">
@@ -111,27 +124,27 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               ))}
 
               <div className="bg-blue-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={teamA?.team_name || 'Team A'}>
-                  {teamA?.team_name || 'Team A'}
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}>
+                  {teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
                 </span>
               </div>
               {STAT_KEYS.map((key) => {
                 const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';
                 return (
-                  <StatValue 
+                  <StatValue
                     key={key}
-                    value={displayStatsA[key as keyof typeof displayStatsA]} 
-                    comparedTo={displayStatsB[key as keyof typeof displayStatsB]} 
-                    viewMode={viewMode} 
+                    value={displayStatsA[key as keyof typeof displayStatsA]}
+                    comparedTo={displayStatsB[key as keyof typeof displayStatsB]}
+                    viewMode={viewMode}
                     isPercentage={isPercentage}
                     field={key}
                   />
                 );
               })}
-              
+
               <div className="bg-green-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={teamB?.team_name || 'Team B'}>
-                  {teamB?.team_name || 'Team B'}
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}>
+                  {tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
                 </span>
               </div>
               {STAT_KEYS.map((key) => {

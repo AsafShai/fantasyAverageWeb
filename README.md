@@ -8,8 +8,9 @@ Link to the app: https://fantasyleagueinfo.onrender.com/
 - **Team Rankings**: Sortable rankings across all statistical categories
 - **Teams Browser**: Browse all teams with detailed roster views and ESPN integration
 - **Team Details**: Comprehensive team statistics with player rosters and minutes tracking
+- **Players Browser**: Search and filter all players including free agents and waivers with advanced filters (position, status, team, stats)
 - **AI Trade Suggestions**: GPT-powered trade recommendations with impact analysis
-- **Manual Trade Analyzer**: Interactive tool to compare players between teams with detailed stats
+- **Manual Trade Analyzer**: Interactive tool to compare players between teams OR compare your players against free agents, with detailed stats and per-game/total views
 - **Team Analytics**: Performance visualizations and detailed statistics
 - **Player Data**: Comprehensive player statistics including minutes played
 - **Real-time Data**: Live ESPN Fantasy Basketball API integration
@@ -176,12 +177,21 @@ The backend provides the following REST API endpoints:
 - `GET /api/analytics/heatmap` - Get performance heatmap data for visualization
 
 ### Players
-- `GET /api/players` - Get list of all players in the league with comprehensive stats including:
-  - Points, rebounds, assists, steals, blocks
-  - Field goal and free throw shooting stats
-  - Three-pointers made
-  - Minutes played
-  - Games played
+- `GET /api/players` - Get all players including rostered players, free agents, and waivers with pagination
+  - Query params: 
+    - `page` (integer, default: 1) - Page number
+    - `limit` (integer, default: 500, range: 10-500) - Players per page
+  - Returns: `PaginatedPlayers` object with:
+    - `players` - Array of player objects
+    - `total_count` - Total number of players
+    - `page` - Current page number
+    - `limit` - Players per page
+    - `has_more` - Boolean indicating if more pages exist
+  - Each player includes:
+    - Comprehensive stats (points, rebounds, assists, steals, blocks, shooting percentages, 3PM, minutes, games played)
+    - Player status (`ONTEAM`, `FREEAGENT`, or `WAIVERS`)
+    - Fantasy team assignment (`team_id`)
+    - NBA team and position information
 
 **Note:** Interactive API documentation is available at `/docs` (Swagger UI) when running the backend.
 
