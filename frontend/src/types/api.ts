@@ -115,6 +115,31 @@ export interface Player {
   positions: string[];
   stats: PlayerStats;
   team_id: number;
+  status: "ONTEAM" | "FREEAGENT" | "WAIVERS";
+}
+
+export interface PaginatedPlayers {
+  players: Player[];
+  total_count: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
+export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
+
+export interface StatFilter {
+  stat: keyof PlayerStats;
+  operator: ComparisonOperator;
+  value: number;
+}
+
+export interface PlayerFilters {
+  search?: string;
+  positions?: string[];
+  status?: string[];
+  team_id?: number | null;
+  stat_filters?: StatFilter[];
 }
 
 export interface TeamPlayers {

@@ -23,3 +23,11 @@ class Player(BaseModel):
     positions: List[str]
     stats: PlayerStats
     team_id: int
+    status: str
+
+class PaginatedPlayers(BaseModel):
+    players: List[Player]
+    total_count: int
+    page: int
+    limit: int
+    has_more: bool
