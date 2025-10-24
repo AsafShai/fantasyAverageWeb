@@ -135,8 +135,8 @@ const Analytics = () => {
                   </div>
                 </th>
                 {sortedData.categories.map((category: string) => (
-                  <th 
-                    key={category} 
+                  <th
+                    key={category}
                     className="px-2 py-2 text-center text-xs cursor-pointer hover:bg-gray-100 transition-colors duration-150"
                     onClick={() => handleSort(category)}
                   >
@@ -165,7 +165,9 @@ const Analytics = () => {
                     return (
                       <td
                         key={catIndex}
-                        className="px-2 py-2 text-center text-xs"
+                        className={`px-2 py-2 text-center text-xs ${
+                          category === 'GP' ? 'border-l-4 border-gray-700' : ''
+                        }`}
                         style={{
                           backgroundColor: getHeatmapColor(value),
                           color: getTextColor(value)
