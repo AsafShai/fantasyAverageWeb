@@ -46,15 +46,17 @@ const Players = () => {
       if (filters.stat_filters?.length) {
         for (const filter of filters.stat_filters) {
           const statValue = player.stats[filter.stat];
-          const perGame = player.stats.gp > 0 ? statValue / player.stats.gp : 0;
+          const compareValue = showAverages
+            ? (player.stats.gp > 0 ? statValue / player.stats.gp : 0)
+            : statValue;
 
           let passes = false;
           switch (filter.operator) {
-            case "eq": passes = perGame === filter.value; break;
-            case "gt": passes = perGame > filter.value; break;
-            case "lt": passes = perGame < filter.value; break;
-            case "gte": passes = perGame >= filter.value; break;
-            case "lte": passes = perGame <= filter.value; break;
+            case "eq": passes = compareValue === filter.value; break;
+            case "gt": passes = compareValue > filter.value; break;
+            case "lt": passes = compareValue < filter.value; break;
+            case "gte": passes = compareValue >= filter.value; break;
+            case "lte": passes = compareValue <= filter.value; break;
           }
 
           if (!passes) return false;
@@ -63,7 +65,7 @@ const Players = () => {
 
       return true;
     });
-  }, [data, filters]);
+  }, [data, filters, showAverages]);
 
   if (isLoading) return <div className="loading">Loading players...</div>;
   if (error) return <div className="error">Error loading players</div>;
@@ -290,8 +292,15 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
         aVal = a.player_name;
         bVal = b.player_name;
       } else if (sortColumn in a.stats) {
-        aVal = a.stats[sortColumn as keyof typeof a.stats];
-        bVal = b.stats[sortColumn as keyof typeof b.stats];
+        const aStat = a.stats[sortColumn as keyof typeof a.stats];
+        const bStat = b.stats[sortColumn as keyof typeof b.stats];
+
+        aVal = showAverages && sortColumn !== 'gp'
+          ? (a.stats.gp > 0 ? aStat / a.stats.gp : 0)
+          : aStat;
+        bVal = showAverages && sortColumn !== 'gp'
+          ? (b.stats.gp > 0 ? bStat / b.stats.gp : 0)
+          : bStat;
       } else {
         aVal = (a as any)[sortColumn];
         bVal = (b as any)[sortColumn];
@@ -303,7 +312,7 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
         return aVal < bVal ? 1 : -1;
       }
     });
-  }, [players, sortBy, sortOrder]);
+  }, [players, sortBy, sortOrder, showAverages]);
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
