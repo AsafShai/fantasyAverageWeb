@@ -271,9 +271,9 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
       return value.toFixed(3);
     }
     if (showAverages) {
-      return gp > 0 ? (value / gp).toFixed(1) : '0.0';
+      return gp > 0 ? (value / gp).toFixed(2) : '0.00';
     }
-    return value.toFixed(1);
+    return value.toFixed(0);
   };
 
   const sortedPlayers = useMemo(() => {
