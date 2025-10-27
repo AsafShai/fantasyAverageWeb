@@ -37,15 +37,21 @@ class LeagueService:
         averages_df = await self.data_provider.get_averages_df()
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
-        
+
+        rankings_df = await self.data_provider.get_rankings_df()
+        if rankings_df is None:
+            raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
+
         teams_data = self._extract_teams_data(averages_df)
         categories_data = self._extract_categories_data(averages_df)
         normalized_data = self.stats_calculator.normalize_for_heatmap(averages_df)
-        
+        ranks_data = self._extract_ranks_data(rankings_df, averages_df)
+
         return self.response_builder.build_heatmap_response(
             teams=teams_data,
             categories=categories_data,
-            normalized_data=normalized_data
+            normalized_data=normalized_data,
+            ranks_data=ranks_data
         )
     
     async def get_league_shots_data(self) -> LeagueShotsData:
@@ -84,7 +90,25 @@ class LeagueService:
         from app.utils.constants import RANKING_CATEGORIES
         categories_with_gp = RANKING_CATEGORIES + ['GP']
         return averages_df[categories_with_gp].values.tolist()
-    
+
+    def _extract_ranks_data(self, rankings_df, averages_df) -> List[List[int]]:
+        """Extract rank data for each team and category"""
+        from app.utils.constants import RANKING_CATEGORIES
+
+        team_id_to_ranks = {}
+        for _, row in rankings_df.iterrows():
+            team_id = int(row['team_id'])
+            ranks = [int(row[cat]) for cat in RANKING_CATEGORIES]
+            ranks.append(0)
+            team_id_to_ranks[team_id] = ranks
+
+        ranks_data = []
+        for _, team_row in averages_df.iterrows():
+            team_id = int(team_row['team_id'])
+            ranks_data.append(team_id_to_ranks.get(team_id, [0] * 9))
+
+        return ranks_data
+
     def _extract_shots_data(self, totals_df) -> List:
         """Extract shots data for league shots"""
         shots_data = []

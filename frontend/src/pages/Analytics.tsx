@@ -9,19 +9,26 @@ interface SortedHeatmapData {
   categories: string[]
   data: number[][]
   normalized_data: number[][]
+  ranks_data: number[][]
 }
 interface TeamDataItem {
   team: Team
   index: number
   data: number[]
   normalized_data: number[]
+  ranks_data: number[]
 }
 
 
 const Analytics = () => {
   const [sortBy, setSortBy] = useState<string>('team')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [highlightedTeamId, setHighlightedTeamId] = useState<number | null>(null)
   const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery()
+
+  const handleTeamClick = (teamId: number) => {
+    setHighlightedTeamId(prev => prev === teamId ? null : teamId)
+  }
 
   const getHeatmapColor = (normalizedValue: number): string => {
     // Red (bad) -> White (middle) -> Green (good)
@@ -72,13 +79,14 @@ const Analytics = () => {
   const getSortedHeatmapData = (heatmapData: HeatmapData): SortedHeatmapData | null => {
     if (!heatmapData) return null
 
-    const { teams, categories, data, normalized_data } = heatmapData
-    
+    const { teams, categories, data, normalized_data, ranks_data } = heatmapData
+
     const teamData: TeamDataItem[] = teams.map((team: Team, index: number) => ({
       team,
       index,
       data: data[index] ?? [],
-      normalized_data: normalized_data[index] ?? []
+      normalized_data: normalized_data[index] ?? [],
+      ranks_data: ranks_data?.[index] ?? []
     }))
 
     const sortedTeamData: TeamDataItem[] = teamData.sort((a: TeamDataItem, b: TeamDataItem) => {
@@ -91,7 +99,7 @@ const Analytics = () => {
       } else {
         const categoryIndex = categories.indexOf(sortBy)
         if (categoryIndex === -1) return 0
-        
+
         const aValue: number = a.data[categoryIndex] ?? 0
         const bValue: number = b.data[categoryIndex] ?? 0
         return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
@@ -102,7 +110,8 @@ const Analytics = () => {
       teams: sortedTeamData.map((item: TeamDataItem) => item.team),
       categories,
       data: sortedTeamData.map((item: TeamDataItem) => item.data),
-      normalized_data: sortedTeamData.map((item: TeamDataItem) => item.normalized_data)
+      normalized_data: sortedTeamData.map((item: TeamDataItem) => item.normalized_data),
+      ranks_data: sortedTeamData.map((item: TeamDataItem) => item.ranks_data)
     }
   }
 
@@ -153,32 +162,53 @@ const Analytics = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedData.teams.map((team: Team, teamIndex: number) => (
-                <tr key={team.team_id}>
-                  <td className="px-4 py-2 font-medium">{team.team_name}</td>
-                  {sortedData.normalized_data[teamIndex]?.map((value: number, catIndex: number) => {
-                    const cellValue: number | undefined = sortedData.data[teamIndex]?.[catIndex]
-                    const category = sortedData.categories[catIndex]
-                    const displayValue = category === 'GP'
-                      ? Math.round(cellValue ?? 0)
-                      : (cellValue?.toFixed(4) ?? '0.0000')
-                    return (
-                      <td
-                        key={catIndex}
-                        className={`px-2 py-2 text-center text-xs ${
-                          category === 'GP' ? 'border-l-4 border-gray-700' : ''
-                        }`}
-                        style={{
-                          backgroundColor: getHeatmapColor(value),
-                          color: getTextColor(value)
-                        }}
-                      >
-                        {displayValue}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+              {sortedData.teams.map((team: Team, teamIndex: number) => {
+                const isHighlighted = highlightedTeamId === team.team_id
+                return (
+                  <tr
+                    key={team.team_id}
+                    className={`transition-all duration-150 ${
+                      isHighlighted ? 'border-[3px] border-black' : ''
+                    }`}
+                  >
+                    <td
+                      className={`px-4 py-2 cursor-pointer transition-colors duration-150 ${
+                        isHighlighted ? 'font-bold' : 'font-medium hover:bg-gray-100'
+                      }`}
+                      onClick={() => handleTeamClick(team.team_id)}
+                    >
+                      {team.team_name}
+                    </td>
+                    {sortedData.normalized_data[teamIndex]?.map((value: number, catIndex: number) => {
+                      const cellValue: number | undefined = sortedData.data[teamIndex]?.[catIndex]
+                      const rank: number | undefined = sortedData.ranks_data[teamIndex]?.[catIndex]
+                      const category = sortedData.categories[catIndex]
+                      const displayValue = category === 'GP'
+                        ? Math.round(cellValue ?? 0)
+                        : (cellValue?.toFixed(4) ?? '0.0000')
+                      return (
+                        <td
+                          key={catIndex}
+                          className={`px-2 py-2 text-center text-xs relative ${
+                            category === 'GP' ? 'border-l-4 border-gray-700' : ''
+                          }`}
+                          style={{
+                            backgroundColor: getHeatmapColor(value),
+                            color: getTextColor(value)
+                          }}
+                        >
+                          <span>{displayValue}</span>
+                          {rank !== undefined && rank > 0 && (
+                            <span className="absolute bottom-0.5 right-0.5 text-[0.7rem] opacity-85 font-semibold">
+                              ({rank})
+                            </span>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

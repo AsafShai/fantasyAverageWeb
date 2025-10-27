@@ -74,6 +74,7 @@ export interface HeatmapData {
   categories: string[];
   data: number[][];
   normalized_data: number[][];
+  ranks_data?: number[][];
 }
 
 export interface TeamShotStats {
