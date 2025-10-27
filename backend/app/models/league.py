@@ -24,4 +24,5 @@ class HeatmapData(BaseModel):
     teams: List[Team]
     categories: List[str]
     data: List[List[float]]
-    normalized_data: List[List[float]] 
+    normalized_data: List[List[float]]
+    ranks_data: List[List[int]] 

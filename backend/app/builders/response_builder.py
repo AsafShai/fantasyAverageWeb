@@ -75,10 +75,10 @@ class ResponseBuilder:
             last_updated=datetime.now()
         )
     
-    def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]], 
-                             normalized_data: List[List[float]]) -> HeatmapData:
+    def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],
+                             normalized_data: List[List[float]], ranks_data: List[List[int]]) -> HeatmapData:
         """Build HeatmapData response from prepared data"""
-        team_objects = [Team(team_id=team['team_id'], team_name=team['team_name']) 
+        team_objects = [Team(team_id=team['team_id'], team_name=team['team_name'])
                        for team in teams]
         categories_with_gp = RANKING_CATEGORIES + ['GP']
 
@@ -86,7 +86,8 @@ class ResponseBuilder:
             teams=team_objects,
             categories=categories_with_gp,
             data=categories,
-            normalized_data=normalized_data
+            normalized_data=normalized_data,
+            ranks_data=ranks_data
         )
     
     def build_league_shots_response(self, shots_data: List[Dict]) -> LeagueShotsData:

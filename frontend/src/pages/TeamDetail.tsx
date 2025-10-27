@@ -66,8 +66,8 @@ const TeamDetail = () => {
     return positionRank[firstPos as keyof typeof positionRank] ?? 99
   }
 
-  const sortedPlayers = sortBy === null 
-    ? team_detail.players 
+  const sortedPlayers = sortBy === null
+    ? team_detail.players
     : [...team_detail.players].sort((a, b) => {
         let aVal: string | number | null
         let bVal: string | number | null
@@ -83,8 +83,15 @@ const TeamDetail = () => {
           aVal = a.pro_team
           bVal = b.pro_team
         } else {
-          aVal = a.stats[sortBy as keyof typeof a.stats] ?? -1
-          bVal = b.stats[sortBy as keyof typeof b.stats] ?? -1
+          const aStat = a.stats[sortBy as keyof typeof a.stats] ?? -1
+          const bStat = b.stats[sortBy as keyof typeof b.stats] ?? -1
+
+          aVal = showAverages && sortBy !== 'gp'
+            ? (a.stats.gp > 0 ? aStat / a.stats.gp : 0)
+            : aStat
+          bVal = showAverages && sortBy !== 'gp'
+            ? (b.stats.gp > 0 ? bStat / b.stats.gp : 0)
+            : bStat
         }
 
         if (sortBy === 'positions') {
