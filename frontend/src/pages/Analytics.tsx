@@ -183,8 +183,11 @@ const Analytics = () => {
                       const cellValue: number | undefined = sortedData.data[teamIndex]?.[catIndex]
                       const rank: number | undefined = sortedData.ranks_data[teamIndex]?.[catIndex]
                       const category = sortedData.categories[catIndex]
+                      const isPercentage = category === 'FG%' || category === 'FT%'
                       const displayValue = category === 'GP'
                         ? Math.round(cellValue ?? 0)
+                        : isPercentage
+                        ? ((cellValue ?? 0) * 100).toFixed(4) + '%'
                         : (cellValue?.toFixed(4) ?? '0.0000')
                       return (
                         <td

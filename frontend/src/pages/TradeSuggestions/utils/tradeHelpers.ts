@@ -24,8 +24,8 @@ export const groupPlayersByTeam = (
 };
 
 export const formatStatValue = (
-  value: number, 
-  gamesPlayed: number, 
+  value: number,
+  gamesPlayed: number,
   viewMode: 'totals' | 'averages',
   isPercentage: boolean = false,
   isGamesPlayed: boolean = false
@@ -33,15 +33,15 @@ export const formatStatValue = (
   if (isGamesPlayed) {
     return Math.round(value).toString();
   }
-  
+
   if (isPercentage) {
     return `${value.toFixed(4)}%`;
   }
-  
+
   if (viewMode === 'averages' && gamesPlayed > 0) {
     return (value / gamesPlayed).toFixed(4);
   }
-  
+
   return Math.round(value).toString();
 };
 

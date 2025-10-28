@@ -46,7 +46,8 @@ const Players = () => {
       if (filters.stat_filters?.length) {
         for (const filter of filters.stat_filters) {
           const statValue = player.stats[filter.stat];
-          const compareValue = showAverages
+          const isPercentage = filter.stat === 'fg_percentage' || filter.stat === 'ft_percentage';
+          const compareValue = (showAverages && !isPercentage)
             ? (player.stats.gp > 0 ? statValue / player.stats.gp : 0)
             : statValue;
 
@@ -206,6 +207,7 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
           onChange={(e) => setStatFilter({ ...statFilter, stat: e.target.value as any })}
         >
           <option value="">Filter by stat</option>
+          <option value="minutes">Minutes</option>
           <option value="pts">PTS</option>
           <option value="reb">REB</option>
           <option value="ast">AST</option>
@@ -270,7 +272,7 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
 
   const formatStat = (value: number, gp: number, isPercentage: boolean = false) => {
     if (isPercentage) {
-      return value.toFixed(3);
+      return (value * 100).toFixed(4) + '%';
     }
     if (showAverages) {
       return gp > 0 ? (value / gp).toFixed(2) : '0.00';
@@ -294,11 +296,12 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
       } else if (sortColumn in a.stats) {
         const aStat = a.stats[sortColumn as keyof typeof a.stats];
         const bStat = b.stats[sortColumn as keyof typeof b.stats];
+        const isPercentage = sortColumn === 'fg_percentage' || sortColumn === 'ft_percentage';
 
-        aVal = showAverages && sortColumn !== 'gp'
+        aVal = (showAverages && sortColumn !== 'gp' && !isPercentage)
           ? (a.stats.gp > 0 ? aStat / a.stats.gp : 0)
           : aStat;
-        bVal = showAverages && sortColumn !== 'gp'
+        bVal = (showAverages && sortColumn !== 'gp' && !isPercentage)
           ? (b.stats.gp > 0 ? bStat / b.stats.gp : 0)
           : bStat;
       } else {
