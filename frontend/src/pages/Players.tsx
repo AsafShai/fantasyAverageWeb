@@ -51,13 +51,15 @@ const Players = () => {
             ? (player.stats.gp > 0 ? statValue / player.stats.gp : 0)
             : statValue;
 
+          const filterValue = isPercentage ? filter.value / 100 : filter.value;
+
           let passes = false;
           switch (filter.operator) {
-            case "eq": passes = compareValue === filter.value; break;
-            case "gt": passes = compareValue > filter.value; break;
-            case "lt": passes = compareValue < filter.value; break;
-            case "gte": passes = compareValue >= filter.value; break;
-            case "lte": passes = compareValue <= filter.value; break;
+            case "eq": passes = compareValue === filterValue; break;
+            case "gt": passes = compareValue > filterValue; break;
+            case "lt": passes = compareValue < filterValue; break;
+            case "gte": passes = compareValue >= filterValue; break;
+            case "lte": passes = compareValue <= filterValue; break;
           }
 
           if (!passes) return false;
