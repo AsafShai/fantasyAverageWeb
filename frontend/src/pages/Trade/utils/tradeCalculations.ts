@@ -121,19 +121,21 @@ export const calculateTeamAverages = (aggregatedStats: AggregatedStats): Aggrega
 };
 
 export const formatStatValue = (
-  value: number, 
-  isPercentage: boolean = false, 
-  viewMode: 'totals' | 'averages' = 'totals'
+  value: number,
+  isPercentage: boolean = false,
+  viewMode: 'totals' | 'averages' = 'totals',
+  isFromBackend: boolean = true
 ): string => {
   if (isPercentage) {
-    return `${value.toFixed(4)}%`;
+    const displayValue = isFromBackend ? value * 100 : value;
+    return `${displayValue.toFixed(3)}%`;
   }
-  
+
   if (viewMode === 'totals') {
     return Math.round(value).toString();
   }
-  
-  return value.toFixed(4);
+
+  return value.toFixed(3);
 };
 
 export const getStatColor = (value: number, isPercentage: boolean = false): string => {

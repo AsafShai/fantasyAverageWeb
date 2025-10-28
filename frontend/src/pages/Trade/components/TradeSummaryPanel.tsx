@@ -58,7 +58,7 @@ const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage =
   const styles = getValueStyles();
   const displayValue = (field === 'gp' || field === 'minutes')
     ? (viewMode === 'averages' && field === 'minutes' ? value.toFixed(1) : Math.round(value).toString())
-    : formatStatValue(value, isPercentage, viewMode);
+    : formatStatValue(value, isPercentage, viewMode, false);
 
   return (
     <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px]`}>

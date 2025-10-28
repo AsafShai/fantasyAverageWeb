@@ -85,11 +85,12 @@ const TeamDetail = () => {
         } else {
           const aStat = a.stats[sortBy as keyof typeof a.stats] ?? -1
           const bStat = b.stats[sortBy as keyof typeof b.stats] ?? -1
+          const isPercentage = sortBy === 'fg_percentage' || sortBy === 'ft_percentage'
 
-          aVal = showAverages && sortBy !== 'gp'
+          aVal = (showAverages && sortBy !== 'gp' && !isPercentage)
             ? (a.stats.gp > 0 ? aStat / a.stats.gp : 0)
             : aStat
-          bVal = showAverages && sortBy !== 'gp'
+          bVal = (showAverages && sortBy !== 'gp' && !isPercentage)
             ? (b.stats.gp > 0 ? bStat / b.stats.gp : 0)
             : bStat
         }
