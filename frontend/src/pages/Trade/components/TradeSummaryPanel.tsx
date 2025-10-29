@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Player, Team } from '../../../types/api';
 import type { TradeMode } from '../../../hooks/useTradeState';
 import {
@@ -79,6 +79,42 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   viewMode,
   tradeMode,
 }) => {
+  const [shownColumns, setShownColumns] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    STAT_KEYS.forEach(key => {
+      initial[key] = true;
+    });
+    return initial;
+  });
+
+  const [isColumnControlsOpen, setIsColumnControlsOpen] = useState(false);
+
+  const toggleColumn = (key: string) => {
+    setShownColumns(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const showAllColumns = () => {
+    const allShown: Record<string, boolean> = {};
+    STAT_KEYS.forEach(key => {
+      allShown[key] = true;
+    });
+    setShownColumns(allShown);
+  };
+
+  const hideAllColumns = () => {
+    const allHidden: Record<string, boolean> = {};
+    STAT_KEYS.forEach(key => {
+      allHidden[key] = false;
+    });
+    setShownColumns(allHidden);
+  };
+
+  const visibleColumns = STAT_KEYS.filter(key => shownColumns[key]);
+  const visibleHeaders = STAT_HEADERS.filter((_, index) => shownColumns[STAT_KEYS[index]]);
+
   if (playersA.length === 0 && playersB.length === 0) {
     const emptyMessage = tradeMode === 'freeAgent'
       ? 'Select players from your team and free agents to see comparison'
@@ -111,12 +147,64 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
             {comparisonTitle}
           </h2>
-          
+
+          {/* Show/Hide Columns Control */}
+          <div className="mb-6">
+            <button
+              onClick={() => setIsColumnControlsOpen(!isColumnControlsOpen)}
+              className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+            >
+              <span>{isColumnControlsOpen ? '▼' : '▶'}</span>
+              <span>Show/Hide Columns</span>
+            </button>
+
+            {isColumnControlsOpen && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex gap-3 mb-3">
+                  <button
+                    onClick={showAllColumns}
+                    className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded transition-colors"
+                  >
+                    Show All
+                  </button>
+                  <button
+                    onClick={hideAllColumns}
+                    className="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded transition-colors"
+                  >
+                    Hide All
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {STAT_HEADERS.map(({ label, icon }, index) => {
+                    const key = STAT_KEYS[index];
+                    return (
+                      <label
+                        key={key}
+                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={shownColumns[key]}
+                          onChange={() => toggleColumn(key)}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-sm">
+                          {icon} {label}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="w-full overflow-x-auto">
-            <div className="grid gap-1" style={{ gridTemplateColumns: '220px repeat(14, minmax(42px, 1fr))' }}>
+            <div className="grid gap-1" style={{ gridTemplateColumns: `220px repeat(${visibleColumns.length}, minmax(42px, 1fr))` }}>
               {/* Header row */}
               <div className="font-semibold text-gray-700 p-2 text-sm">Team</div>
-              {STAT_HEADERS.map(({ label, icon }) => (
+              {visibleHeaders.map(({ label, icon }) => (
                 <div key={label} className="font-semibold text-gray-700 p-2 text-center text-xs leading-tight">
                   <div className="text-sm">{icon}</div>
                   <div>{label}</div>
@@ -128,7 +216,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   {teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
                 </span>
               </div>
-              {STAT_KEYS.map((key) => {
+              {visibleColumns.map((key) => {
                 const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';
                 return (
                   <StatValue
@@ -147,14 +235,14 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   {tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
                 </span>
               </div>
-              {STAT_KEYS.map((key) => {
+              {visibleColumns.map((key) => {
                 const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';
                 return (
-                  <StatValue 
+                  <StatValue
                     key={key}
-                    value={displayStatsB[key as keyof typeof displayStatsB]} 
-                    comparedTo={displayStatsA[key as keyof typeof displayStatsA]} 
-                    viewMode={viewMode} 
+                    value={displayStatsB[key as keyof typeof displayStatsB]}
+                    comparedTo={displayStatsA[key as keyof typeof displayStatsA]}
+                    viewMode={viewMode}
                     isPercentage={isPercentage}
                     field={key}
                   />
