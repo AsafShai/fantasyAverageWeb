@@ -3,6 +3,7 @@ import { useGetHeatmapDataQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import type { HeatmapData, Team } from '../types/api'
+import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 
 interface SortedHeatmapData {
   teams: Team[]
@@ -21,47 +22,13 @@ interface TeamDataItem {
 
 
 const Analytics = () => {
-  const [sortBy, setSortBy] = useState<string>('team')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [sortBy, setSortBy] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [highlightedTeamId, setHighlightedTeamId] = useState<number | null>(null)
   const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery()
 
   const handleTeamClick = (teamId: number) => {
     setHighlightedTeamId(prev => prev === teamId ? null : teamId)
-  }
-
-  const getHeatmapColor = (normalizedValue: number): string => {
-    // Red (bad) -> White (middle) -> Green (good)
-    // normalizedValue ranges from 0 to 1, with 0.5 being pure white
-    
-    // Apply a power function to expand the white zone
-    // This makes values near 0.5 closer to white
-    const adjustedValue = normalizedValue < 0.5 
-      ? 0.5 * Math.pow(normalizedValue * 2, 1.5) 
-      : 1 - 0.5 * Math.pow((1 - normalizedValue) * 2, 1.5);
-    
-    if (adjustedValue <= 0.5) {
-      const ratio = adjustedValue * 2;
-      const r = Math.round(215 + (255 - 215) * ratio); // 215 -> 255
-      const g = Math.round(48 + (255 - 48) * ratio);   // 48 -> 255
-      const b = Math.round(39 + (255 - 39) * ratio);   // 39 -> 255
-      return `rgb(${r}, ${g}, ${b})`;
-    } else {
-      const ratio = (adjustedValue - 0.5) * 2;
-      const r = Math.round(255 - (255 - 34) * ratio);  // 255 -> 34
-      const g = Math.round(255 - (255 - 197) * ratio); // 255 -> 197
-      const b = Math.round(255 - (255 - 94) * ratio);  // 255 -> 94
-      return `rgb(${r}, ${g}, ${b})`;
-    }
-  }
-
-  const getTextColor = (normalizedValue: number): string => {
-    if (normalizedValue < 0.25) {
-      return 'white';
-    } else if (normalizedValue > 0.75) {
-      return 'white';
-    }
-    return 'black';
   }
 
   const handleSort = (column: string) => {
@@ -88,6 +55,16 @@ const Analytics = () => {
       normalized_data: normalized_data[index] ?? [],
       ranks_data: ranks_data?.[index] ?? []
     }))
+
+    if (sortBy === null) {
+      return {
+        teams,
+        categories,
+        data,
+        normalized_data,
+        ranks_data: ranks_data ?? []
+      }
+    }
 
     const sortedTeamData: TeamDataItem[] = teamData.sort((a: TeamDataItem, b: TeamDataItem) => {
       if (sortBy === 'team') {

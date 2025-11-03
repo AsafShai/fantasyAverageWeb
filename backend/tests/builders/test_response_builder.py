@@ -154,15 +154,17 @@ class TestResponseBuilder:
         ]
         categories = [[115.0, 28.0], [120.0, 25.0]]
         normalized_data = [[0.8, 0.9], [1.0, 0.7]]
-        
-        result = response_builder.build_heatmap_response(teams, categories, normalized_data)
-        
+        ranks_data = [[1, 2], [3, 4]]
+
+        result = response_builder.build_heatmap_response(teams, categories, normalized_data, ranks_data)
+
         assert isinstance(result, HeatmapData), "Should return HeatmapData object"
         assert len(result.teams) == 2, "Should have 2 teams"
         assert result.teams[0].team_id == 1, "First team should have ID 1"
         assert result.teams[0].team_name == 'Team Alpha', "First team should be Team Alpha"
         assert result.data == categories, "Should have correct data"
         assert result.normalized_data == normalized_data, "Should have correct normalized_data"
+        assert result.ranks_data == ranks_data, "Should have correct ranks_data"
         assert len(result.categories) == 9, "Should have 9 categories (8 ranking categories + GP)"
     
     def test_build_league_shots_response_success(self, response_builder):

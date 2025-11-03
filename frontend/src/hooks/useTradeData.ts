@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useGetTeamsListQuery, useGetTeamPlayersQuery, useGetAllPlayersQuery } from '../store/api/fantasyApi';
-import type { Team, TeamPlayers, Player } from '../types/api';
+import { useGetTeamsListQuery, useGetTeamDetailQuery, useGetAllPlayersQuery } from '../store/api/fantasyApi';
+import type { Team, TeamDetail, Player } from '../types/api';
 import type { TradeMode } from './useTradeState';
 
 interface UseTradeDataReturn {
@@ -8,11 +8,11 @@ interface UseTradeDataReturn {
   isLoadingTeams: boolean;
   teamsError: unknown;
 
-  teamAData: TeamPlayers | undefined;
+  teamAData: TeamDetail | undefined;
   isFetchingTeamA: boolean;
   teamAError: unknown;
 
-  teamBData: TeamPlayers | undefined;
+  teamBData: TeamDetail | undefined;
   isFetchingTeamB: boolean;
   teamBError: unknown;
 
@@ -27,18 +27,18 @@ export const useTradeData = (
   tradeMode: TradeMode
 ): UseTradeDataReturn => {
   const { data: teams = [], isLoading: isLoadingTeams, error: teamsError } = useGetTeamsListQuery();
-  
-  const { 
-    data: teamAData, 
+
+  const {
+    data: teamAData,
     isFetching: isFetchingTeamA,
-    error: teamAError 
-  } = useGetTeamPlayersQuery(teamA?.team_id || 0, { skip: !teamA });
-  
+    error: teamAError
+  } = useGetTeamDetailQuery(teamA?.team_id || 0, { skip: !teamA });
+
   const {
     data: teamBData,
     isFetching: isFetchingTeamB,
     error: teamBError
-  } = useGetTeamPlayersQuery(teamB?.team_id || 0, { skip: !teamB || tradeMode === 'freeAgent' });
+  } = useGetTeamDetailQuery(teamB?.team_id || 0, { skip: !teamB || tradeMode === 'freeAgent' });
 
   const {
     data: allPlayersData,

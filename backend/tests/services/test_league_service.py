@@ -58,20 +58,22 @@ class TestLeagueService:
             await league_service.get_league_summary()
     
     @pytest.mark.asyncio
-    async def test_get_heatmap_data_success(self, league_service, sample_averages_df):
+    async def test_get_heatmap_data_success(self, league_service, sample_averages_df, sample_rankings_df):
         """Test successful heatmap data retrieval"""
         expected_heatmap = Mock(spec=HeatmapData)
         mock_normalized_data = [[1.0, 2.0], [3.0, 4.0]]
-        
+
         league_service.data_provider.get_averages_df.return_value = sample_averages_df
+        league_service.data_provider.get_rankings_df.return_value = sample_rankings_df
         league_service.stats_calculator.normalize_for_heatmap.return_value = mock_normalized_data
         league_service.response_builder.build_heatmap_response.return_value = expected_heatmap
-        
+
         result = await league_service.get_heatmap_data()
-        
+
         assert result == expected_heatmap
         league_service.data_provider.get_averages_df.assert_called_once()
-        league_service.stats_calculator.normalize_for_heatmap.assert_called_once_with(sample_averages_df)
+        league_service.data_provider.get_rankings_df.assert_called_once()
+        league_service.stats_calculator.normalize_for_heatmap.assert_called_once()
         league_service.response_builder.build_heatmap_response.assert_called_once()
     
     @pytest.mark.asyncio
@@ -109,16 +111,17 @@ class TestLeagueServiceResponseBuilding:
     """Response building tests for LeagueService with mocked dependencies but real ResponseBuilder"""
     
     @pytest.fixture
-    def response_building_league_service(self, sample_averages_df, sample_totals_df):
+    def response_building_league_service(self, sample_averages_df, sample_totals_df, sample_rankings_df):
         """Create LeagueService with mocked DataProvider and StatsCalculator but real ResponseBuilder"""
         with patch('app.services.league_service.DataProvider') as mock_data_provider, \
              patch('app.services.league_service.StatsCalculator') as mock_stats_calculator:
             service = LeagueService()
             service.data_provider = AsyncMock()
             service.stats_calculator = mock_stats_calculator.return_value
-            
+
             # Mock data provider
             service.data_provider.get_averages_df.return_value = sample_averages_df
+            service.data_provider.get_rankings_df.return_value = sample_rankings_df
             service.data_provider.get_totals_df.return_value = sample_totals_df
             
             # Mock stats calculator with realistic results
