@@ -42,10 +42,14 @@ class LeagueService:
         if rankings_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 
-        teams_data = self._extract_teams_data(averages_df)
-        categories_data = self._extract_categories_data(averages_df)
-        normalized_data = self.stats_calculator.normalize_for_heatmap(averages_df)
-        ranks_data = self._extract_ranks_data(rankings_df, averages_df)
+        rankings_df = rankings_df.sort_values(by='TOTAL_POINTS', ascending=False)
+
+        sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
+
+        teams_data = self._extract_teams_data(sorted_averages_df)
+        categories_data = self._extract_categories_data(sorted_averages_df)
+        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df)
+        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df)
 
         return self.response_builder.build_heatmap_response(
             teams=teams_data,

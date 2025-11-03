@@ -80,6 +80,7 @@ export const Trade: React.FC = () => {
           teamsError={teamsError}
           playersError={teamAError}
           viewMode={viewMode}
+          categoryRanks={teamAData?.category_ranks}
         />
 
         {/* Team B Section or Free Agent Section */}
@@ -98,6 +99,7 @@ export const Trade: React.FC = () => {
             teamsError={teamsError}
             playersError={teamBError}
             viewMode={viewMode}
+            categoryRanks={teamBData?.category_ranks}
           />
         ) : (
           <FreeAgentSection
