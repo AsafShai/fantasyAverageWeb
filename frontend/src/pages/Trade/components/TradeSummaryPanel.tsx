@@ -201,7 +201,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
           </div>
 
           <div className="w-full overflow-x-auto">
-            <div className="grid gap-1" style={{ gridTemplateColumns: `220px repeat(${visibleColumns.length}, minmax(42px, 1fr))` }}>
+            <div className="grid gap-1" style={{ gridTemplateColumns: `220px repeat(${visibleColumns.length}, minmax(60px, 1fr))` }}>
               {/* Header row */}
               <div className="font-semibold text-gray-700 p-2 text-sm">Team</div>
               {visibleHeaders.map(({ label, icon }) => (
