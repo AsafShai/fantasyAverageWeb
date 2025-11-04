@@ -40,7 +40,7 @@ const Rankings = () => {
   })
 
   const columns = [
-    { key: 'rank', label: 'Rank', sortable: false },
+    { key: 'rank', label: 'Rank', sortable: true },
     { key: 'team', label: 'Team', sortable: true },
     { key: 'fg_percentage', label: 'FG%', sortable: true },
     { key: 'ft_percentage', label: 'FT%', sortable: true },
