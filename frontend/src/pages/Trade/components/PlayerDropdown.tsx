@@ -56,11 +56,11 @@ export const PlayerDropdown: React.FC<PlayerDropdownProps> = ({
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 items-center">
       <select
         value={selectedPlayerId}
         onChange={(e) => setSelectedPlayerId(e.target.value)}
-        className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
+        className="flex-1 min-w-0 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
       >
         <option value="">Select a player to add...</option>
         {availablePlayers.map((player) => (
@@ -72,7 +72,7 @@ export const PlayerDropdown: React.FC<PlayerDropdownProps> = ({
       <button
         onClick={handleAddPlayer}
         disabled={!selectedPlayerId}
-        className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+        className="flex-shrink-0 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium transition-colors whitespace-nowrap"
       >
         Add
       </button>
