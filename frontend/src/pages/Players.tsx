@@ -1,13 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
-import type { PlayerFilters, Player, StatFilter } from '../types/api';
+import type { PlayerFilters, Player, StatFilter, TimePeriod } from '../types/api';
+import TimePeriodSelector from '../components/TimePeriodSelector';
 import './Players.css';
 
 const Players = () => {
   const [filters, setFilters] = useState<PlayerFilters>({});
   const [showAverages, setShowAverages] = useState(true);
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
 
-  const { data, isLoading, error } = useGetAllPlayersQuery({ page: 1, limit: 500 });
+  const { data, isLoading, error } = useGetAllPlayersQuery({ page: 1, limit: 500, time_period: timePeriod });
   const { data: teams } = useGetTeamsListQuery();
 
   const teamMap = useMemo(() => {
@@ -78,6 +80,8 @@ const Players = () => {
       <h1>Players</h1>
 
       <FilterPanel filters={filters} onChange={setFilters} teams={teams} />
+
+      <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
 
       <div className="results-header">
         <div className="results-count">

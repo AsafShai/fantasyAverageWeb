@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod } from '../../types/api';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
@@ -15,9 +15,12 @@ export const fantasyApi = createApi({
       }),
       providesTags: ['Rankings'],
     }),
-    getTeamDetail: builder.query<TeamDetail, number>({
-      query: (teamId) => `/teams/${teamId}`,
-      providesTags: ['Team'],
+    getTeamDetail: builder.query<TeamDetail, { teamId: number; time_period?: TimePeriod }>({
+      query: ({ teamId, time_period = 'season' }) => ({
+        url: `/teams/${teamId}`,
+        params: { time_period },
+      }),
+      keepUnusedDataFor: 300,
     }),
     getLeagueSummary: builder.query<LeagueSummary, void>({
       query: () => '/league/summary',
@@ -47,13 +50,12 @@ export const fantasyApi = createApi({
       query: (teamId) => `/trades/suggestions/${teamId}`,
       keepUnusedDataFor: 0,
     }),
-    getAllPlayers: builder.query<PaginatedPlayers, { page?: number; limit?: number }>({
-      query: ({ page = 1, limit = 500 } = {}) => ({
+    getAllPlayers: builder.query<PaginatedPlayers, { page?: number; limit?: number; time_period?: TimePeriod }>({
+      query: ({ page = 1, limit = 500, time_period = 'season' } = {}) => ({
         url: '/players',
-        params: { page, limit },
+        params: { page, limit, time_period },
       }),
       keepUnusedDataFor: 300,
-      providesTags: ['Players'],
     }),
   }),
 });

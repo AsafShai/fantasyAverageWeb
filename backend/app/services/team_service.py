@@ -1,6 +1,6 @@
 import logging
 from typing import List
-from app.models import TeamDetail, TeamPlayers, Team
+from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
 from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
@@ -9,16 +9,23 @@ from app.config import settings
 
 class TeamService:
     """Service for team-related operations"""
-    
+
     def __init__(self):
         self.data_provider = DataProvider()
         self.response_builder = ResponseBuilder()
         self.logger = logging.getLogger(__name__)
-    
-    async def get_team_detail(self, team_id: int) -> TeamDetail:
-        """Get detailed team statistics including roster and ESPN link"""
+
+    async def get_team_detail(self, team_id: int, time_period: StatTimePeriod = StatTimePeriod.SEASON) -> TeamDetail:
+        """Get detailed team statistics including roster and ESPN link
+
+        Args:
+            team_id: Team ID
+            time_period: Time period for player stats
+        """
+        stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
+
         totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
-        players_df = await self.data_provider.get_players_df()
+        players_df = await self.data_provider.get_players_df(stat_split_id)
 
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ResourceNotFoundError("Unable to process ESPN data")

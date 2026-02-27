@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import type { TimePeriod } from '../../types/api';
 import { TeamTradeSection } from './components/TeamTradeSection';
 import { TradeStatsToggle } from './components/TradeStatsToggle';
 import { TradeModeToggle } from './components/TradeModeToggle';
@@ -6,8 +7,11 @@ import { FreeAgentSection } from './components/FreeAgentSection';
 import { TradeSummaryPanel } from './components/TradeSummaryPanel';
 import { useTradeState } from '../../hooks/useTradeState';
 import { useTradeData } from '../../hooks/useTradeData';
+import TimePeriodSelector from '../../components/TimePeriodSelector';
 
 export const Trade: React.FC = () => {
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
+
   const {
     teamA,
     teamB,
@@ -41,7 +45,7 @@ export const Trade: React.FC = () => {
     freeAgents,
     isFetchingFreeAgents,
     freeAgentsError,
-  } = useTradeData(teamA, teamB, tradeMode);
+  } = useTradeData(teamA, teamB, tradeMode, timePeriod);
 
   return (
     <div className="max-w-none mx-auto px-4 py-3">
@@ -60,8 +64,11 @@ export const Trade: React.FC = () => {
       {/* Mode Toggle */}
       <TradeModeToggle mode={tradeMode} onToggle={setTradeMode} />
 
-      {/* Stats Toggle */}
-      <TradeStatsToggle viewMode={viewMode} onToggle={setViewMode} />
+      {/* Time Period & Stats Toggles */}
+      <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-4">
+        <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
+        <TradeStatsToggle viewMode={viewMode} onToggle={setViewMode} />
+      </div>
 
       {/* Trade Sections */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
