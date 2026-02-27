@@ -2,6 +2,12 @@ from pydantic import BaseModel
 from typing import Optional
 from .base import Team
 
+
+class SlotUsage(BaseModel):
+    games_used: int
+    cap: int
+    remaining: int
+
 class AverageStats(BaseModel):
     fg_percentage: float
     ft_percentage: float

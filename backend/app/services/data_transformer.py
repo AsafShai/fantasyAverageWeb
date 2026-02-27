@@ -8,13 +8,40 @@ from app.services.stats_calculator import StatsCalculator
 from app.config import settings
 
 
+SLOT_MAP = {0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C', 5: 'G', 6: 'F', 11: 'UTIL'}
+SLOT_CAPS = {'PG': 82, 'SG': 82, 'SF': 82, 'PF': 82, 'C': 82, 'G': 82, 'F': 82, 'UTIL': 246}
+
+
 class DataTransformer:
     """Transforms raw ESPN data into clean pandas DataFrames"""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.stats_calculator = StatsCalculator()
     
+    def parse_slot_usage(self, espn_data: Dict) -> Dict[int, Dict[str, int]]:
+        """Parse slot usage from mMatchupScore data. Returns {team_id: {slot_name: games_used}}"""
+        result: Dict[int, Dict[str, int]] = {}
+        try:
+            schedule = espn_data.get('schedule', [])
+            if not schedule:
+                return result
+            for matchup in schedule:
+                for team in matchup.get('teams', []):
+                    team_id = team.get('teamId')
+                    stat_by_slot = team.get('cumulativeScore', {}).get('statBySlot', {})
+                    if team_id is None or not stat_by_slot:
+                        continue
+                    if team_id not in result:
+                        result[team_id] = {name: 0 for name in SLOT_CAPS}
+                    for slot_id_str, slot_data in stat_by_slot.items():
+                        slot_name = SLOT_MAP.get(int(slot_id_str))
+                        if slot_name and slot_data.get('statId') == 42:
+                            result[team_id][slot_name] = int(slot_data.get('value', 0))
+        except Exception as e:
+            self.logger.warning(f"Error parsing slot usage data: {e}")
+        return result
+
     def raw_all_players_to_df(self, espn_data: Dict, stat_split_type_id: int = 0) -> pd.DataFrame:
         """
         Convert ESPN kona_player_info API data to DataFrame (all 500 players including FA/waivers)
