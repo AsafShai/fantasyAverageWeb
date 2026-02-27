@@ -16,6 +16,7 @@ __all__ = [
     "RankingStats",
     "TeamShotStats",
     "PlayerStats",
+    "SlotUsage",
 
     "LeagueRankings",
     "LeagueSummary",

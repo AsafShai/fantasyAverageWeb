@@ -51,6 +51,12 @@ export interface TeamAverageStats extends AverageStats {
   team: Team;
 }
 
+export interface SlotUsage {
+  games_used: number;
+  cap: number;
+  remaining: number;
+}
+
 export interface TeamDetail {
   team: Team;
   espn_url: string;
@@ -59,6 +65,7 @@ export interface TeamDetail {
   raw_averages: TeamAverageStats;
   ranking_stats: RankingStats;
   category_ranks: Record<string, number>;
+  slot_usage: Record<string, SlotUsage>;
 }
 
 export interface LeagueSummary {

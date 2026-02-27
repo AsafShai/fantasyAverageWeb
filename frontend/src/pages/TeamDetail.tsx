@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { useGetTeamDetailQuery } from '../store/api/fantasyApi'
+import { useGetTeamDetailQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import type { TimePeriod } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -16,6 +16,7 @@ const TeamDetail = () => {
     teamId: teamIdNumber,
     time_period: timePeriod
   })
+  const { data: leagueSummary } = useGetLeagueSummaryQuery()
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
@@ -312,23 +313,78 @@ const TeamDetail = () => {
           </div>
         </div>
       </div>
+      {team_detail.slot_usage && Object.keys(team_detail.slot_usage).length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <h2 className="text-2xl font-bold text-gray-900">Slot Usage</h2>
+              <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+                <span>*</span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-200 inline-block"></span><span className="text-red-700">5%+ out of pace (above or below)</span></span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-200 inline-block"></span><span className="text-gray-600">within range</span></span>
+              </p>
+            </div>
+            {leagueSummary?.nba_avg_pace && (
+              <span className="text-xs text-gray-500">NBA avg: <span className="font-medium text-gray-700">{leagueSummary.nba_avg_pace.toFixed(1)} GP/team</span></span>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead>
+                <tr>
+                  {(['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'] as const).map(slot => (
+                    <th key={slot} className="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase border border-gray-200 bg-gray-50">
+                      {slot}
+                      {slot === 'UTIL' && <div className="text-gray-400 font-normal normal-case">per slot in ()</div>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {(['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'] as const).map(slot => {
+                    const usage = team_detail.slot_usage[slot]
+                    if (!usage) return <td key={slot} className="px-4 py-3 text-center border border-gray-200">-</td>
+                    const nbaAvg = leagueSummary?.nba_avg_pace ?? null
+                    let cellClass = 'bg-gray-100 text-gray-800'
+                    if (nbaAvg && nbaAvg > 0) {
+                      const effective = slot === 'UTIL' ? usage.games_used / 3 : usage.games_used
+                      const deviation = Math.abs((effective - nbaAvg) / nbaAvg)
+                      if (deviation >= 0.05) cellClass = 'bg-red-100 text-red-800'
+                      else cellClass = 'bg-gray-100 text-gray-700'
+                    }
+                    const perSlotVal = usage.games_used / 3
+                    const perSlot = slot === 'UTIL' ? ` (${Number.isInteger(perSlotVal) ? perSlotVal : perSlotVal.toFixed(1)}/82)` : ''
+                    return (
+                      <td key={slot} className={`px-4 py-3 text-center text-sm font-medium border border-gray-200 ${cellClass}`}>
+                        {usage.games_used}/{usage.cap}{perSlot}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-4 gap-3">
           <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <TimePeriodSelector
               value={timePeriod}
               onChange={setTimePeriod}
             />
-            <div className="stats-toggle">
+            <div className="flex border border-gray-300 rounded overflow-hidden self-end sm:self-stretch">
               <button
-                className={showAverages ? 'active' : ''}
+                className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(true)}
               >
                 Per Game
               </button>
               <button
-                className={!showAverages ? 'active' : ''}
+                className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(false)}
               >
                 Totals

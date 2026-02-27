@@ -81,26 +81,37 @@ const Players = () => {
 
       <FilterPanel filters={filters} onChange={setFilters} teams={teams} />
 
-      <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
-
-      <div className="results-header">
-        <div className="results-count">
-          Showing {filteredPlayers.length} players
+      <div className="flex flex-row justify-between items-center sm:items-stretch gap-2 mt-4 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="sm:hidden">
+            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
+          </div>
+          <div className="results-count hidden sm:flex sm:items-center">
+            Showing {filteredPlayers.length} players
+          </div>
         </div>
-        <div className="stats-toggle">
-          <button
-            className={showAverages ? 'active' : ''}
-            onClick={() => setShowAverages(true)}
-          >
-            Per Game
-          </button>
-          <button
-            className={!showAverages ? 'active' : ''}
-            onClick={() => setShowAverages(false)}
-          >
-            Totals
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:block">
+            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
+          </div>
+          <div className="flex border border-gray-300 rounded overflow-hidden sm:self-stretch">
+            <button
+              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              onClick={() => setShowAverages(true)}
+            >
+              Per Game
+            </button>
+            <button
+              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              onClick={() => setShowAverages(false)}
+            >
+              Totals
+            </button>
+          </div>
         </div>
+      </div>
+      <div className="results-count sm:hidden mb-2">
+        Showing {filteredPlayers.length} players
       </div>
 
       <div className="table-container">

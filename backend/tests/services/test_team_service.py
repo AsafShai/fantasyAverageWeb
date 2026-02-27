@@ -58,14 +58,15 @@ class TestTeamService:
             sample_totals_df, sample_averages_df, sample_rankings_df
         )
         team_service.data_provider.get_players_df.return_value = team_service_players_df
+        team_service.data_provider.get_slot_usage.return_value = {}
         team_service.response_builder.build_players_list.return_value = []
         team_service.response_builder.build_team_detail_response.return_value = expected_team_detail
-        
+
         result = await team_service.get_team_detail(team_id)
         assert result == expected_team_detail
         team_service.data_provider.get_all_dataframes.assert_called_once()
         team_service.response_builder.build_team_detail_response.assert_called_once_with(
-            team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY
+            team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY, {}
         )
     
     @pytest.mark.asyncio
@@ -166,6 +167,7 @@ class TestTeamServiceResponseBuilding:
                 sample_totals_df, sample_averages_df, sample_rankings_df
             )
             service.data_provider.get_players_df.return_value = team_service_players_df
+            service.data_provider.get_slot_usage.return_value = {}
             return service
     
     @pytest.mark.asyncio
