@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     season_id: int = Field(alias="SEASON_ID")
     league_id: int = Field(alias="LEAGUE_ID")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
+    espn_swid: str = Field(default="", alias="ESPN_SWID")
+    espn_s2: str = Field(default="", alias="ESPN_S2")
     
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
