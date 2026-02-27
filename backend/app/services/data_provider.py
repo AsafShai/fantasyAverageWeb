@@ -67,12 +67,23 @@ class DataProvider:
             self.logger.error(f"Unexpected error fetching ESPN data: {e}")
             raise Exception("Unexpected error fetching ESPN data")
 
-    async def get_players_df(self) -> pd.DataFrame:
-        """Get ALL players (roster + FA + waivers) DataFrame with caching"""
+    async def get_players_df(self, stat_split_type_id: int = 0) -> pd.DataFrame:
+        """Get ALL players (roster + FA + waivers) DataFrame with caching
+
+        Args:
+            stat_split_type_id: ESPN stat split type (0=season, 1=last7, 2=last15, 3=last30)
+        """
         try:
+            cache_key = f'players_{stat_split_type_id}'
+
+            if not hasattr(self.cache_manager, cache_key):
+                setattr(self.cache_manager, cache_key, {'data': None, 'etag': None})
+
+            cache = getattr(self.cache_manager, cache_key)
+
             headers = {}
-            if self.cache_manager.players_cache['etag']:
-                headers['If-None-Match'] = self.cache_manager.players_cache['etag']
+            if cache.get('etag'):
+                headers['If-None-Match'] = cache['etag']
 
             espn_filter = {
                 "players": {
@@ -86,16 +97,16 @@ class DataProvider:
 
             response = await self._client.get(self.espn_players_url, headers=headers)
 
-            if response.status_code == 304:
-                return self.cache_manager.players_cache['data']
+            if response.status_code == 304 and cache.get('data') is not None:
+                return cache['data']
 
             response.raise_for_status()
             api_data = response.json()
 
-            players_df = self.data_transformer.raw_all_players_to_df(api_data)
+            players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id)
 
-            self.cache_manager.players_cache['etag'] = response.headers.get('ETag')
-            self.cache_manager.players_cache['data'] = players_df
+            cache['etag'] = response.headers.get('ETag')
+            cache['data'] = players_df
 
             return players_df
 

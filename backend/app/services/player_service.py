@@ -1,6 +1,6 @@
 import logging
 from typing import List
-from app.models import Player, PaginatedPlayers
+from app.models import Player, PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
@@ -13,9 +13,21 @@ class PlayerService:
         self.response_builder = ResponseBuilder()
         self.logger = logging.getLogger(__name__)
 
-    async def get_all_players(self, page: int = 1, limit: int = 500) -> PaginatedPlayers:
-        """Get all players with pagination"""
-        players_df = await self.data_provider.get_players_df()
+    async def get_all_players(
+        self,
+        page: int = 1,
+        limit: int = 500,
+        time_period: StatTimePeriod = StatTimePeriod.SEASON
+    ) -> PaginatedPlayers:
+        """Get all players with pagination
+
+        Args:
+            page: Page number (1-indexed)
+            limit: Number of players per page
+            time_period: Time period for stats (season, last_7, last_15, last_30)
+        """
+        stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
+        players_df = await self.data_provider.get_players_df(stat_split_id)
 
         if players_df is None or players_df.empty:
             raise ResourceNotFoundError("No players found")
