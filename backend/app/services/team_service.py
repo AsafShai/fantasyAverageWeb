@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import List
 from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
@@ -25,7 +26,10 @@ class TeamService:
         stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
 
         totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
-        players_df = await self.data_provider.get_players_df(stat_split_id)
+        players_df, slot_usage_map = await asyncio.gather(
+            self.data_provider.get_players_df(stat_split_id),
+            self.data_provider.get_slot_usage()
+        )
 
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ResourceNotFoundError("Unable to process ESPN data")
@@ -41,8 +45,10 @@ class TeamService:
 
         espn_url = f"https://fantasy.espn.com/basketball/team?leagueId={settings.league_id}&teamId={team_id}"
 
+        team_slot_usage = slot_usage_map.get(team_id, {})
+
         return self.response_builder.build_team_detail_response(
-            team_id, totals_df, averages_df, rankings_df, players_list, espn_url
+            team_id, totals_df, averages_df, rankings_df, players_list, espn_url, team_slot_usage
         )
     
     async def get_teams_list(self) -> List[Team]:

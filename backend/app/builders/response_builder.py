@@ -4,8 +4,9 @@ from typing import Dict, List, Optional
 from app.models import (
     ShotChartStats, AverageStats, TeamAverageStats, RankingStats,
     TeamDetail, LeagueRankings, LeagueSummary, HeatmapData,
-    TeamShotStats, LeagueShotsData, TeamPlayers, Player, PlayerStats, Team
+    TeamShotStats, LeagueShotsData, TeamPlayers, Player, PlayerStats, Team, SlotUsage
 )
+from app.services.data_transformer import SLOT_CAPS
 from app.utils.constants import RANKING_CATEGORIES
 
 
@@ -32,9 +33,9 @@ class ResponseBuilder:
     
     def build_team_detail_response(self, team_id: int, totals_df: pd.DataFrame,
                                  averages_df: pd.DataFrame, rankings_df: pd.DataFrame,
-                                 players: List[Player], espn_url: str) -> TeamDetail:
+                                 players: List[Player], espn_url: str,
+                                 slot_usage_raw: Dict[str, int] = None) -> TeamDetail:
         """Build TeamDetail response for a specific team"""
-        # Find team data
         team_row = totals_df[totals_df['team_id'] == team_id]
         if team_row.empty:
             raise ValueError(f"Team '{team_id}' not found")
@@ -47,11 +48,19 @@ class ResponseBuilder:
 
         rank_data = rankings_df[rankings_df['team_id'] == team_id].iloc[0]
 
-        # Transform data to response objects
         team = Team(team_id=team_id, team_name=totals_data['team_name'])
         shot_chart = self._create_shot_chart_stats(totals_data)
         raw_averages = self._create_raw_average_stats(avg_data)
         ranking_stats = self._create_ranking_stats(rank_data)
+
+        slot_usage: Dict[str, SlotUsage] = {}
+        for slot_name, cap in SLOT_CAPS.items():
+            games_used = (slot_usage_raw or {}).get(slot_name, 0)
+            slot_usage[slot_name] = SlotUsage(
+                games_used=games_used,
+                cap=cap,
+                remaining=cap - games_used
+            )
 
         return TeamDetail(
             team=team,
@@ -60,7 +69,8 @@ class ResponseBuilder:
             shot_chart=shot_chart,
             raw_averages=raw_averages,
             ranking_stats=ranking_stats,
-            category_ranks={col: int(rank_data[col]) for col in RANKING_CATEGORIES}
+            category_ranks={col: int(rank_data[col]) for col in RANKING_CATEGORIES},
+            slot_usage=slot_usage
         )
     
     def build_league_summary_response(self, total_teams: int, total_games_played: int,
