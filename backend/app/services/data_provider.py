@@ -1,7 +1,7 @@
 import logging
 import httpx
 import json
-from typing import Tuple
+from typing import Dict, Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
@@ -32,7 +32,7 @@ class DataProvider:
             DataProvider._initialized = True
             if not settings.season_id or not settings.league_id:
                 raise ValueError("Season ID and league ID are not configured")
-            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam'
+            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam&view=mMatchupScore'
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
     
     async def get_totals_df(self) -> pd.DataFrame:
@@ -51,10 +51,11 @@ class DataProvider:
             api_data = response.json()
             
             totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
-            
+
             self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
             self.cache_manager.totals_cache['data'] = totals_df
-            
+            self.cache_manager.totals_cache['raw'] = api_data
+
             return totals_df
             
         except httpx.RequestError as e:
@@ -119,6 +120,14 @@ class DataProvider:
         except Exception as e:
             self.logger.error(f"Unexpected error fetching ESPN players data: {e}")
             raise DataSourceError("Unexpected error fetching ESPN players data")
+
+    async def get_slot_usage(self) -> Dict[int, Dict[str, int]]:
+        """Get games used per roster slot for all teams, parsed from cached mMatchupScore data"""
+        await self.get_totals_df()
+        raw = self.cache_manager.totals_cache.get('raw')
+        if not raw:
+            return {}
+        return self.data_transformer.parse_slot_usage(raw)
 
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""

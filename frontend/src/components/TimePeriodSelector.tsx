@@ -16,23 +16,21 @@ const TimePeriodSelector: React.FC<TimePeriodSelectorProps> = ({ value, onChange
   ];
 
   return (
-    <div className="flex items-center justify-center mb-3">
-      <div className="bg-gray-100 p-2 rounded-lg grid grid-cols-2 gap-2 w-full max-w-sm sm:flex sm:flex-wrap sm:w-auto sm:p-1 sm:gap-1">
-        {periods.map((period) => (
-          <button
-            key={period.value}
-            onClick={() => onChange(period.value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap ${
-              value === period.value
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            <span className="mr-1">{period.emoji}</span>
-            {period.label}
-          </button>
-        ))}
-      </div>
+    <div className="bg-gray-100 p-2 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-2 w-auto max-w-sm sm:max-w-none mb-3 sm:mb-0">
+      {periods.map((period) => (
+        <button
+          key={period.value}
+          onClick={() => onChange(period.value)}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap ${
+            value === period.value
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <span className="mr-1">{period.emoji}</span>
+          {period.label}
+        </button>
+      ))}
     </div>
   );
 };
