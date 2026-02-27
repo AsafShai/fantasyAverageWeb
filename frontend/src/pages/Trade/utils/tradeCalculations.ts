@@ -99,6 +99,51 @@ export const aggregatePlayerStats = (players: Player[]): AggregatedStats => {
   };
 };
 
+export const aggregatePlayerAverages = (players: Player[]): AggregatedStats => {
+  if (players.length === 0) {
+    return {
+      pts: 0,
+      reb: 0,
+      ast: 0,
+      stl: 0,
+      blk: 0,
+      fgm: 0,
+      fga: 0,
+      ftm: 0,
+      fta: 0,
+      fg_percentage: 0,
+      ft_percentage: 0,
+      three_pm: 0,
+      minutes: 0,
+      gp: 0,
+    };
+  }
+
+  const n = players.length;
+  const sumAvg = (getter: (p: Player) => number) =>
+    players.reduce((s, p) => s + getter(p), 0) / n;
+
+  const totalGp = players.reduce((s, p) => s + p.stats.gp, 0);
+
+  return {
+    pts: sumAvg(p => p.stats.gp > 0 ? p.stats.pts / p.stats.gp : 0),
+    reb: sumAvg(p => p.stats.gp > 0 ? p.stats.reb / p.stats.gp : 0),
+    ast: sumAvg(p => p.stats.gp > 0 ? p.stats.ast / p.stats.gp : 0),
+    stl: sumAvg(p => p.stats.gp > 0 ? p.stats.stl / p.stats.gp : 0),
+    blk: sumAvg(p => p.stats.gp > 0 ? p.stats.blk / p.stats.gp : 0),
+    fgm: sumAvg(p => p.stats.gp > 0 ? p.stats.fgm / p.stats.gp : 0),
+    fga: sumAvg(p => p.stats.gp > 0 ? p.stats.fga / p.stats.gp : 0),
+    ftm: sumAvg(p => p.stats.gp > 0 ? p.stats.ftm / p.stats.gp : 0),
+    fta: sumAvg(p => p.stats.gp > 0 ? p.stats.fta / p.stats.gp : 0),
+    // fg/ft percentages are already per-game values from backend; average them directly
+    fg_percentage: sumAvg(p => p.stats.fg_percentage) * 100,
+    ft_percentage: sumAvg(p => p.stats.ft_percentage) * 100,
+    three_pm: sumAvg(p => p.stats.gp > 0 ? p.stats.three_pm / p.stats.gp : 0),
+    minutes: sumAvg(p => p.stats.gp > 0 ? p.stats.minutes / p.stats.gp : 0),
+    gp: totalGp,
+  };
+};
+
 export const calculateTeamAverages = (aggregatedStats: AggregatedStats): AggregatedStats => {
   if (aggregatedStats.gp === 0) return aggregatedStats;
 
