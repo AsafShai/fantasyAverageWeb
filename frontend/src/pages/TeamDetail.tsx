@@ -315,13 +315,18 @@ const TeamDetail = () => {
       </div>
       {team_detail.slot_usage && Object.keys(team_detail.slot_usage).length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Slot Usage</h2>
-            <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
-              <span>*</span>
-              <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-200 inline-block"></span><span className="text-red-700">5%+ out of pace (above or below)</span></span>
-              <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-200 inline-block"></span><span className="text-gray-600">within range</span></span>
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <h2 className="text-2xl font-bold text-gray-900">Slot Usage</h2>
+              <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+                <span>*</span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-200 inline-block"></span><span className="text-red-700">5%+ out of pace (above or below)</span></span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-200 inline-block"></span><span className="text-gray-600">within range</span></span>
+              </p>
+            </div>
+            {leagueSummary?.nba_avg_pace && (
+              <span className="text-xs text-gray-500">NBA avg: <span className="font-medium text-gray-700">{leagueSummary.nba_avg_pace.toFixed(1)} GP/team</span></span>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse">
@@ -348,7 +353,8 @@ const TeamDetail = () => {
                       if (deviation >= 0.05) cellClass = 'bg-red-100 text-red-800'
                       else cellClass = 'bg-gray-100 text-gray-700'
                     }
-                    const perSlot = slot === 'UTIL' ? ` (${Math.round(usage.games_used / 3)}/82)` : ''
+                    const perSlotVal = usage.games_used / 3
+                    const perSlot = slot === 'UTIL' ? ` (${Number.isInteger(perSlotVal) ? perSlotVal : perSlotVal.toFixed(1)}/82)` : ''
                     return (
                       <td key={slot} className={`px-4 py-3 text-center text-sm font-medium border border-gray-200 ${cellClass}`}>
                         {usage.games_used}/{usage.cap}{perSlot}
