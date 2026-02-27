@@ -64,6 +64,8 @@ export interface TeamDetail {
 export interface LeagueSummary {
   total_teams: number;
   total_games_played: number;
+  nba_avg_pace?: number;
+  nba_game_days_left?: number;
   category_leaders: Record<string, RankingStats>;
   league_averages: AverageStats;
   last_updated: string;

@@ -4,8 +4,10 @@ from typing import Dict, List
 from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats, RankingStats
 from app.services.data_provider import DataProvider
 from app.services.stats_calculator import StatsCalculator
+from app.services.nba_stats_service import NBAStatsService
 from app.builders.response_builder import ResponseBuilder
 from app.exceptions import ResourceNotFoundError
+from app.config import settings
 
 class LeagueService:
     """Service for league-wide statistics and analytics operations"""
@@ -17,19 +19,32 @@ class LeagueService:
         self.logger = logging.getLogger(__name__)
     
     async def get_league_summary(self) -> LeagueSummary:
-        """Get league summary statistics"""        
+        """Get league summary statistics"""
         averages_df = await self.data_provider.get_averages_df()
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
-        
+
         category_leaders = self._calculate_category_leaders(averages_df)
         league_averages = self._calculate_league_averages(averages_df)
-        
+
+        nba_avg_pace = None
+        nba_game_days_left = None
+
+        try:
+            nba_service = NBAStatsService()
+            nba_avg_pace = await nba_service.get_nba_average_pace(settings.season_id)
+            nba_game_days_left = await nba_service.get_nba_game_days_remaining()
+            await nba_service.close()
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch NBA stats: {e}")
+
         return self.response_builder.build_league_summary_response(
             total_teams=len(averages_df),
             total_games_played=int(averages_df['GP'].sum()),
             category_leaders=category_leaders,
-            league_averages=league_averages
+            league_averages=league_averages,
+            nba_avg_pace=nba_avg_pace,
+            nba_game_days_left=nba_game_days_left
         )
     
     async def get_heatmap_data(self) -> HeatmapData:
