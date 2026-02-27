@@ -1,4 +1,5 @@
 import type { Player, PlayerStats } from '../../../types/api';
+import { aggregatePlayerAverages as _aggregatePlayerAverages } from '../../../utils/statsUtils';
 
 export interface AggregatedStats {
   pts: number;
@@ -96,6 +97,15 @@ export const aggregatePlayerStats = (players: Player[]): AggregatedStats => {
     ...totals,
     fg_percentage,
     ft_percentage,
+  };
+};
+
+export const aggregatePlayerAverages = (players: Player[]): AggregatedStats => {
+  const result = _aggregatePlayerAverages(players);
+  return {
+    ...result,
+    fg_percentage: result.fg_percentage * 100,
+    ft_percentage: result.ft_percentage * 100,
   };
 };
 
