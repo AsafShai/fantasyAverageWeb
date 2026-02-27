@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import List, Dict
 from datetime import datetime
 from .base import Team
-from .stats import ShotChartStats, TeamAverageStats, RankingStats
+from .stats import ShotChartStats, TeamAverageStats, RankingStats, SlotUsage
 from .player import Player
 
 class TeamDetail(BaseModel):
@@ -13,6 +13,7 @@ class TeamDetail(BaseModel):
     raw_averages: TeamAverageStats
     ranking_stats: RankingStats
     category_ranks: Dict[str, int]
+    slot_usage: Dict[str, SlotUsage]
 
 class TeamPlayers(BaseModel):
     team_id: int
