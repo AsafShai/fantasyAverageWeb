@@ -191,6 +191,29 @@ const TeamDetail = () => {
       fta: 0,
     })
 
+    if (showAverages) {
+      // Average of averages: mean of each player's per-game value
+      const n = includedPlayers.length
+      const sumAvg = (getter: (p: typeof includedPlayers[0]) => number) =>
+        includedPlayers.reduce((s, p) => s + getter(p), 0) / n
+      return {
+        minutes: sumAvg(p => p.stats.gp > 0 ? p.stats.minutes / p.stats.gp : 0),
+        three_pm: sumAvg(p => p.stats.gp > 0 ? p.stats.three_pm / p.stats.gp : 0),
+        reb: sumAvg(p => p.stats.gp > 0 ? p.stats.reb / p.stats.gp : 0),
+        ast: sumAvg(p => p.stats.gp > 0 ? p.stats.ast / p.stats.gp : 0),
+        stl: sumAvg(p => p.stats.gp > 0 ? p.stats.stl / p.stats.gp : 0),
+        blk: sumAvg(p => p.stats.gp > 0 ? p.stats.blk / p.stats.gp : 0),
+        pts: sumAvg(p => p.stats.gp > 0 ? p.stats.pts / p.stats.gp : 0),
+        fgm: sumAvg(p => p.stats.gp > 0 ? p.stats.fgm / p.stats.gp : 0),
+        fga: sumAvg(p => p.stats.gp > 0 ? p.stats.fga / p.stats.gp : 0),
+        ftm: sumAvg(p => p.stats.gp > 0 ? p.stats.ftm / p.stats.gp : 0),
+        fta: sumAvg(p => p.stats.gp > 0 ? p.stats.fta / p.stats.gp : 0),
+        fg_percentage: sumAvg(p => p.stats.fg_percentage),
+        ft_percentage: sumAvg(p => p.stats.ft_percentage),
+        gp: totals.gp,
+      }
+    }
+
     return {
       ...totals,
       fg_percentage: totals.fga > 0 ? totals.fgm / totals.fga : 0,
@@ -404,15 +427,15 @@ const TeamDetail = () => {
                   {team_detail.players.length - excludedPlayers.size} players
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.fg_percentage * 100)}%</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.ft_percentage * 100)}%</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.three_pm, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.reb, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.ast, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.stl, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.three_pm, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.reb, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.ast, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.stl, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
               </tr>
             </tbody>
