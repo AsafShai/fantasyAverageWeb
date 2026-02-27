@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends
-from app.models import TeamDetail, TeamPlayers, Team
+from fastapi import APIRouter, HTTPException, Depends, Query
+from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.team_service import TeamService
 from typing import Annotated, List
@@ -30,14 +30,18 @@ async def get_teams_list(
 @router.get("/{team_id}", response_model=TeamDetail)
 async def get_team_detail(
     team_id: int,
-    team_service: TeamServiceDep
+    team_service: TeamServiceDep,
+    time_period: StatTimePeriod = Query(
+        StatTimePeriod.SEASON,
+        description="Time period for player stats: season, last_7, last_15, last_30"
+    ),
 ):
     """Get detailed stats for a specific team"""
     if team_id is None or team_id <= 0:
         raise HTTPException(status_code=400, detail="Team ID must be positive")
-    
+
     try:
-        return await team_service.get_team_detail(team_id)
+        return await team_service.get_team_detail(team_id, time_period)
     except InvalidParameterError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:

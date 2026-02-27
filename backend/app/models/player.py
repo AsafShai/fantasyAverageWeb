@@ -1,5 +1,22 @@
 from pydantic import BaseModel
 from typing import List
+from enum import Enum
+
+class StatTimePeriod(str, Enum):
+    SEASON = "season"
+    LAST_7 = "last_7"
+    LAST_15 = "last_15"
+    LAST_30 = "last_30"
+
+    @classmethod
+    def to_stat_split_id(cls, period: 'StatTimePeriod') -> int:
+        mapping = {
+            cls.SEASON: 0,
+            cls.LAST_7: 1,
+            cls.LAST_15: 2,
+            cls.LAST_30: 3
+        }
+        return mapping[period]
 
 class PlayerStats(BaseModel):
     pts: float
