@@ -17,7 +17,7 @@ const TimePeriodSelector: React.FC<TimePeriodSelectorProps> = ({ value, onChange
 
   return (
     <div className="flex items-center justify-center mb-3">
-      <div className="bg-gray-100 p-1 rounded-lg flex flex-wrap gap-1">
+      <div className="bg-gray-100 p-2 rounded-lg grid grid-cols-2 gap-2 w-full max-w-sm sm:flex sm:flex-wrap sm:w-auto sm:p-1 sm:gap-1">
         {periods.map((period) => (
           <button
             key={period.value}
