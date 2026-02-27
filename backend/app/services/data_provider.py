@@ -34,6 +34,9 @@ class DataProvider:
                 raise ValueError("Season ID and league ID are not configured")
             self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam'
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
+            self._espn_cookies = {}
+            if settings.espn_swid and settings.espn_s2:
+                self._espn_cookies = {'SWID': settings.espn_swid, 'espn_s2': settings.espn_s2}
     
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching"""
@@ -42,7 +45,7 @@ class DataProvider:
             if self.cache_manager.totals_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
             
-            response = await self._client.get(self.espn_standings_url, headers=headers)
+            response = await self._client.get(self.espn_standings_url, headers=headers, cookies=self._espn_cookies)
             
             if response.status_code == 304:
                 return self.cache_manager.totals_cache['data']
@@ -98,7 +101,7 @@ class DataProvider:
             }
             headers['X-Fantasy-Filter'] = json.dumps(espn_filter)
 
-            response = await self._client.get(self.espn_players_url, headers=headers)
+            response = await self._client.get(self.espn_players_url, headers=headers, cookies=self._espn_cookies)
             response.raise_for_status()
             api_data = response.json()
 
