@@ -5,6 +5,7 @@ import type { TimePeriod } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
+import { aggregatePlayerAverages } from '../utils/statsUtils'
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -18,7 +19,7 @@ const TeamDetail = () => {
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
-  const [excludedPlayers, setExcludedPlayers] = useState<Set<string>>(new Set())
+  const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -29,25 +30,26 @@ const TeamDetail = () => {
     }
   }
 
-  const togglePlayerExclusion = (playerName: string) => {
-    setExcludedPlayers(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(playerName)) {
-        newSet.delete(playerName)
+  const isPlayerIncluded = (playerName: string) =>
+    includedPlayers === null || includedPlayers.has(playerName)
+
+  const togglePlayerInclusion = (playerName: string) => {
+    setIncludedPlayers(prev => {
+      const allNames = team_detail?.players.map(p => p.player_name) ?? []
+      const currentIncluded = prev === null ? new Set(allNames) : new Set(prev)
+      if (currentIncluded.has(playerName)) {
+        currentIncluded.delete(playerName)
       } else {
-        newSet.add(playerName)
+        currentIncluded.add(playerName)
       }
-      return newSet
+      return currentIncluded.size === allNames.length ? null : currentIncluded
     })
   }
 
   const toggleAllPlayers = () => {
     if (!team_detail) return
-    if (excludedPlayers.size === team_detail.players.length) {
-      setExcludedPlayers(new Set())
-    } else {
-      setExcludedPlayers(new Set(team_detail.players.map(p => p.player_name)))
-    }
+    const allIncluded = includedPlayers === null || includedPlayers.size === team_detail.players.length
+    setIncludedPlayers(allIncluded ? new Set() : null)
   }
 
   const formatNumber = (num: number) => {
@@ -73,7 +75,7 @@ const TeamDetail = () => {
   if (!team_detail) return <ErrorMessage message="Team not found" />
 
   const columns = [
-    { key: 'exclude', label: 'Exclude', align: 'center', sortable: false },
+    { key: 'include', label: 'Include', align: 'center', sortable: false },
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
@@ -140,7 +142,7 @@ const TeamDetail = () => {
       })
 
   const calculateTeamAverage = () => {
-    const includedPlayers = team_detail.players.filter(p => !excludedPlayers.has(p.player_name))
+    const includedPlayers = team_detail.players.filter(p => isPlayerIncluded(p.player_name))
 
     if (includedPlayers.length === 0) {
       return {
@@ -192,26 +194,7 @@ const TeamDetail = () => {
     })
 
     if (showAverages) {
-      // Average of averages: mean of each player's per-game value
-      const n = includedPlayers.length
-      const sumAvg = (getter: (p: typeof includedPlayers[0]) => number) =>
-        includedPlayers.reduce((s, p) => s + getter(p), 0) / n
-      return {
-        minutes: sumAvg(p => p.stats.gp > 0 ? p.stats.minutes / p.stats.gp : 0),
-        three_pm: sumAvg(p => p.stats.gp > 0 ? p.stats.three_pm / p.stats.gp : 0),
-        reb: sumAvg(p => p.stats.gp > 0 ? p.stats.reb / p.stats.gp : 0),
-        ast: sumAvg(p => p.stats.gp > 0 ? p.stats.ast / p.stats.gp : 0),
-        stl: sumAvg(p => p.stats.gp > 0 ? p.stats.stl / p.stats.gp : 0),
-        blk: sumAvg(p => p.stats.gp > 0 ? p.stats.blk / p.stats.gp : 0),
-        pts: sumAvg(p => p.stats.gp > 0 ? p.stats.pts / p.stats.gp : 0),
-        fgm: sumAvg(p => p.stats.gp > 0 ? p.stats.fgm / p.stats.gp : 0),
-        fga: sumAvg(p => p.stats.gp > 0 ? p.stats.fga / p.stats.gp : 0),
-        ftm: sumAvg(p => p.stats.gp > 0 ? p.stats.ftm / p.stats.gp : 0),
-        fta: sumAvg(p => p.stats.gp > 0 ? p.stats.fta / p.stats.gp : 0),
-        fg_percentage: sumAvg(p => p.stats.fg_percentage),
-        ft_percentage: sumAvg(p => p.stats.ft_percentage),
-        gp: totals.gp,
-      }
+      return aggregatePlayerAverages(includedPlayers)
     }
 
     return {
@@ -365,15 +348,15 @@ const TeamDetail = () => {
                       column.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''
                     } transition-colors duration-150`}
                   >
-                    {column.key === 'exclude' ? (
+                    {column.key === 'include' ? (
                       <div className="flex flex-col items-center justify-center gap-1">
-                        <span className="text-xs font-medium text-gray-500 uppercase">Exclude</span>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Include</span>
                         <input
                           type="checkbox"
-                          checked={excludedPlayers.size === team_detail.players.length}
+                          checked={includedPlayers === null || includedPlayers.size === team_detail.players.length}
                           onChange={toggleAllPlayers}
                           className="w-4 h-4 text-blue-600 cursor-pointer"
-                          title={excludedPlayers.size === team_detail.players.length ? "Include all" : "Exclude all"}
+                          title="Toggle all players"
                         />
                       </div>
                     ) : (
@@ -396,8 +379,8 @@ const TeamDetail = () => {
                   <td className="px-4 py-3 whitespace-nowrap text-center">
                     <input
                       type="checkbox"
-                      checked={excludedPlayers.has(player.player_name)}
-                      onChange={() => togglePlayerExclusion(player.player_name)}
+                      checked={isPlayerIncluded(player.player_name)}
+                      onChange={() => togglePlayerInclusion(player.player_name)}
                       className="w-4 h-4 text-blue-600 cursor-pointer"
                     />
                   </td>
@@ -424,7 +407,7 @@ const TeamDetail = () => {
                   {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">
-                  {team_detail.players.length - excludedPlayers.size} players
+                  {includedPlayers === null ? team_detail.players.length : includedPlayers.size} players
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, showAverages ? 1 : teamAverage.gp)}</td>
