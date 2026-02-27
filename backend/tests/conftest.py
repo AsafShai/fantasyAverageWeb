@@ -114,10 +114,10 @@ class MockDataProvider:
     
     async def get_rankings_df(self):
         return self.sample_rankings_df
-    
-    async def get_players_df(self):
+
+    async def get_players_df(self, stat_split_type_id: int = 0):
         return self.sample_players_df
-    
+
     async def get_all_dataframes(self):
         return (self.sample_totals_df, self.sample_averages_df, self.sample_rankings_df)
     

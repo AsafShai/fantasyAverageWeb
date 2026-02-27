@@ -77,13 +77,16 @@ class DataProvider:
             cache_key = f'players_{stat_split_type_id}'
 
             if not hasattr(self.cache_manager, cache_key):
-                setattr(self.cache_manager, cache_key, {'data': None, 'etag': None})
+                setattr(self.cache_manager, cache_key, {'data': None, 'timestamp': None})
 
             cache = getattr(self.cache_manager, cache_key)
 
+            if cache.get('data') is not None and cache.get('timestamp'):
+                from datetime import datetime, timedelta
+                if datetime.now() - cache['timestamp'] < timedelta(minutes=5):
+                    return cache['data']
+
             headers = {}
-            if cache.get('etag'):
-                headers['If-None-Match'] = cache['etag']
 
             espn_filter = {
                 "players": {
@@ -96,16 +99,13 @@ class DataProvider:
             headers['X-Fantasy-Filter'] = json.dumps(espn_filter)
 
             response = await self._client.get(self.espn_players_url, headers=headers)
-
-            if response.status_code == 304 and cache.get('data') is not None:
-                return cache['data']
-
             response.raise_for_status()
             api_data = response.json()
 
             players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id)
 
-            cache['etag'] = response.headers.get('ETag')
+            from datetime import datetime
+            cache['timestamp'] = datetime.now()
             cache['data'] = players_df
 
             return players_df

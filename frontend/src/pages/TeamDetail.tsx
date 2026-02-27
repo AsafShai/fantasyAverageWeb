@@ -1,14 +1,20 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useGetTeamDetailQuery } from '../store/api/fantasyApi'
+import type { TimePeriod } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import TimePeriodSelector from '../components/TimePeriodSelector'
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
   const navigate = useNavigate()
   const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
-  const { data: team_detail, error, isLoading } = useGetTeamDetailQuery(teamIdNumber)
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
+  const { data: team_detail, error, isLoading } = useGetTeamDetailQuery({
+    teamId: teamIdNumber,
+    time_period: timePeriod
+  })
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
@@ -207,21 +213,27 @@ const TeamDetail = () => {
         </div>
       </div>
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
           <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
-          <div className="stats-toggle">
-            <button
-              className={showAverages ? 'active' : ''}
-              onClick={() => setShowAverages(true)}
-            >
-              Per Game
-            </button>
-            <button
-              className={!showAverages ? 'active' : ''}
-              onClick={() => setShowAverages(false)}
-            >
-              Totals
-            </button>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <TimePeriodSelector
+              value={timePeriod}
+              onChange={setTimePeriod}
+            />
+            <div className="stats-toggle">
+              <button
+                className={showAverages ? 'active' : ''}
+                onClick={() => setShowAverages(true)}
+              >
+                Per Game
+              </button>
+              <button
+                className={!showAverages ? 'active' : ''}
+                onClick={() => setShowAverages(false)}
+              >
+                Totals
+              </button>
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
