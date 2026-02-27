@@ -10,7 +10,7 @@ const Rankings = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const { data, error, isLoading } = useGetRankingsQuery({})
-  const { data: summary } = useGetLeagueSummaryQuery()
+  const { data: summary, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -21,7 +21,7 @@ const Rankings = () => {
     }
   }
 
-  if (isLoading) return <LoadingSpinner />
+  if (isLoading || summaryLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message="Failed to load rankings" />
 
   const rawRankings = data?.rankings || []
