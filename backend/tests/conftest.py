@@ -120,7 +120,10 @@ class MockDataProvider:
 
     async def get_all_dataframes(self):
         return (self.sample_totals_df, self.sample_averages_df, self.sample_rankings_df)
-    
+
+    async def get_slot_usage(self):
+        return {}
+
     async def close(self):
         pass
 
