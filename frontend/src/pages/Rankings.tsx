@@ -58,29 +58,27 @@ const Rankings = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {(summary?.nba_avg_pace || summary?.nba_game_days_left !== undefined) && (
-        <div className="mb-6 flex justify-center gap-4">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:flex sm:justify-center sm:gap-4">
           {summary?.nba_avg_pace && (
-            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-center w-10 h-10 bg-amber-100 rounded-full">
-                <span className="text-xl">⚡</span>
+            <div className="flex flex-col items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
+              <div className="flex items-center justify-center w-8 h-8 bg-amber-100 rounded-full sm:w-10 sm:h-10">
+                <span className="text-lg sm:text-xl">⚡</span>
               </div>
-              <div>
+              <div className="text-center sm:text-left">
                 <div className="text-xs text-gray-500 font-medium">NBA Avg Pace</div>
-                <div className="text-2xl font-bold text-gray-900">{summary.nba_avg_pace.toFixed(1)}</div>
+                <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_avg_pace.toFixed(1)}</div>
               </div>
-              <div className="text-xs text-gray-400">games/team</div>
             </div>
           )}
           {summary?.nba_game_days_left !== undefined && summary.nba_game_days_left !== null && (
-            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-center w-10 h-10 bg-emerald-100 rounded-full">
-                <span className="text-xl">📅</span>
+            <div className="flex flex-col items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
+              <div className="flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full sm:w-10 sm:h-10">
+                <span className="text-lg sm:text-xl">📅</span>
               </div>
-              <div>
+              <div className="text-center sm:text-left">
                 <div className="text-xs text-gray-500 font-medium">Days Remaining</div>
-                <div className="text-2xl font-bold text-gray-900">{summary.nba_game_days_left}</div>
+                <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_game_days_left}</div>
               </div>
-              <div className="text-xs text-gray-400">game days</div>
             </div>
           )}
         </div>
