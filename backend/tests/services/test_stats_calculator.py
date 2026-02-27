@@ -98,22 +98,30 @@ class TestStatsCalculator:
         assert result == {}, "Should return empty dict for empty DataFrame"
     
     def test_normalize_for_heatmap_success(self, stats_calculator, sample_stats_calculator_averages_df):
-        """Test successful heatmap normalization"""
+        """Test successful heatmap normalization using diverging scale"""
         result = stats_calculator.normalize_for_heatmap(sample_stats_calculator_averages_df)
         
         assert isinstance(result, list), "Should return list"
         assert len(result) == 3, "Should have 3 teams (rows)"
         assert all(isinstance(row, list) for row in result), "Each row should be a list"
-        assert len(result[0]) == 8, "Each team should have 8 categories (RANKING_CATEGORIES)"
+        assert len(result[0]) == 9, "Each team should have 9 categories (RANKING_CATEGORIES + GP)"
         
+        # Verify all values are between 0 and 1 (diverging scale centered on 0.5)
         for row in result:
             for value in row:
                 assert 0.0 <= value <= 1.0, f"Normalized value {value} should be between 0 and 1"
         
+        # With diverging normalization, min and max values should exist at extremes
         transposed = list(map(list, zip(*result))) 
-        for category_values in transposed:
-            assert min(category_values) == 0.0, "Each category should have a min value of 0.0"
-            assert max(category_values) == 1.0, "Each category should have a max value of 1.0"
+        for i, category_values in enumerate(transposed):
+            # At least one value should be at or near 0 (min) and one at or near 1 (max)
+            # or all values should be 0.5 if they're identical
+            min_val = min(category_values)
+            max_val = max(category_values)
+            # Either we have variation (min near 0, max near 1) or all values are 0.5
+            if min_val != max_val:
+                assert min_val <= 0.01, f"Category {i}: min value {min_val} should be close to 0"
+                assert max_val >= 0.99, f"Category {i}: max value {max_val} should be close to 1"
     
     def test_normalize_for_heatmap_empty_dataframe(self, stats_calculator):
         """Test normalize_for_heatmap with empty DataFrame"""

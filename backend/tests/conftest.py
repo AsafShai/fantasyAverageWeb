@@ -8,12 +8,12 @@ import asyncio
 
 # Mock environment variables for testing
 os.environ.update({
-    "ESPN_STANDINGS_URL": "https://mock.espn.com/standings",
-    "ESPN_PLAYERS_URL": "https://mock.espn.com/players", 
-    "OPENAI_API_KEY": "mock_openai_key_for_tests",
+    "SEASON_ID": "2026",
+    "LEAGUE_ID": "1234567890",
     "CORS_ORIGINS": "http://localhost:3000,http://localhost:5173",
     "ENVIRONMENT": "test",
-    "LOG_LEVEL": "WARNING"
+    "LOG_LEVEL": "WARNING",
+    "PORT": "8000"
 })
 
 # Import after setting environment variables
@@ -80,7 +80,8 @@ class MockDataProvider:
             'BLK': [3, 1, 2],
             'PTS': [2, 1, 3],
             'TOTAL_POINTS': [18, 17, 15],
-            'RANK': [1, 2, 3]
+            'RANK': [1, 2, 3],
+            'GP': [82, 82, 82]
         })
         
         self.sample_players_df = pd.DataFrame({
@@ -101,7 +102,8 @@ class MockDataProvider:
             'FG%': [46.9, 48.6, 46.0, 47.1, 48.4, 46.5],
             'FT%': [81.6, 80.0, 84.4, 80.8, 80.6, 80.0],
             '3PM': [2.8, 1.2, 3.4, 0.8, 0.9, 1.6],
-            'GP': [72, 68, 75, 70, 74, 69]
+            'GP': [72, 68, 75, 70, 74, 69],
+            'MIN': [28.5, 27.4, 30.1, 26.8, 29.6, 27.8]
         })
     
     async def get_totals_df(self):
@@ -112,10 +114,10 @@ class MockDataProvider:
     
     async def get_rankings_df(self):
         return self.sample_rankings_df
-    
-    async def get_players_df(self):
+
+    async def get_players_df(self, stat_split_type_id: int = 0):
         return self.sample_players_df
-    
+
     async def get_all_dataframes(self):
         return (self.sample_totals_df, self.sample_averages_df, self.sample_rankings_df)
     
@@ -203,7 +205,8 @@ def sample_rankings_df():
         'BLK': [3, 1, 2],
         'PTS': [2, 1, 3],
         'TOTAL_POINTS': [18, 17, 15],
-        'RANK': [1, 2, 3]
+        'RANK': [1, 2, 3],
+        'GP': [82, 82, 82]
     })
 
 @pytest.fixture

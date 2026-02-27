@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from app.models import (
     ShotChartStats, AverageStats, TeamAverageStats, RankingStats,
-    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData, 
+    TeamDetail, LeagueRankings, LeagueSummary, HeatmapData,
     TeamShotStats, LeagueShotsData, TeamPlayers, Player, PlayerStats, Team
 )
 from app.utils.constants import RANKING_CATEGORIES
@@ -31,29 +31,32 @@ class ResponseBuilder:
         )
     
     def build_team_detail_response(self, team_id: int, totals_df: pd.DataFrame,
-                                 averages_df: pd.DataFrame, rankings_df: pd.DataFrame) -> TeamDetail:
+                                 averages_df: pd.DataFrame, rankings_df: pd.DataFrame,
+                                 players: List[Player], espn_url: str) -> TeamDetail:
         """Build TeamDetail response for a specific team"""
         # Find team data
         team_row = totals_df[totals_df['team_id'] == team_id]
         if team_row.empty:
             raise ValueError(f"Team '{team_id}' not found")
         totals_data = team_row.iloc[0]
-        
+
         avg_row = averages_df[averages_df['team_id'] == team_id]
         if avg_row.empty:
             raise ValueError(f"Team '{team_id}' not found in averages")
         avg_data = avg_row.iloc[0]
-        
+
         rank_data = rankings_df[rankings_df['team_id'] == team_id].iloc[0]
-        
+
         # Transform data to response objects
         team = Team(team_id=team_id, team_name=totals_data['team_name'])
         shot_chart = self._create_shot_chart_stats(totals_data)
         raw_averages = self._create_raw_average_stats(avg_data)
         ranking_stats = self._create_ranking_stats(rank_data)
-        
+
         return TeamDetail(
             team=team,
+            espn_url=espn_url,
+            players=players,
             shot_chart=shot_chart,
             raw_averages=raw_averages,
             ranking_stats=ranking_stats,
@@ -61,28 +64,34 @@ class ResponseBuilder:
         )
     
     def build_league_summary_response(self, total_teams: int, total_games_played: int,
-                                    category_leaders: Dict[str, RankingStats], 
-                                    league_averages: AverageStats) -> LeagueSummary:
+                                    category_leaders: Dict[str, RankingStats],
+                                    league_averages: AverageStats,
+                                    nba_avg_pace: Optional[float] = None,
+                                    nba_game_days_left: Optional[int] = None) -> LeagueSummary:
         """Build LeagueSummary response from calculated data"""
         return LeagueSummary(
             total_teams=total_teams,
             total_games_played=total_games_played,
+            nba_avg_pace=nba_avg_pace,
+            nba_game_days_left=nba_game_days_left,
             category_leaders=category_leaders,
             league_averages=league_averages,
             last_updated=datetime.now()
         )
     
-    def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]], 
-                             normalized_data: List[List[float]]) -> HeatmapData:
+    def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],
+                             normalized_data: List[List[float]], ranks_data: List[List[int]]) -> HeatmapData:
         """Build HeatmapData response from prepared data"""
-        team_objects = [Team(team_id=team['team_id'], team_name=team['team_name']) 
+        team_objects = [Team(team_id=team['team_id'], team_name=team['team_name'])
                        for team in teams]
-        
+        categories_with_gp = RANKING_CATEGORIES + ['GP']
+
         return HeatmapData(
             teams=team_objects,
-            categories=RANKING_CATEGORIES,
+            categories=categories_with_gp,
             data=categories,
-            normalized_data=normalized_data
+            normalized_data=normalized_data,
+            ranks_data=ranks_data
         )
     
     def build_league_shots_response(self, shots_data: List[Dict]) -> LeagueShotsData:
@@ -105,8 +114,8 @@ class ResponseBuilder:
             last_updated=datetime.now()
         )
     
-    def build_team_players_response(self, team_players: pd.DataFrame) -> TeamPlayers:
-        """Build TeamPlayers response from players DataFrame"""
+    def build_players_list(self, team_players: pd.DataFrame) -> List[Player]:
+        """Build list of Player objects from players DataFrame"""
         players = []
         for _, row in team_players.iterrows():
             players.append(Player(
@@ -126,12 +135,20 @@ class ResponseBuilder:
                     fg_percentage=float(row['FG%']),
                     ft_percentage=float(row['FT%']),
                     three_pm=float(row['3PM']),
+                    minutes=float(row['MIN']),
                     gp=int(row['GP'])
-                )
+                ),
+                team_id=int(row['team_id']),
+                status=str(row.get('status', 'ONTEAM'))
             ))
+        return players
+
+    def build_team_players_response(self, team_players: pd.DataFrame) -> TeamPlayers:
+        """Build TeamPlayers response from players DataFrame"""
+        players = self.build_players_list(team_players)
         return TeamPlayers(
-            team_id=team_players.iloc[0]['team_id'], 
-            players=players, 
+            team_id=team_players.iloc[0]['team_id'],
+            players=players,
             last_updated=datetime.now()
         )
     
@@ -148,7 +165,8 @@ class ResponseBuilder:
             stl=float(team_data['STL']),
             blk=float(team_data['BLK']),
             pts=float(team_data['PTS']),
-            total_points=0.0  # Not applicable for category leaders
+            gp=int(team_data['GP']),
+            total_points=0.0
         )
     
     def create_average_stats(self, league_avg_data: Dict) -> AverageStats:
@@ -162,7 +180,7 @@ class ResponseBuilder:
             stl=league_avg_data['STL'],
             blk=league_avg_data['BLK'],
             pts=league_avg_data['PTS'],
-            gp=int(league_avg_data['GP'])
+            gp=float(league_avg_data['GP'])
         )
     
     def _create_ranking_stats(self, row: pd.Series) -> RankingStats:
@@ -177,6 +195,7 @@ class ResponseBuilder:
             stl=float(row['STL']),
             blk=float(row['BLK']),
             pts=float(row['PTS']),
+            gp=int(row['GP']),
             total_points=float(row['TOTAL_POINTS']),
             rank=int(row['RANK'])
         )
@@ -208,3 +227,32 @@ class ResponseBuilder:
             pts=float(avg_data['PTS']),
             gp=int(avg_data['GP'])
         )
+
+    def build_all_players_response(self, players_df: pd.DataFrame) -> List[Player]:
+        """Build list of all players from players DataFrame"""
+        players = []
+        for _, row in players_df.iterrows():
+            players.append(Player(
+                player_name=str(row['Name']),
+                pro_team=str(row['Pro Team']),
+                positions=str(row['Positions']).split(', '),
+                stats=PlayerStats(
+                    pts=float(row['PTS']),
+                    reb=float(row['REB']),
+                    ast=float(row['AST']),
+                    stl=float(row['STL']),
+                    blk=float(row['BLK']),
+                    fgm=float(row['FGM']),
+                    fga=float(row['FGA']),
+                    ftm=float(row['FTM']),
+                    fta=float(row['FTA']),
+                    fg_percentage=float(row['FG%']),
+                    ft_percentage=float(row['FT%']),
+                    three_pm=float(row['3PM']),
+                    minutes=float(row['MIN']),
+                    gp=int(row['GP'])
+                ),
+                team_id=int(row['team_id']),
+                status=str(row.get('status', 'ONTEAM'))
+            ))
+        return players

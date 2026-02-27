@@ -3,25 +3,33 @@ import { useGetHeatmapDataQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import type { HeatmapData, Team } from '../types/api'
+import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 
 interface SortedHeatmapData {
   teams: Team[]
   categories: string[]
   data: number[][]
   normalized_data: number[][]
+  ranks_data: number[][]
 }
 interface TeamDataItem {
   team: Team
   index: number
   data: number[]
   normalized_data: number[]
+  ranks_data: number[]
 }
 
 
 const Analytics = () => {
-  const [sortBy, setSortBy] = useState<string>('team')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [sortBy, setSortBy] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [highlightedTeamId, setHighlightedTeamId] = useState<number | null>(null)
   const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery()
+
+  const handleTeamClick = (teamId: number) => {
+    setHighlightedTeamId(prev => prev === teamId ? null : teamId)
+  }
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -38,14 +46,25 @@ const Analytics = () => {
   const getSortedHeatmapData = (heatmapData: HeatmapData): SortedHeatmapData | null => {
     if (!heatmapData) return null
 
-    const { teams, categories, data, normalized_data } = heatmapData
-    
+    const { teams, categories, data, normalized_data, ranks_data } = heatmapData
+
     const teamData: TeamDataItem[] = teams.map((team: Team, index: number) => ({
       team,
       index,
       data: data[index] ?? [],
-      normalized_data: normalized_data[index] ?? []
+      normalized_data: normalized_data[index] ?? [],
+      ranks_data: ranks_data?.[index] ?? []
     }))
+
+    if (sortBy === null) {
+      return {
+        teams,
+        categories,
+        data,
+        normalized_data,
+        ranks_data: ranks_data ?? []
+      }
+    }
 
     const sortedTeamData: TeamDataItem[] = teamData.sort((a: TeamDataItem, b: TeamDataItem) => {
       if (sortBy === 'team') {
@@ -57,7 +76,7 @@ const Analytics = () => {
       } else {
         const categoryIndex = categories.indexOf(sortBy)
         if (categoryIndex === -1) return 0
-        
+
         const aValue: number = a.data[categoryIndex] ?? 0
         const bValue: number = b.data[categoryIndex] ?? 0
         return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
@@ -68,7 +87,8 @@ const Analytics = () => {
       teams: sortedTeamData.map((item: TeamDataItem) => item.team),
       categories,
       data: sortedTeamData.map((item: TeamDataItem) => item.data),
-      normalized_data: sortedTeamData.map((item: TeamDataItem) => item.normalized_data)
+      normalized_data: sortedTeamData.map((item: TeamDataItem) => item.normalized_data),
+      ranks_data: sortedTeamData.map((item: TeamDataItem) => item.ranks_data)
     }
   }
 
@@ -101,8 +121,8 @@ const Analytics = () => {
                   </div>
                 </th>
                 {sortedData.categories.map((category: string) => (
-                  <th 
-                    key={category} 
+                  <th
+                    key={category}
                     className="px-2 py-2 text-center text-xs cursor-pointer hover:bg-gray-100 transition-colors duration-150"
                     onClick={() => handleSort(category)}
                   >
@@ -119,26 +139,56 @@ const Analytics = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedData.teams.map((team: Team, teamIndex: number) => (
-                <tr key={team.team_id}>
-                  <td className="px-4 py-2 font-medium">{team.team_name}</td>
-                  {sortedData.normalized_data[teamIndex]?.map((value: number, catIndex: number) => {
-                    const cellValue: number | undefined = sortedData.data[teamIndex]?.[catIndex]
-                    return (
-                      <td
-                        key={catIndex}
-                        className="px-2 py-2 text-center text-xs"
-                        style={{
-                          backgroundColor: `rgba(59, 130, 246, ${value})`,
-                          color: value > 0.5 ? 'white' : 'black'
-                        }}
-                      >
-                        {cellValue?.toFixed(4) ?? '0.0000'}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+              {sortedData.teams.map((team: Team, teamIndex: number) => {
+                const isHighlighted = highlightedTeamId === team.team_id
+                return (
+                  <tr
+                    key={team.team_id}
+                    className={`transition-all duration-150 ${
+                      isHighlighted ? 'border-[3px] border-black' : ''
+                    }`}
+                  >
+                    <td
+                      className={`px-4 py-2 cursor-pointer transition-colors duration-150 ${
+                        isHighlighted ? 'font-bold' : 'font-medium hover:bg-gray-100'
+                      }`}
+                      onClick={() => handleTeamClick(team.team_id)}
+                    >
+                      {team.team_name}
+                    </td>
+                    {sortedData.normalized_data[teamIndex]?.map((value: number, catIndex: number) => {
+                      const cellValue: number | undefined = sortedData.data[teamIndex]?.[catIndex]
+                      const rank: number | undefined = sortedData.ranks_data[teamIndex]?.[catIndex]
+                      const category = sortedData.categories[catIndex]
+                      const isPercentage = category === 'FG%' || category === 'FT%'
+                      const displayValue = category === 'GP'
+                        ? Math.round(cellValue ?? 0)
+                        : isPercentage
+                        ? ((cellValue ?? 0) * 100).toFixed(4) + '%'
+                        : (cellValue?.toFixed(4) ?? '0.0000')
+                      return (
+                        <td
+                          key={catIndex}
+                          className={`px-2 py-2 text-center text-xs relative ${
+                            category === 'GP' ? 'border-l-4 border-gray-700' : ''
+                          }`}
+                          style={{
+                            backgroundColor: getHeatmapColor(value),
+                            color: getTextColor(value)
+                          }}
+                        >
+                          <span>{displayValue}</span>
+                          {rank !== undefined && rank > 0 && (
+                            <span className="absolute bottom-0.5 right-0.5 text-[0.7rem] opacity-85 font-semibold">
+                              ({rank})
+                            </span>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -154,19 +204,9 @@ const Analytics = () => {
         {renderHeatmapTable(
           heatmapData,
           "Performance Heatmap",
-          "Visual representation of team performance across different categories. Darker colors indicate better performance relative to other teams. Click column headers to sort by team name or category values."
+          "Visual representation of team performance across different categories. Red indicates below-average performance, white indicates league-average performance, and green indicates above-average performance. Click column headers to sort by team name or category values."
         )}
 
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="font-semibold mb-2">Coming Soon:</h3>
-          <ul className="text-sm text-gray-600 space-y-1">
-            <li>• Tab navigation: League Average | Above Gaps | Below Gaps</li>
-            <li>• Category gap heatmaps showing rank improvement targets</li>
-            <li>• Interactive charts with Recharts</li>
-            <li>• Team comparison tool</li>
-            <li>• Trend analysis over time</li>
-          </ul>
-        </div>
       </div>
     </div>
   )

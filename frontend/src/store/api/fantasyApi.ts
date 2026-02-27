@@ -1,12 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod } from '../../types/api';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string }>({
       query: ({ sortBy, order = 'asc' } = {}) => ({
@@ -15,9 +15,12 @@ export const fantasyApi = createApi({
       }),
       providesTags: ['Rankings'],
     }),
-    getTeamDetail: builder.query<TeamDetail, number>({
-      query: (teamId) => `/teams/${teamId}`,
-      providesTags: ['Team'],
+    getTeamDetail: builder.query<TeamDetail, { teamId: number; time_period?: TimePeriod }>({
+      query: ({ teamId, time_period = 'season' }) => ({
+        url: `/teams/${teamId}`,
+        params: { time_period },
+      }),
+      keepUnusedDataFor: 300,
     }),
     getLeagueSummary: builder.query<LeagueSummary, void>({
       query: () => '/league/summary',
@@ -45,7 +48,14 @@ export const fantasyApi = createApi({
     }),
     getTradeSuggestions: builder.query<TradeSuggestionsResponse, number>({
       query: (teamId) => `/trades/suggestions/${teamId}`,
-      keepUnusedDataFor: 0, // Don't cache the results
+      keepUnusedDataFor: 0,
+    }),
+    getAllPlayers: builder.query<PaginatedPlayers, { page?: number; limit?: number; time_period?: TimePeriod }>({
+      query: ({ page = 1, limit = 500, time_period = 'season' } = {}) => ({
+        url: '/players',
+        params: { page, limit, time_period },
+      }),
+      keepUnusedDataFor: 300,
     }),
   }),
 });
@@ -60,4 +70,5 @@ export const {
   useGetTeamsListQuery,
   useGetTeamPlayersQuery,
   useGetTradeSuggestionsQuery,
+  useGetAllPlayersQuery,
 } = fantasyApi;

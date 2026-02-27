@@ -14,7 +14,8 @@ ESPN_COLUMN_MAP = {
     '17': '3PM',
     '19': 'FG%',
     '20': 'FT%',
-    '42': 'GP'
+    '42': 'GP',
+    '40': 'MIN'
 }
 
 PRO_TEAM_MAP = {

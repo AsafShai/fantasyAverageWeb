@@ -32,7 +32,8 @@ def response_builder_players_df():
         'STL': [89, 67],
         'BLK': [23, 134],
         'PTS': [1213, 1369],
-        'GP': [78, 82]
+        'GP': [78, 82],
+        'MIN': [2345.6, 2567.8]
     })
 
 
@@ -94,7 +95,9 @@ class TestResponseBuilder:
     def test_build_team_detail_response_success(self, response_builder, sample_totals_df, sample_averages_df, sample_rankings_df):
         """Test successful team detail response building"""
         team_id = 1
-        result = response_builder.build_team_detail_response(team_id, sample_totals_df, sample_averages_df, sample_rankings_df)
+        players = []  # Empty list for testing
+        espn_url = "https://fantasy.espn.com/basketball/team"
+        result = response_builder.build_team_detail_response(team_id, sample_totals_df, sample_averages_df, sample_rankings_df, players, espn_url)
         
         assert isinstance(result, TeamDetail), "Should return TeamDetail object"
         assert result.team.team_id == team_id, "Should have correct team_id"
@@ -115,16 +118,18 @@ class TestResponseBuilder:
     def test_build_team_detail_response_team_not_found(self, response_builder, sample_totals_df, sample_averages_df, sample_rankings_df):
         """Test build_team_detail_response with non-existent team"""
         team_id = 999
+        players = []
+        espn_url = "https://fantasy.espn.com/basketball/team"
         
         with pytest.raises(ValueError, match="Team '999' not found"):
-            response_builder.build_team_detail_response(team_id, sample_totals_df, sample_averages_df, sample_rankings_df)
+            response_builder.build_team_detail_response(team_id, sample_totals_df, sample_averages_df, sample_rankings_df, players, espn_url)
     
     def test_build_league_summary_response_success(self, response_builder):
         """Test successful league summary response building"""
         total_teams = 30
         total_games_played = 2460
         category_leaders = {'PTS': RankingStats(
-            team=Team(team_id=1, team_name='Team Alpha'), fg_percentage=0, ft_percentage=0, three_pm=0, ast=0, reb=0, stl=0, blk=0, pts=130.0, total_points=0
+            team=Team(team_id=1, team_name='Team Alpha'), fg_percentage=0, ft_percentage=0, three_pm=0, ast=0, reb=0, stl=0, blk=0, pts=130.0, gp=82, total_points=0
         )}
         league_averages = AverageStats(
             fg_percentage=45.5, ft_percentage=75.0, three_pm=12.5, ast=25.0, reb=45.0, stl=8.0, blk=5.0, pts=112.0, gp=82
@@ -149,16 +154,18 @@ class TestResponseBuilder:
         ]
         categories = [[115.0, 28.0], [120.0, 25.0]]
         normalized_data = [[0.8, 0.9], [1.0, 0.7]]
-        
-        result = response_builder.build_heatmap_response(teams, categories, normalized_data)
-        
+        ranks_data = [[1, 2], [3, 4]]
+
+        result = response_builder.build_heatmap_response(teams, categories, normalized_data, ranks_data)
+
         assert isinstance(result, HeatmapData), "Should return HeatmapData object"
         assert len(result.teams) == 2, "Should have 2 teams"
         assert result.teams[0].team_id == 1, "First team should have ID 1"
         assert result.teams[0].team_name == 'Team Alpha', "First team should be Team Alpha"
         assert result.data == categories, "Should have correct data"
         assert result.normalized_data == normalized_data, "Should have correct normalized_data"
-        assert len(result.categories) == 8, "Should have 8 ranking categories"
+        assert result.ranks_data == ranks_data, "Should have correct ranks_data"
+        assert len(result.categories) == 9, "Should have 9 categories (8 ranking categories + GP)"
     
     def test_build_league_shots_response_success(self, response_builder):
         """Test successful league shots response building"""

@@ -2,18 +2,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
 from app.routes.league import router as league_router
 from app.routes.analytics import router as analytics_router
-from app.routes.trades import router as trades_router, limiter
+from app.routes.players import router as players_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
 from datetime import datetime
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 from app.services.data_provider import DataProvider
 
 # Configure logging
@@ -26,6 +27,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,9 +45,9 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error during shutdown cleanup: {e}")
 
 app = FastAPI(
-    title="Fantasy League Dashboard API", 
+    title="Fantasy League Dashboard API",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
@@ -73,16 +76,18 @@ app.include_router(rankings_router, prefix="/api", tags=["Rankings"])
 app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
 app.include_router(league_router, prefix="/api/league", tags=["League"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
-app.include_router(trades_router, prefix="/api/trades", tags=["Trades"])
+app.include_router(players_router, prefix="/api/players", tags=["Players"])
 
 
 
 @app.get("/")
-async def root():
+@limiter.limit("20/minute")
+async def root(request: Request):
     return {"message": "Fantasy League Dashboard API"}
 
 @app.get("/health")
-async def health_check():
+@limiter.limit("60/minute")
+async def health_check(request: Request):
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
