@@ -131,6 +131,8 @@ export interface PaginatedPlayers {
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
 
+export type TimePeriod = 'season' | 'last_7' | 'last_15' | 'last_30';
+
 export interface StatFilter {
   stat: keyof PlayerStats;
   operator: ComparisonOperator;
