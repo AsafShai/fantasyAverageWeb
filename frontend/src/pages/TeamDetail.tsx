@@ -18,6 +18,7 @@ const TeamDetail = () => {
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
+  const [excludedPlayers, setExcludedPlayers] = useState<Set<string>>(new Set())
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -25,6 +26,27 @@ const TeamDetail = () => {
     } else {
       setSortBy(column)
       setSortOrder('asc')
+    }
+  }
+
+  const togglePlayerExclusion = (playerName: string) => {
+    setExcludedPlayers(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(playerName)) {
+        newSet.delete(playerName)
+      } else {
+        newSet.add(playerName)
+      }
+      return newSet
+    })
+  }
+
+  const toggleAllPlayers = () => {
+    if (!team_detail) return
+    if (excludedPlayers.size === team_detail.players.length) {
+      setExcludedPlayers(new Set())
+    } else {
+      setExcludedPlayers(new Set(team_detail.players.map(p => p.player_name)))
     }
   }
 
@@ -51,19 +73,20 @@ const TeamDetail = () => {
   if (!team_detail) return <ErrorMessage message="Team not found" />
 
   const columns = [
-    { key: 'player_name', label: 'Player', align: 'left' },
-    { key: 'positions', label: 'Position', align: 'left' },
-    { key: 'pro_team', label: 'Pro Team', align: 'left' },
-    { key: 'minutes', label: showAverages ? 'MPG' : 'Min', align: 'right' },
-    { key: 'fg_percentage', label: 'FG%', align: 'right' },
-    { key: 'ft_percentage', label: 'FT%', align: 'right' },
-    { key: 'three_pm', label: showAverages ? '3PG' : '3PM', align: 'right' },
-    { key: 'reb', label: showAverages ? 'RPG' : 'REB', align: 'right' },
-    { key: 'ast', label: showAverages ? 'APG' : 'AST', align: 'right' },
-    { key: 'stl', label: showAverages ? 'SPG' : 'STL', align: 'right' },
-    { key: 'blk', label: showAverages ? 'BPG' : 'BLK', align: 'right' },
-    { key: 'pts', label: showAverages ? 'PPG' : 'PTS', align: 'right' },
-    { key: 'gp', label: 'GP', align: 'right' },
+    { key: 'exclude', label: 'Exclude', align: 'center', sortable: false },
+    { key: 'player_name', label: 'Player', align: 'left', sortable: true },
+    { key: 'positions', label: 'Position', align: 'left', sortable: true },
+    { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
+    { key: 'minutes', label: showAverages ? 'MPG' : 'Min', align: 'right', sortable: true },
+    { key: 'fg_percentage', label: 'FG%', align: 'right', sortable: true },
+    { key: 'ft_percentage', label: 'FT%', align: 'right', sortable: true },
+    { key: 'three_pm', label: showAverages ? '3PG' : '3PM', align: 'right', sortable: true },
+    { key: 'reb', label: showAverages ? 'RPG' : 'REB', align: 'right', sortable: true },
+    { key: 'ast', label: showAverages ? 'APG' : 'AST', align: 'right', sortable: true },
+    { key: 'stl', label: showAverages ? 'SPG' : 'STL', align: 'right', sortable: true },
+    { key: 'blk', label: showAverages ? 'BPG' : 'BLK', align: 'right', sortable: true },
+    { key: 'pts', label: showAverages ? 'PPG' : 'PTS', align: 'right', sortable: true },
+    { key: 'gp', label: 'GP', align: 'right', sortable: true },
   ]
 
   const getPositionOrder = (positions: string[]): number => {
@@ -102,7 +125,7 @@ const TeamDetail = () => {
         }
 
         if (sortBy === 'positions') {
-          return 0 // Already handled above
+          return 0
         }
 
         if (typeof aVal === 'string' && typeof bVal === 'string') {
@@ -115,6 +138,77 @@ const TeamDetail = () => {
         const bNum = bVal as number
         return sortOrder === 'asc' ? aNum - bNum : bNum - aNum
       })
+
+  const calculateTeamAverage = () => {
+    const includedPlayers = team_detail.players.filter(p => !excludedPlayers.has(p.player_name))
+
+    if (includedPlayers.length === 0) {
+      return {
+        minutes: 0,
+        fg_percentage: 0,
+        ft_percentage: 0,
+        three_pm: 0,
+        reb: 0,
+        ast: 0,
+        stl: 0,
+        blk: 0,
+        pts: 0,
+        gp: 0,
+        fgm: 0,
+        fga: 0,
+        ftm: 0,
+        fta: 0,
+      }
+    }
+
+    const totals = includedPlayers.reduce((acc, player) => {
+      return {
+        minutes: acc.minutes + player.stats.minutes,
+        three_pm: acc.three_pm + player.stats.three_pm,
+        reb: acc.reb + player.stats.reb,
+        ast: acc.ast + player.stats.ast,
+        stl: acc.stl + player.stats.stl,
+        blk: acc.blk + player.stats.blk,
+        pts: acc.pts + player.stats.pts,
+        gp: acc.gp + player.stats.gp,
+        fgm: acc.fgm + player.stats.fgm,
+        fga: acc.fga + player.stats.fga,
+        ftm: acc.ftm + player.stats.ftm,
+        fta: acc.fta + player.stats.fta,
+      }
+    }, {
+      minutes: 0,
+      three_pm: 0,
+      reb: 0,
+      ast: 0,
+      stl: 0,
+      blk: 0,
+      pts: 0,
+      gp: 0,
+      fgm: 0,
+      fga: 0,
+      ftm: 0,
+      fta: 0,
+    })
+
+    return {
+      ...totals,
+      fg_percentage: totals.fga > 0 ? totals.fgm / totals.fga : 0,
+      ft_percentage: totals.fta > 0 ? totals.ftm / totals.fta : 0,
+    }
+  }
+
+  const teamAverage = calculateTeamAverage()
+
+  const getTimePeriodLabel = () => {
+    switch (timePeriod) {
+      case 'last_7': return 'Last 7'
+      case 'last_15': return 'Last 15'
+      case 'last_30': return 'Last 30'
+      case 'season':
+      default: return 'Season'
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 space-y-6">
@@ -243,17 +337,32 @@ const TeamDetail = () => {
                 {columns.map((column) => (
                   <th
                     key={column.key}
-                    onClick={() => handleSort(column.key)}
-                    className={`px-4 py-3 text-${column.align} text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors duration-150`}
+                    onClick={() => column.sortable !== false && handleSort(column.key)}
+                    className={`px-4 py-3 text-${column.align} text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                      column.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''
+                    } transition-colors duration-150`}
                   >
-                    <div className={`flex items-center ${column.align === 'right' ? 'justify-end' : ''}`}>
-                      {column.label}
-                      {sortBy === column.key && (
-                        <span className="ml-1">
-                          {sortOrder === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
-                    </div>
+                    {column.key === 'exclude' ? (
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        <span className="text-xs font-medium text-gray-500 uppercase">Exclude</span>
+                        <input
+                          type="checkbox"
+                          checked={excludedPlayers.size === team_detail.players.length}
+                          onChange={toggleAllPlayers}
+                          className="w-4 h-4 text-blue-600 cursor-pointer"
+                          title={excludedPlayers.size === team_detail.players.length ? "Include all" : "Exclude all"}
+                        />
+                      </div>
+                    ) : (
+                      <div className={`flex items-center ${column.align === 'right' ? 'justify-end' : column.align === 'center' ? 'justify-center' : ''}`}>
+                        {column.label}
+                        {sortBy === column.key && (
+                          <span className="ml-1">
+                            {sortOrder === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -261,6 +370,14 @@ const TeamDetail = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {sortedPlayers.map((player, idx) => (
                 <tr key={idx} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 whitespace-nowrap text-center">
+                    <input
+                      type="checkbox"
+                      checked={excludedPlayers.has(player.player_name)}
+                      onChange={() => togglePlayerExclusion(player.player_name)}
+                      className="w-4 h-4 text-blue-600 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{player.player_name}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
@@ -276,6 +393,28 @@ const TeamDetail = () => {
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
                 </tr>
               ))}
+              <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-t-2 border-blue-400 font-bold">
+                <td className="px-4 py-3 whitespace-nowrap text-center">
+                  <span className="text-blue-600">-</span>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-blue-900">
+                  {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">
+                  {team_detail.players.length - excludedPlayers.size} players
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.fg_percentage * 100)}%</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.ft_percentage * 100)}%</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.three_pm, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.reb, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.ast, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.stl, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
+              </tr>
             </tbody>
           </table>
         </div>
