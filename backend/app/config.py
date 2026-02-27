@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     season_id: int = Field(alias="SEASON_ID")
     league_id: int = Field(alias="LEAGUE_ID")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
-    
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

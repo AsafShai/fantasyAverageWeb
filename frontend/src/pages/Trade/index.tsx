@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { TimePeriod } from '../../types/api';
 import { TeamTradeSection } from './components/TeamTradeSection';
 import { TradeStatsToggle } from './components/TradeStatsToggle';
@@ -47,6 +47,29 @@ export const Trade: React.FC = () => {
     freeAgentsError,
   } = useTradeData(teamA, teamB, tradeMode, timePeriod);
 
+  // Derive selected players from the latest fetched data so stats update
+  // immediately when the time period changes, without needing to re-select.
+  const currentSelectedPlayersA = useMemo(() => {
+    if (!teamAData?.players || selectedPlayersA.length === 0) return selectedPlayersA;
+    return selectedPlayersA.map(
+      selected => teamAData.players.find(p => p.player_name === selected.player_name) || selected
+    );
+  }, [selectedPlayersA, teamAData]);
+
+  const currentSelectedPlayersB = useMemo(() => {
+    if (!teamBData?.players || selectedPlayersB.length === 0) return selectedPlayersB;
+    return selectedPlayersB.map(
+      selected => teamBData.players.find(p => p.player_name === selected.player_name) || selected
+    );
+  }, [selectedPlayersB, teamBData]);
+
+  const currentSelectedFreeAgents = useMemo(() => {
+    if (!freeAgents.length || selectedFreeAgents.length === 0) return selectedFreeAgents;
+    return selectedFreeAgents.map(
+      selected => freeAgents.find(p => p.player_name === selected.player_name) || selected
+    );
+  }, [selectedFreeAgents, freeAgents]);
+
   return (
     <div className="max-w-none mx-auto px-4 py-3">
       {/* Header */}
@@ -79,7 +102,7 @@ export const Trade: React.FC = () => {
           selectedTeam={teamA}
           onTeamChange={handleTeamAChange}
           players={teamAData?.players || []}
-          selectedPlayers={selectedPlayersA}
+          selectedPlayers={currentSelectedPlayersA}
           onPlayerSelect={handlePlayerASelect}
           onPlayerRemove={handlePlayerARemove}
           isLoadingTeams={isLoadingTeams}
@@ -98,7 +121,7 @@ export const Trade: React.FC = () => {
             selectedTeam={teamB}
             onTeamChange={handleTeamBChange}
             players={teamBData?.players || []}
-            selectedPlayers={selectedPlayersB}
+            selectedPlayers={currentSelectedPlayersB}
             onPlayerSelect={handlePlayerBSelect}
             onPlayerRemove={handlePlayerBRemove}
             isLoadingTeams={isLoadingTeams}
@@ -111,7 +134,7 @@ export const Trade: React.FC = () => {
         ) : (
           <FreeAgentSection
             players={freeAgents}
-            selectedPlayers={selectedFreeAgents}
+            selectedPlayers={currentSelectedFreeAgents}
             onPlayerSelect={handleFreeAgentSelect}
             onPlayerRemove={handleFreeAgentRemove}
             isLoading={isFetchingFreeAgents}
@@ -126,8 +149,8 @@ export const Trade: React.FC = () => {
         <TradeSummaryPanel
           teamA={teamA}
           teamB={tradeMode === 'team' ? teamB : null}
-          playersA={selectedPlayersA}
-          playersB={tradeMode === 'team' ? selectedPlayersB : selectedFreeAgents}
+          playersA={currentSelectedPlayersA}
+          playersB={tradeMode === 'team' ? currentSelectedPlayersB : currentSelectedFreeAgents}
           viewMode={viewMode}
           tradeMode={tradeMode}
         />

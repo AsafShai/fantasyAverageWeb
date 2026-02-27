@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { useGetTeamDetailQuery } from '../store/api/fantasyApi'
+import { useGetTeamDetailQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import type { TimePeriod } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
+import { aggregatePlayerAverages } from '../utils/statsUtils'
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -15,10 +16,11 @@ const TeamDetail = () => {
     teamId: teamIdNumber,
     time_period: timePeriod
   })
+  const { data: leagueSummary } = useGetLeagueSummaryQuery()
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
-  const [excludedPlayers, setExcludedPlayers] = useState<Set<string>>(new Set())
+  const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -29,25 +31,26 @@ const TeamDetail = () => {
     }
   }
 
-  const togglePlayerExclusion = (playerName: string) => {
-    setExcludedPlayers(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(playerName)) {
-        newSet.delete(playerName)
+  const isPlayerIncluded = (playerName: string) =>
+    includedPlayers === null || includedPlayers.has(playerName)
+
+  const togglePlayerInclusion = (playerName: string) => {
+    setIncludedPlayers(prev => {
+      const allNames = team_detail?.players.map(p => p.player_name) ?? []
+      const currentIncluded = prev === null ? new Set(allNames) : new Set(prev)
+      if (currentIncluded.has(playerName)) {
+        currentIncluded.delete(playerName)
       } else {
-        newSet.add(playerName)
+        currentIncluded.add(playerName)
       }
-      return newSet
+      return currentIncluded.size === allNames.length ? null : currentIncluded
     })
   }
 
   const toggleAllPlayers = () => {
     if (!team_detail) return
-    if (excludedPlayers.size === team_detail.players.length) {
-      setExcludedPlayers(new Set())
-    } else {
-      setExcludedPlayers(new Set(team_detail.players.map(p => p.player_name)))
-    }
+    const allIncluded = includedPlayers === null || includedPlayers.size === team_detail.players.length
+    setIncludedPlayers(allIncluded ? new Set() : null)
   }
 
   const formatNumber = (num: number) => {
@@ -73,7 +76,7 @@ const TeamDetail = () => {
   if (!team_detail) return <ErrorMessage message="Team not found" />
 
   const columns = [
-    { key: 'exclude', label: 'Exclude', align: 'center', sortable: false },
+    { key: 'include', label: 'Include', align: 'center', sortable: false },
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
@@ -140,7 +143,7 @@ const TeamDetail = () => {
       })
 
   const calculateTeamAverage = () => {
-    const includedPlayers = team_detail.players.filter(p => !excludedPlayers.has(p.player_name))
+    const includedPlayers = team_detail.players.filter(p => isPlayerIncluded(p.player_name))
 
     if (includedPlayers.length === 0) {
       return {
@@ -190,6 +193,10 @@ const TeamDetail = () => {
       ftm: 0,
       fta: 0,
     })
+
+    if (showAverages) {
+      return aggregatePlayerAverages(includedPlayers)
+    }
 
     return {
       ...totals,
@@ -306,23 +313,78 @@ const TeamDetail = () => {
           </div>
         </div>
       </div>
+      {team_detail.slot_usage && Object.keys(team_detail.slot_usage).length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <h2 className="text-2xl font-bold text-gray-900">Slot Usage</h2>
+              <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+                <span>*</span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-200 inline-block"></span><span className="text-red-700">5%+ out of pace (above or below)</span></span>
+                <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-200 inline-block"></span><span className="text-gray-600">within range</span></span>
+              </p>
+            </div>
+            {leagueSummary?.nba_avg_pace && (
+              <span className="text-xs text-gray-500">NBA avg: <span className="font-medium text-gray-700">{leagueSummary.nba_avg_pace.toFixed(1)} GP/team</span></span>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead>
+                <tr>
+                  {(['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'] as const).map(slot => (
+                    <th key={slot} className="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase border border-gray-200 bg-gray-50">
+                      {slot}
+                      {slot === 'UTIL' && <div className="text-gray-400 font-normal normal-case">per slot in ()</div>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {(['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'] as const).map(slot => {
+                    const usage = team_detail.slot_usage[slot]
+                    if (!usage) return <td key={slot} className="px-4 py-3 text-center border border-gray-200">-</td>
+                    const nbaAvg = leagueSummary?.nba_avg_pace ?? null
+                    let cellClass = 'bg-gray-100 text-gray-800'
+                    if (nbaAvg && nbaAvg > 0) {
+                      const effective = slot === 'UTIL' ? usage.games_used / 3 : usage.games_used
+                      const deviation = Math.abs((effective - nbaAvg) / nbaAvg)
+                      if (deviation >= 0.05) cellClass = 'bg-red-100 text-red-800'
+                      else cellClass = 'bg-gray-100 text-gray-700'
+                    }
+                    const perSlotVal = usage.games_used / 3
+                    const perSlot = slot === 'UTIL' ? ` (${Number.isInteger(perSlotVal) ? perSlotVal : perSlotVal.toFixed(1)}/82)` : ''
+                    return (
+                      <td key={slot} className={`px-4 py-3 text-center text-sm font-medium border border-gray-200 ${cellClass}`}>
+                        {usage.games_used}/{usage.cap}{perSlot}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-4 gap-3">
           <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <TimePeriodSelector
               value={timePeriod}
               onChange={setTimePeriod}
             />
-            <div className="stats-toggle">
+            <div className="flex border border-gray-300 rounded overflow-hidden self-end sm:self-stretch">
               <button
-                className={showAverages ? 'active' : ''}
+                className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(true)}
               >
                 Per Game
               </button>
               <button
-                className={!showAverages ? 'active' : ''}
+                className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(false)}
               >
                 Totals
@@ -342,15 +404,15 @@ const TeamDetail = () => {
                       column.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''
                     } transition-colors duration-150`}
                   >
-                    {column.key === 'exclude' ? (
+                    {column.key === 'include' ? (
                       <div className="flex flex-col items-center justify-center gap-1">
-                        <span className="text-xs font-medium text-gray-500 uppercase">Exclude</span>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Include</span>
                         <input
                           type="checkbox"
-                          checked={excludedPlayers.size === team_detail.players.length}
+                          checked={includedPlayers === null || includedPlayers.size === team_detail.players.length}
                           onChange={toggleAllPlayers}
                           className="w-4 h-4 text-blue-600 cursor-pointer"
-                          title={excludedPlayers.size === team_detail.players.length ? "Include all" : "Exclude all"}
+                          title="Toggle all players"
                         />
                       </div>
                     ) : (
@@ -373,8 +435,8 @@ const TeamDetail = () => {
                   <td className="px-4 py-3 whitespace-nowrap text-center">
                     <input
                       type="checkbox"
-                      checked={excludedPlayers.has(player.player_name)}
-                      onChange={() => togglePlayerExclusion(player.player_name)}
+                      checked={isPlayerIncluded(player.player_name)}
+                      onChange={() => togglePlayerInclusion(player.player_name)}
                       className="w-4 h-4 text-blue-600 cursor-pointer"
                     />
                   </td>
@@ -401,18 +463,18 @@ const TeamDetail = () => {
                   {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">
-                  {team_detail.players.length - excludedPlayers.size} players
+                  {includedPlayers === null ? team_detail.players.length : includedPlayers.size} players
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.fg_percentage * 100)}%</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.ft_percentage * 100)}%</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.three_pm, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.reb, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.ast, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.stl, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.three_pm, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.reb, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.ast, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.stl, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, showAverages ? 1 : teamAverage.gp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
               </tr>
             </tbody>

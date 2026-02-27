@@ -151,16 +151,19 @@
   border: 1px solid #ddd;
   border-radius: 4px;
   overflow: hidden;
+  align-self: stretch;
 }
 
 .stats-toggle button {
-  padding: 8px 16px;
+  padding: 0 12px;
   background: white;
   border: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
   transition: all 0.2s;
   border-right: 1px solid #ddd;
+  flex: 1;
 }
 
 .stats-toggle button:last-child {

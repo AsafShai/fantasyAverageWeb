@@ -3,7 +3,7 @@ import type { Player, Team } from '../../../types/api';
 import type { TradeMode } from '../../../hooks/useTradeState';
 import {
   aggregatePlayerStats,
-  calculateTeamAverages,
+  aggregatePlayerAverages,
   formatStatValue
 } from '../utils/tradeCalculations';
 import { STAT_KEYS } from '../constants';
@@ -131,10 +131,12 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
     );
   }
 
-  const statsA = aggregatePlayerStats(playersA);
-  const statsB = aggregatePlayerStats(playersB);
-  const displayStatsA = viewMode === 'averages' ? calculateTeamAverages(statsA) : statsA;
-  const displayStatsB = viewMode === 'averages' ? calculateTeamAverages(statsB) : statsB;
+  const displayStatsA = viewMode === 'averages'
+    ? aggregatePlayerAverages(playersA)
+    : aggregatePlayerStats(playersA);
+  const displayStatsB = viewMode === 'averages'
+    ? aggregatePlayerAverages(playersB)
+    : aggregatePlayerStats(playersB);
 
   const comparisonTitle = tradeMode === 'freeAgent'
     ? '📊 Player Comparison: Your Team vs Free Agents'
