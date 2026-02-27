@@ -8,12 +8,9 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", alias="ENVIRONMENT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     
-    espn_standings_url: str = Field(alias="ESPN_STANDINGS_URL")
-    espn_players_url: str = Field(alias="ESPN_PLAYERS_URL")
-    
+    season_id: int = Field(alias="SEASON_ID")
+    league_id: int = Field(alias="LEAGUE_ID")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
-    
-    openai_api_key: str = Field(alias="OPENAI_API_KEY")
     
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists

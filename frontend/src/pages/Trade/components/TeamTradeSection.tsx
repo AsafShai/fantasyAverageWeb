@@ -2,6 +2,7 @@ import React from 'react';
 import type { Player, Team } from '../../../types/api';
 import { PlayerStatsCard } from './PlayerStatsCard';
 import { PlayerDropdown } from './PlayerDropdown';
+import { TeamRankingsBar } from './TeamRankingsBar';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import ErrorMessage from '../../../components/ErrorMessage';
 
@@ -19,6 +20,7 @@ interface TeamTradeSectionProps {
   teamsError: unknown;
   playersError: unknown;
   viewMode: 'totals' | 'averages';
+  categoryRanks?: Record<string, number>;
 }
 
 export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
@@ -35,6 +37,7 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
   teamsError,
   playersError,
   viewMode,
+  categoryRanks,
 }) => {
 
 
@@ -73,6 +76,16 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
           </select>
         )}
       </div>
+
+      {/* Team Rankings Bar */}
+      {selectedTeam && categoryRanks && (
+        <div>
+          <h3 className="text-xs font-medium text-gray-700 mb-1">
+            Team Category Rankings
+          </h3>
+          <TeamRankingsBar categoryRanks={categoryRanks} />
+        </div>
+      )}
 
       {/* Available Players */}
       {selectedTeam && (

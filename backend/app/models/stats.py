@@ -11,7 +11,7 @@ class AverageStats(BaseModel):
     stl: float  # Steals
     blk: float  # Blocks
     pts: float  # Points
-    gp: int  # Games Played
+    gp: float  # Games Played
 
 class TeamAverageStats(AverageStats):
     team: Team
@@ -36,6 +36,7 @@ class RankingStats(BaseModel):
     stl: float
     blk: float
     pts: float
+    gp: int
     total_points: float
     rank: Optional[int] = None
 
@@ -48,18 +49,3 @@ class TeamShotStats(BaseModel):
     fta: int  # Free Throws Attempted
     ft_percentage: float  # Free Throw Percentage
     gp: int  # Games Played
-
-class PlayerStats(BaseModel):
-    pts: float
-    reb: float
-    ast: float
-    stl: float
-    blk: float
-    fgm: float
-    fga: float
-    ftm: float
-    fta: float
-    fg_percentage: float
-    ft_percentage: float
-    three_pm: float
-    gp: int 

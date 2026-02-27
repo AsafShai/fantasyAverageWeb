@@ -1,24 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
+import type { TimePeriod } from '../../types/api';
 import { TeamTradeSection } from './components/TeamTradeSection';
 import { TradeStatsToggle } from './components/TradeStatsToggle';
+import { TradeModeToggle } from './components/TradeModeToggle';
+import { FreeAgentSection } from './components/FreeAgentSection';
 import { TradeSummaryPanel } from './components/TradeSummaryPanel';
 import { useTradeState } from '../../hooks/useTradeState';
 import { useTradeData } from '../../hooks/useTradeData';
+import TimePeriodSelector from '../../components/TimePeriodSelector';
 
 export const Trade: React.FC = () => {
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
+
   const {
     teamA,
     teamB,
     selectedPlayersA,
     selectedPlayersB,
+    selectedFreeAgents,
     viewMode,
+    tradeMode,
     setViewMode,
+    setTradeMode,
     handleTeamAChange,
     handlePlayerASelect,
     handlePlayerARemove,
     handleTeamBChange,
     handlePlayerBSelect,
     handlePlayerBRemove,
+    handleFreeAgentSelect,
+    handleFreeAgentRemove,
   } = useTradeState();
 
   const {
@@ -31,7 +42,10 @@ export const Trade: React.FC = () => {
     teamBData,
     isFetchingTeamB,
     teamBError,
-  } = useTradeData(teamA, teamB);
+    freeAgents,
+    isFetchingFreeAgents,
+    freeAgentsError,
+  } = useTradeData(teamA, teamB, tradeMode, timePeriod);
 
   return (
     <div className="max-w-none mx-auto px-4 py-3">
@@ -41,18 +55,26 @@ export const Trade: React.FC = () => {
           🔄 Trade Analyzer
         </h1>
         <p className="text-sm text-gray-600 max-w-2xl mx-auto">
-          Select players from two teams to analyze potential trades with comprehensive statistical breakdowns
+          {tradeMode === 'team'
+            ? 'Select players from two teams to analyze potential trades with comprehensive statistical breakdowns'
+            : 'Compare your team players against free agents and waivers to find the best pickups'}
         </p>
       </div>
 
-      {/* Stats Toggle */}
-      <TradeStatsToggle viewMode={viewMode} onToggle={setViewMode} />
+      {/* Mode Toggle */}
+      <TradeModeToggle mode={tradeMode} onToggle={setTradeMode} />
+
+      {/* Time Period & Stats Toggles */}
+      <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-4">
+        <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
+        <TradeStatsToggle viewMode={viewMode} onToggle={setViewMode} />
+      </div>
 
       {/* Trade Sections */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
         {/* Team A Section */}
         <TeamTradeSection
-          title="Team A"
+          title={tradeMode === 'team' ? 'Team A' : 'Your Team'}
           teams={teams}
           selectedTeam={teamA}
           onTeamChange={handleTeamAChange}
@@ -65,34 +87,49 @@ export const Trade: React.FC = () => {
           teamsError={teamsError}
           playersError={teamAError}
           viewMode={viewMode}
+          categoryRanks={teamAData?.category_ranks}
         />
 
-        {/* Team B Section */}
-        <TeamTradeSection
-          title="Team B"
-          teams={teams}
-          selectedTeam={teamB}
-          onTeamChange={handleTeamBChange}
-          players={teamBData?.players || []}
-          selectedPlayers={selectedPlayersB}
-          onPlayerSelect={handlePlayerBSelect}
-          onPlayerRemove={handlePlayerBRemove}
-          isLoadingTeams={isLoadingTeams}
-          isLoadingPlayers={isFetchingTeamB}
-          teamsError={teamsError}
-          playersError={teamBError}
-          viewMode={viewMode}
-        />
+        {/* Team B Section or Free Agent Section */}
+        {tradeMode === 'team' ? (
+          <TeamTradeSection
+            title="Team B"
+            teams={teams}
+            selectedTeam={teamB}
+            onTeamChange={handleTeamBChange}
+            players={teamBData?.players || []}
+            selectedPlayers={selectedPlayersB}
+            onPlayerSelect={handlePlayerBSelect}
+            onPlayerRemove={handlePlayerBRemove}
+            isLoadingTeams={isLoadingTeams}
+            isLoadingPlayers={isFetchingTeamB}
+            teamsError={teamsError}
+            playersError={teamBError}
+            viewMode={viewMode}
+            categoryRanks={teamBData?.category_ranks}
+          />
+        ) : (
+          <FreeAgentSection
+            players={freeAgents}
+            selectedPlayers={selectedFreeAgents}
+            onPlayerSelect={handleFreeAgentSelect}
+            onPlayerRemove={handleFreeAgentRemove}
+            isLoading={isFetchingFreeAgents}
+            error={freeAgentsError}
+            viewMode={viewMode}
+          />
+        )}
       </div>
 
       {/* Trade Summary Panel */}
       <div className="card p-3">
         <TradeSummaryPanel
           teamA={teamA}
-          teamB={teamB}
+          teamB={tradeMode === 'team' ? teamB : null}
           playersA={selectedPlayersA}
-          playersB={selectedPlayersB}
+          playersB={tradeMode === 'team' ? selectedPlayersB : selectedFreeAgents}
           viewMode={viewMode}
+          tradeMode={tradeMode}
         />
       </div>
     </div>

@@ -13,6 +13,7 @@ export interface RankingStats {
   stl: number;
   blk: number;
   pts: number;
+  gp: number;
   total_points: number;
   rank?: number;
 }
@@ -52,6 +53,8 @@ export interface TeamAverageStats extends AverageStats {
 
 export interface TeamDetail {
   team: Team;
+  espn_url: string;
+  players: Player[];
   shot_chart: ShotChartStats;
   raw_averages: TeamAverageStats;
   ranking_stats: RankingStats;
@@ -61,6 +64,8 @@ export interface TeamDetail {
 export interface LeagueSummary {
   total_teams: number;
   total_games_played: number;
+  nba_avg_pace?: number;
+  nba_game_days_left?: number;
   category_leaders: Record<string, RankingStats>;
   league_averages: AverageStats;
   last_updated: string;
@@ -71,6 +76,7 @@ export interface HeatmapData {
   categories: string[];
   data: number[][];
   normalized_data: number[][];
+  ranks_data?: number[][];
 }
 
 export interface TeamShotStats {
@@ -102,6 +108,7 @@ export interface PlayerStats {
   fg_percentage: number;
   ft_percentage: number;
   three_pm: number;
+  minutes: number;
   gp: number;
 }
 
@@ -110,6 +117,34 @@ export interface Player {
   pro_team: string;
   positions: string[];
   stats: PlayerStats;
+  team_id: number;
+  status: "ONTEAM" | "FREEAGENT" | "WAIVERS";
+}
+
+export interface PaginatedPlayers {
+  players: Player[];
+  total_count: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
+export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
+
+export type TimePeriod = 'season' | 'last_7' | 'last_15' | 'last_30';
+
+export interface StatFilter {
+  stat: keyof PlayerStats;
+  operator: ComparisonOperator;
+  value: number;
+}
+
+export interface PlayerFilters {
+  search?: string;
+  positions?: string[];
+  status?: string[];
+  team_id?: number | null;
+  stat_filters?: StatFilter[];
 }
 
 export interface TeamPlayers {

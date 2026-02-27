@@ -1,3 +1,14 @@
 CLAUDE.md
 .env
 fantasy_api.log
+.claude/
+.vscode/
+
+# Playwright
+.playwright-mcp/
+
+# Screenshots and images
+*.png
+*.jpg
+*.jpeg
+*.gif

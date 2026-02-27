@@ -1,5 +1,6 @@
 import logging
 import httpx
+import json
 from typing import Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
@@ -21,7 +22,6 @@ class DataProvider:
     def __init__(self):
         if not DataProvider._initialized:
             self.cache_manager = CacheManager()
-            self._validate_urls()
             self.data_transformer = DataTransformer()
             self.logger = logging.getLogger(__name__)
             # Create httpx client with connection pooling
@@ -30,6 +30,10 @@ class DataProvider:
                 limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
             )
             DataProvider._initialized = True
+            if not settings.season_id or not settings.league_id:
+                raise ValueError("Season ID and league ID are not configured")
+            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam'
+            self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
     
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching"""
@@ -38,7 +42,7 @@ class DataProvider:
             if self.cache_manager.totals_cache['etag']:
                 headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
             
-            response = await self._client.get(settings.espn_standings_url, headers=headers)
+            response = await self._client.get(self.espn_standings_url, headers=headers)
             
             if response.status_code == 304:
                 return self.cache_manager.totals_cache['data']
@@ -63,28 +67,49 @@ class DataProvider:
             self.logger.error(f"Unexpected error fetching ESPN data: {e}")
             raise Exception("Unexpected error fetching ESPN data")
 
-    async def get_players_df(self) -> pd.DataFrame:
-        """Get players DataFrame with caching"""
+    async def get_players_df(self, stat_split_type_id: int = 0) -> pd.DataFrame:
+        """Get ALL players (roster + FA + waivers) DataFrame with caching
+
+        Args:
+            stat_split_type_id: ESPN stat split type (0=season, 1=last7, 2=last15, 3=last30)
+        """
         try:
+            cache_key = f'players_{stat_split_type_id}'
+
+            if not hasattr(self.cache_manager, cache_key):
+                setattr(self.cache_manager, cache_key, {'data': None, 'timestamp': None})
+
+            cache = getattr(self.cache_manager, cache_key)
+
+            if cache.get('data') is not None and cache.get('timestamp'):
+                from datetime import datetime, timedelta
+                if datetime.now() - cache['timestamp'] < timedelta(minutes=5):
+                    return cache['data']
+
             headers = {}
-            if self.cache_manager.players_cache['etag']:
-                headers['If-None-Match'] = self.cache_manager.players_cache['etag']
-            
-            response = await self._client.get(settings.espn_players_url, headers=headers)
-            
-            if response.status_code == 304:
-                return self.cache_manager.players_cache['data']
-            
+
+            espn_filter = {
+                "players": {
+                    "filterStatus": {"value": ["ONTEAM", "FREEAGENT", "WAIVERS"]},
+                    "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
+                    "limit": 500,
+                    "offset": 0
+                }
+            }
+            headers['X-Fantasy-Filter'] = json.dumps(espn_filter)
+
+            response = await self._client.get(self.espn_players_url, headers=headers)
             response.raise_for_status()
             api_data = response.json()
-            
-            players_df = self.data_transformer.raw_players_to_df(api_data)
-            
-            self.cache_manager.players_cache['etag'] = response.headers.get('ETag')
-            self.cache_manager.players_cache['data'] = players_df
-            
+
+            players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id)
+
+            from datetime import datetime
+            cache['timestamp'] = datetime.now()
+            cache['data'] = players_df
+
             return players_df
-            
+
         except httpx.RequestError as e:
             self.logger.error(f"Error fetching players data from ESPN API: {e}")
             raise DataSourceError("Error fetching players data from ESPN API")
@@ -112,13 +137,6 @@ class DataProvider:
         rankings_df = self.data_transformer.averages_to_rankings_df(averages_df)
         
         return totals_df, averages_df, rankings_df
-    
-    def _validate_urls(self):
-        """Validate that required URLs are configured"""
-        if not settings.espn_standings_url:
-            raise ValueError("ESPN_STANDINGS_URL is not configured")
-        if not settings.espn_players_url:
-            raise ValueError("ESPN_PLAYERS_URL is not configured")
     
     async def close(self):
         """Close the httpx client to clean up connections"""

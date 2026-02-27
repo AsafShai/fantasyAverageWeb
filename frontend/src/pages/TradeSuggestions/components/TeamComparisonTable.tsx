@@ -78,10 +78,10 @@ export const TeamComparisonTable: React.FC<TeamComparisonTableProps> = ({
 
   const getStatValue = (stats: any, statKey: string) => {
     const value = stats[statKey] || 0;
-    const gamesPlayed = stats.gp || 1;
+    const gamesPlayed = stats.gp
     
     if (viewMode === 'averages') {
-      return value / gamesPlayed;
+      return gamesPlayed > 0 ? value / gamesPlayed : 0;
     }
     
     return value;
@@ -97,9 +97,11 @@ export const TeamComparisonTable: React.FC<TeamComparisonTableProps> = ({
     }
     
     if (viewMode === 'averages') {
-      const receivingGP = receivingStats.gp || 1;
-      const givingGP = givingStats.gp || 1;
-      return (receivingValue / receivingGP) - (givingValue / givingGP);
+      const receivingGP = receivingStats.gp;
+      const givingGP = givingStats.gp;
+      const receivingAvg = receivingGP === 0 ? 0 : receivingValue / receivingGP;
+      const givingAvg = givingGP === 0 ? 0 : givingValue / givingGP;
+      return receivingAvg - givingAvg;
     }
     
     return receivingValue - givingValue;

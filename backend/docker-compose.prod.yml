@@ -8,8 +8,8 @@ services:
       - "8000:8000"
     
     environment:
-      ESPN_STANDINGS_URL: ${ESPN_STANDINGS_URL}
-      ESPN_PLAYERS_URL: ${ESPN_PLAYERS_URL}
+      SEASON_ID: ${SEASON_ID}
+      LEAGUE_ID: ${LEAGUE_ID}
       ENVIRONMENT: production
       PORT: 8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
