@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useGetRankingsQuery } from '../store/api/fantasyApi'
+import { useGetRankingsQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -8,8 +8,9 @@ import type { RankingStats } from '../types/api'
 const Rankings = () => {
   const [sortBy, setSortBy] = useState<string>('total_points')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  
+
   const { data, error, isLoading } = useGetRankingsQuery({})
+  const { data: summary } = useGetLeagueSummaryQuery()
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -56,6 +57,35 @@ const Rankings = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {(summary?.nba_avg_pace || summary?.nba_game_days_left !== undefined) && (
+        <div className="mb-6 flex justify-center gap-4">
+          {summary?.nba_avg_pace && (
+            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-center w-10 h-10 bg-amber-100 rounded-full">
+                <span className="text-xl">⚡</span>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 font-medium">NBA Avg Pace</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.nba_avg_pace.toFixed(1)}</div>
+              </div>
+              <div className="text-xs text-gray-400">games/team</div>
+            </div>
+          )}
+          {summary?.nba_game_days_left !== undefined && summary.nba_game_days_left !== null && (
+            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-center w-10 h-10 bg-emerald-100 rounded-full">
+                <span className="text-xl">📅</span>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 font-medium">Days Remaining</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.nba_game_days_left}</div>
+              </div>
+              <div className="text-xs text-gray-400">game days</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="card">
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-lg">
           <h2 className="text-2xl font-bold text-white">Team Rankings (Averages)</h2>

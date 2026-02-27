@@ -64,12 +64,16 @@ class ResponseBuilder:
         )
     
     def build_league_summary_response(self, total_teams: int, total_games_played: int,
-                                    category_leaders: Dict[str, RankingStats], 
-                                    league_averages: AverageStats) -> LeagueSummary:
+                                    category_leaders: Dict[str, RankingStats],
+                                    league_averages: AverageStats,
+                                    nba_avg_pace: Optional[float] = None,
+                                    nba_game_days_left: Optional[int] = None) -> LeagueSummary:
         """Build LeagueSummary response from calculated data"""
         return LeagueSummary(
             total_teams=total_teams,
             total_games_played=total_games_played,
+            nba_avg_pace=nba_avg_pace,
+            nba_game_days_left=nba_game_days_left,
             category_leaders=category_leaders,
             league_averages=league_averages,
             last_updated=datetime.now()

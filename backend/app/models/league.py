@@ -12,6 +12,8 @@ class LeagueRankings(BaseModel):
 class LeagueSummary(BaseModel):
     total_teams: int
     total_games_played: int
+    nba_avg_pace: Optional[float] = None
+    nba_game_days_left: Optional[int] = None
     category_leaders: Dict[str, RankingStats]
     league_averages: Optional[AverageStats] = None
     last_updated: datetime
