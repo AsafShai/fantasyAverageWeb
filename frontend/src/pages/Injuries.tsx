@@ -53,7 +53,7 @@ export default function Injuries() {
         <div className="mb-4">
           <h1 className="text-2xl font-bold text-gray-800">Injury Report</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Live NBA injury statuses - updated every 15 minutes. Last update times shown in Israel time.
+            Live NBA injury statuses - updates streamed in real-time. Times shown in your local timezone.
           </p>
         </div>
 
