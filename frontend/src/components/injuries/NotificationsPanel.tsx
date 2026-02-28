@@ -35,7 +35,7 @@ interface Props {
 export default function NotificationsPanel({ notifications }: Props) {
   return (
     <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50 sticky top-0 z-10">
         <h2 className="text-sm font-semibold text-gray-700">Notifications</h2>
         {notifications.length > 0 && (
           <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
@@ -44,7 +44,7 @@ export default function NotificationsPanel({ notifications }: Props) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="lg:flex-1 lg:overflow-y-auto">
         {notifications.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">
             No notifications yet
