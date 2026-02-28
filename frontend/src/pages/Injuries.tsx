@@ -83,7 +83,7 @@ export default function Injuries() {
                 </svg>
               </button>
               {notifOpen && (
-                <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden" style={{ maxHeight: '16rem' }}>
+                <div className="mt-1 border border-gray-200 rounded-lg overflow-y-auto" style={{ maxHeight: '16rem' }}>
                   <NotificationsPanel notifications={notifications} />
                 </div>
               )}
