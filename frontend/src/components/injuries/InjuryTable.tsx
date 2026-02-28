@@ -1,5 +1,11 @@
 import type { InjuryRecord } from '../../types/injury';
 
+function fmtTimestamp(ts: string): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? ts : d.toLocaleString();
+}
+
 const STATUS_STYLES: Record<string, string> = {
   'Out': 'bg-red-100 text-red-800',
   'Questionable': 'bg-yellow-100 text-yellow-800',
@@ -63,7 +69,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-600">{r.injury || '—'}</td>
-                <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{r.last_update}</td>
+                <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{fmtTimestamp(r.last_update)}</td>
               </tr>
             ))}
           </tbody>
@@ -87,7 +93,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
               <p className="text-xs text-gray-600 mt-2 break-words">{r.injury}</p>
             )}
             {r.last_update && (
-              <p className="text-xs text-gray-400 mt-1">{r.last_update}</p>
+              <p className="text-xs text-gray-400 mt-1">{fmtTimestamp(r.last_update)}</p>
             )}
           </div>
         ))}

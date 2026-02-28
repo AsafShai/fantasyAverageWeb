@@ -27,7 +27,7 @@ async def get_notifications():
 async def test_notification():
     """Broadcast a fake notification using a real player from the store and persist it."""
     store = injury_service.injury_store
-    now_il = injury_service.get_israel_time_str()
+    now_il = injury_service.get_utc_now_str()
     if store:
         key = next(iter(store))
         record = store[key]
