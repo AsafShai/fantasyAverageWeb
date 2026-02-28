@@ -50,8 +50,15 @@ async def fetch_pdf_bytes(url: str, max_retries: int = 3) -> bytes | None:
     delays = [10, 20]
     for attempt in range(1, max_retries + 1):
         try:
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                )
+            }
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, follow_redirects=True)
+                response = await client.get(url, headers=headers, follow_redirects=True)
                 if response.status_code == 200:
                     return response.content
                 if response.status_code == 404:

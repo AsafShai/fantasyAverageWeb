@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 
 from app.models.injury_models import InjuryRecord, InjuryNotification
@@ -21,6 +21,21 @@ async def get_injuries():
 async def get_notifications():
     """Return the last 50 stored notifications."""
     return injury_service.notification_history
+
+
+@router.post("/upload-pdf", response_model=list[InjuryRecord])
+async def upload_pdf(file: UploadFile = File(...)):
+    """Parse an uploaded NBA injury PDF and load it into the store (for local testing)."""
+    pdf_bytes = await file.read()
+    now_il = injury_service.get_utc_now_str()
+    new_records = injury_service.parse_injury_pdf(pdf_bytes)
+    notifications = injury_service.compute_diff(injury_service.injury_store, new_records, now_il)
+    new_store = injury_service.build_updated_store(injury_service.injury_store, new_records, notifications, now_il)
+    injury_service.injury_store.clear()
+    injury_service.injury_store.update(new_store)
+    if notifications:
+        await injury_service.broadcast_notifications(notifications)
+    return list(injury_service.injury_store.values())
 
 
 @router.post("/test-notification")
