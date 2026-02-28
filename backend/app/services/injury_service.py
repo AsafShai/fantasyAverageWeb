@@ -1,7 +1,7 @@
 import asyncio
 import io
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -12,7 +12,6 @@ from app.models.injury_models import InjuryRecord, InjuryNotification
 logger = logging.getLogger(__name__)
 
 NY_TZ = ZoneInfo("America/New_York")
-IL_TZ = ZoneInfo("Asia/Jerusalem")
 
 # In-memory state
 injury_store: dict[str, InjuryRecord] = {}
@@ -21,8 +20,8 @@ notification_history: list[InjuryNotification] = []
 MAX_NOTIFICATION_HISTORY = 150
 
 
-def get_israel_time_str() -> str:
-    return datetime.now(IL_TZ).strftime("%d/%m/%Y %H:%M:%S")
+def get_utc_now_str() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def get_current_pdf_url() -> str:
@@ -326,18 +325,30 @@ def build_updated_store(
     return new_store
 
 
+TTL_HOURS = 48
+
+
+def _parse_timestamp(ts: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+
+
 def _prune_notification_history() -> None:
-    cutoff = datetime.now(IL_TZ) - timedelta(hours=24)
-    to_remove = []
-    for notif in notification_history:
-        try:
-            ts = datetime.strptime(notif.timestamp, "%d/%m/%Y %H:%M:%S").replace(tzinfo=IL_TZ)
-            if ts < cutoff:
-                to_remove.append(notif)
-        except ValueError:
-            pass
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=TTL_HOURS)
+    to_remove = [n for n in notification_history if (t := _parse_timestamp(n.timestamp)) and t < cutoff]
     for notif in to_remove:
         notification_history.remove(notif)
+
+
+def prune_injury_store() -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=TTL_HOURS)
+    stale = [k for k, r in injury_store.items() if (t := _parse_timestamp(r.last_update)) and t < cutoff]
+    for key in stale:
+        del injury_store[key]
+    if stale:
+        logger.info(f"Pruned {len(stale)} stale injury record(s) older than {TTL_HOURS}h")
 
 
 async def broadcast_notifications(notifications: list[InjuryNotification]) -> None:
@@ -360,13 +371,14 @@ async def update_injury_data() -> None:
         logger.warning("Keeping stale injury data — PDF unavailable")
         return
 
-    now_il = get_israel_time_str()
+    now_il = get_utc_now_str()
     new_records = parse_injury_pdf(pdf_bytes)
     notifications = compute_diff(injury_store, new_records, now_il)
     new_store = build_updated_store(injury_store, new_records, notifications, now_il)
 
     injury_store.clear()
     injury_store.update(new_store)
+    prune_injury_store()
 
     if notifications:
         logger.info(f"Broadcasting {len(notifications)} injury update(s)")
@@ -383,7 +395,7 @@ async def initialize() -> None:
         logger.warning("Starting with empty injury store — initial PDF unavailable")
         return
 
-    now_il = get_israel_time_str()
+    now_il = get_utc_now_str()
     records = parse_injury_pdf(pdf_bytes)
     for record in records:
         key = f"{record.team}|{record.player}"
