@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,11 +12,13 @@ from app.routes.teams import router as teams_router
 from app.routes.league import router as league_router
 from app.routes.analytics import router as analytics_router
 from app.routes.players import router as players_router
+from app.routes.injuries import router as injuries_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
 from datetime import datetime
 from app.services.data_provider import DataProvider
+from app.services import injury_service
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +38,8 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan for proper resource cleanup"""
     # Startup
     logger.info("Starting Fantasy League Dashboard API")
+    await injury_service.initialize()
+    asyncio.create_task(injury_service.start_scheduler())
     yield
     # Shutdown
     try:
@@ -77,6 +82,7 @@ app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
 app.include_router(league_router, prefix="/api/league", tags=["League"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(players_router, prefix="/api/players", tags=["Players"])
+app.include_router(injuries_router, prefix="/api/injuries", tags=["Injuries"])
 
 
 
