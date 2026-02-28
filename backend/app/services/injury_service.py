@@ -83,7 +83,8 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
 
     import re
     PAGE_FOOTER_RE = re.compile(r"^page\d+of\d+$", re.IGNORECASE)
-    TIME_RE = re.compile(r'(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)', re.IGNORECASE)
+    # AM/PM is optional — NBA PDFs often use "08:30(ET)" with no meridiem indicator.
+    TIME_RE = re.compile(r'(\d{1,2}):(\d{2})(?:\s*(AM|PM))?', re.IGNORECASE)
     DATE_RE = re.compile(r'(\d{1,2})/(\d{1,2})/(\d{4})')
 
     def parse_game_time_utc(date_str: str, time_str: str) -> str | None:
@@ -94,11 +95,16 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
             return None
         month, day, year = int(date_m.group(1)), int(date_m.group(2)), int(date_m.group(3))
         hour, minute = int(time_m.group(1)), int(time_m.group(2))
-        ampm = time_m.group(3).upper()
+        ampm = (time_m.group(3) or "").upper()
         if ampm == "PM" and hour != 12:
             hour += 12
         elif ampm == "AM" and hour == 12:
             hour = 0
+        elif not ampm:
+            # No meridiem in PDF — NBA games run 12 PM–midnight ET.
+            # Hours 1–11 are always PM; hour 12 stays as noon.
+            if 1 <= hour <= 11:
+                hour += 12
         try:
             dt_et = datetime(year, month, day, hour, minute, tzinfo=NY_TZ)
             return dt_et.astimezone(timezone.utc).isoformat(timespec="seconds")
