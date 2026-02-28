@@ -1,4 +1,4 @@
-import { StoredNotification } from '../../types/injury';
+import type { StoredNotification } from '../../types/injury';
 
 function formatMessage(notif: StoredNotification): string {
   switch (notif.type) {

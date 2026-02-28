@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { InjuryRecord, InjuryNotification } from '../types/injury';
+import type { InjuryRecord, InjuryNotification, StoredNotification } from '../types/injury';
 import { useInjuryNotifications } from './useInjuryNotifications';
-import { StoredNotification } from '../types/injury';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api';
 
@@ -49,7 +48,7 @@ export function useInjuryData(): {
   const [records, setRecords] = useState<InjuryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { notifications, addNotification } = useInjuryNotifications();
+  const { notifications, loadHistory, addNotification } = useInjuryNotifications();
 
   const fetchAll = useCallback(async () => {
     try {
@@ -66,10 +65,14 @@ export function useInjuryData(): {
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch — records + past notifications from backend
   useEffect(() => {
     fetchAll();
-  }, [fetchAll]);
+    fetch(`${API_BASE}/injuries/notifications`)
+      .then(r => r.ok ? r.json() : [])
+      .then((past: InjuryNotification[]) => loadHistory(past))
+      .catch(() => {});
+  }, [fetchAll, loadHistory]);
 
   // SSE subscription
   useEffect(() => {
@@ -78,7 +81,11 @@ export function useInjuryData(): {
     es.onmessage = event => {
       try {
         const notif: InjuryNotification = JSON.parse(event.data as string);
-        setRecords(prev => applyNotificationToRecords(prev, notif));
+        if (notif.type === 'added') {
+          fetchAll();
+        } else {
+          setRecords(prev => applyNotificationToRecords(prev, notif));
+        }
         addNotification(notif);
       } catch {
         // Malformed event — ignore

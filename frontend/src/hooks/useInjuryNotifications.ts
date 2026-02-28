@@ -1,37 +1,26 @@
 import { useState, useCallback } from 'react';
-import { InjuryNotification, StoredNotification } from '../types/injury';
+import type { InjuryNotification, StoredNotification } from '../types/injury';
 
-const STORAGE_KEY = 'injury_notifications';
-const MAX_NOTIFICATIONS = 50;
+const MAX_NOTIFICATIONS = 150;
 
-function loadFromStorage(): StoredNotification[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as StoredNotification[]) : [];
-  } catch {
-    return [];
-  }
+function toStored(notif: InjuryNotification): StoredNotification {
+  return {
+    ...notif,
+    id: crypto.randomUUID(),
+    received_at: new Date().toLocaleString('he-IL'),
+  };
 }
 
 export function useInjuryNotifications() {
-  const [notifications, setNotifications] = useState<StoredNotification[]>(loadFromStorage);
+  const [notifications, setNotifications] = useState<StoredNotification[]>([]);
 
-  const addNotification = useCallback((notif: InjuryNotification) => {
-    const stored: StoredNotification = {
-      ...notif,
-      id: crypto.randomUUID(),
-      received_at: new Date().toLocaleString('he-IL'),
-    };
-    setNotifications(prev => {
-      const updated = [stored, ...prev].slice(0, MAX_NOTIFICATIONS);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {
-        // localStorage full or unavailable — continue in-memory only
-      }
-      return updated;
-    });
+  const loadHistory = useCallback((past: InjuryNotification[]) => {
+    setNotifications(past.map(toStored).slice(0, MAX_NOTIFICATIONS));
   }, []);
 
-  return { notifications, addNotification };
+  const addNotification = useCallback((notif: InjuryNotification) => {
+    setNotifications(prev => [toStored(notif), ...prev].slice(0, MAX_NOTIFICATIONS));
+  }, []);
+
+  return { notifications, loadHistory, addNotification };
 }
