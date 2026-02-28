@@ -7,7 +7,7 @@ function toStored(notif: InjuryNotification): StoredNotification {
   return {
     ...notif,
     id: crypto.randomUUID(),
-    received_at: new Date().toLocaleString('he-IL'),
+    received_at: new Date().toLocaleString(),
   };
 }
 
