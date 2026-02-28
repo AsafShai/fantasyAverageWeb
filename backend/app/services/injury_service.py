@@ -83,6 +83,27 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
 
     import re
     PAGE_FOOTER_RE = re.compile(r"^page\d+of\d+$", re.IGNORECASE)
+    TIME_RE = re.compile(r'(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)', re.IGNORECASE)
+    DATE_RE = re.compile(r'(\d{1,2})/(\d{1,2})/(\d{4})')
+
+    def parse_game_time_utc(date_str: str, time_str: str) -> str | None:
+        """Convert ET game date+time strings from PDF to UTC ISO string."""
+        date_m = DATE_RE.search(date_str)
+        time_m = TIME_RE.search(time_str)
+        if not date_m or not time_m:
+            return None
+        month, day, year = int(date_m.group(1)), int(date_m.group(2)), int(date_m.group(3))
+        hour, minute = int(time_m.group(1)), int(time_m.group(2))
+        ampm = time_m.group(3).upper()
+        if ampm == "PM" and hour != 12:
+            hour += 12
+        elif ampm == "AM" and hour == 12:
+            hour = 0
+        try:
+            dt_et = datetime(year, month, day, hour, minute, tzinfo=NY_TZ)
+            return dt_et.astimezone(timezone.utc).isoformat(timespec="seconds")
+        except (ValueError, OverflowError):
+            return None
     VALID_STATUSES = {"Out", "Questionable", "Doubtful", "Probable", "Available"}
     CAMEL_SPLIT_RE = re.compile(r"(?<=[a-z])(?=[A-Z])(?<!Mc)(?<!Mac)|(?<=[A-Z])(?=[A-Z][a-z])")
 
@@ -165,7 +186,9 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
         rows.setdefault(y, {}).setdefault(col, []).append(word["text"])
 
     sorted_ys = sorted(rows)
-    current_game = ""
+    current_matchup = ""
+    current_date = ""
+    current_game_time_utc: str | None = None
     current_team = ""
 
     row_data: list[dict] = []
@@ -179,16 +202,25 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
         status  = cells.get("status", "").strip()
         reason  = cells.get("reason", "").strip()
 
+        if date:
+            current_date = date
         if time_ or matchup:
-            current_game = " ".join(p for p in [time_, matchup] if p)
+            current_matchup = matchup
+            if time_:
+                current_game_time_utc = parse_game_time_utc(current_date, time_)
         elif date:
-            current_game = ""
+            current_matchup = ""
+            current_game_time_utc = None
         if team:
             current_team = split_camel(team)
 
+        if current_game_time_utc:
+            game_field = f"{current_game_time_utc} {current_matchup}".strip()
+        else:
+            game_field = current_matchup
         row_data.append({
             "y": y, "player": player, "status": status, "reason": reason,
-            "game": current_game, "team": current_team,
+            "game": game_field, "team": current_team,
         })
 
     player_ys = [row["y"] for row in row_data if row["player"] and row["status"] in VALID_STATUSES]

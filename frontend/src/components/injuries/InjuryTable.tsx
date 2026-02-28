@@ -6,6 +6,21 @@ function fmtTimestamp(ts: string): string {
   return isNaN(d.getTime()) ? ts : d.toLocaleString();
 }
 
+// game field is either "2026-02-28T00:30:00+00:00 BOS@MIA" (UTC ISO + matchup)
+// or just a matchup string for games with no parsed time.
+function fmtGame(game: string): string {
+  if (!game) return '—';
+  const m = game.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2})\s*(.*)/);
+  if (m) {
+    const d = new Date(m[1]);
+    if (!isNaN(d.getTime())) {
+      const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return m[2] ? `${timeStr} · ${m[2]}` : timeStr;
+    }
+  }
+  return game;
+}
+
 const STATUS_STYLES: Record<string, string> = {
   'Out': 'bg-red-100 text-red-800',
   'Questionable': 'bg-yellow-100 text-yellow-800',
@@ -61,7 +76,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
             {records.map((r, i) => (
               <tr key={`${r.team}|${r.player}|${i}`} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{r.team}</td>
-                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.game || '—'}</td>
+                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtGame(r.game)}</td>
                 <td className="px-4 py-3 text-gray-800 whitespace-nowrap">{r.player}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyle(r.status)}`}>
@@ -83,7 +98,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
             <div className="flex items-start justify-between gap-2 min-w-0">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-gray-800 text-sm truncate">{r.player}</p>
-                <p className="text-xs text-gray-500 mt-0.5 truncate">{r.team}{r.game ? ` · ${r.game}` : ''}</p>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">{r.team}{r.game ? ` · ${fmtGame(r.game)}` : ''}</p>
               </div>
               <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyle(r.status)}`}>
                 {r.status}
