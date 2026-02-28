@@ -13,6 +13,7 @@ const Layout = () => {
     { path: '/shots', label: 'Shots', icon: '🎯' },
     { path: '/analytics', label: 'Analytics', icon: '📈' },
     { path: '/players', label: 'Players', icon: '🏀' },
+    { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
   ]
 
