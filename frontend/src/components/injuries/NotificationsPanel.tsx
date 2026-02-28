@@ -1,5 +1,11 @@
 import type { StoredNotification } from '../../types/injury';
 
+function fmtTimestamp(ts: string): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? ts : d.toLocaleString();
+}
+
 function formatMessage(notif: StoredNotification): string {
   switch (notif.type) {
     case 'status_change':
@@ -53,7 +59,7 @@ export default function NotificationsPanel({ notifications }: Props) {
                     <p className="text-xs text-gray-800 leading-snug break-words">
                       {formatMessage(n)}
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{n.timestamp}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{fmtTimestamp(n.timestamp)}</p>
                   </div>
                 </div>
               </li>
