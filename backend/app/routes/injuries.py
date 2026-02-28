@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from app.models.injury_models import InjuryRecord
+from app.models.injury_models import InjuryRecord, InjuryNotification
 from app.services import injury_service
 
 router = APIRouter()
@@ -15,6 +15,43 @@ logger = logging.getLogger(__name__)
 async def get_injuries():
     """Return the current in-memory injury report."""
     return list(injury_service.injury_store.values())
+
+
+@router.get("/notifications", response_model=list[InjuryNotification])
+async def get_notifications():
+    """Return the last 50 stored notifications."""
+    return injury_service.notification_history
+
+
+@router.post("/test-notification")
+async def test_notification():
+    """Broadcast a fake notification using a real player from the store and persist it."""
+    store = injury_service.injury_store
+    now_il = injury_service.get_israel_time_str()
+    if store:
+        key = next(iter(store))
+        record = store[key]
+        statuses = ["Out", "Questionable", "Doubtful", "Probable", "Available"]
+        new_status = next((s for s in statuses if s != record.status), "Out")
+        notif = InjuryNotification(
+            type="status_change",
+            player=record.player,
+            team=record.team,
+            old_status=record.status,
+            new_status=new_status,
+            timestamp=now_il,
+        )
+        store[key] = record.model_copy(update={"status": new_status, "last_update": now_il})
+    else:
+        notif = InjuryNotification(
+            type="added",
+            player="Test Player",
+            team="Test Team",
+            new_status="Out",
+            timestamp=now_il,
+        )
+    await injury_service.broadcast_notifications([notif])
+    return {"ok": True, "notification": notif}
 
 
 @router.get("/stream")

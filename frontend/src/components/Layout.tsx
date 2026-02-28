@@ -25,7 +25,7 @@ const Layout = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent whitespace-nowrap">
                 🏀 Fantasy League Dashboard
               </h1>
             </div>
@@ -36,14 +36,14 @@ const Layout = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`inline-flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                     location.pathname === item.path
                       ? 'bg-blue-100 text-blue-700 shadow-sm'
                       : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
                   }`}
                 >
-                  <span className="mr-2 text-lg">{item.icon}</span>
-                  {item.label}
+                  <span className="lg:mr-2 text-lg">{item.icon}</span>
+                  <span className="hidden lg:inline">{item.label}</span>
                 </Link>
               ))}
             </div>
