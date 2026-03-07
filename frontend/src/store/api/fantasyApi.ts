@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource } from '../../types/api';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
@@ -57,6 +57,12 @@ export const fantasyApi = createApi({
       }),
       keepUnusedDataFor: 300,
     }),
+    getRankingsOverTime: builder.query<RankingsOverTimeResponse, { source?: OverTimeSource; teamIds?: number[] }>({
+      query: ({ source = 'rankings_avg', teamIds } = {}) => ({
+        url: '/analytics/over-time',
+        params: { source, ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds.join(',') } : {}) },
+      }),
+    }),
   }),
 });
 
@@ -71,4 +77,5 @@ export const {
   useGetTeamPlayersQuery,
   useGetTradeSuggestionsQuery,
   useGetAllPlayersQuery,
+  useGetRankingsOverTimeQuery,
 } = fantasyApi;
