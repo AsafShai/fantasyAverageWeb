@@ -1,6 +1,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     season_id: int = Field(alias="SEASON_ID")
     league_id: int = Field(alias="LEAGUE_ID")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
+    database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",
