@@ -22,8 +22,8 @@ const TEAM_COLORS = [
 
 type SourceOption = { value: OverTimeSource; label: string }
 const SOURCES: SourceOption[] = [
-  { value: 'rankings_avg', label: 'Avg Rankings' },
-  { value: 'rankings_totals', label: 'Total Rankings' },
+  { value: 'rankings_avg', label: 'Rankings by Avg' },
+  { value: 'rankings_totals', label: 'Rankings by Total' },
   { value: 'averages', label: 'Per-Game Avg' },
   { value: 'snapshot', label: 'Season Totals' },
 ]
