@@ -124,6 +124,9 @@ class MockDataProvider:
     async def get_slot_usage(self):
         return {}
 
+    def get_data_date(self):
+        return None
+
     async def close(self):
         pass
 

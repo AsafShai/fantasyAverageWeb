@@ -2,6 +2,7 @@ import { useState, type JSX } from 'react'
 import { useGetHeatmapDataQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import DataDateBadge from '../components/DataDateBadge'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 
@@ -199,7 +200,10 @@ const Analytics = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">League Analytics</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">League Analytics</h1>
+          <DataDateBadge dataDate={heatmapData?.data_date} />
+        </div>
         
         {renderHeatmapTable(
           heatmapData,

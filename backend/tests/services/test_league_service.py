@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
 import pandas as pd
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.league_service import LeagueService
 from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats, RankingStats
 from app.exceptions import ResourceNotFoundError
@@ -15,6 +15,7 @@ def league_service():
          patch('app.services.league_service.ResponseBuilder') as mock_response_builder:
         service = LeagueService()
         service.data_provider = AsyncMock()
+        service.data_provider.get_data_date = MagicMock(return_value=None)
         service.stats_calculator = mock_stats_calculator.return_value
         service.response_builder = mock_response_builder.return_value
         return service
@@ -123,6 +124,7 @@ class TestLeagueServiceResponseBuilding:
             service.data_provider.get_averages_df.return_value = sample_averages_df
             service.data_provider.get_rankings_df.return_value = sample_rankings_df
             service.data_provider.get_totals_df.return_value = sample_totals_df
+            service.data_provider.get_data_date = MagicMock(return_value=None)
             
             # Mock stats calculator with realistic results
             service.stats_calculator.find_category_leaders.return_value = {

@@ -5,7 +5,7 @@ import pandas as pd
 from app.models.league import LeagueRankings
 from app.models.stats import RankingStats
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch, AsyncMock, MagicMock
 
 @pytest.fixture
 def ranking_service():
@@ -13,6 +13,7 @@ def ranking_service():
             patch('app.services.ranking_service.ResponseBuilder') as mock_response_builder:
         service = RankingService()
         service.data_provider = AsyncMock()
+        service.data_provider.get_data_date = MagicMock(return_value=None)
         service.response_builder = mock_response_builder.return_value
         return service
 
@@ -30,7 +31,7 @@ async def test_get_league_rankings_success(ranking_service, sample_rankings_df):
     assert result == expected_rankings
     ranking_service.data_provider.get_rankings_df.assert_called_once()
     ranking_service.response_builder.build_rankings_response.assert_called_once_with(
-        sample_rankings_df, None, "asc" # default order is asc
+        sample_rankings_df, None, "asc", data_date=None
     )
     
 @pytest.mark.asyncio
@@ -42,10 +43,10 @@ async def test_get_league_rankings_with_sort_by(ranking_service, sample_rankings
     ranking_service.response_builder.build_rankings_response.return_value = expected_rankings
     
     result = await ranking_service.get_league_rankings(sort_by='FG%')
-    
+
     assert result == expected_rankings
     ranking_service.response_builder.build_rankings_response.assert_called_once_with(
-        sample_rankings_df, 'FG%', "asc"
+        sample_rankings_df, 'FG%', "asc", data_date=None
     )
 
 @pytest.mark.asyncio
@@ -57,10 +58,10 @@ async def test_get_league_rankings_with_order(ranking_service, sample_rankings_d
     ranking_service.response_builder.build_rankings_response.return_value = expected_rankings
     
     result = await ranking_service.get_league_rankings(order='asc')
-    
+
     assert result == expected_rankings
     ranking_service.response_builder.build_rankings_response.assert_called_once_with(
-        sample_rankings_df, None, "asc"
+        sample_rankings_df, None, "asc", data_date=None
     )
 
 @pytest.mark.asyncio
@@ -72,10 +73,10 @@ async def test_get_league_rankings_with_sort_by_and_order(ranking_service, sampl
     ranking_service.response_builder.build_rankings_response.return_value = expected_rankings
     
     result = await ranking_service.get_league_rankings(sort_by='FG%', order='asc')
-    
+
     assert result == expected_rankings
     ranking_service.response_builder.build_rankings_response.assert_called_once_with(
-        sample_rankings_df, 'FG%', "asc"
+        sample_rankings_df, 'FG%', "asc", data_date=None
     )
 
 
@@ -122,6 +123,7 @@ class TestRankingServiceResponseBuilding:
             service = RankingService()
             service.data_provider = AsyncMock()
             service.data_provider.get_rankings_df.return_value = sample_rankings_df
+            service.data_provider.get_data_date = MagicMock(return_value=None)
             return service
     
     @pytest.mark.asyncio
