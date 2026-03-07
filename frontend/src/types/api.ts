@@ -177,3 +177,32 @@ export interface TradeSuggestionsResponse {
   trade_suggestions: TradeSuggestion[];
 }
 
+export type OverTimeSource = 'rankings_avg' | 'rankings_totals' | 'snapshot' | 'averages';
+
+export interface TeamTimeSeriesPoint {
+  date: string;
+  team_id: number;
+  team_name: string;
+  rk_fg_pct?: number;
+  rk_ft_pct?: number;
+  rk_three_pm?: number;
+  rk_reb?: number;
+  rk_ast?: number;
+  rk_stl?: number;
+  rk_blk?: number;
+  rk_pts?: number;
+  rk_total?: number;
+  fg_pct?: number;
+  ft_pct?: number;
+  three_pm?: number;
+  reb?: number;
+  ast?: number;
+  stl?: number;
+  blk?: number;
+  pts?: number;
+}
+
+export interface RankingsOverTimeResponse {
+  data: TeamTimeSeriesPoint[];
+}
+
