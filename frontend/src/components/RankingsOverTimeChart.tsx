@@ -251,11 +251,28 @@ const RankingsOverTimeChart = () => {
                 domain={['auto', 'auto']}
               />
               <Tooltip
-                formatter={(value: number, name: string) =>
-                  [typeof value === 'number' && !isNaN(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—', name]
-                }
-                labelFormatter={(label: string) => `Date: ${label}`}
-                contentStyle={{ fontSize: 11 }}
+                allowEscapeViewBox={{ x: false, y: true }}
+                position={{ y: 0 }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || payload.length === 0) return null
+                  const sorted = [...payload]
+                    .filter(e => typeof e.value === 'number' && !isNaN(e.value as number))
+                    .sort((a, b) => (b.value as number) - (a.value as number))
+                  return (
+                    <div style={{ fontSize: 11, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px', maxHeight: 180, overflowY: 'auto', minWidth: 160 }}>
+                      <p style={{ marginBottom: 4, fontWeight: 600 }}>{`Date: ${label}`}</p>
+                      {sorted.map(e => (
+                        <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: e.color, flexShrink: 0 }} />
+                          <span style={{ color: '#374151' }}>{e.name}:</span>
+                          <span style={{ fontWeight: 600, marginLeft: 'auto', paddingLeft: 8 }}>
+                            {(e.value as number).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }}
               />
               <Brush
                 dataKey="date"

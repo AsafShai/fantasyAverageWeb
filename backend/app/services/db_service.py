@@ -272,6 +272,7 @@ class DBService:
         pool = await self._get_pool()
         if pool is None:
             return []
+        cutoff = _SEASON_START + timedelta(days=10)
         try:
             async with pool.acquire() as conn:
                 if team_ids:
@@ -280,10 +281,10 @@ class DBService:
                         SELECT date, team_id, team_name,
                                fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
                         FROM team_daily_snapshot
-                        WHERE team_id = ANY($1)
+                        WHERE date >= $1 AND team_id = ANY($2)
                         ORDER BY date, team_id
                         """,
-                        team_ids,
+                        cutoff, team_ids,
                     )
                 else:
                     rows = await conn.fetch(
@@ -291,8 +292,10 @@ class DBService:
                         SELECT date, team_id, team_name,
                                fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
                         FROM team_daily_snapshot
+                        WHERE date >= $1
                         ORDER BY date, team_id
-                        """
+                        """,
+                        cutoff,
                     )
                 return [dict(r) for r in rows]
         except Exception as e:
