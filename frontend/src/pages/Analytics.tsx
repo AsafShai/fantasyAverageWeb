@@ -3,6 +3,7 @@ import { useGetHeatmapDataQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DataDateBadge from '../components/DataDateBadge'
+import RankingsOverTimeChart from '../components/RankingsOverTimeChart'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 
@@ -211,6 +212,10 @@ const Analytics = () => {
           "Visual representation of team performance across different categories. Red indicates below-average performance, white indicates league-average performance, and green indicates above-average performance. Click column headers to sort by team name or category values."
         )}
 
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <RankingsOverTimeChart />
       </div>
     </div>
   )

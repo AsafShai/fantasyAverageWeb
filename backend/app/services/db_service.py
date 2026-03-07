@@ -235,6 +235,99 @@ class DBService:
             logger.error(f"Failed to fetch latest snapshot: {e}")
             return None, []
 
+    async def get_rankings_over_time(self, table: str, team_ids: list[int] | None) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                if team_ids:
+                    rows = await conn.fetch(
+                        f"""
+                        SELECT date, team_id, team_name,
+                               rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
+                               rk_ast, rk_stl, rk_blk, rk_pts, rk_total
+                        FROM {table}
+                        WHERE team_id = ANY($1)
+                        ORDER BY date, team_id
+                        """,
+                        team_ids,
+                    )
+                else:
+                    rows = await conn.fetch(
+                        f"""
+                        SELECT date, team_id, team_name,
+                               rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
+                               rk_ast, rk_stl, rk_blk, rk_pts, rk_total
+                        FROM {table}
+                        ORDER BY date, team_id
+                        """
+                    )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch rankings over time from {table}: {e}")
+            return []
+
+    async def get_snapshot_over_time(self, team_ids: list[int] | None) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                if team_ids:
+                    rows = await conn.fetch(
+                        """
+                        SELECT date, team_id, team_name,
+                               fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
+                        FROM team_daily_snapshot
+                        WHERE team_id = ANY($1)
+                        ORDER BY date, team_id
+                        """,
+                        team_ids,
+                    )
+                else:
+                    rows = await conn.fetch(
+                        """
+                        SELECT date, team_id, team_name,
+                               fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
+                        FROM team_daily_snapshot
+                        ORDER BY date, team_id
+                        """
+                    )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch snapshot over time: {e}")
+            return []
+
+    async def get_averages_over_time(self, team_ids: list[int] | None) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        _base = """
+            SELECT date, team_id, team_name,
+                   fg_pct,
+                   ft_pct,
+                   ROUND((three_pm::numeric / NULLIF(gp, 0)), 4) AS three_pm,
+                   ROUND((reb::numeric    / NULLIF(gp, 0)), 4) AS reb,
+                   ROUND((ast::numeric    / NULLIF(gp, 0)), 4) AS ast,
+                   ROUND((stl::numeric    / NULLIF(gp, 0)), 4) AS stl,
+                   ROUND((blk::numeric    / NULLIF(gp, 0)), 4) AS blk,
+                   ROUND((pts::numeric    / NULLIF(gp, 0)), 4) AS pts
+            FROM team_daily_snapshot
+            WHERE date >= $1
+        """
+        try:
+            async with pool.acquire() as conn:
+                cutoff = _SEASON_START + timedelta(days=10)
+                if team_ids:
+                    rows = await conn.fetch(_base + " AND team_id = ANY($2) ORDER BY date, team_id", cutoff, team_ids)
+                else:
+                    rows = await conn.fetch(_base + " ORDER BY date, team_id", cutoff)
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch averages over time: {e}")
+            return []
+
     async def close(self) -> None:
         if self._pool is not None:
             await self._pool.close()
