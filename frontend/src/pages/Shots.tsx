@@ -3,6 +3,7 @@ import { useGetLeagueShotsQuery } from '../store/api/fantasyApi'
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import DataDateBadge from '../components/DataDateBadge'
 import type { TeamShotStats } from '../types/api'
 
 const Shots = () => {
@@ -82,10 +83,15 @@ const Shots = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="card">
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-orange-600 to-red-600 rounded-t-lg">
-          <h2 className="text-2xl font-bold text-white">League Shooting Statistics</h2>
-          <p className="text-orange-100 mt-1">
-            Field goal and free throw shooting stats for all teams. Click column headers to sort.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+            <div>
+              <h2 className="text-2xl font-bold text-white">League Shooting Statistics</h2>
+              <p className="text-orange-100 mt-1">
+                Field goal and free throw shooting stats for all teams. Click column headers to sort.
+              </p>
+            </div>
+            {data?.data_date && <DataDateBadge dataDate={data.data_date} />}
+          </div>
         </div>
       
       <div className="overflow-x-auto">

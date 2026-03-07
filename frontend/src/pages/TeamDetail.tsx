@@ -5,6 +5,7 @@ import type { TimePeriod } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
+import DataDateBadge from '../components/DataDateBadge'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 
 const TeamDetail = () => {
@@ -36,7 +37,7 @@ const TeamDetail = () => {
 
   const togglePlayerInclusion = (playerName: string) => {
     setIncludedPlayers(prev => {
-      const allNames = team_detail?.players.map(p => p.player_name) ?? []
+      const allNames = team_detail?.players?.map(p => p.player_name) ?? []
       const currentIncluded = prev === null ? new Set(allNames) : new Set(prev)
       if (currentIncluded.has(playerName)) {
         currentIncluded.delete(playerName)
@@ -48,7 +49,7 @@ const TeamDetail = () => {
   }
 
   const toggleAllPlayers = () => {
-    if (!team_detail) return
+    if (!team_detail?.players) return
     const allIncluded = includedPlayers === null || includedPlayers.size === team_detail.players.length
     setIncludedPlayers(allIncluded ? new Set() : null)
   }
@@ -98,7 +99,7 @@ const TeamDetail = () => {
     return positionRank[firstPos as keyof typeof positionRank] ?? 99
   }
 
-  const sortedPlayers = sortBy === null
+  const sortedPlayers = !team_detail.players ? [] : sortBy === null
     ? team_detail.players
     : [...team_detail.players].sort((a, b) => {
         let aVal: string | number | null
@@ -143,7 +144,7 @@ const TeamDetail = () => {
       })
 
   const calculateTeamAverage = () => {
-    const includedPlayers = team_detail.players.filter(p => isPlayerIncluded(p.player_name))
+    const includedPlayers = (team_detail.players ?? []).filter(p => isPlayerIncluded(p.player_name))
 
     if (includedPlayers.length === 0) {
       return {
@@ -229,8 +230,11 @@ const TeamDetail = () => {
           </svg>
           Back to Teams
         </button>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">{team_detail.team.team_name}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-3xl font-bold text-gray-900">{team_detail.team.team_name}</h1>
+            <DataDateBadge dataDate={team_detail.data_date} />
+          </div>
           <a
             href={team_detail.espn_url}
             target="_blank"
@@ -371,6 +375,9 @@ const TeamDetail = () => {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-4 gap-3">
           <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
+          {!team_detail.players && (
+            <p className="text-sm text-gray-500 italic">Player data unavailable</p>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <TimePeriodSelector
               value={timePeriod}
@@ -392,6 +399,11 @@ const TeamDetail = () => {
             </div>
           </div>
         </div>
+        {!team_detail.players ? (
+          <div className="py-12 text-center text-gray-400 text-sm">
+            Roster data is currently unavailable. Team stats above are from the last known snapshot.
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -480,6 +492,7 @@ const TeamDetail = () => {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   )

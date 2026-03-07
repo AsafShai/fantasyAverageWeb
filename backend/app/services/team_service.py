@@ -26,29 +26,32 @@ class TeamService:
         stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
 
         totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
-        players_df, slot_usage_map = await asyncio.gather(
-            self.data_provider.get_players_df(stat_split_id),
-            self.data_provider.get_slot_usage()
-        )
 
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ResourceNotFoundError("Unable to process ESPN data")
 
-        if players_df is None:
-            raise ResourceNotFoundError("Unable to process player data")
-
         if not is_team_exists(team_id, totals_df):
             raise ResourceNotFoundError(f"Team with ID {team_id} not found")
 
-        team_players_df = self._filter_team_players(players_df, team_id)
-        players_list = self.response_builder.build_players_list(team_players_df)
+        players_list = None
+        slot_usage_map = {}
+        try:
+            players_df, slot_usage_map = await asyncio.gather(
+                self.data_provider.get_players_df(stat_split_id),
+                self.data_provider.get_slot_usage()
+            )
+            if players_df is not None:
+                team_players_df = self._filter_team_players(players_df, team_id)
+                players_list = self.response_builder.build_players_list(team_players_df)
+        except Exception as e:
+            self.logger.warning(f"Player data unavailable for team {team_id}: {e}")
 
         espn_url = f"https://fantasy.espn.com/basketball/team?leagueId={settings.league_id}&teamId={team_id}"
-
         team_slot_usage = slot_usage_map.get(team_id, {})
 
         return self.response_builder.build_team_detail_response(
-            team_id, totals_df, averages_df, rankings_df, players_list, espn_url, team_slot_usage
+            team_id, totals_df, averages_df, rankings_df, players_list, espn_url,
+            team_slot_usage, data_date=self.data_provider.get_data_date()
         )
     
     async def get_teams_list(self) -> List[Team]:

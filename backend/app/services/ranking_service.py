@@ -18,13 +18,15 @@ class RankingService:
         rankings_df = await self.data_provider.get_rankings_df()
         if rankings_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
-        
+
         if sort_by is not None and not self._is_valid_sort_column(sort_by, rankings_df):
             raise InvalidParameterError(f"Invalid sort column: {sort_by}")
-        
+
         if order not in ["asc", "desc"]:
             raise InvalidParameterError("Order must be 'asc' or 'desc'")
-        return self.response_builder.build_rankings_response(rankings_df, sort_by, order)
+        return self.response_builder.build_rankings_response(
+            rankings_df, sort_by, order, data_date=self.data_provider.get_data_date()
+        )
     
     def _is_valid_sort_column(self, sort_by: str, rankings_df) -> bool:
         """Validate if sort column exists in rankings DataFrame"""
