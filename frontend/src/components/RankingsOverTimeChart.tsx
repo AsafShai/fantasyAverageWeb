@@ -129,7 +129,6 @@ const RankingsOverTimeChart = () => {
   const selectAll = () => setSelectedTeamIds(null)
   const clearAll = () => setSelectedTeamIds(new Set())
 
-  const metricLabel = (metrics.find(m => m.value === metric) ?? { label: metric }).label
   const allSelected = effectiveSelectedIds.size === allTeams.length
   const noneSelected = effectiveSelectedIds.size === 0
 
