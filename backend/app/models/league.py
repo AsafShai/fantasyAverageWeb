@@ -32,3 +32,28 @@ class HeatmapData(BaseModel):
     normalized_data: List[List[float]]
     ranks_data: List[List[int]]
     data_date: Optional[date] = None
+
+class TeamTimeSeriesPoint(BaseModel):
+    date: date
+    team_id: int
+    team_name: str
+    rk_fg_pct: Optional[int] = None
+    rk_ft_pct: Optional[int] = None
+    rk_three_pm: Optional[int] = None
+    rk_reb: Optional[int] = None
+    rk_ast: Optional[int] = None
+    rk_stl: Optional[int] = None
+    rk_blk: Optional[int] = None
+    rk_pts: Optional[int] = None
+    rk_total: Optional[int] = None
+    fg_pct: Optional[float] = None
+    ft_pct: Optional[float] = None
+    three_pm: Optional[float] = None
+    reb: Optional[float] = None
+    ast: Optional[float] = None
+    stl: Optional[float] = None
+    blk: Optional[float] = None
+    pts: Optional[float] = None
+
+class RankingsOverTimeResponse(BaseModel):
+    data: List[TeamTimeSeriesPoint]
