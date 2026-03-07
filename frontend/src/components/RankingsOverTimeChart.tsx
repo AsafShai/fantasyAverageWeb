@@ -251,13 +251,15 @@ const RankingsOverTimeChart = () => {
                 domain={['auto', 'auto']}
               />
               <Tooltip
+                allowEscapeViewBox={{ x: false, y: true }}
+                position={{ y: 0 }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload || payload.length === 0) return null
                   const sorted = [...payload]
                     .filter(e => typeof e.value === 'number' && !isNaN(e.value as number))
                     .sort((a, b) => (b.value as number) - (a.value as number))
                   return (
-                    <div style={{ fontSize: 11, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 11, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px', maxHeight: 180, overflowY: 'auto', minWidth: 160 }}>
                       <p style={{ marginBottom: 4, fontWeight: 600 }}>{`Date: ${label}`}</p>
                       {sorted.map(e => (
                         <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
