@@ -421,7 +421,7 @@ const TeamDetail = () => {
                         <span className="text-xs font-medium text-gray-500 uppercase">Include</span>
                         <input
                           type="checkbox"
-                          checked={includedPlayers === null || includedPlayers.size === team_detail.players.length}
+                          checked={includedPlayers === null || includedPlayers.size === (team_detail.players?.length ?? 0)}
                           onChange={toggleAllPlayers}
                           className="w-4 h-4 text-blue-600 cursor-pointer"
                           title="Toggle all players"
