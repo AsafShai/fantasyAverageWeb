@@ -13,28 +13,29 @@ from app.utils.constants import RANKING_CATEGORIES
 class ResponseBuilder:
     """Transforms data into API response objects (pure data transformation)"""
     
-    def build_rankings_response(self, rankings_df: pd.DataFrame, 
-                              sort_by: Optional[str] = None, 
-                              order: str = "asc") -> LeagueRankings:
+    def build_rankings_response(self, rankings_df: pd.DataFrame,
+                              sort_by: Optional[str] = None,
+                              order: str = "asc",
+                              data_date=None) -> LeagueRankings:
         """Build LeagueRankings response from rankings DataFrame"""
-        # Apply sorting if requested, otherwise sort by rank
         sort_by = "RANK" if sort_by is None else sort_by.upper()
         ascending = order == "asc"
         rankings_df = rankings_df.sort_values(sort_by, ascending=ascending)
-        
-        # Convert to RankingStats objects
+
         rankings = [self._create_ranking_stats(row) for _, row in rankings_df.iterrows()]
-        
+
         return LeagueRankings(
             rankings=rankings,
             categories=RANKING_CATEGORIES + ['TOTAL_POINTS'],
-            last_updated=datetime.now()
+            last_updated=datetime.now(),
+            data_date=data_date,
         )
     
     def build_team_detail_response(self, team_id: int, totals_df: pd.DataFrame,
                                  averages_df: pd.DataFrame, rankings_df: pd.DataFrame,
-                                 players: List[Player], espn_url: str,
-                                 slot_usage_raw: Dict[str, int] = None) -> TeamDetail:
+                                 players: Optional[List[Player]], espn_url: str,
+                                 slot_usage_raw: Dict[str, int] = None,
+                                 data_date=None) -> TeamDetail:
         """Build TeamDetail response for a specific team"""
         team_row = totals_df[totals_df['team_id'] == team_id]
         if team_row.empty:
@@ -70,14 +71,16 @@ class ResponseBuilder:
             raw_averages=raw_averages,
             ranking_stats=ranking_stats,
             category_ranks={col: int(rank_data[col]) for col in RANKING_CATEGORIES},
-            slot_usage=slot_usage
+            slot_usage=slot_usage,
+            data_date=data_date,
         )
     
     def build_league_summary_response(self, total_teams: int, total_games_played: int,
                                     category_leaders: Dict[str, RankingStats],
                                     league_averages: AverageStats,
                                     nba_avg_pace: Optional[float] = None,
-                                    nba_game_days_left: Optional[int] = None) -> LeagueSummary:
+                                    nba_game_days_left: Optional[int] = None,
+                                    data_date=None) -> LeagueSummary:
         """Build LeagueSummary response from calculated data"""
         return LeagueSummary(
             total_teams=total_teams,
@@ -86,11 +89,13 @@ class ResponseBuilder:
             nba_game_days_left=nba_game_days_left,
             category_leaders=category_leaders,
             league_averages=league_averages,
-            last_updated=datetime.now()
+            last_updated=datetime.now(),
+            data_date=data_date,
         )
     
     def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],
-                             normalized_data: List[List[float]], ranks_data: List[List[int]]) -> HeatmapData:
+                             normalized_data: List[List[float]], ranks_data: List[List[int]],
+                             data_date=None) -> HeatmapData:
         """Build HeatmapData response from prepared data"""
         team_objects = [Team(team_id=team['team_id'], team_name=team['team_name'])
                        for team in teams]
@@ -101,10 +106,11 @@ class ResponseBuilder:
             categories=categories_with_gp,
             data=categories,
             normalized_data=normalized_data,
-            ranks_data=ranks_data
+            ranks_data=ranks_data,
+            data_date=data_date,
         )
     
-    def build_league_shots_response(self, shots_data: List[Dict]) -> LeagueShotsData:
+    def build_league_shots_response(self, shots_data: List[Dict], data_date=None) -> LeagueShotsData:
         """Build LeagueShotsData response from prepared shots data"""
         shots = []
         for shot_data in shots_data:
@@ -118,10 +124,11 @@ class ResponseBuilder:
                 ft_percentage=shot_data['ft_percentage'],
                 gp=shot_data['gp']
             ))
-        
+
         return LeagueShotsData(
             shots=shots,
-            last_updated=datetime.now()
+            last_updated=datetime.now(),
+            data_date=data_date,
         )
     
     def build_players_list(self, team_players: pd.DataFrame) -> List[Player]:
