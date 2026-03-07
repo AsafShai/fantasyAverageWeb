@@ -22,6 +22,7 @@ export interface LeagueRankings {
   rankings: RankingStats[];
   categories: string[];
   last_updated: string;
+  data_date?: string;
 }
 
 export interface ShotChartStats {
@@ -60,12 +61,13 @@ export interface SlotUsage {
 export interface TeamDetail {
   team: Team;
   espn_url: string;
-  players: Player[];
+  players?: Player[];
   shot_chart: ShotChartStats;
   raw_averages: TeamAverageStats;
   ranking_stats: RankingStats;
   category_ranks: Record<string, number>;
   slot_usage: Record<string, SlotUsage>;
+  data_date?: string;
 }
 
 export interface LeagueSummary {
@@ -76,6 +78,7 @@ export interface LeagueSummary {
   category_leaders: Record<string, RankingStats>;
   league_averages: AverageStats;
   last_updated: string;
+  data_date?: string;
 }
 
 export interface HeatmapData {
@@ -84,6 +87,7 @@ export interface HeatmapData {
   data: number[][];
   normalized_data: number[][];
   ranks_data?: number[][];
+  data_date?: string;
 }
 
 export interface TeamShotStats {
@@ -100,6 +104,7 @@ export interface TeamShotStats {
 export interface LeagueShotsData {
   shots: TeamShotStats[];
   last_updated: string;
+  data_date?: string;
 }
 
 export interface PlayerStats {
@@ -170,5 +175,34 @@ export interface TradeSuggestion {
 export interface TradeSuggestionsResponse {
   user_team: Team;
   trade_suggestions: TradeSuggestion[];
+}
+
+export type OverTimeSource = 'rankings_avg' | 'rankings_totals' | 'snapshot' | 'averages';
+
+export interface TeamTimeSeriesPoint {
+  date: string;
+  team_id: number;
+  team_name: string;
+  rk_fg_pct?: number;
+  rk_ft_pct?: number;
+  rk_three_pm?: number;
+  rk_reb?: number;
+  rk_ast?: number;
+  rk_stl?: number;
+  rk_blk?: number;
+  rk_pts?: number;
+  rk_total?: number;
+  fg_pct?: number;
+  ft_pct?: number;
+  three_pm?: number;
+  reb?: number;
+  ast?: number;
+  stl?: number;
+  blk?: number;
+  pts?: number;
+}
+
+export interface RankingsOverTimeResponse {
+  data: TeamTimeSeriesPoint[];
 }
 

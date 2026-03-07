@@ -3,6 +3,7 @@ import { useGetRankingsQuery, useGetLeagueSummaryQuery } from '../store/api/fant
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import DataDateBadge from '../components/DataDateBadge'
 import type { RankingStats } from '../types/api'
 
 const Rankings = () => {
@@ -57,6 +58,11 @@ const Rankings = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {data?.data_date && (
+        <div className="mb-4 flex justify-end">
+          <DataDateBadge dataDate={data.data_date} />
+        </div>
+      )}
       {(summary?.nba_avg_pace || summary?.nba_game_days_left !== undefined) && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:flex sm:justify-center sm:gap-4">
           {summary?.nba_avg_pace && (

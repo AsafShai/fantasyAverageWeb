@@ -52,14 +52,14 @@ export const Trade: React.FC = () => {
   const currentSelectedPlayersA = useMemo(() => {
     if (!teamAData?.players || selectedPlayersA.length === 0) return selectedPlayersA;
     return selectedPlayersA.map(
-      selected => teamAData.players.find(p => p.player_name === selected.player_name) || selected
+      selected => teamAData.players!.find(p => p.player_name === selected.player_name) || selected
     );
   }, [selectedPlayersA, teamAData]);
 
   const currentSelectedPlayersB = useMemo(() => {
     if (!teamBData?.players || selectedPlayersB.length === 0) return selectedPlayersB;
     return selectedPlayersB.map(
-      selected => teamBData.players.find(p => p.player_name === selected.player_name) || selected
+      selected => teamBData.players!.find(p => p.player_name === selected.player_name) || selected
     );
   }, [selectedPlayersB, teamBData]);
 

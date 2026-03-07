@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
 import pandas as pd
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.team_service import TeamService
 from app.models import Team, TeamDetail, TeamPlayers, Player, ShotChartStats, AverageStats, RankingStats, PlayerStats
 from app.exceptions import ResourceNotFoundError
@@ -13,6 +13,7 @@ def team_service():
             patch('app.services.team_service.ResponseBuilder') as mock_response_builder:
         service = TeamService()
         service.data_provider = AsyncMock()
+        service.data_provider.get_data_date = MagicMock(return_value=None)
         service.response_builder = mock_response_builder.return_value
         return service
 
@@ -66,7 +67,7 @@ class TestTeamService:
         assert result == expected_team_detail
         team_service.data_provider.get_all_dataframes.assert_called_once()
         team_service.response_builder.build_team_detail_response.assert_called_once_with(
-            team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY, {}
+            team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY, {}, data_date=None
         )
     
     @pytest.mark.asyncio
@@ -168,6 +169,7 @@ class TestTeamServiceResponseBuilding:
             )
             service.data_provider.get_players_df.return_value = team_service_players_df
             service.data_provider.get_slot_usage.return_value = {}
+            service.data_provider.get_data_date = MagicMock(return_value=None)
             return service
     
     @pytest.mark.asyncio

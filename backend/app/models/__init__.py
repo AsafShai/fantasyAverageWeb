@@ -22,6 +22,8 @@ __all__ = [
     "LeagueSummary",
     "LeagueShotsData",
     "HeatmapData",
+    "TeamTimeSeriesPoint",
+    "RankingsOverTimeResponse",
 
     "TeamDetail",
     "Player",

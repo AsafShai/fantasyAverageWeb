@@ -44,7 +44,8 @@ class LeagueService:
             category_leaders=category_leaders,
             league_averages=league_averages,
             nba_avg_pace=nba_avg_pace,
-            nba_game_days_left=nba_game_days_left
+            nba_game_days_left=nba_game_days_left,
+            data_date=self.data_provider.get_data_date(),
         )
     
     async def get_heatmap_data(self) -> HeatmapData:
@@ -70,7 +71,8 @@ class LeagueService:
             teams=teams_data,
             categories=categories_data,
             normalized_data=normalized_data,
-            ranks_data=ranks_data
+            ranks_data=ranks_data,
+            data_date=self.data_provider.get_data_date(),
         )
     
     async def get_league_shots_data(self) -> LeagueShotsData:
@@ -80,8 +82,10 @@ class LeagueService:
             raise ResourceNotFoundError("Unable to fetch totals data from ESPN API")
         
         shots_data = self._extract_shots_data(totals_df)
-        
-        return self.response_builder.build_league_shots_response(shots_data)
+
+        return self.response_builder.build_league_shots_response(
+            shots_data, data_date=self.data_provider.get_data_date()
+        )
     
     def _calculate_category_leaders(self, averages_df) -> Dict[str, RankingStats]:
         """Calculate category leaders (business logic)"""
