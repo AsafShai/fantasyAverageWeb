@@ -42,12 +42,16 @@ class NBAStatsService:
             games_played_list = []
             for entry in all_entries:
                 stats = entry.get('stats', [])
-                if len(stats) < 15:
-                    continue
 
-                wins = stats[14].get('value', 0)
-                losses = stats[6].get('value', 0)
-                games_played = wins + losses
+                gp_stat = next((s for s in stats if s.get('name') == 'gamesPlayed'), None)
+                if gp_stat is None:
+                    wins_stat = next((s for s in stats if s.get('name') == 'wins'), None)
+                    losses_stat = next((s for s in stats if s.get('name') == 'losses'), None)
+                    if wins_stat is None or losses_stat is None:
+                        continue
+                    games_played = wins_stat.get('value', 0) + losses_stat.get('value', 0)
+                else:
+                    games_played = gp_stat.get('value', 0)
                 games_played_list.append(games_played)
 
             if not games_played_list:
