@@ -45,8 +45,17 @@ class NBAStatsService:
                 if len(stats) < 15:
                     continue
 
-                wins = stats[14].get('value', 0)
-                losses = stats[6].get('value', 0)
+               stats_map = {s['name']: s.get('value') for s in stats}  # store None if missing
+
+                wins = stats_map.get('wins')
+                if wins is None:
+                    logger.warning("'wins' stat missing or null in ESPN standings response")
+                    wins = 0
+                
+                losses = stats_map.get('losses')
+                if losses is None:
+                    logger.warning("'losses' stat missing or null in ESPN standings response")
+                    losses = 0
                 games_played = wins + losses
                 games_played_list.append(games_played)
 
