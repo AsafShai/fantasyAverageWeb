@@ -1,6 +1,7 @@
 import { useGetLeagueSummaryQuery, useGetRankingsQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import DeadlineCountdown from '../components/DeadlineCountdown'
 
 const Dashboard = () => {
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
@@ -18,6 +19,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
+      <DeadlineCountdown />
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">League Overview</h2>
 
