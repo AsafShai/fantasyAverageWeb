@@ -42,10 +42,8 @@ class NBAStatsService:
             games_played_list = []
             for entry in all_entries:
                 stats = entry.get('stats', [])
-                if len(stats) < 15:
-                    continue
 
-               stats_map = {s['name']: s.get('value') for s in stats}  # store None if missing
+                stats_map = {s['name']: s.get('value') for s in stats}  # store None if missing
 
                 wins = stats_map.get('wins')
                 if wins is None:
