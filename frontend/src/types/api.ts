@@ -19,10 +19,15 @@ export interface RankingStats {
 }
 
 export interface LeagueRankings {
-  rankings: RankingStats[];
+  averages_rankings: RankingStats[];
+  totals_rankings: RankingStats[];
   categories: string[];
   last_updated: string;
   data_date?: string;
+  date_range_start?: string;
+  date_range_end?: string;
+  actual_start_date?: string;
+  actual_end_date?: string;
 }
 
 export interface ShotChartStats {
@@ -79,6 +84,7 @@ export interface LeagueSummary {
   league_averages: AverageStats;
   last_updated: string;
   data_date?: string;
+  season_start?: string;
 }
 
 export interface HeatmapData {
@@ -88,6 +94,10 @@ export interface HeatmapData {
   normalized_data: number[][];
   ranks_data?: number[][];
   data_date?: string;
+  date_range_start?: string;
+  date_range_end?: string;
+  actual_start_date?: string;
+  actual_end_date?: string;
 }
 
 export interface TeamShotStats {
