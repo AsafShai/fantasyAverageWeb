@@ -64,40 +64,36 @@ class DBService:
         snap_date = _SEASON_START + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
-                for _, row in rankings_df.iterrows():
-                    await conn.execute(
-                        """
-                        INSERT INTO team_rankings_averages
-                            (scoring_period_id, date, team_id, team_name,
-                             rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
-                             rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
-                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-                        ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
-                            team_name   = EXCLUDED.team_name,
-                            rk_fg_pct   = EXCLUDED.rk_fg_pct,
-                            rk_ft_pct   = EXCLUDED.rk_ft_pct,
-                            rk_three_pm = EXCLUDED.rk_three_pm,
-                            rk_reb      = EXCLUDED.rk_reb,
-                            rk_ast      = EXCLUDED.rk_ast,
-                            rk_stl      = EXCLUDED.rk_stl,
-                            rk_blk      = EXCLUDED.rk_blk,
-                            rk_pts      = EXCLUDED.rk_pts,
-                            rk_total    = EXCLUDED.rk_total
-                        """,
-                        scoring_period_id,
-                        snap_date,
-                        int(row['team_id']),
-                        str(row['team_name']),
-                        int(row['FG%']),
-                        int(row['FT%']),
-                        int(row['3PM']),
-                        int(row['REB']),
-                        int(row['AST']),
-                        int(row['STL']),
-                        int(row['BLK']),
-                        int(row['PTS']),
-                        int(row['TOTAL_POINTS']),
-                    )
+                await conn.executemany(
+                    """
+                    INSERT INTO team_rankings_averages
+                        (scoring_period_id, date, team_id, team_name,
+                         rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
+                         rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                    ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
+                        team_name   = EXCLUDED.team_name,
+                        rk_fg_pct   = EXCLUDED.rk_fg_pct,
+                        rk_ft_pct   = EXCLUDED.rk_ft_pct,
+                        rk_three_pm = EXCLUDED.rk_three_pm,
+                        rk_reb      = EXCLUDED.rk_reb,
+                        rk_ast      = EXCLUDED.rk_ast,
+                        rk_stl      = EXCLUDED.rk_stl,
+                        rk_blk      = EXCLUDED.rk_blk,
+                        rk_pts      = EXCLUDED.rk_pts,
+                        rk_total    = EXCLUDED.rk_total
+                    """,
+                    [
+                        (
+                            scoring_period_id, snap_date,
+                            int(row['team_id']), str(row['team_name']),
+                            int(row['FG%']), int(row['FT%']), int(row['3PM']),
+                            int(row['REB']), int(row['AST']), int(row['STL']),
+                            int(row['BLK']), int(row['PTS']), int(row['TOTAL_POINTS']),
+                        )
+                        for _, row in rankings_df.iterrows()
+                    ],
+                )
             logger.info(f"Upserted team_rankings_averages for scoring_period_id={scoring_period_id}")
         except Exception as e:
             logger.error(f"Failed to upsert team_rankings_averages: {e}")
@@ -109,40 +105,36 @@ class DBService:
         snap_date = _SEASON_START + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
-                for _, row in rankings_totals_df.iterrows():
-                    await conn.execute(
-                        """
-                        INSERT INTO team_rankings_totals
-                            (scoring_period_id, date, team_id, team_name,
-                             rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
-                             rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
-                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-                        ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
-                            team_name   = EXCLUDED.team_name,
-                            rk_fg_pct   = EXCLUDED.rk_fg_pct,
-                            rk_ft_pct   = EXCLUDED.rk_ft_pct,
-                            rk_three_pm = EXCLUDED.rk_three_pm,
-                            rk_reb      = EXCLUDED.rk_reb,
-                            rk_ast      = EXCLUDED.rk_ast,
-                            rk_stl      = EXCLUDED.rk_stl,
-                            rk_blk      = EXCLUDED.rk_blk,
-                            rk_pts      = EXCLUDED.rk_pts,
-                            rk_total    = EXCLUDED.rk_total
-                        """,
-                        scoring_period_id,
-                        snap_date,
-                        int(row['team_id']),
-                        str(row['team_name']),
-                        int(row['FG%']),
-                        int(row['FT%']),
-                        int(row['3PM']),
-                        int(row['REB']),
-                        int(row['AST']),
-                        int(row['STL']),
-                        int(row['BLK']),
-                        int(row['PTS']),
-                        int(row['TOTAL_POINTS']),
-                    )
+                await conn.executemany(
+                    """
+                    INSERT INTO team_rankings_totals
+                        (scoring_period_id, date, team_id, team_name,
+                         rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
+                         rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                    ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
+                        team_name   = EXCLUDED.team_name,
+                        rk_fg_pct   = EXCLUDED.rk_fg_pct,
+                        rk_ft_pct   = EXCLUDED.rk_ft_pct,
+                        rk_three_pm = EXCLUDED.rk_three_pm,
+                        rk_reb      = EXCLUDED.rk_reb,
+                        rk_ast      = EXCLUDED.rk_ast,
+                        rk_stl      = EXCLUDED.rk_stl,
+                        rk_blk      = EXCLUDED.rk_blk,
+                        rk_pts      = EXCLUDED.rk_pts,
+                        rk_total    = EXCLUDED.rk_total
+                    """,
+                    [
+                        (
+                            scoring_period_id, snap_date,
+                            int(row['team_id']), str(row['team_name']),
+                            int(row['FG%']), int(row['FT%']), int(row['3PM']),
+                            int(row['REB']), int(row['AST']), int(row['STL']),
+                            int(row['BLK']), int(row['PTS']), int(row['TOTAL_POINTS']),
+                        )
+                        for _, row in rankings_totals_df.iterrows()
+                    ],
+                )
             logger.info(f"Upserted team_rankings_totals for scoring_period_id={scoring_period_id}")
         except Exception as e:
             logger.error(f"Failed to upsert team_rankings_totals: {e}")
@@ -154,50 +146,46 @@ class DBService:
         snap_date = _SEASON_START + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
+                rows = []
                 for _, row in totals_df.iterrows():
                     fgm = int(row['FGM'])
                     fga = int(row['FGA'])
                     ftm = int(row['FTM'])
                     fta = int(row['FTA'])
-                    fg_pct = round(fgm / fga, 4) if fga > 0 else 0.0
-                    ft_pct = round(ftm / fta, 4) if fta > 0 else 0.0
-                    await conn.execute(
-                        """
-                        INSERT INTO team_daily_snapshot
-                            (scoring_period_id, date, team_id, team_name,
-                             gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
-                             three_pm, reb, ast, stl, blk, pts)
-                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-                        ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
-                            team_name = EXCLUDED.team_name,
-                            gp        = EXCLUDED.gp,
-                            fgm       = EXCLUDED.fgm,
-                            fga       = EXCLUDED.fga,
-                            fg_pct    = EXCLUDED.fg_pct,
-                            ftm       = EXCLUDED.ftm,
-                            fta       = EXCLUDED.fta,
-                            ft_pct    = EXCLUDED.ft_pct,
-                            three_pm  = EXCLUDED.three_pm,
-                            reb       = EXCLUDED.reb,
-                            ast       = EXCLUDED.ast,
-                            stl       = EXCLUDED.stl,
-                            blk       = EXCLUDED.blk,
-                            pts       = EXCLUDED.pts
-                        """,
-                        scoring_period_id,
-                        snap_date,
-                        int(row['team_id']),
-                        str(row['team_name']),
+                    rows.append((
+                        scoring_period_id, snap_date,
+                        int(row['team_id']), str(row['team_name']),
                         int(row['GP']),
-                        fgm, fga, fg_pct,
-                        ftm, fta, ft_pct,
-                        int(row['3PM']),
-                        int(row['REB']),
-                        int(row['AST']),
-                        int(row['STL']),
-                        int(row['BLK']),
-                        int(row['PTS']),
-                    )
+                        fgm, fga, round(fgm / fga, 4) if fga > 0 else 0.0,
+                        ftm, fta, round(ftm / fta, 4) if fta > 0 else 0.0,
+                        int(row['3PM']), int(row['REB']), int(row['AST']),
+                        int(row['STL']), int(row['BLK']), int(row['PTS']),
+                    ))
+                await conn.executemany(
+                    """
+                    INSERT INTO team_daily_snapshot
+                        (scoring_period_id, date, team_id, team_name,
+                         gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
+                         three_pm, reb, ast, stl, blk, pts)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+                    ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
+                        team_name = EXCLUDED.team_name,
+                        gp        = EXCLUDED.gp,
+                        fgm       = EXCLUDED.fgm,
+                        fga       = EXCLUDED.fga,
+                        fg_pct    = EXCLUDED.fg_pct,
+                        ftm       = EXCLUDED.ftm,
+                        fta       = EXCLUDED.fta,
+                        ft_pct    = EXCLUDED.ft_pct,
+                        three_pm  = EXCLUDED.three_pm,
+                        reb       = EXCLUDED.reb,
+                        ast       = EXCLUDED.ast,
+                        stl       = EXCLUDED.stl,
+                        blk       = EXCLUDED.blk,
+                        pts       = EXCLUDED.pts
+                    """,
+                    rows,
+                )
             logger.info(f"Upserted team_daily_snapshot for scoring_period_id={scoring_period_id}")
         except Exception as e:
             logger.error(f"Failed to upsert team_daily_snapshot: {e}")
@@ -380,6 +368,181 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to fetch snapshots for date range: {e}")
             return None, None, [], []
+
+    async def upsert_estimator_prediction(self, df: pd.DataFrame) -> None:
+        pool = await self._get_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute("DELETE FROM estimator_prediction")
+                    for _, row in df.iterrows():
+                        await conn.execute(
+                            """
+                            INSERT INTO estimator_prediction (
+                                team_id, team_name, as_of_date, projected_total_gp,
+                                estimated_final_fg_pct, estimated_final_ft_pct, estimated_final_three_pm,
+                                estimated_final_reb, estimated_final_ast, estimated_final_stl,
+                                estimated_final_blk, estimated_final_pts,
+                                variance_fg_pct, variance_ft_pct, variance_three_pm,
+                                variance_reb, variance_ast, variance_stl, variance_blk, variance_pts,
+                                nba_avg_pace
+                            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+                            ON CONFLICT (team_id) DO UPDATE SET
+                                team_name = EXCLUDED.team_name,
+                                as_of_date = EXCLUDED.as_of_date,
+                                projected_total_gp = EXCLUDED.projected_total_gp,
+                                estimated_final_fg_pct = EXCLUDED.estimated_final_fg_pct,
+                                estimated_final_ft_pct = EXCLUDED.estimated_final_ft_pct,
+                                estimated_final_three_pm = EXCLUDED.estimated_final_three_pm,
+                                estimated_final_reb = EXCLUDED.estimated_final_reb,
+                                estimated_final_ast = EXCLUDED.estimated_final_ast,
+                                estimated_final_stl = EXCLUDED.estimated_final_stl,
+                                estimated_final_blk = EXCLUDED.estimated_final_blk,
+                                estimated_final_pts = EXCLUDED.estimated_final_pts,
+                                variance_fg_pct = EXCLUDED.variance_fg_pct,
+                                variance_ft_pct = EXCLUDED.variance_ft_pct,
+                                variance_three_pm = EXCLUDED.variance_three_pm,
+                                variance_reb = EXCLUDED.variance_reb,
+                                variance_ast = EXCLUDED.variance_ast,
+                                variance_stl = EXCLUDED.variance_stl,
+                                variance_blk = EXCLUDED.variance_blk,
+                                variance_pts = EXCLUDED.variance_pts,
+                                nba_avg_pace = EXCLUDED.nba_avg_pace
+                            """,
+                            int(row['team_id']),
+                            str(row['team_name']),
+                            row['as_of_date'],
+                            float(row['projected_total_gp']),
+                            float(row['estimated_final_fg_pct']),
+                            float(row['estimated_final_ft_pct']),
+                            float(row['estimated_final_three_pm']),
+                            float(row['estimated_final_reb']),
+                            float(row['estimated_final_ast']),
+                            float(row['estimated_final_stl']),
+                            float(row['estimated_final_blk']),
+                            float(row['estimated_final_pts']),
+                            float(row['variance_fg_pct']),
+                            float(row['variance_ft_pct']),
+                            float(row['variance_three_pm']),
+                            float(row['variance_reb']),
+                            float(row['variance_ast']),
+                            float(row['variance_stl']),
+                            float(row['variance_blk']),
+                            float(row['variance_pts']),
+                            float(row['nba_avg_pace']),
+                        )
+            logger.info("Upserted estimator_prediction")
+        except Exception as e:
+            logger.error(f"Failed to upsert estimator_prediction: {e}")
+
+    async def upsert_estimator_ranking(self, df: pd.DataFrame) -> None:
+        pool = await self._get_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute("DELETE FROM estimator_ranking")
+                    for _, row in df.iterrows():
+                        await conn.execute(
+                            """
+                            INSERT INTO estimator_ranking (
+                                team_id, team_name, rank, total_expected_pts,
+                                expected_pts_fg_pct, expected_pts_ft_pct, expected_pts_three_pm,
+                                expected_pts_reb, expected_pts_ast, expected_pts_stl,
+                                expected_pts_blk, expected_pts_pts, projected_total_gp
+                            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                            ON CONFLICT (team_id) DO UPDATE SET
+                                team_name = EXCLUDED.team_name,
+                                rank = EXCLUDED.rank,
+                                total_expected_pts = EXCLUDED.total_expected_pts,
+                                expected_pts_fg_pct = EXCLUDED.expected_pts_fg_pct,
+                                expected_pts_ft_pct = EXCLUDED.expected_pts_ft_pct,
+                                expected_pts_three_pm = EXCLUDED.expected_pts_three_pm,
+                                expected_pts_reb = EXCLUDED.expected_pts_reb,
+                                expected_pts_ast = EXCLUDED.expected_pts_ast,
+                                expected_pts_stl = EXCLUDED.expected_pts_stl,
+                                expected_pts_blk = EXCLUDED.expected_pts_blk,
+                                expected_pts_pts = EXCLUDED.expected_pts_pts,
+                                projected_total_gp = EXCLUDED.projected_total_gp
+                            """,
+                            int(row['team_id']),
+                            str(row['team_name']),
+                            int(row['rank']),
+                            float(row['total_expected_pts']),
+                            float(row['expected_pts_fg_pct']),
+                            float(row['expected_pts_ft_pct']),
+                            float(row['expected_pts_three_pm']),
+                            float(row['expected_pts_reb']),
+                            float(row['expected_pts_ast']),
+                            float(row['expected_pts_stl']),
+                            float(row['expected_pts_blk']),
+                            float(row['expected_pts_pts']),
+                            float(row['projected_total_gp']),
+                        )
+            logger.info("Upserted estimator_ranking")
+        except Exception as e:
+            logger.error(f"Failed to upsert estimator_ranking: {e}")
+
+    async def upsert_estimator_rank_probability(self, df: pd.DataFrame) -> None:
+        pool = await self._get_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute("DELETE FROM estimator_rank_probability")
+                    await conn.executemany(
+                        """
+                        INSERT INTO estimator_rank_probability (team_id, team_name, rank, prob)
+                        VALUES ($1, $2, $3, $4)
+                        """,
+                        [
+                            (int(row['team_id']), str(row['team_name']), int(row['rank']), float(row['prob']))
+                            for _, row in df.iterrows()
+                        ],
+                    )
+            logger.info("Upserted estimator_rank_probability")
+        except Exception as e:
+            logger.error(f"Failed to upsert estimator_rank_probability: {e}")
+
+    async def get_estimator_latest(self) -> dict:
+        pool = await self._get_pool()
+        if pool is None:
+            return {}
+        try:
+            async with pool.acquire() as conn:
+                predictions = await conn.fetch(
+                    "SELECT * FROM estimator_prediction ORDER BY team_id"
+                )
+                rankings = await conn.fetch(
+                    "SELECT * FROM estimator_ranking ORDER BY rank"
+                )
+                rank_probs = await conn.fetch(
+                    "SELECT * FROM estimator_rank_probability ORDER BY team_id, rank"
+                )
+                return {
+                    "predictions": [dict(r) for r in predictions],
+                    "rankings": [dict(r) for r in rankings],
+                    "rank_probabilities": [dict(r) for r in rank_probs],
+                }
+        except Exception as e:
+            logger.error(f"Failed to fetch estimator latest: {e}")
+            return {}
+
+    async def estimator_has_data(self) -> bool:
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        try:
+            async with pool.acquire() as conn:
+                count = await conn.fetchval("SELECT COUNT(*) FROM estimator_ranking")
+                return (count or 0) > 0
+        except Exception as e:
+            logger.error(f"Failed to check estimator data: {e}")
+            return False
 
     async def close(self) -> None:
         if self._pool is not None:
