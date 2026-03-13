@@ -21,5 +21,6 @@ dependencies = [
     "pdfplumber>=0.11.0",
     "psycopg2-binary>=2.9.11",
     "asyncpg>=0.30.0",
+    "numpy>=1.24.0",
 ]
 

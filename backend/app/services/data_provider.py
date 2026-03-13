@@ -78,6 +78,33 @@ class DataProvider:
                     return self.cache_manager.totals_cache['data']
                 return await self._fallback_from_db()
 
+    async def sync_db_now(self) -> bool:
+        """Fetch from ESPN and synchronously await the DB sync. Returns True if new data was written."""
+        async with self._fetch_lock:
+            try:
+                response = await self._client.get(self.espn_standings_url)
+                response.raise_for_status()
+                api_data = response.json()
+                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
+                scoring_period_id = api_data.get('scoringPeriodId', 0)
+                self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
+                self.cache_manager.totals_cache['data'] = totals_df
+                self.cache_manager.totals_cache['raw'] = api_data
+                self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
+                self.cache_manager.totals_cache['data_date'] = None
+            except Exception as e:
+                self.logger.error(f"sync_db_now: ESPN fetch failed: {e}")
+                return False
+
+        completed_period = scoring_period_id - 1
+        max_snap = await self.db_service.get_db_max_scoring_period('team_daily_snapshot')
+        if max_snap >= completed_period:
+            self.logger.info(f"sync_db_now: snapshot already current (period {completed_period}), skipping")
+            return False
+
+        await self._sync_db_if_needed(scoring_period_id, totals_df)
+        return True
+
     async def _fallback_from_db(self) -> pd.DataFrame:
         """Build a totals DataFrame from the latest DB snapshot. Stores data_date in cache."""
         snap_date, rows = await self.db_service.get_latest_snapshot()

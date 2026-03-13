@@ -13,12 +13,14 @@ from app.routes.league import router as league_router
 from app.routes.analytics import router as analytics_router
 from app.routes.players import router as players_router
 from app.routes.injuries import router as injuries_router
+from app.routes.estimator import router as estimator_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
 from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services import injury_service
+from app.services import estimator_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -40,6 +42,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Fantasy League Dashboard API")
     await injury_service.initialize()
     asyncio.create_task(injury_service.start_scheduler())
+    asyncio.create_task(estimator_scheduler.start_scheduler())
     yield
     # Shutdown
     try:
@@ -83,6 +86,7 @@ app.include_router(league_router, prefix="/api/league", tags=["League"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(players_router, prefix="/api/players", tags=["Players"])
 app.include_router(injuries_router, prefix="/api/injuries", tags=["Injuries"])
+app.include_router(estimator_router, prefix="/api/estimator", tags=["Estimator"])
 
 
 
