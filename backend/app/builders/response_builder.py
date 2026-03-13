@@ -8,27 +8,41 @@ from app.models import (
 )
 from app.services.data_transformer import SLOT_CAPS
 from app.utils.constants import RANKING_CATEGORIES
+from app.config import settings
 
 
 class ResponseBuilder:
     """Transforms data into API response objects (pure data transformation)"""
     
-    def build_rankings_response(self, rankings_df: pd.DataFrame,
+    def build_rankings_response(self, averages_rankings_df: pd.DataFrame,
+                              totals_rankings_df: pd.DataFrame,
                               sort_by: Optional[str] = None,
                               order: str = "asc",
-                              data_date=None) -> LeagueRankings:
-        """Build LeagueRankings response from rankings DataFrame"""
-        sort_by = "RANK" if sort_by is None else sort_by.upper()
+                              data_date=None,
+                              date_range_start=None,
+                              date_range_end=None,
+                              actual_start_date=None,
+                              actual_end_date=None) -> LeagueRankings:
+        """Build LeagueRankings response from averages and totals rankings DataFrames"""
+        sort_col = "RANK" if sort_by is None else sort_by.upper()
         ascending = order == "asc"
-        rankings_df = rankings_df.sort_values(sort_by, ascending=ascending)
 
-        rankings = [self._create_ranking_stats(row) for _, row in rankings_df.iterrows()]
+        averages_rankings_df = averages_rankings_df.sort_values(sort_col, ascending=ascending)
+        totals_rankings_df = totals_rankings_df.sort_values(sort_col, ascending=ascending)
+
+        averages_rankings = [self._create_ranking_stats(row) for _, row in averages_rankings_df.iterrows()]
+        totals_rankings = [self._create_ranking_stats(row) for _, row in totals_rankings_df.iterrows()]
 
         return LeagueRankings(
-            rankings=rankings,
+            averages_rankings=averages_rankings,
+            totals_rankings=totals_rankings,
             categories=RANKING_CATEGORIES + ['TOTAL_POINTS'],
             last_updated=datetime.now(),
             data_date=data_date,
+            date_range_start=date_range_start,
+            date_range_end=date_range_end,
+            actual_start_date=actual_start_date,
+            actual_end_date=actual_end_date,
         )
     
     def build_team_detail_response(self, team_id: int, totals_df: pd.DataFrame,
@@ -91,11 +105,13 @@ class ResponseBuilder:
             league_averages=league_averages,
             last_updated=datetime.now(),
             data_date=data_date,
+            season_start=settings.season_start,
         )
     
     def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],
                              normalized_data: List[List[float]], ranks_data: List[List[int]],
-                             data_date=None) -> HeatmapData:
+                             data_date=None, date_range_start=None, date_range_end=None,
+                             actual_start_date=None, actual_end_date=None) -> HeatmapData:
         """Build HeatmapData response from prepared data"""
         team_objects = [Team(team_id=team['team_id'], team_name=team['team_name'])
                        for team in teams]
@@ -108,6 +124,10 @@ class ResponseBuilder:
             normalized_data=normalized_data,
             ranks_data=ranks_data,
             data_date=data_date,
+            date_range_start=date_range_start,
+            date_range_end=date_range_end,
+            actual_start_date=actual_start_date,
+            actual_end_date=actual_end_date,
         )
     
     def build_league_shots_response(self, shots_data: List[Dict], data_date=None) -> LeagueShotsData:

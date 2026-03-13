@@ -56,23 +56,23 @@ def test_get_rankings_default():
 def test_get_rankings_with_sort_by(sort_by):
     """Test that the rankings are sorted by the sort_by column, order default is asc"""
     league_rankings = _get_valid_rankings(sort_by=sort_by)
-    expected_sorted = sorted(league_rankings.rankings, key=lambda x: getattr(x, sort_by_to_attribute[sort_by.upper()]), reverse=True)
-    assert league_rankings.rankings == expected_sorted
+    expected_sorted = sorted(league_rankings.averages_rankings, key=lambda x: getattr(x, sort_by_to_attribute[sort_by.upper()]), reverse=False)
+    assert league_rankings.averages_rankings == expected_sorted
 
 @pytest.mark.parametrize("order", ["asc", "desc"])
 def test_get_rankings_with_order_without_sort_by(order):
     """Test that the rankings are sorted by the rank column, order default is asc"""
     league_rankings = _get_valid_rankings(order=order)
-    expected_sorted = sorted(league_rankings.rankings, key=lambda x: getattr(x, "rank"), reverse=order == "desc")
-    assert league_rankings.rankings == expected_sorted
+    expected_sorted = sorted(league_rankings.averages_rankings, key=lambda x: getattr(x, "rank"), reverse=order == "desc")
+    assert league_rankings.averages_rankings == expected_sorted
 
 @pytest.mark.parametrize("sort_by", ["rank", "total_points", "pts"])
 @pytest.mark.parametrize("order", ["asc", "desc"])
 def test_get_rankings_with_order_and_sort_by(sort_by, order):
     """Test that the rankings are sorted by the sort_by column, order default is asc"""
     league_rankings = _get_valid_rankings(sort_by=sort_by, order=order)
-    expected_sorted = sorted(league_rankings.rankings, key=lambda x: getattr(x, sort_by_to_attribute[sort_by.upper()]), reverse=order == "desc")
-    assert league_rankings.rankings == expected_sorted
+    expected_sorted = sorted(league_rankings.averages_rankings, key=lambda x: getattr(x, sort_by_to_attribute[sort_by.upper()]), reverse=order == "desc")
+    assert league_rankings.averages_rankings == expected_sorted
 
 def test_get_rankings_with_invalid_sort_by():
     """Test that invalid sort_by returns 422 status code"""

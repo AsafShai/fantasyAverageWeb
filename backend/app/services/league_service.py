@@ -1,6 +1,7 @@
 import logging
-from datetime import datetime
-from typing import Dict, List
+import pandas as pd
+from datetime import date
+from typing import Dict, List, Optional
 from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats, RankingStats
 from app.services.data_provider import DataProvider
 from app.services.stats_calculator import StatsCalculator
@@ -48,8 +49,11 @@ class LeagueService:
             data_date=self.data_provider.get_data_date(),
         )
     
-    async def get_heatmap_data(self) -> HeatmapData:
+    async def get_heatmap_data(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> HeatmapData:
         """Get data for heatmap visualization"""
+        if start_date is not None and end_date is not None:
+            return await self._get_heatmap_for_range(start_date, end_date)
+
         averages_df = await self.data_provider.get_averages_df()
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
@@ -73,6 +77,61 @@ class LeagueService:
             normalized_data=normalized_data,
             ranks_data=ranks_data,
             data_date=self.data_provider.get_data_date(),
+        )
+
+    async def _get_heatmap_for_range(self, start_date: date, end_date: date) -> HeatmapData:
+        from app.services.ranking_service import RankingService
+        from app.services.data_transformer import DataTransformer
+
+        actual_end_date, actual_start_date, rows_end, rows_start = \
+            await self.data_provider.db_service.get_snapshots_for_date_range(start_date, end_date)
+
+        if actual_end_date is None or not rows_end:
+            raise ResourceNotFoundError("No data available for the requested date range")
+
+        ranking_service = RankingService()
+        end_df = pd.DataFrame(rows_end)
+        start_df = pd.DataFrame(rows_start) if rows_start else None
+        delta_df = ranking_service._compute_delta(end_df, start_df)
+
+        averages_rankings_df = ranking_service._build_averages_rankings_df(delta_df)
+        rankings_df = averages_rankings_df.sort_values(by='TOTAL_POINTS', ascending=False)
+
+        transformer = DataTransformer()
+        averages_df = pd.DataFrame()
+        averages_df['team_id'] = delta_df['team_id']
+        averages_df['team_name'] = delta_df['team_name']
+        averages_df['GP'] = delta_df['gp']
+        averages_df['FGM'] = delta_df['fgm']
+        averages_df['FGA'] = delta_df['fga']
+        averages_df['FTM'] = delta_df['ftm']
+        averages_df['FTA'] = delta_df['fta']
+        averages_df['FG%'] = delta_df['fg_pct']
+        averages_df['FT%'] = delta_df['ft_pct']
+        averages_df['3PM'] = delta_df['three_pm']
+        averages_df['REB'] = delta_df['reb']
+        averages_df['AST'] = delta_df['ast']
+        averages_df['STL'] = delta_df['stl']
+        averages_df['BLK'] = delta_df['blk']
+        averages_df['PTS'] = delta_df['pts']
+        averages_df = transformer.totals_to_averages_df(averages_df)
+
+        sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
+
+        teams_data = self._extract_teams_data(sorted_averages_df)
+        categories_data = self._extract_categories_data(sorted_averages_df)
+        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df)
+        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df)
+
+        return self.response_builder.build_heatmap_response(
+            teams=teams_data,
+            categories=categories_data,
+            normalized_data=normalized_data,
+            ranks_data=ranks_data,
+            date_range_start=start_date,
+            date_range_end=end_date,
+            actual_start_date=actual_start_date,
+            actual_end_date=actual_end_date,
         )
     
     async def get_league_shots_data(self) -> LeagueShotsData:
