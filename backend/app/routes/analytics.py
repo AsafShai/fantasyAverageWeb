@@ -5,7 +5,8 @@ from app.services.league_service import LeagueService
 from app.services.db_service import DBService
 from typing import Annotated, Optional
 from app.exceptions import ResourceNotFoundError
-from datetime import date as date_type
+from datetime import date, date as date_type
+from app.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -19,10 +20,26 @@ _SOURCE_TO_TABLE = {
 }
 
 @router.get("/heatmap", response_model=HeatmapData)
-async def get_heatmap(league_service: LeagueServiceDep):
+async def get_heatmap(
+    league_service: LeagueServiceDep,
+    start_date: Optional[date] = Query(None, description="Start date for date range filter"),
+    end_date: Optional[date] = Query(None, description="End date for date range filter"),
+):
     """Get heatmap data for visualization"""
     try:
-        return await league_service.get_heatmap_data()
+        if (start_date is None) != (end_date is None):
+            raise HTTPException(status_code=422, detail="Both start_date and end_date must be provided together")
+        if start_date is not None and end_date is not None:
+            if start_date >= end_date:
+                raise HTTPException(status_code=422, detail="start_date must be before end_date")
+            if start_date < settings.season_start:
+                raise HTTPException(status_code=422, detail=f"start_date cannot be before season start ({settings.season_start})")
+            if end_date > date.today():
+                raise HTTPException(status_code=422, detail="end_date cannot be in the future")
+
+        return await league_service.get_heatmap_data(start_date=start_date, end_date=end_date)
+    except HTTPException:
+        raise
     except ResourceNotFoundError as e:
         logger.warning(f"Invalid request for heatmap: {e}")
         raise HTTPException(status_code=404, detail=str(e))

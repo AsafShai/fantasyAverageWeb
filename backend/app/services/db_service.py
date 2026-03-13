@@ -7,7 +7,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_SEASON_START = date(2025, 10, 22)
+_SEASON_START = settings.season_start
 
 _RANKINGS_COL_MAP = {
     'FG%': 'rk_fg_pct',
@@ -330,6 +330,56 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to fetch averages over time: {e}")
             return []
+
+    async def get_snapshots_for_date_range(self, start_date: date, end_date: date):
+        """
+        Returns (actual_end_date, actual_start_date, rows_end, rows_start) for delta calculation.
+        - actual_end_date: closest date <= end_date in DB
+        - actual_start_date: closest date >= start_date in DB (None if no data at or after start)
+        - rows_start is empty list if no snapshot >= start_date exists (treat as zeros)
+        - Returns (None, None, [], []) if no end snapshot found
+        """
+        pool = await self._get_pool()
+        if pool is None:
+            return None, None, [], []
+        try:
+            async with pool.acquire() as conn:
+                end_row = await conn.fetchrow(
+                    "SELECT MAX(date) AS d FROM team_daily_snapshot WHERE date <= $1", end_date
+                )
+                actual_end_date = end_row['d'] if end_row else None
+                if actual_end_date is None:
+                    return None, None, [], []
+
+                start_row = await conn.fetchrow(
+                    "SELECT MIN(date) AS d FROM team_daily_snapshot WHERE date >= $1", start_date
+                )
+                actual_start_date = start_row['d'] if start_row else None
+
+                rows_end = await conn.fetch(
+                    """
+                    SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
+                           three_pm, reb, ast, stl, blk, pts
+                    FROM team_daily_snapshot WHERE date = $1
+                    """,
+                    actual_end_date
+                )
+
+                rows_start = []
+                if actual_start_date is not None:
+                    rows_start = await conn.fetch(
+                        """
+                        SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
+                               three_pm, reb, ast, stl, blk, pts
+                        FROM team_daily_snapshot WHERE date = $1
+                        """,
+                        actual_start_date
+                    )
+
+                return actual_end_date, actual_start_date, [dict(r) for r in rows_end], [dict(r) for r in rows_start]
+        except Exception as e:
+            logger.error(f"Failed to fetch snapshots for date range: {e}")
+            return None, None, [], []
 
     async def close(self) -> None:
         if self._pool is not None:

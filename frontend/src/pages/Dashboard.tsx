@@ -15,7 +15,7 @@ const Dashboard = () => {
     return <ErrorMessage message="Failed to load dashboard data" />
   }
 
-  const topTeams = rankings?.rankings.slice(0, 5) || []
+  const topTeams = rankings?.averages_rankings.slice(0, 5) || []
 
   return (
     <div className="space-y-6">
@@ -112,7 +112,7 @@ const Dashboard = () => {
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Top 5 Teams (average)</h2>
         <div className="space-y-3">
-          {topTeams.map((team, index) => (
+          {topTeams.map((team: import('../types/api').RankingStats, index: number) => (
             <div
               key={team.team.team_id}
               className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
