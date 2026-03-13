@@ -1,17 +1,18 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource } from '../../types/api';
+import type { EstimatorResults } from '../../types/estimator';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator'],
   endpoints: (builder) => ({
-    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string }>({
-      query: ({ sortBy, order = 'asc' } = {}) => ({
+    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string }>({
+      query: ({ sortBy, order = 'asc', startDate, endDate } = {}) => ({
         url: '/rankings',
-        params: { sort_by: sortBy, order },
+        params: { sort_by: sortBy, order, ...(startDate ? { start_date: startDate } : {}), ...(endDate ? { end_date: endDate } : {}) },
       }),
       providesTags: ['Rankings'],
     }),
@@ -26,8 +27,11 @@ export const fantasyApi = createApi({
       query: () => '/league/summary',
       providesTags: ['League'],
     }),
-    getHeatmapData: builder.query<HeatmapData, void>({
-      query: () => '/analytics/heatmap',
+    getHeatmapData: builder.query<HeatmapData, { startDate?: string; endDate?: string }>({
+      query: ({ startDate, endDate } = {}) => ({
+        url: '/analytics/heatmap',
+        params: { ...(startDate ? { start_date: startDate } : {}), ...(endDate ? { end_date: endDate } : {}) },
+      }),
       providesTags: ['Heatmap'],
     }),
     // getCategoryRankings: builder.query<any, string>({
@@ -63,6 +67,10 @@ export const fantasyApi = createApi({
         params: { source, ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds.join(',') } : {}) },
       }),
     }),
+    getEstimatorResults: builder.query<EstimatorResults, void>({
+      query: () => '/estimator/results',
+      providesTags: ['Estimator'],
+    }),
   }),
 });
 
@@ -78,4 +86,5 @@ export const {
   useGetTradeSuggestionsQuery,
   useGetAllPlayersQuery,
   useGetRankingsOverTimeQuery,
+  useGetEstimatorResultsQuery,
 } = fantasyApi;
