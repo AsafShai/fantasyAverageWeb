@@ -6,6 +6,7 @@ import Shots from './pages/Shots'
 import Teams from './pages/Teams'
 import TeamDetail from './pages/TeamDetail'
 import Analytics from './pages/Analytics'
+import Estimator from './pages/Estimator'
 import { Trade } from './pages/Trade'
 import Players from './pages/Players'
 import Injuries from './pages/Injuries'
@@ -22,6 +23,7 @@ function App() {
           <Route path="teams" element={<Teams />} />
           <Route path="team/:teamId" element={<TeamDetail />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="estimator" element={<Estimator />} />
           <Route path="trade" element={<Trade />} />
           <Route path="players" element={<Players />} />
           <Route path="injuries" element={<Injuries />} />
