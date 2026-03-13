@@ -5,10 +5,15 @@ from .base import Team
 from .stats import RankingStats, AverageStats, TeamShotStats
 
 class LeagueRankings(BaseModel):
-    rankings: List[RankingStats]
+    averages_rankings: List[RankingStats]
+    totals_rankings: List[RankingStats]
     categories: List[str]
     last_updated: datetime
     data_date: Optional[date] = None
+    date_range_start: Optional[date] = None
+    date_range_end: Optional[date] = None
+    actual_start_date: Optional[date] = None
+    actual_end_date: Optional[date] = None
 
 class LeagueSummary(BaseModel):
     total_teams: int
@@ -19,6 +24,7 @@ class LeagueSummary(BaseModel):
     league_averages: Optional[AverageStats] = None
     last_updated: datetime
     data_date: Optional[date] = None
+    season_start: Optional[date] = None
 
 class LeagueShotsData(BaseModel):
     shots: List[TeamShotStats]
@@ -32,6 +38,10 @@ class HeatmapData(BaseModel):
     normalized_data: List[List[float]]
     ranks_data: List[List[int]]
     data_date: Optional[date] = None
+    date_range_start: Optional[date] = None
+    date_range_end: Optional[date] = None
+    actual_start_date: Optional[date] = None
+    actual_end_date: Optional[date] = None
 
 class TeamTimeSeriesPoint(BaseModel):
     date: date
