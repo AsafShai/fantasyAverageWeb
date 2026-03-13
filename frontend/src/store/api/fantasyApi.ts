@@ -8,10 +8,10 @@ export const fantasyApi = createApi({
   }),
   tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players'],
   endpoints: (builder) => ({
-    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string }>({
-      query: ({ sortBy, order = 'asc' } = {}) => ({
+    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string }>({
+      query: ({ sortBy, order = 'asc', startDate, endDate } = {}) => ({
         url: '/rankings',
-        params: { sort_by: sortBy, order },
+        params: { sort_by: sortBy, order, ...(startDate ? { start_date: startDate } : {}), ...(endDate ? { end_date: endDate } : {}) },
       }),
       providesTags: ['Rankings'],
     }),
@@ -26,8 +26,11 @@ export const fantasyApi = createApi({
       query: () => '/league/summary',
       providesTags: ['League'],
     }),
-    getHeatmapData: builder.query<HeatmapData, void>({
-      query: () => '/analytics/heatmap',
+    getHeatmapData: builder.query<HeatmapData, { startDate?: string; endDate?: string }>({
+      query: ({ startDate, endDate } = {}) => ({
+        url: '/analytics/heatmap',
+        params: { ...(startDate ? { start_date: startDate } : {}), ...(endDate ? { end_date: endDate } : {}) },
+      }),
       providesTags: ['Heatmap'],
     }),
     // getCategoryRankings: builder.query<any, string>({

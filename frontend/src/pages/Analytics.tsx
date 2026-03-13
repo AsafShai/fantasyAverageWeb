@@ -1,5 +1,5 @@
 import { useState, type JSX } from 'react'
-import { useGetHeatmapDataQuery } from '../store/api/fantasyApi'
+import { useGetHeatmapDataQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DataDateBadge from '../components/DataDateBadge'
@@ -22,12 +22,22 @@ interface TeamDataItem {
   ranks_data: number[]
 }
 
+const formatDate = (d: string) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
 const Analytics = () => {
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [highlightedTeamId, setHighlightedTeamId] = useState<number | null>(null)
-  const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery()
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
+  const [dateError, setDateError] = useState<string>('')
+  const [appliedDates, setAppliedDates] = useState<{ startDate?: string; endDate?: string }>({})
+
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery(appliedDates)
+  const { data: summary } = useGetLeagueSummaryQuery()
 
   const handleTeamClick = (teamId: number) => {
     setHighlightedTeamId(prev => prev === teamId ? null : teamId)
@@ -42,8 +52,48 @@ const Analytics = () => {
     }
   }
 
+  const handleStartDate = (val: string) => {
+    setStartDate(val)
+    validateDates(val, endDate)
+  }
+
+  const handleEndDate = (val: string) => {
+    setEndDate(val)
+    validateDates(startDate, val)
+  }
+
+  const validateDates = (start: string, end: string) => {
+    if (!start || !end) {
+      setDateError('')
+      return
+    }
+    if (start >= end) {
+      setDateError('Start date must be before end date')
+    } else {
+      setDateError('')
+    }
+  }
+
+  const applyDates = () => {
+    if (!startDate || !endDate || dateError) return
+    setAppliedDates({ startDate, endDate })
+  }
+
+  const clearDates = () => {
+    setStartDate('')
+    setEndDate('')
+    setDateError('')
+    setAppliedDates({})
+  }
+
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message="Failed to load analytics data" />
+
+  const isDateRangeActive = appliedDates.startDate && appliedDates.endDate
+  const hasDateMismatch = heatmapData && isDateRangeActive && (
+    (heatmapData.actual_start_date && heatmapData.actual_start_date !== heatmapData.date_range_start) ||
+    (heatmapData.actual_end_date && heatmapData.actual_end_date !== heatmapData.date_range_end)
+  )
 
   const getSortedHeatmapData = (heatmapData: HeatmapData): SortedHeatmapData | null => {
     if (!heatmapData) return null
@@ -96,20 +146,83 @@ const Analytics = () => {
 
   const renderHeatmapTable = (data: HeatmapData | undefined, title: string, description: string): JSX.Element | null => {
     if (!data) return null
-    
+
     const sortedData: SortedHeatmapData | null = getSortedHeatmapData(data)
     if (!sortedData) return null
 
+    const titleWithRange = isDateRangeActive
+      ? <>{title}<span className="ml-2 text-lg font-normal text-gray-500">– {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}</span></>
+      : title
+
     return (
       <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-4">{title}</h2>
+        <h2 className="text-xl font-semibold mb-2">{titleWithRange}</h2>
+
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-600 font-medium">From</label>
+            <input
+              type="date"
+              value={startDate}
+              min={summary?.season_start}
+              max={endDate || today}
+              onChange={(e) => handleStartDate(e.target.value)}
+              className="px-3 py-1.5 rounded-md text-sm text-gray-800 bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-600 font-medium">To</label>
+              <button
+                onClick={() => handleEndDate(today)}
+                className="text-xs text-blue-500 hover:text-blue-700 underline"
+              >
+                Today
+              </button>
+            </div>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate || summary?.season_start}
+              max={today}
+              onChange={(e) => handleEndDate(e.target.value)}
+              className="px-3 py-1.5 rounded-md text-sm text-gray-800 bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+          <button
+            onClick={applyDates}
+            disabled={!startDate || !endDate || !!dateError}
+            className="px-4 py-1.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Apply
+          </button>
+          {(startDate || endDate) && (
+            <button
+              onClick={clearDates}
+              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-md transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {dateError && (
+          <p className="mb-3 text-sm text-red-600">{dateError}</p>
+        )}
+
+        {hasDateMismatch && (
+          <div className="mb-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+            Note: closest available data used - showing {formatDate(heatmapData!.actual_start_date!)} - {formatDate(heatmapData!.actual_end_date!)}
+          </div>
+        )}
+
         <p className="text-gray-600 mb-4">{description}</p>
-        
+
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead>
               <tr>
-                <th 
+                <th
                   className="px-4 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors duration-150"
                   onClick={() => handleSort('team')}
                 >
@@ -205,7 +318,7 @@ const Analytics = () => {
           <h1 className="text-2xl font-bold text-gray-900">League Analytics</h1>
           <DataDateBadge dataDate={heatmapData?.data_date} />
         </div>
-        
+
         {renderHeatmapTable(
           heatmapData,
           "Performance Heatmap",

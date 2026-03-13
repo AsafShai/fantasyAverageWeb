@@ -1,3 +1,4 @@
+from datetime import date
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
@@ -7,9 +8,10 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, alias="PORT")
     environment: str = Field(default="development", alias="ENVIRONMENT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-    
+
     season_id: int = Field(alias="SEASON_ID")
     league_id: int = Field(alias="LEAGUE_ID")
+    season_start: date = Field(default=date(2025, 10, 22), alias="SEASON_START")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     model_config = SettingsConfigDict(
