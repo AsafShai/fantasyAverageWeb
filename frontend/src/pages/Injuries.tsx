@@ -14,7 +14,7 @@ interface Filters {
 }
 
 export default function Injuries() {
-  const { records, loading, error, notifications } = useInjuryData();
+  const { records, loading, error, notifications, lastReportTime } = useInjuryData();
   const [filters, setFilters] = useState<Filters>({ search: '', teams: [], statuses: [] });
   const [notifOpen, setNotifOpen] = useState(false);
   const debouncedSearch = useDebounce(filters.search, 300);
@@ -91,7 +91,14 @@ export default function Injuries() {
 
             {/* Left panel — filters + table */}
             <div className="flex-1 min-w-0">
-              <InjuryFilters filters={filters} onChange={setFilters} teams={teams} />
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4 sm:flex-nowrap">
+                <InjuryFilters filters={filters} onChange={setFilters} teams={teams} />
+                {lastReportTime && (
+                  <span className="text-xs text-gray-400 shrink-0">
+                    Last report: {new Date(lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
               <div className="injury-table-scroll">
                 <InjuryTable records={filteredRecords} totalCount={records.length} />
               </div>

@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart } from '../../types/api';
 import type { EstimatorResults } from '../../types/estimator';
 
 export const fantasyApi = createApi({
@@ -71,6 +71,12 @@ export const fantasyApi = createApi({
       query: () => '/estimator/results',
       providesTags: ['Estimator'],
     }),
+    getNbaTeamsList: builder.query<NbaTeamInfo[], void>({
+      query: () => '/nba-teams/',
+    }),
+    getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
+      query: (teamId) => `/nba-teams/${teamId}/depthchart`,
+    }),
   }),
 });
 
@@ -87,4 +93,6 @@ export const {
   useGetAllPlayersQuery,
   useGetRankingsOverTimeQuery,
   useGetEstimatorResultsQuery,
+  useGetNbaTeamsListQuery,
+  useGetNbaTeamDepthChartQuery,
 } = fantasyApi;

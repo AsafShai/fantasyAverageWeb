@@ -20,6 +20,12 @@ const Rankings = () => {
 
   const today = new Date().toISOString().split('T')[0]
 
+  function getDateNDaysAgo(n: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().split('T')[0];
+  }
+
   const { data, error, isLoading } = useGetRankingsQuery(appliedDates)
   const { data: summary, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
 
@@ -229,6 +235,22 @@ const Rankings = () => {
                 Clear
               </button>
             )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {[7, 14, 30, 60].map(days => (
+              <button
+                key={days}
+                onClick={() => {
+                  const start = getDateNDaysAgo(days);
+                  setStartDate(start);
+                  setEndDate(today);
+                  setDateError('');
+                }}
+                className="px-2 py-0.5 text-xs rounded bg-blue-500 text-white hover:bg-blue-400 transition-colors"
+              >
+                Last {days}d
+              </button>
+            ))}
           </div>
           {dateError && (
             <p className="mt-2 text-sm text-red-200">{dateError}</p>
