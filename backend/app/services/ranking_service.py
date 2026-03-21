@@ -23,11 +23,10 @@ class RankingService:
         if start_date is not None and end_date is not None:
             return await self._get_rankings_for_range(start_date, end_date, sort_by, order)
 
-        totals_df = await self.data_provider.get_totals_df()
+        totals_df, _, averages_rankings_df = await self.data_provider.get_all_dataframes()
         if totals_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 
-        averages_rankings_df = await self.data_provider.get_rankings_df()
         totals_rankings_df = self._build_totals_rankings_df(totals_df)
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):

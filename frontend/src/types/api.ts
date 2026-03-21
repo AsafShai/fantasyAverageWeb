@@ -216,3 +216,34 @@ export interface RankingsOverTimeResponse {
   data: TeamTimeSeriesPoint[];
 }
 
+export interface NbaTeamInfo {
+  team_id: string;
+  team_name: string;
+  abbreviation: string;
+}
+
+export interface NbaInjury {
+  status: string;
+}
+
+export interface DepthChartPlayer {
+  id: string;
+  display_name: string;
+  short_name: string;
+  injury?: NbaInjury | null;
+}
+
+export interface DepthChartPosition {
+  abbreviation: string;
+  display_name: string;
+  players: DepthChartPlayer[];
+}
+
+export interface TeamDepthChart {
+  team_id: string;
+  team_name: string;
+  team_abbreviation: string;
+  team_logo: string;
+  record: string;
+  positions: DepthChartPosition[];
+}

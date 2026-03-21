@@ -10,6 +10,7 @@ import Estimator from './pages/Estimator'
 import { Trade } from './pages/Trade'
 import Players from './pages/Players'
 import Injuries from './pages/Injuries'
+import NbaTeams from './pages/NbaTeams'
 import NotFound from './pages/NotFound'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
           <Route path="trade" element={<Trade />} />
           <Route path="players" element={<Players />} />
           <Route path="injuries" element={<Injuries />} />
+          <Route path="nba-teams" element={<NbaTeams />} />
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
           <Route path="*" element={<NotFound />} />
         </Route>
