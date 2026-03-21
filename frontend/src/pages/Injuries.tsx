@@ -34,7 +34,6 @@ export default function Injuries() {
         const matchesStatus = filters.statuses.length === 0 || filters.statuses.includes(r.status);
         return matchesSearch && matchesTeam && matchesStatus;
       })
-      .sort((a, b) => b.last_update.localeCompare(a.last_update));
   }, [records, debouncedSearch, filters.teams, filters.statuses]);
 
   return (
