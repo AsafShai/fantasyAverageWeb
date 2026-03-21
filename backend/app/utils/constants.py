@@ -18,38 +18,32 @@ ESPN_COLUMN_MAP = {
     '40': 'MIN'
 }
 
-PRO_TEAM_MAP = {
+PRO_TEAM_MAP: dict[int, str] = {
     0: 'FA',
-    1: 'ATL',
-    2: 'BOS',
-    3: 'NOP',
-    4: 'CHI',
-    5: 'CLE',
-    6: 'DAL',
-    7: 'DEN',
-    8: 'DET',
-    9: 'GSW',
-    10: 'HOU',
-    11: 'IND',
-    12: 'LAC',
-    13: 'LAL',
-    14: 'MIA',
-    15: 'MIL',
-    16: 'MIN',
-    17: 'BKN',
-    18: 'NYK',
-    19: 'ORL',
-    20: 'PHL',
-    21: 'PHO',
-    22: 'POR',
-    23: 'SAC',
-    24: 'SAS',
-    25: 'OKC',
-    26: 'UTA',
-    27: 'WAS',
-    28: 'TOR',
-    29: 'MEM',
-    30: 'CHA'
+    1: 'ATL', 2: 'BOS',  3: 'NOP', 4: 'CHI',  5: 'CLE',
+    6: 'DAL', 7: 'DEN',  8: 'DET', 9: 'GSW', 10: 'HOU',
+    11: 'IND', 12: 'LAC', 13: 'LAL', 14: 'MIA', 15: 'MIL',
+    16: 'MIN', 17: 'BKN', 18: 'NYK', 19: 'ORL', 20: 'PHL',
+    21: 'PHO', 22: 'POR', 23: 'SAC', 24: 'SAS', 25: 'OKC',
+    26: 'UTA', 27: 'WAS', 28: 'TOR', 29: 'MEM', 30: 'CHA',
+}
+
+NBA_TEAM_NAMES: dict[str, str] = {
+    'ATL': 'Atlanta Hawks',          'BOS': 'Boston Celtics',
+    'NOP': 'New Orleans Pelicans',   'CHI': 'Chicago Bulls',
+    'CLE': 'Cleveland Cavaliers',    'DAL': 'Dallas Mavericks',
+    'DEN': 'Denver Nuggets',         'DET': 'Detroit Pistons',
+    'GSW': 'Golden State Warriors',  'HOU': 'Houston Rockets',
+    'IND': 'Indiana Pacers',         'LAC': 'LA Clippers',
+    'LAL': 'Los Angeles Lakers',     'MIA': 'Miami Heat',
+    'MIL': 'Milwaukee Bucks',        'MIN': 'Minnesota Timberwolves',
+    'BKN': 'Brooklyn Nets',          'NYK': 'New York Knicks',
+    'ORL': 'Orlando Magic',          'PHL': 'Philadelphia 76ers',
+    'PHO': 'Phoenix Suns',           'POR': 'Portland Trail Blazers',
+    'SAC': 'Sacramento Kings',       'SAS': 'San Antonio Spurs',
+    'OKC': 'Oklahoma City Thunder',  'UTA': 'Utah Jazz',
+    'WAS': 'Washington Wizards',     'TOR': 'Toronto Raptors',
+    'MEM': 'Memphis Grizzlies',      'CHA': 'Charlotte Hornets',
 }
 
 POSITION_MAP = {

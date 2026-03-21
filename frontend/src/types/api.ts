@@ -218,8 +218,8 @@ export interface RankingsOverTimeResponse {
 
 export interface NbaTeamInfo {
   team_id: string;
-  team_name: string;
   abbreviation: string;
+  team_name: string;
 }
 
 export interface NbaInjury {
