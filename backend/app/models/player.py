@@ -43,6 +43,10 @@ class Player(BaseModel):
     status: str
     injured: bool = False
     fantasy_team_name: Optional[str] = None
+    season_rating: float = 0.0
+    last7_rating: float = 0.0
+    last15_rating: float = 0.0
+    last30_rating: float = 0.0
 
 class PaginatedPlayers(BaseModel):
     players: List[Player]
