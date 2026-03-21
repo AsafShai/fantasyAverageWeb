@@ -16,6 +16,7 @@ const Layout = () => {
     { path: '/players', label: 'Players', icon: '🏀' },
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
+    { path: '/nba-teams', label: 'NBA', icon: '🏟️' },
   ]
 
   const closeMobileMenu = () => setMobileMenuOpen(false)
