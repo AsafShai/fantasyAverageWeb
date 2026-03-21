@@ -13,10 +13,10 @@ const Layout = () => {
     { path: '/shots', label: 'Shots', icon: '🎯' },
     { path: '/analytics', label: 'Analytics', icon: '📈' },
     { path: '/estimator', label: 'Estimator', icon: '🔮' },
-    { path: '/players', label: 'Players', icon: '🏀' },
+    { path: '/players', label: 'Players', icon: '⛹️' },
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
-    { path: '/nba-teams', label: 'NBA', icon: '⛹️' },
+    { path: '/nba-teams', label: 'NBA', icon: '🏀' },
   ]
 
   const closeMobileMenu = () => setMobileMenuOpen(false)
