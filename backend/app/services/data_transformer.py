@@ -42,14 +42,15 @@ class DataTransformer:
             self.logger.warning(f"Error parsing slot usage data: {e}")
         return result
 
-    def raw_all_players_to_df(self, espn_data: Dict, stat_split_type_id: int = 0) -> pd.DataFrame:
+    def raw_all_players_to_df(self, espn_data: Dict, stat_split_type_id: int = 0, fantasy_team_map: Dict[int, str] = None) -> pd.DataFrame:
         """
         Convert ESPN kona_player_info API data to DataFrame (all 500 players including FA/waivers)
         Args:
             espn_data: Raw ESPN API response with 'players' array
             stat_split_type_id: ESPN stat split type (0=season, 1=last7, 2=last15, 3=last30)
+            fantasy_team_map: Optional dict mapping fantasy team_id -> team_name
         Returns:
-            Clean DataFrame with proper columns and types, including status field
+            Clean DataFrame with proper columns and types, including status and injured fields
         """
         try:
             if not espn_data or 'players' not in espn_data:
@@ -59,11 +60,13 @@ class DataTransformer:
             for player_entry in espn_data.get('players', []):
                 player = player_entry.get('player', {})
                 status = player_entry.get('status', 'UNKNOWN')
-                team_id = player_entry.get('onTeamId', 0)                
+                team_id = player_entry.get('onTeamId', 0)
 
                 player_name = player.get('fullName', 'Unknown')
                 pro_team_id = player.get('proTeamId', 0)
                 pro_team = PRO_TEAM_MAP.get(pro_team_id, 'Unknown')
+                injured = bool(player.get('injured', False))
+                fantasy_team_name = (fantasy_team_map or {}).get(team_id)
 
                 positions = "Unknown"
                 if 'eligibleSlots' in player:
@@ -85,7 +88,9 @@ class DataTransformer:
                             'team_id': team_id,
                             'Pro Team': pro_team,
                             'Positions': positions,
-                            'status': status
+                            'status': status,
+                            'injured': injured,
+                            'fantasy_team_name': fantasy_team_name,
                         })
 
                         all_players.append(mapped_stats)
@@ -236,7 +241,7 @@ class DataTransformer:
     
     def _organize_player_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Organize player DataFrame columns in logical order"""
-        info_cols = ['Name', 'team_id', 'Pro Team', 'Positions', 'status']
+        info_cols = ['Name', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name']
         stat_cols = [col for col in df.columns if col not in info_cols]
         available_info_cols = [col for col in info_cols if col in df.columns]
         return df.reindex(columns=available_info_cols + stat_cols)
