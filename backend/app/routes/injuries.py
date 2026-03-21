@@ -54,6 +54,11 @@ async def test_notification():
     return {"ok": True, "notification": notif}
 
 
+@router.get("/status")
+async def get_injury_status():
+    return {"last_report_time": injury_service.last_report_time}
+
+
 @router.get("/stream")
 async def injury_stream(request: Request):
     """SSE endpoint — pushes InjuryNotification events to connected clients."""
@@ -67,10 +72,12 @@ async def injury_stream(request: Request):
         try:
             while True:
                 try:
-                    notification = await asyncio.wait_for(queue.get(), timeout=30.0)
-                    yield f"data: {notification.model_dump_json()}\n\n"
+                    item = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if isinstance(item, dict) and "_event" in item:
+                        yield f"event: {item['_event']}\ndata: {item['data']}\n\n"
+                    else:
+                        yield f"data: {item.model_dump_json()}\n\n"
                 except asyncio.TimeoutError:
-                    # Heartbeat to keep the connection alive
                     yield ": ping\n\n"
         finally:
             if queue in injury_service.sse_subscribers:

@@ -5,6 +5,7 @@ export interface InjuryRecord {
   status: string;
   injury: string;
   last_update: string;
+  game_time_utc?: string | null;
 }
 
 export interface InjuryNotification {

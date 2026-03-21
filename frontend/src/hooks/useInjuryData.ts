@@ -44,10 +44,12 @@ export function useInjuryData(): {
   loading: boolean;
   error: string | null;
   notifications: StoredNotification[];
+  lastReportTime: string | null;
 } {
   const [records, setRecords] = useState<InjuryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastReportTime, setLastReportTime] = useState<string | null>(null);
   const { notifications, loadHistory, addNotification } = useInjuryNotifications();
 
   const fetchAll = useCallback(async () => {
@@ -65,12 +67,16 @@ export function useInjuryData(): {
     }
   }, []);
 
-  // Initial fetch — records + past notifications from backend
+  // Initial fetch — records + past notifications + last report time from backend
   useEffect(() => {
     fetchAll();
     fetch(`${API_BASE}/injuries/notifications`)
       .then(r => r.ok ? r.json() : [])
       .then((past: InjuryNotification[]) => loadHistory(past))
+      .catch(() => {});
+    fetch(`${API_BASE}/injuries/status`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.last_report_time) setLastReportTime(data.last_report_time); })
       .catch(() => {});
   }, [fetchAll, loadHistory]);
 
@@ -92,6 +98,13 @@ export function useInjuryData(): {
       }
     };
 
+    es.addEventListener('fetch_update', (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data as string);
+        setLastReportTime(data.report_time);
+      } catch {}
+    });
+
     es.onerror = () => {
       // Browser auto-reconnects; refresh the full table once the connection is back
       es.addEventListener('open', () => fetchAll(), { once: true });
@@ -100,5 +113,5 @@ export function useInjuryData(): {
     return () => es.close();
   }, [addNotification, fetchAll]);
 
-  return { records, loading, error, notifications };
+  return { records, loading, error, notifications, lastReportTime };
 }
