@@ -14,6 +14,7 @@ from app.routes.analytics import router as analytics_router
 from app.routes.players import router as players_router
 from app.routes.injuries import router as injuries_router
 from app.routes.estimator import router as estimator_router
+from app.routes.nba_teams import router as nba_teams_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
@@ -87,6 +88,7 @@ app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"]
 app.include_router(players_router, prefix="/api/players", tags=["Players"])
 app.include_router(injuries_router, prefix="/api/injuries", tags=["Injuries"])
 app.include_router(estimator_router, prefix="/api/estimator", tags=["Estimator"])
+app.include_router(nba_teams_router, prefix="/api/nba-teams", tags=["NBA Teams"])
 
 
 
