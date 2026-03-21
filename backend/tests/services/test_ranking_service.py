@@ -15,8 +15,7 @@ def ranking_service(sample_rankings_df, sample_totals_df):
         service = RankingService()
         service.data_provider = AsyncMock()
         service.data_provider.get_data_date = MagicMock(return_value=None)
-        service.data_provider.get_totals_df.return_value = sample_totals_df
-        service.data_provider.get_rankings_df.return_value = sample_rankings_df
+        service.data_provider.get_all_dataframes.return_value = (sample_totals_df, None, sample_rankings_df)
         service.response_builder = mock_response_builder.return_value
         return service
 
@@ -31,7 +30,7 @@ async def test_get_league_rankings_success(ranking_service, sample_rankings_df):
     result = await ranking_service.get_league_rankings()
 
     assert result == expected_rankings
-    ranking_service.data_provider.get_totals_df.assert_called_once()
+    ranking_service.data_provider.get_all_dataframes.assert_called_once()
     ranking_service.response_builder.build_rankings_response.assert_called_once()
 
 
@@ -81,7 +80,7 @@ async def test_get_league_rankings_with_sort_by_and_order(ranking_service, sampl
 @pytest.mark.asyncio
 async def test_get_league_rankings_data_provider_returns_none(ranking_service):
     """Test get_league_rankings when data provider returns None"""
-    ranking_service.data_provider.get_totals_df.return_value = None
+    ranking_service.data_provider.get_all_dataframes.return_value = (None, None, None)
 
     with pytest.raises(ResourceNotFoundError, match="Unable to fetch rankings data from ESPN API"):
         await ranking_service.get_league_rankings()
@@ -117,8 +116,7 @@ class TestRankingServiceResponseBuilding:
         with patch('app.services.ranking_service.DataProvider') as mock_data_provider:
             service = RankingService()
             service.data_provider = AsyncMock()
-            service.data_provider.get_totals_df.return_value = sample_totals_df
-            service.data_provider.get_rankings_df.return_value = sample_rankings_df
+            service.data_provider.get_all_dataframes.return_value = (sample_totals_df, None, sample_rankings_df)
             service.data_provider.get_data_date = MagicMock(return_value=None)
             return service
 

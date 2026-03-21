@@ -9,6 +9,7 @@ class InjuryRecord(BaseModel):
     status: str
     injury: str
     last_update: str
+    game_time_utc: str | None = None
 
 
 class InjuryNotification(BaseModel):
