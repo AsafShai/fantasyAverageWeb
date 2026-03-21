@@ -46,10 +46,10 @@ PRO_TEAM_MAP = {
     24: 'SAS',
     25: 'OKC',
     26: 'UTA',
-    27: 'MEM',
+    27: 'WAS',
     28: 'TOR',
-    29: 'CHA',
-    30: 'WAS'
+    29: 'MEM',
+    30: 'CHA'
 }
 
 POSITION_MAP = {

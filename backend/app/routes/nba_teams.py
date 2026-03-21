@@ -37,10 +37,10 @@ NBA_TEAMS: list[dict] = [
     {"team_id": "24", "team_name": "San Antonio Spurs",      "abbreviation": "SAS"},
     {"team_id": "25", "team_name": "Oklahoma City Thunder",  "abbreviation": "OKC"},
     {"team_id": "26", "team_name": "Utah Jazz",              "abbreviation": "UTA"},
-    {"team_id": "27", "team_name": "Memphis Grizzlies",      "abbreviation": "MEM"},
+    {"team_id": "29", "team_name": "Memphis Grizzlies",      "abbreviation": "MEM"},
     {"team_id": "28", "team_name": "Toronto Raptors",        "abbreviation": "TOR"},
-    {"team_id": "29", "team_name": "Charlotte Hornets",      "abbreviation": "CHA"},
-    {"team_id": "30", "team_name": "Washington Wizards",     "abbreviation": "WAS"},
+    {"team_id": "30", "team_name": "Charlotte Hornets",      "abbreviation": "CHA"},
+    {"team_id": "27", "team_name": "Washington Wizards",     "abbreviation": "WAS"},
 ]
 
 _NORMALIZE_RE = re.compile(r"[^a-z0-9]")
