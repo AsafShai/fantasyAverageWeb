@@ -99,7 +99,7 @@ function MultiSelectDropdown({
 
 export default function InjuryFilters({ filters, onChange, teams }: Props) {
   return (
-    <div className="flex flex-wrap gap-3 mb-4 items-center w-full">
+    <div className="flex flex-wrap gap-3 items-center">
       <input
         type="text"
         placeholder="Search player..."

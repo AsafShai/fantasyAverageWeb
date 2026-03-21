@@ -115,7 +115,10 @@ class EstimatorService:
         result = await self.db_service.get_estimator_latest()
         if result.get("rankings"):
             self._cache = result
-            self._cache_date = today
+            predictions = result.get("predictions", [])
+            as_of = predictions[0].get("as_of_date") if predictions else None
+            if isinstance(as_of, date) and as_of == today:
+                self._cache_date = today
             return result
 
         return None

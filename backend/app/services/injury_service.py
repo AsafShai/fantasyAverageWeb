@@ -1,7 +1,9 @@
 import asyncio
 import io
+import json
 import logging
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -18,6 +20,7 @@ injury_store: dict[str, InjuryRecord] = {}
 sse_subscribers: list[asyncio.Queue] = []
 notification_history: list[InjuryNotification] = []
 MAX_NOTIFICATION_HISTORY = 150
+last_report_time: str | None = None
 
 
 def get_utc_now_str() -> str:
@@ -35,37 +38,49 @@ def get_current_pdf_url() -> str:
 
 
 def compute_next_trigger() -> datetime:
-    """Return the next :00:15, :15:15, :30:15, or :45:15 moment in NY time."""
+    """Return the next :00:00, :15:00, :30:00, or :45:00 moment in NY time."""
     now_ny = datetime.now(NY_TZ)
     for mark in [0, 15, 30, 45]:
-        candidate = now_ny.replace(minute=mark, second=15, microsecond=0)
+        candidate = now_ny.replace(minute=mark, second=0, microsecond=0)
         if candidate > now_ny:
             return candidate
-    # All marks in this hour have passed — go to :00:15 of next hour
-    return (now_ny + timedelta(hours=1)).replace(minute=0, second=15, microsecond=0)
+    return (now_ny + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
 
-async def fetch_pdf_bytes(url: str, max_retries: int = 3) -> bytes | None:
-    """Fetch PDF with fixed retry delays. Returns None if unavailable after all retries."""
-    delays = [10, 20]
-    for attempt in range(1, max_retries + 1):
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, follow_redirects=True)
-                if response.status_code == 200:
-                    return response.content
-                if response.status_code == 404:
-                    logger.warning(f"Injury PDF not found (404): {url}")
-                    return None
-                logger.warning(f"Injury PDF fetch attempt {attempt} got HTTP {response.status_code}")
-        except httpx.HTTPError as e:
-            logger.warning(f"Injury PDF fetch attempt {attempt} failed: {e}")
+async def fetch_pdf_bytes(url: str) -> bytes | None:
+    """Fetch PDF bytes. Returns None if unavailable."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, follow_redirects=True)
+            if response.status_code == 200:
+                return response.content
+            logger.warning(f"Injury PDF fetch got HTTP {response.status_code}: {url}")
+            return None
+    except httpx.HTTPError as e:
+        logger.warning(f"Injury PDF fetch failed: {e}")
+        return None
 
-        if attempt < max_retries:
-            await asyncio.sleep(delays[attempt - 1])
 
-    logger.error(f"Could not fetch injury PDF after {max_retries} attempts: {url}")
-    return None
+_GAME_TIME_RE = re.compile(r'^(\d{1,2}:\d{2})\s*(?:\(ET\))?\s*', re.IGNORECASE)
+_PDF_DATE_RE = re.compile(r'^(\d{2}/\d{2}/\d{4})$')
+
+
+def parse_game_time_utc(game: str, game_date: date) -> str | None:
+    """Parse ET time (12h PM, no AM/PM marker) from game string and return as UTC ISO string."""
+    if not game:
+        return None
+    m = _GAME_TIME_RE.match(game)
+    if not m:
+        return None
+    try:
+        t = datetime.strptime(m.group(1), "%H:%M")
+        hour = t.hour if t.hour >= 12 else t.hour + 12
+        et_dt = datetime(game_date.year, game_date.month, game_date.day,
+                         hour, t.minute, tzinfo=NY_TZ)
+        utc_dt = et_dt.astimezone(timezone.utc)
+        return utc_dt.isoformat(timespec="minutes")
+    except Exception:
+        return None
 
 
 def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
@@ -78,10 +93,12 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
     COL_STATUS    = (575, 650)
     COL_REASON    = (650, 9999)
 
+    report_date = datetime.now(NY_TZ).date()
+    DATE_PARSE_FMTS = ["%m/%d/%Y", "%Y-%m-%d"]
+
     HEADER_WORDS = {"gamedate", "gametime", "matchup", "team", "playername", "currentstatus", "reason"}
     TITLE_WORDS = {"injury", "report:"}
 
-    import re
     PAGE_FOOTER_RE = re.compile(r"^page\d+of\d+$", re.IGNORECASE)
     VALID_STATUSES = {"Out", "Questionable", "Doubtful", "Probable", "Available"}
     CAMEL_SPLIT_RE = re.compile(r"(?<=[a-z])(?=[A-Z])(?<!Mc)(?<!Mac)|(?<=[A-Z])(?=[A-Z][a-z])")
@@ -167,11 +184,20 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
     sorted_ys = sorted(rows)
     current_game = ""
     current_team = ""
+    current_date = report_date
+
+    def _parse_pdf_date(raw: str) -> date | None:
+        for fmt in DATE_PARSE_FMTS:
+            try:
+                return datetime.strptime(raw, fmt).date()
+            except ValueError:
+                continue
+        return None
 
     row_data: list[dict] = []
     for y in sorted_ys:
         cells = {k: " ".join(v) for k, v in rows[y].items()}
-        date    = cells.get("date", "").strip()
+        date_str = cells.get("date", "").strip()
         time_   = cells.get("time", "").strip()
         matchup = cells.get("matchup", "").strip()
         team    = cells.get("team", "").strip()
@@ -179,16 +205,25 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
         status  = cells.get("status", "").strip()
         reason  = cells.get("reason", "").strip()
 
+        if date_str:
+            parsed = _parse_pdf_date(date_str)
+            if parsed:
+                current_date = parsed
+                current_game = ""
+
         if time_ or matchup:
-            current_game = " ".join(p for p in [time_, matchup] if p)
-        elif date:
-            current_game = ""
+            if matchup and not time_:
+                time_match = re.match(r'^(.*?)\s+\S+@\S+$', current_game)
+                prev_time = time_match.group(1).strip() if time_match else ""
+                current_game = " ".join(p for p in [prev_time, matchup] if p)
+            else:
+                current_game = " ".join(p for p in [time_, matchup] if p)
         if team:
             current_team = split_camel(team)
 
         row_data.append({
             "y": y, "player": player, "status": status, "reason": reason,
-            "game": current_game, "team": current_team,
+            "game": current_game, "team": current_team, "game_date": current_date,
         })
 
     player_ys = [row["y"] for row in row_data if row["player"] and row["status"] in VALID_STATUSES]
@@ -251,6 +286,7 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
             status=row["status"],
             injury=format_injury(raw_reason),
             last_update="",
+            game_time_utc=parse_game_time_utc(row["game"], row["game_date"]),
         )))
 
     records = [rec for _, _, rec in raw_records]
@@ -361,15 +397,23 @@ async def broadcast_notifications(notifications: list[InjuryNotification]) -> No
             await queue.put(notif)
 
 
-async def update_injury_data() -> None:
-    """Fetch latest PDF, diff against store, update store, and push notifications."""
+async def broadcast_fetch_update(report_time: str) -> None:
+    global last_report_time
+    last_report_time = report_time
+    payload = json.dumps({"report_time": report_time})
+    for queue in list(sse_subscribers):
+        await queue.put({"_event": "fetch_update", "data": payload})
+
+
+async def _try_update_injury_data() -> bool:
+    """Like update_injury_data but returns True on success, False if PDF unavailable."""
     url = get_current_pdf_url()
     logger.info(f"Fetching injury report: {url}")
 
     pdf_bytes = await fetch_pdf_bytes(url)
     if pdf_bytes is None:
         logger.warning("Keeping stale injury data — PDF unavailable")
-        return
+        return False
 
     now_il = get_utc_now_str()
     new_records = parse_injury_pdf(pdf_bytes)
@@ -383,6 +427,17 @@ async def update_injury_data() -> None:
     if notifications:
         logger.info(f"Broadcasting {len(notifications)} injury update(s)")
         await broadcast_notifications(notifications)
+
+    now_ny = datetime.now(NY_TZ)
+    floored_minute = (now_ny.minute // 15) * 15
+    report_dt = now_ny.replace(minute=floored_minute, second=0, microsecond=0)
+    report_time_utc = report_dt.astimezone(timezone.utc).isoformat(timespec="minutes")
+    await broadcast_fetch_update(report_time_utc)
+    return True
+
+
+async def update_injury_data() -> None:
+    await _try_update_injury_data()
 
 
 async def initialize() -> None:
@@ -403,9 +458,18 @@ async def initialize() -> None:
 
     logger.info(f"Injury store initialized with {len(injury_store)} player(s)")
 
+    global last_report_time
+    now_ny = datetime.now(NY_TZ)
+    floored_minute = (now_ny.minute // 15) * 15
+    report_dt = now_ny.replace(minute=floored_minute, second=0, microsecond=0)
+    last_report_time = report_dt.astimezone(timezone.utc).isoformat(timespec="minutes")
+
+
+_RETRY_OFFSETS = [0, 5, 10, 15, 15, 15]
+
 
 async def start_scheduler() -> None:
-    """Poll the injury PDF at every :00:15, :15:15, :30:15, :45:15 in NY time."""
+    """On each :00, :15, :30, :45 mark, retry at +0s, +5s, +15s, +30s, +45s, +60s until PDF is fetched."""
     logger.info("Injury report scheduler started")
     while True:
         next_trigger = compute_next_trigger()
@@ -413,7 +477,15 @@ async def start_scheduler() -> None:
         if sleep_secs > 0:
             logger.debug(f"Next injury update at {next_trigger} (in {sleep_secs:.1f}s)")
             await asyncio.sleep(sleep_secs)
-        try:
-            await update_injury_data()
-        except Exception as e:
-            logger.error(f"Injury update cycle error: {e}", exc_info=True)
+
+        prev_offset = 0
+        for offset in _RETRY_OFFSETS:
+            await asyncio.sleep(offset - prev_offset)
+            prev_offset = offset
+            try:
+                success = await _try_update_injury_data()
+            except Exception as e:
+                logger.error(f"Injury update cycle error at +{offset}s: {e}", exc_info=True)
+                success = False
+            if success:
+                break

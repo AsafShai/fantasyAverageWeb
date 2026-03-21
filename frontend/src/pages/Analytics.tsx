@@ -36,6 +36,12 @@ const Analytics = () => {
 
   const today = new Date().toISOString().split('T')[0]
 
+  function getDateNDaysAgo(n: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().split('T')[0];
+  }
+
   const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery(appliedDates)
   const { data: summary } = useGetLeagueSummaryQuery()
 
@@ -158,7 +164,7 @@ const Analytics = () => {
       <div className="mb-6">
         <h2 className="text-xl font-semibold mb-2">{titleWithRange}</h2>
 
-        <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="mb-2 flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-600 font-medium">From</label>
             <input
@@ -204,6 +210,22 @@ const Analytics = () => {
               Clear
             </button>
           )}
+        </div>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {[7, 14, 30, 60].map(days => (
+            <button
+              key={days}
+              onClick={() => {
+                const start = getDateNDaysAgo(days);
+                setStartDate(start);
+                setEndDate(today);
+                setDateError('');
+              }}
+              className="px-2 py-0.5 text-xs rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+            >
+              Last {days}d
+            </button>
+          ))}
         </div>
 
         {dateError && (
