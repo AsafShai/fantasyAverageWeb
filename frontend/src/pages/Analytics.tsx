@@ -212,7 +212,7 @@ const Analytics = () => {
           )}
         </div>
         <div className="mb-3 flex flex-wrap gap-1.5">
-          {[7, 14, 30, 60].map(days => (
+          {[1, 7, 15, 30].map(days => (
             <button
               key={days}
               onClick={() => {
