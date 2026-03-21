@@ -121,7 +121,7 @@ export default function NbaTeams() {
               <option value="">Select a team...</option>
               {teams?.map((team) => (
                 <option key={team.team_id} value={team.team_id}>
-                  {team.team_name}
+                  {team.abbreviation}
                 </option>
               ))}
             </select>
