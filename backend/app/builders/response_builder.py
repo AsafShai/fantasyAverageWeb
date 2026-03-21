@@ -290,6 +290,12 @@ class ResponseBuilder:
                     gp=int(row['GP'])
                 ),
                 team_id=int(row['team_id']),
-                status=str(row.get('status', 'ONTEAM'))
+                status=str(row.get('status', 'ONTEAM')),
+                injured=bool(row.get('injured', False)),
+                fantasy_team_name=row.get('fantasy_team_name') or None,
+                season_rating=float(row.get('season_rating') or 0.0),
+                last7_rating=float(row.get('last7_rating') or 0.0),
+                last15_rating=float(row.get('last15_rating') or 0.0),
+                last30_rating=float(row.get('last30_rating') or 0.0),
             ))
         return players
