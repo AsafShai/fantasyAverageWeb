@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.models.nba_team_models import DepthChartPlayer, DepthChartPosition, InjuryInfo, NbaTeamInfo, TeamDepthChart
 from app.services import injury_service
-from app.utils.constants import NBA_TEAMS
+from app.utils.constants import PRO_TEAM_MAP
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def _build_injury_lookup() -> dict[str, str]:
 
 @router.get("/", response_model=list[NbaTeamInfo])
 async def list_nba_teams():
-    return [NbaTeamInfo(**t) for t in NBA_TEAMS]
+    return [NbaTeamInfo(team_id=str(k), abbreviation=v) for k, v in PRO_TEAM_MAP.items() if k != 0]
 
 
 @router.get("/{team_id}/depthchart", response_model=TeamDepthChart)
