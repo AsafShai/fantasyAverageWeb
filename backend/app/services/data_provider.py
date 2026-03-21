@@ -159,7 +159,12 @@ class DataProvider:
             response.raise_for_status()
             api_data = response.json()
 
-            players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id)
+            fantasy_team_map = {}
+            totals_data = self.cache_manager.totals_cache.get('data')
+            if totals_data is not None:
+                fantasy_team_map = dict(zip(totals_data['team_id'], totals_data['team_name']))
+
+            players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id, fantasy_team_map)
 
             from datetime import datetime
             cache['timestamp'] = datetime.now()

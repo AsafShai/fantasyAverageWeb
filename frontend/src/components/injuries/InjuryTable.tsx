@@ -43,8 +43,8 @@ interface Props {
 }
 
 export default function InjuryTable({ records, totalCount }: Props) {
-  const [sortKey, setSortKey] = useState<SortKey>('gameTime');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortKey, setSortKey] = useState<SortKey>('last_update');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -122,6 +122,31 @@ export default function InjuryTable({ records, totalCount }: Props) {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile sort controls */}
+      <div className="sm:hidden flex items-center gap-2 mb-2">
+        <span className="text-xs text-gray-500 shrink-0">Sort by:</span>
+        <select
+          value={sortKey}
+          onChange={e => {
+            const key = e.target.value as SortKey;
+            setSortKey(key);
+            setSortDir(key === 'last_update' ? 'desc' : 'asc');
+          }}
+          className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1"
+        >
+          <option value="last_update">Last Update</option>
+          <option value="gameTime">Game Time</option>
+        </select>
+        <button
+          type="button"
+          onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+          className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 shrink-0"
+          aria-label="Toggle sort direction"
+        >
+          {sortDir === 'asc' ? '↑' : '↓'}
+        </button>
       </div>
 
       {/* Mobile cards */}
