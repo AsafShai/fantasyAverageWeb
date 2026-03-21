@@ -61,12 +61,18 @@ class DataTransformer:
                 player = player_entry.get('player', {})
                 status = player_entry.get('status', 'UNKNOWN')
                 team_id = player_entry.get('onTeamId', 0)
+                ratings = player_entry.get('ratings', {})
 
                 player_name = player.get('fullName', 'Unknown')
                 pro_team_id = player.get('proTeamId', 0)
                 pro_team = PRO_TEAM_MAP.get(pro_team_id, 'Unknown')
                 injured = bool(player.get('injured', False))
                 fantasy_team_name = (fantasy_team_map or {}).get(team_id)
+
+                season_rating = ratings.get('0', {}).get('totalRating')
+                last7_rating = ratings.get('1', {}).get('totalRating')
+                last15_rating = ratings.get('2', {}).get('totalRating')
+                last30_rating = ratings.get('3', {}).get('totalRating')
 
                 positions = "Unknown"
                 if 'eligibleSlots' in player:
@@ -91,6 +97,10 @@ class DataTransformer:
                             'status': status,
                             'injured': injured,
                             'fantasy_team_name': fantasy_team_name,
+                            'season_rating': season_rating,
+                            'last7_rating': last7_rating,
+                            'last15_rating': last15_rating,
+                            'last30_rating': last30_rating,
                         })
 
                         all_players.append(mapped_stats)
@@ -241,7 +251,7 @@ class DataTransformer:
     
     def _organize_player_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Organize player DataFrame columns in logical order"""
-        info_cols = ['Name', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name']
+        info_cols = ['Name', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name', 'season_rating', 'last7_rating', 'last15_rating', 'last30_rating']
         stat_cols = [col for col in df.columns if col not in info_cols]
         available_info_cols = [col for col in info_cols if col in df.columns]
         return df.reindex(columns=available_info_cols + stat_cols)
