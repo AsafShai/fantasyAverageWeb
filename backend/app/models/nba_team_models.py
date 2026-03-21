@@ -30,3 +30,4 @@ class TeamDepthChart(BaseModel):
 class NbaTeamInfo(BaseModel):
     team_id: str
     abbreviation: str
+    team_name: str
