@@ -159,6 +159,9 @@ class DataProvider:
             response.raise_for_status()
             api_data = response.json()
 
+            if self.cache_manager.totals_cache.get('data') is None:
+                await self.get_totals_df()
+
             fantasy_team_map = {}
             totals_data = self.cache_manager.totals_cache.get('data')
             if totals_data is not None:
