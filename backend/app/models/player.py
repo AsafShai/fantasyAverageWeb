@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from enum import Enum
 
 class StatTimePeriod(str, Enum):
@@ -41,6 +41,8 @@ class Player(BaseModel):
     stats: PlayerStats
     team_id: int
     status: str
+    injured: bool = False
+    fantasy_team_name: Optional[str] = None
 
 class PaginatedPlayers(BaseModel):
     players: List[Player]
