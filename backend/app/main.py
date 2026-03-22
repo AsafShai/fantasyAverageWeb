@@ -1,11 +1,15 @@
 import asyncio
+import os
+import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from fantasy_nba_israel_mcp.server import mcp as fantasy_mcp
 
 from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
@@ -15,10 +19,7 @@ from app.routes.players import router as players_router
 from app.routes.injuries import router as injuries_router
 from app.routes.estimator import router as estimator_router
 from app.routes.nba_teams import router as nba_teams_router
-from dotenv import load_dotenv
 from app.config import settings
-import logging
-from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services import injury_service
 from app.services import estimator_scheduler
@@ -34,18 +35,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+os.environ.setdefault("FANTASY_DB_URL", settings.database_url or "")
+fantasy_mcp.settings.streamable_http_path = "/"
+fantasy_mcp_app = fantasy_mcp.streamable_http_app()
+
 limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan for proper resource cleanup"""
-    # Startup
     logger.info("Starting Fantasy League Dashboard API")
     await injury_service.initialize()
     asyncio.create_task(injury_service.start_scheduler())
     asyncio.create_task(estimator_scheduler.start_scheduler())
-    yield
-    # Shutdown
+    async with fantasy_mcp_app.router.lifespan_context(fantasy_mcp_app):
+        yield
     try:
         data_provider = DataProvider()
         await data_provider.close()
@@ -89,6 +92,7 @@ app.include_router(players_router, prefix="/api/players", tags=["Players"])
 app.include_router(injuries_router, prefix="/api/injuries", tags=["Injuries"])
 app.include_router(estimator_router, prefix="/api/estimator", tags=["Estimator"])
 app.include_router(nba_teams_router, prefix="/api/nba-teams", tags=["NBA Teams"])
+app.mount("/mcp", fantasy_mcp_app)
 
 
 
@@ -105,8 +109,6 @@ async def health_check(request: Request):
         "timestamp": datetime.now().isoformat(),
         "service": "Fantasy League Dashboard API"
     }
-
-load_dotenv()
 
 if __name__ == "__main__":
     import uvicorn
