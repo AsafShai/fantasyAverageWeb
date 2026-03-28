@@ -10,6 +10,7 @@ import httpx
 import pdfplumber
 
 from app.models.injury_models import InjuryRecord, InjuryNotification
+from app.services.db_service import get_db_service
 
 logger = logging.getLogger(__name__)
 
@@ -378,15 +379,6 @@ def _prune_notification_history() -> None:
         notification_history.remove(notif)
 
 
-def prune_injury_store() -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=TTL_HOURS)
-    stale = [k for k, r in injury_store.items() if (t := _parse_timestamp(r.last_update)) and t < cutoff]
-    for key in stale:
-        del injury_store[key]
-    if stale:
-        logger.info(f"Pruned {len(stale)} stale injury record(s) older than {TTL_HOURS}h")
-
-
 async def broadcast_notifications(notifications: list[InjuryNotification]) -> None:
     for notif in notifications:
         notification_history.insert(0, notif)
@@ -420,9 +412,41 @@ async def _try_update_injury_data() -> bool:
     notifications = compute_diff(injury_store, new_records, now_il)
     new_store = build_updated_store(injury_store, new_records, notifications, now_il)
 
+    old_store = dict(injury_store)
     injury_store.clear()
     injury_store.update(new_store)
-    prune_injury_store()
+
+    db_service = get_db_service()
+    for notif in notifications:
+        key = f"{notif.team}|{notif.player}"
+        if notif.type in ("added", "status_change"):
+            record = new_store.get(key)
+            if record:
+                if record.status == "Available":
+                    await db_service.delete_injury_status(record.team, record.player)
+                else:
+                    await db_service.upsert_injury_status(record)
+        elif notif.type == "removed":
+            await db_service.delete_injury_status(notif.team, notif.player)
+
+    teams_in_new = {r.team for r in new_records}
+    teams_in_memory = {rec.team for rec in old_store.values()}
+    teams_only_in_pdf = teams_in_new - teams_in_memory
+
+    if teams_only_in_pdf:
+        db_records = await db_service.get_injury_statuses_for_teams(list(teams_only_in_pdf))
+        new_keys = {f"{rec.team}|{rec.player}" for rec in new_records}
+        for row in db_records:
+            key = f"{row['team']}|{row['player']}"
+            if key not in new_keys:
+                await db_service.delete_injury_status(row['team'], row['player'])
+                notifications.append(InjuryNotification(
+                    type="removed",
+                    player=row['player'],
+                    team=row['team'],
+                    old_status=row['status'],
+                    timestamp=now_il,
+                ))
 
     if notifications:
         logger.info(f"Broadcasting {len(notifications)} injury update(s)")

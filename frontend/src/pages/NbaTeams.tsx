@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import type { TeamDepthChart } from '../types/api';
+import type { DepthChartPosition } from '../types/api';
+import { applyDepthChartFilters } from '../utils/depthChartFilters';
 
 const MAX_DEPTH = 5;
 const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th'];
@@ -19,11 +20,93 @@ function injuryStyle(status: string): string {
   return INJURY_STYLES[status] ?? 'bg-gray-100 text-gray-700';
 }
 
-function DepthChartTable({ data }: { data: TeamDepthChart }) {
-  const positions = data.positions.map((pos) => ({
-    ...pos,
-    players: pos.players.slice(0, MAX_DEPTH),
-  }));
+function DepthChartTable({ positions }: { positions: DepthChartPosition[] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap w-36">Position</th>
+            {DEPTH_LABELS.map((label) => (
+              <th key={label} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-100">
+          {positions.map((pos) => (
+            <tr key={pos.abbreviation} className="hover:bg-gray-50 transition-colors">
+              <td className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap w-36">
+                {pos.display_name}
+              </td>
+              {Array.from({ length: MAX_DEPTH }, (_, i) => {
+                const player = pos.players[i];
+                return (
+                  <td key={i} className="px-4 py-2.5 whitespace-nowrap">
+                    {player ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-800">{player.display_name}</span>
+                        {player.injury && (
+                          <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-semibold ${injuryStyle(player.injury.status)}`}>
+                            {player.injury.status}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FilterCheckbox({
+  id,
+  label,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label htmlFor={id} className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+      />
+      {label}
+    </label>
+  );
+}
+
+function DepthChartView({ teamId }: { teamId: string }) {
+  const { data, isLoading, error } = useGetNbaTeamDepthChartQuery(teamId);
+  const [hideInjured, setHideInjured] = useState(false);
+  const [removeDuplicates, setRemoveDuplicates] = useState(false);
+
+  useEffect(() => {
+    setHideInjured(false);
+    setRemoveDuplicates(false);
+  }, [teamId]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message="Failed to load depth chart" />;
+  if (!data) return null;
+
+  const filteredPositions = applyDepthChartFilters(data.positions, hideInjured, removeDuplicates);
 
   return (
     <div>
@@ -37,60 +120,24 @@ function DepthChartTable({ data }: { data: TeamDepthChart }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap w-36">Position</th>
-              {DEPTH_LABELS.map((label) => (
-                <th key={label} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {positions.map((pos) => (
-              <tr key={pos.abbreviation} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap w-36">
-                  {pos.display_name}
-                </td>
-                {Array.from({ length: MAX_DEPTH }, (_, i) => {
-                  const player = pos.players[i];
-                  return (
-                    <td key={i} className="px-4 py-2.5 whitespace-nowrap">
-                      {player ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-800">{player.display_name}</span>
-                          {player.injury && (
-                            <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-semibold ${injuryStyle(player.injury.status)}`}>
-                              {player.injury.status}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex items-center gap-6 mb-4">
+        <FilterCheckbox
+          id="hide-injured"
+          label="Hide injured (Out)"
+          checked={hideInjured}
+          onChange={setHideInjured}
+        />
+        <FilterCheckbox
+          id="remove-duplicates"
+          label="Remove duplicate positions"
+          checked={removeDuplicates}
+          onChange={setRemoveDuplicates}
+        />
       </div>
+
+      <DepthChartTable positions={filteredPositions} />
     </div>
   );
-}
-
-function DepthChartView({ teamId }: { teamId: string }) {
-  const { data, isLoading, error } = useGetNbaTeamDepthChartQuery(teamId);
-
-  if (isLoading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message="Failed to load depth chart" />;
-  if (!data) return null;
-
-  return <DepthChartTable data={data} />;
 }
 
 export default function NbaTeams() {
