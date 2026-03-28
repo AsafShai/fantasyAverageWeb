@@ -129,7 +129,7 @@ function DepthChartView({ teamId }: { teamId: string }) {
         />
         <FilterCheckbox
           id="remove-duplicates"
-          label="Remove duplicate positions"
+          label="Remove duplicates"
           checked={removeDuplicates}
           onChange={setRemoveDuplicates}
         />
