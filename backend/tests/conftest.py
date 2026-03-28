@@ -144,20 +144,8 @@ def mock_data_provider_globally():
 @pytest.fixture
 def test_client():
     """Create a test client for the FastAPI application."""
-    from contextlib import asynccontextmanager
-    from unittest.mock import patch, AsyncMock, MagicMock
-
-    @asynccontextmanager
-    async def noop_lifespan(app):
-        yield
-
-    mock_mcp_app = MagicMock()
-    mock_mcp_app.router.lifespan_context = noop_lifespan
-    mock_mcp_app.__call__ = AsyncMock()
-
-    with patch("app.main.fantasy_mcp_app", mock_mcp_app):
-        with TestClient(app) as client:
-            yield client
+    with TestClient(app) as client:
+        yield client
 
 @pytest_asyncio.fixture
 async def async_client():

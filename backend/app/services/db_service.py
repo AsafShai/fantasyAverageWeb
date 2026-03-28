@@ -4,6 +4,7 @@ from typing import Optional
 import asyncpg
 import pandas as pd
 from app.config import settings
+from app.models.injury_models import InjuryRecord
 
 logger = logging.getLogger(__name__)
 
@@ -543,6 +544,70 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to check estimator data: {e}")
             return False
+
+    async def upsert_injury_status(self, record: InjuryRecord) -> None:
+        pool = await self._get_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO player_injury_status (team, player, status, injury_reason, last_updated)
+                    VALUES ($1, $2, $3, $4, NOW())
+                    ON CONFLICT (team, player) DO UPDATE SET
+                        status        = EXCLUDED.status,
+                        injury_reason = EXCLUDED.injury_reason,
+                        last_updated  = NOW()
+                    WHERE player_injury_status.status IS DISTINCT FROM EXCLUDED.status
+                       OR player_injury_status.injury_reason IS DISTINCT FROM EXCLUDED.injury_reason
+                    """,
+                    record.team, record.player, record.status, record.injury,
+                )
+        except Exception as e:
+            logger.error(f"Failed to upsert injury status for {record.team}|{record.player}: {e}")
+
+    async def delete_injury_status(self, team: str, player: str) -> None:
+        pool = await self._get_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "DELETE FROM player_injury_status WHERE team = $1 AND player = $2",
+                    team, player,
+                )
+        except Exception as e:
+            logger.error(f"Failed to delete injury status for {team}|{player}: {e}")
+
+    async def get_injury_statuses_for_teams(self, teams: list[str]) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT team, player, status, injury_reason FROM player_injury_status WHERE team = ANY($1)",
+                    teams,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch injury statuses for teams: {e}")
+            return []
+
+    async def load_all_injury_statuses(self) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT team, player, status, injury_reason FROM player_injury_status"
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to load all injury statuses: {e}")
+            return []
 
     async def close(self) -> None:
         if self._pool is not None:

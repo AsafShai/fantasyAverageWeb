@@ -22,6 +22,5 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "asyncpg>=0.30.0",
     "numpy>=1.24.0",
-    "fantasy-nba-israel-mcp==0.4.0",
 ]
 
