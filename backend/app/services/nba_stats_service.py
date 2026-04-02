@@ -98,7 +98,7 @@ class NBAStatsService:
             future_game_dates = [
                 datetime.fromisoformat(date.replace('Z', '+00:00')).date()
                 for date in calendar
-                if datetime.fromisoformat(date.replace('Z', '+00:00')).date() > today
+                if datetime.fromisoformat(date.replace('Z', '+00:00')).date() >= today
                 and datetime.fromisoformat(date.replace('Z', '+00:00')).date() <= regular_season_end
             ]
 
