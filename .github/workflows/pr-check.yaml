@@ -14,45 +14,51 @@ jobs:
       LEAGUE_ID: ${{ vars.LEAGUE_ID }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
-          python-version-file: 'backend/.python-version'
+          python-version-file: backend/.python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.0.0
 
       - name: Install dependencies
-        run: |
-          cd backend 
-          pip install uv
-          uv sync --frozen
+        working-directory: backend
+        run: uv sync --frozen
 
       - name: Run tests
-        run: |
-          cd backend
-          PYTHONPATH=. uv run pytest
+        working-directory: backend
+        run: PYTHONPATH=. uv run pytest
 
   build-backend:
     needs: test-backend
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build backend
-        run: |
-          cd backend
-          docker build -t fantasy-backend:latest .
+        working-directory: backend
+        run: docker build -t fantasy-backend:latest .
 
   build-frontend:
     needs: test-backend
     runs-on: ubuntu-latest
-    steps:  
+    steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Build frontend
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build frontend
+        working-directory: frontend
         run: |
-          cd frontend
-          npm install
+          npm ci
           npm run build

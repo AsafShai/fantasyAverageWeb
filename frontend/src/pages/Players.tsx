@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
-import type { PlayerFilters, Player, StatFilter, TimePeriod } from '../types/api';
+import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
 import './Players.css';
 
@@ -221,7 +221,13 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
       <div className="stat-filter-builder">
         <select
           value={statFilter.stat || ''}
-          onChange={(e) => setStatFilter({ ...statFilter, stat: e.target.value as any })}
+          onChange={(e) => {
+            const v = e.target.value
+            setStatFilter({
+              ...statFilter,
+              stat: v === '' ? undefined : (v as keyof PlayerStats),
+            })
+          }}
         >
           <option value="">Filter by stat</option>
           <option value="minutes">Minutes</option>
@@ -237,7 +243,13 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
 
         <select
           value={statFilter.operator || ''}
-          onChange={(e) => setStatFilter({ ...statFilter, operator: e.target.value as any })}
+          onChange={(e) => {
+            const v = e.target.value
+            setStatFilter({
+              ...statFilter,
+              operator: v === '' ? undefined : (v as ComparisonOperator),
+            })
+          }}
         >
           <option value="">Select operator</option>
           <option value="eq">=</option>
@@ -276,7 +288,7 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const getTeamDisplay = (player: Player) => {
+  const getTeamDisplay = useCallback((player: Player) => {
     if (player.status === 'ONTEAM' && player.team_id !== 0) {
       return teamMap.get(player.team_id) || 'Unknown Team';
     } else if (player.status === 'FREEAGENT') {
@@ -285,7 +297,7 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
       return 'Waivers';
     }
     return 'Unknown';
-  };
+  }, [teamMap]);
 
   const formatStat = (value: number, gp: number, isPercentage: boolean = false) => {
     if (isPercentage) {
@@ -305,25 +317,32 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
     const sortColumn = sortBy;
 
     return [...players].sort((a, b) => {
-      let aVal: any, bVal: any;
+      let aVal: string | number
+      let bVal: string | number
 
       if (sortColumn === 'player_name') {
-        aVal = a.player_name;
-        bVal = b.player_name;
+        aVal = a.player_name
+        bVal = b.player_name
+      } else if (sortColumn === 'pro_team') {
+        aVal = a.pro_team
+        bVal = b.pro_team
+      } else if (sortColumn === 'team_id') {
+        aVal = getTeamDisplay(a)
+        bVal = getTeamDisplay(b)
       } else if (sortColumn in a.stats) {
-        const aStat = a.stats[sortColumn as keyof typeof a.stats];
-        const bStat = b.stats[sortColumn as keyof typeof b.stats];
-        const isPercentage = sortColumn === 'fg_percentage' || sortColumn === 'ft_percentage';
+        const aStat = a.stats[sortColumn as keyof typeof a.stats]
+        const bStat = b.stats[sortColumn as keyof typeof b.stats]
+        const isPercentage = sortColumn === 'fg_percentage' || sortColumn === 'ft_percentage'
 
         aVal = (showAverages && sortColumn !== 'gp' && !isPercentage)
           ? (a.stats.gp > 0 ? aStat / a.stats.gp : 0)
-          : aStat;
+          : aStat
         bVal = (showAverages && sortColumn !== 'gp' && !isPercentage)
           ? (b.stats.gp > 0 ? bStat / b.stats.gp : 0)
-          : bStat;
+          : bStat
       } else {
-        aVal = (a as any)[sortColumn];
-        bVal = (b as any)[sortColumn];
+        aVal = 0
+        bVal = 0
       }
 
       if (sortOrder === 'asc') {
@@ -332,7 +351,7 @@ const PlayerTable = ({ players, teamMap, showAverages }: { players: Player[]; te
         return aVal < bVal ? 1 : -1;
       }
     });
-  }, [players, sortBy, sortOrder, showAverages]);
+  }, [players, sortBy, sortOrder, showAverages, getTeamDisplay]);
 
   const handleSort = (column: string) => {
     if (sortBy === column) {

@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { formatStatValue, getComparisonColor, getComparisonIcon } from '../utils/tradeHelpers';
 import type { PlayerGroup } from '../utils/tradeHelpers';
-import { aggregatePlayerStats } from '../../Trade/utils/tradeCalculations';
+import { aggregatePlayerStats, type AggregatedStats } from '../../Trade/utils/tradeCalculations';
 import { CollapsibleTable } from '../../../components/CollapsibleTable';
 
 interface StatColumn {
-  key: string;
+  key: keyof AggregatedStats;
   label: string;
   mobile: boolean;
   isPercentage?: boolean;
@@ -40,7 +40,7 @@ export const TeamComparisonTable: React.FC<TeamComparisonTableProps> = ({
     }));
   }, [playerGroups]);
 
-  const formatTeamStat = (stats: any, statKey: string, isPercentage: boolean = false, isGamesPlayed: boolean = false) => {
+  const formatTeamStat = (stats: AggregatedStats, statKey: keyof AggregatedStats, isPercentage: boolean = false, isGamesPlayed: boolean = false) => {
     const value = stats[statKey] || 0;
     const gamesPlayed = stats.gp || 1;
     
@@ -76,7 +76,7 @@ export const TeamComparisonTable: React.FC<TeamComparisonTableProps> = ({
     }
   };
 
-  const getStatValue = (stats: any, statKey: string) => {
+  const getStatValue = (stats: AggregatedStats, statKey: keyof AggregatedStats) => {
     const value = stats[statKey] || 0;
     const gamesPlayed = stats.gp
     
@@ -87,7 +87,7 @@ export const TeamComparisonTable: React.FC<TeamComparisonTableProps> = ({
     return value;
   };
 
-  const calculateDifference = (receivingStats: any, givingStats: any, statKey: string) => {
+  const calculateDifference = (receivingStats: AggregatedStats, givingStats: AggregatedStats, statKey: keyof AggregatedStats) => {
     const receivingValue = receivingStats[statKey] || 0;
     const givingValue = givingStats[statKey] || 0;
     
