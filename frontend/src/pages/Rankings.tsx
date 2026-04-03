@@ -123,7 +123,7 @@ const Rankings = () => {
       {(summary?.nba_avg_pace || summary?.nba_game_days_left !== undefined) && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:flex sm:justify-center sm:gap-4">
           {summary?.nba_avg_pace && (
-            <div className="flex flex-col items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
+            <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
               <div className="flex items-center justify-center w-8 h-8 bg-amber-100 rounded-full sm:w-10 sm:h-10">
                 <span className="text-lg sm:text-xl">⚡</span>
               </div>
@@ -134,7 +134,7 @@ const Rankings = () => {
             </div>
           )}
           {summary?.nba_game_days_left !== undefined && summary.nba_game_days_left !== null && (
-            <div className="flex flex-col items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
+            <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
               <div className="flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full sm:w-10 sm:h-10">
                 <span className="text-lg sm:text-xl">📅</span>
               </div>
@@ -198,7 +198,7 @@ const Rankings = () => {
                 min={summary?.season_start}
                 max={endDate || today}
                 onChange={(e) => handleStartDate(e.target.value)}
-                className="px-3 py-1.5 rounded-md text-sm text-gray-800 bg-white border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="px-3 py-1.5 rounded-md text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -217,13 +217,13 @@ const Rankings = () => {
                 min={startDate || summary?.season_start}
                 max={today}
                 onChange={(e) => handleEndDate(e.target.value)}
-                className="px-3 py-1.5 rounded-md text-sm text-gray-800 bg-white border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="px-3 py-1.5 rounded-md text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
             </div>
             <button
               onClick={applyDates}
               disabled={!startDate || !endDate || !!dateError}
-              className="px-4 py-1.5 text-sm font-semibold bg-white text-blue-700 rounded-md hover:bg-blue-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-1.5 text-sm font-semibold bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Apply
             </button>
@@ -258,7 +258,7 @@ const Rankings = () => {
         </div>
 
         {hasDateMismatch && (
-          <div className="px-6 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-700">
+          <div className="px-6 py-2 bg-amber-50 dark:bg-gray-700 border-b border-amber-200 dark:border-gray-600 text-sm text-amber-700 dark:text-amber-300">
             Note: closest available data used - showing {formatDate(data!.actual_start_date!)} - {formatDate(data!.actual_end_date!)}
           </div>
         )}

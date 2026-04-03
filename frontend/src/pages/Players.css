@@ -249,3 +249,86 @@
   background: #fff9c4;
   color: #f57f17;
 }
+
+:where(.dark, .dark *) .players-page h1 {
+  color: #f1f5f9;
+}
+
+:where(.dark, .dark *) .loading {
+  color: #94a3b8;
+}
+
+:where(.dark, .dark *) .filter-panel {
+  background: #1e293b;
+  border-color: #374151;
+  color: #e2e8f0;
+}
+
+:where(.dark, .dark *) .search-input {
+  background: #0f172a;
+  border-color: #374151;
+  color: #e2e8f0;
+}
+
+:where(.dark, .dark *) .search-input::placeholder {
+  color: #64748b;
+}
+
+:where(.dark, .dark *) .team-select {
+  background: #0f172a;
+  border-color: #374151;
+  color: #e2e8f0;
+}
+
+:where(.dark, .dark *) .stat-filter-builder select,
+:where(.dark, .dark *) .stat-filter-builder input {
+  background: #0f172a;
+  border-color: #374151;
+  color: #e2e8f0;
+}
+
+:where(.dark, .dark *) .filter-chip {
+  background: #1e3a5f;
+  color: #bfdbfe;
+}
+
+:where(.dark, .dark *) .filter-chip button {
+  color: #94a3b8;
+}
+
+:where(.dark, .dark *) .filter-chip button:hover {
+  color: #f1f5f9;
+}
+
+:where(.dark, .dark *) .results-count {
+  color: #94a3b8;
+}
+
+:where(.dark, .dark *) .table-container {
+  background: #1e293b;
+  border-color: #374151;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+:where(.dark, .dark *) .player-table {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+:where(.dark, .dark *) .player-table th {
+  background: #0f172a;
+  border-bottom-color: #374151;
+  color: #e2e8f0;
+}
+
+:where(.dark, .dark *) .player-table th:hover {
+  background: #1e293b;
+}
+
+:where(.dark, .dark *) .player-table td {
+  border-bottom-color: #1f2937;
+}
+
+:where(.dark, .dark *) .player-table tbody tr:hover {
+  background: #1e3a5f;
+}
