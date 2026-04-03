@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGetLeagueShotsQuery } from '../store/api/fantasyApi'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DataDateBadge from '../components/DataDateBadge'
@@ -53,16 +53,16 @@ const Shots = () => {
   
   // Sort the data client-side
   const shots = [...rawShots].sort((a, b) => {
-    let aValue = a[sortBy as keyof TeamShotStats]
-    let bValue = b[sortBy as keyof TeamShotStats]
+    const aValue = a[sortBy as keyof TeamShotStats]
+    const bValue = b[sortBy as keyof TeamShotStats]
     
     // Handle numeric sorting
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
     }
     
-    let aTeamName = a.team.team_name.toLowerCase()
-    let bTeamName = b.team.team_name.toLowerCase()
+    const aTeamName = a.team.team_name.toLowerCase()
+    const bTeamName = b.team.team_name.toLowerCase()
     if (aTeamName && bTeamName && aTeamName < bTeamName) return sortOrder === 'asc' ? -1 : 1
     if (aTeamName && bTeamName && aTeamName > bTeamName) return sortOrder === 'asc' ? 1 : -1
     return 0
