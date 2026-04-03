@@ -22,22 +22,22 @@ function injuryStyle(status: string): string {
 
 function DepthChartTable({ positions }: { positions: DepthChartPosition[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+        <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap w-36">Position</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-36">Position</th>
             {DEPTH_LABELS.map((label) => (
-              <th key={label} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              <th key={label} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                 {label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-100">
+        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
           {positions.map((pos) => (
-            <tr key={pos.abbreviation} className="hover:bg-gray-50 transition-colors">
-              <td className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap w-36">
+            <tr key={pos.abbreviation} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <td className="px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap w-36">
                 {pos.display_name}
               </td>
               {Array.from({ length: MAX_DEPTH }, (_, i) => {
@@ -46,7 +46,7 @@ function DepthChartTable({ positions }: { positions: DepthChartPosition[] }) {
                   <td key={i} className="px-4 py-2.5 whitespace-nowrap">
                     {player ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-800">{player.display_name}</span>
+                        <span className="text-gray-800 dark:text-gray-100">{player.display_name}</span>
                         {player.injury && (
                           <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-semibold ${injuryStyle(player.injury.status)}`}>
                             {player.injury.status}
@@ -79,7 +79,7 @@ function FilterCheckbox({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label htmlFor={id} className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700">
+    <label htmlFor={id} className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-gray-300">
       <input
         id={id}
         type="checkbox"
@@ -163,7 +163,7 @@ export default function NbaTeams() {
             <select
               value={selectedTeamId}
               onChange={(e) => setSelectedTeamId(e.target.value)}
-              className="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select a team...</option>
               {teams?.map((team) => (

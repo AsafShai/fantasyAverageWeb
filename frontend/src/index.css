@@ -1,44 +1,154 @@
 @import "tailwindcss";
 
-/* Custom styles for better design */
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Dark mode base ── */
+.dark body {
+  background-color: #111827;
+  color: #f3f4f6;
+}
+
+/* ── Backgrounds ── */
+.dark .bg-white         { background-color: #1f2937 !important; }
+.dark .bg-gray-50       { background-color: #374151 !important; }
+.dark .bg-gray-100      { background-color: #374151 !important; }
+
+/* Colored *-50 cards → slightly raised surface */
+.dark .bg-amber-50, .dark .bg-orange-50,
+.dark .bg-emerald-50,   .dark .bg-teal-50,
+.dark .bg-blue-50,      .dark .bg-indigo-50,
+.dark .bg-green-50,     .dark .bg-purple-50,
+.dark .bg-pink-50,      .dark .bg-yellow-50,
+.dark .bg-red-50,       .dark .bg-cyan-50,
+.dark .bg-rose-50       { background-color: #2d3748 !important; }
+
+/* Gradient *-50 stops */
+.dark .from-blue-50, .dark .from-indigo-50,
+.dark .from-amber-50,   .dark .from-orange-50,
+.dark .from-emerald-50, .dark .from-teal-50,
+.dark .from-green-50,   .dark .from-purple-50,
+.dark .from-gray-50 {
+  --tw-gradient-from: #2d3748 !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+.dark .to-blue-50,      .dark .to-indigo-50,
+.dark .to-amber-50,     .dark .to-orange-50,
+.dark .to-emerald-50,   .dark .to-teal-50,
+.dark .to-green-50,     .dark .to-purple-50,
+.dark .to-gray-50       { --tw-gradient-to: #2d3748 !important; }
+
+/* Badge / status pill backgrounds */
+.dark .bg-blue-100      { background-color: #1e3a5f !important; }
+.dark .bg-red-100       { background-color: #4c1d1d !important; }
+.dark .bg-yellow-100    { background-color: #422006 !important; }
+.dark .bg-orange-100    { background-color: #431407 !important; }
+.dark .bg-green-100     { background-color: #052e16 !important; }
+.dark .bg-amber-100     { background-color: #451a03 !important; }
+.dark .bg-emerald-100   { background-color: #022c22 !important; }
+
+/* ── Text ── */
+.dark .text-gray-900    { color: #f9fafb !important; }
+.dark .text-gray-800    { color: #f3f4f6 !important; }
+.dark .text-gray-700    { color: #e5e7eb !important; }
+.dark .text-gray-600    { color: #d1d5db !important; }
+.dark .text-gray-500    { color: #9ca3af !important; }
+.dark .text-gray-400    { color: #6b7280 !important; }
+.dark .text-gray-300    { color: #4b5563 !important; }
+
+/* Colored heading text — lighter shades for dark bg */
+.dark .text-amber-900   { color: #fbbf24 !important; }
+.dark .text-orange-900  { color: #fb923c !important; }
+.dark .text-emerald-900 { color: #34d399 !important; }
+.dark .text-teal-900    { color: #2dd4bf !important; }
+.dark .text-blue-900    { color: #60a5fa !important; }
+.dark .text-indigo-900  { color: #818cf8 !important; }
+.dark .text-green-900   { color: #4ade80 !important; }
+.dark .text-purple-900  { color: #c084fc !important; }
+.dark .text-pink-900    { color: #f472b6 !important; }
+.dark .text-yellow-900  { color: #facc15 !important; }
+.dark .text-red-900     { color: #f87171 !important; }
+.dark .text-cyan-900    { color: #22d3ee !important; }
+.dark .text-amber-700   { color: #fcd34d !important; }
+.dark .text-red-700     { color: #fca5a5 !important; }
+.dark .text-red-600     { color: #f87171 !important; }
+.dark .text-green-600   { color: #6ee7b7 !important; }
+.dark .text-yellow-600  { color: #fcd34d !important; }
+
+/* Badge / status pill text */
+.dark .text-blue-800    { color: #93c5fd !important; }
+.dark .text-red-800     { color: #fca5a5 !important; }
+.dark .text-yellow-800  { color: #fde68a !important; }
+.dark .text-orange-800  { color: #fdba74 !important; }
+.dark .text-green-800   { color: #86efac !important; }
+.dark .text-amber-800   { color: #fcd34d !important; }
+.dark .text-emerald-800 { color: #6ee7b7 !important; }
+
+/* ── Borders ── */
+.dark .border-gray-200  { border-color: #4b5563 !important; }
+.dark .border-gray-100  { border-color: #4b5563 !important; }
+.dark .border-gray-300  { border-color: #4b5563 !important; }
+.dark .border-amber-200 { border-color: #78350f !important; }
+.dark .border-emerald-200 { border-color: #065f46 !important; }
+.dark .border-blue-200  { border-color: #1e40af !important; }
+.dark .border-amber-400 { border-color: #d97706 !important; }
+
+.dark .divide-gray-200 > * + * { border-color: #4b5563 !important; }
+.dark .divide-gray-100 > * + * { border-color: #4b5563 !important; }
+
+/* ── Inputs & selects ── */
+.dark input[type="date"],
+.dark input[type="text"],
+.dark input[type="search"],
+.dark select {
+  background-color: #374151 !important;
+  color: #f3f4f6 !important;
+  border-color: #4b5563 !important;
+}
+
+/* ── Hover rows ── */
+.dark .hover\:bg-gray-50:hover    { background-color: #374151 !important; }
+.dark .hover\:bg-gray-100:hover   { background-color: #374151 !important; }
+.dark .hover\:bg-blue-50:hover    { background-color: #1e3a5f !important; }
+.dark .hover\:bg-orange-50:hover  { background-color: #374151 !important; }
+
+/* ── Notifications panel ── */
+.dark .bg-blue-500  { background-color: #2563eb !important; }
+
+/* ── Footer ── */
+.dark footer { background-color: #1f2937 !important; border-color: #374151 !important; }
+
+/* ── Custom component classes ── */
 @layer components {
   .card {
-    @apply bg-white rounded-lg shadow-md border border-gray-200;
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700;
   }
-  
+
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200;
   }
-  
+
   .table-header {
-    @apply bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+    @apply bg-gray-50 dark:bg-gray-800 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700;
   }
-  
+
   .table-cell {
-    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100;
   }
-  
-  /* Trade specific styles */
+
   .trade-stat-grid {
     @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3;
   }
-  
+
   .trade-stat-item {
     @apply flex items-center justify-between p-2 bg-gray-50 rounded-lg;
   }
-  
+
   .trade-comparison-grid {
     @apply grid grid-cols-1 sm:grid-cols-2 gap-4;
   }
-  
-  /* Mobile improvements */
+
   @media (max-width: 640px) {
-    .trade-stat-grid {
-      @apply grid-cols-1 gap-2;
-    }
-    
-    .trade-comparison-grid {
-      @apply grid-cols-1 gap-3;
-    }
+    .trade-stat-grid    { @apply grid-cols-1 gap-2; }
+    .trade-comparison-grid { @apply grid-cols-1 gap-3; }
   }
 }
