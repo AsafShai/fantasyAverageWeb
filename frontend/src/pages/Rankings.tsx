@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGetRankingsQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DataDateBadge from '../components/DataDateBadge'
@@ -80,13 +80,13 @@ const Rankings = () => {
     : (data?.totals_rankings || [])
 
   const rankings = [...rawRankings].sort((a, b) => {
-    let aValue = a[sortBy as keyof RankingStats]
-    let bValue = b[sortBy as keyof RankingStats]
+    const aValue = a[sortBy as keyof RankingStats]
+    const bValue = b[sortBy as keyof RankingStats]
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
     }
-    let aTeamName = a.team.team_name.toLowerCase()
-    let bTeamName = b.team.team_name.toLowerCase()
+    const aTeamName = a.team.team_name.toLowerCase()
+    const bTeamName = b.team.team_name.toLowerCase()
     if (aTeamName < bTeamName) return sortOrder === 'asc' ? -1 : 1
     if (aTeamName > bTeamName) return sortOrder === 'asc' ? 1 : -1
     return 0

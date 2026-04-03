@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TeamSelector } from './components/TeamSelector';
 import { TradeSuggestionCard } from './components/TradeSuggestionCard';
 import { useGetTradeSuggestionsQuery } from '../../store/api/fantasyApi';
@@ -32,8 +32,6 @@ const getErrorMessage = (error: unknown): string => {
 export const TradeSuggestions: React.FC = () => {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('totals');
-  const [currentSuggestions, setCurrentSuggestions] = useState<TradeSuggestionsResponse | null>(null);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [shouldFetch, setShouldFetch] = useState<boolean>(false);
 
   const {
@@ -41,55 +39,42 @@ export const TradeSuggestions: React.FC = () => {
     isLoading: queryLoading,
     error,
     refetch,
-  } = useGetTradeSuggestionsQuery(selectedTeam?.team_id!, {
+  } = useGetTradeSuggestionsQuery(selectedTeam?.team_id ?? 0, {
     skip: !selectedTeam || !shouldFetch,
   });
 
-  // Clear suggestions when team changes
-  useEffect(() => {
-    if (selectedTeam) {
-      setCurrentSuggestions(null);
-      setIsGenerating(false);
-      setShouldFetch(false);
-    }
-  }, [selectedTeam]);
+  const isAnalyzing = shouldFetch && queryLoading;
 
-  // Update current suggestions when new data arrives
-  useEffect(() => {
-    if (suggestions && !queryLoading) {
-      setCurrentSuggestions(suggestions);
-      setIsGenerating(false);
-    }
-  }, [suggestions, queryLoading]);
+  const effectiveSuggestions = useMemo((): TradeSuggestionsResponse | null => {
+    if (!selectedTeam || !shouldFetch) return null;
+    if (queryLoading) return null;
+    return suggestions ?? null;
+  }, [selectedTeam, shouldFetch, queryLoading, suggestions]);
 
-  const isAnalyzing = isGenerating || queryLoading;
+  const handleTeamSelect = (team: Team | null): void => {
+    setSelectedTeam(team);
+    setShouldFetch(false);
+  };
 
   const handleGenerateTrades = (): void => {
     if (!selectedTeam || isAnalyzing) return;
-    setIsGenerating(true);
-    setCurrentSuggestions(null);
     setShouldFetch(true);
     refetch();
   };
 
   const handleReset = (): void => {
     setSelectedTeam(null);
-    setCurrentSuggestions(null);
-    setIsGenerating(false);
     setShouldFetch(false);
   };
 
   const handleRetry = (): void => {
     if (!selectedTeam || isAnalyzing) return;
-    setIsGenerating(true);
     setShouldFetch(true);
     refetch();
   };
 
   const handleGenerateNew = (): void => {
     if (!selectedTeam || isAnalyzing) return;
-    setIsGenerating(true);
-    setCurrentSuggestions(null);
     setShouldFetch(true);
     refetch();
   };
@@ -130,11 +115,11 @@ export const TradeSuggestions: React.FC = () => {
         </div>
       </div>
 
-      {!currentSuggestions && (
+      {!effectiveSuggestions && !isAnalyzing && (
         <div className="max-w-md mx-auto mb-8">
           <TeamSelector
             selectedTeam={selectedTeam}
-            onTeamSelect={setSelectedTeam}
+            onTeamSelect={handleTeamSelect}
             disabled={isAnalyzing}
           />
           
@@ -189,11 +174,11 @@ export const TradeSuggestions: React.FC = () => {
         </div>
       )}
 
-      {currentSuggestions && (
+      {effectiveSuggestions && (
         <div className="space-y-6">
           <div className="text-center">
             <h2 className="text-xl font-bold text-gray-900 mb-2">
-              Trade Suggestions for {currentSuggestions.user_team.team_name}
+              Trade Suggestions for {effectiveSuggestions.user_team.team_name}
             </h2>
             <div className="flex justify-center space-x-4">
               <button
@@ -215,11 +200,11 @@ export const TradeSuggestions: React.FC = () => {
           </div>
 
           <div className="grid gap-6 lg:gap-8">
-            {currentSuggestions.trade_suggestions.map((suggestion, index) => (
+            {effectiveSuggestions.trade_suggestions.map((suggestion, index) => (
               <TradeSuggestionCard
                 key={`${suggestion.opponent_team.team_id}-${index}`}
                 suggestion={suggestion}
-                userTeam={currentSuggestions.user_team}
+                userTeam={effectiveSuggestions.user_team}
                 index={index + 1}
                 viewMode={viewMode}
               />
@@ -228,7 +213,7 @@ export const TradeSuggestions: React.FC = () => {
         </div>
       )}
 
-      {!selectedTeam && !isAnalyzing && !currentSuggestions && (
+      {!selectedTeam && !isAnalyzing && !effectiveSuggestions && (
         <div className="text-center py-16">
           <div className="text-6xl mb-6">🤝</div>
           <h3 className="text-xl font-semibold text-gray-800 mb-2">

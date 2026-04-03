@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router'
 import { useState } from 'react'
 import { useGetTeamDetailQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import type { TimePeriod } from '../types/api'

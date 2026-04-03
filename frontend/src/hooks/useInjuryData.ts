@@ -102,7 +102,9 @@ export function useInjuryData(): {
       try {
         const data = JSON.parse(event.data as string);
         setLastReportTime(data.report_time);
-      } catch {}
+      } catch {
+        void 0
+      }
     });
 
     es.onerror = () => {
