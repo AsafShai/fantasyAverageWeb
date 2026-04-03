@@ -120,11 +120,11 @@ const Shots = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {shots.map((team: TeamShotStats) => (
-              <tr key={team.team.team_id} className="hover:bg-orange-50 transition-colors duration-150 border-b border-gray-100">
+              <tr key={team.team.team_id} className="hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors duration-150 border-b border-gray-100">
                 <td className="table-cell">
                   <Link
                     to={`/team/${team.team.team_id}`}
-                    className="text-orange-600 hover:text-orange-800 font-semibold transition-colors duration-150 hover:underline"
+                    className="text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-150 hover:underline"
                   >
                     {team.team.team_name}
                   </Link>
