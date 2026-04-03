@@ -18,6 +18,11 @@ const STAT_LABELS: Record<string, string> = {
 const STAT_KEYS = ['fg_pct', 'ft_pct', 'three_pm', 'reb', 'ast', 'stl', 'blk', 'pts'] as const
 type StatKey = typeof STAT_KEYS[number]
 
+function formatRankProbabilityPercent(prob: number): string {
+  if (prob <= 0) return ''
+  return `${(prob * 100).toFixed(1)}%`
+}
+
 function getProbColor(prob: number, isDark: boolean): { bg: string; text: string } {
   if (prob === 0) return { bg: isDark ? 'rgb(17,24,39)' : 'rgb(240,245,255)', text: isDark ? 'transparent' : '#aaa' }
   if (isDark) {
@@ -82,7 +87,7 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
     <div>
       <h2 className="text-xl font-semibold mb-1">Rank Probability Heatmap</h2>
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
-        How likely is each team to finish in each place by end of season? Higher probability = more likely. Teams are ordered by their most likely finishing position.
+        How likely is each team to finish in each place by end of season? Cells show percent chance (0–100%). Teams are ordered by their most likely finishing position.
       </p>
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse text-sm">
@@ -90,7 +95,7 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
             <tr className="border-b border-gray-300 dark:border-gray-600">
               <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Team</th>
               {rankCols.map(r => (
-                <th key={r} className="px-2 py-2 text-center font-medium text-gray-700 dark:text-gray-200 w-12">{r}</th>
+                <th key={r} className="px-2 py-2 text-center font-medium text-gray-700 dark:text-gray-200 min-w-14">{r}</th>
               ))}
             </tr>
           </thead>
@@ -114,10 +119,10 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
                     return (
                       <td
                         key={r}
-                        className="px-1 py-1.5 text-center w-12 text-xs font-medium"
+                        className="px-1 py-1.5 text-center min-w-14 text-xs font-medium"
                         style={{ backgroundColor: bg, color: text }}
                       >
-                        {prob > 0 ? prob.toFixed(2) : ''}
+                        {formatRankProbabilityPercent(prob)}
                       </td>
                     )
                   })}
