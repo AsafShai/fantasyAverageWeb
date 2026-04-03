@@ -32,7 +32,7 @@ function pl(overrides: Partial<Player['stats']> = {}): Player {
 
 describe('aggregatePlayerAverages', () => {
   it('computes per-game aggregates and FG/FT% from totals', () => {
-    const a = aggregatePlayerAverages([pl(''), pl({ pts: 10, fgm: 2, fga: 4, ftm: 1, fta: 2, gp: 10 })]);
+    const a = aggregatePlayerAverages([pl(), pl({ pts: 10, fgm: 2, fga: 4, ftm: 1, fta: 2, gp: 10 })]);
     expect(a.pts).toBeCloseTo(1.5, 5);
     expect(a.fgm).toBeCloseTo(0.5, 5);
     expect(a.fga).toBeCloseTo(1.0, 5);
