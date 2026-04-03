@@ -37,6 +37,11 @@ function parseGameParts(r: InjuryRecord): { gameTime: string; matchup: string; g
 type SortKey = 'team' | 'gameTime' | 'status' | 'last_update';
 type SortDir = 'asc' | 'desc';
 
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (sortKey !== col) return <span className="ml-1 text-gray-300">↕</span>;
+  return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+}
+
 interface Props {
   records: InjuryRecord[];
   totalCount: number;
@@ -53,11 +58,6 @@ export default function InjuryTable({ records, totalCount }: Props) {
       setSortKey(key);
       setSortDir('asc');
     }
-  }
-
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) return <span className="ml-1 text-gray-300">↕</span>;
-    return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
   }
 
   const sorted = [...records].sort((a, b) => {
@@ -92,13 +92,13 @@ export default function InjuryTable({ records, totalCount }: Props) {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
             <tr>
-              <th className={thSortClass} onClick={() => handleSort('team')}>Team<SortIcon col="team" /></th>
-              <th className={thSortClass} onClick={() => handleSort('gameTime')}>Game Time<SortIcon col="gameTime" /></th>
+              <th className={thSortClass} onClick={() => handleSort('team')}>Team<SortIcon col="team" sortKey={sortKey} sortDir={sortDir} /></th>
+              <th className={thSortClass} onClick={() => handleSort('gameTime')}>Game Time<SortIcon col="gameTime" sortKey={sortKey} sortDir={sortDir} /></th>
               <th className={thClass}>Matchup</th>
               <th className={thClass}>Player</th>
-              <th className={thSortClass} onClick={() => handleSort('status')}>Status<SortIcon col="status" /></th>
+              <th className={thSortClass} onClick={() => handleSort('status')}>Status<SortIcon col="status" sortKey={sortKey} sortDir={sortDir} /></th>
               <th className={thClass}>Injury</th>
-              <th className={thSortClass} onClick={() => handleSort('last_update')}>Last Update<SortIcon col="last_update" /></th>
+              <th className={thSortClass} onClick={() => handleSort('last_update')}>Last Update<SortIcon col="last_update" sortKey={sortKey} sortDir={sortDir} /></th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">

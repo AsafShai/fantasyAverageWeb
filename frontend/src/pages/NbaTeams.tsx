@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -97,11 +97,6 @@ function DepthChartView({ teamId }: { teamId: string }) {
   const [hideInjured, setHideInjured] = useState(false);
   const [removeDuplicates, setRemoveDuplicates] = useState(false);
 
-  useEffect(() => {
-    setHideInjured(false);
-    setRemoveDuplicates(false);
-  }, [teamId]);
-
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message="Failed to load depth chart" />;
   if (!data) return null;
@@ -174,7 +169,7 @@ export default function NbaTeams() {
             </select>
           </div>
 
-          {selectedTeamId && <DepthChartView teamId={selectedTeamId} />}
+          {selectedTeamId && <DepthChartView key={selectedTeamId} teamId={selectedTeamId} />}
         </>
       )}
     </div>
