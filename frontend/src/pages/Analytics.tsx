@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react'
+import { useState, useEffect, type JSX } from 'react'
 import { useGetHeatmapDataQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -26,6 +26,13 @@ const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
 const Analytics = () => {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
+  useEffect(() => {
+    const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')))
+    obs.observe(document.documentElement, { attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
+
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [highlightedTeamId, setHighlightedTeamId] = useState<number | null>(null)
@@ -173,7 +180,7 @@ const Analytics = () => {
               min={summary?.season_start}
               max={endDate || today}
               onChange={(e) => handleStartDate(e.target.value)}
-              className="px-3 py-1.5 rounded-md text-sm text-gray-800 bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="px-3 py-1.5 rounded-md text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -192,7 +199,7 @@ const Analytics = () => {
               min={startDate || summary?.season_start}
               max={today}
               onChange={(e) => handleEndDate(e.target.value)}
-              className="px-3 py-1.5 rounded-md text-sm text-gray-800 bg-white border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="px-3 py-1.5 rounded-md text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
           </div>
           <button
@@ -205,7 +212,7 @@ const Analytics = () => {
           {(startDate || endDate) && (
             <button
               onClick={clearDates}
-              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-md transition-colors"
+              className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 hover:border-gray-500 rounded-md transition-colors"
             >
               Clear
             </button>
@@ -221,7 +228,7 @@ const Analytics = () => {
                 setEndDate(today);
                 setDateError('');
               }}
-              className="px-2 py-0.5 text-xs rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+              className="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
             >
               Last {days}d
             </button>
@@ -233,7 +240,7 @@ const Analytics = () => {
         )}
 
         {hasDateMismatch && (
-          <div className="mb-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+          <div className="mb-3 px-4 py-2 bg-amber-50 dark:bg-gray-700 border border-amber-200 dark:border-gray-600 rounded-md text-sm text-amber-700 dark:text-amber-300">
             Note: closest available data used - showing {formatDate(heatmapData!.actual_start_date!)} - {formatDate(heatmapData!.actual_end_date!)}
           </div>
         )}
@@ -245,7 +252,7 @@ const Analytics = () => {
             <thead>
               <tr>
                 <th
-                  className="px-4 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+                  className="px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
                   onClick={() => handleSort('team')}
                 >
                   <div className="flex items-center">
@@ -260,7 +267,7 @@ const Analytics = () => {
                 {sortedData.categories.map((category: string) => (
                   <th
                     key={category}
-                    className="px-2 py-2 text-center text-xs cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+                    className="px-2 py-2 text-center text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150 border-l border-gray-200 dark:border-gray-700"
                     onClick={() => handleSort(category)}
                   >
                     <div className="flex items-center justify-center">
@@ -282,12 +289,12 @@ const Analytics = () => {
                   <tr
                     key={team.team_id}
                     className={`transition-all duration-150 ${
-                      isHighlighted ? 'border-[3px] border-black' : ''
+                      isHighlighted ? 'border-[3px] border-black dark:border-white' : ''
                     }`}
                   >
                     <td
                       className={`px-4 py-2 cursor-pointer transition-colors duration-150 ${
-                        isHighlighted ? 'font-bold' : 'font-medium hover:bg-gray-100'
+                        isHighlighted ? 'font-bold' : 'font-medium hover:bg-gray-100 dark:hover:bg-gray-700'
                       }`}
                       onClick={() => handleTeamClick(team.team_id)}
                     >
@@ -306,12 +313,12 @@ const Analytics = () => {
                       return (
                         <td
                           key={catIndex}
-                          className={`px-2 py-2 text-center text-xs relative ${
-                            category === 'GP' ? 'border-l-4 border-gray-700' : ''
+                          className={`px-2 py-2 text-center text-xs relative border-l border-gray-300 dark:border-gray-600 ${
+                            category === 'GP' ? 'border-l-4 border-gray-700 dark:border-gray-400' : ''
                           }`}
                           style={{
-                            backgroundColor: getHeatmapColor(value),
-                            color: getTextColor(value)
+                            backgroundColor: getHeatmapColor(value, isDark),
+                            color: getTextColor(value, isDark)
                           }}
                         >
                           <span>{displayValue}</span>
