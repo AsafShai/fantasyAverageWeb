@@ -41,7 +41,7 @@ export const TradeSuggestions: React.FC = () => {
     isLoading: queryLoading,
     error,
     refetch,
-  } = useGetTradeSuggestionsQuery(selectedTeam?.team_id!, {
+  } = useGetTradeSuggestionsQuery(selectedTeam?.team_id ?? 0, {
     skip: !selectedTeam || !shouldFetch,
   });
 
