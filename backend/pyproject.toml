@@ -24,3 +24,8 @@ dependencies = [
     "numpy>=1.24.0",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "real_dataprovider: use real DataProvider singleton (nested patch) for unit tests",
+]
+

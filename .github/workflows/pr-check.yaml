@@ -32,6 +32,20 @@ jobs:
         working-directory: backend
         run: PYTHONPATH=. uv run pytest
 
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+
   build-backend:
     needs: test-backend
     runs-on: ubuntu-latest
@@ -44,7 +58,7 @@ jobs:
         run: docker build -t fantasy-backend:latest .
 
   build-frontend:
-    needs: test-backend
+    needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
