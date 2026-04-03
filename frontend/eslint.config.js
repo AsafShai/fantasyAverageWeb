@@ -19,9 +19,5 @@ export default tseslint.config([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
-    rules: {
-      'react-hooks/static-components': 'off',
-      'react-hooks/set-state-in-effect': 'off',
-    },
   },
 ])
