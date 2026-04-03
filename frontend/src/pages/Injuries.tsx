@@ -67,7 +67,7 @@ export default function Injuries() {
               <button
                 type="button"
                 onClick={() => setNotifOpen(o => !o)}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-200 rounded-lg shadow-sm text-sm font-medium text-gray-700"
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200"
               >
                 <span className="flex items-center gap-2">
                   <span>Notifications</span>
