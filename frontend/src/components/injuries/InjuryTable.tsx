@@ -76,21 +76,21 @@ export default function InjuryTable({ records, totalCount }: Props) {
   });
 
   if (totalCount === 0) {
-    return <div className="text-center py-16 text-gray-400 text-sm">No injury data available</div>;
+    return <div className="text-center py-16 text-gray-400 dark:text-gray-500 text-sm">No injury data available</div>;
   }
   if (records.length === 0) {
-    return <div className="text-center py-16 text-gray-400 text-sm">No results match your filters</div>;
+    return <div className="text-center py-16 text-gray-400 dark:text-gray-500 text-sm">No results match your filters</div>;
   }
 
-  const thClass = "px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap";
-  const thSortClass = `${thClass} cursor-pointer hover:text-gray-700 select-none`;
+  const thClass = "px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap";
+  const thSortClass = `${thClass} cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none`;
 
   return (
     <>
       {/* Desktop table */}
-      <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50 sticky top-0 z-10">
+      <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+          <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
             <tr>
               <th className={thSortClass} onClick={() => handleSort('team')}>Team<SortIcon col="team" /></th>
               <th className={thSortClass} onClick={() => handleSort('gameTime')}>Game Time<SortIcon col="gameTime" /></th>
@@ -101,22 +101,22 @@ export default function InjuryTable({ records, totalCount }: Props) {
               <th className={thSortClass} onClick={() => handleSort('last_update')}>Last Update<SortIcon col="last_update" /></th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
             {sorted.map((r, i) => {
               const { gameTime, matchup } = parseGameParts(r);
               return (
-                <tr key={`${r.team}|${r.player}|${i}`} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{r.team}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{gameTime || '—'}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{matchup || '—'}</td>
-                  <td className="px-4 py-3 text-gray-800 whitespace-nowrap">{r.player}</td>
+                <tr key={`${r.team}|${r.player}|${i}`} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap">{r.team}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{gameTime || '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{matchup || '—'}</td>
+                  <td className="px-4 py-3 text-gray-800 dark:text-gray-100 whitespace-nowrap">{r.player}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyle(r.status)}`}>
                       {r.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{r.injury || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{fmtTimestamp(r.last_update)}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{r.injury || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">{fmtTimestamp(r.last_update)}</td>
                 </tr>
               );
             })}
@@ -126,7 +126,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
 
       {/* Mobile sort controls */}
       <div className="sm:hidden flex items-center gap-2 mb-2">
-        <span className="text-xs text-gray-500 shrink-0">Sort by:</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Sort by:</span>
         <select
           value={sortKey}
           onChange={e => {
@@ -134,7 +134,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
             setSortKey(key);
             setSortDir(key === 'last_update' ? 'desc' : 'asc');
           }}
-          className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1"
+          className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1"
         >
           <option value="last_update">Last Update</option>
           <option value="gameTime">Game Time</option>
@@ -142,7 +142,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
         <button
           type="button"
           onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-          className="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 shrink-0"
+          className="border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 text-sm bg-white dark:bg-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 shrink-0"
           aria-label="Toggle sort direction"
         >
           {sortDir === 'asc' ? '↑' : '↓'}
@@ -155,22 +155,28 @@ export default function InjuryTable({ records, totalCount }: Props) {
           const { gameTime, matchup } = parseGameParts(r);
           const gameDisplay = [gameTime, matchup].filter(Boolean).join(' ');
           return (
-            <div key={`${r.team}|${r.player}|${i}`} className="bg-white rounded-lg border border-gray-200 px-3 py-2.5 shadow-sm w-full min-w-0">
+            <div key={`${r.team}|${r.player}|${i}`} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 shadow-sm w-full min-w-0">
               <div className="flex items-start justify-between gap-2 min-w-0">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-800 text-sm truncate">{r.player}</p>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">{r.team}{gameDisplay ? ` · ${gameDisplay}` : ''}</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{r.player}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{r.team}</p>
+                  {gameDisplay && (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{gameDisplay}</p>
+                  )}
                 </div>
                 <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyle(r.status)}`}>
                   {r.status}
                 </span>
               </div>
-              {r.injury && (
-                <p className="text-xs text-gray-600 mt-2 break-words">{r.injury}</p>
-              )}
-              {r.last_update && (
-                <p className="text-xs text-gray-400 mt-1">{fmtTimestamp(r.last_update)}</p>
-              )}
+              <div className="flex items-end justify-between mt-1 gap-2">
+                {r.injury
+                  ? <p className="text-xs text-gray-600 dark:text-gray-300 break-words">{r.injury}</p>
+                  : <span />
+                }
+                {r.last_update && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 shrink-0 text-right">{fmtTimestamp(r.last_update)}</p>
+                )}
+              </div>
             </div>
           );
         })}

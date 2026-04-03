@@ -57,8 +57,8 @@ function MultiSelectDropdown({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-colors ${
-          selected.length > 0 ? 'border-blue-400 text-blue-700' : 'border-gray-300 text-gray-600'
+        className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white dark:bg-gray-700 transition-colors ${
+          selected.length > 0 ? 'border-blue-400 text-blue-700 dark:text-blue-300' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300'
         }`}
       >
         <span>{label}</span>
@@ -76,11 +76,11 @@ function MultiSelectDropdown({
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-20 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
           {options.map(opt => (
             <label
               key={opt}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-600 cursor-pointer"
             >
               <input
                 type="checkbox"
@@ -105,7 +105,7 @@ export default function InjuryFilters({ filters, onChange, teams }: Props) {
         placeholder="Search player..."
         value={filters.search}
         onChange={e => onChange({ ...filters, search: e.target.value })}
-        className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-full sm:w-48"
+        className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full sm:w-48"
       />
 
       <MultiSelectDropdown

@@ -94,15 +94,15 @@ const Players = () => {
           <div className="hidden sm:block">
             <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
           </div>
-          <div className="flex border border-gray-300 rounded overflow-hidden sm:self-stretch">
+          <div className="flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden sm:self-stretch">
             <button
-              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
               onClick={() => setShowAverages(true)}
             >
               Per Game
             </button>
             <button
-              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
               onClick={() => setShowAverages(false)}
             >
               Totals
