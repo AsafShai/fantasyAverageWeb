@@ -107,7 +107,7 @@ describe('NbaTeams page', () => {
     await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
     await user.selectOptions(screen.getByRole('combobox'), '13');
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
-    await user.click(screen.getByRole('checkbox', { name: /remove duplicates/i }));
+    await user.click(screen.getByRole('checkbox', { name: /duplicates/i }));
     const table = screen.getByRole('table');
     const rows = within(table).getAllByRole('row').slice(1);
     const pgRow = rows.find((r) => within(r).queryByText('Point Guard'));
