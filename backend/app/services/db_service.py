@@ -602,7 +602,7 @@ class DBService:
         try:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT team, player, status, injury_reason FROM player_injury_status"
+                    "SELECT team, player, status, injury_reason, last_updated FROM player_injury_status"
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
