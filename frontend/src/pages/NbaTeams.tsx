@@ -7,6 +7,7 @@ import { applyDepthChartFilters } from '../utils/depthChartFilters';
 
 const MAX_DEPTH = 5;
 const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th'];
+const EXCLUDE_STATUSES = ['Out', 'Doubtful', 'Questionable', 'Probable'] as const;
 
 const INJURY_STYLES: Record<string, string> = {
   Out: 'bg-red-100 text-red-800',
@@ -94,14 +95,23 @@ function FilterCheckbox({
 
 function DepthChartView({ teamId }: { teamId: string }) {
   const { data, isLoading, error } = useGetNbaTeamDepthChartQuery(teamId);
-  const [hideInjured, setHideInjured] = useState(false);
+  const [excludedStatuses, setExcludedStatuses] = useState<Set<string>>(new Set());
   const [removeDuplicates, setRemoveDuplicates] = useState(false);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message="Failed to load depth chart" />;
   if (!data) return null;
 
-  const filteredPositions = applyDepthChartFilters(data.positions, hideInjured, removeDuplicates);
+  const toggleStatus = (status: string) => {
+    setExcludedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  };
+
+  const filteredPositions = applyDepthChartFilters(data.positions, excludedStatuses, removeDuplicates);
 
   return (
     <div>
@@ -115,13 +125,19 @@ function DepthChartView({ teamId }: { teamId: string }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-6 mb-4">
-        <FilterCheckbox
-          id="hide-injured"
-          label="Hide injured (Out)"
-          checked={hideInjured}
-          onChange={setHideInjured}
-        />
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">Exclude:</span>
+          {EXCLUDE_STATUSES.map((status) => (
+            <FilterCheckbox
+              key={status}
+              id={`exclude-${status.toLowerCase()}`}
+              label={status}
+              checked={excludedStatuses.has(status)}
+              onChange={() => toggleStatus(status)}
+            />
+          ))}
+        </div>
         <FilterCheckbox
           id="remove-duplicates"
           label="Remove duplicates"
@@ -161,7 +177,7 @@ export default function NbaTeams() {
               className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select a team...</option>
-              {teams?.map((team) => (
+              {[...(teams ?? [])].sort((a, b) => a.team_name.localeCompare(b.team_name)).map((team) => (
                 <option key={team.team_id} value={team.team_id}>
                   {team.team_name}
                 </option>
