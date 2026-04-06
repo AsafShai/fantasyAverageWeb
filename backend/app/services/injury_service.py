@@ -465,7 +465,11 @@ async def update_injury_data() -> None:
 
 
 async def initialize() -> None:
-    """Fetch and store the latest injury report on startup (no notifications)."""
+    """Fetch and store the latest injury report on startup (no notifications).
+
+    last_update is taken from the DB when available so each player shows the
+    timestamp of when they were actually last changed, not the current time.
+    """
     logger.info("Initializing injury service")
     url = get_current_pdf_url()
     logger.info(f"Fetching injury PDF: {url}")
@@ -474,11 +478,23 @@ async def initialize() -> None:
         logger.warning("Starting with empty injury store — initial PDF unavailable")
         return
 
+    db_service = get_db_service()
+    db_rows = await db_service.load_all_injury_statuses()
+    db_timestamps: dict[str, str] = {}
+    for row in db_rows:
+        key = f"{row['team']}|{row['player']}"
+        ts = row.get("last_updated")
+        if ts is not None:
+            if isinstance(ts, datetime):
+                ts = ts.astimezone(timezone.utc).isoformat(timespec="seconds")
+            db_timestamps[key] = str(ts)
+
     now_il = get_utc_now_str()
     records = parse_injury_pdf(pdf_bytes)
     for record in records:
         key = f"{record.team}|{record.player}"
-        injury_store[key] = record.model_copy(update={"last_update": now_il})
+        last_update = db_timestamps.get(key, now_il)
+        injury_store[key] = record.model_copy(update={"last_update": last_update})
 
     logger.info(f"Injury store initialized with {len(injury_store)} player(s)")
 

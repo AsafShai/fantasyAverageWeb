@@ -1,19 +1,18 @@
 import type { DepthChartPosition } from '../types/api';
 
-const OUT_STATUS = 'Out';
 const MAX_DEPTH = 5;
 
 export function applyDepthChartFilters(
   positions: DepthChartPosition[],
-  hideInjured: boolean,
+  excludedStatuses: Set<string>,
   removeDuplicates: boolean
 ): DepthChartPosition[] {
   let result = positions.map((pos) => ({ ...pos, players: [...pos.players] }));
 
-  if (hideInjured) {
+  if (excludedStatuses.size > 0) {
     result = result.map((pos) => ({
       ...pos,
-      players: pos.players.filter((p) => p.injury?.status !== OUT_STATUS),
+      players: pos.players.filter((p) => !p.injury || !excludedStatuses.has(p.injury.status)),
     }));
   }
 

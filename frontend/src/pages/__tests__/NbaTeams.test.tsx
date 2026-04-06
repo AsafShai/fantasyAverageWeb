@@ -90,13 +90,13 @@ describe('NbaTeams page', () => {
     expect(screen.getByText('Point Guard')).toBeInTheDocument();
   });
 
-  it('hide injured removes Out players', async () => {
+  it('excluding Out status removes Out players', async () => {
     const user = userEvent.setup();
     renderWithProviders(<NbaTeams />);
     await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
     await user.selectOptions(screen.getByRole('combobox'), '13');
     await waitFor(() => expect(screen.getByText('Hurt')).toBeInTheDocument());
-    await user.click(screen.getByRole('checkbox', { name: /hide injured/i }));
+    await user.click(screen.getByRole('checkbox', { name: /^out$/i }));
     expect(screen.queryByText('Hurt')).not.toBeInTheDocument();
     expect(screen.getByText('Healthy')).toBeInTheDocument();
   });
@@ -107,7 +107,7 @@ describe('NbaTeams page', () => {
     await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
     await user.selectOptions(screen.getByRole('combobox'), '13');
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
-    await user.click(screen.getByRole('checkbox', { name: /remove duplicates/i }));
+    await user.click(screen.getByRole('checkbox', { name: /duplicates/i }));
     const table = screen.getByRole('table');
     const rows = within(table).getAllByRole('row').slice(1);
     const pgRow = rows.find((r) => within(r).queryByText('Point Guard'));
@@ -139,13 +139,13 @@ describe('NbaTeams page', () => {
     await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
     await user.selectOptions(screen.getByRole('combobox'), '13');
     await waitFor(() => expect(screen.getByText('Hurt')).toBeInTheDocument());
-    await user.click(screen.getByRole('checkbox', { name: /hide injured/i }));
+    await user.click(screen.getByRole('checkbox', { name: /^out$/i }));
     expect(screen.queryByText('Hurt')).not.toBeInTheDocument();
     await user.selectOptions(screen.getByRole('combobox'), '14');
     await waitFor(() =>
       expect(screen.getByRole('heading', { level: 2, name: /celtics/i })).toBeInTheDocument(),
     );
-    const inj = screen.queryByRole('checkbox', { name: /hide injured/i });
+    const inj = screen.queryByRole('checkbox', { name: /^out$/i });
     expect(inj).not.toBeChecked();
   });
 
