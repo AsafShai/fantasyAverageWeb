@@ -1,7 +1,5 @@
-"""Output table models (e.g. Phase 1 team_prediction, SQLAlchemy)."""
+"""Output table column names for estimator results."""
 
-from .team_prediction import Base, TeamPrediction
-from .team_ranking import TeamRanking
-from .team_rank_probability import TeamRankProbability
+from .column_names import OutputColumnNames
 
-__all__ = ["Base", "TeamPrediction", "TeamRanking", "TeamRankProbability"]
+__all__ = ["OutputColumnNames"]
