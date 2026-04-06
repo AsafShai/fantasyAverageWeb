@@ -125,22 +125,20 @@ function DepthChartView({ teamId }: { teamId: string }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">Exclude:</span>
-          {EXCLUDE_STATUSES.map((status) => (
-            <FilterCheckbox
-              key={status}
-              id={`exclude-${status.toLowerCase()}`}
-              label={status}
-              checked={excludedStatuses.has(status)}
-              onChange={() => toggleStatus(status)}
-            />
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
+        <span className="text-sm text-gray-600 dark:text-gray-400 font-medium w-full sm:w-auto">Exclude:</span>
+        {EXCLUDE_STATUSES.map((status) => (
+          <FilterCheckbox
+            key={status}
+            id={`exclude-${status.toLowerCase()}`}
+            label={status}
+            checked={excludedStatuses.has(status)}
+            onChange={() => toggleStatus(status)}
+          />
+        ))}
         <FilterCheckbox
           id="remove-duplicates"
-          label="Remove duplicates"
+          label="Duplicates"
           checked={removeDuplicates}
           onChange={setRemoveDuplicates}
         />
