@@ -141,6 +141,12 @@ export interface Player {
   stats: PlayerStats;
   team_id: number;
   status: "ONTEAM" | "FREEAGENT" | "WAIVERS";
+  injured?: boolean;
+  fantasy_team_name?: string | null;
+  season_rating?: number | null;
+  last7_rating?: number | null;
+  last15_rating?: number | null;
+  last30_rating?: number | null;
 }
 
 export interface PaginatedPlayers {
