@@ -144,6 +144,7 @@ describe('computePlayerRankings', () => {
     const result = computePlayerRankings(players, defaultConfig)
     expect(result.length).toBeLessThanOrEqual(200)
     expect(result.length).toBeGreaterThan(0)
+    expect(result[0].player.player_name).toBe('P349')
   })
 
   it('single pass when filtered pool < 300', () => {
