@@ -1,26 +1,8 @@
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from app.main import app
-from app.models import Player, PlayerStats
 
 client = TestClient(app)
-
-
-def _sample_player(name: str = "P1") -> Player:
-    return Player(
-        player_name=name,
-        pro_team="LAL",
-        positions=["PG"],
-        stats=PlayerStats(
-            pts=20, reb=5, ast=5, stl=1, blk=0.5,
-            fgm=8, fga=17, ftm=4, fta=5,
-            fg_percentage=0.47, ft_percentage=0.85,
-            three_pm=2, minutes=30, gp=70,
-        ),
-        team_id=1,
-        status="ONTEAM",
-        injured=False,
-    )
 
 
 def test_get_player_rankings_returns_list():
@@ -44,7 +26,7 @@ def test_get_player_rankings_player_shape():
         assert field in stats
 
 
-@patch("app.services.player_rankings_service.PlayerRankingsService.get_player_rankings")
+@patch("app.routes.player_rankings.PlayerRankingsService.get_player_rankings")
 def test_get_player_rankings_error(mock_get):
     from app.exceptions import ResourceNotFoundError
     mock_get.side_effect = ResourceNotFoundError("No players found")
