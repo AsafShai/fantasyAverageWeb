@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useGetPlayerRankingsQuery } from '../store/api/fantasyApi'
+import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorMessage from '../components/ErrorMessage'
 import {
   computePlayerRankings,
   getRawValue,
@@ -23,6 +25,7 @@ export default function PlayerRankings() {
   const [minMin, setMinMin] = useState(0)
   const [position, setPosition] = useState<string | null>(null)
   const [weights, setWeights] = useState<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
+  const prevWeightsRef = useRef<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
   const [sortCol, setSortCol] = useState<'totalZ' | RankingCategory>('totalZ')
   const [sortAsc, setSortAsc] = useState(false)
   const [rankedPlayers, setRankedPlayers] = useState<RankedPlayer[]>([])
@@ -31,7 +34,12 @@ export default function PlayerRankings() {
   const isPunted = (cat: RankingCategory) => weights[cat] === 0
 
   const togglePunt = (cat: RankingCategory) => {
-    setWeights(w => ({ ...w, [cat]: w[cat] === 0 ? 1 : 0 }))
+    if (weights[cat] === 0) {
+      setWeights(w => ({ ...w, [cat]: prevWeightsRef.current[cat] }))
+    } else {
+      prevWeightsRef.current = { ...prevWeightsRef.current, [cat]: weights[cat] }
+      setWeights(w => ({ ...w, [cat]: 0 }))
+    }
   }
 
   const handleCalculate = () => {
@@ -64,8 +72,8 @@ export default function PlayerRankings() {
     return cat === 'fg_pct' || cat === 'ft_pct' ? fmtPct(val) : fmt(val, 1)
   }
 
-  if (isLoading) return <div className="p-8 text-center text-gray-500 dark:text-gray-400">Loading player data...</div>
-  if (error) return <div className="p-8 text-center text-red-500">Failed to load players.</div>
+  if (isLoading) return <LoadingSpinner />
+  if (error) return <ErrorMessage message="Failed to load players." />
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
@@ -207,7 +215,7 @@ export default function PlayerRankings() {
               </thead>
               <tbody>
                 {sortedPlayers.map((ranked, idx) => (
-                  <tr key={ranked.player.player_name + idx} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <tr key={`${ranked.player.player_name}-${ranked.player.team_id}`} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-3 py-2 text-gray-500 dark:text-gray-400 sticky left-0 bg-white dark:bg-gray-800 text-center font-mono text-xs">{idx + 1}</td>
                     <td className="px-3 py-2 text-center font-semibold text-blue-600 dark:text-blue-400">{fmt(ranked.totalZ)}</td>
                     <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{ranked.player.player_name}</td>
@@ -247,6 +255,10 @@ function Th({ col, label, sortCol, sortAsc, onSort, punted }: {
   return (
     <th
       onClick={() => onSort(col)}
+      tabIndex={0}
+      role="button"
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSort(col)}
+      aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
       className={`px-3 py-2 text-right text-xs font-semibold cursor-pointer select-none ${punted ? 'text-gray-300 dark:text-gray-600' : active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
     >
       {label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}
