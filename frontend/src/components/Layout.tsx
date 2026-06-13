@@ -32,7 +32,7 @@ const Layout = () => {
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
     { path: '/nba-teams', label: 'NBA', icon: '🏀' },
-    ...(SHOW_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Rankings', icon: '📋' }] : []),
+    ...(SHOW_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
   ]
 
   const closeMobileMenu = () => setMobileMenuOpen(false)
