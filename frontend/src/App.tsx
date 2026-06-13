@@ -12,6 +12,9 @@ import Players from './pages/Players'
 import Injuries from './pages/Injuries'
 import NbaTeams from './pages/NbaTeams'
 import NotFound from './pages/NotFound'
+import PlayerRankings from './pages/PlayerRankings'
+
+const SHOW_PLAYER_RANKINGS = import.meta.env.VITE_SHOW_PLAYER_RANKINGS === 'true'
 
 function App() {
   return (
@@ -30,6 +33,7 @@ function App() {
           <Route path="injuries" element={<Injuries />} />
           <Route path="nba-teams" element={<NbaTeams />} />
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
+          {SHOW_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
