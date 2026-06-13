@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, Player } from '../../types/api';
 import type { EstimatorResults } from '../../types/estimator';
 
 export const fantasyApi = createApi({
@@ -7,7 +7,7 @@ export const fantasyApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'PlayerRankings'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string }>({
       query: ({ sortBy, order = 'asc', startDate, endDate } = {}) => ({
@@ -77,6 +77,11 @@ export const fantasyApi = createApi({
     getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
       query: (teamId) => `/nba-teams/${teamId}/depthchart`,
     }),
+    getPlayerRankings: builder.query<Player[], void>({
+      query: () => '/player-rankings/',
+      providesTags: ['PlayerRankings'],
+      keepUnusedDataFor: 300,
+    }),
   }),
 });
 
@@ -95,4 +100,5 @@ export const {
   useGetEstimatorResultsQuery,
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
+  useGetPlayerRankingsQuery,
 } = fantasyApi;
