@@ -17,7 +17,8 @@ const DEFAULT_WEIGHTS = Object.fromEntries(CATEGORIES.map(c => [c, 1])) as Recor
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
 export default function PlayerRankings() {
-  const { data: players = [], isLoading, error } = useGetPlayerRankingsQuery()
+  const [period, setPeriod] = useState<'season' | 'last_7' | 'last_15' | 'last_30'>('season')
+  const { data: players = [], isLoading, error } = useGetPlayerRankingsQuery(period)
 
   const [calcMode, setCalcMode] = useState<'totals' | 'per_game'>('per_game')
   const [displayMode, setDisplayMode] = useState<'totals' | 'per_game'>('per_game')
@@ -52,7 +53,7 @@ export default function PlayerRankings() {
   }
 
   useEffect(() => {
-    if (players.length > 0 && !hasCalculated) {
+    if (players.length > 0) {
       handleCalculate()
     }
   }, [players])
@@ -115,6 +116,21 @@ export default function PlayerRankings() {
                     className={`px-3 py-1.5 ${displayMode === m ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                   >
                     {m === 'totals' ? 'Totals' : 'Per Game'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Period</label>
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
+                {([['season', 'Season'], ['last_7', 'L7'], ['last_15', 'L15'], ['last_30', 'L30']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setPeriod(val)}
+                    className={`px-3 py-1.5 ${period === val ? 'bg-green-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  >
+                    {label}
                   </button>
                 ))}
               </div>

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Annotated
-from app.models import Player
+from app.models import Player, StatTimePeriod
 from app.exceptions import ResourceNotFoundError
 from app.services.player_rankings_service import PlayerRankingsService
 import logging
@@ -12,9 +12,12 @@ PlayerRankingsServiceDep = Annotated[PlayerRankingsService, Depends(PlayerRankin
 
 
 @router.get("/", response_model=List[Player])
-async def get_player_rankings(service: PlayerRankingsServiceDep):
+async def get_player_rankings(
+    service: PlayerRankingsServiceDep,
+    period: StatTimePeriod = Query(default=StatTimePeriod.SEASON),
+):
     try:
-        return await service.get_player_rankings()
+        return await service.get_player_rankings(period)
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

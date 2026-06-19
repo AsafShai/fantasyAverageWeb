@@ -12,8 +12,8 @@ class PlayerRankingsService:
         self.response_builder = ResponseBuilder()
         self.logger = logging.getLogger(__name__)
 
-    async def get_player_rankings(self) -> List[Player]:
-        players_df = await self.data_provider.get_players_df(StatTimePeriod.to_stat_split_id(StatTimePeriod.SEASON))
+    async def get_player_rankings(self, period: StatTimePeriod = StatTimePeriod.SEASON) -> List[Player]:
+        players_df = await self.data_provider.get_players_df(StatTimePeriod.to_stat_split_id(period))
         if players_df is None or players_df.empty:
             raise ResourceNotFoundError("No players found")
         return self.response_builder.build_all_players_response(players_df)

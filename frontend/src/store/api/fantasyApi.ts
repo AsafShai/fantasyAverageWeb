@@ -77,8 +77,8 @@ export const fantasyApi = createApi({
     getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
       query: (teamId) => `/nba-teams/${teamId}/depthchart`,
     }),
-    getPlayerRankings: builder.query<Player[], void>({
-      query: () => '/player-rankings/',
+    getPlayerRankings: builder.query<Player[], string>({
+      query: (period = 'season') => `/player-rankings/?period=${period}`,
       providesTags: ['PlayerRankings'],
       keepUnusedDataFor: 300,
     }),
