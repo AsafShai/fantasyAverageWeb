@@ -25,7 +25,7 @@ export default function PlayerRankings() {
   const [minMin, setMinMin] = useState(0)
   const [position, setPosition] = useState<string | null>(null)
   const [weights, setWeights] = useState<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
-  const [displayLimit, setDisplayLimit] = useState(100)
+  const [displayLimit, setDisplayLimit] = useState(200)
   const prevWeightsRef = useRef<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
   const [sortCol, setSortCol] = useState<'totalZ' | RankingCategory>('totalZ')
   const [sortAsc, setSortAsc] = useState(false)
