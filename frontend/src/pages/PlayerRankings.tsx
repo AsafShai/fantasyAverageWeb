@@ -12,9 +12,19 @@ import {
   type RankingsConfig,
 } from '../utils/playerRankings'
 
+type SortCol = 'totalZ' | 'gp' | 'mpg' | RankingCategory | `${RankingCategory}_raw`
+
 const DEFAULT_WEIGHTS = Object.fromEntries(CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
 
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
+
+function getSortVal(ranked: RankedPlayer, col: SortCol, displayMode: 'totals' | 'per_game'): number {
+  if (col === 'totalZ') return ranked.totalZ
+  if (col === 'gp') return ranked.player.stats.gp
+  if (col === 'mpg') return ranked.player.stats.gp > 0 ? ranked.player.stats.minutes / ranked.player.stats.gp : 0
+  if (col.endsWith('_raw')) return getRawValue(ranked.player, col.replace('_raw', '') as RankingCategory, displayMode)
+  return ranked.zScores[col as RankingCategory]
+}
 
 export default function PlayerRankings() {
   const [period, setPeriod] = useState<'season' | 'last_7' | 'last_15' | 'last_30'>('season')
@@ -29,10 +39,21 @@ export default function PlayerRankings() {
   const [weights, setWeights] = useState<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
   const [displayLimit, setDisplayLimit] = useState<number | null>(null)
   const prevWeightsRef = useRef<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
-  const [sortCol, setSortCol] = useState<'totalZ' | RankingCategory>('totalZ')
+  const [sortCol, setSortCol] = useState<SortCol>('totalZ')
   const [sortAsc, setSortAsc] = useState(false)
   const [rankedPlayers, setRankedPlayers] = useState<RankedPlayer[]>([])
   const [hasCalculated, setHasCalculated] = useState(false)
+
+  const handleReset = () => {
+    setCalcMode('per_game')
+    setDisplayMode('per_game')
+    setPeriod('season')
+    setMinGp(0)
+    setMinMin(0)
+    setPosition(null)
+    setWeights({ ...DEFAULT_WEIGHTS })
+    setDisplayLimit(null)
+  }
 
   const isPunted = (cat: RankingCategory) => weights[cat] === 0
 
@@ -61,14 +82,19 @@ export default function PlayerRankings() {
 
   const sortedPlayers = useMemo(() => {
     if (!rankedPlayers.length) return []
-    return [...rankedPlayers].sort((a, b) => {
-      const aVal = sortCol === 'totalZ' ? a.totalZ : a.zScores[sortCol]
-      const bVal = sortCol === 'totalZ' ? b.totalZ : b.zScores[sortCol]
+    const filtered = rankedPlayers.filter(r =>
+      r.player.stats.gp >= minGp &&
+      (r.player.stats.gp > 0 ? r.player.stats.minutes / r.player.stats.gp : 0) >= minMin &&
+      (position === null || r.player.positions.includes(position))
+    )
+    return [...filtered].sort((a, b) => {
+      const aVal = getSortVal(a, sortCol, displayMode)
+      const bVal = getSortVal(b, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, displayMode])
 
-  const handleSort = (col: typeof sortCol) => {
+  const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
     else { setSortCol(col); setSortAsc(false) }
   }
@@ -147,7 +173,7 @@ export default function PlayerRankings() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Min MIN (season)</label>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Min MPG</label>
               <input
                 type="number" min={0} value={minMin}
                 onChange={e => setMinMin(Math.max(0, Number(e.target.value)))}
@@ -204,15 +230,23 @@ export default function PlayerRankings() {
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              {players.length} players loaded · Blue toggle = calc mode · Purple = display mode
+              {players.length} players loaded · Blue = calc mode · Purple = display mode · GP/MPG/position filter instantly
             </p>
-            <button
-              onClick={handleCalculate}
-              disabled={players.length === 0}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
-            >
-              Calculate
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleReset}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg transition-colors"
+              >
+                Reset
+              </button>
+              <button
+                onClick={handleCalculate}
+                disabled={players.length === 0}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+              >
+                Calculate
+              </button>
+            </div>
           </div>
         </div>
 
@@ -238,11 +272,10 @@ export default function PlayerRankings() {
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Player</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Pos</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">GP</th>
+                  <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
+                  <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   {CATEGORIES.map(cat => (
-                    <th key={`raw-${cat}`} className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">
-                      {CATEGORY_LABELS[cat]}
-                    </th>
+                    <Th key={`raw-${cat}`} col={`${cat}_raw` as SortCol} label={CATEGORY_LABELS[cat]} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
                   {CATEGORIES.map(cat => (
                     <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat]}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
@@ -258,6 +291,7 @@ export default function PlayerRankings() {
                     <td className="px-3 py-2 text-gray-500 dark:text-gray-400">{ranked.player.pro_team}</td>
                     <td className="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.positions.join(', ')}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp}</td>
+                    <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>
                     {CATEGORIES.map(cat => (
                       <td key={`raw-${cat}`} className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
                         {rawDisplay(ranked, cat)}
@@ -280,11 +314,11 @@ export default function PlayerRankings() {
 }
 
 function Th({ col, label, sortCol, sortAsc, onSort, punted }: {
-  col: 'totalZ' | RankingCategory
+  col: SortCol
   label: string
-  sortCol: string
+  sortCol: SortCol
   sortAsc: boolean
-  onSort: (col: 'totalZ' | RankingCategory) => void
+  onSort: (col: SortCol) => void
   punted?: boolean
 }) {
   const active = sortCol === col
