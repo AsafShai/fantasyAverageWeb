@@ -42,7 +42,10 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Fantasy League Dashboard API")
     await injury_service.initialize()
-    asyncio.create_task(injury_service.start_scheduler())
+    if settings.injury_scheduler_enabled:
+        asyncio.create_task(injury_service.start_scheduler())
+    else:
+        logger.info("Injury scheduler disabled via INJURY_SCHEDULER_ENABLED=false")
     asyncio.create_task(estimator_scheduler.start_scheduler())
     yield
     # Shutdown
