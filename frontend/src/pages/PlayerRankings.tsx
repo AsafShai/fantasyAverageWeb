@@ -25,6 +25,7 @@ export default function PlayerRankings() {
   const [minMin, setMinMin] = useState(0)
   const [position, setPosition] = useState<string | null>(null)
   const [weights, setWeights] = useState<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
+  const [displayLimit, setDisplayLimit] = useState(100)
   const prevWeightsRef = useRef<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
   const [sortCol, setSortCol] = useState<'totalZ' | RankingCategory>('totalZ')
   const [sortAsc, setSortAsc] = useState(false)
@@ -43,7 +44,7 @@ export default function PlayerRankings() {
   }
 
   const handleCalculate = () => {
-    const config: RankingsConfig = { calcMode, minGp, minMin, position, weights }
+    const config: RankingsConfig = { calcMode, minGp, minMin, position, weights, displayLimit }
     setRankedPlayers(computePlayerRankings(players, config))
     setHasCalculated(true)
     setSortCol('totalZ')
@@ -146,6 +147,17 @@ export default function PlayerRankings() {
               >
                 <option value="">All</option>
                 {ALL_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Show</label>
+              <select
+                value={displayLimit}
+                onChange={e => setDisplayLimit(Number(e.target.value))}
+                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+              >
+                {[50, 100, 150, 200].map(n => <option key={n} value={n}>Top {n}</option>)}
               </select>
             </div>
           </div>

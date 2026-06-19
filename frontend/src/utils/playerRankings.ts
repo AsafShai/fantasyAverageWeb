@@ -23,6 +23,7 @@ export interface RankingsConfig {
   minMin: number
   position: string | null
   weights: Record<RankingCategory, number>
+  displayLimit: number
 }
 
 export interface RankedPlayer {
@@ -74,7 +75,7 @@ function totalZArray(pool: Player[], calcMode: 'totals' | 'per_game', weights: R
 }
 
 export function computePlayerRankings(players: Player[], config: RankingsConfig): RankedPlayer[] {
-  const { calcMode, minGp, minMin, position, weights } = config
+  const { calcMode, minGp, minMin, position, weights, displayLimit } = config
 
   const filtered = players.filter(p =>
     p.stats.gp >= minGp &&
@@ -111,7 +112,7 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
       return { player: p, zScores, totalZ }
     })
     .sort((a, b) => b.totalZ - a.totalZ)
-    .slice(0, 200)
+    .slice(0, displayLimit)
 }
 
 export function getRawValue(player: Player, cat: RankingCategory, displayMode: 'totals' | 'per_game'): number {
