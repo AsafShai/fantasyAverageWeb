@@ -70,7 +70,7 @@ function totalZArray(pool: Player[], calcMode: 'totals' | 'per_game', weights: R
     if (cat === 'ft_pct') return zScoreArray(pctImpactArray(pool, 'ft_percentage', 'fta', calcMode))
     return zScoreArray(pool.map(p => getCatValue(p, cat, calcMode)))
   })
-  return pool.map((_, i) => CATEGORIES.reduce((sum, cat, ci) => sum + catZs[ci][i] * weights[cat], 0))
+  return pool.map((_, i) => CATEGORIES.reduce((sum, cat, ci) => sum + catZs[ci][i] * weights[cat], 0) / CATEGORIES.length)
 }
 
 export function computePlayerRankings(players: Player[], config: RankingsConfig): RankedPlayer[] {
@@ -107,7 +107,7 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
       const zScores = Object.fromEntries(
         CATEGORIES.map((cat, ci) => [cat, catZs[ci][i]])
       ) as Record<RankingCategory, number>
-      const totalZ = CATEGORIES.reduce((sum, cat) => sum + zScores[cat] * weights[cat], 0)
+      const totalZ = CATEGORIES.reduce((sum, cat) => sum + zScores[cat] * weights[cat], 0) / CATEGORIES.length
       return { player: p, zScores, totalZ }
     })
     .sort((a, b) => b.totalZ - a.totalZ)
