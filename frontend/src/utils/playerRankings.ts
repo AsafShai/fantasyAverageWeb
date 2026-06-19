@@ -47,6 +47,15 @@ function getCatValue(player: Player, cat: RankingCategory, calcMode: 'totals' | 
   return calcMode === 'per_game' && COUNTING_CATS.has(cat) ? raw[cat] / gp : raw[cat]
 }
 
+function pctImpactArray(pool: Player[], pctKey: 'fg_percentage' | 'ft_percentage', attemptKey: 'fga' | 'fta', calcMode: 'totals' | 'per_game'): number[] {
+  const poolMean = pool.reduce((s, p) => s + p.stats[pctKey], 0) / pool.length
+  return pool.map(p => {
+    const gp = Math.max(p.stats.gp, 1)
+    const attempts = calcMode === 'per_game' ? p.stats[attemptKey] / gp : p.stats[attemptKey]
+    return (p.stats[pctKey] - poolMean) * attempts
+  })
+}
+
 function zScoreArray(values: number[]): number[] {
   if (values.length === 0) return []
   const mean = values.reduce((s, v) => s + v, 0) / values.length
@@ -56,7 +65,11 @@ function zScoreArray(values: number[]): number[] {
 }
 
 function totalZArray(pool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>): number[] {
-  const catZs = CATEGORIES.map(cat => zScoreArray(pool.map(p => getCatValue(p, cat, calcMode))))
+  const catZs = CATEGORIES.map(cat => {
+    if (cat === 'fg_pct') return zScoreArray(pctImpactArray(pool, 'fg_percentage', 'fga', calcMode))
+    if (cat === 'ft_pct') return zScoreArray(pctImpactArray(pool, 'ft_percentage', 'fta', calcMode))
+    return zScoreArray(pool.map(p => getCatValue(p, cat, calcMode)))
+  })
   return pool.map((_, i) => CATEGORIES.reduce((sum, cat, ci) => sum + catZs[ci][i] * weights[cat], 0))
 }
 
@@ -83,9 +96,11 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
     referencePool = filtered
   }
 
-  const catZs = CATEGORIES.map(cat =>
-    zScoreArray(referencePool.map(p => getCatValue(p, cat, calcMode)))
-  )
+  const catZs = CATEGORIES.map(cat => {
+    if (cat === 'fg_pct') return zScoreArray(pctImpactArray(referencePool, 'fg_percentage', 'fga', calcMode))
+    if (cat === 'ft_pct') return zScoreArray(pctImpactArray(referencePool, 'ft_percentage', 'fta', calcMode))
+    return zScoreArray(referencePool.map(p => getCatValue(p, cat, calcMode)))
+  })
 
   return referencePool
     .map((p, i) => {
