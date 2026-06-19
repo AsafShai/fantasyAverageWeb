@@ -1,15 +1,17 @@
 import { useEffect } from 'react'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { useIsFetching } from '../store/api/fantasyApi'
+import { useSelector } from 'react-redux'
 
 NProgress.configure({ showSpinner: false, minimum: 0.2, speed: 300 })
 
 export default function GlobalLoadingBar() {
-  const isFetching = useIsFetching()
+  const isFetching = useSelector((state: any) =>
+    Object.values(state.fantasyApi?.queries ?? {}).some((q: any) => q?.status === 'pending')
+  )
 
   useEffect(() => {
-    if (isFetching > 0) {
+    if (isFetching) {
       NProgress.start()
     } else {
       NProgress.done()
