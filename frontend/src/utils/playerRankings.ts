@@ -79,7 +79,7 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
 
   const filtered = players.filter(p =>
     p.stats.gp >= minGp &&
-    p.stats.minutes >= minMin &&
+    (p.stats.gp > 0 ? p.stats.minutes / p.stats.gp : 0) >= minMin &&
     (position === null || p.positions.includes(position))
   )
 
