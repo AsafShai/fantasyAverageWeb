@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -66,11 +65,11 @@ class NbaMatchupService:
                 continue
             # ascending sort → lowest value gets rank 1, highest gets rank N (best matchup)
             sorted_df = opp_df.sort_values(col, ascending=True).reset_index(drop=True)
-            for i, row in sorted_df.iterrows():
+            for rank, (_, row) in enumerate(sorted_df.iterrows(), start=1):
                 espn = nba_to_espn(row['TEAM_ABBREVIATION'])
                 if espn not in ranks:
                     ranks[espn] = {}
-                ranks[espn][stat_key] = int(i) + 1
+                ranks[espn][stat_key] = rank
         pace = self._build_pace(adv_df)
         self._def_cache.update({'ranks': ranks, 'pace': pace, 'ts': datetime.now()})
         return ranks
