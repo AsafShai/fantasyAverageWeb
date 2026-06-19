@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useGetPlayerRankingsQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -49,6 +49,12 @@ export default function PlayerRankings() {
     setSortCol('totalZ')
     setSortAsc(false)
   }
+
+  useEffect(() => {
+    if (players.length > 0 && !hasCalculated) {
+      handleCalculate()
+    }
+  }, [players])
 
   const sortedPlayers = useMemo(() => {
     if (!rankedPlayers.length) return []
