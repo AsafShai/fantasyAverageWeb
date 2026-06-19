@@ -47,7 +47,7 @@ const defaultConfig: RankingsConfig = {
   minMin: 0,
   position: null,
   weights: defaultWeights,
-  displayLimit: null,
+  displayLimit: 200,
 }
 
 function makePlayers(n: number): Player[] {
