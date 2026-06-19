@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useGetPlayerRankingsQuery } from '../store/api/fantasyApi'
+import { useGetAllPlayersQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import {
@@ -18,7 +18,8 @@ const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
 export default function PlayerRankings() {
   const [period, setPeriod] = useState<'season' | 'last_7' | 'last_15' | 'last_30'>('season')
-  const { data: players = [], isLoading, error } = useGetPlayerRankingsQuery(period)
+  const { data: playersData, isLoading, error } = useGetAllPlayersQuery({ limit: 500, time_period: period })
+  const players = playersData?.players ?? []
 
   const [calcMode, setCalcMode] = useState<'totals' | 'per_game'>('per_game')
   const [displayMode, setDisplayMode] = useState<'totals' | 'per_game'>('per_game')
@@ -26,7 +27,7 @@ export default function PlayerRankings() {
   const [minMin, setMinMin] = useState(0)
   const [position, setPosition] = useState<string | null>(null)
   const [weights, setWeights] = useState<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
-  const [displayLimit, setDisplayLimit] = useState(200)
+  const [displayLimit, setDisplayLimit] = useState<number | null>(null)
   const prevWeightsRef = useRef<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
   const [sortCol, setSortCol] = useState<'totalZ' | RankingCategory>('totalZ')
   const [sortAsc, setSortAsc] = useState(false)
@@ -169,11 +170,12 @@ export default function PlayerRankings() {
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Show</label>
               <select
-                value={displayLimit}
-                onChange={e => setDisplayLimit(Number(e.target.value))}
+                value={displayLimit ?? ''}
+                onChange={e => setDisplayLimit(e.target.value === '' ? null : Number(e.target.value))}
                 className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               >
                 {[50, 100, 150, 200].map(n => <option key={n} value={n}>Top {n}</option>)}
+                <option value="">All</option>
               </select>
             </div>
           </div>

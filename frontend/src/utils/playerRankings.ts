@@ -23,7 +23,7 @@ export interface RankingsConfig {
   minMin: number
   position: string | null
   weights: Record<RankingCategory, number>
-  displayLimit: number
+  displayLimit: number | null
 }
 
 export interface RankedPlayer {
@@ -112,7 +112,7 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
       return { player: p, zScores, totalZ }
     })
     .sort((a, b) => b.totalZ - a.totalZ)
-    .slice(0, displayLimit)
+    .slice(0, displayLimit ?? undefined)
 }
 
 export function getRawValue(player: Player, cat: RankingCategory, displayMode: 'totals' | 'per_game'): number {

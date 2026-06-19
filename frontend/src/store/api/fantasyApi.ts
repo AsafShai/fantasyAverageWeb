@@ -7,7 +7,7 @@ export const fantasyApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'PlayerRankings'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string }>({
       query: ({ sortBy, order = 'asc', startDate, endDate } = {}) => ({
@@ -77,11 +77,6 @@ export const fantasyApi = createApi({
     getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
       query: (teamId) => `/nba-teams/${teamId}/depthchart`,
     }),
-    getPlayerRankings: builder.query<Player[], string>({
-      query: (period = 'season') => `/player-rankings/?period=${period}`,
-      providesTags: ['PlayerRankings'],
-      keepUnusedDataFor: 300,
-    }),
   }),
 });
 
@@ -100,5 +95,4 @@ export const {
   useGetEstimatorResultsQuery,
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
-  useGetPlayerRankingsQuery,
 } = fantasyApi;
