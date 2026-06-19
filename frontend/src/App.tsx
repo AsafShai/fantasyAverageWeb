@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router'
 import Layout from './components/Layout'
+import GlobalLoadingBar from './components/GlobalLoadingBar'
 import Dashboard from './pages/Dashboard'
 import Rankings from './pages/Rankings'
 import Shots from './pages/Shots'
@@ -12,10 +13,14 @@ import Players from './pages/Players'
 import Injuries from './pages/Injuries'
 import NbaTeams from './pages/NbaTeams'
 import NotFound from './pages/NotFound'
+import PlayerRankings from './pages/PlayerRankings'
+
+const SHOW_PLAYER_RANKINGS = import.meta.env.VITE_SHOW_PLAYER_RANKINGS === 'true'
 
 function App() {
   return (
     <div className="min-h-screen bg-gray-50">
+      <GlobalLoadingBar />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -30,6 +35,7 @@ function App() {
           <Route path="injuries" element={<Injuries />} />
           <Route path="nba-teams" element={<NbaTeams />} />
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
+          {SHOW_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

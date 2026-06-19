@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     season_start: date = Field(default=date(2025, 10, 22), alias="SEASON_START")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
+    injury_scheduler_enabled: bool = Field(default=True, alias="INJURY_SCHEDULER_ENABLED")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",
