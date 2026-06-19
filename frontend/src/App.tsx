@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router'
 import Layout from './components/Layout'
+import GlobalLoadingBar from './components/GlobalLoadingBar'
 import Dashboard from './pages/Dashboard'
 import Rankings from './pages/Rankings'
 import Shots from './pages/Shots'
@@ -19,6 +20,7 @@ const SHOW_PLAYER_RANKINGS = import.meta.env.VITE_SHOW_PLAYER_RANKINGS === 'true
 function App() {
   return (
     <div className="min-h-screen bg-gray-50">
+      <GlobalLoadingBar />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
