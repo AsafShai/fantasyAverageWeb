@@ -12,3 +12,12 @@ fantasy_api.log
 *.jpg
 *.jpeg
 *.gif
+
+# Research/exploration output
+*_results.json
+*_research.json
+boxscore_sample.json
+team_endpoint_teams_1.json
+
+# Planning docs
+docs/plans/
