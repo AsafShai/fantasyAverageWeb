@@ -95,4 +95,5 @@ export const {
   useGetEstimatorResultsQuery,
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
+  useIsFetching,
 } = fantasyApi;

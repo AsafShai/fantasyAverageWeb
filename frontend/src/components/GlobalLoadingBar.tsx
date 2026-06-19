@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { useIsFetching } from '@reduxjs/toolkit/query/react'
+import { useIsFetching } from '../store/api/fantasyApi'
 
 NProgress.configure({ showSpinner: false, minimum: 0.2, speed: 300 })
 
