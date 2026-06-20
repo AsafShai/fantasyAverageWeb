@@ -1,70 +1,42 @@
 # Fantasy League Dashboard
 
-A full-stack fantasy basketball application featuring AI-powered trade suggestions, real-time ESPN data integration, and comprehensive team analytics.
-Link to the app: https://fantasyleagueinfo.onrender.com/
+Full-stack roto fantasy basketball app for a private ESPN league (12 teams, 8 categories).
 
-## 🏀 Features
+Live: https://fantasyleagueinfo.onrender.com (Render free tier — cold starts after 15 min idle)
 
-- **Team Rankings**: Sortable rankings across all statistical categories
-- **Teams Browser**: Browse all teams with detailed roster views and ESPN integration
-- **Team Details**: Comprehensive team statistics with player rosters and minutes tracking
-- **Players Browser**: Search and filter all players including free agents and waivers with advanced filters (position, status, team, stats)
-- **AI Trade Suggestions**: GPT-powered trade recommendations with impact analysis
-- **Manual Trade Analyzer**: Interactive tool to compare players between teams OR compare your players against free agents, with detailed stats and per-game/total views
-- **Team Analytics**: Performance visualizations and detailed statistics
-- **Player Data**: Comprehensive player statistics including minutes played
-- **Real-time Data**: Live ESPN Fantasy Basketball API integration
+## Features
 
-## 📸 Screenshots
+- **Dashboard** — league overview and top-team snapshot
+- **Rankings** — sortable roto standings across all 8 categories
+- **Shots** — league-wide FG%/FT% with sortable table
+- **Analytics** — color-coded performance heatmap across all categories
+- **Teams** — browse all fantasy teams with ESPN integration
+- **Team Detail** — full roster, per-player stats, minutes tracking
+- **Players** — all rostered players, free agents, and waivers with filters (position, status, stats thresholds)
+- **Player Rankings** — custom z-score ranker: set category weights, filter by position/GP/MPG, sort by any column
+- **Injuries** — live injury report from ESPN PDF (polled at 4 PM ET daily)
+- **NBA Teams** — depth charts with client-side filters (hide injured, deduplicate positions)
+- **Estimator** — Monte Carlo standings projection (runs on startup, background sync)
+- **Trade Analyzer** — compare players between teams or vs free agents; z-score impact per category
+- **Trade Suggestions** — GPT-4o-mini powered trade recommendations with statistical impact analysis
 
-### Dashboard Overview
-Main dashboard showing league overview and top team rankings.
-
-![Dashboard](screenshots/dashboard.png)
-
-### Team Rankings
-Comprehensive team rankings with sortable categories and statistical breakdowns.
-
-![Rankings](screenshots/rankings.png)
-
-### Shooting Statistics
-League-wide shooting statistics with sortable field goal and free throw percentages.
-
-![Shots](screenshots/shots.png)
-
-### Analytics & Performance Heatmap  
-Advanced analytics with color-coded performance indicators across all statistical categories.
-
-![Analytics](screenshots/analytics.png)
-
-### AI Trade Suggestions
-Intelligent trade recommendations powered by GPT-4o-mini with detailed impact analysis and statistical comparisons.
-
-![AI Trades with Stats](screenshots/ai-trades-with-stats.png)
-
-### Manual Trade Analyzer
-Interactive trade analysis tool for comparing players between teams with comprehensive statistical breakdowns.
-
-![Trade Analyzer](screenshots/trade-analyzer.png)
-
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Backend
-- **Python 3.12+** - Programming language
-- **FastAPI** - Python web framework
-- **LangChain + OpenAI** - AI trade suggestions
-- **pandas** - Data processing
-- **pytest** - Testing
-- **Docker** - Containerization
+- Python 3.12+ / FastAPI
+- PostgreSQL (Neon) — persistent injury status, snapshots
+- Redis — caching
+- LangChain + OpenAI (GPT-4o-mini) — trade suggestions
+- nba_api — defensive ranks, team stats, pace
+- pandas — data processing
+- pytest — testing
 
 ### Frontend
-- **React 19** - Frontend framework
-- **TypeScript** - Type safety
-- **Redux Toolkit** - State management
-- **TanStack Query (React Query)** - Server state management
-- **Recharts** - Data visualization
-- **Tailwind CSS** - Styling
-- **Vite** - Build tool
+- React 19 / TypeScript / Vite
+- Redux Toolkit — global state
+- TanStack Query — server state
+- D3.js — visualizations
+- Tailwind CSS — styling
 
 ## Setup
 
@@ -73,145 +45,80 @@ Interactive trade analysis tool for comparing players between teams with compreh
 - Node.js 18+
 - uv (Python package manager)
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd fantasyAverageWeb
-   ```
-
-2. **Environment Setup**
-
-   **Backend** - Create `.env` in `backend` directory:
-   ```env
-   SEASON_ID=your_season_id
-   LEAGUE_ID=your_league_id
-   OPENAI_API_KEY=your_openai_api_key
-   CORS_ORIGINS=localhost:5173,others
-   ENVIRONMENT=production/development
-   ```
-   
-   **Frontend** - Create `.env` in `frontend` directory:
-   ```env
-   VITE_API_BASE_URL=http://localhost:8000
-   ```
-
-3. **Backend Setup**
-   ```bash
-   cd backend
-   uv sync
-   ```
-
-4. **Frontend Setup**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-## 🚀 Running the Application
-
-### Option 1: Backend Docker Setup
-```bash
-cd backend
-docker-compose up --build
-```
-Backend: http://localhost:8000
-
-*Note: Docker setup is currently available for backend only. Frontend runs locally.*
-
-### Option 2: Local Development
-
-**Backend:**
-```bash
-cd backend
-uv run -m app.main
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm run dev
-```
-
-## 🧪 Testing
-
-```bash
-# Backend tests
-cd backend
-uv run pytest
-```
-
-## 📊 Data & AI
-
-- **ESPN Fantasy API** - Live team and player statistics
-- **OpenAI GPT-4o-mini** - AI-powered trade analysis
-- **Smart Caching** - ETag-based HTTP caching for performance
-
-## 🔌 API Endpoints
-
-The backend provides the following REST API endpoints:
-
-### Core Endpoints
-- `GET /` - API welcome message
-- `GET /health` - Health check endpoint
-
-### Rankings
-- `GET /api/rankings` - Get league rankings with optional sorting
-  - Query params: `sort_by` (category), `order` (asc/desc)
-
-### Teams
-- `GET /api/teams` - Get list of all teams
-- `GET /api/teams/{team_id}` - Get detailed stats for a specific team including:
-  - Team statistics (totals and averages)
-  - Complete roster with player stats (including minutes played)
-  - ESPN team page URL for external reference
-  - Shot chart stats and ranking information
-- `GET /api/teams/{team_id}/players` - Get players for a specific team (lightweight endpoint)
-
-### League
-- `GET /api/league/summary` - Get league overview and summary statistics
-- `GET /api/league/shots` - Get league-wide shooting statistics
-
-### Analytics
-- `GET /api/analytics/heatmap` - Get performance heatmap data for visualization
-
-### Players
-- `GET /api/players` - Get all players including rostered players, free agents, and waivers with pagination
-  - Query params: 
-    - `page` (integer, default: 1) - Page number
-    - `limit` (integer, default: 500, range: 10-500) - Players per page
-  - Returns: `PaginatedPlayers` object with:
-    - `players` - Array of player objects
-    - `total_count` - Total number of players
-    - `page` - Current page number
-    - `limit` - Players per page
-    - `has_more` - Boolean indicating if more pages exist
-  - Each player includes:
-    - Comprehensive stats (points, rebounds, assists, steals, blocks, shooting percentages, 3PM, minutes, games played)
-    - Player status (`ONTEAM`, `FREEAGENT`, or `WAIVERS`)
-    - Fantasy team assignment (`team_id`)
-    - NBA team and position information
-
-**Note:** Interactive API documentation is available at `/docs` (Swagger UI) when running the backend.
-
-## ⚙️ Environment Variables
-
 ### Backend
-`.env` file in `backend/` directory:
 
+Create `backend/.env`:
 ```env
 SEASON_ID=your_season_id
 LEAGUE_ID=your_league_id
 OPENAI_API_KEY=your_openai_api_key
-CORS_ORIGINS=localhost:5173,others
-ENVIRONMENT=production/development
+DATABASE_URL=your_neon_postgres_url
+REDIS_URL=your_redis_url
+CORS_ORIGINS=localhost:5173
+ENVIRONMENT=development
+```
+
+```bash
+cd backend
+uv sync
+uv run -m app.main
 ```
 
 ### Frontend
-Optional `.env` file in `frontend/` directory:
 
+Create `frontend/.env`:
 ```env
-# API Configuration
 VITE_API_BASE_URL=http://localhost:8000
 ```
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Testing
+
+```bash
+cd backend
+uv run pytest
+```
+
+## API Endpoints
+
+Interactive docs at `/docs` when running locally.
+
+### Rankings
+- `GET /api/rankings` — league roto standings (`sort_by`, `order`)
+
+### Teams
+- `GET /api/teams` — all fantasy teams
+- `GET /api/teams/{team_id}` — team stats, roster, shooting, rankings
+- `GET /api/teams/{team_id}/players` — lightweight roster
+
+### Players
+- `GET /api/players` — all players with pagination (`page`, `limit`, up to 500)
+
+### Player Rankings
+- `GET /api/rankings/players` — z-score ranked player list
+
+### League
+- `GET /api/league/summary` — league overview
+- `GET /api/league/shots` — shooting stats
+
+### Analytics
+- `GET /api/analytics/heatmap` — heatmap data
+
+### Injuries
+- `GET /api/injuries` — current injury report
+
+### Estimator
+- `GET /api/estimator/results` — latest Monte Carlo projection
+- `POST /api/estimator/run` — trigger a fresh run
+
+### NBA Teams
+- `GET /api/nba-teams` — depth charts with injury status
+
+### Trades
+- `GET /api/trades/suggestions` — AI trade suggestions
+- `POST /api/trades/analyze` — manual trade impact analysis
