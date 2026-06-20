@@ -25,7 +25,6 @@ Live: https://fantasyleagueinfo.onrender.com (Render free tier — cold starts a
 ### Backend
 - Python 3.12+ / FastAPI
 - PostgreSQL (Neon) — persistent injury status, snapshots
-- Redis — caching
 - LangChain + OpenAI (GPT-4o-mini) — trade suggestions
 - nba_api — defensive ranks, team stats, pace
 - pandas — data processing
@@ -53,7 +52,6 @@ SEASON_ID=your_season_id
 LEAGUE_ID=your_league_id
 OPENAI_API_KEY=your_openai_api_key
 DATABASE_URL=your_neon_postgres_url
-REDIS_URL=your_redis_url
 CORS_ORIGINS=localhost:5173
 ENVIRONMENT=development
 ```
