@@ -1,8 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect } from 'react'
 import Footer from './Footer'
-
-const SHOW_PLAYER_RANKINGS = import.meta.env.VITE_SHOW_PLAYER_RANKINGS === 'true'
+import { FF_PLAYER_RANKINGS } from '../config/featureFlags'
 
 const Layout = () => {
   const location = useLocation()
@@ -32,7 +31,7 @@ const Layout = () => {
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
     { path: '/nba-teams', label: 'NBA', icon: '🏀' },
-    ...(SHOW_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
+    ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
   ]
 
   const closeMobileMenu = () => setMobileMenuOpen(false)
