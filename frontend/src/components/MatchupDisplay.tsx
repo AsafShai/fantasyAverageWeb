@@ -94,8 +94,6 @@ export function MatchupCell({
 }) {
   if (!matchup) return <span className="mq-no-game">—</span>;
 
-  const badge = paceBadge(matchup.pace, matchup.league_avg_pace);
-
   return (
     <button className="mq-cell" onClick={onToggle}>
       <span className="mq-opp">vs {matchup.opponent}</span>
