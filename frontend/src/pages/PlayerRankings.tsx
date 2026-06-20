@@ -115,10 +115,10 @@ export default function PlayerRankings() {
       <div className="max-w-screen-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Player Rankings</h1>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 mb-6 space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 mb-6 space-y-3 sm:space-y-4">
 
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-4 sm:items-end">
+            <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Calc mode</label>
               <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
                 {(['totals', 'per_game'] as const).map(m => (
@@ -133,7 +133,7 @@ export default function PlayerRankings() {
               </div>
             </div>
 
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Display mode</label>
               <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
                 {(['totals', 'per_game'] as const).map(m => (
@@ -148,7 +148,7 @@ export default function PlayerRankings() {
               </div>
             </div>
 
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Period</label>
               <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
                 {([['season', 'Season'], ['last_7', 'L7'], ['last_15', 'L15'], ['last_30', 'L30']] as const).map(([val, label]) => (
@@ -206,7 +206,7 @@ export default function PlayerRankings() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             {CATEGORIES.map(cat => (
               <div key={cat} className={`flex items-center gap-2 p-2 rounded-lg border ${isPunted(cat) ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600'}`}>
                 <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8">{CATEGORY_LABELS[cat]}</span>
@@ -267,38 +267,38 @@ export default function PlayerRankings() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-900">Rank</th>
-                  <Th col="totalZ" label="Z Score" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Player</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Pos</th>
+                  <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-900">#</th>
+                  <Th col="totalZ" label="Z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
+                  <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Player</th>
+                  <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
+                  <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Pos</th>
                   <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
-                  <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
+                  <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
                   {CATEGORIES.map(cat => (
                     <Th key={`raw-${cat}`} col={`${cat}_raw` as SortCol} label={CATEGORY_LABELS[cat]} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
                   {CATEGORIES.map(cat => (
-                    <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat]}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
+                    <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat]}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} className="hidden sm:table-cell" />
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {sortedPlayers.map((ranked, idx) => (
                   <tr key={`${ranked.player.player_name}-${ranked.player.team_id}`} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400 sticky left-0 bg-white dark:bg-gray-800 text-center font-mono text-xs">{idx + 1}</td>
-                    <td className="px-3 py-2 text-center font-semibold text-blue-600 dark:text-blue-400">{fmt(ranked.totalZ)}</td>
-                    <td className="px-3 py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{ranked.player.player_name}</td>
-                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400">{ranked.player.pro_team}</td>
-                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.positions.join(', ')}</td>
-                    <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp}</td>
-                    <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 sticky left-0 bg-white dark:bg-gray-800 text-center font-mono text-xs">{idx + 1}</td>
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{fmt(ranked.totalZ)}</td>
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm">{ranked.player.player_name}</td>
+                    <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.pro_team}</td>
+                    <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.positions.join(', ')}</td>
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{ranked.player.stats.gp}</td>
+                    <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>
                     {CATEGORIES.map(cat => (
-                      <td key={`raw-${cat}`} className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+                      <td key={`raw-${cat}`} className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                         {rawDisplay(ranked, cat)}
                       </td>
                     ))}
                     {CATEGORIES.map(cat => (
-                      <td key={`z-${cat}`} className={`px-3 py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                      <td key={`z-${cat}`} className={`hidden sm:table-cell px-3 py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                         {fmt(ranked.zScores[cat])}
                       </td>
                     ))}
@@ -313,13 +313,14 @@ export default function PlayerRankings() {
   )
 }
 
-function Th({ col, label, sortCol, sortAsc, onSort, punted }: {
+function Th({ col, label, sortCol, sortAsc, onSort, punted, className = '' }: {
   col: SortCol
   label: string
   sortCol: SortCol
   sortAsc: boolean
   onSort: (col: SortCol) => void
   punted?: boolean
+  className?: string
 }) {
   const active = sortCol === col
   return (
@@ -329,7 +330,7 @@ function Th({ col, label, sortCol, sortAsc, onSort, punted }: {
       role="button"
       onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSort(col)}
       aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
-      className={`px-3 py-2 text-right text-xs font-semibold cursor-pointer select-none ${punted ? 'text-gray-300 dark:text-gray-600' : active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+      className={`px-1.5 py-2 sm:px-3 text-right text-xs font-semibold cursor-pointer select-none ${punted ? 'text-gray-300 dark:text-gray-600' : active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} ${className}`}
     >
       {label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}
     </th>
