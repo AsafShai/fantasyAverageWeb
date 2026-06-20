@@ -92,6 +92,8 @@ app.include_router(players_router, prefix="/api/players", tags=["Players"])
 app.include_router(injuries_router, prefix="/api/injuries", tags=["Injuries"])
 app.include_router(estimator_router, prefix="/api/estimator", tags=["Estimator"])
 app.include_router(nba_teams_router, prefix="/api/nba-teams", tags=["NBA Teams"])
+from app.routes import matchups as matchups_module
+app.include_router(matchups_module.router, prefix='/api/matchups', tags=['Matchups'])
 
 
 
