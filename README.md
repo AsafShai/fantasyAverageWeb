@@ -20,6 +20,38 @@ Live: https://fantasyleagueinfo.onrender.com (Render free tier — cold starts a
 - **Trade Analyzer** — compare players between teams or vs free agents; z-score impact per category
 - **Trade Suggestions** — AI trade recommendations with statistical impact analysis
 
+## Screenshots
+
+### Dashboard Overview
+Main dashboard showing league overview and top team rankings.
+
+![Dashboard](screenshots/dashboard.png)
+
+### Team Rankings
+Comprehensive team rankings with sortable categories and statistical breakdowns.
+
+![Rankings](screenshots/rankings.png)
+
+### Shooting Statistics
+League-wide shooting statistics with sortable field goal and free throw percentages.
+
+![Shots](screenshots/shots.png)
+
+### Analytics & Performance Heatmap
+Advanced analytics with color-coded performance indicators across all statistical categories.
+
+![Analytics](screenshots/analytics.png)
+
+### AI Trade Suggestions
+Intelligent trade recommendations with detailed impact analysis and statistical comparisons.
+
+![AI Trades with Stats](screenshots/ai-trades-with-stats.png)
+
+### Manual Trade Analyzer
+Interactive trade analysis tool for comparing players between teams with comprehensive statistical breakdowns.
+
+![Trade Analyzer](screenshots/trade-analyzer.png)
+
 ## Tech Stack
 
 ### Backend
