@@ -253,3 +253,21 @@ export interface TeamDepthChart {
   record: string;
   positions: DepthChartPosition[];
 }
+
+export interface DefRanks {
+  pts: number;
+  reb: number;
+  ast: number;
+  stl: number;
+  blk: number;
+  three_pm: number;
+  fg_pct: number;
+}
+
+export interface PlayerMatchup {
+  player_name: string;
+  pro_team: string;
+  opponent: string;
+  pace_badge: 'Fast' | 'Average' | 'Slow';
+  def_ranks: DefRanks;
+}
