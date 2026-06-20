@@ -76,34 +76,46 @@ Interactive trade analysis tool for comparing players between teams with compreh
 - Node.js 18+
 - uv (Python package manager)
 
-### Backend
+### Installation
 
-Create `backend/.env`:
-```env
-SEASON_ID=your_season_id
-LEAGUE_ID=your_league_id
-OPENAI_API_KEY=your_openai_api_key
-DATABASE_URL=your_neon_postgres_url
-CORS_ORIGINS=localhost:5173
-ENVIRONMENT=development
-```
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd fantasyAverageWeb
+   ```
 
+2. **Backend — create `backend/.env`**
+   ```env
+   SEASON_ID=your_season_id
+   LEAGUE_ID=your_league_id
+   OPENAI_API_KEY=your_openai_api_key
+   DATABASE_URL=your_neon_postgres_url
+   CORS_ORIGINS=localhost:5173
+   ENVIRONMENT=development
+   ```
+
+3. **Frontend — create `frontend/.env`**
+   ```env
+   VITE_API_BASE_URL=http://localhost:8000
+   ```
+
+4. **Install dependencies**
+   ```bash
+   cd backend && uv sync
+   cd ../frontend && npm install
+   ```
+
+### Running locally
+
+**Backend:**
 ```bash
 cd backend
-uv sync
 uv run -m app.main
 ```
 
-### Frontend
-
-Create `frontend/.env`:
-```env
-VITE_API_BASE_URL=http://localhost:8000
-```
-
+**Frontend:**
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
