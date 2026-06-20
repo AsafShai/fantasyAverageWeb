@@ -18,14 +18,14 @@ Live: https://fantasyleagueinfo.onrender.com (Render free tier — cold starts a
 - **NBA Teams** — depth charts with client-side filters (hide injured, deduplicate positions)
 - **Estimator** — Monte Carlo standings projection (runs on startup, background sync)
 - **Trade Analyzer** — compare players between teams or vs free agents; z-score impact per category
-- **Trade Suggestions** — GPT-4o-mini powered trade recommendations with statistical impact analysis
+- **Trade Suggestions** — AI trade recommendations with statistical impact analysis
 
 ## Tech Stack
 
 ### Backend
 - Python 3.12+ / FastAPI
 - PostgreSQL (Neon) — persistent injury status, snapshots
-- LangChain + OpenAI (GPT-4o-mini) — trade suggestions
+- OpenAI (GPT-4o-mini) — trade suggestions
 - nba_api — defensive ranks, team stats, pace
 - pandas — data processing
 - pytest — testing
