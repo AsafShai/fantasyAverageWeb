@@ -5,6 +5,7 @@ import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator,
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
+import { FF_MATCHUP_QUALITY } from '../config/featureFlags';
 import './Players.css';
 
 const Players = () => {
@@ -15,12 +16,11 @@ const Players = () => {
   const { data, isLoading, error } = useGetAllPlayersQuery({ page: 1, limit: 500, time_period: timePeriod });
   const { data: teams } = useGetTeamsListQuery();
 
-  const { data: matchups = [] } = useGetMatchupsTodayQuery();
+  const { data: matchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
   const matchupMap = useMemo(
     () => new Map(matchups.map((m: PlayerMatchup) => [m.player_name, m])),
     [matchups]
   );
-  const [showGamesToday, setShowGamesToday] = useState(false);
 
   const teamMap = useMemo(() => {
     if (!teams) return new Map();
@@ -104,13 +104,7 @@ const Players = () => {
           <div className="hidden sm:block">
             <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
           </div>
-          <button
-            className={`filter-toggle${showGamesToday ? ' active' : ''}`}
-            onClick={() => setShowGamesToday(v => !v)}
-          >
-            Games today only
-          </button>
-          <div className="flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden sm:self-stretch">
+<div className="flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden sm:self-stretch">
             <button
               className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
               onClick={() => setShowAverages(true)}
@@ -136,7 +130,6 @@ const Players = () => {
           teamMap={teamMap}
           showAverages={showAverages}
           matchupMap={matchupMap}
-          showGamesToday={showGamesToday}
         />
       </div>
     </div>
@@ -311,13 +304,11 @@ const PlayerTable = ({
   teamMap,
   showAverages,
   matchupMap,
-  showGamesToday,
 }: {
   players: Player[];
   teamMap: Map<number, string>;
   showAverages: boolean;
   matchupMap: Map<string, PlayerMatchup>;
-  showGamesToday: boolean;
 }) => {
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -353,9 +344,7 @@ const PlayerTable = ({
   };
 
   const sortedPlayers = useMemo(() => {
-    const base = showGamesToday
-      ? players.filter(p => matchupMap.has(p.player_name))
-      : players;
+    const base = players;
 
     if (!sortBy) return base;
 
@@ -396,7 +385,7 @@ const PlayerTable = ({
         return aVal < bVal ? 1 : -1;
       }
     });
-  }, [players, sortBy, sortOrder, showAverages, showGamesToday, matchupMap, getTeamDisplay]);
+  }, [players, sortBy, sortOrder, showAverages, getTeamDisplay]);
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -425,7 +414,7 @@ const PlayerTable = ({
           <th onClick={() => handleSort('blk')}>{showAverages ? 'BPG' : 'BLK'} {sortBy === 'blk' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
           <th onClick={() => handleSort('pts')}>{showAverages ? 'PPG' : 'PTS'} {sortBy === 'pts' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
           <th onClick={() => handleSort('gp')}>GP {sortBy === 'gp' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th>Matchup</th>
+          {FF_MATCHUP_QUALITY && <th>Matchup</th>}
         </tr>
       </thead>
       <tbody>
@@ -449,15 +438,18 @@ const PlayerTable = ({
                 <td>{formatStat(player.stats.blk, player.stats.gp)}</td>
                 <td>{formatStat(player.stats.pts, player.stats.gp)}</td>
                 <td>{player.stats.gp}</td>
-                <td>
-                  <MatchupCell
-                    matchup={matchup}
-                    isExpanded={isExpanded}
-                    onToggle={() => toggleExpand(player.player_name)}
-                  />
-                </td>
+                {FF_MATCHUP_QUALITY && (
+                  <td>
+                    <MatchupCell
+                      matchup={matchup}
+                      isExpanded={isExpanded}
+                      onToggle={() => toggleExpand(player.player_name)}
+                      playerStats={player.stats}
+                    />
+                  </td>
+                )}
               </tr>
-              {isExpanded && matchup && (
+              {FF_MATCHUP_QUALITY && isExpanded && matchup && (
                 <MatchupExpandRow matchup={matchup} colSpan={15} />
               )}
             </React.Fragment>

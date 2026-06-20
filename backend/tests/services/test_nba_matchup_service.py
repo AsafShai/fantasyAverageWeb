@@ -35,22 +35,24 @@ def mock_adv_df():
 
 def test_higher_opp_pts_gets_higher_rank(service, mock_opp_df, mock_adv_df):
     with patch.object(service, '_fetch_nba_stats', return_value=(mock_opp_df, mock_adv_df)):
-        ranks = service.get_defensive_ranks()
+        data = service.get_all_def_data()
+    ranks = data['ranks']
     # CHA allows more PTS (118 > 112) → rank 2 (best matchup for 2-team sample)
     assert ranks['CHA']['pts'] > ranks['LAL']['pts']
 
 
 def test_rank_values_within_bounds(service, mock_opp_df, mock_adv_df):
     with patch.object(service, '_fetch_nba_stats', return_value=(mock_opp_df, mock_adv_df)):
-        ranks = service.get_defensive_ranks()
-    for team_ranks in ranks.values():
+        data = service.get_all_def_data()
+    for team_ranks in data['ranks'].values():
         for rank in team_ranks.values():
             assert 1 <= rank <= 30
 
 
 def test_get_team_pace_returns_espn_key(service, mock_opp_df, mock_adv_df):
     with patch.object(service, '_fetch_nba_stats', return_value=(mock_opp_df, mock_adv_df)):
-        pace = service.get_team_pace()
+        data = service.get_all_def_data()
+    pace = data['pace']
     assert 'CHA' in pace
     assert abs(pace['CHA'] - 101.8) < 0.01
 
@@ -60,9 +62,26 @@ def test_nba_abbr_converted_to_espn(service, mock_opp_df, mock_adv_df):
     phi_df = mock_opp_df.copy()
     phi_df.loc[0, 'TEAM_ABBREVIATION'] = 'PHI'
     with patch.object(service, '_fetch_nba_stats', return_value=(phi_df, mock_adv_df)):
-        ranks = service.get_defensive_ranks()
+        data = service.get_all_def_data()
+    ranks = data['ranks']
     assert 'PHL' in ranks
     assert 'PHI' not in ranks
+
+
+def test_def_values_populated(service, mock_opp_df, mock_adv_df):
+    with patch.object(service, '_fetch_nba_stats', return_value=(mock_opp_df, mock_adv_df)):
+        data = service.get_all_def_data()
+    values = data['values']
+    assert 'LAL' in values
+    assert abs(values['LAL']['pts'] - 112.0) < 0.1
+    assert abs(values['CHA']['reb'] - 47.0) < 0.1
+
+
+def test_league_avg_values_populated(service, mock_opp_df, mock_adv_df):
+    with patch.object(service, '_fetch_nba_stats', return_value=(mock_opp_df, mock_adv_df)):
+        data = service.get_all_def_data()
+    avgs = data['league_avg_values']
+    assert abs(avgs['pts'] - 115.0) < 0.1  # (112 + 118) / 2
 
 
 def test_pace_badge_fast(service):

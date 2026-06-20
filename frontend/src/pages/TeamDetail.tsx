@@ -9,6 +9,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector'
 import DataDateBadge from '../components/DataDateBadge'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay'
+import { FF_MATCHUP_QUALITY } from '../config/featureFlags'
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -24,11 +25,11 @@ const TeamDetail = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
-  const { data: matchups = [] } = useGetMatchupsTodayQuery()
-  const matchupMap = useMemo(
-    () => new Map(matchups.map((m: PlayerMatchup) => [m.player_name, m])),
-    [matchups]
-  )
+  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY })
+  const matchupMap = useMemo(() => {
+    if (!FF_MATCHUP_QUALITY) return new Map<string, PlayerMatchup>()
+    return new Map(liveMatchups.map((m: PlayerMatchup) => [m.player_name, m]))
+  }, [liveMatchups])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {
@@ -106,7 +107,7 @@ const TeamDetail = () => {
     { key: 'blk', label: showAverages ? 'BPG' : 'BLK', align: 'right', sortable: true },
     { key: 'pts', label: showAverages ? 'PPG' : 'PTS', align: 'right', sortable: true },
     { key: 'gp', label: 'GP', align: 'right', sortable: true },
-    { key: 'matchup', label: 'Matchup', align: 'left', sortable: false },
+    ...(FF_MATCHUP_QUALITY ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
   ]
 
   const getPositionOrder = (positions: string[]): number => {
@@ -485,15 +486,18 @@ const TeamDetail = () => {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.blk, player.stats.gp)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.pts, player.stats.gp)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <MatchupCell
-                          matchup={matchup}
-                          isExpanded={isExpanded}
-                          onToggle={() => toggleExpand(player.player_name)}
-                        />
-                      </td>
+                      {FF_MATCHUP_QUALITY && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <MatchupCell
+                            matchup={matchup}
+                            isExpanded={isExpanded}
+                            onToggle={() => toggleExpand(player.player_name)}
+                            playerStats={player.stats}
+                          />
+                        </td>
+                      )}
                     </tr>
-                    {isExpanded && matchup && (
+                    {FF_MATCHUP_QUALITY && isExpanded && matchup && (
                       <MatchupExpandRow matchup={matchup} colSpan={15} />
                     )}
                   </React.Fragment>
@@ -520,7 +524,7 @@ const TeamDetail = () => {
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">—</td>
+                {FF_MATCHUP_QUALITY && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
               </tr>
             </tbody>
           </table>
