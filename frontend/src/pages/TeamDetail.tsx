@@ -1,12 +1,15 @@
 import { useParams, useNavigate } from 'react-router'
-import { useState } from 'react'
-import { useGetTeamDetailQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
-import type { TimePeriod } from '../types/api'
+import { useState, useMemo } from 'react'
+import React from 'react'
+import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery } from '../store/api/fantasyApi'
+import type { TimePeriod, PlayerMatchup } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import DataDateBadge from '../components/DataDateBadge'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
+import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay'
+import { FF_MATCHUP_QUALITY } from '../config/featureFlags'
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -22,6 +25,19 @@ const TeamDetail = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
+  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY })
+  const matchupMap = useMemo(() => {
+    if (!FF_MATCHUP_QUALITY) return new Map<string, PlayerMatchup>()
+    return new Map(liveMatchups.map((m: PlayerMatchup) => [m.player_name, m]))
+  }, [liveMatchups])
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const toggleExpand = (name: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -91,6 +107,7 @@ const TeamDetail = () => {
     { key: 'blk', label: showAverages ? 'BPG' : 'BLK', align: 'right', sortable: true },
     { key: 'pts', label: showAverages ? 'PPG' : 'PTS', align: 'right', sortable: true },
     { key: 'gp', label: 'GP', align: 'right', sortable: true },
+    ...(FF_MATCHUP_QUALITY ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
   ]
 
   const getPositionOrder = (positions: string[]): number => {
@@ -442,31 +459,50 @@ const TeamDetail = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {sortedPlayers.map((player, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 whitespace-nowrap text-center">
-                    <input
-                      type="checkbox"
-                      checked={isPlayerIncluded(player.player_name)}
-                      onChange={() => togglePlayerInclusion(player.player_name)}
-                      className="w-4 h-4 text-blue-600 cursor-pointer"
-                    />
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{player.player_name}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.minutes, player.stats.gp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.fg_percentage, player.stats.gp, true)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ft_percentage, player.stats.gp, true)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.three_pm, player.stats.gp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.reb, player.stats.gp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ast, player.stats.gp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.stl, player.stats.gp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.blk, player.stats.gp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.pts, player.stats.gp)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
-                </tr>
-              ))}
+              {sortedPlayers.map((player, idx) => {
+                const matchup = matchupMap.get(player.player_name)
+                const isExpanded = expandedRows.has(player.player_name)
+                return (
+                  <React.Fragment key={idx}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <input
+                          type="checkbox"
+                          checked={isPlayerIncluded(player.player_name)}
+                          onChange={() => togglePlayerInclusion(player.player_name)}
+                          className="w-4 h-4 text-blue-600 cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{player.player_name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.minutes, player.stats.gp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.fg_percentage, player.stats.gp, true)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ft_percentage, player.stats.gp, true)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.three_pm, player.stats.gp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.reb, player.stats.gp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ast, player.stats.gp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.stl, player.stats.gp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.blk, player.stats.gp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.pts, player.stats.gp)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
+                      {FF_MATCHUP_QUALITY && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <MatchupCell
+                            matchup={matchup}
+                            isExpanded={isExpanded}
+                            onToggle={() => toggleExpand(player.player_name)}
+                            playerStats={player.stats}
+                          />
+                        </td>
+                      )}
+                    </tr>
+                    {FF_MATCHUP_QUALITY && isExpanded && matchup && (
+                      <MatchupExpandRow matchup={matchup} colSpan={15} />
+                    )}
+                  </React.Fragment>
+                )
+              })}
               <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-t-2 border-blue-400 font-bold">
                 <td className="px-4 py-3 whitespace-nowrap text-center">
                   <span className="text-blue-600">-</span>
@@ -488,6 +524,7 @@ const TeamDetail = () => {
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, showAverages ? 1 : teamAverage.gp)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
+                {FF_MATCHUP_QUALITY && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
               </tr>
             </tbody>
           </table>

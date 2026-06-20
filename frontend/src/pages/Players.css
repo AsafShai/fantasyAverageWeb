@@ -4,6 +4,21 @@
   margin: 0 auto;
 }
 
+.filter-toggle {
+  padding: 4px 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.filter-toggle.active {
+  background: #1a4a2a;
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
 .players-page h1 {
   margin-bottom: 20px;
 }
