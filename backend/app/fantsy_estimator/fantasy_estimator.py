@@ -60,23 +60,14 @@ class FantasyEstimator:
         last_row: pd.Series,
         nba_avg_pace: float,
         mean_gp_per_period: float,
+        projected_total_gp: float,
     ) -> dict:
         """
         From window mean/cov and current state, compute estimated_final and variance per stat
-        (plan: max_gp, projected_total_gp, remaining_games, then scale; fg_pct/ft_pct via ratio + delta method).
+        (fg_pct/ft_pct via ratio + delta method).
         """
-        cfg = self.fantasy_configuration
         c = self.columns
-        max_gp = cfg.num_nba_games * cfg.num_players_in_team
         num_games_played_now = float(last_row[c.GP])
-        denom = nba_avg_pace * 10
-        if denom <= 0:
-            projected_total_gp = max_gp
-        else:
-            pace_ratio = num_games_played_now / denom
-            season_progress = nba_avg_pace / cfg.num_nba_games if cfg.num_nba_games else 1.0
-            x = cfg.catch_up_boost_max * (1.0 - season_progress)
-            projected_total_gp = min(max_gp, pace_ratio * (1.0 + x) * max_gp)
         remaining_games = max(0.0, projected_total_gp - num_games_played_now)
 
         stat_cols = list(WindowEstimator.stat_columns())
@@ -142,11 +133,13 @@ class FantasyEstimator:
         self,
         df_team: pd.DataFrame,
         nba_avg_pace: float,
+        slot_proj_df: pd.DataFrame | None = None,
     ) -> tuple[dict, np.ndarray, np.ndarray]:
         """
         Run estimation for a single team: window mean/cov, then compute estimated_final and variance
         per stat. Returns (row_dict, mean_10, cov_10) for the predictions table and Monte Carlo.
         """
+        from app.services.slot_games_estimator import SLOT_CAPS
         c = self.columns
         team_id = df_team[c.TEAM_ID].iloc[0]
         team_name = df_team[c.TEAM_NAME].iloc[0]
@@ -162,13 +155,23 @@ class FantasyEstimator:
             index=stat_cols,
             columns=stat_cols,
         )
-        # Use latest date within latest period so current state is true cumulative (not an earlier day in the period)
         last_row = (
             df_team.sort_values([PreprocessColumns.PERIOD_INDEX, c.DATE]).iloc[-1]
         )
         mean_gp_per_period = float(df_team[PreprocessColumns.GP_IN_PERIOD].mean())
+
+        if slot_proj_df is not None and not slot_proj_df.empty:
+            team_row = slot_proj_df[slot_proj_df['team_id'] == team_id]
+            if not team_row.empty:
+                projected_total_gp = float(team_row['proj_total'].iloc[0])
+            else:
+                projected_total_gp = float(sum(SLOT_CAPS.values()) * (nba_avg_pace / 82))
+        else:
+            projected_total_gp = float(sum(SLOT_CAPS.values()) * (nba_avg_pace / 82))
+
         row, mean_10, cov_10 = self._compute_final_and_variance(
-            mean_vector, covariance_matrix, last_row, nba_avg_pace, mean_gp_per_period
+            mean_vector, covariance_matrix, last_row, nba_avg_pace, mean_gp_per_period,
+            projected_total_gp,
         )
         row[c.TEAM_ID] = team_id
         row[c.TEAM_NAME] = team_name
@@ -293,7 +296,8 @@ class FantasyEstimator:
         self,
         df: pd.DataFrame,
         nba_avg_pace: float,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        slot_proj_df: pd.DataFrame | None = None,
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Run estimation: for each eligible team, compute estimated_final and variance per stat,
         then run Monte Carlo to get expected ranking points per stat. Returns two DataFrames.
@@ -333,7 +337,7 @@ class FantasyEstimator:
                     min_period_id,
                 )
                 continue
-            result, mean_10, cov_10 = self._estimate_per_team(df_team, nba_avg_pace)
+            result, mean_10, cov_10 = self._estimate_per_team(df_team, nba_avg_pace, slot_proj_df)
             self.logger.debug("team_id=%s estimated_final_pts=%s", team_id, result.get(OutputColumnNames.EstimatedFinal.PTS))
             results.append(result)
             mc_data.append((result[c.TEAM_ID], result[c.TEAM_NAME], mean_10, cov_10, result["projected_total_gp"]))

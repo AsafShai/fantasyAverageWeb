@@ -6,6 +6,8 @@ from datetime import date, datetime
 from app.config import settings
 from app.services.db_service import DBService
 from app.services.nba_stats_service import NBAStatsService
+from app.services.team_slot_pace import get_team_slot_pace_df
+from app.services.slot_games_estimator import SlotGamesEstimator
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +81,17 @@ class EstimatorService:
                     return False
 
         try:
-            df = await self._get_snapshot_df()
-            nba_avg_pace = await self._get_nba_avg_pace()
+            df, nba_avg_pace, slot_pace_df = await asyncio.gather(
+                self._get_snapshot_df(),
+                self._get_nba_avg_pace(),
+                get_team_slot_pace_df(),
+            )
+            slot_proj_df = SlotGamesEstimator().estimate(slot_pace_df)
 
             from app.fantsy_estimator import FantasyEstimator
             loop = asyncio.get_event_loop()
             prediction_df, ranking_df, rank_prob_df = await loop.run_in_executor(
-                None, lambda: FantasyEstimator().estimate(df, nba_avg_pace)
+                None, lambda: FantasyEstimator().estimate(df, nba_avg_pace, slot_proj_df)
             )
 
             await asyncio.gather(
