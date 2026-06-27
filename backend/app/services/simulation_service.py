@@ -159,7 +159,7 @@ def _pred(p) -> PlayerPrediction:
         team_id=p.team_id, team_abbr=_abbr(p.team_id),
         opponent_team_id=p.opponent_team_id, opponent_abbr=_abbr(p.opponent_team_id),
         is_home=p.is_home, minutes=p.minutes, default_minutes=p.default_minutes,
-        eligible=p.eligible, reason=p.reason,
+        eligible=p.eligible, status=p.status, reason=p.reason,
         stats={k: StatCell(value=c.value, low=c.low, high=c.high) for k, c in p.stats.items()},
     )
 
