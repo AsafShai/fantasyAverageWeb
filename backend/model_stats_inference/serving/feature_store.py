@@ -130,6 +130,25 @@ class FeatureStore:
         team_ids = new_team_games["TEAM_ID"].unique().tolist()
         self._recompute(player_ids, team_ids)
 
+    def ingest_prederived(
+        self,
+        player_rows: pd.DataFrame,
+        team_allowed_rows: pd.DataFrame,
+        team_own_rows: pd.DataFrame,
+    ) -> None:
+        """Append already-derived rows (player logs + team allowed/own) and recompute.
+
+        Used by the season simulator, which slices these directly from cached frames
+        (so it never needs raw team logs). Same b2 semantics as the nightly update.
+        """
+        self.players = _append_dedup(self.players, player_rows, ["PLAYER_ID", "GAME_ID"])
+        self.team_allowed = _append_dedup(self.team_allowed, team_allowed_rows, ["TEAM_ID", "GAME_ID"])
+        self.team_own = _append_dedup(self.team_own, team_own_rows, ["TEAM_ID", "GAME_ID"])
+        self._recompute(
+            player_rows["PLAYER_ID"].unique().tolist(),
+            team_allowed_rows["TEAM_ID"].unique().tolist(),
+        )
+
     def _recompute(self, player_ids: list[int], team_ids: list[int]) -> None:
         pv, tav, tov = rfeatures.build_current_state(
             self.players[self.players["PLAYER_ID"].isin(player_ids)],
