@@ -31,6 +31,8 @@ const Layout = () => {
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
     { path: '/nba-teams', label: 'NBA', icon: '🏀' },
+    { path: '/simulation', label: 'Simulation', icon: '🎮' },
+    { path: '/feature-store', label: 'Feature Store', icon: '🗄️' },
     ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
   ]
 
