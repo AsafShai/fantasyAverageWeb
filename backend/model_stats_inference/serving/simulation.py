@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from ..research import config as rconfig
 from ..research import data as rdata
 from . import config
 from .errors import InsufficientHistoryError, ServingError, UnknownPlayerError
@@ -27,6 +28,10 @@ from .inference import LiveInference, PredictionRequest
 # Stats we surface in the UI (model targets + derived percentages).
 DISPLAY_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA", "FG_PCT", "FT_PCT"]
 REPLAY_SEASON = "2025-26"
+
+# Recency caps (days) used to judge how fresh the form windows are.
+W5_DAYS = rconfig.WINDOWS["w5"]["days"]    # 30
+W10_DAYS = rconfig.WINDOWS["w10"]["days"]  # 60
 
 
 @dataclass
@@ -46,6 +51,7 @@ class PlayerPrediction:
     minutes: float
     default_minutes: float
     eligible: bool
+    status: str = "green"          # green = confident, orange = stale/thin form, red = no inference
     reason: str = ""
     stats: dict[str, StatCell] = field(default_factory=dict)
 
@@ -239,6 +245,33 @@ class SeasonSimulator:
             raise ServingError(f"player {player_id} does not play on {_d(self.next_game_day)}")
         return self._predict_player(row.iloc[0], float(minutes), self._default_minutes(player_id))
 
+    def _freshness(self, player_id: int, predict_date) -> tuple[str, str]:
+        """Confidence of an eligible prediction based on how many games fall in the
+        recent-form windows (computed from real game dates, anchor-independent)."""
+        predict_date = pd.Timestamp(predict_date)
+        games = self.players[
+            (self.players["PLAYER_ID"] == player_id) & (self.players["GAME_DATE"] < predict_date)
+        ]["GAME_DATE"]
+        if games.empty:
+            return "orange", "No prior games on record — projection uses defaults only."
+        last = games.max()
+        gap = (predict_date - last).days
+        r30 = int((games >= predict_date - pd.Timedelta(days=W5_DAYS)).sum())
+        r60 = int((games >= predict_date - pd.Timedelta(days=W10_DAYS)).sum())
+        if r60 == 0:
+            return "orange", (
+                f"Last game {gap} days ago ({_d(last)}); 0 games in the last {W10_DAYS} days. "
+                f"The recent-form windows are empty, so the projection leans on career/"
+                f"season-long averages only — lower confidence."
+            )
+        if r30 < 3 or r60 < 5:
+            return "orange", (
+                f"Last game {gap} days ago ({_d(last)}); only {r30} game(s) in the last "
+                f"{W5_DAYS}d and {r60} in the last {W10_DAYS}d. Recent-form windows are thin "
+                f"or partly stale — treat with lower confidence."
+            )
+        return "green", ""
+
     def _predict_player(self, row, minutes: float, default_min: float) -> PlayerPrediction:
         pid = int(row["PLAYER_ID"])
         opp = self._opponent(row["GAME_ID"], row["TEAM_ID"])
@@ -254,8 +287,12 @@ class SeasonSimulator:
                 game_date=self.next_game_day, minutes=minutes,
             ))
             pred.stats = {k: StatCell(v.value, v.low, v.high) for k, v in res.stats.items()}
+            pred.status, reason = self._freshness(pid, self.next_game_day)
+            if reason:
+                pred.reason = reason
         except (InsufficientHistoryError, UnknownPlayerError) as e:
             pred.eligible = False
+            pred.status = "red"
             pred.reason = str(e)
         return pred
 

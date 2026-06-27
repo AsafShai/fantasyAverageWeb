@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import {
   useGetSimUpcomingQuery,
   useInitSimMutation,
@@ -26,9 +26,10 @@ export default function Simulation() {
 
   const [minutesById, setMinutesById] = useState<Record<number, number>>({});
   const [overrideById, setOverrideById] = useState<Record<number, PlayerPrediction>>({});
+  const [openReason, setOpenReason] = useState<number | null>(null);
   const timers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
-  const resetLocal = () => { setMinutesById({}); setOverrideById({}); };
+  const resetLocal = () => { setMinutesById({}); setOverrideById({}); setOpenReason(null); };
 
   const onSlider = (pid: number, minutes: number) => {
     setMinutesById((m) => ({ ...m, [pid]: minutes }));
@@ -105,6 +106,7 @@ export default function Simulation() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
               <tr>
+                <th className="px-3 py-2 w-8"></th>
                 <th className="text-left px-3 py-2">Player</th>
                 <th className="text-left px-3 py-2">Matchup</th>
                 <th className="px-3 py-2 w-56">Minutes (t)</th>
@@ -117,50 +119,70 @@ export default function Simulation() {
               {preds.map((base) => {
                 const p = overrideById[base.player_id] ?? base;
                 const minutes = minutesById[base.player_id] ?? base.default_minutes;
+                const open = openReason === base.player_id;
+                const toggle = () => setOpenReason(open ? null : base.player_id);
+                const reasonRow = open && base.reason ? (
+                  <tr className="bg-amber-50 dark:bg-amber-900/20">
+                    <td></td>
+                    <td colSpan={STAT_COLS.length + 5} className="px-3 py-2 text-xs text-amber-800 dark:text-amber-300">{base.reason}</td>
+                  </tr>
+                ) : null;
+
                 if (!base.eligible) {
                   return (
-                    <tr key={base.player_id} className="border-t border-gray-100 dark:border-gray-800 text-gray-400">
-                      <td className="px-3 py-2">{base.player_name}</td>
-                      <td className="px-3 py-2">{base.team_abbr} {base.is_home ? 'vs' : '@'} {base.opponent_abbr}</td>
-                      <td className="px-3 py-2 italic" colSpan={STAT_COLS.length + 3}>insufficient history — {base.reason}</td>
-                    </tr>
+                    <Fragment key={base.player_id}>
+                      <tr className="border-t border-gray-100 dark:border-gray-800 text-gray-400">
+                        <td className="px-3 py-2 text-center"><StatusDot status="red" onClick={toggle} /></td>
+                        <td className="px-3 py-2">{base.player_name}</td>
+                        <td className="px-3 py-2">{base.team_abbr} {base.is_home ? 'vs' : '@'} {base.opponent_abbr}</td>
+                        <td className="px-3 py-2 italic" colSpan={STAT_COLS.length + 3}>no prediction — insufficient history (click ●)</td>
+                      </tr>
+                      {reasonRow}
+                    </Fragment>
                   );
                 }
                 return (
-                  <tr key={base.player_id} className="border-t border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100">
-                    <td className="px-3 py-2 font-medium whitespace-nowrap">{base.player_name}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
-                      {base.team_abbr} {base.is_home ? 'vs' : '@'} {base.opponent_abbr}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range" min={0} max={44} step={1} value={Math.round(minutes)}
-                          onChange={(e) => onSlider(base.player_id, Number(e.target.value))}
-                          className="w-32 accent-blue-600"
-                        />
-                        <span className="tabular-nums w-8 text-right">{Math.round(minutes)}</span>
-                      </div>
-                    </td>
-                    {STAT_COLS.map(([key]) => (
-                      <td key={key} className="px-3 py-2 text-right tabular-nums">{fmt(p.stats[key]?.value)}</td>
-                    ))}
-                    <td className="px-3 py-2 text-right tabular-nums">{pct(p.stats['FG_PCT']?.value)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pct(p.stats['FT_PCT']?.value)}</td>
-                  </tr>
+                  <Fragment key={base.player_id}>
+                    <tr className="border-t border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100">
+                      <td className="px-3 py-2 text-center"><StatusDot status={base.status} onClick={toggle} /></td>
+                      <td className="px-3 py-2 font-medium whitespace-nowrap">{base.player_name}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                        {base.team_abbr} {base.is_home ? 'vs' : '@'} {base.opponent_abbr}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range" min={0} max={44} step={1} value={Math.round(minutes)}
+                            onChange={(e) => onSlider(base.player_id, Number(e.target.value))}
+                            className="w-32 accent-blue-600"
+                          />
+                          <span className="tabular-nums w-8 text-right">{Math.round(minutes)}</span>
+                        </div>
+                      </td>
+                      {STAT_COLS.map(([key]) => (
+                        <td key={key} className="px-3 py-2 text-right tabular-nums">{fmt(p.stats[key]?.value)}</td>
+                      ))}
+                      <td className="px-3 py-2 text-right tabular-nums">{pct(p.stats['FG_PCT']?.value)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{pct(p.stats['FT_PCT']?.value)}</td>
+                    </tr>
+                    {reasonRow}
+                  </Fragment>
                 );
               })}
               {preds.length === 0 && (
-                <tr><td colSpan={STAT_COLS.length + 4} className="px-3 py-6 text-center text-gray-400">
+                <tr><td colSpan={STAT_COLS.length + 6} className="px-3 py-6 text-center text-gray-400">
                   No upcoming games {state?.finished ? '— season finished.' : '.'}
                 </td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <p className="px-4 py-2 text-xs text-gray-400">
-          Drag the minutes slider to see how the projection scales with playing time. Bands available via ±RMSE per model.
-        </p>
+        <div className="px-4 py-2 text-xs text-gray-400 flex flex-wrap items-center gap-4">
+          <span>Drag the minutes slider to rescale a projection.</span>
+          <span className="flex items-center gap-1"><Dot className="bg-green-500" /> confident</span>
+          <span className="flex items-center gap-1"><Dot className="bg-amber-500" /> stale/thin recent form — click for why</span>
+          <span className="flex items-center gap-1"><Dot className="bg-red-500" /> no prediction (insufficient history)</span>
+        </div>
       </div>
 
       {/* Evaluation of the day we just advanced past (from the server, so it
@@ -207,6 +229,22 @@ export default function Simulation() {
         </div>
       )}
     </div>
+  );
+}
+
+function Dot({ className }: { className: string }) {
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${className}`} />;
+}
+
+function StatusDot({ status, onClick }: { status: 'green' | 'orange' | 'red'; onClick: () => void }) {
+  const color = status === 'green' ? 'bg-green-500' : status === 'orange' ? 'bg-amber-500' : 'bg-red-500';
+  if (status === 'green') return <Dot className={color} />;
+  return (
+    <button
+      onClick={onClick}
+      title="click for why"
+      className={`inline-block w-2.5 h-2.5 rounded-full ${color} hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 dark:hover:ring-gray-600`}
+    />
   );
 }
 

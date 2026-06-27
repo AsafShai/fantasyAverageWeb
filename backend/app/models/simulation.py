@@ -44,6 +44,7 @@ class PlayerPrediction(BaseModel):
     minutes: float
     default_minutes: float
     eligible: bool
+    status: str = "green"
     reason: str = ""
     stats: dict[str, StatCell] = {}
 
