@@ -1,0 +1,118 @@
+"""Live inference: predict a player's next-game stat line from the feature store.
+
+Given an upcoming game (player, opponent, home/away, date) and the minutes ``t``
+the player is expected to play, assemble the feature row from the store, set the
+minutes-dependent features, and run each per-stat model.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import joblib
+import pandas as pd
+
+from . import config
+from .errors import ModelsNotTrainedError
+from .feature_store import FeatureStore
+
+
+@dataclass
+class PredictionRequest:
+    player_id: int
+    opponent_team_id: int
+    is_home: bool
+    game_date: str | pd.Timestamp
+    minutes: float  # t — expected minutes the player will play
+
+
+@dataclass
+class StatPrediction:
+    value: float
+    low: float | None = None   # value - RMSE
+    high: float | None = None  # value + RMSE
+
+
+@dataclass
+class PredictionResult:
+    player_id: int
+    minutes: float
+    stats: dict[str, StatPrediction] = field(default_factory=dict)
+
+
+class LiveInference:
+    """Loads the trained per-stat models and serves predictions off a FeatureStore."""
+
+    def __init__(self, store: FeatureStore, models_dir: Path | None = None):
+        self.store = store
+        self.models: dict[str, dict] = {}
+        d = models_dir or config.MODELS_DIR
+        for path in sorted(Path(d).glob("*.joblib")):
+            payload = joblib.load(path)
+            self.models[payload["target"]] = payload
+        if not self.models:
+            raise ModelsNotTrainedError(
+                f"no models found in {d} — run `python -m model_stats_inference.training.train`"
+            )
+
+    def predict(self, req: PredictionRequest) -> PredictionResult:
+        state = self.store.get_player_state(req.player_id)        # raises if insufficient
+        own = self.store.get_team_state(state.team_id)
+        opp = self.store.get_team_state(req.opponent_team_id)
+
+        row = self._assemble_row(state, own, opp, req)
+        X = pd.DataFrame([row])
+
+        result = PredictionResult(player_id=req.player_id, minutes=float(req.minutes))
+        preds: dict[str, float] = {}
+        for target, payload in self.models.items():
+            value = float(payload["model"].predict(X[payload["features"]])[0])
+            if payload.get("clip_at_zero", True):
+                value = max(0.0, value)
+            preds[target] = value
+            rmse = payload.get("metrics", {}).get("rmse_mean")
+            result.stats[target] = StatPrediction(
+                value=value,
+                low=max(0.0, value - rmse) if rmse is not None else None,
+                high=value + rmse if rmse is not None else None,
+            )
+
+        # Derived shooting percentages from predicted makes / attempts.
+        result.stats["FG_PCT"] = StatPrediction(_safe_ratio(preds.get("FGM"), preds.get("FGA")))
+        result.stats["FT_PCT"] = StatPrediction(_safe_ratio(preds.get("FTM"), preds.get("FTA")))
+        return result
+
+    # --- feature-row assembly ---------------------------------------------
+
+    def _assemble_row(self, state, own, opp, req: PredictionRequest) -> dict:
+        game_date = pd.Timestamp(req.game_date)
+        rest = (game_date - pd.Timestamp(state.last_game_date)).days
+
+        row: dict[str, float] = {}
+        row.update(state.vector.to_dict())   # player history mean/var/rate + efficiency
+        row.update(own.own.to_dict())        # TEAM_* own-team context
+        row.update(opp.allowed.to_dict())    # OPP_ALLOWED_* opponent context
+
+        # Context.
+        pos = state.position or ""
+        row["IS_HOME"] = float(req.is_home)
+        row["REST_DAYS"] = float(rest)
+        row["IS_BACK_TO_BACK"] = float(rest == 1)
+        row["HISTORY_GAMES"] = float(state.games_count)
+        row["IS_GUARD"] = float("G" in pos)
+        row["IS_FORWARD"] = float("F" in pos)
+        row["IS_CENTER"] = float("C" in pos)
+
+        # Minutes-dependent features: t and every t*rate.
+        t = float(req.minutes)
+        row["T_MIN"] = t
+        for key in [k for k in row if k.endswith("_rate")]:
+            row[f"T_x_{key}"] = t * row[key]
+        return row
+
+
+def _safe_ratio(num: float | None, den: float | None) -> float:
+    if not num or not den or den <= 0:
+        return 0.0
+    return min(1.0, num / den)
