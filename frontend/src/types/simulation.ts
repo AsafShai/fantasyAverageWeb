@@ -35,6 +35,7 @@ export interface PlayerPrediction {
   minutes: number;
   default_minutes: number;
   eligible: boolean;
+  status: 'green' | 'orange' | 'red';
   reason: string;
   stats: Record<string, StatCell>;
 }
