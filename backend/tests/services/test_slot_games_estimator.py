@@ -33,16 +33,16 @@ def estimator():
 class TestSlotGamesEstimatorEarlySeason:
     def test_early_season_weight_favors_method1(self, estimator):
         avg_pace = 10.0
-        days_remaining = 100
-        gp = 10
+        days_remaining = 40
+        gp = 5
 
         df = make_df(avg_pace, days_remaining, {s: gp for s in SLOTS})
         result = estimator.estimate(df)
 
         w1 = 1 - avg_pace / 82
         w2 = avg_pace / 82
-        m1 = gp * (82 / avg_pace)
-        m2 = gp + (gp / avg_pace) * days_remaining
+        m1 = gp * (82 / avg_pace)           # = 41, within cap
+        m2 = gp + (gp / avg_pace) * days_remaining  # = 25, within cap
         expected_pg = w1 * m1 + w2 * m2
 
         assert result['proj_PG'].iloc[0] == pytest.approx(expected_pg, rel=1e-6)
