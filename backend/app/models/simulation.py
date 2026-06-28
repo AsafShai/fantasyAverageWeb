@@ -71,6 +71,7 @@ class UpcomingResponse(BaseModel):
     state: SimState
     predictions: list[PlayerPrediction]
     last_results: Optional[LastResults] = None
+    resid_sigma: dict[str, float] = {}   # learned Pearson-residual spread per stat
 
 
 class AdvanceResponse(BaseModel):

@@ -37,6 +37,8 @@ class TrainResult:
     r2_mean: float
     r2_std: float
     baseline_rmse: float
+    resid_sigma: float            # robust spread of the Pearson residual (color scale)
+    resid_bias: float             # median Pearson residual (systematic over/under)
     oof_true: np.ndarray = field(repr=False)
     oof_pred: np.ndarray = field(repr=False)
 
@@ -96,6 +98,14 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
 
     baseline_rmse = float(np.sqrt(mean_squared_error(y, np.full(len(y), y.mean()))))
 
+    # Learned color scale: spread of the magnitude-normalized (Pearson) residual,
+    # m = (actual - pred)/sqrt(pred+1), measured on the held-out OOF predictions.
+    # Robust (MAD-based) so a few blow-ups don't inflate it. No hand-picked numbers.
+    resid = (y.to_numpy() - oof) / np.sqrt(np.clip(oof, 0, None) + 1.0)
+    resid_bias = float(np.median(resid))
+    mad = float(np.median(np.abs(resid - resid_bias)))
+    resid_sigma = float(1.4826 * mad) if mad > 0 else float(np.std(resid))
+
     # Final model trained on everything, then saved.
     final = config.make_model()
     final.fit(X, y)
@@ -111,6 +121,8 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
                 "rmse_std": float(np.std(rmses)),
                 "mae_mean": float(np.mean(maes)),
                 "r2_mean": float(np.mean(r2s)),
+                "resid_sigma": resid_sigma,
+                "resid_bias": resid_bias,
             },
         },
         config.MODELS_DIR / f"{target}.joblib",
@@ -127,6 +139,8 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
         r2_mean=float(np.mean(r2s)),
         r2_std=float(np.std(r2s)),
         baseline_rmse=baseline_rmse,
+        resid_sigma=resid_sigma,
+        resid_bias=resid_bias,
         oof_true=y.to_numpy(),
         oof_pred=oof,
     )
@@ -151,7 +165,7 @@ def main() -> None:
             f"  {target:<5} n={res.n_rows:,}  "
             f"RMSE={res.rmse_mean:.3f}±{res.rmse_std:.3f} (baseline {res.baseline_rmse:.3f})  "
             f"MAE={res.mae_mean:.3f}  R2={res.r2_mean:.3f}±{res.r2_std:.3f}  "
-            f"[{len(res.features)} feats]"
+            f"residσ={res.resid_sigma:.3f}  [{len(res.features)} feats]"
         )
         card[target] = {
             "n_rows": res.n_rows,
@@ -162,6 +176,8 @@ def main() -> None:
             "r2_mean": res.r2_mean,
             "r2_std": res.r2_std,
             "baseline_rmse": res.baseline_rmse,
+            "resid_sigma": res.resid_sigma,
+            "resid_bias": res.resid_bias,
         }
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
