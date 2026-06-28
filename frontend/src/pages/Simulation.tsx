@@ -18,6 +18,27 @@ const STAT_COLS: [string, string][] = [
 const fmt = (n: number | undefined, d = 1) => (n == null ? '—' : n.toFixed(d));
 const pct = (n: number | undefined) => (n == null ? '—' : `${(n * 100).toFixed(1)}%`);
 
+// Predicted-vs-actual cell coloring thresholds, in units of the per-stat σ
+// (Pearson residual spread) learned during validation. Tune here only — the
+// coloring logic reads these and never hardcodes numbers.
+const EVAL_SIGMA_BANDS = {
+  GREEN_MAX: 0.75,   // |z| ≤ GREEN_MAX        → green
+  ORANGE_MAX: 2.0,   // GREEN_MAX < |z| ≤ ORANGE_MAX → orange, else red
+};
+
+// Color a predicted-vs-actual cell by the magnitude-normalized (Pearson) residual,
+// standardized by the learned per-stat σ. No magic numbers — thresholds live in
+// EVAL_SIGMA_BANDS above.
+function evalColor(pred: number | undefined, actual: number | undefined, sigma: number | undefined) {
+  if (pred == null || actual == null || !sigma || sigma <= 0) return { cls: '', z: null as number | null };
+  const m = Math.abs(actual - pred) / Math.sqrt(Math.max(pred, 0) + 1);
+  const z = m / sigma;
+  const cls = z <= EVAL_SIGMA_BANDS.GREEN_MAX ? 'text-green-600 dark:text-green-400'
+    : z <= EVAL_SIGMA_BANDS.ORANGE_MAX ? 'text-amber-600 dark:text-amber-400'
+    : 'text-red-600 dark:text-red-400';
+  return { cls, z };
+}
+
 export default function Simulation() {
   const { data, isLoading, isFetching, error } = useGetSimUpcomingQuery();
   const [initSim, { isLoading: initing }] = useInitSimMutation();
@@ -57,6 +78,7 @@ export default function Simulation() {
   const state = data?.state;
   const preds = data?.predictions ?? [];
   const lastResults = data?.last_results ?? null;
+  const residSigma = data?.resid_sigma ?? {};
   const card = 'bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700';
 
   return (
@@ -212,11 +234,10 @@ export default function Simulation() {
                     <td className="px-3 py-2 text-right tabular-nums">{e.real_minutes.toFixed(0)}</td>
                     {STAT_COLS.map(([key]) => {
                       const pr = e.predicted[key]; const ac = e.actual[key];
-                      const diff = pr != null && ac != null ? Math.abs(pr - ac) : null;
-                      const color = diff == null ? '' : diff <= 2 ? 'text-green-600 dark:text-green-400'
-                        : diff <= 5 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400';
+                      const { cls, z } = evalColor(pr, ac, residSigma[key]);
                       return (
-                        <td key={key} className={`px-3 py-2 text-right tabular-nums ${color}`}>
+                        <td key={key} title={z == null ? undefined : `${z.toFixed(2)}σ (learned scale)`}
+                            className={`px-3 py-2 text-right tabular-nums ${cls}`}>
                           {fmt(pr)} → <span className="font-semibold">{fmt(ac, 0)}</span>
                         </td>
                       );
@@ -226,6 +247,12 @@ export default function Simulation() {
               </tbody>
             </table>
           </div>
+          <p className="px-4 py-2 text-xs text-gray-400">
+            Cell color = how far the miss is in <em>expected spreads</em> for that stat, using a
+            per-stat scale learned from validation (Pearson residual). <span className="text-green-600 dark:text-green-400">green</span> ≤ {EVAL_SIGMA_BANDS.GREEN_MAX}σ ·
+            <span className="text-amber-600 dark:text-amber-400"> orange</span> ≤ {EVAL_SIGMA_BANDS.ORANGE_MAX}σ ·
+            <span className="text-red-600 dark:text-red-400"> red</span> &gt; {EVAL_SIGMA_BANDS.ORANGE_MAX}σ. Hover a cell for its σ-distance.
+          </p>
         </div>
       )}
     </div>

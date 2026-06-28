@@ -79,6 +79,7 @@ class SimulationService:
             state=self._state(),
             predictions=[_pred(p) for p in preds],
             last_results=last,
+            resid_sigma=dict(sim.inference.resid_sigma),
         )
 
     async def players(self) -> PlayersListResponse:

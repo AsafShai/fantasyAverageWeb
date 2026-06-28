@@ -51,6 +51,12 @@ class LiveInference:
         for path in sorted(Path(d).glob("*.joblib")):
             payload = joblib.load(path)
             self.models[payload["target"]] = payload
+        # Learned color scale (spread of the Pearson residual) per target, if present.
+        self.resid_sigma: dict[str, float] = {
+            t: p.get("metrics", {}).get("resid_sigma")
+            for t, p in self.models.items()
+            if p.get("metrics", {}).get("resid_sigma") is not None
+        }
         if not self.models:
             raise ModelsNotTrainedError(
                 f"no models found in {d} — run `python -m model_stats_inference.training.train`"

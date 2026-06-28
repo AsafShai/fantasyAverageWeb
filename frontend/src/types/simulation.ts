@@ -62,6 +62,7 @@ export interface UpcomingResponse {
   state: SimState;
   predictions: PlayerPrediction[];
   last_results?: LastResults | null;
+  resid_sigma?: Record<string, number>;
 }
 
 export interface AdvanceResponse {
