@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from typing import Callable
 
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold, cross_val_predict
 
@@ -74,15 +76,26 @@ def _prepare(matrix: pd.DataFrame, features: list[str], target: str):
     return sub[features], sub[y_col].astype(float)
 
 
-def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
-    features = load_feature_set(target)
-    X, y = _prepare(matrix, features, target)
+def cross_validate_target(
+    X: pd.DataFrame,
+    y: pd.Series,
+    target: str,
+    features: list[str],
+    make_est: Callable[[], BaseEstimator] | None = None,
+) -> TrainResult:
+    """K-fold CV for one target with an arbitrary estimator factory.
+
+    `make_est` defaults to the production model (`config.make_model`); the
+    comparison script passes a registry factory to score other models on the
+    *same* folds and features. Saves nothing — pure evaluation.
+    """
+    make_est = make_est or config.make_model
     kf = KFold(n_splits=config.KFOLDS, shuffle=True, random_state=config.RANDOM_STATE)
 
     # Per-fold metrics (so we get a std / band), computed on each fold's test part.
     rmses, maes, r2s = [], [], []
     for tr, te in kf.split(X):
-        model = config.make_model()
+        model = make_est()
         model.fit(X.iloc[tr], y.iloc[tr])
         pred = model.predict(X.iloc[te])
         if config.CLIP_AT_ZERO:
@@ -92,7 +105,7 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
         r2s.append(r2_score(y.iloc[te], pred))
 
     # Out-of-fold predictions for the scatter plot.
-    oof = cross_val_predict(config.make_model(), X, y, cv=kf, n_jobs=-1)
+    oof = cross_val_predict(make_est(), X, y, cv=kf, n_jobs=-1)
     if config.CLIP_AT_ZERO:
         oof = np.clip(oof, 0, None)
 
@@ -105,28 +118,6 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
     resid_bias = float(np.median(resid))
     mad = float(np.median(np.abs(resid - resid_bias)))
     resid_sigma = float(1.4826 * mad) if mad > 0 else float(np.std(resid))
-
-    # Final model trained on everything, then saved.
-    final = config.make_model()
-    final.fit(X, y)
-    config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump(
-        {
-            "target": target,
-            "features": features,
-            "model": final,
-            "clip_at_zero": config.CLIP_AT_ZERO,
-            "metrics": {
-                "rmse_mean": float(np.mean(rmses)),
-                "rmse_std": float(np.std(rmses)),
-                "mae_mean": float(np.mean(maes)),
-                "r2_mean": float(np.mean(r2s)),
-                "resid_sigma": resid_sigma,
-                "resid_bias": resid_bias,
-            },
-        },
-        config.MODELS_DIR / f"{target}.joblib",
-    )
 
     return TrainResult(
         target=target,
@@ -144,6 +135,38 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
         oof_true=y.to_numpy(),
         oof_pred=oof,
     )
+
+
+def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
+    features = load_feature_set(target)
+    X, y = _prepare(matrix, features, target)
+
+    res = cross_validate_target(X, y, target, features)
+
+    # Final model trained on everything, then saved.
+    final = config.make_model()
+    final.fit(X, y)
+    config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(
+        {
+            "target": target,
+            "features": features,
+            "model": final,
+            "model_name": config.MODEL_NAME,
+            "clip_at_zero": config.CLIP_AT_ZERO,
+            "metrics": {
+                "rmse_mean": res.rmse_mean,
+                "rmse_std": res.rmse_std,
+                "mae_mean": res.mae_mean,
+                "r2_mean": res.r2_mean,
+                "resid_sigma": res.resid_sigma,
+                "resid_bias": res.resid_bias,
+            },
+        },
+        config.MODELS_DIR / f"{target}.joblib",
+    )
+
+    return res
 
 
 def main() -> None:

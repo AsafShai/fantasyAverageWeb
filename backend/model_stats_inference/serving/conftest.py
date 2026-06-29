@@ -11,13 +11,13 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_squared_error
 
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
 from model_stats_inference.research import features as rfeatures
 from model_stats_inference.serving.feature_store import FeatureStore
+from model_stats_inference.training import models as registry
 
 TEAM_A, TEAM_B = 10, 20
 FULL_PID, LOW_PID = 1, 4
@@ -124,11 +124,12 @@ def models_dir(feature_matrix, tmp_path_factory):
         ]
         sub = feature_matrix[feature_matrix[f"y_{target}"].notna()]
         X, y = sub[feats], sub[f"y_{target}"].astype(float)
-        model = HistGradientBoostingRegressor(max_iter=60, random_state=0).fit(X, y)
+        model = registry.build_estimator("hgb_l2").fit(X, y)
         rmse = float(np.sqrt(mean_squared_error(y, model.predict(X))))
         joblib.dump(
             {"target": target, "features": feats, "model": model,
-             "clip_at_zero": True, "metrics": {"rmse_mean": rmse}},
+             "model_name": "hgb_l2", "clip_at_zero": True,
+             "metrics": {"rmse_mean": rmse}},
             out / f"{target}.joblib",
         )
     return out

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.base import BaseEstimator
 
 from ..research import config as rconfig
 
@@ -36,19 +36,20 @@ RANDOM_STATE = 0
 # Counting-stat targets are clipped at 0 at predict time (can't be negative).
 CLIP_AT_ZERO = True
 
+# --- Model selection -------------------------------------------------------
 
-def make_model() -> HistGradientBoostingRegressor:
-    """The estimator used for every target. Swap here to change model family.
+# The production model/loss. Must be a key in `training.models.ESTIMATORS`.
+# Change this one line to swap model family or loss; add new candidates in
+# training/models.py (they auto-appear in the compare_models bake-off).
+MODEL_NAME = "hgb_poisson"
 
-    HistGradientBoosting handles NaNs natively (no imputation needed) and models
-    the nonlinear minutes/rate interactions well.
+
+def make_model() -> BaseEstimator:
+    """The estimator used for every target. Swap via `MODEL_NAME` above.
+
+    Delegates to the registry in `training.models`; imported lazily so that
+    module (which imports this config) doesn't create a circular import.
     """
-    return HistGradientBoostingRegressor(
-        max_iter=400,
-        learning_rate=0.05,
-        max_leaf_nodes=31,
-        l2_regularization=1.0,
-        early_stopping=True,
-        validation_fraction=0.1,
-        random_state=RANDOM_STATE,
-    )
+    from . import models
+
+    return models.build_estimator(MODEL_NAME)
