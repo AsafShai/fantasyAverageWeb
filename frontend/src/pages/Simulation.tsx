@@ -22,21 +22,39 @@ const pct = (n: number | undefined) => (n == null ? '—' : `${(n * 100).toFixed
 // (Pearson residual spread) learned during validation. Tune here only — the
 // coloring logic reads these and never hardcodes numbers.
 const EVAL_SIGMA_BANDS = {
-  GREEN_MAX: 0.75,   // |z| ≤ GREEN_MAX        → green
-  ORANGE_MAX: 2.0,   // GREEN_MAX < |z| ≤ ORANGE_MAX → orange, else red
+  GREEN_MAX: 0.6,    // |z| ≤ GREEN_MAX        → green
+  ORANGE_MAX: 1.2,   // GREEN_MAX < |z| ≤ ORANGE_MAX → orange, else red
 };
 
-// Color a predicted-vs-actual cell by the magnitude-normalized (Pearson) residual,
+// Map a σ-distance to a color band. Shared by the count and percentage colorers.
+function bandClass(z: number) {
+  return z <= EVAL_SIGMA_BANDS.GREEN_MAX ? 'text-green-600 dark:text-green-400'
+    : z <= EVAL_SIGMA_BANDS.ORANGE_MAX ? 'text-amber-600 dark:text-amber-400'
+    : 'text-red-600 dark:text-red-400';
+}
+
+// Color a counting-stat cell by the magnitude-normalized (Pearson) residual,
 // standardized by the learned per-stat σ. No magic numbers — thresholds live in
 // EVAL_SIGMA_BANDS above.
 function evalColor(pred: number | undefined, actual: number | undefined, sigma: number | undefined) {
   if (pred == null || actual == null || !sigma || sigma <= 0) return { cls: '', z: null as number | null };
   const m = Math.abs(actual - pred) / Math.sqrt(Math.max(pred, 0) + 1);
   const z = m / sigma;
-  const cls = z <= EVAL_SIGMA_BANDS.GREEN_MAX ? 'text-green-600 dark:text-green-400'
-    : z <= EVAL_SIGMA_BANDS.ORANGE_MAX ? 'text-amber-600 dark:text-amber-400'
-    : 'text-red-600 dark:text-red-400';
-  return { cls, z };
+  return { cls: bandClass(z), z };
+}
+
+// Color a percentage cell (FG%/FT%) by how many binomial standard errors the miss
+// is, at the real attempt volume. A 50%→67% miss on 3 attempts is noise (big SE,
+// forgiven); the same miss on 15 attempts is real (small SE, penalized). Same
+// σ-band thresholds, still no magic numbers — and no learned σ needed since the
+// SE is the natural scale for a rate.
+function evalColorPct(pred: number | undefined, actual: number | undefined, attempts: number | undefined) {
+  if (pred == null || actual == null || !attempts || attempts <= 0) return { cls: '', z: null as number | null };
+  const p = Math.min(0.999, Math.max(0.001, pred));
+  const se = Math.sqrt((p * (1 - p)) / attempts);
+  if (se <= 0) return { cls: '', z: null as number | null };
+  const z = Math.abs(actual - pred) / se;
+  return { cls: bandClass(z), z };
 }
 
 export default function Simulation() {
@@ -182,10 +200,21 @@ export default function Simulation() {
                         </div>
                       </td>
                       {STAT_COLS.map(([key]) => (
-                        <td key={key} className="px-3 py-2 text-right tabular-nums">{fmt(p.stats[key]?.value)}</td>
+                        <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fmt(p.stats[key]?.value)}</td>
                       ))}
-                      <td className="px-3 py-2 text-right tabular-nums">{pct(p.stats['FG_PCT']?.value)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{pct(p.stats['FT_PCT']?.value)}</td>
+                      {([['FG_PCT', 'FGM', 'FGA'], ['FT_PCT', 'FTM', 'FTA']] as const).map(([key, mKey, aKey]) => {
+                        const v = p.stats[key]?.value;
+                        const made = p.stats[mKey]?.value;
+                        const att = p.stats[aKey]?.value;
+                        return (
+                          <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+                            {pct(v)}
+                            {made != null && att != null && (
+                              <span className="text-gray-400 dark:text-gray-500 text-xs"> ({made.toFixed(1)}/{att.toFixed(1)})</span>
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                     {reasonRow}
                   </Fragment>
@@ -215,6 +244,7 @@ export default function Simulation() {
             <h2 className="font-semibold text-gray-900 dark:text-white">
               Results for {lastResults.played_date} — model vs actual (using real minutes)
             </h2>
+            <p className="text-xs text-gray-400 mt-0.5">Each cell shows <span className="tabular-nums">pred → actual</span>.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -222,7 +252,9 @@ export default function Simulation() {
                 <tr>
                   <th className="text-left px-3 py-2">Player</th>
                   <th className="px-3 py-2 text-right">Min</th>
-                  {STAT_COLS.map(([, label]) => <th key={label} className="px-3 py-2 text-right">{label} (pred→act)</th>)}
+                  {STAT_COLS.map(([, label]) => <th key={label} className="px-2 py-2 text-right whitespace-nowrap">{label}</th>)}
+                  <th className="px-2 py-2 text-right">FG%</th>
+                  <th className="px-2 py-2 text-right">FT%</th>
                 </tr>
               </thead>
               <tbody>
@@ -237,8 +269,17 @@ export default function Simulation() {
                       const { cls, z } = evalColor(pr, ac, residSigma[key]);
                       return (
                         <td key={key} title={z == null ? undefined : `${z.toFixed(2)}σ (learned scale)`}
-                            className={`px-3 py-2 text-right tabular-nums ${cls}`}>
+                            className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${cls || 'text-gray-400 dark:text-gray-500'}`}>
                           {fmt(pr)} → <span className="font-semibold">{fmt(ac, 0)}</span>
+                        </td>
+                      );
+                    })}
+                    {([['FG_PCT', 'FGA'], ['FT_PCT', 'FTA']] as const).map(([key, attKey]) => {
+                      const { cls, z } = evalColorPct(e.predicted[key], e.actual[key], e.actual[attKey]);
+                      return (
+                        <td key={key} title={z == null ? 'no attempts — rate undefined' : `${z.toFixed(2)}σ (binomial, ${(e.actual[attKey] ?? 0).toFixed(0)} att)`}
+                            className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${cls || 'text-gray-400 dark:text-gray-500'}`}>
+                          {pct(e.predicted[key])} → <span className="font-semibold">{pct(e.actual[key])}</span>
                         </td>
                       );
                     })}
@@ -252,6 +293,7 @@ export default function Simulation() {
             per-stat scale learned from validation (Pearson residual). <span className="text-green-600 dark:text-green-400">green</span> ≤ {EVAL_SIGMA_BANDS.GREEN_MAX}σ ·
             <span className="text-amber-600 dark:text-amber-400"> orange</span> ≤ {EVAL_SIGMA_BANDS.ORANGE_MAX}σ ·
             <span className="text-red-600 dark:text-red-400"> red</span> &gt; {EVAL_SIGMA_BANDS.ORANGE_MAX}σ. Hover a cell for its σ-distance.
+            FG%/FT% use a <em>binomial</em> spread at that game's attempt volume, so low-attempt percentages are forgiven.
           </p>
         </div>
       )}
