@@ -229,12 +229,22 @@ class SeasonSimulator:
         if self.finished:
             return []
         overrides = minutes_overrides or {}
-        out = []
+        reqs: list[PredictionRequest] = []
+        meta = []  # (row, minutes, default_min, opp, is_home) aligned to reqs
         for _, r in self._rows_on(self.next_game_day).iterrows():
             pid = int(r["PLAYER_ID"])
             default_min = self._default_minutes(pid)
             minutes = float(overrides.get(pid, default_min))
-            out.append(self._predict_player(r, minutes, default_min))
+            opp = self._opponent(r["GAME_ID"], r["TEAM_ID"])
+            is_home = "vs" in str(r["MATCHUP"])
+            reqs.append(PredictionRequest(
+                player_id=pid, opponent_team_id=opp, is_home=is_home,
+                game_date=self.next_game_day, minutes=minutes,
+            ))
+            meta.append((r, minutes, default_min, opp, is_home))
+
+        results, errors = self.inference.predict_many(reqs)
+        out = [self._build_prediction(*m, res, err) for m, res, err in zip(meta, results, errors)]
         out.sort(key=lambda p: p.stats.get("PTS", StatCell(0)).value, reverse=True)
         return out
 
@@ -273,27 +283,32 @@ class SeasonSimulator:
         return "green", ""
 
     def _predict_player(self, row, minutes: float, default_min: float) -> PlayerPrediction:
-        pid = int(row["PLAYER_ID"])
         opp = self._opponent(row["GAME_ID"], row["TEAM_ID"])
         is_home = "vs" in str(row["MATCHUP"])
+        req = PredictionRequest(
+            player_id=int(row["PLAYER_ID"]), opponent_team_id=opp, is_home=is_home,
+            game_date=self.next_game_day, minutes=minutes,
+        )
+        results, errors = self.inference.predict_many([req])
+        return self._build_prediction(row, minutes, default_min, opp, is_home, results[0], errors[0])
+
+    def _build_prediction(self, row, minutes, default_min, opp, is_home, res, err) -> PlayerPrediction:
+        """Assemble a PlayerPrediction from a batched result (or its error)."""
+        pid = int(row["PLAYER_ID"])
         pred = PlayerPrediction(
             player_id=pid, player_name=row.get("PLAYER_NAME", str(pid)),
             team_id=int(row["TEAM_ID"]), opponent_team_id=opp, is_home=is_home,
             minutes=minutes, default_minutes=default_min, eligible=True,
         )
-        try:
-            res = self.inference.predict(PredictionRequest(
-                player_id=pid, opponent_team_id=opp, is_home=is_home,
-                game_date=self.next_game_day, minutes=minutes,
-            ))
+        if err is not None:
+            pred.eligible = False
+            pred.status = "red"
+            pred.reason = str(err)
+        else:
             pred.stats = {k: StatCell(v.value, v.low, v.high) for k, v in res.stats.items()}
             pred.status, reason = self._freshness(pid, self.next_game_day)
             if reason:
                 pred.reason = reason
-        except (InsufficientHistoryError, UnknownPlayerError) as e:
-            pred.eligible = False
-            pred.status = "red"
-            pred.reason = str(e)
         return pred
 
     # --- stepping forward --------------------------------------------------
@@ -306,9 +321,7 @@ class SeasonSimulator:
         day = self.next_game_day
         rows = self._rows_on(day)
 
-        evals = []
-        for _, r in rows.iterrows():
-            evals.append(self._evaluate(r, day))
+        evals = self._evaluate_all(rows, day)
 
         # Fold the day into the store, then advance the pointer.
         self.store.ingest_prederived(
@@ -322,26 +335,37 @@ class SeasonSimulator:
         self.last_evaluations = evals
         return evals
 
-    def _evaluate(self, row, day) -> EvalRow:
-        pid = int(row["PLAYER_ID"])
-        opp = self._opponent(row["GAME_ID"], row["TEAM_ID"])
-        is_home = "vs" in str(row["MATCHUP"])
-        real_min = float(row["MIN"])
-        ev = EvalRow(
-            player_id=pid, player_name=row.get("PLAYER_NAME", str(pid)),
-            team_id=int(row["TEAM_ID"]), opponent_team_id=opp, is_home=is_home,
-            real_minutes=real_min, eligible=True, actual=_actual_line(row),
-        )
-        try:
-            res = self.inference.predict(PredictionRequest(
-                player_id=pid, opponent_team_id=opp, is_home=is_home,
+    def _evaluate_all(self, rows, day) -> list[EvalRow]:
+        """Score every player on ``day`` against actuals, batched through one
+        vectorized predict (real minutes the players actually played)."""
+        reqs: list[PredictionRequest] = []
+        meta = []  # (row, opp, is_home, real_min) aligned to reqs
+        for _, row in rows.iterrows():
+            opp = self._opponent(row["GAME_ID"], row["TEAM_ID"])
+            is_home = "vs" in str(row["MATCHUP"])
+            real_min = float(row["MIN"])
+            reqs.append(PredictionRequest(
+                player_id=int(row["PLAYER_ID"]), opponent_team_id=opp, is_home=is_home,
                 game_date=day, minutes=real_min,  # score with the minutes they actually played
             ))
-            ev.predicted = {k: round(v.value, 2) for k, v in res.stats.items()}
-        except (InsufficientHistoryError, UnknownPlayerError) as e:
-            ev.eligible = False
-            ev.reason = str(e)
-        return ev
+            meta.append((row, opp, is_home, real_min))
+
+        results, errors = self.inference.predict_many(reqs)
+        evals = []
+        for (row, opp, is_home, real_min), res, err in zip(meta, results, errors):
+            pid = int(row["PLAYER_ID"])
+            ev = EvalRow(
+                player_id=pid, player_name=row.get("PLAYER_NAME", str(pid)),
+                team_id=int(row["TEAM_ID"]), opponent_team_id=opp, is_home=is_home,
+                real_minutes=real_min, eligible=True, actual=_actual_line(row),
+            )
+            if err is not None:
+                ev.eligible = False
+                ev.reason = str(err)
+            else:
+                ev.predicted = {k: round(v.value, 2) for k, v in res.stats.items()}
+            evals.append(ev)
+        return evals
 
 
 def _actual_line(row) -> dict[str, float]:
