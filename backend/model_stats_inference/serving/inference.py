@@ -17,6 +17,7 @@ import pandas as pd
 from . import config
 from .errors import InsufficientHistoryError, ModelsNotTrainedError, UnknownPlayerError
 from .feature_store import FeatureStore
+from .reconcile import Reconciler
 
 
 @dataclass
@@ -50,6 +51,8 @@ class LiveInference:
         self.models: dict[str, dict] = {}
         d = models_dir or config.MODELS_DIR
         for path in sorted(Path(d).glob("*.joblib")):
+            if path.name == "reconciler.joblib":
+                continue
             payload = joblib.load(path)
             self.models[payload["target"]] = payload
         # Learned color scale (spread of the Pearson residual) per target, if present.
@@ -62,6 +65,9 @@ class LiveInference:
             raise ModelsNotTrainedError(
                 f"no models found in {d} — run `python -m model_stats_inference.training.train`"
             )
+        # MinT reconciler (coherent shooting lines: PTS = 2·FGM + FG3M + FTM).
+        # Optional — absent reconciler.joblib just skips reconciliation.
+        self.reconciler = Reconciler.load(Path(d) / "reconciler.joblib")
 
     def predict(self, req: PredictionRequest) -> PredictionResult:
         results, errors = self.predict_many([req])
@@ -110,6 +116,14 @@ class LiveInference:
             if payload.get("clip_at_zero", True):
                 vals = np.clip(vals, 0.0, None)
             batched[target] = vals
+
+        # Reconcile the shooting block so PTS = 2·FGM + FG3M + FTM (coherent lines).
+        # Overwrites those 6 targets in place; REB/AST/STL/BLK pass through untouched.
+        if self.reconciler is not None and all(t in batched for t in self.reconciler.targets):
+            Y = np.column_stack([batched[t] for t in self.reconciler.targets])
+            Yt = self.reconciler.apply(Y)
+            for k, t in enumerate(self.reconciler.targets):
+                batched[t] = Yt[:, k]
 
         for j, i in enumerate(valid):
             req = reqs[i]

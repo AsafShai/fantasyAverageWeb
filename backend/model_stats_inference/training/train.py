@@ -25,6 +25,7 @@ from sklearn.model_selection import KFold, cross_val_predict
 
 from . import config
 from . import plots
+from . import reconcile
 
 
 @dataclass
@@ -43,6 +44,7 @@ class TrainResult:
     resid_bias: float             # median Pearson residual (systematic over/under)
     oof_true: np.ndarray = field(repr=False)
     oof_pred: np.ndarray = field(repr=False)
+    oof_index: np.ndarray = field(repr=False, default=None)  # row keys for OOF rows (for reconciler alignment)
 
 
 def ensure_feature_sets() -> None:
@@ -134,6 +136,7 @@ def cross_validate_target(
         resid_bias=resid_bias,
         oof_true=y.to_numpy(),
         oof_pred=oof,
+        oof_index=y.index.to_numpy(),
     )
 
 
@@ -202,6 +205,21 @@ def main() -> None:
             "resid_sigma": res.resid_sigma,
             "resid_bias": res.resid_bias,
         }
+
+    # MinT reconciler: estimate the shooting-stat error covariance from the OOF
+    # residuals we just computed, and bake the projection gain. Coherent lines for
+    # the scoring identity PTS = 2·FGM + FG3M + FTM.
+    recon = reconcile.build_reconciler(results)
+    joblib.dump(recon, config.MODELS_DIR / "reconciler.joblib")
+    card["_reconciler"] = {
+        "targets": recon["targets"],
+        "gains": recon["gains"],
+        "incoherence_before": recon["incoherence_before"],
+        "incoherence_after": recon["incoherence_after"],
+        "n_rows": recon["n_rows"],
+    }
+    print(f"  reconciler: mean |incoherence| {recon['incoherence_before']:.3f} -> "
+          f"{recon['incoherence_after']:.2e}  gains={ {k: round(v,3) for k,v in recon['gains'].items()} }")
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     (config.MODELS_DIR / "model_card.json").write_text(json.dumps(card, indent=2))
