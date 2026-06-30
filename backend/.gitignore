@@ -15,3 +15,13 @@ wheels/
 fantasy_api.log
 
 .coverage
+
+# model_stats_inference generated artifacts
+# Pipeline outputs (plots, selected-feature CSVs, summaries) — all regenerable.
+# The runtime source of truth (training/feature_sets/*.json, models/model_card.json)
+# is committed separately and not under outputs/.
+model_stats_inference/**/outputs/
+# Large data caches, trained model binaries and the materialized feature store
+model_stats_inference/research/data/
+model_stats_inference/models/*.joblib
+model_stats_inference/serving/store/
