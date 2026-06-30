@@ -7,6 +7,8 @@ so the minutes features are genuinely predictive (lets us assert monotonicity).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -18,6 +20,7 @@ from model_stats_inference.research import data as rdata
 from model_stats_inference.research import features as rfeatures
 from model_stats_inference.serving.feature_store import FeatureStore
 from model_stats_inference.training import models as registry
+from model_stats_inference.training.reconcile import build_reconciler
 
 TEAM_A, TEAM_B = 10, 20
 FULL_PID, LOW_PID = 1, 4
@@ -115,8 +118,10 @@ def feature_matrix(raw_players, team_tables) -> pd.DataFrame:
 
 @pytest.fixture
 def models_dir(feature_matrix, tmp_path_factory):
-    """Train tiny per-target models on the synthetic data so inference can run."""
+    """Train tiny per-target models on the synthetic data so inference can run,
+    plus a reconciler built from in-sample residuals (pseudo-OOF)."""
     out = tmp_path_factory.mktemp("models")
+    pseudo = {}  # target -> namespace(oof_true, oof_pred, oof_index) for the reconciler
     for target in rconfig.TARGETS:
         feats = [
             "T_MIN", f"T_x_{target}_global_rate",
@@ -125,11 +130,16 @@ def models_dir(feature_matrix, tmp_path_factory):
         sub = feature_matrix[feature_matrix[f"y_{target}"].notna()]
         X, y = sub[feats], sub[f"y_{target}"].astype(float)
         model = registry.build_estimator("hgb_l2").fit(X, y)
-        rmse = float(np.sqrt(mean_squared_error(y, model.predict(X))))
+        pred = model.predict(X)
+        rmse = float(np.sqrt(mean_squared_error(y, pred)))
         joblib.dump(
             {"target": target, "features": feats, "model": model,
              "model_name": "hgb_l2", "clip_at_zero": True,
              "metrics": {"rmse_mean": rmse}},
             out / f"{target}.joblib",
         )
+        pseudo[target] = SimpleNamespace(
+            oof_true=y.to_numpy(), oof_pred=pred, oof_index=y.index.to_numpy())
+
+    joblib.dump(build_reconciler(pseudo), out / "reconciler.joblib")
     return out
