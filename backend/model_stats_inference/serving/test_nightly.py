@@ -7,7 +7,7 @@ from datetime import date
 import pandas as pd
 
 from model_stats_inference.serving import nightly
-from model_stats_inference.serving.inference import LiveInference
+from model_stats_inference.serving.inference import LiveInference, PredictionRequest
 
 from .conftest import FULL_PID, LOW_PID, TEAM_A, TEAM_B
 
@@ -115,6 +115,24 @@ def test_drop_stale_players_boundary():
     out = nightly.drop_stale_players(df, as_of)
     assert set(out["PLAYER_ID"]) == {1}
     assert len(out) == 2  # active player keeps his old rows too
+
+
+def test_from_vectors_matches_original(store, models_dir):
+    """A store rebuilt from just its vectors must produce identical predictions —
+    this is the DB-vectors serving path (no raw rows, no recompute)."""
+    from model_stats_inference.serving.feature_store import FeatureStore
+
+    original = LiveInference(store, models_dir)
+    lite_store = FeatureStore.from_vectors(
+        store.player_vectors, store.team_allowed_vectors, store.team_own_vectors
+    )
+    lite = LiveInference(lite_store, models_dir)
+
+    req = [PredictionRequest(player_id=FULL_PID, opponent_team_id=TEAM_B,
+                             is_home=True, game_date=NIGHT_DATE, minutes=32.0)]
+    (a,), _ = original.predict_many(req)
+    (b,), _ = lite.predict_many(req)
+    assert {k: v.value for k, v in a.stats.items()} == {k: v.value for k, v in b.stats.items()}
 
 
 def test_attach_positions(store):

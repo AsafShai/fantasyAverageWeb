@@ -1,6 +1,8 @@
 """Orchestration tests for ModelNightlyService (fake DB + fake fetch, no network)."""
 
+import json
 from datetime import date
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -12,6 +14,9 @@ from app.services.model_nightly_service import (
     _FS_TEAM_COLS,
     ModelNightlyService,
     _eval_to_tuple,
+    _player_vectors_df,
+    _serialize_vectors,
+    _team_vectors_df,
 )
 from model_stats_inference.serving.nightly import NightFetch
 from model_stats_inference.serving.simulation import EvalRow
@@ -27,9 +32,11 @@ class FakeDB:
         self.team_recs = [{"team_id": 10}]
         self.eval_insert_ok = True
         self.fs_insert_ok = True
+        self.vec_insert_ok = True
         self.marked = []          # (game_date, status, num_games, num_rows)
         self.eval_rows = None
         self.fs_rows = None
+        self.vectors_written = None
 
     async def get_model_nightly_run(self, d):
         return self.run
@@ -47,6 +54,10 @@ class FakeDB:
     async def insert_fs_rows(self, player_rows, team_rows):
         self.fs_rows = (player_rows, team_rows)
         return self.fs_insert_ok
+
+    async def upsert_feature_vectors(self, player_rows, team_allowed_rows, team_own_rows):
+        self.vectors_written = (player_rows, team_allowed_rows, team_own_rows)
+        return self.vec_insert_ok
 
     async def upsert_model_nightly_run(self, d, status, num_games, num_rows):
         self.marked.append((d, status, num_games, num_rows))
@@ -81,6 +92,9 @@ def _night_players_frame():
                               1) for c in _FS_PLAYER_COLS}])
 
 
+_DUMMY_VECTORS = ([("pv",)], [("tav",)], [("tov",)])
+
+
 @pytest.fixture
 def service(monkeypatch):
     ModelNightlyService._instance = None
@@ -88,6 +102,11 @@ def service(monkeypatch):
     svc._db = FakeDB()
     monkeypatch.setattr(
         mns.nightly, "fetch_night", lambda d: pytest.fail("fetch_night should not be called")
+    )
+    # Never build a real store from the fake records in unit tests.
+    monkeypatch.setattr(
+        ModelNightlyService, "_vectors_from_records",
+        staticmethod(lambda p, t: ([], [], [])),
     )
     yield svc
     ModelNightlyService._instance = None
@@ -99,8 +118,8 @@ def _allow_fetch(monkeypatch, night):
 
 def _allow_predict(monkeypatch, evals):
     monkeypatch.setattr(
-        ModelNightlyService, "_predict_sync",
-        staticmethod(lambda p, t, n: (evals, _night_players_frame())),
+        ModelNightlyService, "_process_sync",
+        staticmethod(lambda p, t, n: (evals, _night_players_frame(), _DUMMY_VECTORS)),
     )
 
 
@@ -111,10 +130,11 @@ async def test_already_processed_skips_fetch(service):
 
 
 @pytest.mark.asyncio
-async def test_leakage_guard_when_rows_already_ingested(service):
+async def test_leakage_guard_when_rows_already_ingested_refreshes_vectors(service):
     service._db.has_date = True
     assert await service.run_for_date(GAME_DATE) == "store_already_ingested"
     assert service._db.marked == [(GAME_DATE, "store_already_ingested", 0, 0)]
+    assert service._db.vectors_written is not None  # vectors refreshed on recovery
 
 
 @pytest.mark.asyncio
@@ -159,26 +179,80 @@ async def test_failed_eval_write_does_not_mark_run(service, monkeypatch):
     service._db.eval_insert_ok = False
     assert await service.run_for_date(GAME_DATE) == "db_write_failed"
     assert service._db.marked == []
-    assert service._db.fs_rows is None  # night must not be ingested either
+    assert service._db.fs_rows is None
 
 
 @pytest.mark.asyncio
-async def test_happy_path_processes_and_ingests(service, monkeypatch):
+async def test_failed_vector_write_does_not_mark_run(service, monkeypatch):
+    _allow_fetch(monkeypatch, _night())
+    _allow_predict(monkeypatch, [_eval_row()])
+    service._db.vec_insert_ok = False
+    assert await service.run_for_date(GAME_DATE) == "db_write_failed"
+    assert service._db.marked == []  # raw rows written, but run left unmarked to retry
+
+
+@pytest.mark.asyncio
+async def test_happy_path_processes_ingests_and_writes_vectors(service, monkeypatch):
     _allow_fetch(monkeypatch, _night())
     _allow_predict(monkeypatch, [_eval_row(), _eval_row(eligible=False)])
     assert await service.run_for_date(GAME_DATE) == "processed"
     assert service._db.marked == [(GAME_DATE, "processed", 2, 2)]
     assert len(service._db.eval_rows) == 2
     player_rows, team_rows = service._db.fs_rows
-    assert len(player_rows) == 1 and len(player_rows[0]) == len(_FS_PLAYER_COLS)
-    assert len(team_rows) == 1 and len(team_rows[0]) == len(_FS_TEAM_COLS)
+    assert len(player_rows[0]) == len(_FS_PLAYER_COLS)
+    assert len(team_rows[0]) == len(_FS_TEAM_COLS)
+    assert service._db.vectors_written == _DUMMY_VECTORS
+
+
+@pytest.mark.asyncio
+async def test_processing_invalidates_in_memory_store(service, monkeypatch):
+    _allow_fetch(monkeypatch, _night())
+    _allow_predict(monkeypatch, [_eval_row()])
+    service._inference_store = SimpleNamespace()  # pretend a store is cached
+    await service.run_for_date(GAME_DATE)
+    assert service._inference_store is None  # invalidated so next inference reloads fresh
 
 
 def test_eval_to_tuple_shapes():
     eligible = _eval_to_tuple(_eval_row(), GAME_DATE)
     ineligible = _eval_to_tuple(_eval_row(eligible=False), GAME_DATE)
     assert len(eligible) == 10 + 2 * len(_EVAL_STATS)
-    assert eligible[10:20] == tuple(5.0 for _ in _EVAL_STATS)      # pred_*
-    assert eligible[20:30] == tuple(6.0 for _ in _EVAL_STATS)      # actual_*
-    assert ineligible[10:20] == tuple(None for _ in _EVAL_STATS)   # NULL preds
+    assert eligible[10:20] == tuple(5.0 for _ in _EVAL_STATS)
+    assert eligible[20:30] == tuple(6.0 for _ in _EVAL_STATS)
+    assert ineligible[10:20] == tuple(None for _ in _EVAL_STATS)
     assert ineligible[20:30] == tuple(6.0 for _ in _EVAL_STATS)
+
+
+def test_vector_serialize_roundtrip():
+    """Serialize vectors -> (simulate DB read) -> reconstruct; values, NaN, and the
+    eligible flag must survive intact."""
+    pv = pd.DataFrame({
+        "PLAYER_ID": [1, 2], "PLAYER_NAME": ["A", "B"], "TEAM_ID": [10, 20],
+        "POSITION": ["G", "F"],
+        "last_game_date": [pd.Timestamp("2026-01-01"), pd.Timestamp("2026-01-02")],
+        "games_count": [15, 5],
+        "PTS_global_mean": [20.0, float("nan")], "REB_w5_mean": [5.0, 3.0],
+    })
+    tav = pd.DataFrame({"TEAM_ID": [10, 20], "OPP_ALLOWED_PTS_global_mean": [110.0, 108.0]})
+    tov = pd.DataFrame({"TEAM_ID": [10, 20], "TEAM_PTS_global_mean": [112.0, 109.0]})
+    store = SimpleNamespace(player_vectors=pv, team_allowed_vectors=tav, team_own_vectors=tov)
+
+    prows, tarows, torows = _serialize_vectors(store)
+
+    # eligibility computed from games_count vs MIN_INFERENCE_GAMES (10)
+    assert prows[0][6] is True and prows[1][6] is False
+
+    # simulate what DBService.load_feature_vectors returns (lowercase cols, json str)
+    precs = [{"player_id": p[0], "player_name": p[1], "team_id": p[2], "position": p[3],
+              "last_game_date": p[4], "games_count": p[5], "eligible": p[6],
+              "features": p[7]} for p in prows]
+    tacs = [{"team_id": t[0], "features": t[1]} for t in tarows]
+
+    pv2 = _player_vectors_df(precs).set_index("PLAYER_ID")
+    assert pv2.loc[1, "PTS_global_mean"] == 20.0
+    assert pd.isna(pv2.loc[2, "PTS_global_mean"])      # NaN survived the JSON round-trip
+    assert pv2.loc[1, "REB_w5_mean"] == 5.0
+    tav2 = _team_vectors_df(tacs).set_index("TEAM_ID")
+    assert tav2.loc[10, "OPP_ALLOWED_PTS_global_mean"] == 110.0
+    # features JSON is valid and NaN was stored as null
+    assert json.loads(prows[1][7])["PTS_global_mean"] is None
