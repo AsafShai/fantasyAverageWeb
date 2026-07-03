@@ -15,3 +15,5 @@ wheels/
 fantasy_api.log
 
 .coverage
+
+seed_team_snapshots.py
