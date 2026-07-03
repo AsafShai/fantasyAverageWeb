@@ -16,7 +16,7 @@ import Simulation from './pages/Simulation'
 import FeatureStore from './pages/FeatureStore'
 import NotFound from './pages/NotFound'
 import PlayerRankings from './pages/PlayerRankings'
-import { FF_PLAYER_RANKINGS } from './config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_SIMULATION, FF_FEATURE_STORE } from './config/featureFlags'
 
 function App() {
   return (
@@ -35,8 +35,8 @@ function App() {
           <Route path="players" element={<Players />} />
           <Route path="injuries" element={<Injuries />} />
           <Route path="nba-teams" element={<NbaTeams />} />
-          <Route path="simulation" element={<Simulation />} />
-          <Route path="feature-store" element={<FeatureStore />} />
+          {FF_SIMULATION && <Route path="simulation" element={<Simulation />} />}
+          {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
           {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
           <Route path="*" element={<NotFound />} />
