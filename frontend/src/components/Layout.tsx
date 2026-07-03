@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect } from 'react'
 import Footer from './Footer'
-import { FF_PLAYER_RANKINGS } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_SIMULATION, FF_FEATURE_STORE } from '../config/featureFlags'
 
 const Layout = () => {
   const location = useLocation()
@@ -31,6 +31,8 @@ const Layout = () => {
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
     { path: '/nba-teams', label: 'NBA', icon: '🏀' },
+    ...(FF_SIMULATION ? [{ path: '/simulation', label: 'Simulation', icon: '🎮' }] : []),
+    ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
     ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
   ]
 
