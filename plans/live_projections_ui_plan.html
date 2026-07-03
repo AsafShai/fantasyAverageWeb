@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Live Player Projections — Plan</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 48px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.6; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
+  h2 { margin-top: 44px; color: #222; }
+  h3 { color: #444; margin-top: 24px; }
+  code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.92em; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  .note { background: #fffbe6; border-left: 3px solid #f0b429; padding: 10px 16px; border-radius: 0 4px 4px 0; margin: 16px 0; }
+  .superseded { background: #fdecec; border-left: 3px solid #d33; padding: 10px 16px; border-radius: 0 4px 4px 0; margin: 16px 0; }
+  .file { font-weight: bold; font-family: monospace; background: #e8f4fd; padding: 2px 8px; border-radius: 3px; }
+  .decision { background: #eefaf0; border-left: 3px solid #2e9e5b; padding: 8px 16px; border-radius: 0 4px 4px 0; margin: 8px 0; }
+
+  /* --- mockup chrome, approximates the app's Tailwind look --- */
+  .mock { border: 1px solid #d0d5dd; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin: 20px 0; overflow: hidden; }
+  .mock-header { background: #f9fafb; padding: 10px 16px; border-bottom: 1px solid #e5e7eb; font-weight: 600; font-size: 0.9em; color: #374151; }
+  .mock-body { padding: 14px 16px; }
+  .mtable { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+  .mtable th { background: #f9fafb; color: #6b7280; text-transform: uppercase; font-size: 0.72em; padding: 6px 10px; border: none; border-bottom: 1px solid #e5e7eb; text-align: right; }
+  .mtable th:nth-child(1), .mtable th:nth-child(2) { text-align: left; }
+  .mtable td { padding: 8px 10px; border: none; border-bottom: 1px solid #f1f2f4; text-align: right; }
+  .mtable td:nth-child(1), .mtable td:nth-child(2) { text-align: left; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .dot-green { background: #22c55e; }
+  .dot-amber { background: #f59e0b; }
+  .dot-red { background: #ef4444; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75em; background: #eef2ff; color: #3730a3; }
+  .badge-vs { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em; color: #374151; cursor: pointer; }
+  .expand { background: #f8fafc; border-top: 1px dashed #d0d5dd; padding: 14px 18px; }
+  .expand-title { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.04em; color: #9ca3af; margin-bottom: 8px; }
+  .grid7 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  .cell { background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 10px; text-align: center; }
+  .cell .label { font-size: 0.68em; color: #9ca3af; text-transform: uppercase; }
+  .cell .rank { font-size: 1.05em; font-weight: 700; color: #1f2937; }
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .slider-row input[type=range] { flex: 1; accent-color: #2563eb; }
+  .insufficient { color: #9ca3af; font-size: 0.85em; font-style: italic; }
+  .vfrac { display: inline-flex; flex-direction: column; align-items: center; line-height: 0.9; font-size: 0.85em; vertical-align: middle; margin-left: 5px; color: #6b7280; font-weight: 500; }
+  .vfrac span:first-child { border-bottom: 1px solid #6b7280; padding: 0 3px; }
+  .pct-cell { display: inline-flex; align-items: center; justify-content: flex-end; }
+  .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 0.82em; color: #374151; }
+  .toggle-row input { accent-color: #2563eb; }
+</style>
+</head>
+<body>
+
+<h1>Live Player Projections — Implementation Plan</h1>
+
+<div class="superseded">
+  Supersedes <span class="file">plans/live_daily_player_projections.md</span> — that draft assumed no live pipeline existed yet.
+  It now does: the nightly job (<span class="file">app/services/model_nightly_service.py</span>) already writes real per-night
+  results and materializes feature vectors in Postgres, and <span class="file">ModelNightlyService.get_inference_store()</span>
+  already exposes a live, DB-backed <code>FeatureStore</code> — currently unused by anything except the nightly job itself.
+  This plan wires that existing store to two UI surfaces instead of building new DB tables / a new daily job.
+</div>
+
+<h2>1. Decisions (from planning session)</h2>
+<div class="decision">Live nightly store only — no fallback to the historical replay/simulation store. If there are no games today, say so; don't fake it with replay data.</div>
+<div class="decision">Scope: today's games only, no history browsing.</div>
+<div class="decision">Player universe = same as Matchup today (ESPN roster + FA + waivers, matched to the model store by player name — same informal join convention <code>MatchupCell</code> already uses).</div>
+<div class="decision">One shared backend service (<code>LiveProjectionService</code>) powers both surfaces — no duplicated "today's games + live store" logic.</div>
+<div class="decision">Two surfaces: (1) a new standalone <code>/projections</code> page, (2) folded into the existing Matchup expand row (Players.tsx + TeamDetail.tsx) — not a third separate table column.</div>
+<div class="decision">Stat set = the league's 8 roto categories (PTS, REB, AST, 3PM, STL, BLK, FG%, FT%), matching every other table in the app. Shooting volume (FGM/FGA, FTM/FTA) shown small, stacked under the FG%/FT% number — no separate columns — reusing Simulation's <code>VFrac</code> pattern exactly.</div>
+<div class="decision">Minutes: default (recent-avg) projection shown immediately, <em>plus</em> a slider to re-predict at custom minutes — in both surfaces, for now. If Matchup's expand row gets too cluttered, drop the slider there later and keep it only on the dedicated page.</div>
+<div class="decision">No visible confidence range (low/high numbers) — too noisy for a casual glance.</div>
+<div class="decision">Integer-vs-decimal display is a user toggle, not a fixed choice — reuse Simulation's <code>integerMode</code> checkbox pattern (<code>fmt()</code>, <code>shootingCell()</code>, <code>ptsIntFromComponents()</code>) in both surfaces. Off by default matches Simulation's default (checked/int on) — decide at build time which default reads better for a projections context.</div>
+<div class="decision">Confidence instead shown as a 3-tier colored dot (green/amber/red), reusing Simulation's existing <code>status</code> + <code>reason</code> semantics. Insufficient history (red) shows small gray text ("not enough data") instead of numbers.</div>
+<div class="decision">Performance: singleton <code>LiveInference</code> (models loaded once, not per request), batch <code>predict_many()</code> for the default line embedded in <code>/matchups/today</code>, single debounced <code>predict()</code> call only when the slider moves.</div>
+
+<h2>2. Data Flow</h2>
+<div class="mock">
+  <div class="mock-header">Request-time flow</div>
+  <div class="mock-body" style="font-family: monospace; font-size: 0.85em; line-height: 2;">
+    ESPN scoreboard (today's games) ──┐<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├──▶ <b>LiveProjectionService</b> (singleton)<br>
+    ModelNightlyService.get_inference_store() ──┘&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ warm <code>LiveInference</code> (models loaded once)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ predict_many() → batch default lines<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ predict() → single-player custom-minutes<br>
+    <br>
+    <b>GET /api/matchups/today</b> ──▶ enriched <code>PlayerMatchupResponse</code> (matchup + projection fields)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├──▶ TeamDetail.tsx (Matchup expand row)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├──▶ Players.tsx (Matchup expand row)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└──▶ Projections.tsx (new page — same objects, different rendering)<br>
+    <br>
+    <b>POST /api/projections/predict</b> {player_name, minutes} ──▶ single re-predicted line (slider only)
+  </div>
+</div>
+
+<h2>3. Backend Changes</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td class="file">app/services/live_projection_service.py</td><td><b>New.</b> Singleton wrapping <code>ModelNightlyService.get_inference_store()</code> + a warm <code>LiveInference</code>. Exposes <code>project_today(games_today: dict) → dict[player_name, ProjectionResult]</code> (batch, via <code>predict_many</code>) and <code>project_one(player_name, minutes) → ProjectionResult</code> (single). Resolves player name → store's internal <code>player_id</code> via <code>PLAYER_NAME</code> match; unresolved/ineligible players are simply absent from the result dict.</td></tr>
+  <tr><td class="file">app/models/matchup_models.py</td><td>Extend <code>PlayerMatchupResponse</code>: add <code>projection: dict[str, float] | None</code>, <code>default_minutes: float | None</code>, <code>projection_status: Literal['green','amber','red'] | None</code>, <code>projection_reason: str | None</code>.</td></tr>
+  <tr><td class="file">app/routes/matchups.py</td><td>After building <code>games_today</code>, call <code>LiveProjectionService.project_today(games_today)</code> once; merge into each <code>PlayerMatchupResponse</code> by player name alongside the existing def-rank merge.</td></tr>
+  <tr><td class="file">app/routes/projections.py</td><td><b>New.</b> <code>POST /api/projections/predict</code> — body <code>{player_name, minutes}</code>, calls <code>LiveProjectionService.project_one()</code>, returns the same stat-line shape used in <code>PlayerMatchupResponse.projection</code>.</td></tr>
+  <tr><td class="file">app/models/projection_models.py</td><td><b>New.</b> Request/response pydantic models for the predict route.</td></tr>
+</table>
+
+<h2>4. Frontend Changes</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td class="file">frontend/src/types/api.ts</td><td>Extend <code>PlayerMatchup</code> type with the new projection fields.</td></tr>
+  <tr><td class="file">frontend/src/store/api/fantasyApi.ts</td><td>Add <code>predictProjection</code> mutation → <code>POST /projections/predict</code>.</td></tr>
+  <tr><td class="file">frontend/src/components/MatchupDisplay.tsx</td><td><code>MatchupExpandRow</code> gets a new "Projection" section below the existing 8-cell def-rank grid: dot + stat line at default minutes, slider that calls <code>predictProjection</code> (350ms debounce, same pattern as <code>Simulation.tsx</code>'s <code>onSlider</code>). Red status → "not enough data" text, numbers hidden. Accepts an <code>integerMode</code> prop from the parent page (TeamDetail/Players), one shared toggle per page rather than per-row.</td></tr>
+  <tr><td class="file">frontend/src/pages/Projections.tsx</td><td><b>New.</b> Leaguewide table, same data source as Matchup (<code>useGetMatchupsTodayQuery</code>), one row per player with a game today. Columns: Player, Opponent, Minutes (slider), 8 roto stats, confidence dot. No matchup def-rank columns here — just projection. Own <code>integerMode</code> toggle in the header, same checkbox pattern as Simulation.</td></tr>
+  <tr><td class="file">frontend/src/App.tsx</td><td>New route <code>/projections</code>.</td></tr>
+  <tr><td class="file">frontend/src/components/Navbar (or wherever nav icons live)</td><td>New nav icon, e.g. 🎯 slot already used by Shots — pick a distinct one (e.g. 📡 or 🔭).</td></tr>
+  <tr><td class="file">frontend/src/config/featureFlags.ts</td><td>New flag <code>VITE_FF_PROJECTIONS</code>, gates both the page and the Matchup expand-row section.</td></tr>
+</table>
+
+<h2>5. How It Will Look</h2>
+
+<h3>5a. Matchup expand row — with projection folded in</h3>
+<div class="mock">
+  <div class="mock-header">TeamDetail.tsx / Players.tsx — expanded row for Bam Adebayo</div>
+  <div class="expand">
+    <div class="expand-title">Opponent defense — vs MIA</div>
+    <div class="grid7">
+      <div class="cell"><div class="label">PTS rank</div><div class="rank">22</div></div>
+      <div class="cell"><div class="label">REB rank</div><div class="rank">26</div></div>
+      <div class="cell"><div class="label">AST rank</div><div class="rank">21</div></div>
+      <div class="cell"><div class="label">Pace</div><div class="rank">95.6</div></div>
+    </div>
+
+    <div class="expand-title">Tonight's projection <span class="dot dot-green" title="confident"></span></div>
+    <div class="mtable-wrap">
+      <table class="mtable">
+        <tr><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>STL</th><th>BLK</th><th>FG%</th><th>FT%</th></tr>
+        <tr>
+          <td>21.4</td><td>9.8</td><td>3.4</td><td>0.9</td><td>1.1</td><td>0.7</td>
+          <td><span class="pct-cell">46.2%<span class="vfrac"><span>8</span><span>17</span></span></span></td>
+          <td><span class="pct-cell">78.0%<span class="vfrac"><span>7</span><span>9</span></span></span></td>
+        </tr>
+      </table>
+    </div>
+    <div class="slider-row">
+      <span style="font-size:0.8em;color:#6b7280;">Minutes</span>
+      <input type="range" min="0" max="44" value="32" disabled />
+      <span style="font-size:0.85em;">32</span>
+    </div>
+  </div>
+</div>
+
+<div class="mock">
+  <div class="mock-header">Same section — insufficient history example (Tahjere McCall)</div>
+  <div class="expand">
+    <div class="expand-title">Tonight's projection <span class="dot dot-red"></span></div>
+    <div class="insufficient">not enough data — new to the store / too few tracked games</div>
+  </div>
+</div>
+
+<h3>5b. New dedicated Projections page</h3>
+<div class="mock">
+  <div class="mock-header" style="display:flex; align-items:center; justify-content:space-between;">
+    <span>/projections — Tonight's Games</span>
+    <label class="toggle-row"><input type="checkbox" checked disabled /> Integer projections</label>
+  </div>
+  <div class="mock-body">
+    <table class="mtable">
+      <tr>
+        <th>Player</th><th>Matchup</th><th>Minutes</th>
+        <th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>STL</th><th>BLK</th><th>FG%</th><th>FT%</th>
+      </tr>
+      <tr>
+        <td><span class="dot dot-green"></span>Bam Adebayo</td>
+        <td>MIA vs BOS</td>
+        <td><div class="slider-row" style="min-width:110px;"><input type="range" min="0" max="44" value="32" disabled /><span>32</span></div></td>
+        <td>21.4</td><td>9.8</td><td>3.4</td><td>0.9</td><td>1.1</td><td>0.7</td>
+        <td><span class="pct-cell">46.2%<span class="vfrac"><span>8</span><span>17</span></span></span></td>
+        <td><span class="pct-cell">78.0%<span class="vfrac"><span>7</span><span>9</span></span></span></td>
+      </tr>
+      <tr>
+        <td><span class="dot dot-amber"></span>Andrew Wiggins</td>
+        <td>MIA vs BOS</td>
+        <td><div class="slider-row" style="min-width:110px;"><input type="range" min="0" max="44" value="29" disabled /><span>29</span></div></td>
+        <td>14.9</td><td>4.6</td><td>2.5</td><td>1.8</td><td>1.0</td><td>0.9</td>
+        <td><span class="pct-cell">47.1%<span class="vfrac"><span>6</span><span>13</span></span></span></td>
+        <td><span class="pct-cell">77.5%<span class="vfrac"><span>4</span><span>5</span></span></span></td>
+      </tr>
+      <tr>
+        <td><span class="dot dot-red"></span>Tahjere McCall</td>
+        <td>ATL vs ORL</td>
+        <td colspan="8" class="insufficient">not enough data</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<p class="note">
+  Page is a stripped-down, live-only sibling of <span class="file">Simulation.tsx</span> — same minutes-slider →
+  debounced-repredict interaction, same status-dot + reason convention, but no <code>init</code>/<code>advance</code>/eval-vs-actual
+  machinery (that stays exclusive to the research/simulation tool). No sortable columns or filters in v1 — add later if the flat list proves too long.
+</p>
+
+<h2>6. Performance Notes</h2>
+<ul>
+  <li><code>LiveInference.__init__</code> loads all <code>.joblib</code> models from disk — happens once, on the singleton's first construction, not per request.</li>
+  <li><code>get_inference_store()</code> is already cached on <code>ModelNightlyService</code> and only invalidated by the nightly job — no rebuild mid-day.</li>
+  <li>Default lines for the whole slate come from one <code>predict_many()</code> batch call per <code>/matchups/today</code> request (vectorized — one DataFrame + one <code>model.predict()</code> per stat, not per player).</li>
+  <li>The slider only triggers <code>predict()</code> (single player) on release/debounce (350ms), matching <code>Simulation.tsx</code>'s existing pattern — no request storm while dragging.</li>
+</ul>
+
+<h2>7. Open Risks</h2>
+<ul>
+  <li>Name-matching ESPN players to the store's <code>PLAYER_NAME</code> is a string join, not an ID join — Jr./Sr./accent mismatches will silently drop a player's projection. Same risk already exists for Matchup today; not new, but not fixed either.</li>
+  <li>Off-season / no-games-today: page should render an honest "no games today" state, not an empty table with no explanation.</li>
+  <li>Slider-in-both-places was agreed as "try it, remove later if cluttered" — expect a follow-up pass to drop it from the Matchup expand row if it proves too dense on mobile.</li>
+</ul>
+
+</body>
+</html>

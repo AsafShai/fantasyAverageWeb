@@ -1,4 +1,8 @@
+from typing import Optional
+
 from pydantic import BaseModel
+
+from app.models.projection_models import Projection
 
 
 class DefRanks(BaseModel):
@@ -25,9 +29,11 @@ class PlayerMatchupResponse(BaseModel):
     player_name: str
     pro_team: str
     opponent: str
+    is_home: bool
     pace: float
     league_avg_pace: float
     positions: list[str]
     def_ranks: DefRanks
     def_values: DefValues
     league_avg_def_values: DefValues
+    projection: Optional[Projection] = None

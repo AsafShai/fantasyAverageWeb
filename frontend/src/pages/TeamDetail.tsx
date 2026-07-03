@@ -9,7 +9,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector'
 import DataDateBadge from '../components/DataDateBadge'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay'
-import { FF_MATCHUP_QUALITY } from '../config/featureFlags'
+import { FF_MATCHUP_QUALITY, FF_PROJECTIONS } from '../config/featureFlags'
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -24,8 +24,10 @@ const TeamDetail = () => {
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
+  const [integerMode, setIntegerMode] = useState(true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
-  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY })
+  const [demoDate, setDemoDate] = useState('')
+  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(demoDate || undefined, { skip: !FF_MATCHUP_QUALITY })
   const matchupMap = useMemo(() => {
     if (!FF_MATCHUP_QUALITY) return new Map<string, PlayerMatchup>()
     return new Map(liveMatchups.map((m: PlayerMatchup) => [m.player_name, m]))
@@ -396,6 +398,22 @@ const TeamDetail = () => {
             <p className="text-sm text-gray-500 italic">Player data unavailable</p>
           )}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            {FF_MATCHUP_QUALITY && (
+              <input
+                type="text"
+                value={demoDate}
+                onChange={(e) => setDemoDate(e.target.value)}
+                placeholder="Demo date YYYYMMDD"
+                className="px-2 py-1 text-sm border border-gray-300 rounded w-36"
+                title="Temp: override matchup date for demo (offseason has no live games)"
+              />
+            )}
+            {FF_PROJECTIONS && (
+              <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
+                Integer projections
+              </label>
+            )}
             <TimePeriodSelector
               value={timePeriod}
               onChange={setTimePeriod}
@@ -493,12 +511,13 @@ const TeamDetail = () => {
                             isExpanded={isExpanded}
                             onToggle={() => toggleExpand(player.player_name)}
                             playerStats={player.stats}
+                            showProjection={FF_PROJECTIONS}
                           />
                         </td>
                       )}
                     </tr>
                     {FF_MATCHUP_QUALITY && isExpanded && matchup && (
-                      <MatchupExpandRow matchup={matchup} colSpan={15} />
+                      <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} />
                     )}
                   </React.Fragment>
                 )

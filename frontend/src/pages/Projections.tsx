@@ -1,0 +1,219 @@
+import { useMemo, useRef, useState } from 'react';
+import { useGetMatchupsTodayQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import type { PlayerMatchup, ProjectionStats } from '../types/api';
+import LoadingSpinner from '../components/LoadingSpinner';
+import ErrorMessage from '../components/ErrorMessage';
+
+const STAT_COLS: [keyof ProjectionStats, string][] = [
+  ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['three_pm', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
+];
+
+function fmtStat(n: number, integer: boolean): string {
+  return integer ? String(Math.round(n)) : n.toFixed(1);
+}
+
+function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
+  if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
+  if (integer) {
+    const m = Math.round(made), a = Math.round(att);
+    return { pct: a > 0 ? `${Math.round((m / a) * 100)}%` : '—', m: String(m), a: String(a), ok: a > 0 };
+  }
+  return { pct: `${(pctVal * 100).toFixed(1)}%`, m: made.toFixed(1), a: att.toFixed(1), ok: true };
+}
+
+function VFrac({ m, a }: { m: string; a: string }) {
+  return (
+    <span className="inline-flex flex-col items-center leading-[0.85] text-[10px] align-middle ml-1 text-gray-400 dark:text-gray-500">
+      <span className="border-b border-current px-0.5">{m}</span>
+      <span>{a}</span>
+    </span>
+  );
+}
+
+function StatusDot({ status }: { status: 'green' | 'amber' | 'red' }) {
+  const color = status === 'green' ? 'bg-green-500' : status === 'amber' ? 'bg-amber-500' : 'bg-red-500';
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />;
+}
+
+function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integerMode: boolean }) {
+  const proj = matchup.projection!;
+  const [predict] = usePredictProjectionMutation();
+  const [minutes, setMinutes] = useState(proj.default_minutes);
+  const [stats, setStats] = useState<ProjectionStats | null>(proj.stats);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const onSlider = (v: number) => {
+    setMinutes(v);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        const res = await predict({
+          player_name: matchup.player_name, opponent: matchup.opponent,
+          is_home: matchup.is_home, minutes: v,
+        }).unwrap();
+        setStats(res.stats);
+      } catch { /* ignore transient predict errors */ }
+    }, 350);
+  };
+
+  if (proj.status === 'red' || !stats) {
+    return (
+      <tr className="border-t border-gray-100 dark:border-gray-800">
+        <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100">
+          <StatusDot status="red" /> <span className="ml-1">{matchup.player_name}</span>
+        </td>
+        <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
+          {matchup.pro_team} {matchup.is_home ? 'vs' : '@'} {matchup.opponent}
+        </td>
+        <td colSpan={9} className="px-3 py-2 italic text-gray-400 text-sm" title={proj.reason}>not enough data</td>
+      </tr>
+    );
+  }
+
+  const fg = pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode);
+  const ft = pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode);
+
+  return (
+    <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">
+      <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100">
+        <StatusDot status={proj.status} /> <span className="ml-1" title={proj.reason}>{matchup.player_name}</span>
+      </td>
+      <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
+        {matchup.pro_team} {matchup.is_home ? 'vs' : '@'} {matchup.opponent}
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-2 min-w-[120px]">
+          <input
+            type="range" min={0} max={44} step={1} value={Math.round(minutes)}
+            onChange={(e) => onSlider(Number(e.target.value))}
+            className="w-24 accent-blue-600"
+          />
+          <span className="tabular-nums w-6 text-right text-sm">{Math.round(minutes)}</span>
+        </div>
+      </td>
+      {STAT_COLS.map(([key]) => (
+        <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fmtStat(stats[key] as number, integerMode)}</td>
+      ))}
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</td>
+    </tr>
+  );
+}
+
+export default function Projections() {
+  const [demoDate, setDemoDate] = useState('');
+  const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery(demoDate || undefined);
+  const [integerMode, setIntegerMode] = useState(true);
+  const [search, setSearch] = useState('');
+  const [nbaTeam, setNbaTeam] = useState('');
+  const [fantasyTeamId, setFantasyTeamId] = useState('');
+
+  const { data: allPlayers } = useGetAllPlayersQuery({ page: 1, limit: 500 });
+  const { data: fantasyTeams } = useGetTeamsListQuery();
+
+  const playerTeamMap = useMemo(() => {
+    const m = new Map<string, number>();
+    allPlayers?.players.forEach((p) => m.set(p.player_name, p.status === 'ONTEAM' ? p.team_id : 0));
+    return m;
+  }, [allPlayers]);
+
+  const withGames = useMemo(() => matchups.filter((m) => m.projection != null), [matchups]);
+
+  const nbaTeamOptions = useMemo(
+    () => Array.from(new Set(withGames.map((m) => m.pro_team))).sort(),
+    [withGames]
+  );
+
+  const filtered = useMemo(() => {
+    return withGames.filter((m) => {
+      if (search && !m.player_name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (nbaTeam && m.pro_team !== nbaTeam) return false;
+      if (fantasyTeamId !== '') {
+        const teamId = playerTeamMap.get(m.player_name);
+        if (String(teamId ?? '') !== fantasyTeamId) return false;
+      }
+      return true;
+    });
+  }, [withGames, search, nbaTeam, fantasyTeamId, playerTeamMap]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message="Failed to load projections." />;
+
+  return (
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Projections</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Live model projections for tonight's games.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={demoDate}
+            onChange={(e) => setDemoDate(e.target.value)}
+            placeholder="Demo date YYYYMMDD"
+            className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded w-36 bg-white dark:bg-gray-800"
+            title="Temp: override projection date for demo (offseason has no live games)"
+          />
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+            <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} className="accent-blue-600" />
+            Integer projections
+          </label>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search player..."
+          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded w-48 bg-white dark:bg-gray-800"
+        />
+        <select
+          value={nbaTeam}
+          onChange={(e) => setNbaTeam(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+        >
+          <option value="">All NBA Teams</option>
+          {nbaTeamOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select
+          value={fantasyTeamId}
+          onChange={(e) => setFantasyTeamId(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+        >
+          <option value="">All Fantasy Teams</option>
+          <option value="0">Free Agents / Waivers</option>
+          {fantasyTeams?.map((t) => <option key={t.team_id} value={t.team_id}>{t.team_name}</option>)}
+        </select>
+        <span className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} players</span>
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+            <tr>
+              <th className="text-left px-3 py-2">Player</th>
+              <th className="text-left px-3 py-2">Matchup</th>
+              <th className="px-3 py-2 w-40">Minutes</th>
+              {STAT_COLS.map(([, label]) => <th key={label} className="px-2 py-2 text-right">{label}</th>)}
+              <th className="px-2 py-2 text-right">FG%</th>
+              <th className="px-2 py-2 text-right">FT%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((matchup) => (
+              <ProjectionRow key={matchup.player_name} matchup={matchup} integerMode={integerMode} />
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">
+                {withGames.length === 0 ? 'No games today.' : 'No players match the filters.'}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

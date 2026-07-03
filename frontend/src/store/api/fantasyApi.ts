@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup, ProjectionStats } from '../../types/api';
 import type { EstimatorResults } from '../../types/estimator';
 import type { UpcomingResponse, AdvanceResponse, SimState, PlayerPrediction, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState } from '../../types/simulation';
 
@@ -78,8 +78,11 @@ export const fantasyApi = createApi({
     getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
       query: (teamId) => `/nba-teams/${teamId}/depthchart`,
     }),
-    getMatchupsToday: builder.query<PlayerMatchup[], void>({
-      query: () => '/matchups/today',
+    getMatchupsToday: builder.query<PlayerMatchup[], string | void>({
+      query: (date) => date ? `/matchups/today?date=${date}` : '/matchups/today',
+    }),
+    predictProjection: builder.mutation<{ stats: ProjectionStats }, { player_name: string; opponent: string; is_home: boolean; minutes: number }>({
+      query: (body) => ({ url: '/projections/predict', method: 'POST', body }),
     }),
     getSimUpcoming: builder.query<UpcomingResponse, void>({
       query: () => '/simulation/upcoming',
@@ -131,6 +134,7 @@ export const {
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
   useGetMatchupsTodayQuery,
+  usePredictProjectionMutation,
   useGetSimUpcomingQuery,
   useInitSimMutation,
   useAdvanceSimMutation,

@@ -17,16 +17,6 @@
 
 .mq-opp { font-weight: 600; }
 
-.mq-pace {
-  font-size: 0.72rem;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-weight: 700;
-}
-.mq-pace-fast    { background: #1a4a2a; color: #4ade80; }
-.mq-pace-slow    { background: #3a1a1a; color: #f87171; }
-.mq-pace-average { background: #2a2a1a; color: #facc15; }
-
 .mq-cat {
   font-size: 0.78rem;
   font-weight: 700;
@@ -38,6 +28,19 @@
 .mq-cat-yellow { background: #2a2a1a; color: #facc15; }
 
 .mq-chevron { font-size: 0.65rem; color: #888; }
+
+/* Confidence dot on the collapsed badge line — vertically centered by the
+   flex row it sits in (.mq-cell), so no separate alignment fixup needed. */
+.mq-conf-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.mq-conf-dot-green { background: #4ade80; }
+.mq-conf-dot-amber { background: #facc15; }
+.mq-conf-dot-red   { background: #f87171; }
 
 .mq-expand-row .mq-expand-td { padding: 0 !important; }
 
@@ -65,21 +68,71 @@
   justify-content: center;
 }
 
-.mq-rank-cell {
+/* Unified cell: opponent-defense rank + the player's projection for that same
+   category, stacked in one box — a single fact per stat instead of two grids
+   the reader has to cross-reference. */
+.mq-cell-box {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 8px 14px;
   border-radius: 6px;
-  min-width: 54px;
+  min-width: 58px;
 }
-.mq-rank-green  { background: #1a4a2a; }
-.mq-rank-red    { background: #3a1a1a; }
-.mq-rank-yellow { background: #2a2a1a; }
+.mq-cell-green  { background: #1a4a2a; }
+.mq-cell-red    { background: #3a1a1a; }
+.mq-cell-yellow { background: #2a2a1a; }
 
-.mq-rank-label { font-size: 0.68rem; color: #aaa; }
-.mq-rank-value { font-size: 1.05rem; font-weight: 700; }
-.mq-rank-sub   { font-size: 0.62rem; color: #aaa; margin-top: 1px; }
-.mq-rank-green  .mq-rank-value { color: #4ade80; }
-.mq-rank-red    .mq-rank-value { color: #f87171; }
-.mq-rank-yellow .mq-rank-value { color: #facc15; }
+.mq-cell-label { font-size: 0.65rem; color: #aaa; letter-spacing: 0.02em; }
+.mq-cell-rank  { font-size: 0.95rem; font-weight: 700; margin-top: 1px; }
+.mq-cell-green  .mq-cell-rank { color: #4ade80; }
+.mq-cell-red    .mq-cell-rank { color: #f87171; }
+.mq-cell-yellow .mq-cell-rank { color: #facc15; }
+
+.mq-cell-proj {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+}
+
+.mq-vfrac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.85;
+  font-size: 0.65em;
+  vertical-align: middle;
+  margin-left: 4px;
+  color: #ccc;
+}
+.mq-vfrac span:first-child { border-bottom: 1px solid #ccc; padding: 0 2px; }
+
+.mq-proj-footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  display: flex;
+  justify-content: center;
+}
+
+.mq-proj-insufficient {
+  font-size: 0.78rem;
+  color: #777;
+  font-style: italic;
+}
+
+.mq-proj-slider-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.mq-proj-slider-label { font-size: 0.72rem; color: #999; }
+.mq-proj-slider-row input[type=range] { width: 140px; accent-color: #3b82f6; }
+.mq-proj-slider-value { font-size: 0.8rem; min-width: 18px; text-align: right; }
