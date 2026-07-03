@@ -57,6 +57,9 @@ jobs:
         working-directory: backend
         run: docker build -t fantasy-backend:latest .
 
+      - name: Smoke test image (import app)
+        run: docker run --rm -e SEASON_ID="${{ vars.SEASON_ID }}" -e LEAGUE_ID="${{ vars.LEAGUE_ID }}" fantasy-backend:latest uv run python -c "import app.main; print('app imports OK')"
+
   build-frontend:
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest

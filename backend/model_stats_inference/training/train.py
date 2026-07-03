@@ -14,15 +14,18 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from typing import Callable
 
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold, cross_val_predict
 
 from . import config
 from . import plots
+from . import reconcile
 
 
 @dataclass
@@ -37,8 +40,11 @@ class TrainResult:
     r2_mean: float
     r2_std: float
     baseline_rmse: float
+    resid_sigma: float            # robust spread of the Pearson residual (color scale)
+    resid_bias: float             # median Pearson residual (systematic over/under)
     oof_true: np.ndarray = field(repr=False)
     oof_pred: np.ndarray = field(repr=False)
+    oof_index: np.ndarray = field(repr=False, default=None)  # row keys for OOF rows (for reconciler alignment)
 
 
 def ensure_feature_sets() -> None:
@@ -72,15 +78,26 @@ def _prepare(matrix: pd.DataFrame, features: list[str], target: str):
     return sub[features], sub[y_col].astype(float)
 
 
-def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
-    features = load_feature_set(target)
-    X, y = _prepare(matrix, features, target)
+def cross_validate_target(
+    X: pd.DataFrame,
+    y: pd.Series,
+    target: str,
+    features: list[str],
+    make_est: Callable[[], BaseEstimator] | None = None,
+) -> TrainResult:
+    """K-fold CV for one target with an arbitrary estimator factory.
+
+    `make_est` defaults to the production model (`config.make_model`); the
+    comparison script passes a registry factory to score other models on the
+    *same* folds and features. Saves nothing — pure evaluation.
+    """
+    make_est = make_est or config.make_model
     kf = KFold(n_splits=config.KFOLDS, shuffle=True, random_state=config.RANDOM_STATE)
 
     # Per-fold metrics (so we get a std / band), computed on each fold's test part.
     rmses, maes, r2s = [], [], []
     for tr, te in kf.split(X):
-        model = config.make_model()
+        model = make_est()
         model.fit(X.iloc[tr], y.iloc[tr])
         pred = model.predict(X.iloc[te])
         if config.CLIP_AT_ZERO:
@@ -90,31 +107,19 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
         r2s.append(r2_score(y.iloc[te], pred))
 
     # Out-of-fold predictions for the scatter plot.
-    oof = cross_val_predict(config.make_model(), X, y, cv=kf, n_jobs=-1)
+    oof = cross_val_predict(make_est(), X, y, cv=kf, n_jobs=-1)
     if config.CLIP_AT_ZERO:
         oof = np.clip(oof, 0, None)
 
     baseline_rmse = float(np.sqrt(mean_squared_error(y, np.full(len(y), y.mean()))))
 
-    # Final model trained on everything, then saved.
-    final = config.make_model()
-    final.fit(X, y)
-    config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump(
-        {
-            "target": target,
-            "features": features,
-            "model": final,
-            "clip_at_zero": config.CLIP_AT_ZERO,
-            "metrics": {
-                "rmse_mean": float(np.mean(rmses)),
-                "rmse_std": float(np.std(rmses)),
-                "mae_mean": float(np.mean(maes)),
-                "r2_mean": float(np.mean(r2s)),
-            },
-        },
-        config.MODELS_DIR / f"{target}.joblib",
-    )
+    # Learned color scale: spread of the magnitude-normalized (Pearson) residual,
+    # m = (actual - pred)/sqrt(pred+1), measured on the held-out OOF predictions.
+    # Robust (MAD-based) so a few blow-ups don't inflate it. No hand-picked numbers.
+    resid = (y.to_numpy() - oof) / np.sqrt(np.clip(oof, 0, None) + 1.0)
+    resid_bias = float(np.median(resid))
+    mad = float(np.median(np.abs(resid - resid_bias)))
+    resid_sigma = float(1.4826 * mad) if mad > 0 else float(np.std(resid))
 
     return TrainResult(
         target=target,
@@ -127,9 +132,44 @@ def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
         r2_mean=float(np.mean(r2s)),
         r2_std=float(np.std(r2s)),
         baseline_rmse=baseline_rmse,
+        resid_sigma=resid_sigma,
+        resid_bias=resid_bias,
         oof_true=y.to_numpy(),
         oof_pred=oof,
+        oof_index=y.index.to_numpy(),
     )
+
+
+def train_target(matrix: pd.DataFrame, target: str) -> TrainResult:
+    features = load_feature_set(target)
+    X, y = _prepare(matrix, features, target)
+
+    res = cross_validate_target(X, y, target, features)
+
+    # Final model trained on everything, then saved.
+    final = config.make_model()
+    final.fit(X, y)
+    config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(
+        {
+            "target": target,
+            "features": features,
+            "model": final,
+            "model_name": config.MODEL_NAME,
+            "clip_at_zero": config.CLIP_AT_ZERO,
+            "metrics": {
+                "rmse_mean": res.rmse_mean,
+                "rmse_std": res.rmse_std,
+                "mae_mean": res.mae_mean,
+                "r2_mean": res.r2_mean,
+                "resid_sigma": res.resid_sigma,
+                "resid_bias": res.resid_bias,
+            },
+        },
+        config.MODELS_DIR / f"{target}.joblib",
+    )
+
+    return res
 
 
 def main() -> None:
@@ -151,7 +191,7 @@ def main() -> None:
             f"  {target:<5} n={res.n_rows:,}  "
             f"RMSE={res.rmse_mean:.3f}±{res.rmse_std:.3f} (baseline {res.baseline_rmse:.3f})  "
             f"MAE={res.mae_mean:.3f}  R2={res.r2_mean:.3f}±{res.r2_std:.3f}  "
-            f"[{len(res.features)} feats]"
+            f"residσ={res.resid_sigma:.3f}  [{len(res.features)} feats]"
         )
         card[target] = {
             "n_rows": res.n_rows,
@@ -162,7 +202,24 @@ def main() -> None:
             "r2_mean": res.r2_mean,
             "r2_std": res.r2_std,
             "baseline_rmse": res.baseline_rmse,
+            "resid_sigma": res.resid_sigma,
+            "resid_bias": res.resid_bias,
         }
+
+    # MinT reconciler: estimate the shooting-stat error covariance from the OOF
+    # residuals we just computed, and bake the projection gain. Coherent lines for
+    # the scoring identity PTS = 2·FGM + FG3M + FTM.
+    recon = reconcile.build_reconciler(results)
+    joblib.dump(recon, config.MODELS_DIR / "reconciler.joblib")
+    card["_reconciler"] = {
+        "targets": recon["targets"],
+        "gains": recon["gains"],
+        "incoherence_before": recon["incoherence_before"],
+        "incoherence_after": recon["incoherence_after"],
+        "n_rows": recon["n_rows"],
+    }
+    print(f"  reconciler: mean |incoherence| {recon['incoherence_before']:.3f} -> "
+          f"{recon['incoherence_after']:.2e}  gains={ {k: round(v,3) for k,v in recon['gains'].items()} }")
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     (config.MODELS_DIR / "model_card.json").write_text(json.dumps(card, indent=2))
