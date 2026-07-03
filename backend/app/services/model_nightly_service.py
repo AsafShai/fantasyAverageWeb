@@ -1,10 +1,16 @@
 """Nightly model pipeline: fetch last night's games, retro-predict with real
-minutes, persist predicted-vs-actual, and grow the Postgres-backed feature store.
+minutes, persist predicted-vs-actual, grow the feature store, and refresh the
+materialized feature vectors.
 
-The feature store's source of truth is the raw-row tables (fs_player_games /
-fs_team_games); vectors are rebuilt in memory per run via FeatureStore.build().
-Predictions for a night are computed from rows strictly before it, so they are
-leakage-safe by construction. A model_nightly_runs ledger row per date makes the
+Storage layout in Postgres:
+  - fs_player_games / fs_team_games  : raw game rows, the source of truth.
+  - fs_*_vectors                     : the 'as of now' player/team vectors,
+    DERIVED from the raw rows and re-materialized every morning so a live
+    inference path can load ready-to-use vectors without recomputing.
+
+Predictions for a night are computed from rows strictly before it (leakage-safe
+by construction); the vectors written afterwards include that night, so they are
+current for the *next* game. A model_nightly_runs ledger row per date makes the
 9:00-11:00 scheduler retries no-ops after one success.
 
 Manual runs:
@@ -15,7 +21,9 @@ Manual runs:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import math
 from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -25,8 +33,9 @@ import pandas as pd
 from app.services.db_service import DBService
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
+from model_stats_inference.serving import config as sconfig
 from model_stats_inference.serving import nightly
-from model_stats_inference.serving.feature_store import FeatureStore
+from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
 from model_stats_inference.serving.inference import LiveInference
 from model_stats_inference.serving.simulation import EvalRow
 
@@ -84,6 +93,67 @@ def _eval_to_tuple(ev: EvalRow, game_date: date) -> tuple:
     )
 
 
+# --- feature-vector (de)serialization --------------------------------------
+
+def _features_json(series: pd.Series, feature_cols: list[str]) -> str:
+    """One vector row's features as a JSON object (NaN -> null)."""
+    out = {}
+    for c in feature_cols:
+        v = series[c]
+        out[c] = None if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
+    return json.dumps(out)
+
+
+def _serialize_vectors(store: FeatureStore) -> tuple[list[tuple], list[tuple], list[tuple]]:
+    """FeatureStore vectors -> DB row tuples for upsert_feature_vectors."""
+    pv = store.player_vectors
+    pfeat = [c for c in pv.columns if c not in _PLAYER_META]
+    player_rows = []
+    for _, row in pv.iterrows():
+        games = int(row["games_count"])
+        last = row["last_game_date"]
+        last = pd.Timestamp(last).date() if pd.notna(last) else None
+        player_rows.append((
+            int(row["PLAYER_ID"]), str(row.get("PLAYER_NAME", "")), int(row["TEAM_ID"]),
+            str(row.get("POSITION", "")), last, games,
+            games >= sconfig.MIN_INFERENCE_GAMES, _features_json(row, pfeat),
+        ))
+
+    def team_rows(tv: pd.DataFrame) -> list[tuple]:
+        feat = [c for c in tv.columns if c != "TEAM_ID"]
+        return [(int(row["TEAM_ID"]), _features_json(row, feat)) for _, row in tv.iterrows()]
+
+    return player_rows, team_rows(store.team_allowed_vectors), team_rows(store.team_own_vectors)
+
+
+def _player_vectors_df(records: list[dict]) -> pd.DataFrame:
+    """DB rows -> player_vectors DataFrame (meta cols + expanded features, NaN restored)."""
+    rows = []
+    for r in records:
+        feats = r["features"] if isinstance(r["features"], dict) else json.loads(r["features"])
+        rows.append({
+            "PLAYER_ID": r["player_id"], "PLAYER_NAME": r["player_name"],
+            "TEAM_ID": r["team_id"], "POSITION": r["position"],
+            "last_game_date": pd.Timestamp(r["last_game_date"]) if r["last_game_date"] else pd.NaT,
+            "games_count": r["games_count"], **feats,
+        })
+    df = pd.DataFrame(rows)
+    feat_cols = [c for c in df.columns if c not in _PLAYER_META]
+    df[feat_cols] = df[feat_cols].astype(float)  # None -> NaN
+    return df
+
+
+def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
+    rows = []
+    for r in records:
+        feats = r["features"] if isinstance(r["features"], dict) else json.loads(r["features"])
+        rows.append({"TEAM_ID": r["team_id"], **feats})
+    df = pd.DataFrame(rows)
+    feat_cols = [c for c in df.columns if c != "TEAM_ID"]
+    df[feat_cols] = df[feat_cols].astype(float)
+    return df
+
+
 class ModelNightlyService:
     _instance = None
 
@@ -91,7 +161,12 @@ class ModelNightlyService:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._lock = asyncio.Lock()
+            cls._instance._store_lock = asyncio.Lock()
             cls._instance._db = DBService()
+            # Resident inference store: loaded from the vectors tables on first
+            # use and kept in memory so intra-day predictions never touch the DB.
+            # Invalidated whenever the nightly job refreshes the vectors.
+            cls._instance._inference_store: Optional[FeatureStore] = None
         return cls._instance
 
     # --- morning entry point (called by the scheduler) ----------------------
@@ -126,11 +201,15 @@ class ModelNightlyService:
                 return "already_processed"
 
         # Leakage guard (unconditional, even with --force): once the night's rows
-        # are in the store, a "prediction" for it would see its own outcome.
+        # are in the store, a "prediction" for it would see its own outcome. We
+        # still refresh vectors — this branch is the crash-recovery path (raw rows
+        # committed on a prior run but vectors/ledger not), so vectors may be stale.
         has_date = await db.fs_has_date(game_date)
         if has_date is None:
             return "db_unavailable"
         if has_date:
+            await self._refresh_vectors_through(game_date)
+            self._invalidate_inference_store()
             await db.upsert_model_nightly_run(game_date, "store_already_ingested", 0, 0)
             return "store_already_ingested"
 
@@ -150,8 +229,8 @@ class ModelNightlyService:
             logger.error("Feature-store tables are empty — run --bootstrap first")
             return "store_not_bootstrapped"
 
-        evals, night_players = await asyncio.to_thread(
-            self._predict_sync, player_recs, team_recs, night
+        evals, night_players, vectors = await asyncio.to_thread(
+            self._process_sync, player_recs, team_recs, night
         )
 
         eval_rows = [_eval_to_tuple(ev, game_date) for ev in evals]
@@ -164,6 +243,13 @@ class ModelNightlyService:
         ):
             return "db_write_failed"
 
+        # Post-night vectors (include the night just ingested). If this fails the
+        # raw rows are already committed, so the run is left unmarked; the retry
+        # hits the leakage-guard branch above and refreshes vectors from the DB.
+        if not await db.upsert_feature_vectors(*vectors):
+            return "db_write_failed"
+        self._invalidate_inference_store()
+
         await db.upsert_model_nightly_run(
             game_date, "processed", night.expected_games, len(eval_rows)
         )
@@ -174,12 +260,21 @@ class ModelNightlyService:
         )
         return "processed"
 
+    async def _refresh_vectors_through(self, game_date: date) -> None:
+        """Rebuild and upsert vectors from all rows up to and including game_date."""
+        player_recs, team_recs = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
+        if not player_recs or not team_recs:
+            return
+        vectors = await asyncio.to_thread(self._vectors_from_records, player_recs, team_recs)
+        await self._db.upsert_feature_vectors(*vectors)
+
     @staticmethod
-    def _predict_sync(
+    def _process_sync(
         player_recs: list[dict], team_recs: list[dict], night: nightly.NightFetch
-    ) -> tuple[list[EvalRow], pd.DataFrame]:
-        """Heavy pandas/sklearn work, run in a thread: build the pre-night store,
-        score the night, and annotate the night's player rows with positions."""
+    ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
+        """Heavy pandas/sklearn work in a thread: build the pre-night store, score
+        the night (leakage-safe), then fold the night in to materialize post-night
+        vectors."""
         players = _records_to_frame(player_recs).sort_values(["PLAYER_ID", "GAME_DATE"])
         team_games = _records_to_frame(team_recs)
         store = FeatureStore.build(
@@ -190,12 +285,64 @@ class ModelNightlyService:
         inference = LiveInference(store)
         evals = nightly.evaluate_night(store, inference, night)
         night_players = nightly.attach_positions(store, night.player_games)
-        return evals, night_players
+        # Fold last night in so the stored vectors are current for tonight's games.
+        store.update_with_nightly_results(night_players, night.team_games)
+        return evals, night_players, _serialize_vectors(store)
+
+    @staticmethod
+    def _vectors_from_records(
+        player_recs: list[dict], team_recs: list[dict]
+    ) -> tuple[list, list, list]:
+        players = _records_to_frame(player_recs).sort_values(["PLAYER_ID", "GAME_DATE"])
+        team_games = _records_to_frame(team_recs)
+        store = FeatureStore.build(
+            players.reset_index(drop=True),
+            rdata.build_team_allowed(team_games),
+            rdata.build_team_own(team_games),
+        )
+        return _serialize_vectors(store)
+
+    # --- serving: resident in-memory store (for a future inference tab) -------
+
+    async def get_inference_store(self, refresh: bool = False) -> Optional[FeatureStore]:
+        """Return the resident inference store, loading it from the vectors tables
+        only on first use (or when ``refresh=True``). Held in memory so every
+        prediction during the day is served from RAM without a DB round-trip.
+        Returns None if the vectors have not been materialized yet.
+        """
+        if self._inference_store is not None and not refresh:
+            return self._inference_store
+        async with self._store_lock:
+            if self._inference_store is not None and not refresh:
+                return self._inference_store
+            self._inference_store = await self._load_inference_store()
+            return self._inference_store
+
+    async def _load_inference_store(self) -> Optional[FeatureStore]:
+        pv, tav, tov = await self._db.load_feature_vectors()
+        if not pv:
+            return None
+        return await asyncio.to_thread(
+            lambda: FeatureStore.from_vectors(
+                _player_vectors_df(pv), _team_vectors_df(tav), _team_vectors_df(tov)
+            )
+        )
+
+    def _invalidate_inference_store(self) -> None:
+        """Drop the resident store so the next prediction reloads the fresh vectors.
+
+        Correct when the scheduler and the serving path share this process (the
+        default — the scheduler runs in the FastAPI lifespan). A separate serving
+        process should instead call get_inference_store(refresh=True) after the
+        morning window, since it can't observe this in-process invalidation.
+        """
+        self._inference_store = None
 
     # --- one-time init -------------------------------------------------------
 
     async def bootstrap(self, force: bool = False, until_date: Optional[date] = None) -> str:
-        """Seed fs_player_games / fs_team_games from nba_api for research SEASONS."""
+        """Seed fs_player_games / fs_team_games from nba_api for research SEASONS,
+        then materialize the initial vectors so inference is ready immediately."""
         async with self._lock:
             p_count, t_count = await self._db.fs_counts()
             if p_count or t_count:
@@ -216,11 +363,24 @@ class ModelNightlyService:
                 f"for {', '.join(rconfig.SEASONS)}"
                 + (f" (until {until_date})" if until_date else "")
             )
-            ok = await self._db.insert_fs_rows(
+            if not await self._db.insert_fs_rows(
                 _frame_to_tuples(players, _FS_PLAYER_COLS),
                 _frame_to_tuples(team_games, _FS_TEAM_COLS),
-            )
-            return "bootstrapped" if ok else "db_write_failed"
+            ):
+                return "db_write_failed"
+
+            vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
+            if not await self._db.upsert_feature_vectors(*vectors):
+                return "db_write_failed"
+            self._invalidate_inference_store()
+            return "bootstrapped"
+
+    @staticmethod
+    def _vectors_from_frames(players: pd.DataFrame, team_games: pd.DataFrame) -> tuple[list, list, list]:
+        store = FeatureStore.build(
+            players, rdata.build_team_allowed(team_games), rdata.build_team_own(team_games)
+        )
+        return _serialize_vectors(store)
 
     @staticmethod
     def _cached_positions() -> Optional[pd.DataFrame]:
