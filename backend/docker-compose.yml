@@ -1,6 +1,27 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fantasy-postgres
+    environment:
+      POSTGRES_USER: fantasy
+      POSTGRES_PASSWORD: fantasy
+      POSTGRES_DB: fantasy
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # All migrations are CREATE ... IF NOT EXISTS, so auto-applying on first
+      # init is safe. For an existing volume, apply new files manually:
+      # docker compose exec -T postgres psql -U fantasy -d fantasy < migrations/<file>.sql
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fantasy -d fantasy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   fantasy-backend:
     build: .
     image: fantasy-backend:latest
@@ -9,6 +30,11 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://fantasy:fantasy@postgres:5432/fantasy
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -16,3 +42,5 @@ services:
       retries: 3
       start_period: 40s
 
+volumes:
+  pgdata:

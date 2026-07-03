@@ -24,6 +24,7 @@ from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services import injury_service
 from app.services import estimator_scheduler
+from app.services import model_nightly_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +50,10 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Injury scheduler disabled via INJURY_SCHEDULER_ENABLED=false")
     asyncio.create_task(estimator_scheduler.start_scheduler())
+    if settings.model_nightly_enabled:
+        asyncio.create_task(model_nightly_scheduler.start_scheduler())
+    else:
+        logger.info("Model nightly scheduler disabled via MODEL_NIGHTLY_ENABLED=false")
     yield
     # Shutdown
     try:
