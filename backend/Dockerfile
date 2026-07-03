@@ -14,6 +14,7 @@ RUN pip install uv && uv sync --frozen
 
 # Copy application code and set ownership
 COPY --chown=appuser:appuser app/ ./app/
+COPY --chown=appuser:appuser model_stats_inference/ ./model_stats_inference/
 
 # Give appuser ownership of the working directory for log files
 RUN chown appuser:appuser /app
