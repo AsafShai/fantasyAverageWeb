@@ -80,6 +80,23 @@ class FeatureStore:
         team_own = pd.read_parquet(d / "team_own.parquet")
         return cls.build(players, team_allowed, team_own)
 
+    @classmethod
+    def from_vectors(
+        cls,
+        player_vectors: pd.DataFrame,
+        team_allowed_vectors: pd.DataFrame,
+        team_own_vectors: pd.DataFrame,
+    ) -> "FeatureStore":
+        """Inference-only store built from materialized vectors (no raw rows).
+
+        Sufficient for ``get_player_state`` / ``get_team_state`` and therefore for
+        ``LiveInference`` — but it holds no raw game rows, so it cannot ingest or
+        recompute. Used by a live serving path that loads vectors straight from
+        the DB instead of rebuilding them from history.
+        """
+        empty = pd.DataFrame()
+        return cls(empty, empty, empty, player_vectors, team_allowed_vectors, team_own_vectors)
+
     # --- persistence (DB-ready; parquet now) -------------------------------
 
     def save(self, store_dir: Path | None = None) -> None:

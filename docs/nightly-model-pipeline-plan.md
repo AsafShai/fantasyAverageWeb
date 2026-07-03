@@ -15,7 +15,9 @@ The `model_stats_inference` package (PR #100) can predict per-player stat lines,
 | Decision | Choice |
 |---|---|
 | Store persistence | **Postgres-backed feature store now** (no parquet store dir, no docker volume). |
-| Store shape | **Raw game rows only** in Postgres (`fs_player_games`, `fs_team_games`). Vectors are derived — rebuilt in memory each run via `FeatureStore.build()`. `team_allowed`/`team_own` derived in memory from raw team logs via `rdata.build_team_allowed/build_team_own`. |
+| Store shape | Raw game rows (`fs_player_games`, `fs_team_games`) are the **source of truth**; vectors are derived. **Materialized vectors** are also persisted (`fs_player_vectors`, `fs_team_allowed_vectors`, `fs_team_own_vectors`, features as JSONB) so a live inference path loads ready-to-use vectors without recomputing. The nightly job rebuilds vectors from the raw rows each run and upserts them (post-night, so they're current for tonight's games). |
+| Serving | `ModelNightlyService` holds a **resident in-memory `FeatureStore`** (`get_inference_store`), loaded once from the vector tables and reused for every intra-day prediction (no per-request DB hit). Invalidated whenever the nightly job refreshes vectors; a separate serving process refreshes via `get_inference_store(refresh=True)`. `FeatureStore.from_vectors` builds an inference-only store (no raw rows). |
+| Stale players | Bootstrap-only: players whose newest game is ≥2 years old are dropped (`drop_stale_players`). Forced re-bootstrap truncates raw + vector tables first. |
 | Bootstrap depth | Same seasons as `research/config.py: SEASONS` (currently 2023-24 → 2025-26; bump each season). Row-level filter only (regular season, `MIN >= MIN_MINUTES`); do **not** apply the research corpus filter `MIN_PLAYER_GAMES=20` — `MIN_INFERENCE_GAMES=10` gates at read time. |
 | Eval output | DB table only (`model_eval_results`). No API route, no UI tab for now. |
 | Retraining | Out of scope. Models stay frozen `models/*.joblib`; retrain manually offline. |
