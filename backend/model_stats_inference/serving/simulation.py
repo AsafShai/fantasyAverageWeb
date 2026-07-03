@@ -66,6 +66,7 @@ class EvalRow:
     real_minutes: float
     eligible: bool
     reason: str = ""
+    game_id: str = ""
     predicted: dict[str, float] = field(default_factory=dict)
     actual: dict[str, float] = field(default_factory=dict)
 
