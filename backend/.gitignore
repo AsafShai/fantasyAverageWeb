@@ -25,3 +25,5 @@ model_stats_inference/**/outputs/
 model_stats_inference/research/data/
 model_stats_inference/models/*.joblib
 model_stats_inference/serving/store/
+
+seed_team_snapshots.py
