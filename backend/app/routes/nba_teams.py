@@ -1,4 +1,3 @@
-import re
 import logging
 
 import httpx
@@ -7,15 +6,10 @@ from fastapi import APIRouter, HTTPException
 from app.models.nba_team_models import DepthChartPlayer, DepthChartPosition, InjuryInfo, NbaTeamInfo, TeamDepthChart
 from app.services.db_service import get_db_service
 from app.utils.constants import PRO_TEAM_MAP, NBA_TEAM_NAMES
+from app.utils.name_matching import normalize_player_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-_NORMALIZE_RE = re.compile(r"[^a-z0-9]")
-
-
-def _normalize_name(name: str) -> str:
-    return _NORMALIZE_RE.sub("", name.lower())
 
 
 @router.get("/", response_model=list[NbaTeamInfo])
@@ -42,7 +36,7 @@ async def get_depth_chart(team_id: int):
 
     db_service = get_db_service()
     all_statuses = await db_service.load_all_injury_statuses()
-    injury_lookup = {_normalize_name(row['player']): row['status'] for row in all_statuses}
+    injury_lookup = {normalize_player_name(row['player']): row['status'] for row in all_statuses}
 
     positions: list[DepthChartPosition] = []
     if depthcharts:
@@ -60,7 +54,7 @@ async def get_depth_chart(team_id: int):
                 seen_ids.add(athlete_id)
 
                 display_name = athlete.get("displayName", "")
-                normalized = _normalize_name(display_name)
+                normalized = normalize_player_name(display_name)
                 injury_status = injury_lookup.get(normalized)
 
                 players.append(DepthChartPlayer(

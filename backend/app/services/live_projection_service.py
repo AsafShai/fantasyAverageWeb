@@ -16,6 +16,7 @@ import pandas as pd
 
 from app.services.model_nightly_service import ModelNightlyService
 from app.services.nba_matchup_service import GameInfo
+from app.utils.name_matching import normalize_player_name
 from app.utils.team_abbr_map import NBA_ABBR_TO_TEAM_ID, espn_to_nba
 from model_stats_inference.serving.feature_store import FeatureStore
 from model_stats_inference.serving.inference import LiveInference, PredictionRequest
@@ -79,7 +80,7 @@ class LiveProjectionService:
             info = games_today.get(str(row.get('Pro Team', '')))
             if info is None:
                 continue
-            pid = self._name_index.get(name)
+            pid = self._name_index.get(normalize_player_name(name))
             if pid is None:
                 continue
             opp_id = _opponent_team_id(info.opponent)
@@ -108,7 +109,7 @@ class LiveProjectionService:
         inference = await self._ensure_inference()
         if inference is None:
             return None
-        pid = self._name_index.get(player_name)
+        pid = self._name_index.get(normalize_player_name(player_name))
         if pid is None:
             return None
         opp_id = _opponent_team_id(opponent)
@@ -128,7 +129,7 @@ def _build_name_index(store: FeatureStore) -> dict[str, int]:
     pv = store.player_vectors
     if 'PLAYER_NAME' not in pv.columns:
         return {}
-    return {str(name): int(pid) for pid, name in pv['PLAYER_NAME'].items()}
+    return {normalize_player_name(str(name)): int(pid) for pid, name in pv['PLAYER_NAME'].items()}
 
 
 def _opponent_team_id(espn_abbr: str) -> int | None:
