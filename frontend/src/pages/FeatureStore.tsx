@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
-  useGetSimPlayersQuery,
-  useGetSimPlayerStateQuery,
-  useGetSimTeamsQuery,
-  useGetSimTeamStateQuery,
+  useGetFeatureStorePlayersQuery,
+  useGetFeatureStorePlayerStateQuery,
+  useGetFeatureStoreTeamsQuery,
+  useGetFeatureStoreTeamStateQuery,
 } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -82,14 +82,14 @@ function Badge({ label, value }: { label: string; value: string }) {
 }
 
 export default function FeatureStore() {
-  const { data: list, isLoading, error } = useGetSimPlayersQuery();
-  const { data: teamList } = useGetSimTeamsQuery();
+  const { data: list, isLoading, error } = useGetFeatureStorePlayersQuery();
+  const { data: teamList } = useGetFeatureStoreTeamsQuery();
   const [playerId, setPlayerId] = useState<number | null>(null);
   const [teamId, setTeamId] = useState<number | null>(null);
   const [playerFilter, setPlayerFilter] = useState('');
 
-  const { data: pState } = useGetSimPlayerStateQuery(playerId as number, { skip: playerId == null });
-  const { data: tState } = useGetSimTeamStateQuery(teamId as number, { skip: teamId == null });
+  const { data: pState } = useGetFeatureStorePlayerStateQuery(playerId as number, { skip: playerId == null });
+  const { data: tState } = useGetFeatureStoreTeamStateQuery(teamId as number, { skip: teamId == null });
 
   const players = list?.players ?? [];
   const visiblePlayers = useMemo(() => {
@@ -105,8 +105,7 @@ export default function FeatureStore() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Feature Store</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          The exact state stored per player and per team, as of the simulator's clock
-          {list?.current_date ? ` (current date: ${list.current_date}, next game day: ${list.next_game_day})` : ' (season start)'}.
+          The exact state stored per player and per team in the live nightly feature store.
           Empty (—) values are NaN.
         </p>
       </div>

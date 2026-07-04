@@ -311,3 +311,42 @@ export interface PlayerMatchup {
   league_avg_def_values: DefValues;
   projection: Projection | null;
 }
+
+export interface PlayerStoreSummary {
+  player_id: number;
+  player_name: string;
+  team_abbr: string;
+  games_count: number;
+  eligible: boolean;
+}
+
+export interface PlayersListResponse {
+  players: PlayerStoreSummary[];
+}
+
+export interface PlayerStoreState {
+  player_id: number;
+  player_name: string;
+  team_abbr: string;
+  position: string;
+  last_game_date: string | null;
+  games_count: number;
+  eligible: boolean;
+  features: Record<string, number | null>;
+}
+
+export interface TeamSummary {
+  team_id: number;
+  team_abbr: string;
+}
+
+export interface TeamsListResponse {
+  teams: TeamSummary[];
+}
+
+export interface TeamStoreState {
+  team_id: number;
+  team_abbr: string;
+  own: Record<string, number | null>;
+  allowed: Record<string, number | null>;
+}
