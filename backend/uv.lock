@@ -499,8 +499,6 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-openai" },
-    { name = "lightgbm" },
-    { name = "matplotlib" },
     { name = "nba-api" },
     { name = "numpy" },
     { name = "pandas" },
@@ -508,15 +506,23 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "pyarrow" },
     { name = "pydantic-settings" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "scikit-learn" },
-    { name = "shap" },
     { name = "slowapi" },
     { name = "uvicorn" },
+]
+
+[package.dev-dependencies]
+ml-research = [
+    { name = "lightgbm" },
+    { name = "matplotlib" },
+    { name = "shap" },
+]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
 ]
 
 [package.metadata]
@@ -526,8 +532,6 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=0.3.27" },
     { name = "langchain-openai", specifier = ">=0.2.9" },
-    { name = "lightgbm", specifier = ">=4.6.0" },
-    { name = "matplotlib", specifier = ">=3.11.0" },
     { name = "nba-api", specifier = ">=1.11.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.3.0" },
@@ -535,15 +539,23 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
     { name = "pyarrow", specifier = ">=24.0.0" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=0.24.0" },
-    { name = "pytest-cov", specifier = ">=6.2.1" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "scikit-learn", specifier = ">=1.9.0" },
-    { name = "shap", specifier = ">=0.52.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "uvicorn", specifier = ">=0.34.3" },
+]
+
+[package.metadata.requires-dev]
+ml-research = [
+    { name = "lightgbm", specifier = ">=4.6.0" },
+    { name = "matplotlib", specifier = ">=3.11.0" },
+    { name = "shap", specifier = ">=0.52.0" },
+]
+test = [
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=0.24.0" },
+    { name = "pytest-cov", specifier = ">=6.2.1" },
 ]
 
 [[package]]
