@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
 import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats } from '../types/api';
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
 import './MatchupDisplay.css';
@@ -54,6 +54,12 @@ function formatDefVal(stat: keyof DefValues, value: number): string {
   if (stat === 'fg_pct') return `${(value * 100).toFixed(1)}%`;
   return value.toFixed(1);
 }
+
+const RANK_TEXT_COLOR: Record<'green' | 'yellow' | 'red', string> = {
+  green: 'text-green-600 dark:text-green-400',
+  yellow: 'text-amber-600 dark:text-amber-400',
+  red: 'text-red-600 dark:text-red-400',
+};
 
 function BestCatBadge({ ranks, playerStats }: { ranks: DefRanks; playerStats?: PlayerStats }) {
   const entries = Object.entries(ranks) as [keyof DefRanks, number][];
@@ -118,6 +124,12 @@ function fmtStat(n: number, integer: boolean): string {
   return integer ? String(Math.round(n)) : n.toFixed(1);
 }
 
+// Integer PTS derived from the rounded shooting components, so displayed
+// whole numbers satisfy PTS = 2·FGM + 3PM + FTM exactly (independent rounding breaks it).
+function ptsIntFromComponents(stats: ProjectionStats): number {
+  return 2 * Math.round(stats.fgm) + Math.round(stats.three_pm) + Math.round(stats.ftm);
+}
+
 function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
   if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
   if (integer) {
@@ -133,30 +145,6 @@ function VFrac({ m, a }: { m: string; a: string }) {
       <span>{m}</span>
       <span>{a}</span>
     </span>
-  );
-}
-
-// One cell in the unified matchup grid: rank badge (opponent defense) stacked
-// with the player's projected value for that same category — so "how good is
-// this matchup" and "what do we expect tonight" read as a single fact per stat,
-// not two separate grids the eye has to cross-reference.
-function StatCell({
-  label, rank, rankSub, projected, colorKey,
-}: {
-  label: string;
-  rank?: number;
-  rankSub?: string;
-  projected?: ReactNode;
-  colorKey: 'green' | 'yellow' | 'red';
-}) {
-  return (
-    <div className={`mq-cell-box mq-cell-${colorKey}`}>
-      <span className="mq-cell-label">{label}</span>
-      {rank !== undefined && (
-        <span className="mq-cell-rank" title={rankSub}>#{rank}</span>
-      )}
-      {projected !== undefined && <span className="mq-cell-proj">{projected}</span>}
-    </div>
   );
 }
 
@@ -204,35 +192,47 @@ export function MatchupExpandRow({
         <div className="mq-expand-content">
           <span className="mq-expand-label">
             vs {matchup.opponent} — opponent defense rank (out of 30){projActive ? ' + tonight\'s projection' : ''}.{' '}
-            <span style={{ color: '#4ade80' }}>Green ≥ 21</span> = weak defense.{' '}
-            <span style={{ color: '#f87171' }}>Red ≤ 10</span> = strong defense.
+            <span className="text-green-600 dark:text-green-400">Green ≥ 21</span> = weak defense.{' '}
+            <span className="text-red-600 dark:text-red-400">Red ≤ 10</span> = strong defense.
           </span>
-          <div className="mq-ranks-grid">
-            {(Object.entries(matchup.def_ranks) as [keyof DefRanks, number][]).map(([key, rank]) => {
-              const projected = !projActive ? formatDefVal(key, matchup.def_values[key])
-                : key === 'fg_pct' && fg
-                  ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                  : fmtStat(stats![key], integerMode);
-              return (
-                <StatCell
-                  key={key} label={RANK_LABELS[key]} rank={rank}
-                  rankSub={`${matchup.opponent} allows ${formatDefVal(key, matchup.def_values[key])}/game`}
-                  colorKey={rankColor(rank)} projected={projected}
-                />
-              );
-            })}
-            {projActive && ft && (
-              <StatCell
-                label="FT%" colorKey="yellow"
-                projected={<>{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</>}
-              />
-            )}
-            <StatCell
-              label="PACE" colorKey={paceColor}
-              rankSub={`${matchup.pace} poss/48min vs league avg ${matchup.league_avg_pace}`}
-              projected={paceLabel.charAt(0).toUpperCase() + paceLabel.slice(1)}
-            />
+
+          <div className="mq-strip-label">OPPONENT ({matchup.opponent}) DEFENSE</div>
+          <div className="flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1">
+            {(Object.entries(matchup.def_ranks) as [keyof DefRanks, number][]).map(([key, rank]) => (
+              <span key={key}>
+                <b className={RANK_TEXT_COLOR[rankColor(rank)]}>{RANK_LABELS[key]} #{rank}</b>{' '}
+                <span className="text-gray-500 dark:text-gray-400">{formatDefVal(key, matchup.def_values[key])}</span>
+              </span>
+            ))}
+            <span>
+              <b className={RANK_TEXT_COLOR[paceColor]}>{paceLabel.charAt(0).toUpperCase() + paceLabel.slice(1)}</b>{' '}
+              <span className="text-gray-500 dark:text-gray-400">{matchup.pace} vs {matchup.league_avg_pace} avg</span>
+            </span>
           </div>
+
+          {projActive && (
+            <>
+              <div className="mq-strip-label">TONIGHT'S PROJECTION</div>
+              <div className="flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1">
+                {(Object.entries(matchup.def_ranks) as [keyof DefRanks, number][]).map(([key]) => (
+                  <span key={key} className="font-bold">
+                    {RANK_LABELS[key]}{' '}
+                    {key === 'fg_pct' && fg
+                      ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
+                      : key === 'pts' && integerMode
+                        ? ptsIntFromComponents(stats!)
+                        : fmtStat(stats![key], integerMode)}
+                  </span>
+                ))}
+                {ft && (
+                  <span className="font-bold">
+                    FT% {ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+
           {showProjection && (
             <div className="mq-proj-footer">
               {!projActive && (
@@ -242,7 +242,7 @@ export function MatchupExpandRow({
                 <div className="mq-proj-slider-row">
                   <span className="mq-proj-slider-label">Minutes</span>
                   <input
-                    type="range" min={0} max={44} step={1} value={Math.round(minutes)}
+                    type="range" min={0} max={48} step={1} value={Math.round(minutes)}
                     onChange={(e) => onSlider(Number(e.target.value))}
                   />
                   <span className="mq-proj-slider-value">{Math.round(minutes)}</span>
