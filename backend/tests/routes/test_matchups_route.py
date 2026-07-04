@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.nba_matchup_service import GameInfo
 
 _MOCK_RANKS = {
     'LAL': {'pts': 28, 'reb': 25, 'ast': 12, 'stl': 8, 'blk': 30, 'three_pm': 15, 'fg_pct': 22},
@@ -17,7 +18,10 @@ _MOCK_LEAGUE_AVG_VALUES = {
     'pts': 115.0, 'reb': 44.0, 'ast': 25.0, 'stl': 7.8, 'blk': 5.2, 'three_pm': 13.8, 'fg_pct': 0.473,
 }
 _MOCK_PACE = {'LAL': 97.5, 'CHA': 101.8}
-_MOCK_GAMES = {'LAL': 'CHA', 'CHA': 'LAL'}
+_MOCK_GAMES = {
+    'LAL': GameInfo(opponent='CHA', is_home=True),
+    'CHA': GameInfo(opponent='LAL', is_home=False),
+}
 _MOCK_PLAYERS = pd.DataFrame([
     {'Name': 'Anthony Davis', 'Pro Team': 'LAL', 'Positions': 'C', 'status': 'ONTEAM', 'team_id': 1},
     {'Name': 'Player Off', 'Pro Team': 'BOS', 'Positions': 'PG', 'status': 'ONTEAM', 'team_id': 2},
