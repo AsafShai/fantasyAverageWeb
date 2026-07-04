@@ -4,8 +4,18 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import RankingsOverTimeChart from '../components/RankingsOverTimeChart'
+import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
+import { FF_NAV_REORG } from '../config/featureFlags'
+
+type AnalyticsTab = 'heatmap' | 'rankingsOverTime' | 'shootingStats'
+
+const ANALYTICS_TABS: { key: AnalyticsTab; label: string }[] = [
+  { key: 'heatmap', label: 'Heatmap' },
+  { key: 'rankingsOverTime', label: 'Rankings Over Time' },
+  { key: 'shootingStats', label: 'Shooting Stats' },
+]
 
 interface SortedHeatmapData {
   teams: Team[]
@@ -33,6 +43,7 @@ const Analytics = () => {
     return () => obs.disconnect()
   }, [])
 
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>('heatmap')
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [highlightedTeamId, setHighlightedTeamId] = useState<number | null>(null)
@@ -340,25 +351,71 @@ const Analytics = () => {
     )
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">League Analytics</h1>
-          <DataDateBadge dataDate={heatmapData?.data_date} />
+  if (!FF_NAV_REORG) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">League Analytics</h1>
+            <DataDateBadge dataDate={heatmapData?.data_date} />
+          </div>
+
+          {renderHeatmapTable(
+            heatmapData,
+            "Performance Heatmap",
+            "Visual representation of team performance across different categories. Red indicates below-average performance, white indicates league-average performance, and green indicates above-average performance. Click column headers to sort by team name or category values."
+          )}
+
         </div>
 
-        {renderHeatmapTable(
-          heatmapData,
-          "Performance Heatmap",
-          "Visual representation of team performance across different categories. Red indicates below-average performance, white indicates league-average performance, and green indicates above-average performance. Click column headers to sort by team name or category values."
-        )}
+        <div className="bg-white rounded-lg shadow p-6">
+          <RankingsOverTimeChart />
+        </div>
+      </div>
+    )
+  }
 
+  return (
+    <div>
+      <div className="sticky top-14 z-10 bg-gray-50 dark:bg-gray-900 pt-4 pb-3 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">League Analytics</h1>
+          <DataDateBadge dataDate={heatmapData?.data_date} />
+        </div>
+        <div className="flex gap-2 overflow-x-auto">
+          {ANALYTICS_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <RankingsOverTimeChart />
-      </div>
+      {activeTab === 'heatmap' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          {renderHeatmapTable(
+            heatmapData,
+            "Performance Heatmap",
+            "Visual representation of team performance across different categories. Red indicates below-average performance, white indicates league-average performance, and green indicates above-average performance. Click column headers to sort by team name or category values."
+          )}
+        </div>
+      )}
+
+      {activeTab === 'rankingsOverTime' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <RankingsOverTimeChart />
+        </div>
+      )}
+
+      {activeTab === 'shootingStats' && <ShootingStatsSection />}
     </div>
   )
 }

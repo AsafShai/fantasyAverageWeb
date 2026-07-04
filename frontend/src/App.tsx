@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router'
+import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import Dashboard from './pages/Dashboard'
@@ -12,9 +12,11 @@ import { Trade } from './pages/Trade'
 import Players from './pages/Players'
 import Injuries from './pages/Injuries'
 import NbaTeams from './pages/NbaTeams'
+import FeatureStore from './pages/FeatureStore'
 import NotFound from './pages/NotFound'
 import PlayerRankings from './pages/PlayerRankings'
-import { FF_PLAYER_RANKINGS } from './config/featureFlags'
+import Projections from './pages/Projections'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG } from './config/featureFlags'
 
 function App() {
   return (
@@ -24,7 +26,11 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="rankings" element={<Rankings />} />
-          <Route path="shots" element={<Shots />} />
+          {FF_NAV_REORG ? (
+            <Route path="shots" element={<Navigate to="/analytics" replace />} />
+          ) : (
+            <Route path="shots" element={<Shots />} />
+          )}
           <Route path="teams" element={<Teams />} />
           <Route path="team/:teamId" element={<TeamDetail />} />
           <Route path="analytics" element={<Analytics />} />
@@ -33,8 +39,10 @@ function App() {
           <Route path="players" element={<Players />} />
           <Route path="injuries" element={<Injuries />} />
           <Route path="nba-teams" element={<NbaTeams />} />
+          {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
           {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
+          {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

@@ -609,6 +609,260 @@ class DBService:
             logger.error(f"Failed to load all injury statuses: {e}")
             return []
 
+    # --- nightly model pipeline (feature-store rows / eval results / runs) ---
+
+    async def fs_counts(self) -> tuple[int, int]:
+        """(player rows, team rows) in the feature-store tables; (0, 0) on failure."""
+        pool = await self._get_pool()
+        if pool is None:
+            return 0, 0
+        try:
+            async with pool.acquire() as conn:
+                p = await conn.fetchval("SELECT COUNT(*) FROM fs_player_games")
+                t = await conn.fetchval("SELECT COUNT(*) FROM fs_team_games")
+                return int(p or 0), int(t or 0)
+        except Exception as e:
+            logger.error(f"Failed to count feature-store rows: {e}")
+            return 0, 0
+
+    async def fs_has_date(self, game_date: date) -> Optional[bool]:
+        """Whether the store already holds the night's rows. None = DB unavailable
+        (the caller must NOT treat that as 'safe to predict')."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                return bool(await conn.fetchval(
+                    "SELECT EXISTS (SELECT 1 FROM fs_player_games WHERE game_date = $1)",
+                    game_date,
+                ))
+        except Exception as e:
+            logger.error(f"Failed to check fs rows for {game_date}: {e}")
+            return None
+
+    async def get_fs_rows_before(self, game_date: date) -> tuple[list[dict], list[dict]]:
+        pool = await self._get_pool()
+        if pool is None:
+            return [], []
+        try:
+            async with pool.acquire() as conn:
+                players = await conn.fetch(
+                    "SELECT * FROM fs_player_games WHERE game_date < $1", game_date
+                )
+                teams = await conn.fetch(
+                    "SELECT * FROM fs_team_games WHERE game_date < $1", game_date
+                )
+                return [dict(r) for r in players], [dict(r) for r in teams]
+        except Exception as e:
+            logger.error(f"Failed to fetch fs rows before {game_date}: {e}")
+            return [], []
+
+    async def insert_fs_rows(self, player_rows: list[tuple], team_rows: list[tuple]) -> bool:
+        """Append raw game rows. Tuple order must match the column lists below.
+        ON CONFLICT DO NOTHING makes re-runs of the same night no-ops."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        player_cols = (
+            "player_id, game_id, season, game_date, player_name, team_id, matchup, position, "
+            "min, pts, reb, oreb, dreb, ast, fg3m, fg3a, stl, blk, tov, fgm, fga, ftm, fta, pf, plus_minus"
+        )
+        team_cols = (
+            "team_id, game_id, season, game_date, team_name, matchup, "
+            "pts, reb, ast, stl, blk, fg3m, fg_pct, fga, fta, tov"
+        )
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    if player_rows:
+                        await conn.executemany(
+                            f"INSERT INTO fs_player_games ({player_cols}) VALUES "
+                            f"({', '.join(f'${i + 1}' for i in range(25))}) "
+                            "ON CONFLICT (player_id, game_id) DO NOTHING",
+                            player_rows,
+                        )
+                    if team_rows:
+                        await conn.executemany(
+                            f"INSERT INTO fs_team_games ({team_cols}) VALUES "
+                            f"({', '.join(f'${i + 1}' for i in range(16))}) "
+                            "ON CONFLICT (team_id, game_id) DO NOTHING",
+                            team_rows,
+                        )
+            logger.info(f"Inserted {len(player_rows)} player / {len(team_rows)} team fs rows")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to insert fs rows: {e}")
+            return False
+
+    async def truncate_fs_tables(self) -> bool:
+        """Wipe the raw-row store AND derived vectors (forced re-bootstrap starts clean)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "TRUNCATE fs_player_games, fs_team_games, "
+                    "fs_player_vectors, fs_team_allowed_vectors, fs_team_own_vectors"
+                )
+            logger.info("Truncated feature-store + vector tables")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to truncate feature-store tables: {e}")
+            return False
+
+    async def upsert_feature_vectors(
+        self, player_rows: list[tuple], team_allowed_rows: list[tuple], team_own_rows: list[tuple]
+    ) -> bool:
+        """Upsert the materialized 'as of now' vectors. player_rows tuple order:
+        (player_id, player_name, team_id, position, last_game_date, games_count,
+         eligible, features_json). team rows: (team_id, features_json)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    if player_rows:
+                        await conn.executemany(
+                            """
+                            INSERT INTO fs_player_vectors
+                                (player_id, player_name, team_id, position,
+                                 last_game_date, games_count, eligible, features, updated_at)
+                            VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb, NOW())
+                            ON CONFLICT (player_id) DO UPDATE SET
+                                player_name    = EXCLUDED.player_name,
+                                team_id        = EXCLUDED.team_id,
+                                position       = EXCLUDED.position,
+                                last_game_date = EXCLUDED.last_game_date,
+                                games_count    = EXCLUDED.games_count,
+                                eligible       = EXCLUDED.eligible,
+                                features       = EXCLUDED.features,
+                                updated_at     = NOW()
+                            """,
+                            player_rows,
+                        )
+                    for table, rows in (
+                        ("fs_team_allowed_vectors", team_allowed_rows),
+                        ("fs_team_own_vectors", team_own_rows),
+                    ):
+                        if rows:
+                            await conn.executemany(
+                                f"""
+                                INSERT INTO {table} (team_id, features, updated_at)
+                                VALUES ($1, $2::jsonb, NOW())
+                                ON CONFLICT (team_id) DO UPDATE SET
+                                    features   = EXCLUDED.features,
+                                    updated_at = NOW()
+                                """,
+                                rows,
+                            )
+            logger.info(
+                f"Upserted {len(player_rows)} player + {len(team_allowed_rows)} team feature vectors"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to upsert feature vectors: {e}")
+            return False
+
+    async def load_feature_vectors(self) -> tuple[list[dict], list[dict], list[dict]]:
+        """(player_vectors, team_allowed_vectors, team_own_vectors) rows for serving."""
+        pool = await self._get_pool()
+        if pool is None:
+            return [], [], []
+        try:
+            async with pool.acquire() as conn:
+                pv = await conn.fetch("SELECT * FROM fs_player_vectors")
+                tav = await conn.fetch("SELECT * FROM fs_team_allowed_vectors")
+                tov = await conn.fetch("SELECT * FROM fs_team_own_vectors")
+                return [dict(r) for r in pv], [dict(r) for r in tav], [dict(r) for r in tov]
+        except Exception as e:
+            logger.error(f"Failed to load feature vectors: {e}")
+            return [], [], []
+
+    async def get_model_nightly_run(self, game_date: date) -> Optional[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT * FROM model_nightly_runs WHERE game_date = $1", game_date
+                )
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Failed to fetch model nightly run for {game_date}: {e}")
+            return None
+
+    async def upsert_model_nightly_run(
+        self, game_date: date, status: str, num_games: int, num_rows: int
+    ) -> bool:
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO model_nightly_runs (game_date, status, num_games, num_rows, ran_at)
+                    VALUES ($1, $2, $3, $4, NOW())
+                    ON CONFLICT (game_date) DO UPDATE SET
+                        status    = EXCLUDED.status,
+                        num_games = EXCLUDED.num_games,
+                        num_rows  = EXCLUDED.num_rows,
+                        ran_at    = NOW()
+                    """,
+                    game_date, status, num_games, num_rows,
+                )
+            logger.info(f"Marked model nightly run {game_date} as '{status}'")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to upsert model nightly run for {game_date}: {e}")
+            return False
+
+    async def insert_model_eval_rows(self, rows: list[tuple]) -> bool:
+        """Upsert predicted-vs-actual rows. Tuple order must match the columns below."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        stats = ["pts", "reb", "ast", "fg3m", "stl", "blk", "fgm", "fga", "ftm", "fta"]
+        cols = (
+            ["game_id", "player_id", "game_date", "player_name", "team_id",
+             "opponent_team_id", "is_home", "minutes", "eligible", "reason"]
+            + [f"pred_{s}" for s in stats]
+            + [f"actual_{s}" for s in stats]
+        )
+        updates = ",\n".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("game_id", "player_id"))
+        try:
+            async with pool.acquire() as conn:
+                await conn.executemany(
+                    f"INSERT INTO model_eval_results ({', '.join(cols)}) VALUES "
+                    f"({', '.join(f'${i + 1}' for i in range(len(cols)))}) "
+                    f"ON CONFLICT (game_id, player_id) DO UPDATE SET {updates}",
+                    rows,
+                )
+            logger.info(f"Upserted {len(rows)} model eval rows")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to insert model eval rows: {e}")
+            return False
+
+    async def get_model_eval_for_date(self, game_date: date) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT * FROM model_eval_results WHERE game_date = $1 ORDER BY player_id",
+                    game_date,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch model eval rows for {game_date}: {e}")
+            return []
+
     async def close(self) -> None:
         if self._pool is not None:
             await self._pool.close()

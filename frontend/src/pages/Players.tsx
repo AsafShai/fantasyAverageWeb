@@ -5,13 +5,14 @@ import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator,
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
-import { FF_MATCHUP_QUALITY } from '../config/featureFlags';
+import { FF_MATCHUP_QUALITY, FF_PROJECTIONS } from '../config/featureFlags';
 import './Players.css';
 
 const Players = () => {
   const [filters, setFilters] = useState<PlayerFilters>({});
   const [showAverages, setShowAverages] = useState(true);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
+  const [integerMode, setIntegerMode] = useState(true);
 
   const { data, isLoading, error } = useGetAllPlayersQuery({ page: 1, limit: 500, time_period: timePeriod });
   const { data: teams } = useGetTeamsListQuery();
@@ -101,6 +102,12 @@ const Players = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {FF_PROJECTIONS && (
+            <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+              <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
+              Integer projections
+            </label>
+          )}
           <div className="hidden sm:block">
             <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
           </div>
@@ -130,6 +137,7 @@ const Players = () => {
           teamMap={teamMap}
           showAverages={showAverages}
           matchupMap={matchupMap}
+          integerMode={integerMode}
         />
       </div>
     </div>
@@ -304,11 +312,13 @@ const PlayerTable = ({
   teamMap,
   showAverages,
   matchupMap,
+  integerMode,
 }: {
   players: Player[];
   teamMap: Map<number, string>;
   showAverages: boolean;
   matchupMap: Map<string, PlayerMatchup>;
+  integerMode: boolean;
 }) => {
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -317,7 +327,7 @@ const PlayerTable = ({
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
-      next.has(name) ? next.delete(name) : next.add(name);
+      if (next.has(name)) next.delete(name); else next.add(name);
       return next;
     });
   };
@@ -450,7 +460,7 @@ const PlayerTable = ({
                 )}
               </tr>
               {FF_MATCHUP_QUALITY && isExpanded && matchup && (
-                <MatchupExpandRow matchup={matchup} colSpan={15} />
+                <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
               )}
             </React.Fragment>
           );

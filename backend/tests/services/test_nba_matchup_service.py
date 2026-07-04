@@ -9,16 +9,21 @@ def service():
     return NbaMatchupService()
 
 
+_LAL_ID = 1610612747
+_CHA_ID = 1610612766
+_PHI_ID = 1610612755
+
+
 @pytest.fixture
 def mock_opp_df():
     return pd.DataFrame([
         {
-            'TEAM_ABBREVIATION': 'LAL', 'OPP_PTS': 112.0, 'OPP_REB': 44.0,
+            'TEAM_ID': _LAL_ID, 'TEAM_ABBREVIATION': 'LAL', 'OPP_PTS': 112.0, 'OPP_REB': 44.0,
             'OPP_AST': 26.0, 'OPP_STL': 8.2, 'OPP_BLK': 5.1,
             'OPP_FG3M': 13.2, 'OPP_FG_PCT': 0.471,
         },
         {
-            'TEAM_ABBREVIATION': 'CHA', 'OPP_PTS': 118.0, 'OPP_REB': 47.0,
+            'TEAM_ID': _CHA_ID, 'TEAM_ABBREVIATION': 'CHA', 'OPP_PTS': 118.0, 'OPP_REB': 47.0,
             'OPP_AST': 29.0, 'OPP_STL': 9.1, 'OPP_BLK': 6.3,
             'OPP_FG3M': 14.8, 'OPP_FG_PCT': 0.492,
         },
@@ -28,8 +33,8 @@ def mock_opp_df():
 @pytest.fixture
 def mock_adv_df():
     return pd.DataFrame([
-        {'TEAM_ABBREVIATION': 'LAL', 'PACE': 97.5},
-        {'TEAM_ABBREVIATION': 'CHA', 'PACE': 101.8},
+        {'TEAM_ID': _LAL_ID, 'TEAM_ABBREVIATION': 'LAL', 'PACE': 97.5},
+        {'TEAM_ID': _CHA_ID, 'TEAM_ABBREVIATION': 'CHA', 'PACE': 101.8},
     ])
 
 
@@ -60,6 +65,7 @@ def test_get_team_pace_returns_espn_key(service, mock_opp_df, mock_adv_df):
 def test_nba_abbr_converted_to_espn(service, mock_opp_df, mock_adv_df):
     # PHI in nba_api should become PHL in result
     phi_df = mock_opp_df.copy()
+    phi_df.loc[0, 'TEAM_ID'] = _PHI_ID
     phi_df.loc[0, 'TEAM_ABBREVIATION'] = 'PHI'
     with patch.object(service, '_fetch_nba_stats', return_value=(phi_df, mock_adv_df)):
         data = service.get_all_def_data()
@@ -121,8 +127,10 @@ async def test_get_games_today_both_directions(service):
     with patch.object(service._client, 'get', new_callable=AsyncMock, return_value=mock_resp):
         games = await service.get_games_today()
 
-    assert games['LAL'] == 'CHA'
-    assert games['CHA'] == 'LAL'
+    assert games['LAL'].opponent == 'CHA'
+    assert games['LAL'].is_home is True
+    assert games['CHA'].opponent == 'LAL'
+    assert games['CHA'].is_home is False
 
 
 @pytest.mark.asyncio

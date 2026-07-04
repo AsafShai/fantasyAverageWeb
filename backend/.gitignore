@@ -16,4 +16,15 @@ fantasy_api.log
 
 .coverage
 
+# model_stats_inference generated artifacts
+# Pipeline outputs (plots, selected-feature CSVs, summaries) — all regenerable.
+# The runtime source of truth (training/feature_sets/*.json, models/model_card.json)
+# is committed separately and not under outputs/.
+model_stats_inference/**/outputs/
+# Large data caches and the materialized feature store (regenerable).
+# NOTE: trained model binaries (models/*.joblib) ARE tracked — they are the
+# deployed artifact, so a fresh clone / Docker build is self-sufficient.
+model_stats_inference/research/data/
+model_stats_inference/serving/store/
+
 seed_team_snapshots.py

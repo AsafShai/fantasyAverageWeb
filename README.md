@@ -14,11 +14,11 @@ Live: https://fantasyleagueinfo.onrender.com (Render free tier — cold starts a
 - **Team Detail** — full roster, per-player stats, minutes tracking
 - **Players** — all rostered players, free agents, and waivers with filters (position, status, stats thresholds)
 - **Player Rankings** — custom z-score ranker: set category weights, filter by position/GP/MPG, sort by any column
-- **Injuries** — live injury report from ESPN PDF (polled at 4 PM ET daily)
+- **Injuries** — live injury report from the official NBA injury-report PDF (polled every 15 minutes)
 - **NBA Teams** — depth charts with client-side filters (hide injured, deduplicate positions)
 - **Estimator** — Monte Carlo standings projection (runs on startup, background sync)
 - **Trade Analyzer** — compare players between teams or vs free agents; z-score impact per category
-- **Trade Suggestions** — AI trade recommendations with statistical impact analysis
+- **Trade Suggestions** — AI trade recommendations with statistical impact analysis *(currently disabled — backend route removed)*
 
 ## Screenshots
 
@@ -57,7 +57,7 @@ Interactive trade analysis tool for comparing players between teams with compreh
 ### Backend
 - Python 3.12+ / FastAPI
 - PostgreSQL (Neon) — persistent injury status, snapshots
-- OpenAI (GPT-4o-mini) — trade suggestions
+- OpenAI (GPT-4o-mini) — trade suggestions (disabled for now)
 - nba_api — defensive ranks, team stats, pace
 - pandas — data processing
 - pytest — testing
@@ -66,7 +66,7 @@ Interactive trade analysis tool for comparing players between teams with compreh
 - React 19 / TypeScript / Vite
 - Redux Toolkit — global state
 - TanStack Query — server state
-- D3.js — visualizations
+- Recharts — visualizations
 - Tailwind CSS — styling
 
 ## Setup

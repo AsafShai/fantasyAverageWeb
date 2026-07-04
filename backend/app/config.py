@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     injury_scheduler_enabled: bool = Field(default=True, alias="INJURY_SCHEDULER_ENABLED")
+    model_nightly_enabled: bool = Field(default=False, alias="MODEL_NIGHTLY_ENABLED")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

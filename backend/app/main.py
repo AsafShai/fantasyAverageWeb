@@ -16,6 +16,8 @@ from app.routes.injuries import router as injuries_router
 from app.routes.estimator import router as estimator_router
 from app.routes.nba_teams import router as nba_teams_router
 from app.routes.matchups import router as matchups_router
+from app.routes.projections import router as projections_router
+from app.routes.feature_store import router as feature_store_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
@@ -23,6 +25,7 @@ from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services import injury_service
 from app.services import estimator_scheduler
+from app.services import model_nightly_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +51,10 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Injury scheduler disabled via INJURY_SCHEDULER_ENABLED=false")
     asyncio.create_task(estimator_scheduler.start_scheduler())
+    if settings.model_nightly_enabled:
+        asyncio.create_task(model_nightly_scheduler.start_scheduler())
+    else:
+        logger.info("Model nightly scheduler disabled via MODEL_NIGHTLY_ENABLED=false")
     yield
     # Shutdown
     try:
@@ -94,6 +101,8 @@ app.include_router(injuries_router, prefix="/api/injuries", tags=["Injuries"])
 app.include_router(estimator_router, prefix="/api/estimator", tags=["Estimator"])
 app.include_router(nba_teams_router, prefix="/api/nba-teams", tags=["NBA Teams"])
 app.include_router(matchups_router, prefix='/api/matchups', tags=['Matchups'])
+app.include_router(projections_router, prefix='/api/projections', tags=['Projections'])
+app.include_router(feature_store_router, prefix='/api/feature-store', tags=['Feature Store'])
 
 
 

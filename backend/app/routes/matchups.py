@@ -5,7 +5,9 @@ from fastapi import APIRouter, Query
 from typing import Optional
 
 from app.models.matchup_models import DefRanks, DefValues, PlayerMatchupResponse
+from app.models.projection_models import Projection, ProjectionStats
 from app.services.data_provider import DataProvider
+from app.services.live_projection_service import LiveProjectionService
 from app.services.nba_matchup_service import NbaMatchupService
 
 router = APIRouter()
@@ -13,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 _matchup_service = NbaMatchupService()
 _data_provider = DataProvider()
+_projection_service = LiveProjectionService()
 
 @router.get('/today', response_model=list[PlayerMatchupResponse])
 async def get_matchups_today(
@@ -49,25 +52,41 @@ async def get_matchups_today(
 
     players_df = await _data_provider.get_players_df(stat_split_type_id=0)
 
+    try:
+        projections = await _projection_service.project_today(players_df, games_today)
+    except Exception as e:
+        logger.error(f'Live projection fetch failed: {e}')
+        projections = {}
+
     results: list[PlayerMatchupResponse] = []
     for _, row in players_df.iterrows():
-        pro_team: str = row.get('Pro Team', '')
-        if pro_team not in games_today:
+        pro_team: str = str(row.get('Pro Team', ''))
+        game = games_today.get(pro_team)
+        if game is None or game.opponent not in def_ranks:
             continue
-        opponent = games_today[pro_team]
-        if opponent not in def_ranks:
-            continue
+        opponent = game.opponent
 
-        team_pace = pace_map.get(pro_team, league_avg_pace)
+        team_pace = pace_map.get(opponent, league_avg_pace)
         opp_ranks = def_ranks[opponent]
         opp_vals = def_values.get(opponent, {})
         positions_raw: str = str(row.get('Positions', 'Unknown'))
         positions = [p.strip() for p in positions_raw.split(',') if p.strip() and p.strip() != 'Unknown']
 
+        proj = projections.get(row['Name'])
+        projection = None
+        if proj is not None:
+            projection = Projection(
+                default_minutes=proj['default_minutes'],
+                status=proj['status'],
+                reason=proj['reason'],
+                stats=ProjectionStats(**proj['stats']) if proj['stats'] else None,
+            )
+
         results.append(PlayerMatchupResponse(
             player_name=row['Name'],
             pro_team=pro_team,
             opponent=opponent,
+            is_home=game.is_home,
             pace=round(team_pace, 1),
             league_avg_pace=round(league_avg_pace, 1),
             positions=positions,
@@ -90,6 +109,7 @@ async def get_matchups_today(
                 fg_pct=opp_vals.get('fg_pct', 0.0),
             ),
             league_avg_def_values=league_avg_def,
+            projection=projection,
         ))
 
     return results
