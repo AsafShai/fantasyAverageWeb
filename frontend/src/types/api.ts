@@ -274,14 +274,79 @@ export interface DefValues {
   fg_pct: number;
 }
 
+export type ProjectionStatus = 'green' | 'amber' | 'red';
+
+export interface ProjectionStats {
+  pts: number;
+  reb: number;
+  ast: number;
+  three_pm: number;
+  stl: number;
+  blk: number;
+  fgm: number;
+  fga: number;
+  fg_pct: number;
+  ftm: number;
+  fta: number;
+  ft_pct: number;
+}
+
+export interface Projection {
+  default_minutes: number;
+  status: ProjectionStatus;
+  reason: string;
+  stats: ProjectionStats | null;
+}
+
 export interface PlayerMatchup {
   player_name: string;
   pro_team: string;
   opponent: string;
+  is_home: boolean;
   pace: number;
   league_avg_pace: number;
   positions: string[];
   def_ranks: DefRanks;
   def_values: DefValues;
   league_avg_def_values: DefValues;
+  projection: Projection | null;
+}
+
+export interface PlayerStoreSummary {
+  player_id: number;
+  player_name: string;
+  team_abbr: string;
+  games_count: number;
+  eligible: boolean;
+}
+
+export interface PlayersListResponse {
+  players: PlayerStoreSummary[];
+}
+
+export interface PlayerStoreState {
+  player_id: number;
+  player_name: string;
+  team_abbr: string;
+  position: string;
+  last_game_date: string | null;
+  games_count: number;
+  eligible: boolean;
+  features: Record<string, number | null>;
+}
+
+export interface TeamSummary {
+  team_id: number;
+  team_abbr: string;
+}
+
+export interface TeamsListResponse {
+  teams: TeamSummary[];
+}
+
+export interface TeamStoreState {
+  team_id: number;
+  team_abbr: string;
+  own: Record<string, number | null>;
+  allowed: Record<string, number | null>;
 }

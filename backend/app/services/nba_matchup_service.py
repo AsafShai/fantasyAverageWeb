@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import httpx
@@ -6,11 +7,17 @@ import pandas as pd
 from nba_api.stats.endpoints import leaguedashteamstats
 
 from app.config import settings
-from app.utils.team_abbr_map import nba_to_espn
+from app.utils.team_abbr_map import NBA_TEAM_ID_TO_ABBR, nba_to_espn
 
 
 def _season_str(season_id: int) -> str:
     return f'{season_id - 1}-{str(season_id)[2:]}'
+
+
+@dataclass
+class GameInfo:
+    opponent: str  # ESPN abbreviation
+    is_home: bool
 
 
 _STAT_COLS: dict[str, str] = {
@@ -90,7 +97,7 @@ class NbaMatchupService:
             # ascending → lowest value = rank 1, highest = rank 30 (best matchup)
             sorted_df = opp_df.sort_values(col, ascending=True).reset_index(drop=True)
             for rank, (_, row) in enumerate(sorted_df.iterrows(), start=1):
-                espn = nba_to_espn(row['TEAM_ABBREVIATION'])
+                espn = nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']])
                 if espn not in ranks:
                     ranks[espn] = {}
                 ranks[espn][stat_key] = rank
@@ -102,7 +109,7 @@ class NbaMatchupService:
             if col not in opp_df.columns:
                 continue
             for _, row in opp_df.iterrows():
-                espn = nba_to_espn(row['TEAM_ABBREVIATION'])
+                espn = nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']])
                 if espn not in values:
                     values[espn] = {}
                 raw = float(row[col])
@@ -121,7 +128,7 @@ class NbaMatchupService:
         if 'PACE' not in adv_df.columns:
             return {}
         return {
-            nba_to_espn(row['TEAM_ABBREVIATION']): float(row['PACE'])
+            nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']]): float(row['PACE'])
             for _, row in adv_df.iterrows()
         }
 
@@ -133,7 +140,7 @@ class NbaMatchupService:
             return 'Slow'
         return 'Average'
 
-    async def get_games_today(self, date: str | None = None) -> dict[str, str]:
+    async def get_games_today(self, date: str | None = None) -> dict[str, GameInfo]:
         # Skip cache when a specific date is requested (testing only)
         if date is None and (
             self._schedule_cache['ts'] is not None
@@ -148,14 +155,14 @@ class NbaMatchupService:
         response.raise_for_status()
         data = response.json()
 
-        games: dict[str, str] = {}
+        games: dict[str, GameInfo] = {}
         for event in data.get('events', []):
             competitors = event.get('competitions', [{}])[0].get('competitors', [])
             if len(competitors) == 2:
-                a = competitors[0]['team']['abbreviation']
-                b = competitors[1]['team']['abbreviation']
-                games[a] = b
-                games[b] = a
+                a, b = competitors[0], competitors[1]
+                a_abbr, b_abbr = a['team']['abbreviation'], b['team']['abbreviation']
+                games[a_abbr] = GameInfo(opponent=b_abbr, is_home=a.get('homeAway') == 'home')
+                games[b_abbr] = GameInfo(opponent=a_abbr, is_home=b.get('homeAway') == 'home')
 
         if date is None:
             self._schedule_cache.update({'data': games, 'ts': datetime.now()})
