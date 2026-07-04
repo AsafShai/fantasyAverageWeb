@@ -78,6 +78,7 @@ export default function PlayerRankings() {
     if (players.length > 0) {
       handleCalculate()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [players])
 
   const sortedPlayers = useMemo(() => {

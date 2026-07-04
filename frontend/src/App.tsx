@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router'
+import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import Dashboard from './pages/Dashboard'
@@ -16,7 +16,7 @@ import FeatureStore from './pages/FeatureStore'
 import NotFound from './pages/NotFound'
 import PlayerRankings from './pages/PlayerRankings'
 import Projections from './pages/Projections'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS } from './config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG } from './config/featureFlags'
 
 function App() {
   return (
@@ -26,7 +26,11 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="rankings" element={<Rankings />} />
-          <Route path="shots" element={<Shots />} />
+          {FF_NAV_REORG ? (
+            <Route path="shots" element={<Navigate to="/analytics" replace />} />
+          ) : (
+            <Route path="shots" element={<Shots />} />
+          )}
           <Route path="teams" element={<Teams />} />
           <Route path="team/:teamId" element={<TeamDetail />} />
           <Route path="analytics" element={<Analytics />} />
