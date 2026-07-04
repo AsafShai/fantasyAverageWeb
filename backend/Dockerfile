@@ -8,6 +8,10 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Runtime image already has exactly the deps it needs baked in;
+# `uv run` must not try to reconcile against default-groups as non-root appuser.
+ENV UV_NO_SYNC=1
+
 # Install dependencies as root, then switch to appuser
 COPY pyproject.toml uv.lock ./
 RUN pip install uv && uv sync --frozen --no-group test --no-group ml-research
