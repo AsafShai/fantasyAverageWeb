@@ -66,7 +66,7 @@ async def get_matchups_today(
             continue
         opponent = game.opponent
 
-        team_pace = pace_map.get(pro_team, league_avg_pace)
+        team_pace = pace_map.get(opponent, league_avg_pace)
         opp_ranks = def_ranks[opponent]
         opp_vals = def_values.get(opponent, {})
         positions_raw: str = str(row.get('Positions', 'Unknown'))
