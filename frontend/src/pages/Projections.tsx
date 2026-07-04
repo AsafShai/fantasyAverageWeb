@@ -12,6 +12,12 @@ function fmtStat(n: number, integer: boolean): string {
   return integer ? String(Math.round(n)) : n.toFixed(1);
 }
 
+// Integer PTS derived from the rounded shooting components, so displayed
+// whole numbers satisfy PTS = 2·FGM + 3PM + FTM exactly (independent rounding breaks it).
+function ptsIntFromComponents(stats: ProjectionStats): number {
+  return 2 * Math.round(stats.fgm) + Math.round(stats.three_pm) + Math.round(stats.ftm);
+}
+
 function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
   if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
   if (integer) {
@@ -84,7 +90,7 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
       <td className="px-3 py-2">
         <div className="flex items-center gap-2 min-w-[120px]">
           <input
-            type="range" min={0} max={44} step={1} value={Math.round(minutes)}
+            type="range" min={0} max={48} step={1} value={Math.round(minutes)}
             onChange={(e) => onSlider(Number(e.target.value))}
             className="w-24 accent-blue-600"
           />
@@ -92,7 +98,9 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
         </div>
       </td>
       {STAT_COLS.map(([key]) => (
-        <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fmtStat(stats[key] as number, integerMode)}</td>
+        <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+          {key === 'pts' && integerMode ? ptsIntFromComponents(stats) : fmtStat(stats[key] as number, integerMode)}
+        </td>
       ))}
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</td>
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</td>
