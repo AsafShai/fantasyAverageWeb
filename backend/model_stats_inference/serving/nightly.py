@@ -24,7 +24,7 @@ from ..research import config as rconfig
 from ..research import data as rdata
 from .feature_store import FeatureStore
 from .inference import LiveInference, PredictionRequest
-from .simulation import EvalRow, _actual_line
+from .eval_row import EvalRow, _actual_line
 
 
 def season_for(d: date) -> str:

@@ -98,13 +98,11 @@ export function MatchupCell({
   isExpanded,
   onToggle,
   playerStats,
-  showProjection = false,
 }: {
   matchup: PlayerMatchup | undefined;
   isExpanded: boolean;
   onToggle: () => void;
   playerStats?: PlayerStats;
-  showProjection?: boolean;
 }) {
   if (!matchup) return <span className="mq-no-game">—</span>;
 
@@ -112,9 +110,6 @@ export function MatchupCell({
     <button className="mq-cell" onClick={onToggle}>
       <span className="mq-opp">vs {matchup.opponent}</span>
       <BestCatBadge ranks={matchup.def_ranks} playerStats={playerStats} />
-      {showProjection && matchup.projection && (
-        <ConfidenceDot status={matchup.projection.status} reason={matchup.projection.reason} />
-      )}
       <span className="mq-chevron">{isExpanded ? '▲' : '▼'}</span>
     </button>
   );
@@ -153,11 +148,13 @@ export function MatchupExpandRow({
   colSpan,
   integerMode = true,
   showProjection = false,
+  onCollapse,
 }: {
   matchup: PlayerMatchup;
   colSpan: number;
   integerMode?: boolean;
   showProjection?: boolean;
+  onCollapse?: () => void;
 }) {
   const paceLabel = paceBadge(matchup.pace, matchup.league_avg_pace);
   const paceColor = paceLabel === 'fast' ? 'green' : paceLabel === 'slow' ? 'red' : 'yellow';
@@ -190,21 +187,26 @@ export function MatchupExpandRow({
     <tr className="mq-expand-row">
       <td colSpan={colSpan} className="mq-expand-td">
         <div className="mq-expand-content">
-          <span className="mq-expand-label">
+          {onCollapse && (
+            <button className="mq-expand-close" onClick={onCollapse} aria-label="Collapse matchup" title="Collapse">
+              ▲ Close
+            </button>
+          )}
+          <span className="mq-expand-label text-center block">
             vs {matchup.opponent} — opponent defense rank (out of 30){projActive ? ' + tonight\'s projection' : ''}.{' '}
             <span className="text-green-600 dark:text-green-400">Green ≥ 21</span> = weak defense.{' '}
             <span className="text-red-600 dark:text-red-400">Red ≤ 10</span> = strong defense.
           </span>
 
           <div className="mq-strip-label">OPPONENT ({matchup.opponent}) DEFENSE</div>
-          <div className="flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1">
+          <div className="mq-strip">
             {(Object.entries(matchup.def_ranks) as [keyof DefRanks, number][]).map(([key, rank]) => (
-              <span key={key}>
+              <span key={key} className="mq-strip-item">
                 <b className={RANK_TEXT_COLOR[rankColor(rank)]}>{RANK_LABELS[key]} #{rank}</b>{' '}
                 <span className="text-gray-500 dark:text-gray-400">{formatDefVal(key, matchup.def_values[key])}</span>
               </span>
             ))}
-            <span>
+            <span className="mq-strip-item">
               <b className={RANK_TEXT_COLOR[paceColor]}>{paceLabel.charAt(0).toUpperCase() + paceLabel.slice(1)}</b>{' '}
               <span className="text-gray-500 dark:text-gray-400">{matchup.pace} vs {matchup.league_avg_pace} avg</span>
             </span>
@@ -212,21 +214,27 @@ export function MatchupExpandRow({
 
           {projActive && (
             <>
-              <div className="mq-strip-label">TONIGHT'S PROJECTION</div>
-              <div className="flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1">
+              <div className="mq-strip-label mq-strip-label-row">
+                <ConfidenceDot status={proj!.status} reason={proj!.reason} />
+                <span>TONIGHT'S PROJECTION</span>
+              </div>
+              <div className="mq-strip">
                 {(Object.entries(matchup.def_ranks) as [keyof DefRanks, number][]).map(([key]) => (
-                  <span key={key} className="font-bold">
-                    {RANK_LABELS[key]}{' '}
-                    {key === 'fg_pct' && fg
-                      ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                      : key === 'pts' && integerMode
-                        ? ptsIntFromComponents(stats!)
-                        : fmtStat(stats![key], integerMode)}
+                  <span key={key} className="mq-strip-item">
+                    <span className="text-gray-500 dark:text-gray-400">{RANK_LABELS[key]}</span>{' '}
+                    <b>
+                      {key === 'fg_pct' && fg
+                        ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
+                        : key === 'pts' && integerMode
+                          ? ptsIntFromComponents(stats!)
+                          : fmtStat(stats![key], integerMode)}
+                    </b>
                   </span>
                 ))}
                 {ft && (
-                  <span className="font-bold">
-                    FT% {ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}
+                  <span className="mq-strip-item">
+                    <span className="text-gray-500 dark:text-gray-400">FT%</span>{' '}
+                    <b>{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</b>
                   </span>
                 )}
               </div>

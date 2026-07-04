@@ -26,8 +26,7 @@ const TeamDetail = () => {
   const [showAverages, setShowAverages] = useState(true)
   const [integerMode, setIntegerMode] = useState(true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
-  const [demoDate, setDemoDate] = useState('')
-  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(demoDate || undefined, { skip: !FF_MATCHUP_QUALITY })
+  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY })
   const matchupMap = useMemo(() => {
     if (!FF_MATCHUP_QUALITY) return new Map<string, PlayerMatchup>()
     return new Map(liveMatchups.map((m: PlayerMatchup) => [m.player_name, m]))
@@ -72,13 +71,7 @@ const TeamDetail = () => {
     setIncludedPlayers(allIncluded ? new Set() : null)
   }
 
-  const formatNumber = (num: number) => {
-    const rounded = Math.round(num * 10000) / 10000
-    if (rounded === Math.round(rounded * 10) / 10) {
-      return rounded.toFixed(1)
-    }
-    return rounded.toString()
-  }
+  const formatNumber = (num: number) => num.toFixed(2)
 
   const formatStat = (value: number, gp: number, isPercentage: boolean = false) => {
     if (isPercentage) {
@@ -296,11 +289,11 @@ const TeamDetail = () => {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span>Field Goals:</span>
-                <span>{team_detail.shot_chart.fgm}/{team_detail.shot_chart.fga} ({(team_detail.shot_chart.fg_percentage * 100).toFixed(4)}%)</span>
+                <span>{team_detail.shot_chart.fgm}/{team_detail.shot_chart.fga} ({(team_detail.shot_chart.fg_percentage * 100).toFixed(2)}%)</span>
               </div>
               <div className="flex justify-between">
                 <span>Free Throws:</span>
-                <span>{team_detail.shot_chart.ftm}/{team_detail.shot_chart.fta} ({(team_detail.shot_chart.ft_percentage * 100).toFixed(4)}%)</span>
+                <span>{team_detail.shot_chart.ftm}/{team_detail.shot_chart.fta} ({(team_detail.shot_chart.ft_percentage * 100).toFixed(2)}%)</span>
               </div>
             </div>
           </div>
@@ -310,27 +303,27 @@ const TeamDetail = () => {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span>Points:</span>
-                <span>{team_detail.raw_averages.pts.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.pts.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Rebounds:</span>
-                <span>{team_detail.raw_averages.reb.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.reb.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Assists:</span>
-                <span>{team_detail.raw_averages.ast.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.ast.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Steals:</span>
-                <span>{team_detail.raw_averages.stl.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.stl.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Blocks:</span>
-                <span>{team_detail.raw_averages.blk.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.blk.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>3-Pointers:</span>
-                <span>{team_detail.raw_averages.three_pm.toFixed(4)}</span>
+                <span>{team_detail.raw_averages.three_pm.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -398,16 +391,6 @@ const TeamDetail = () => {
             <p className="text-sm text-gray-500 italic">Player data unavailable</p>
           )}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            {FF_MATCHUP_QUALITY && (
-              <input
-                type="text"
-                value={demoDate}
-                onChange={(e) => setDemoDate(e.target.value)}
-                placeholder="Demo date YYYYMMDD"
-                className="px-2 py-1 text-sm border border-gray-300 rounded w-36"
-                title="Temp: override matchup date for demo (offseason has no live games)"
-              />
-            )}
             {FF_PROJECTIONS && (
               <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
                 <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
@@ -418,15 +401,15 @@ const TeamDetail = () => {
               value={timePeriod}
               onChange={setTimePeriod}
             />
-            <div className="flex border border-gray-300 rounded overflow-hidden self-end sm:self-stretch">
+            <div className="flex self-stretch sm:self-auto border border-gray-300 rounded overflow-hidden">
               <button
-                className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(true)}
               >
                 Per Game
               </button>
               <button
-                className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(false)}
               >
                 Totals
@@ -439,7 +422,7 @@ const TeamDetail = () => {
             Roster data is currently unavailable. Team stats above are from the last known snapshot.
           </div>
         ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto mq-scroll-container">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -449,7 +432,9 @@ const TeamDetail = () => {
                     onClick={() => column.sortable !== false && handleSort(column.key)}
                     className={`px-4 py-3 text-${column.align} text-xs font-medium text-gray-500 uppercase tracking-wider ${
                       column.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''
-                    } transition-colors duration-150`}
+                    } transition-colors duration-150 ${
+                      column.key === 'player_name' ? 'sticky left-0 z-10 bg-gray-50 border-r border-gray-200' : ''
+                    }`}
                   >
                     {column.key === 'include' ? (
                       <div className="flex flex-col items-center justify-center gap-1">
@@ -491,7 +476,7 @@ const TeamDetail = () => {
                           className="w-4 h-4 text-blue-600 cursor-pointer"
                         />
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{player.player_name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-200">{player.player_name}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.minutes, player.stats.gp)}</td>
@@ -511,13 +496,12 @@ const TeamDetail = () => {
                             isExpanded={isExpanded}
                             onToggle={() => toggleExpand(player.player_name)}
                             playerStats={player.stats}
-                            showProjection={FF_PROJECTIONS}
                           />
                         </td>
                       )}
                     </tr>
                     {FF_MATCHUP_QUALITY && isExpanded && matchup && (
-                      <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} />
+                      <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
                     )}
                   </React.Fragment>
                 )
@@ -526,7 +510,7 @@ const TeamDetail = () => {
                 <td className="px-4 py-3 whitespace-nowrap text-center">
                   <span className="text-blue-600">-</span>
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-blue-900">
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-blue-900 sticky left-0 z-10 bg-gradient-to-r from-blue-50 to-indigo-50 border-r border-gray-200">
                   {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">

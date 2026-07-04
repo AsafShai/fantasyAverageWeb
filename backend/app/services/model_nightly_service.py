@@ -37,7 +37,7 @@ from model_stats_inference.serving import config as sconfig
 from model_stats_inference.serving import nightly
 from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
 from model_stats_inference.serving.inference import LiveInference
-from model_stats_inference.serving.simulation import EvalRow
+from model_stats_inference.serving.eval_row import EvalRow
 
 logger = logging.getLogger(__name__)
 

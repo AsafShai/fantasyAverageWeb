@@ -1,14 +1,13 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup, ProjectionStats } from '../../types/api';
 import type { EstimatorResults } from '../../types/estimator';
-import type { UpcomingResponse, AdvanceResponse, SimState, PlayerPrediction, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState } from '../../types/simulation';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'Simulation'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string }>({
       query: ({ sortBy, order = 'asc', startDate, endDate } = {}) => ({
@@ -84,37 +83,6 @@ export const fantasyApi = createApi({
     predictProjection: builder.mutation<{ stats: ProjectionStats }, { player_name: string; opponent: string; is_home: boolean; minutes: number }>({
       query: (body) => ({ url: '/projections/predict', method: 'POST', body }),
     }),
-    getSimUpcoming: builder.query<UpcomingResponse, void>({
-      query: () => '/simulation/upcoming',
-      providesTags: ['Simulation'],
-    }),
-    initSim: builder.mutation<SimState, { season?: string } | void>({
-      query: (body) => ({ url: '/simulation/init', method: 'POST', body: body || {} }),
-      invalidatesTags: ['Simulation'],
-    }),
-    advanceSim: builder.mutation<AdvanceResponse, void>({
-      query: () => ({ url: '/simulation/advance', method: 'POST' }),
-      invalidatesTags: ['Simulation'],
-    }),
-    predictSimPlayer: builder.mutation<PlayerPrediction, { player_id: number; minutes: number }>({
-      query: (body) => ({ url: '/simulation/predict', method: 'POST', body }),
-    }),
-    getSimPlayers: builder.query<PlayersListResponse, void>({
-      query: () => '/simulation/players',
-      providesTags: ['Simulation'],
-    }),
-    getSimPlayerState: builder.query<PlayerStoreState, number>({
-      query: (playerId) => `/simulation/player/${playerId}/state`,
-      providesTags: ['Simulation'],
-    }),
-    getSimTeams: builder.query<TeamsListResponse, void>({
-      query: () => '/simulation/teams',
-      providesTags: ['Simulation'],
-    }),
-    getSimTeamState: builder.query<TeamStoreState, number>({
-      query: (teamId) => `/simulation/team/${teamId}/state`,
-      providesTags: ['Simulation'],
-    }),
   }),
 });
 
@@ -135,12 +103,4 @@ export const {
   useGetNbaTeamDepthChartQuery,
   useGetMatchupsTodayQuery,
   usePredictProjectionMutation,
-  useGetSimUpcomingQuery,
-  useInitSimMutation,
-  useAdvanceSimMutation,
-  usePredictSimPlayerMutation,
-  useGetSimPlayersQuery,
-  useGetSimPlayerStateQuery,
-  useGetSimTeamsQuery,
-  useGetSimTeamStateQuery,
 } = fantasyApi;

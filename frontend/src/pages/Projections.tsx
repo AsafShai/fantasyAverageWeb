@@ -29,16 +29,16 @@ function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
 
 function VFrac({ m, a }: { m: string; a: string }) {
   return (
-    <span className="inline-flex flex-col items-center leading-[0.85] text-[10px] align-middle ml-1 text-gray-400 dark:text-gray-500">
+    <span className="inline-flex flex-col items-center leading-[0.9] text-xs align-middle ml-1 text-gray-500 dark:text-gray-400">
       <span className="border-b border-current px-0.5">{m}</span>
       <span>{a}</span>
     </span>
   );
 }
 
-function StatusDot({ status }: { status: 'green' | 'amber' | 'red' }) {
+function StatusDot({ status, reason }: { status: 'green' | 'amber' | 'red'; reason?: string }) {
   const color = status === 'green' ? 'bg-green-500' : status === 'amber' ? 'bg-amber-500' : 'bg-red-500';
-  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />;
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} title={reason || undefined} />;
 }
 
 function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integerMode: boolean }) {
@@ -65,8 +65,8 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   if (proj.status === 'red' || !stats) {
     return (
       <tr className="border-t border-gray-100 dark:border-gray-800">
-        <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100">
-          <StatusDot status="red" /> <span className="ml-1">{matchup.player_name}</span>
+        <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100 sticky left-0 z-10 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
+          <StatusDot status="red" reason={proj.reason} /> <span className="ml-1">{matchup.player_name}</span>
         </td>
         <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
           {matchup.pro_team} {matchup.is_home ? 'vs' : '@'} {matchup.opponent}
@@ -81,8 +81,8 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
 
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">
-      <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100">
-        <StatusDot status={proj.status} /> <span className="ml-1" title={proj.reason}>{matchup.player_name}</span>
+      <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100 sticky left-0 z-10 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
+        <StatusDot status={proj.status} reason={proj.reason} /> <span className="ml-1">{matchup.player_name}</span>
       </td>
       <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
         {matchup.pro_team} {matchup.is_home ? 'vs' : '@'} {matchup.opponent}
@@ -109,8 +109,7 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
 }
 
 export default function Projections() {
-  const [demoDate, setDemoDate] = useState('');
-  const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery(demoDate || undefined);
+  const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery();
   const [integerMode, setIntegerMode] = useState(true);
   const [search, setSearch] = useState('');
   const [nbaTeam, setNbaTeam] = useState('');
@@ -155,14 +154,6 @@ export default function Projections() {
           <p className="text-sm text-gray-500 dark:text-gray-400">Live model projections for tonight's games.</p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={demoDate}
-            onChange={(e) => setDemoDate(e.target.value)}
-            placeholder="Demo date YYYYMMDD"
-            className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded w-36 bg-white dark:bg-gray-800"
-            title="Temp: override projection date for demo (offseason has no live games)"
-          />
           <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
             <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} className="accent-blue-600" />
             Integer projections
@@ -202,7 +193,7 @@ export default function Projections() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
             <tr>
-              <th className="text-left px-3 py-2">Player</th>
+              <th className="text-left px-3 py-2 sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">Player</th>
               <th className="text-left px-3 py-2">Matchup</th>
               <th className="px-3 py-2 w-40">Minutes</th>
               {STAT_COLS.map(([, label]) => <th key={label} className="px-2 py-2 text-right">{label}</th>)}

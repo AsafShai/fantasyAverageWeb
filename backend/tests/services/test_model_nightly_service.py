@@ -19,7 +19,7 @@ from app.services.model_nightly_service import (
     _team_vectors_df,
 )
 from model_stats_inference.serving.nightly import NightFetch
-from model_stats_inference.serving.simulation import EvalRow
+from model_stats_inference.serving.eval_row import EvalRow
 
 GAME_DATE = date(2026, 1, 15)
 

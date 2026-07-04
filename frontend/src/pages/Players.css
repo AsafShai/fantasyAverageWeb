@@ -237,6 +237,23 @@
   border-bottom: 1px solid #eee;
 }
 
+/* Pin the Name column so it stays visible while scrolling horizontally
+   through the wide stat columns — otherwise there's no way to tell which
+   player a scrolled-out-of-view row belongs to. */
+.player-table th:first-child,
+.player-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 11;
+  background: #fff;
+  border-right: 1px solid #ddd;
+}
+
+.player-table th:first-child {
+  z-index: 12;
+  background: #f5f5f5;
+}
+
 .player-table tbody tr:hover {
   background: #f9f9f9;
 }
@@ -342,6 +359,16 @@
 
 :where(.dark, .dark *) .player-table td {
   border-bottom-color: #1f2937;
+}
+
+:where(.dark, .dark *) .player-table th:first-child,
+:where(.dark, .dark *) .player-table td:first-child {
+  background: #1e293b;
+  border-right-color: #374151;
+}
+
+:where(.dark, .dark *) .player-table th:first-child {
+  background: #0f172a;
 }
 
 :where(.dark, .dark *) .player-table tbody tr:hover {

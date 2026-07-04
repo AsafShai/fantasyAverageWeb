@@ -44,14 +44,29 @@
 
 .mq-expand-row .mq-expand-td { padding: 0 !important; }
 
+/* Some pages (e.g. TeamDetail) wrap the wide roster table in its own
+   horizontally-scrolling div nested inside page/card padding — a literal
+   100vw there overflows past that div's actual visible width and clips the
+   sticky content. Opt those wrappers into a named container so the sticky
+   box can size itself against the container's real width instead of the
+   raw viewport. `.mq-scroll-container` marks that wrapper (see TeamDetail.tsx). */
+.mq-scroll-container { container-type: inline-size; container-name: mq-scroll; }
+
 .mq-expand-content {
   position: sticky;
   left: 0;
   box-sizing: border-box;
+  /* Fallback for pages with no .mq-scroll-container ancestor (e.g. Players.tsx,
+     which scrolls the whole page horizontally instead of a nested div) — there
+     the sticky box's containing block IS the real viewport, so 100vw is correct. */
   max-width: 100vw;
   padding: 12px 20px;
   background: rgba(255, 255, 255, 0.03);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@container mq-scroll (min-width: 0) {
+  .mq-expand-content { max-width: 100cqw; }
 }
 
 .mq-expand-label {
@@ -59,6 +74,26 @@
   font-size: 0.75rem;
   color: #888;
   margin-bottom: 10px;
+}
+
+/* Reachable regardless of horizontal scroll position — sits inside the same
+   sticky-left content box as the rest of the expand row, so it stays visible
+   even after scrolling right through a wide table to read other columns. */
+.mq-expand-close {
+  display: block;
+  margin: 0 auto 10px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #999;
+  background: rgba(128, 128, 128, 0.12);
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.mq-expand-close:hover {
+  background: rgba(128, 128, 128, 0.22);
+  color: #ccc;
 }
 
 .mq-strip-label {
@@ -70,12 +105,45 @@
   text-align: center;
 }
 
+.mq-strip-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+/* Grid of stats per strip — bordered pill (neutral gray border works on both
+   themes, unlike a background fill). A grid instead of wrapped centered flex
+   items keeps every entry aligned into clean columns/rows instead of ragged,
+   independently-centered wrapped lines. */
+.mq-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 20px;
+  font-size: 0.85rem;
+  padding: 10px 16px;
+  margin: 0 auto 4px;
+  max-width: 100%;
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  border-radius: 8px;
+}
+
+@media (min-width: 480px) {
+  .mq-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 700px) {
+  .mq-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.mq-strip-item { white-space: nowrap; text-align: center; }
+
 .mq-vfrac {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  line-height: 0.85;
-  font-size: 0.65em;
+  line-height: 0.9;
+  font-size: 0.8em;
   vertical-align: middle;
   margin-left: 4px;
   color: #ccc;

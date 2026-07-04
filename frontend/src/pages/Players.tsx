@@ -455,13 +455,12 @@ const PlayerTable = ({
                       isExpanded={isExpanded}
                       onToggle={() => toggleExpand(player.player_name)}
                       playerStats={player.stats}
-                      showProjection={FF_PROJECTIONS}
                     />
                   </td>
                 )}
               </tr>
               {FF_MATCHUP_QUALITY && isExpanded && matchup && (
-                <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} />
+                <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
               )}
             </React.Fragment>
           );

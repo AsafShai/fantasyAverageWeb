@@ -195,8 +195,8 @@ This guarantees the whole-number line that Asaf sees also obeys
   clip/clamp + derive-PTS, over a whole batch of players (one `n×6` matmul).
 - **`serving/inference.py`** — loads the reconciler and applies it inside
   `predict_many` before deriving FG%/FT%. Always on when the reconciler is present.
-- **`frontend/src/pages/Simulation.tsx`** — `ptsIntFromComponents(...)` for the
-  integer-coherent display.
+- **`frontend/src/pages/Projections.tsx`** and **`frontend/src/components/MatchupDisplay.tsx`** —
+  `ptsIntFromComponents(...)` for the integer-coherent display.
 
 ## Cost
 
