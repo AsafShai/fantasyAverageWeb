@@ -91,11 +91,11 @@ export default function FeatureStore() {
   const { data: pState } = useGetFeatureStorePlayerStateQuery(playerId as number, { skip: playerId == null });
   const { data: tState } = useGetFeatureStoreTeamStateQuery(teamId as number, { skip: teamId == null });
 
-  const players = list?.players ?? [];
   const visiblePlayers = useMemo(() => {
+    const players = list?.players ?? [];
     const q = playerFilter.toLowerCase();
     return players.filter((p) => !q || p.player_name.toLowerCase().includes(q) || p.team_abbr.toLowerCase().includes(q));
-  }, [players, playerFilter]);
+  }, [list?.players, playerFilter]);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message="Failed to load the feature store. Is the backend running?" />;
