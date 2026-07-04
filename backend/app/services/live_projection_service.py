@@ -82,6 +82,7 @@ class LiveProjectionService:
                 continue
             pid = self._name_index.get(normalize_player_name(name))
             if pid is None:
+                logger.warning(f"No feature-store match for '{name}' — has a game today but was skipped")
                 continue
             opp_id = _opponent_team_id(info.opponent)
             if opp_id is None:
@@ -111,6 +112,7 @@ class LiveProjectionService:
             return None
         pid = self._name_index.get(normalize_player_name(player_name))
         if pid is None:
+            logger.warning(f"No feature-store match for '{player_name}' — projection request skipped")
             return None
         opp_id = _opponent_team_id(opponent)
         if opp_id is None:
