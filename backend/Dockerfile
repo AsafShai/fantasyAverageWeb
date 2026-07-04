@@ -10,7 +10,7 @@ WORKDIR /app
 
 # Install dependencies as root, then switch to appuser
 COPY pyproject.toml uv.lock ./
-RUN pip install uv && uv sync --frozen
+RUN pip install uv && uv sync --frozen --no-group test --no-group ml-research
 
 # Copy application code and set ownership
 COPY --chown=appuser:appuser app/ ./app/
