@@ -151,6 +151,48 @@ describe('Players page', () => {
     expect(screen.getByText(/loading players/i)).toBeInTheDocument();
   });
 
+  it('renders a spanned muted row for has_data: false players, still counted and visible', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('/players')) {
+          return jsonResponse({
+            players: [
+              basePlayer(),
+              basePlayer({ player_name: 'Unmatched Guy', has_data: false }),
+            ],
+            total_count: 2,
+            page: 1,
+            limit: 500,
+            has_more: false,
+          });
+        }
+        if (url.includes('/teams/') && !url.toLowerCase().includes('nba')) {
+          return jsonResponse(teams);
+        }
+        return new Response('not found', { status: 404 });
+      }),
+    );
+
+    renderWithProviders(<Players />);
+    await waitFor(() => expect(screen.getByText('Unmatched Guy')).toBeInTheDocument());
+
+    const noDataCell = screen.getByText(/no data for this range/i);
+    expect(noDataCell).toBeInTheDocument();
+    expect(noDataCell).toHaveAttribute('title', expect.stringMatching(/not available for a custom range/i));
+
+    const row = noDataCell.closest('tr')!;
+    expect(within(row).getByText('Unmatched Guy')).toBeInTheDocument();
+
+    // regular matched player still renders normal per-stat cells, not the spanned message
+    const alphaRow = screen.getByText('Alpha Star').closest('tr')!;
+    expect(within(alphaRow).queryByText(/no data for this range/i)).not.toBeInTheDocument();
+
+    // both rows still count toward "Showing" total
+    expect(screen.getAllByText(/showing 2 players/i).length).toBeGreaterThan(0);
+  });
+
   it('error state', async () => {
     vi.stubGlobal(
       'fetch',

@@ -642,13 +642,16 @@ class DBService:
             return None
 
     async def get_fs_rows_before(self, game_date: date) -> tuple[list[dict], list[dict]]:
+        """The model's only read boundary into fs_player_games. min >= 2 mirrors
+        the old write-time MIN_MINUTES filter (now enforced here instead, since
+        storage keeps every played minute for other consumers)."""
         pool = await self._get_pool()
         if pool is None:
             return [], []
         try:
             async with pool.acquire() as conn:
                 players = await conn.fetch(
-                    "SELECT * FROM fs_player_games WHERE game_date < $1", game_date
+                    "SELECT * FROM fs_player_games WHERE game_date < $1 AND min >= 2", game_date
                 )
                 teams = await conn.fetch(
                     "SELECT * FROM fs_team_games WHERE game_date < $1", game_date
@@ -657,6 +660,79 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to fetch fs rows before {game_date}: {e}")
             return [], []
+
+    async def aggregate_player_games(
+        self, start: date, end: date, season: str
+    ) -> tuple[pd.DataFrame, Optional[date], Optional[date]]:
+        """Per-player totals over [start, end] inclusive, for the dynamic
+        time-range player stats feature. Returns (df, actual_start, actual_end)
+        where the actual dates are the real game_date coverage found in the
+        window (None if no rows at all). Percentages are SUM(makes)/SUM(attempts),
+        never a mean of per-game ratios; gp is COUNT(*)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame(), None, None
+        try:
+            async with pool.acquire() as conn:
+                coverage = await conn.fetchrow(
+                    """
+                    SELECT MIN(game_date) AS start_date, MAX(game_date) AS end_date
+                    FROM fs_player_games
+                    WHERE season = $1 AND game_date BETWEEN $2 AND $3 AND min > 0
+                    """,
+                    season, start, end,
+                )
+                actual_start = coverage['start_date'] if coverage else None
+                actual_end = coverage['end_date'] if coverage else None
+
+                rows = await conn.fetch(
+                    """
+                    SELECT
+                        player_id,
+                        (array_agg(player_name ORDER BY game_date DESC))[1] AS player_name,
+                        COUNT(*) AS gp,
+                        SUM(pts) AS pts,
+                        SUM(reb) AS reb,
+                        SUM(ast) AS ast,
+                        SUM(stl) AS stl,
+                        SUM(blk) AS blk,
+                        SUM(fgm) AS fgm,
+                        SUM(fga) AS fga,
+                        SUM(ftm) AS ftm,
+                        SUM(fta) AS fta,
+                        SUM(fg3m) AS three_pm,
+                        SUM(min) AS min,
+                        COALESCE(SUM(fgm) / NULLIF(SUM(fga), 0), 0.0) AS fg_pct,
+                        COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct
+                    FROM fs_player_games
+                    WHERE season = $1 AND game_date BETWEEN $2 AND $3 AND min > 0
+                    GROUP BY player_id
+                    """,
+                    season, start, end,
+                )
+                return pd.DataFrame([dict(r) for r in rows]), actual_start, actual_end
+        except Exception as e:
+            logger.error(f"Failed to aggregate player games for {start}..{end} ({season}): {e}")
+            return pd.DataFrame(), None, None
+
+    async def get_latest_game_date(self, season: str) -> Optional[date]:
+        """Most recent game_date with real box scores this season, or None if
+        none exist yet. Used as the anchor for last_7/15/30 instead of real
+        calendar today, so those windows stay meaningful once the season ends
+        (real today would otherwise land in a dead offseason stretch)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT MAX(game_date) AS d FROM fs_player_games WHERE season = $1 AND min > 0",
+                    season,
+                )
+                return row['d'] if row else None
+        except Exception as e:
+            logger.error(f"Failed to fetch latest game date for season {season}: {e}")
+            return None
 
     async def insert_fs_rows(self, player_rows: list[tuple], team_rows: list[tuple]) -> bool:
         """Append raw game rows. Tuple order must match the column lists below.

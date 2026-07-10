@@ -1,6 +1,8 @@
+from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models import Team, TeamDetail, TeamPlayers
+from app.config import settings
 from unittest.mock import patch
 from fastapi import HTTPException
 
@@ -121,3 +123,34 @@ def test_get_team_detail_different_stats_per_period():
 
     assert len(season_data["players"]) > 0
     assert len(last_7_data["players"]) > 0
+
+
+def test_get_team_detail_custom_valid_range():
+    start = settings.season_start + timedelta(days=1)
+    end = start + timedelta(days=5)
+    response = client.get(f"/api/teams/1?time_period=custom&start={start}&end={end}")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(TeamDetail(**data), TeamDetail)
+
+
+def test_get_team_detail_custom_missing_start_and_end():
+    response = client.get("/api/teams/1?time_period=custom")
+    assert response.status_code == 422
+    assert "requires both start and end" in response.json()["detail"]
+
+
+def test_get_team_detail_custom_start_after_end():
+    start = settings.season_start + timedelta(days=5)
+    end = settings.season_start + timedelta(days=1)
+    response = client.get(f"/api/teams/1?time_period=custom&start={start}&end={end}")
+    assert response.status_code == 422
+    assert "start must be before end" in response.json()["detail"]
+
+
+def test_get_team_detail_custom_end_in_future():
+    start = settings.season_start + timedelta(days=1)
+    end = date.today() + timedelta(days=1)
+    response = client.get(f"/api/teams/1?time_period=custom&start={start}&end={end}")
+    assert response.status_code == 422
+    assert "future" in response.json()["detail"]

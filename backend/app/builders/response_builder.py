@@ -49,7 +49,7 @@ class ResponseBuilder:
                                  averages_df: pd.DataFrame, rankings_df: pd.DataFrame,
                                  players: Optional[List[Player]], espn_url: str,
                                  slot_usage_raw: Dict[str, int] = None,
-                                 data_date=None) -> TeamDetail:
+                                 data_date=None, actual_start=None, actual_end=None) -> TeamDetail:
         """Build TeamDetail response for a specific team"""
         team_row = totals_df[totals_df['team_id'] == team_id]
         if team_row.empty:
@@ -87,6 +87,8 @@ class ResponseBuilder:
             category_ranks={col: int(rank_data[col]) for col in RANKING_CATEGORIES},
             slot_usage=slot_usage,
             data_date=data_date,
+            actual_start=actual_start,
+            actual_end=actual_end,
         )
     
     def build_league_summary_response(self, total_teams: int, total_games_played: int,
@@ -176,7 +178,8 @@ class ResponseBuilder:
                     gp=int(row['GP'])
                 ),
                 team_id=int(row['team_id']),
-                status=str(row.get('status', 'ONTEAM'))
+                status=str(row.get('status', 'ONTEAM')),
+                has_data=bool(row.get('has_data', True)),
             ))
         return players
 
@@ -297,5 +300,6 @@ class ResponseBuilder:
                 last7_rating=float(row['last7_rating']) if row.get('last7_rating') is not None else None,
                 last15_rating=float(row['last15_rating']) if row.get('last15_rating') is not None else None,
                 last30_rating=float(row['last30_rating']) if row.get('last30_rating') is not None else None,
+                has_data=bool(row.get('has_data', True)),
             ))
         return players

@@ -1,10 +1,15 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useTransition } from 'react'
 import { useGetAllPlayersQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import TimePeriodSelector from '../components/TimePeriodSelector'
+import { CoverageNotice } from '../components/DateRangePicker'
+import { formatShort } from '../utils/dateRange'
+import type { TimePeriod, CustomDateRange } from '../types/api'
 import {
   computePlayerRankings,
   getRawValue,
+  partitionByDataAvailability,
   CATEGORIES,
   CATEGORY_LABELS,
   type RankingCategory,
@@ -27,9 +32,18 @@ function getSortVal(ranked: RankedPlayer, col: SortCol, displayMode: 'totals' | 
 }
 
 export default function PlayerRankings() {
-  const [period, setPeriod] = useState<'season' | 'last_7' | 'last_15' | 'last_30'>('season')
-  const { data: playersData, isLoading, error } = useGetAllPlayersQuery({ limit: 500, time_period: period })
-  const players = playersData?.players ?? []
+  const [period, setPeriod] = useState<TimePeriod>('season')
+  const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
+  const { data: playersData, isLoading, error } = useGetAllPlayersQuery({
+    limit: 500,
+    time_period: period,
+    ...(period === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
+  })
+  const allPlayers = useMemo(() => playersData?.players ?? [], [playersData])
+  const { available: players, excluded: excludedPlayers } = useMemo(
+    () => partitionByDataAvailability(allPlayers),
+    [allPlayers]
+  )
 
   const [calcMode, setCalcMode] = useState<'totals' | 'per_game'>('per_game')
   const [displayMode, setDisplayMode] = useState<'totals' | 'per_game'>('per_game')
@@ -38,38 +52,50 @@ export default function PlayerRankings() {
   const [position, setPosition] = useState<string | null>(null)
   const [weights, setWeights] = useState<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
   const [displayLimit, setDisplayLimit] = useState<number | null>(null)
-  const prevWeightsRef = useRef<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
+  const [sliderResetKey, setSliderResetKey] = useState(0)
   const [sortCol, setSortCol] = useState<SortCol>('totalZ')
   const [sortAsc, setSortAsc] = useState(false)
   const [rankedPlayers, setRankedPlayers] = useState<RankedPlayer[]>([])
   const [hasCalculated, setHasCalculated] = useState(false)
+  const [, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (period !== 'custom' || !customRange || excludedPlayers.length === 0) return
+    console.warn(
+      `${excludedPlayers.length} players excluded (no data for ${customRange.start}–${customRange.end}):`,
+      excludedPlayers.map(p => p.player_name)
+    )
+  }, [period, customRange, excludedPlayers])
 
   const handleReset = () => {
     setCalcMode('per_game')
     setDisplayMode('per_game')
     setPeriod('season')
+    setCustomRange(null)
     setMinGp(0)
     setMinMin(0)
     setPosition(null)
     setWeights({ ...DEFAULT_WEIGHTS })
     setDisplayLimit(null)
+    setSliderResetKey(k => k + 1)
   }
 
   const isPunted = (cat: RankingCategory) => weights[cat] === 0
 
-  const togglePunt = (cat: RankingCategory) => {
-    if (weights[cat] === 0) {
-      setWeights(w => ({ ...w, [cat]: prevWeightsRef.current[cat] }))
-    } else {
-      prevWeightsRef.current = { ...prevWeightsRef.current, [cat]: weights[cat] }
-      setWeights(w => ({ ...w, [cat]: 0 }))
-    }
+  const recompute = () => {
+    const config: RankingsConfig = { calcMode, minGp, minMin, position, weights }
+    const next = computePlayerRankings(players, config)
+    // Low-priority: if another slider tick (or anything urgent) comes in
+    // while this 500-row re-render is in flight, React interrupts/discards
+    // it instead of finishing it first — keeps the slider itself responsive.
+    startTransition(() => {
+      setRankedPlayers(next)
+      setHasCalculated(true)
+    })
   }
 
   const handleCalculate = () => {
-    const config: RankingsConfig = { calcMode, minGp, minMin, position, weights, displayLimit }
-    setRankedPlayers(computePlayerRankings(players, config))
-    setHasCalculated(true)
+    recompute()
     setSortCol('totalZ')
     setSortAsc(false)
   }
@@ -81,6 +107,16 @@ export default function PlayerRankings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [players])
 
+  // Live recompute as sliders/calc-mode change — no Calculate click needed.
+  // `weights` only updates here once WeightSliders has already debounced a
+  // drag internally, so this fires once per settled change, not per tick —
+  // the 500-row table only re-renders once the slider actually stops moving.
+  // Doesn't reset sortCol/sortAsc so an active sort survives a slider drag.
+  useEffect(() => {
+    if (players.length > 0 && hasCalculated) recompute()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weights, calcMode])
+
   const sortedPlayers = useMemo(() => {
     if (!rankedPlayers.length) return []
     const filtered = rankedPlayers.filter(r =>
@@ -88,12 +124,15 @@ export default function PlayerRankings() {
       (r.player.stats.gp > 0 ? r.player.stats.minutes / r.player.stats.gp : 0) >= minMin &&
       (position === null || r.player.positions.includes(position))
     )
-    return [...filtered].sort((a, b) => {
+    // rankedPlayers is already sorted by totalZ descending, so this keeps
+    // "top N by rank" regardless of which column is currently sorted below.
+    const limited = displayLimit === null ? filtered : filtered.slice(0, displayLimit)
+    return [...limited].sort((a, b) => {
       const aVal = getSortVal(a, sortCol, displayMode)
       const bVal = getSortVal(b, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, displayMode])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, displayMode, displayLimit])
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -118,7 +157,7 @@ export default function PlayerRankings() {
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 mb-6 space-y-3 sm:space-y-4">
 
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-4 sm:items-end">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-4 sm:items-start">
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Calc mode</label>
               <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
@@ -149,19 +188,9 @@ export default function PlayerRankings() {
               </div>
             </div>
 
-            <div className="col-span-2 sm:col-span-1">
+            <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Period</label>
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
-                {([['season', 'Season'], ['last_7', 'L7'], ['last_15', 'L15'], ['last_30', 'L30']] as const).map(([val, label]) => (
-                  <button
-                    key={val}
-                    onClick={() => setPeriod(val)}
-                    className={`px-3 py-1.5 ${period === val ? 'bg-green-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <TimePeriodSelector value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
             </div>
 
             <div>
@@ -207,49 +236,35 @@ export default function PlayerRankings() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            {CATEGORIES.map(cat => (
-              <div key={cat} className={`flex items-center gap-2 p-2 rounded-lg border ${isPunted(cat) ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600'}`}>
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8">{CATEGORY_LABELS[cat]}</span>
-                <input
-                  type="range" min={0} max={2} step={0.1}
-                  value={isPunted(cat) ? 0 : weights[cat]}
-                  disabled={isPunted(cat)}
-                  onChange={e => setWeights(w => ({ ...w, [cat]: Number(e.target.value) }))}
-                  className="flex-1 accent-blue-600"
-                />
-                <span className="text-xs text-gray-500 w-6">{isPunted(cat) ? '—' : weights[cat].toFixed(1)}</span>
-                <button
-                  onClick={() => togglePunt(cat)}
-                  className={`text-xs px-1.5 py-0.5 rounded font-medium ${isPunted(cat) ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}
-                >
-                  {isPunted(cat) ? 'PUNT' : 'punt'}
-                </button>
-              </div>
-            ))}
-          </div>
+          {playersData?.actual_start && playersData?.actual_end && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Showing {formatShort(playersData.actual_start)} – {formatShort(playersData.actual_end)}
+            </p>
+          )}
+
+          <WeightSliders key={sliderResetKey} initialWeights={weights} onCommit={setWeights} />
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              {players.length} players loaded · Blue = calc mode · Purple = display mode · GP/MPG/position filter instantly
+              {players.length} players loaded · Blue = calc mode · Purple = display mode · everything updates live
             </p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleReset}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg transition-colors"
-              >
-                Reset
-              </button>
-              <button
-                onClick={handleCalculate}
-                disabled={players.length === 0}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
-              >
-                Calculate
-              </button>
-            </div>
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg transition-colors"
+            >
+              Reset
+            </button>
           </div>
         </div>
+
+        {period === 'custom' && customRange && (
+          <CoverageNotice
+            requestedStart={customRange.start}
+            requestedEnd={customRange.end}
+            actualStart={playersData?.actual_start}
+            actualEnd={playersData?.actual_end}
+          />
+        )}
 
         {!hasCalculated && (
           <div className="text-center text-gray-400 dark:text-gray-500 py-16">
@@ -268,9 +283,9 @@ export default function PlayerRankings() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                  <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-900">#</th>
+                  <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">#</th>
                   <Th col="totalZ" label="Z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
-                  <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Player</th>
+                  <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">Player</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Pos</th>
                   <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
@@ -279,16 +294,16 @@ export default function PlayerRankings() {
                     <Th key={`raw-${cat}`} col={`${cat}_raw` as SortCol} label={CATEGORY_LABELS[cat]} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
                   {CATEGORIES.map(cat => (
-                    <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat]}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} className="hidden sm:table-cell" />
+                    <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat]}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {sortedPlayers.map((ranked, idx) => (
-                  <tr key={`${ranked.player.player_name}-${ranked.player.team_id}`} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 sticky left-0 bg-white dark:bg-gray-800 text-center font-mono text-xs">{idx + 1}</td>
+                  <tr key={`${ranked.player.player_name}-${ranked.player.team_id}`} className="group border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-center font-mono text-xs">{idx + 1}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{fmt(ranked.totalZ)}</td>
-                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm">{ranked.player.player_name}</td>
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700">{ranked.player.player_name}</td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.pro_team}</td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.positions.join(', ')}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{ranked.player.stats.gp}</td>
@@ -299,7 +314,7 @@ export default function PlayerRankings() {
                       </td>
                     ))}
                     {CATEGORIES.map(cat => (
-                      <td key={`z-${cat}`} className={`hidden sm:table-cell px-3 py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                      <td key={`z-${cat}`} className={`px-3 py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                         {fmt(ranked.zScores[cat])}
                       </td>
                     ))}
@@ -310,6 +325,69 @@ export default function PlayerRankings() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Owns slider drag state locally so ticking a slider only re-renders this
+// small subtree, not the parent (and its 500-row table). Only pushes a
+// debounced "settled" value up via onCommit, once per drag/toggle.
+function WeightSliders({ initialWeights, onCommit }: {
+  initialWeights: Record<RankingCategory, number>
+  onCommit: (weights: Record<RankingCategory, number>) => void
+}) {
+  const [weights, setWeights] = useState(initialWeights)
+  const prevWeightsRef = useRef(initialWeights)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+  }, [])
+
+  const isPunted = (cat: RankingCategory) => weights[cat] === 0
+
+  const handleSlide = (cat: RankingCategory, value: number) => {
+    setWeights(w => {
+      const next = { ...w, [cat]: value }
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => onCommit(next), 150)
+      return next
+    })
+  }
+
+  const togglePunt = (cat: RankingCategory) => {
+    setWeights(w => {
+      const next = w[cat] === 0
+        ? { ...w, [cat]: prevWeightsRef.current[cat] }
+        : { ...w, [cat]: 0 }
+      if (w[cat] !== 0) prevWeightsRef.current = { ...prevWeightsRef.current, [cat]: w[cat] }
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      onCommit(next)
+      return next
+    })
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+      {CATEGORIES.map(cat => (
+        <div key={cat} className={`flex items-center gap-2 p-2 rounded-lg border ${isPunted(cat) ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600'}`}>
+          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8">{CATEGORY_LABELS[cat]}</span>
+          <input
+            type="range" min={0} max={2} step={0.1}
+            value={isPunted(cat) ? 0 : weights[cat]}
+            disabled={isPunted(cat)}
+            onChange={e => handleSlide(cat, Number(e.target.value))}
+            className="flex-1 accent-blue-600"
+          />
+          <span className="text-xs text-gray-500 w-6">{isPunted(cat) ? '—' : weights[cat].toFixed(1)}</span>
+          <button
+            onClick={() => togglePunt(cat)}
+            className={`text-xs px-1.5 py-0.5 rounded font-medium ${isPunted(cat) ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'}`}
+          >
+            {isPunted(cat) ? 'PUNT' : 'punt'}
+          </button>
+        </div>
+      ))}
     </div>
   )
 }

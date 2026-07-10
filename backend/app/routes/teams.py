@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.team_service import TeamService
-from typing import Annotated, List
+from typing import Annotated, List, Optional
+from datetime import date
+from app.config import settings
 import logging
 
 router = APIRouter()
@@ -33,15 +35,29 @@ async def get_team_detail(
     team_service: TeamServiceDep,
     time_period: StatTimePeriod = Query(
         StatTimePeriod.SEASON,
-        description="Time period for player stats: season, last_7, last_15, last_30"
+        description="Time period for player stats: season, last_7, last_15, last_30, custom"
     ),
+    start: Optional[date] = Query(None, description="Start date, required when time_period=custom"),
+    end: Optional[date] = Query(None, description="End date, required when time_period=custom"),
 ):
     """Get detailed stats for a specific team"""
     if team_id is None or team_id <= 0:
         raise HTTPException(status_code=400, detail="Team ID must be positive")
 
     try:
-        return await team_service.get_team_detail(team_id, time_period)
+        if time_period == StatTimePeriod.CUSTOM:
+            if start is None or end is None:
+                raise HTTPException(status_code=422, detail="custom time_period requires both start and end")
+            if start >= end:
+                raise HTTPException(status_code=422, detail="start must be before end")
+            if start < settings.season_start:
+                raise HTTPException(status_code=422, detail=f"start cannot be before season start ({settings.season_start})")
+            if end > date.today():
+                raise HTTPException(status_code=422, detail="end cannot be in the future")
+
+        return await team_service.get_team_detail(team_id, time_period, start, end)
+    except HTTPException:
+        raise
     except InvalidParameterError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:

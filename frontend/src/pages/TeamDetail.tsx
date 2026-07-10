@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from 'react-router'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
 import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery } from '../store/api/fantasyApi'
-import type { TimePeriod, PlayerMatchup } from '../types/api'
+import type { TimePeriod, PlayerMatchup, CustomDateRange } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
+import { CoverageNotice } from '../components/DateRangePicker'
 import DataDateBadge from '../components/DataDateBadge'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay'
@@ -16,11 +17,24 @@ const TeamDetail = () => {
   const navigate = useNavigate()
   const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
+  const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const { data: team_detail, error, isLoading } = useGetTeamDetailQuery({
     teamId: teamIdNumber,
-    time_period: timePeriod
+    time_period: timePeriod,
+    ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   })
   const { data: leagueSummary } = useGetLeagueSummaryQuery()
+
+  useEffect(() => {
+    if (timePeriod !== 'custom' || !customRange || !team_detail?.players) return
+    const excluded = team_detail.players.filter(p => p.has_data === false)
+    if (excluded.length > 0) {
+      console.warn(
+        `${excluded.length} players excluded (no data for ${customRange.start}–${customRange.end}):`,
+        excluded.map(p => p.player_name)
+      )
+    }
+  }, [timePeriod, customRange, team_detail])
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [showAverages, setShowAverages] = useState(true)
@@ -52,9 +66,14 @@ const TeamDetail = () => {
   const isPlayerIncluded = (playerName: string) =>
     includedPlayers === null || includedPlayers.has(playerName)
 
+  const visiblePlayers = useMemo(
+    () => team_detail?.players?.filter(p => p.has_data !== false) ?? [],
+    [team_detail]
+  )
+
   const togglePlayerInclusion = (playerName: string) => {
     setIncludedPlayers(prev => {
-      const allNames = team_detail?.players?.map(p => p.player_name) ?? []
+      const allNames = visiblePlayers.map(p => p.player_name)
       const currentIncluded = prev === null ? new Set(allNames) : new Set(prev)
       if (currentIncluded.has(playerName)) {
         currentIncluded.delete(playerName)
@@ -66,8 +85,8 @@ const TeamDetail = () => {
   }
 
   const toggleAllPlayers = () => {
-    if (!team_detail?.players) return
-    const allIncluded = includedPlayers === null || includedPlayers.size === team_detail.players.length
+    if (!visiblePlayers.length) return
+    const allIncluded = includedPlayers === null || includedPlayers.size === visiblePlayers.length
     setIncludedPlayers(allIncluded ? new Set() : null)
   }
 
@@ -111,9 +130,11 @@ const TeamDetail = () => {
     return positionRank[firstPos as keyof typeof positionRank] ?? 99
   }
 
-  const sortedPlayers = !team_detail.players ? [] : sortBy === null
-    ? team_detail.players
-    : [...team_detail.players].sort((a, b) => {
+  const allPlayers = team_detail.players ?? []
+
+  const sortedPlayers = sortBy === null
+    ? allPlayers
+    : [...allPlayers].sort((a, b) => {
         let aVal: string | number | null
         let bVal: string | number | null
 
@@ -156,7 +177,7 @@ const TeamDetail = () => {
       })
 
   const calculateTeamAverage = () => {
-    const includedPlayers = (team_detail.players ?? []).filter(p => isPlayerIncluded(p.player_name))
+    const includedPlayers = visiblePlayers.filter(p => isPlayerIncluded(p.player_name))
 
     if (includedPlayers.length === 0) {
       return {
@@ -225,6 +246,7 @@ const TeamDetail = () => {
       case 'last_7': return 'Last 7'
       case 'last_15': return 'Last 15'
       case 'last_30': return 'Last 30'
+      case 'custom': return 'Custom'
       case 'season':
       default: return 'Season'
     }
@@ -385,12 +407,12 @@ const TeamDetail = () => {
       )}
 
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-4 gap-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">
           <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
           {!team_detail.players && (
             <p className="text-sm text-gray-500 italic">Player data unavailable</p>
           )}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start gap-3">
             {FF_PROJECTIONS && (
               <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
                 <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
@@ -400,16 +422,18 @@ const TeamDetail = () => {
             <TimePeriodSelector
               value={timePeriod}
               onChange={setTimePeriod}
+              customRange={customRange}
+              onCustomRangeChange={setCustomRange}
             />
-            <div className="flex self-stretch sm:self-auto border border-gray-300 rounded overflow-hidden">
+            <div className="flex self-start border border-gray-300 rounded overflow-hidden">
               <button
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(true)}
               >
                 Per Game
               </button>
               <button
-                className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => setShowAverages(false)}
               >
                 Totals
@@ -417,6 +441,14 @@ const TeamDetail = () => {
             </div>
           </div>
         </div>
+        {timePeriod === 'custom' && customRange && (
+          <CoverageNotice
+            requestedStart={customRange.start}
+            requestedEnd={customRange.end}
+            actualStart={team_detail.actual_start}
+            actualEnd={team_detail.actual_end}
+          />
+        )}
         {!team_detail.players ? (
           <div className="py-12 text-center text-gray-400 text-sm">
             Roster data is currently unavailable. Team stats above are from the last known snapshot.
@@ -441,7 +473,7 @@ const TeamDetail = () => {
                         <span className="text-xs font-medium text-gray-500 uppercase">Include</span>
                         <input
                           type="checkbox"
-                          checked={includedPlayers === null || includedPlayers.size === (team_detail.players?.length ?? 0)}
+                          checked={includedPlayers === null || includedPlayers.size === visiblePlayers.length}
                           onChange={toggleAllPlayers}
                           className="w-4 h-4 text-blue-600 cursor-pointer"
                           title="Toggle all players"
@@ -465,30 +497,45 @@ const TeamDetail = () => {
               {sortedPlayers.map((player, idx) => {
                 const matchup = matchupMap.get(player.player_name)
                 const isExpanded = expandedRows.has(player.player_name)
+                const noData = player.has_data === false
                 return (
                   <React.Fragment key={idx}>
                     <tr className="hover:bg-gray-50">
                       <td className="px-4 py-3 whitespace-nowrap text-center">
                         <input
                           type="checkbox"
-                          checked={isPlayerIncluded(player.player_name)}
+                          checked={!noData && isPlayerIncluded(player.player_name)}
+                          disabled={noData}
                           onChange={() => togglePlayerInclusion(player.player_name)}
-                          className="w-4 h-4 text-blue-600 cursor-pointer"
+                          className="w-4 h-4 text-blue-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                          title={noData ? 'Excluded from average — no data for this range' : undefined}
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-200">{player.player_name}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.minutes, player.stats.gp)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.fg_percentage, player.stats.gp, true)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ft_percentage, player.stats.gp, true)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.three_pm, player.stats.gp)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.reb, player.stats.gp)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ast, player.stats.gp)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.stl, player.stats.gp)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.blk, player.stats.gp)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.pts, player.stats.gp)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
+                      {noData ? (
+                        <td
+                          className="px-4 py-3 text-center italic text-gray-400"
+                          colSpan={10}
+                          title="Not available for a custom range — try Last 7/15/30/Season"
+                        >
+                          No data for this range
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.minutes, player.stats.gp)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.fg_percentage, player.stats.gp, true)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ft_percentage, player.stats.gp, true)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.three_pm, player.stats.gp)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.reb, player.stats.gp)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.ast, player.stats.gp)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.stl, player.stats.gp)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.blk, player.stats.gp)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{formatStat(player.stats.pts, player.stats.gp)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
+                        </>
+                      )}
                       {FF_MATCHUP_QUALITY && (
                         <td className="px-4 py-3 whitespace-nowrap">
                           <MatchupCell
@@ -514,7 +561,7 @@ const TeamDetail = () => {
                   {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">
-                  {includedPlayers === null ? team_detail.players.length : includedPlayers.size} players
+                  {includedPlayers === null ? visiblePlayers.length : includedPlayers.size} players
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, showAverages ? 1 : teamAverage.gp)}</td>
