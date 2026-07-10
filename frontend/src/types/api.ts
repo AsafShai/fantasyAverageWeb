@@ -73,6 +73,8 @@ export interface TeamDetail {
   category_ranks: Record<string, number>;
   slot_usage: Record<string, SlotUsage>;
   data_date?: string;
+  actual_start?: string;
+  actual_end?: string;
 }
 
 export interface LeagueSummary {
@@ -147,6 +149,7 @@ export interface Player {
   last7_rating?: number | null;
   last15_rating?: number | null;
   last30_rating?: number | null;
+  has_data?: boolean;
 }
 
 export interface PaginatedPlayers {
@@ -155,11 +158,18 @@ export interface PaginatedPlayers {
   page: number;
   limit: number;
   has_more: boolean;
+  actual_start?: string;
+  actual_end?: string;
 }
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
 
-export type TimePeriod = 'season' | 'last_7' | 'last_15' | 'last_30';
+export type TimePeriod = 'season' | 'last_7' | 'last_15' | 'last_30' | 'custom';
+
+export interface CustomDateRange {
+  start: string;
+  end: string;
+}
 
 export interface StatFilter {
   stat: keyof PlayerStats;

@@ -28,13 +28,28 @@ def event_loop():
     yield loop
     loop.close()
 
+class MockDBService:
+    """Mock DBService covering only the methods the dynamic time-range player
+    stats feature needs; returns 'no fs_player_games data' so callers fall
+    back entirely to the mocked ESPN players_df (preserving pre-existing
+    route-test expectations that all time periods return the same data)."""
+
+    async def aggregate_player_games(self, start, end, season):
+        import pandas as pd
+        return pd.DataFrame(), None, None
+
+    async def get_latest_game_date(self, season):
+        return None
+
+
 # Create a mock DataProvider class that behaves properly with the singleton pattern
 class MockDataProvider:
     """Mock DataProvider that doesn't interfere with singleton pattern."""
-    
+
     def __init__(self):
         import pandas as pd
-        
+        self.db_service = MockDBService()
+
         # Sample DataFrames that match the expected structure
         self.sample_totals_df = pd.DataFrame({
             'team_id': [1, 2, 3],
@@ -134,12 +149,41 @@ class MockDataProvider:
 def mock_data_provider_globally():
     """Mock the DataProvider globally for all tests to avoid HTTP client issues."""
     mock_provider = MockDataProvider()
-    
+
     # Mock the original DataProvider class methods to avoid HTTP calls
     with patch.object(DataProvider, '__new__', return_value=mock_provider), \
          patch.object(DataProvider, '__init__', return_value=None), \
          patch('app.services.data_provider.get_data_provider', return_value=mock_provider):
         yield mock_provider
+
+@pytest.fixture(scope="session", autouse=True)
+def mock_season_roster_keys_globally():
+    """Avoid real nba_api network calls during the suite by stubbing only the
+    low-level fetch — get_season_roster_keys's own caching logic still runs for
+    real everywhere. An empty roster means every player is 'unknown', so preset
+    periods fall back to the ESPN split value already on the row — preserving
+    pre-existing route-test expectations that all time periods return the same
+    mocked data. TestGetSeasonRosterKeys overrides this per-test to exercise
+    specific fetch results."""
+    with patch('app.services.player_service._fetch_season_roster_keys', return_value=set()):
+        yield
+
+@pytest.fixture(autouse=True)
+def reset_season_roster_cache():
+    """The roster-keys cache is a module-level dict with a multi-hour TTL —
+    reset it every test so state can't leak across tests/files."""
+    from app.services.player_service import _season_roster_cache
+    _season_roster_cache.update({'season': None, 'keys': None, 'ts': None})
+    yield
+    _season_roster_cache.update({'season': None, 'keys': None, 'ts': None})
+
+@pytest.fixture(autouse=True)
+def reset_season_anchor_cache():
+    """Same as reset_season_roster_cache, for the anchor-date cache."""
+    from app.services.player_service import _season_anchor_cache
+    _season_anchor_cache.update({'season': None, 'date': None, 'ts': None})
+    yield
+    _season_anchor_cache.update({'season': None, 'date': None, 'ts': None})
 
 @pytest.fixture
 def test_client():

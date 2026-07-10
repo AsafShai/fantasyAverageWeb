@@ -1,10 +1,23 @@
+from datetime import date
+
 import pytest
 import pytest_asyncio
 import pandas as pd
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.team_service import TeamService
-from app.models import Team, TeamDetail, TeamPlayers, Player, ShotChartStats, AverageStats, RankingStats, PlayerStats
-from app.exceptions import ResourceNotFoundError
+from app.models import Team, TeamDetail, TeamPlayers, Player, ShotChartStats, AverageStats, RankingStats, PlayerStats, StatTimePeriod
+from app.exceptions import InvalidParameterError, ResourceNotFoundError
+import app.services.player_service as player_service_module
+
+@pytest.fixture(autouse=True)
+def fixed_anchor_date(monkeypatch):
+    """build_windowed_players_df (shared with player_service) resolves an
+    anchor date via a real db_service call — fix it so team_service tests
+    don't need a working get_latest_game_date mock on their MagicMock
+    db_service chain."""
+    monkeypatch.setattr(
+        player_service_module, "get_season_anchor_date", AsyncMock(return_value=date(2026, 7, 10))
+    )
 
 @pytest.fixture
 def team_service():
@@ -14,6 +27,9 @@ def team_service():
         service = TeamService()
         service.data_provider = AsyncMock()
         service.data_provider.get_data_date = MagicMock(return_value=None)
+        service.data_provider.db_service.aggregate_player_games = AsyncMock(
+            return_value=(pd.DataFrame(), None, None)
+        )
         service.response_builder = mock_response_builder.return_value
         return service
 
@@ -67,9 +83,62 @@ class TestTeamService:
         assert result == expected_team_detail
         team_service.data_provider.get_all_dataframes.assert_called_once()
         team_service.response_builder.build_team_detail_response.assert_called_once_with(
-            team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY, {}, data_date=None
+            team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY, {},
+            data_date=None, actual_start=None, actual_end=None,
         )
     
+    @pytest.mark.asyncio
+    async def test_get_team_detail_custom_without_dates_raises(self, team_service):
+        """custom time_period requires start/end even though routes/teams.py
+        doesn't collect them yet — defensive guard for the shared service call."""
+        with pytest.raises(InvalidParameterError, match="requires both start and end"):
+            await team_service.get_team_detail(1, time_period=StatTimePeriod.CUSTOM)
+
+    @pytest.mark.asyncio
+    async def test_get_team_detail_custom_with_dates_aggregates_players(
+        self, team_service, sample_totals_df, sample_averages_df, sample_rankings_df, team_service_players_df,
+        monkeypatch,
+    ):
+        """Custom range with a known player overlays DB-aggregated stats before
+        filtering to the team's roster."""
+        import app.services.player_service as player_service_module
+
+        team_id = 1
+        team_service.data_provider.get_all_dataframes.return_value = (
+            sample_totals_df, sample_averages_df, sample_rankings_df
+        )
+        team_service.data_provider.get_players_df.return_value = team_service_players_df
+        team_service.data_provider.get_slot_usage.return_value = {}
+        agg_df = pd.DataFrame([{
+            'player_id': 1, 'player_name': 'Player A', 'gp': 2,
+            'pts': 50.0, 'reb': 10.0, 'ast': 6.0, 'stl': 2.0, 'blk': 1.0,
+            'fgm': 18.0, 'fga': 36.0, 'ftm': 8.0, 'fta': 10.0,
+            'three_pm': 4.0, 'min': 60.0,
+            'fg_pct': 18.0 / 36.0, 'ft_pct': 8.0 / 10.0,
+        }])
+        team_service.data_provider.db_service.aggregate_player_games = AsyncMock(
+            return_value=(agg_df, date(2026, 1, 2), date(2026, 1, 9))
+        )
+        monkeypatch.setattr(
+            player_service_module, "get_season_roster_keys",
+            AsyncMock(return_value={player_service_module._join_key('Player A')}),
+        )
+
+        captured = {}
+        def _capture_players_list(df):
+            captured['df'] = df
+            return []
+        team_service.response_builder.build_players_list.side_effect = _capture_players_list
+        team_service.response_builder.build_team_detail_response.return_value = Mock(spec=TeamDetail)
+
+        await team_service.get_team_detail(
+            team_id, time_period=StatTimePeriod.CUSTOM, start=date(2026, 1, 1), end=date(2026, 1, 10)
+        )
+
+        row = captured['df'][captured['df']['Name'] == 'Player A'].iloc[0]
+        assert row['GP'] == 2
+        assert row['PTS'] == 50.0
+
     @pytest.mark.asyncio
     async def test_get_team_detail_partial_none_data(self, team_service, sample_totals_df):
         """Test get_team_detail when only some dataframes are None"""
@@ -170,6 +239,9 @@ class TestTeamServiceResponseBuilding:
             service.data_provider.get_players_df.return_value = team_service_players_df
             service.data_provider.get_slot_usage.return_value = {}
             service.data_provider.get_data_date = MagicMock(return_value=None)
+            service.data_provider.db_service.aggregate_player_games = AsyncMock(
+                return_value=(pd.DataFrame(), None, None)
+            )
             return service
     
     @pytest.mark.asyncio

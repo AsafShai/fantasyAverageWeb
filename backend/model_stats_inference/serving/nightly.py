@@ -36,7 +36,7 @@ def season_for(d: date) -> str:
 @dataclass
 class NightFetch:
     game_date: date
-    player_games: pd.DataFrame   # cleaned player logs (regular season, MIN >= MIN_MINUTES)
+    player_games: pd.DataFrame   # cleaned player logs (regular season, MIN > 0)
     team_games: pd.DataFrame     # raw team logs (regular season; both teams of each game)
     expected_games: int          # regular-season games on the scoreboard for the date
     complete: bool               # all expected games final AND the logs cover them
@@ -77,12 +77,13 @@ def fetch_night(game_date: date) -> NightFetch:
     player_games = _fetch_one_day(playergamelogs.PlayerGameLogs, game_date)
     team_games = _fetch_one_day(teamgamelogs.TeamGameLogs, game_date)
 
-    # Same row filter as the research corpus: DNP / garbage-time rows are neither
-    # targets nor history. (The per-player MIN_PLAYER_GAMES corpus filter does NOT
-    # apply here — MIN_INFERENCE_GAMES gates eligibility at read time instead.)
+    # DNP rows (MIN null/0) are dropped; the >= 2-minute research/model-quality
+    # filter is no longer applied at write time — it now gates at read time in
+    # DBService.get_fs_rows_before, so storage keeps every played minute for
+    # other consumers (e.g. the dynamic time-range player stats aggregation).
     if not player_games.empty:
         player_games = player_games[
-            player_games["MIN"].notna() & (player_games["MIN"] >= rconfig.MIN_MINUTES)
+            player_games["MIN"].notna() & (player_games["MIN"] > 0)
         ].reset_index(drop=True)
 
     complete = all_final and len(team_games) == 2 * expected and not player_games.empty
@@ -191,7 +192,7 @@ def bootstrap_frames(
     players = rdata._regular_season_only(rdata._to_datetime(rdata.fetch_player_logs(rconfig.SEASONS)))
     team_games = rdata._regular_season_only(rdata._to_datetime(rdata.fetch_team_logs(rconfig.SEASONS)))
 
-    players = players[players["MIN"].notna() & (players["MIN"] >= rconfig.MIN_MINUTES)]
+    players = players[players["MIN"].notna() & (players["MIN"] > 0)]
     players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
 
     if positions is None:

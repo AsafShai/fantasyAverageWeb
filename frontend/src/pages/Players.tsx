@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { useGetMatchupsTodayQuery } from '../store/api/fantasyApi';
-import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats } from '../types/api';
+import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
+import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS } from '../config/featureFlags';
 import './Players.css';
@@ -12,10 +13,27 @@ const Players = () => {
   const [filters, setFilters] = useState<PlayerFilters>({});
   const [showAverages, setShowAverages] = useState(true);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
+  const [customRange, setCustomRange] = useState<CustomDateRange | null>(null);
   const [integerMode, setIntegerMode] = useState(true);
 
-  const { data, isLoading, error } = useGetAllPlayersQuery({ page: 1, limit: 500, time_period: timePeriod });
+  const { data, isLoading, error } = useGetAllPlayersQuery({
+    page: 1,
+    limit: 500,
+    time_period: timePeriod,
+    ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
+  });
   const { data: teams } = useGetTeamsListQuery();
+
+  useEffect(() => {
+    if (timePeriod !== 'custom' || !customRange || !data?.players) return
+    const excluded = data.players.filter(p => p.has_data === false)
+    if (excluded.length > 0) {
+      console.warn(
+        `${excluded.length} players excluded (no data for ${customRange.start}–${customRange.end}):`,
+        excluded.map(p => p.player_name)
+      )
+    }
+  }, [timePeriod, customRange, data]);
 
   const { data: matchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
   const matchupMap = useMemo(
@@ -92,10 +110,10 @@ const Players = () => {
 
       <FilterPanel filters={filters} onChange={setFilters} teams={teams} />
 
-      <div className="flex flex-row justify-between items-center sm:items-stretch gap-2 mt-4 mb-4">
+      <div className="flex flex-wrap justify-between items-center sm:items-stretch gap-2 mt-4 mb-4">
         <div className="flex items-center gap-2">
           <div className="sm:hidden">
-            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
+            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
           </div>
           <div className="results-count hidden sm:flex sm:items-center">
             Showing {filteredPlayers.length} players
@@ -109,17 +127,17 @@ const Players = () => {
             </label>
           )}
           <div className="hidden sm:block">
-            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} />
+            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
           </div>
-<div className="flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden sm:self-stretch">
+<div className="flex self-start border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
             <button
-              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              className={`px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
               onClick={() => setShowAverages(true)}
             >
               Per Game
             </button>
             <button
-              className={`px-3 py-1.5 sm:py-0 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              className={`px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
               onClick={() => setShowAverages(false)}
             >
               Totals
@@ -130,6 +148,15 @@ const Players = () => {
       <div className="results-count sm:hidden mb-2">
         Showing {filteredPlayers.length} players
       </div>
+
+      {timePeriod === 'custom' && customRange && (
+        <CoverageNotice
+          requestedStart={customRange.start}
+          requestedEnd={customRange.end}
+          actualStart={data?.actual_start}
+          actualEnd={data?.actual_end}
+        />
+      )}
 
       <div className="table-container">
         <PlayerTable
@@ -431,6 +458,7 @@ const PlayerTable = ({
         {sortedPlayers.map((player, idx) => {
           const matchup = matchupMap.get(player.player_name);
           const isExpanded = expandedRows.has(player.player_name);
+          const noData = player.has_data === false;
           return (
             <React.Fragment key={`${player.player_name}-${idx}`}>
               <tr>
@@ -438,16 +466,28 @@ const PlayerTable = ({
                 <td>{player.pro_team}</td>
                 <td>{player.positions.join(', ')}</td>
                 <td>{getTeamDisplay(player)}</td>
-                <td>{formatStat(player.stats.minutes, player.stats.gp)}</td>
-                <td>{formatStat(player.stats.fg_percentage, player.stats.gp, true)}</td>
-                <td>{formatStat(player.stats.ft_percentage, player.stats.gp, true)}</td>
-                <td>{formatStat(player.stats.three_pm, player.stats.gp)}</td>
-                <td>{formatStat(player.stats.reb, player.stats.gp)}</td>
-                <td>{formatStat(player.stats.ast, player.stats.gp)}</td>
-                <td>{formatStat(player.stats.stl, player.stats.gp)}</td>
-                <td>{formatStat(player.stats.blk, player.stats.gp)}</td>
-                <td>{formatStat(player.stats.pts, player.stats.gp)}</td>
-                <td>{player.stats.gp}</td>
+                {noData ? (
+                  <td
+                    colSpan={10}
+                    className="text-center italic text-gray-400"
+                    title="Not available for a custom range — try Last 7/15/30/Season"
+                  >
+                    No data for this range
+                  </td>
+                ) : (
+                  <>
+                    <td>{formatStat(player.stats.minutes, player.stats.gp)}</td>
+                    <td>{formatStat(player.stats.fg_percentage, player.stats.gp, true)}</td>
+                    <td>{formatStat(player.stats.ft_percentage, player.stats.gp, true)}</td>
+                    <td>{formatStat(player.stats.three_pm, player.stats.gp)}</td>
+                    <td>{formatStat(player.stats.reb, player.stats.gp)}</td>
+                    <td>{formatStat(player.stats.ast, player.stats.gp)}</td>
+                    <td>{formatStat(player.stats.stl, player.stats.gp)}</td>
+                    <td>{formatStat(player.stats.blk, player.stats.gp)}</td>
+                    <td>{formatStat(player.stats.pts, player.stats.gp)}</td>
+                    <td>{player.stats.gp}</td>
+                  </>
+                )}
                 {FF_MATCHUP_QUALITY && (
                   <td>
                     <MatchupCell

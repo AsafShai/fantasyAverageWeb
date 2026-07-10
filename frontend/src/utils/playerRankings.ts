@@ -23,7 +23,6 @@ export interface RankingsConfig {
   minMin: number
   position: string | null
   weights: Record<RankingCategory, number>
-  displayLimit: number | null
 }
 
 export interface RankedPlayer {
@@ -75,7 +74,7 @@ function totalZArray(pool: Player[], calcMode: 'totals' | 'per_game', weights: R
 }
 
 export function computePlayerRankings(players: Player[], config: RankingsConfig): RankedPlayer[] {
-  const { calcMode, minGp, minMin, position, weights, displayLimit } = config
+  const { calcMode, minGp, minMin, position, weights } = config
 
   const filtered = players.filter(p =>
     p.stats.gp >= minGp &&
@@ -112,9 +111,23 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
       return { player: p, zScores, totalZ }
     })
     .sort((a, b) => b.totalZ - a.totalZ)
-    .slice(0, displayLimit ?? undefined)
 }
 
 export function getRawValue(player: Player, cat: RankingCategory, displayMode: 'totals' | 'per_game'): number {
   return getCatValue(player, cat, displayMode)
+}
+
+export interface DataAvailabilityPartition {
+  available: Player[]
+  excluded: Player[]
+}
+
+export function partitionByDataAvailability(players: Player[]): DataAvailabilityPartition {
+  const available: Player[] = []
+  const excluded: Player[] = []
+  for (const p of players) {
+    if (p.has_data === false) excluded.push(p)
+    else available.push(p)
+  }
+  return { available, excluded }
 }

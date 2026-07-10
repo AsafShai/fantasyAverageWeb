@@ -15,6 +15,8 @@ class TeamDetail(BaseModel):
     category_ranks: Dict[str, int]
     slot_usage: Dict[str, SlotUsage]
     data_date: Optional[date] = None
+    actual_start: Optional[date] = None
+    actual_end: Optional[date] = None
 
 class TeamPlayers(BaseModel):
     team_id: int
