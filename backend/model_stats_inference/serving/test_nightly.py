@@ -24,6 +24,61 @@ def test_season_for_boundaries():
     assert nightly.season_for(date(2026, 8, 15)) == "2026-27"
 
 
+def _min_filter_player_rows(game_date: date):
+    return pd.DataFrame({
+        "PLAYER_ID": [1, 2, 3, 4],
+        "GAME_ID": ["0022300001"] * 4,
+        "GAME_DATE": [pd.Timestamp(game_date)] * 4,
+        "MIN": [0.0, None, 0.5, 5.0],
+        "TEAM_ID": [10, 20, 10, 20],
+        "MATCHUP": ["AAA vs. BBB"] * 4,
+    })
+
+
+def test_fetch_night_keeps_any_played_minute(monkeypatch):
+    """MIN > 0 is the write-time filter now (previously MIN >= MIN_MINUTES=2.0):
+    a 0.5-minute row must survive, 0/NaN must not."""
+    game_date = date(2025, 1, 15)
+    monkeypatch.setattr(nightly, "_expected_regular_season_games", lambda d: (1, True))
+
+    def fake_fetch_one_day(endpoint_cls, d):
+        if endpoint_cls is nightly.playergamelogs.PlayerGameLogs:
+            return _min_filter_player_rows(game_date)
+        return pd.DataFrame({
+            "TEAM_ID": [10, 20],
+            "GAME_ID": ["0022300001", "0022300001"],
+            "GAME_DATE": [pd.Timestamp(game_date)] * 2,
+        })
+
+    monkeypatch.setattr(nightly, "_fetch_one_day", fake_fetch_one_day)
+
+    night = nightly.fetch_night(game_date)
+
+    assert set(night.player_games["PLAYER_ID"]) == {3, 4}
+
+
+def test_bootstrap_frames_keeps_any_played_minute(monkeypatch):
+    game_date = pd.Timestamp(date.today())
+    players_raw = pd.DataFrame({
+        "PLAYER_ID": [1, 2, 3, 4],
+        "GAME_ID": ["0022300001"] * 4,
+        "GAME_DATE": [game_date] * 4,
+        "MIN": [0.0, None, 0.5, 5.0],
+    })
+    team_raw = pd.DataFrame({
+        "GAME_ID": ["0022300001", "0022300001"],
+        "GAME_DATE": [game_date] * 2,
+        "TEAM_ID": [10, 20],
+    })
+    monkeypatch.setattr(nightly.rdata, "fetch_player_logs", lambda seasons: players_raw)
+    monkeypatch.setattr(nightly.rdata, "fetch_team_logs", lambda seasons: team_raw)
+    positions = pd.DataFrame({"PLAYER_ID": [1, 2, 3, 4], "POSITION": ["G"] * 4})
+
+    players, _ = nightly.bootstrap_frames(positions=positions)
+
+    assert set(players["PLAYER_ID"]) == {3, 4}
+
+
 def _night_player_row(pid, team, game_id, matchup, minutes=30.0):
     row = {
         "SEASON": "2024-25", "PLAYER_ID": pid, "PLAYER_NAME": f"Player {pid}",

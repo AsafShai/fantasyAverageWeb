@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computePlayerRankings, CATEGORIES } from '../playerRankings'
+import { computePlayerRankings, partitionByDataAvailability, CATEGORIES } from '../playerRankings'
 import type { Player } from '../../types/api'
 import type { RankingsConfig } from '../playerRankings'
 
@@ -47,7 +47,6 @@ const defaultConfig: RankingsConfig = {
   minMin: 0,
   position: null,
   weights: defaultWeights,
-  displayLimit: 200,
 }
 
 function makePlayers(n: number): Player[] {
@@ -57,13 +56,13 @@ function makePlayers(n: number): Player[] {
 }
 
 describe('computePlayerRankings', () => {
-  it('returns at most 200 players even with large pool', () => {
+  it('caps at 300 (two-pass reference pool) with a large pool — display limit is applied by the caller, not here', () => {
     const players = makePlayers(400)
     const result = computePlayerRankings(players, defaultConfig)
-    expect(result.length).toBeLessThanOrEqual(200)
+    expect(result.length).toBe(300)
   })
 
-  it('returns all players when pool < 200', () => {
+  it('returns all players when pool < 300', () => {
     const players = makePlayers(10)
     const result = computePlayerRankings(players, defaultConfig)
     expect(result.length).toBe(10)
@@ -143,8 +142,7 @@ describe('computePlayerRankings', () => {
   it('two-pass: pool >= 300 uses top-300 as second reference', () => {
     const players = makePlayers(350)
     const result = computePlayerRankings(players, defaultConfig)
-    expect(result.length).toBeLessThanOrEqual(200)
-    expect(result.length).toBeGreaterThan(0)
+    expect(result.length).toBe(300)
     expect(result[0].player.player_name).toBe('P349')
   })
 
@@ -169,5 +167,38 @@ describe('computePlayerRankings', () => {
     const players = makePlayers(5)
     const result = computePlayerRankings(players, { ...defaultConfig, minGp: 999 })
     expect(result).toEqual([])
+  })
+})
+
+describe('partitionByDataAvailability', () => {
+  it('separates has_data: false players into excluded', () => {
+    const players = [
+      makePlayer({ name: 'Available' }),
+      { ...makePlayer({ name: 'NoData' }), has_data: false },
+      makePlayer({ name: 'AlsoAvailable' }),
+    ]
+    const { available, excluded } = partitionByDataAvailability(players)
+    expect(available.map(p => p.player_name)).toEqual(['Available', 'AlsoAvailable'])
+    expect(excluded.map(p => p.player_name)).toEqual(['NoData'])
+  })
+
+  it('treats undefined has_data as available (backwards compatible)', () => {
+    const players = [makePlayer({ name: 'Legacy' })]
+    const { available, excluded } = partitionByDataAvailability(players)
+    expect(available).toHaveLength(1)
+    expect(excluded).toHaveLength(0)
+  })
+
+  it('treats has_data: true explicitly as available', () => {
+    const players = [{ ...makePlayer({ name: 'Zeroed' }), has_data: true, stats: { ...makePlayer({}).stats, gp: 0, pts: 0 } }]
+    const { available, excluded } = partitionByDataAvailability(players)
+    expect(available).toHaveLength(1)
+    expect(excluded).toHaveLength(0)
+  })
+
+  it('returns empty partitions for an empty input', () => {
+    const { available, excluded } = partitionByDataAvailability([])
+    expect(available).toEqual([])
+    expect(excluded).toEqual([])
   })
 })

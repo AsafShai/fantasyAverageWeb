@@ -16,10 +16,10 @@ export const fantasyApi = createApi({
       }),
       providesTags: ['Rankings'],
     }),
-    getTeamDetail: builder.query<TeamDetail, { teamId: number; time_period?: TimePeriod }>({
-      query: ({ teamId, time_period = 'season' }) => ({
+    getTeamDetail: builder.query<TeamDetail, { teamId: number; time_period?: TimePeriod; start?: string; end?: string }>({
+      query: ({ teamId, time_period = 'season', start, end }) => ({
         url: `/teams/${teamId}`,
-        params: { time_period },
+        params: { time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) },
       }),
       keepUnusedDataFor: 300,
     }),
@@ -54,10 +54,10 @@ export const fantasyApi = createApi({
       query: (teamId) => `/trades/suggestions/${teamId}`,
       keepUnusedDataFor: 0,
     }),
-    getAllPlayers: builder.query<PaginatedPlayers, { page?: number; limit?: number; time_period?: TimePeriod }>({
-      query: ({ page = 1, limit = 500, time_period = 'season' } = {}) => ({
+    getAllPlayers: builder.query<PaginatedPlayers, { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string }>({
+      query: ({ page = 1, limit = 500, time_period = 'season', start, end } = {}) => ({
         url: '/players',
-        params: { page, limit, time_period },
+        params: { page, limit, time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) },
       }),
       keepUnusedDataFor: 300,
     }),
