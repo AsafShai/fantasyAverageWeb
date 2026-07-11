@@ -1,9 +1,7 @@
-import asyncio
 import logging
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Tuple
 import pandas as pd
-from nba_api.stats.endpoints import commonallplayers
 from app.models import Player, PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
@@ -28,11 +26,11 @@ _DB_STAT_COLS = {
 # "Known this season" must be independent of games played — a player out all
 # year with a season-ending injury is still a real, identifiable player (zero
 # row), not a name-join failure (no data). fs_player_games can't tell those
-# apart (it only has rows for games actually played), so identity comes from
-# nba_api's current-season roster list instead, refreshed at most every 6h
-# since rosters barely move intra-day and this runs on every players/team request.
-_SEASON_ROSTER_TTL = timedelta(hours=6)
-_season_roster_cache: dict = {'season': None, 'keys': None, 'ts': None}
+# apart (it only has rows for games actually played), so for preset periods
+# identity instead comes from ESPN's own roster status (`Pro Team != 'FA'`),
+# which is already present on every players/team request at no extra cost.
+# Custom ranges skip this gate entirely (see build_windowed_players_df) since
+# they have no ESPN split value to protect from being zeroed.
 
 # Real calendar "today" is a dead anchor for last_7/15/30 once the season
 # ends (today lands in the offseason, a stretch with zero games league-wide,
@@ -69,48 +67,6 @@ def _join_key(name: str) -> str:
     return NAME_OVERRIDES.get(normalized, normalized)
 
 
-def _fetch_season_roster_keys(season: str) -> set:
-    """is_only_current_season=1 silently filters to 'has a logged game this
-    season' — the exact games-played bug this was meant to eliminate, just
-    relocated from fs_player_games to nba_api. Fetch the full player universe
-    instead and filter for 'rostered this season' ourselves: ROSTERSTATUS=1
-    (active roster) + a real TEAM_ID + TO_YEAR matching the season's end year
-    (players' TO_YEAR tracks career span, so this also drops anyone whose last
-    season was a prior year)."""
-    df = commonallplayers.CommonAllPlayers(
-        is_only_current_season=0, season=season, timeout=30
-    ).get_data_frames()[0]
-    season_end_year = str(settings.season_id)
-    current = df[
-        (df['ROSTERSTATUS'] == 1) & (df['TEAM_ID'] > 0) & (df['TO_YEAR'] == season_end_year)
-    ]
-    return {_join_key(name) for name in current['DISPLAY_FIRST_LAST']}
-
-
-async def get_season_roster_keys(season: str) -> set:
-    """Normalized names of every player on a current-season NBA roster,
-    regardless of games played. Cached for _SEASON_ROSTER_TTL; on fetch
-    failure, serves a stale cache if one exists rather than treating every
-    player as unmatched."""
-    cached = _season_roster_cache
-    now = datetime.now()
-    if (
-        cached['season'] == season
-        and cached['keys'] is not None
-        and now - cached['ts'] < _SEASON_ROSTER_TTL
-    ):
-        return cached['keys']
-    try:
-        keys = await asyncio.to_thread(_fetch_season_roster_keys, season)
-    except Exception as e:
-        logger.error(f"Failed to fetch current-season NBA roster from nba_api: {e}")
-        if cached['season'] == season and cached['keys'] is not None:
-            return cached['keys']
-        return set()
-    _season_roster_cache.update({'season': season, 'keys': keys, 'ts': now})
-    return keys
-
-
 async def build_windowed_players_df(
     time_period: StatTimePeriod,
     espn_players_df: pd.DataFrame,
@@ -120,21 +76,22 @@ async def build_windowed_players_df(
 ) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
     """Overlay fs_player_games-aggregated stats onto an ESPN players DataFrame.
 
-    A player is "known" if they're on a current-season NBA roster (per nba_api),
-    independent of whether they've played at all this season:
+    For preset periods, a player is "known" if they're on a current NBA roster
+    per ESPN (`Pro Team != 'FA'`), independent of whether they've played at
+    all this season:
       - known, >=1 game in window -> DB-aggregated totals for the window.
       - known, 0 games in window  -> zeroed stats, gp=0, has_data=True (a real
         answer, whether they just didn't play in this window or have been out
         all season — not missing data).
-      - unknown (name doesn't resolve to any current-season NBA player) -> preset
-        periods fall back to the ESPN split value already on the row; `custom`
-        has no ESPN split to fall back to, so it's zeroed with has_data=False.
+      - unknown (ESPN free agent, no window rows) -> falls back to the ESPN
+        split value already on the row.
+
+    Custom ranges skip the roster gate entirely: there's no ESPN split to
+    fall back to anyway, so every player is simply zeroed to their window
+    totals (0 if they have no rows), always has_data=True.
     """
     season = espn_season_string(settings.season_id)
-    anchor_date, roster_keys = await asyncio.gather(
-        get_season_anchor_date(season, db_service),
-        get_season_roster_keys(season),
-    )
+    anchor_date = await get_season_anchor_date(season, db_service)
     resolved_start, resolved_end = StatTimePeriod.resolve_window(
         time_period, start, end, settings.season_start, today=anchor_date
     )
@@ -158,9 +115,10 @@ async def build_windowed_players_df(
         for espn_col, db_col in _DB_STAT_COLS.items():
             merged.loc[windowed, espn_col] = merged.loc[windowed, db_col]
 
-    # A player with rows in the window is trivially known even if the roster
-    # snapshot missed them (nba_api lag, mid-season signing not yet reflected).
-    known = merged['_join_key'].isin(roster_keys) | windowed
+    if is_custom:
+        known = pd.Series(True, index=merged.index)
+    else:
+        known = (merged['Pro Team'] != 'FA') | windowed
 
     merged['has_data'] = True
 
@@ -184,10 +142,6 @@ async def build_windowed_players_df(
             f"{len(missed)} players did not resolve to a current-season NBA player "
             f"(time_period={time_period.value}): {missed[:20]}"
         )
-        if is_custom:
-            for espn_col in _DB_STAT_COLS:
-                merged.loc[unmatched, espn_col] = 0 if espn_col == 'GP' else 0.0
-            merged.loc[unmatched, 'has_data'] = False
 
     merged['GP'] = merged['GP'].astype(int)
     drop_cols = ['_join_key'] + list(_DB_STAT_COLS.values())
