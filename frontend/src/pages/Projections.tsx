@@ -115,7 +115,7 @@ export default function Projections() {
   const [nbaTeam, setNbaTeam] = useState('');
   const [fantasyTeamId, setFantasyTeamId] = useState('');
 
-  const { data: allPlayers } = useGetAllPlayersQuery({ page: 1, limit: 500 });
+  const { data: allPlayers } = useGetAllPlayersQuery({ page: 1, limit: 1200 });
   const { data: fantasyTeams } = useGetTeamsListQuery();
 
   const playerTeamMap = useMemo(() => {

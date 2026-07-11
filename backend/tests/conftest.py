@@ -139,6 +139,19 @@ class MockDataProvider:
     async def get_slot_usage(self):
         return {}
 
+    async def get_draft_detail_raw(self):
+        return {
+            'draftDetail': {
+                'picks': [
+                    {'overallPickNumber': 1, 'roundId': 1, 'teamId': 1, 'playerId': 101},
+                    {'overallPickNumber': 2, 'roundId': 1, 'teamId': 2, 'playerId': 201},
+                ]
+            }
+        }
+
+    async def get_players_directory(self):
+        return {101: 'Player A1', 201: 'Player B1'}
+
     def get_data_date(self):
         return None
 

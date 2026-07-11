@@ -35,7 +35,7 @@ export default function PlayerRankings() {
   const [period, setPeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const { data: playersData, isLoading, error } = useGetAllPlayersQuery({
-    limit: 500,
+    limit: 1200,
     time_period: period,
     ...(period === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   })

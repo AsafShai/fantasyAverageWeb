@@ -17,7 +17,7 @@ PlayerServiceDep = Annotated[PlayerService, Depends(PlayerService)]
 async def get_all_players(
     player_service: PlayerServiceDep,
     page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(500, ge=10, le=500, description="Players per page"),
+    limit: int = Query(500, ge=10, le=1200, description="Players per page"),
     time_period: StatTimePeriod = Query(
         StatTimePeriod.SEASON,
         description="Time period for stats: season, last_7, last_15, last_30, custom"
