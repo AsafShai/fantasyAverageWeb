@@ -16,7 +16,8 @@ import FeatureStore from './pages/FeatureStore'
 import NotFound from './pages/NotFound'
 import PlayerRankings from './pages/PlayerRankings'
 import Projections from './pages/Projections'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG } from './config/featureFlags'
+import DraftReport from './pages/DraftReport'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT } from './config/featureFlags'
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
           {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
           {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
+          {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

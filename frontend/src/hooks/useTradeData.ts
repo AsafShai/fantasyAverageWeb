@@ -55,7 +55,7 @@ export const useTradeData = (
     data: allPlayersData,
     isFetching: isFetchingAllPlayers,
     error: allPlayersError
-  } = useGetAllPlayersQuery({ page: 1, limit: 500, time_period: timePeriod, ...customParams }, { skip: tradeMode !== 'freeAgent' });
+  } = useGetAllPlayersQuery({ page: 1, limit: 1200, time_period: timePeriod, ...customParams }, { skip: tradeMode !== 'freeAgent' });
 
   const teamAData = useMemo(() => withoutNoDataPlayers(teamADataRaw), [teamADataRaw]);
   const teamBData = useMemo(() => withoutNoDataPlayers(teamBDataRaw), [teamBDataRaw]);

@@ -18,7 +18,7 @@ const Players = () => {
 
   const { data, isLoading, error } = useGetAllPlayersQuery({
     page: 1,
-    limit: 500,
+    limit: 1200,
     time_period: timePeriod,
     ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   });

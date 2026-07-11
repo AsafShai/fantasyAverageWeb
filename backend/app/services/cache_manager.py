@@ -22,6 +22,8 @@ class CacheManager:
             # Cache each DataFrame with its own timestamp
             self.totals_cache: Dict = {'etag': None, 'data': None}
             self.players_cache: Dict = {'etag': None, 'data': None}
+            self.draft_detail_cache: Optional[Dict] = None
+            self.players_directory_cache: Optional[Dict[int, str]] = None
             self._initialized = True
     
     def get_totals(self, etag: str, calculator_func) -> Optional[pd.DataFrame]:

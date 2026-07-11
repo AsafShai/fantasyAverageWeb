@@ -56,11 +56,15 @@ function pctImpactArray(pool: Player[], pctKey: 'fg_percentage' | 'ft_percentage
   })
 }
 
-function zScoreArray(values: number[]): number[] {
-  if (values.length === 0) return []
+function meanStdev(values: number[]): { mean: number; stdev: number } {
   const mean = values.reduce((s, v) => s + v, 0) / values.length
   const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length
-  const stdev = Math.sqrt(variance)
+  return { mean, stdev: Math.sqrt(variance) }
+}
+
+function zScoreArray(values: number[]): number[] {
+  if (values.length === 0) return []
+  const { mean, stdev } = meanStdev(values)
   return values.map(v => (stdev === 0 ? 0 : (v - mean) / stdev))
 }
 
@@ -115,6 +119,28 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
 
 export function getRawValue(player: Player, cat: RankingCategory, displayMode: 'totals' | 'per_game'): number {
   return getCatValue(player, cat, displayMode)
+}
+
+// Scores a player outside a ranking's referencePool (e.g. below the minGp
+// cutoff) against that same pool's mean/stdev, so the number is directly
+// comparable to the totalZ values computePlayerRankings produced for it.
+export function scoreAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>): number {
+  const catZs = CATEGORIES.map(cat => {
+    if (cat === 'fg_pct' || cat === 'ft_pct') {
+      const pctKey = cat === 'fg_pct' ? 'fg_percentage' : 'ft_percentage'
+      const attemptKey = cat === 'fg_pct' ? 'fga' : 'fta'
+      const poolMean = referencePool.reduce((s, p) => s + p.stats[pctKey], 0) / referencePool.length
+      const { mean, stdev } = meanStdev(pctImpactArray(referencePool, pctKey, attemptKey, calcMode))
+      const gp = Math.max(player.stats.gp, 1)
+      const attempts = calcMode === 'per_game' ? player.stats[attemptKey] / gp : player.stats[attemptKey]
+      const playerImpact = (player.stats[pctKey] - poolMean) * attempts
+      return stdev === 0 ? 0 : (playerImpact - mean) / stdev
+    }
+    const { mean, stdev } = meanStdev(referencePool.map(p => getCatValue(p, cat, calcMode)))
+    const playerValue = getCatValue(player, cat, calcMode)
+    return stdev === 0 ? 0 : (playerValue - mean) / stdev
+  })
+  return CATEGORIES.reduce((sum, cat, ci) => sum + catZs[ci] * weights[cat], 0) / CATEGORIES.length
 }
 
 export interface DataAvailabilityPartition {

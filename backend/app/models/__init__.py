@@ -25,6 +25,8 @@ __all__ = [
     "HeatmapData",
     "TeamTimeSeriesPoint",
     "RankingsOverTimeResponse",
+    "DraftPick",
+    "DraftReport",
 
     "TeamDetail",
     "Player",

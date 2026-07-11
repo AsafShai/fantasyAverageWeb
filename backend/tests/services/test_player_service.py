@@ -300,16 +300,16 @@ class TestBuildWindowedPlayersDf:
         }])
         db = self._db_service(agg_df)
 
-        from app.utils.name_matching import normalize_player_name
-        espn_key = normalize_player_name('Player X')
-        db_key = normalize_player_name('X. Player')
-        player_service_module.NAME_OVERRIDES[espn_key] = db_key
+        from app.utils import name_matching
+        espn_key = name_matching.normalize_player_name('Player X')
+        db_key = name_matching.normalize_player_name('X. Player')
+        name_matching.NAME_OVERRIDES[espn_key] = db_key
         try:
             merged, _, _ = await build_windowed_players_df(
                 StatTimePeriod.LAST_7, sample_window_players_df, db
             )
         finally:
-            player_service_module.NAME_OVERRIDES.pop(espn_key, None)
+            name_matching.NAME_OVERRIDES.pop(espn_key, None)
 
         row = merged[merged['Name'] == 'Player X'].iloc[0]
         assert row['GP'] == 1
