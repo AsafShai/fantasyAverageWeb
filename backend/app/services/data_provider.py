@@ -41,6 +41,8 @@ class DataProvider:
                 raise ValueError("Season ID and league ID are not configured")
             self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam&view=mMatchupScore'
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
+            self.espn_draft_detail_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mDraftDetail'
+            self.espn_players_directory_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/players?view=players_wl'
     
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure."""
@@ -145,11 +147,16 @@ class DataProvider:
 
             headers = {}
 
+            # ESPN's kona_player_info universe plateaus at ~1069 players (verified
+            # 2026-07-11); 1200 covers it with headroom. A lower limit here (this
+            # used to be 500) silently drops any player outside the ownership-rank
+            # cutoff — including drafted players later dropped to 0% owned, who
+            # are still real players with real games (e.g. Reed Sheppard).
             espn_filter = {
                 "players": {
                     "filterStatus": {"value": ["ONTEAM", "FREEAGENT", "WAIVERS"]},
                     "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
-                    "limit": 500,
+                    "limit": 1200,
                     "offset": 0
                 }
             }
@@ -188,6 +195,38 @@ class DataProvider:
     def get_data_date(self):
         """Returns the data_date from cache if serving DB fallback, else None."""
         return self.cache_manager.totals_cache.get('data_date')
+
+    async def get_draft_detail_raw(self) -> Dict:
+        """Get raw ESPN draft picks. Draft is immutable after draft night, cached for process lifetime."""
+        if self.cache_manager.draft_detail_cache is not None:
+            return self.cache_manager.draft_detail_cache
+
+        try:
+            response = await self._client.get(self.espn_draft_detail_url)
+            response.raise_for_status()
+            api_data = response.json()
+            self.cache_manager.draft_detail_cache = api_data
+            return api_data
+        except httpx.RequestError as e:
+            self.logger.error(f"Error fetching draft detail from ESPN API: {e}")
+            raise DataSourceError("Error fetching draft detail from ESPN API")
+
+    async def get_players_directory(self) -> Dict[int, str]:
+        """Get playerId -> fullName map for the season. Static roster of NBA players, cached for process lifetime."""
+        if self.cache_manager.players_directory_cache is not None:
+            return self.cache_manager.players_directory_cache
+
+        try:
+            headers = {'X-Fantasy-Filter': json.dumps({"players": {"limit": 3000}})}
+            response = await self._client.get(self.espn_players_directory_url, headers=headers)
+            response.raise_for_status()
+            api_data = response.json()
+            directory = {p['id']: p['fullName'] for p in api_data}
+            self.cache_manager.players_directory_cache = directory
+            return directory
+        except httpx.RequestError as e:
+            self.logger.error(f"Error fetching players directory from ESPN API: {e}")
+            raise DataSourceError("Error fetching players directory from ESPN API")
 
     async def get_slot_usage(self) -> Dict[int, Dict[str, int]]:
         """Get games used per roster slot for all teams, parsed from cached mMatchupScore data"""

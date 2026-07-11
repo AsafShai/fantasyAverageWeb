@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup, ProjectionStats, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup, ProjectionStats, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport } from '../../types/api';
 import type { EstimatorResults } from '../../types/estimator';
 
 export const fantasyApi = createApi({
@@ -95,6 +95,10 @@ export const fantasyApi = createApi({
     getFeatureStoreTeamState: builder.query<TeamStoreState, number>({
       query: (teamId) => `/feature-store/teams/${teamId}/state`,
     }),
+    getDraftReport: builder.query<DraftReport, void>({
+      query: () => '/league/draft-report',
+      keepUnusedDataFor: 3600,
+    }),
   }),
 });
 
@@ -119,4 +123,5 @@ export const {
   useGetFeatureStorePlayerStateQuery,
   useGetFeatureStoreTeamsQuery,
   useGetFeatureStoreTeamStateQuery,
+  useGetDraftReportQuery,
 } = fantasyApi;

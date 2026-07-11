@@ -1,21 +1,16 @@
 import logging
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 import pandas as pd
-from app.models import Player, PaginatedPlayers, StatTimePeriod
+from app.models import PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.builders.response_builder import ResponseBuilder
-from app.utils.name_matching import normalize_player_name
+from app.utils.name_matching import resolve_join_key
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-
-# Known ESPN <-> NBA name mismatches that normalize_player_name alone can't
-# resolve (e.g. suffix/nickname differences). Keyed by the ESPN-side
-# normalized name, valued by the nba_api-side normalized name.
-NAME_OVERRIDES: dict[str, str] = {}
 
 _DB_STAT_COLS = {
     'PTS': 'pts', 'REB': 'reb', 'AST': 'ast', 'STL': 'stl', 'BLK': 'blk',
@@ -62,11 +57,6 @@ def espn_season_string(season_id: int) -> str:
     return f"{season_id - 1}-{str(season_id)[-2:]}"
 
 
-def _join_key(name: str) -> str:
-    normalized = normalize_player_name(name)
-    return NAME_OVERRIDES.get(normalized, normalized)
-
-
 async def build_windowed_players_df(
     time_period: StatTimePeriod,
     espn_players_df: pd.DataFrame,
@@ -101,13 +91,13 @@ async def build_windowed_players_df(
 
     merged = espn_players_df.copy()
     is_custom = time_period == StatTimePeriod.CUSTOM
-    merged['_join_key'] = merged['Name'].map(_join_key)
+    merged['_join_key'] = merged['Name'].map(resolve_join_key)
 
     if agg_df.empty:
         windowed = pd.Series(False, index=merged.index)
     else:
         agg_df = agg_df.copy()
-        agg_df['_join_key'] = agg_df['player_name'].map(_join_key)
+        agg_df['_join_key'] = agg_df['player_name'].map(resolve_join_key)
         agg_df = agg_df.drop_duplicates('_join_key', keep='first')
         db_cols = ['_join_key'] + list(_DB_STAT_COLS.values())
         merged = merged.merge(agg_df[db_cols], on='_join_key', how='left', suffixes=('', '_db'))

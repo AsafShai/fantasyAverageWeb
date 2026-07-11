@@ -67,3 +67,13 @@ class TeamTimeSeriesPoint(BaseModel):
 
 class RankingsOverTimeResponse(BaseModel):
     data: List[TeamTimeSeriesPoint]
+
+class DraftPick(BaseModel):
+    pick: int
+    round: int
+    team_id: int
+    team_name: str
+    player_name: str
+
+class DraftReport(BaseModel):
+    picks: List[DraftPick]

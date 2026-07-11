@@ -232,6 +232,18 @@ export interface RankingsOverTimeResponse {
   data: TeamTimeSeriesPoint[];
 }
 
+export interface DraftPick {
+  pick: number;
+  round: number;
+  team_id: number;
+  team_name: string;
+  player_name: string;
+}
+
+export interface DraftReport {
+  picks: DraftPick[];
+}
+
 export interface NbaTeamInfo {
   team_id: string;
   abbreviation: string;
