@@ -3,7 +3,7 @@ import { useGetDraftReportQuery, useGetAllPlayersQuery } from '../store/api/fant
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { FF_DRAFT_STEALS_BUSTS } from '../config/featureFlags'
-import { buildScoredPicks, buildTeamGrades, topSteals, topBusts, type ScoredPick, type DraftBadge } from '../utils/draftReport'
+import { buildScoredPicks, topSteals, topBusts, type ScoredPick, type DraftBadge } from '../utils/draftReport'
 
 type SortCol = 'pick' | 'diff' | 'valueRank'
 
@@ -17,9 +17,9 @@ const BADGE_STYLES: Record<DraftBadge, string> = {
   DNP: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
 }
 
-const GRADE_STYLES: Record<string, string> = {
-  A: 'bg-green-600', B: 'bg-teal-600', C: 'bg-amber-600', D: 'bg-orange-600', F: 'bg-red-600',
-}
+// const GRADE_STYLES: Record<string, string> = {
+//   A: 'bg-green-600', B: 'bg-teal-600', C: 'bg-amber-600', D: 'bg-orange-600', F: 'bg-red-600',
+// }
 
 function valueTag(p: ScoredPick): string {
   if (p.valueRank !== null) return `#${p.valueRank}`
@@ -50,7 +50,7 @@ export default function DraftReport() {
     return buildScoredPicks(draftReport.picks, playersData.players, calcMode)
   }, [draftReport, playersData, calcMode])
 
-  const teamGrades = useMemo(() => buildTeamGrades(scoredPicks), [scoredPicks])
+  // const teamGrades = useMemo(() => buildTeamGrades(scoredPicks), [scoredPicks])
   const steals = useMemo(() => topSteals(scoredPicks), [scoredPicks])
   const busts = useMemo(() => topBusts(scoredPicks), [scoredPicks])
 
@@ -117,9 +117,43 @@ export default function DraftReport() {
           Value calc: season stats · min 15 GP to qualify · all 8 categories weighted equally.
         </p>
 
+        <section>
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Draft Board — value heat</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+            <table className="text-xs border-collapse">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">Rd</th>
+                  {teamColumns.map(t => (
+                    <th key={t.team_id} className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">{t.team_name}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rounds.map(round => (
+                  <tr key={round} className="border-t border-gray-100 dark:border-gray-700">
+                    <td className="sticky left-0 z-10 bg-white dark:bg-gray-800 px-2 py-1.5 font-semibold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">{round}</td>
+                    {teamColumns.map(t => {
+                      const p = gridByRoundTeam.get(`${round}-${t.team_id}`)
+                      if (!p) return <td key={t.team_id} className="px-2 py-1.5" />
+                      return (
+                        <td key={t.team_id} className="px-2 py-1.5 align-top min-w-[110px]" style={{ backgroundColor: heatColor(p) }}>
+                          <div className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{p.player_name}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400">{p.pick} → {valueTag(p)}</div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Blue = returned above slot · Red = below slot / INJ / DNP · Gray = about right.</p>
+        </section>
+
         {FF_DRAFT_STEALS_BUSTS && (
           <>
-            <section>
+            {/* <section>
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Team Grades</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {teamGrades.map(t => (
@@ -130,13 +164,13 @@ export default function DraftReport() {
                     <div className="min-w-0">
                       <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">{t.team_name}</div>
                       <div className="text-[11px] text-gray-400 dark:text-gray-500">
-                        avg diff {t.avgDiff > 0 ? '+' : ''}{t.avgDiff.toFixed(1)} · zΣ {t.zSum.toFixed(1)}
+                        {(t.ratio * 100).toFixed(0)}% value · {(t.hitRate * 100).toFixed(0)}% hits
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </section>
+            </section> */}
 
             <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -174,40 +208,6 @@ export default function DraftReport() {
         )}
 
         <section>
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Draft Board — value heat</h2>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
-            <table className="text-xs border-collapse">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">Rd</th>
-                  {teamColumns.map(t => (
-                    <th key={t.team_id} className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">{t.team_name}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rounds.map(round => (
-                  <tr key={round} className="border-t border-gray-100 dark:border-gray-700">
-                    <td className="sticky left-0 z-10 bg-white dark:bg-gray-800 px-2 py-1.5 font-semibold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">{round}</td>
-                    {teamColumns.map(t => {
-                      const p = gridByRoundTeam.get(`${round}-${t.team_id}`)
-                      if (!p) return <td key={t.team_id} className="px-2 py-1.5" />
-                      return (
-                        <td key={t.team_id} className="px-2 py-1.5 align-top min-w-[110px]" style={{ backgroundColor: heatColor(p) }}>
-                          <div className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{p.player_name}</div>
-                          <div className="text-[10px] text-gray-500 dark:text-gray-400">{p.pick} → {valueTag(p)}</div>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Blue = returned above slot · Red = below slot / INJ / DNP · Gray = about right.</p>
-        </section>
-
-        <section>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400">All Picks</h2>
             <select
@@ -221,9 +221,9 @@ export default function DraftReport() {
               ))}
             </select>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                   <SortTh col="pick" label="Pick" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Rd</th>

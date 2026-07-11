@@ -21,8 +21,8 @@ export interface ScoredPick extends DraftPick {
 export interface TeamGrade {
   team_id: number
   team_name: string
-  avgDiff: number
-  zSum: number
+  ratio: number
+  hitRate: number
   grade: 'A' | 'B' | 'C' | 'D' | 'F'
 }
 
@@ -92,12 +92,39 @@ export function buildScoredPicks(picks: DraftPick[], allPlayers: Player[], calcM
   })
 }
 
-// A diff of -50 matters more at pick 50 (falling to value #100, basically
-// losing half your draft slot's worth) than at pick 120 (falling to #170,
-// a round-13-ish throwaway). Normalizing by pick number gives early-round
-// misses/hits proportionally more weight than the same raw diff late.
-function weightedMagnitude(p: ScoredPick): number {
-  return (p.diff ?? 0) / p.pick
+// Rank isn't linear in value: #1 vs #10 is a real talent gap, #100 vs #110 is
+// noise. A concave value curve (steep at the top, flat at the bottom) captures
+// that. Draft surplus = value gained at the realized rank minus value paid at
+// the pick slot, both read off the same curve — so a 20→10 jump outweighs a
+// 30→20 jump of equal size, and early accuracy weighs more than late.
+// The +OFFSET tames the near-vertical very top of the curve so a 1-rank slip
+// on an elite pick (e.g. slot 2 returning #3) reads as roughly neutral, not as
+// a bigger loss than a genuine mid-round bust.
+const VALUE_EXP = 0.7
+const VALUE_OFFSET = 5
+function valueScore(rank: number): number {
+  return 1 / Math.pow(rank + VALUE_OFFSET, VALUE_EXP)
+}
+
+// INJ/DNP picks return null valueRank; an injury isn't a drafting mistake, so
+// they contribute zero surplus (neither reward nor penalty).
+function pickSurplus(p: ScoredPick): number {
+  if (p.valueRank === null) return 0
+  return valueScore(p.valueRank) - valueScore(p.pick)
+}
+
+// Draft grade blends two absolute signals so a team isn't graded on totals
+// alone: the value-efficiency ratio (realized ÷ expected value at their slots,
+// 1.0 = par) times a hit-rate factor (share of picks that beat their slot).
+// The factor is 1.0 at a 50% hit rate, so a lopsided draft carried by one steal
+// grades below a steady one at the same ratio. Grades are generous and floor at
+// D — no team is handed an F.
+const GRADE_CUTS: [number, TeamGrade['grade']][] = [
+  [1.04, 'A'], [0.88, 'B'], [0.76, 'C'],
+]
+function gradeForScore(score: number): TeamGrade['grade'] {
+  for (const [cut, grade] of GRADE_CUTS) if (score >= cut) return grade
+  return 'D'
 }
 
 export function buildTeamGrades(scoredPicks: ScoredPick[]): TeamGrade[] {
@@ -107,50 +134,47 @@ export function buildTeamGrades(scoredPicks: ScoredPick[]): TeamGrade[] {
     byTeam.get(p.team_id)!.picks.push(p)
   }
 
-  const teamStats = [...byTeam.entries()].map(([team_id, { team_name, picks }]) => ({
-    team_id,
-    team_name,
-    avgDiff: picks.reduce((s, p) => s + (p.diff ?? 0), 0) / picks.length,
-    avgWeighted: picks.reduce((s, p) => s + weightedMagnitude(p), 0) / picks.length,
-    zSum: picks.reduce((s, p) => s + (p.totalZ ?? 0), 0),
-  }))
-
-  const avgWeightedVals = teamStats.map(t => t.avgWeighted)
-  const mean = avgWeightedVals.reduce((s, v) => s + v, 0) / avgWeightedVals.length
-  const variance = avgWeightedVals.reduce((s, v) => s + (v - mean) ** 2, 0) / avgWeightedVals.length
-  const stdev = Math.sqrt(variance)
+  const teamStats = [...byTeam.entries()].map(([team_id, { team_name, picks }]) => {
+    const judged = picks.filter(p => p.valueRank !== null)
+    const realized = judged.reduce((s, p) => s + valueScore(p.valueRank!), 0)
+    const expected = judged.reduce((s, p) => s + valueScore(p.pick), 0)
+    const ratio = expected > 0 ? realized / expected : 1
+    const hitRate = judged.length > 0
+      ? judged.filter(p => valueScore(p.valueRank!) > valueScore(p.pick)).length / judged.length
+      : 0
+    return {
+      team_id,
+      team_name,
+      ratio,
+      hitRate,
+      score: ratio * (0.75 + 0.5 * hitRate),
+    }
+  })
 
   return teamStats
-    .map(t => {
-      const z = stdev === 0 ? 0 : (t.avgWeighted - mean) / stdev
-      const grade: TeamGrade['grade'] = z >= 1.0 ? 'A' : z >= 0.33 ? 'B' : z >= -0.33 ? 'C' : z >= -1.0 ? 'D' : 'F'
-      return { ...t, grade }
-    })
-    .sort((a, b) => b.avgWeighted - a.avgWeighted)
+    .sort((a, b) => b.score - a.score)
+    .map(t => ({
+      team_id: t.team_id,
+      team_name: t.team_name,
+      ratio: t.ratio,
+      hitRate: t.hitRate,
+      grade: gradeForScore(t.score),
+    }))
 }
-
-const BUST_INJ_PICK_CEILING = 100
 
 export function topSteals(scoredPicks: ScoredPick[], limit = 5): ScoredPick[] {
   return scoredPicks
     .filter(p => p.badge === 'Steal' && (p.gp ?? 0) >= STEAL_MIN_GP)
-    .sort((a, b) => weightedMagnitude(b) - weightedMagnitude(a))
+    .sort((a, b) => pickSurplus(b) - pickSurplus(a))
     .slice(0, limit)
 }
 
 export function topBusts(scoredPicks: ScoredPick[], limit = 5): ScoredPick[] {
-  // DNP (no games at all) isn't a "bust" verdict on the player's performance —
-  // there's no realized value to judge. A late-round INJ flier isn't
-  // newsworthy either; only an injury eating a real (top-100) pick counts.
-  const candidates = scoredPicks.filter(p =>
-    p.badge === 'Bust' || (p.badge === 'INJ' && p.pick <= BUST_INJ_PICK_CEILING)
-  )
-  return candidates
-    .sort((a, b) => {
-      if (a.badge === 'INJ' && b.badge !== 'INJ') return -1
-      if (b.badge === 'INJ' && a.badge !== 'INJ') return 1
-      if (a.badge === 'INJ' && b.badge === 'INJ') return a.pick - b.pick
-      return weightedMagnitude(a) - weightedMagnitude(b)
-    })
+  // Only players who actually played and underperformed their slot are busts.
+  // INJ/DNP carry no realized value to judge — an injury is bad luck, not a bad
+  // pick — so they're excluded rather than ranked as the "worst" outcomes.
+  return scoredPicks
+    .filter(p => p.badge === 'Bust')
+    .sort((a, b) => pickSurplus(a) - pickSurplus(b))
     .slice(0, limit)
 }
