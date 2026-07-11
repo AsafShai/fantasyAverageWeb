@@ -10,8 +10,6 @@ from app.services.player_service import (
     PlayerService,
     build_windowed_players_df,
     espn_season_string,
-    _join_key,
-    _fetch_season_roster_keys as _real_fetch_season_roster_keys,
 )
 from app.models import PaginatedPlayers, Player, PlayerStats, StatTimePeriod
 
@@ -83,28 +81,12 @@ def sample_window_players_df():
 
 
 @pytest.fixture(autouse=True)
-def no_roster_keys(monkeypatch):
-    """Default: nobody resolves to a current-season NBA player (no nba_api call
-    made). Individual tests override via mock_roster_keys()."""
-    monkeypatch.setattr(
-        player_service_module, "get_season_roster_keys", AsyncMock(return_value=set())
-    )
-
-
-@pytest.fixture(autouse=True)
 def fixed_anchor_date(monkeypatch):
     """Default: fixed anchor so tests aren't sensitive to real calendar today
     (and don't need a working db_service.get_latest_game_date mock). Override
     via monkeypatch in specific tests that care about the resolved window."""
     monkeypatch.setattr(
         player_service_module, "get_season_anchor_date", AsyncMock(return_value=date(2026, 7, 10))
-    )
-
-
-def mock_roster_keys(monkeypatch, names: list[str]) -> None:
-    keys = {_join_key(n) for n in names}
-    monkeypatch.setattr(
-        player_service_module, "get_season_roster_keys", AsyncMock(return_value=keys)
     )
 
 
@@ -176,7 +158,7 @@ def test_espn_season_string():
 
 class TestBuildWindowedPlayersDf:
     """The core join/fallback logic: known-with-games, known-zero-games
-    (including season-long-injury), unknown-preset-fallback, unknown-custom-no-data."""
+    (including season-long-injury), unknown-preset-fallback, custom-always-known."""
 
     def _db_service(self, agg_df=None):
         db = MagicMock()
@@ -186,8 +168,7 @@ class TestBuildWindowedPlayersDf:
         return db
 
     @pytest.mark.asyncio
-    async def test_known_player_uses_db_totals(self, sample_window_players_df, monkeypatch):
-        mock_roster_keys(monkeypatch, ["Player X"])
+    async def test_known_player_uses_db_totals(self, sample_window_players_df):
         agg_df = pd.DataFrame([{
             'player_id': 1, 'player_name': 'Player X', 'gp': 4,
             'pts': 100.0, 'reb': 20.0, 'ast': 16.0, 'stl': 4.0, 'blk': 2.0,
@@ -211,10 +192,9 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_known_player_zero_games_in_window_is_zeroed_not_no_data(
-        self, sample_window_players_df, monkeypatch
+        self, sample_window_players_df
     ):
-        # Player Y is on the current-season roster but has no rows in this window.
-        mock_roster_keys(monkeypatch, ["Player X", "Player Y"])
+        # Player Y is on an ESPN roster (Pro Team != 'FA') but has no rows in this window.
         agg_df = pd.DataFrame([{
             'player_id': 1, 'player_name': 'Player X', 'gp': 2,
             'pts': 40.0, 'reb': 10.0, 'ast': 8.0, 'stl': 2.0, 'blk': 1.0,
@@ -235,13 +215,12 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_known_player_out_all_season_is_zero_row_not_no_data(
-        self, sample_window_players_df, monkeypatch
+        self, sample_window_players_df
     ):
         """Regression: a real, identifiable player out all season (e.g. a
         season-ending injury) must NOT collapse into 'no data' just because
-        fs_player_games has zero rows for them all year — they're still on the
-        nba_api roster, so they're 'known' regardless of the aggregation window."""
-        mock_roster_keys(monkeypatch, ["Player X", "Player Y", "Player Z"])
+        fs_player_games has zero rows for them all year — custom ranges treat
+        every player as known regardless of the aggregation window."""
         db = self._db_service(pd.DataFrame())  # nobody has any games in fs_player_games at all
 
         merged, _, _ = await build_windowed_players_df(
@@ -256,7 +235,7 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_known_player_preset_with_fully_empty_window_keeps_espn_value(
-        self, sample_window_players_df, monkeypatch
+        self, sample_window_players_df
     ):
         """Regression: if the DB has zero rows for the ENTIRE window (e.g. the
         anchor-date resolution still lands somewhere with no games at all),
@@ -264,7 +243,6 @@ class TestBuildWindowedPlayersDf:
         empty window is a property of the window, not evidence this specific
         player had no games. Custom ranges still zero (test above), since
         they have no ESPN value to fall back to."""
-        mock_roster_keys(monkeypatch, ["Player X", "Player Y", "Player Z"])
         db = self._db_service(pd.DataFrame())
 
         original_pts = sample_window_players_df.set_index('Name')['PTS'].to_dict()
@@ -279,7 +257,8 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_unknown_preset_falls_back_to_espn_value(self, sample_window_players_df):
-        # No roster keys, no fs_player_games rows -> preset periods keep the ESPN row untouched.
+        # ESPN free agents ('FA'), no fs_player_games rows -> preset periods keep the ESPN row untouched.
+        sample_window_players_df['Pro Team'] = 'FA'
         db = self._db_service(pd.DataFrame())
 
         original_pts = sample_window_players_df.set_index('Name')['PTS'].to_dict()
@@ -293,7 +272,11 @@ class TestBuildWindowedPlayersDf:
             assert bool(row['has_data']) is True
 
     @pytest.mark.asyncio
-    async def test_unknown_custom_has_no_data(self, sample_window_players_df):
+    async def test_custom_range_zeroes_regardless_of_espn_roster_status(self, sample_window_players_df):
+        """Custom ranges skip the roster gate entirely: even an ESPN free
+        agent with no fs_player_games rows is treated as known and just
+        zeroed, never dropped to has_data=False."""
+        sample_window_players_df['Pro Team'] = 'FA'
         db = self._db_service(pd.DataFrame())
 
         merged, _, _ = await build_windowed_players_df(
@@ -302,39 +285,12 @@ class TestBuildWindowedPlayersDf:
         )
 
         for _, row in merged.iterrows():
-            assert bool(row['has_data']) is False
+            assert bool(row['has_data']) is True
             assert row['PTS'] == 0.0
             assert row['GP'] == 0
 
     @pytest.mark.asyncio
-    async def test_unmatched_by_roster_but_has_window_rows_is_still_known(
-        self, sample_window_players_df, monkeypatch
-    ):
-        """Defensive fallback: a player missing from the nba_api roster snapshot
-        (lag / mid-season signing) but present in fs_player_games for the window
-        must still be treated as known, not zeroed as no-data."""
-        mock_roster_keys(monkeypatch, [])  # roster snapshot missed everyone
-        agg_df = pd.DataFrame([{
-            'player_id': 1, 'player_name': 'Player X', 'gp': 3,
-            'pts': 60.0, 'reb': 15.0, 'ast': 9.0, 'stl': 3.0, 'blk': 1.0,
-            'fgm': 21.0, 'fga': 45.0, 'ftm': 12.0, 'fta': 14.0,
-            'three_pm': 6.0, 'min': 90.0,
-            'fg_pct': 21.0 / 45.0, 'ft_pct': 12.0 / 14.0,
-        }])
-        db = self._db_service(agg_df)
-
-        merged, _, _ = await build_windowed_players_df(
-            StatTimePeriod.CUSTOM, sample_window_players_df, db,
-            start=date(2026, 1, 1), end=date(2026, 1, 10),
-        )
-
-        row = merged[merged['Name'] == 'Player X'].iloc[0]
-        assert row['GP'] == 3
-        assert bool(row['has_data']) is True
-
-    @pytest.mark.asyncio
-    async def test_name_override_resolves_mismatch(self, sample_window_players_df, monkeypatch):
-        mock_roster_keys(monkeypatch, ["X. Player"])
+    async def test_name_override_resolves_mismatch(self, sample_window_players_df):
         agg_df = pd.DataFrame([{
             'player_id': 9, 'player_name': 'X. Player', 'gp': 1,
             'pts': 25.0, 'reb': 5.0, 'ast': 4.0, 'stl': 1.0, 'blk': 1.0,
@@ -359,63 +315,6 @@ class TestBuildWindowedPlayersDf:
         assert row['GP'] == 1
         assert row['PTS'] == 25.0
         assert bool(row['has_data']) is True
-
-
-class TestGetSeasonRosterKeys:
-    """These tests exercise the real get_season_roster_keys, so they must not
-    inherit the module-wide 'no_roster_keys' autouse patch — shadow it here."""
-
-    @pytest.fixture(autouse=True)
-    def no_roster_keys(self):
-        yield
-
-    @pytest.mark.asyncio
-    async def test_fetches_and_caches(self, monkeypatch):
-        player_service_module._season_roster_cache.update({'season': None, 'keys': None, 'ts': None})
-        calls = []
-
-        def fake_fetch(season):
-            calls.append(season)
-            return {'playerx'}
-
-        monkeypatch.setattr(player_service_module, "_fetch_season_roster_keys", fake_fetch)
-
-        first = await player_service_module.get_season_roster_keys("2025-26")
-        second = await player_service_module.get_season_roster_keys("2025-26")
-
-        assert first == {'playerx'}
-        assert second == {'playerx'}
-        assert calls == ["2025-26"]  # second call served from cache, no re-fetch
-
-    @pytest.mark.asyncio
-    async def test_fetch_failure_falls_back_to_stale_cache(self, monkeypatch):
-        player_service_module._season_roster_cache.update(
-            {'season': "2025-26", 'keys': {'stale'}, 'ts': player_service_module.datetime.now()}
-        )
-        # Force the cache to look expired so a re-fetch is attempted.
-        player_service_module._season_roster_cache['ts'] = (
-            player_service_module.datetime.now() - player_service_module._SEASON_ROSTER_TTL * 2
-        )
-
-        def failing_fetch(season):
-            raise RuntimeError("nba_api down")
-
-        monkeypatch.setattr(player_service_module, "_fetch_season_roster_keys", failing_fetch)
-
-        result = await player_service_module.get_season_roster_keys("2025-26")
-        assert result == {'stale'}
-
-    @pytest.mark.asyncio
-    async def test_fetch_failure_no_cache_returns_empty_set(self, monkeypatch):
-        player_service_module._season_roster_cache.update({'season': None, 'keys': None, 'ts': None})
-
-        def failing_fetch(season):
-            raise RuntimeError("nba_api down")
-
-        monkeypatch.setattr(player_service_module, "_fetch_season_roster_keys", failing_fetch)
-
-        result = await player_service_module.get_season_roster_keys("2025-26")
-        assert result == set()
 
 
 class TestGetSeasonAnchorDate:
@@ -458,51 +357,3 @@ class TestGetSeasonAnchorDate:
 
         result = await player_service_module.get_season_anchor_date("2025-26", db)
         assert result == date(2026, 4, 12)
-
-
-class TestFetchSeasonRosterKeys:
-    """Regression coverage for the is_only_current_season=1 bug: that flag
-    silently means 'has played a game this season', which is exactly the
-    games-played bug this feature is supposed to eliminate (just moved from
-    fs_player_games to nba_api). The real filter must be ROSTERSTATUS==1,
-    a real TEAM_ID, and TO_YEAR matching the season's end year — independent
-    of whether the player has actually played."""
-
-    def _raw_players_df(self):
-        return pd.DataFrame([
-            # rostered, season-long injury (no games played this season) -> must be kept
-            {'DISPLAY_FIRST_LAST': 'Season Long Injury', 'ROSTERSTATUS': 1,
-             'TEAM_ID': 1610612754, 'TO_YEAR': '2026', 'GAMES_PLAYED_FLAG': 'Y'},
-            # rostered, active -> kept
-            {'DISPLAY_FIRST_LAST': 'Healthy Starter', 'ROSTERSTATUS': 1,
-             'TEAM_ID': 1610612745, 'TO_YEAR': '2026', 'GAMES_PLAYED_FLAG': 'Y'},
-            # no longer rostered this season (retired/released) -> dropped
-            {'DISPLAY_FIRST_LAST': 'Retired Veteran', 'ROSTERSTATUS': 0,
-             'TEAM_ID': 0, 'TO_YEAR': '2023', 'GAMES_PLAYED_FLAG': 'Y'},
-            # rostered flag set but no current team (free agent in the historical frame) -> dropped
-            {'DISPLAY_FIRST_LAST': 'Unsigned Free Agent', 'ROSTERSTATUS': 0,
-             'TEAM_ID': 0, 'TO_YEAR': '2025', 'GAMES_PLAYED_FLAG': 'N'},
-        ])
-
-    def test_filters_by_roster_status_team_and_to_year(self, monkeypatch):
-        monkeypatch.setattr(player_service_module.settings, "season_id", 2026)
-        raw_df = self._raw_players_df()
-
-        class FakeEndpoint:
-            def __init__(self, is_only_current_season, season, timeout):
-                assert is_only_current_season == 0  # not the games-played-only variant
-                self.season = season
-
-            def get_data_frames(self):
-                return [raw_df]
-
-        monkeypatch.setattr(
-            player_service_module.commonallplayers, "CommonAllPlayers", FakeEndpoint
-        )
-
-        keys = _real_fetch_season_roster_keys("2025-26")
-
-        assert player_service_module._join_key('Season Long Injury') in keys
-        assert player_service_module._join_key('Healthy Starter') in keys
-        assert player_service_module._join_key('Retired Veteran') not in keys
-        assert player_service_module._join_key('Unsigned Free Agent') not in keys

@@ -97,12 +97,9 @@ class TestTeamService:
     @pytest.mark.asyncio
     async def test_get_team_detail_custom_with_dates_aggregates_players(
         self, team_service, sample_totals_df, sample_averages_df, sample_rankings_df, team_service_players_df,
-        monkeypatch,
     ):
         """Custom range with a known player overlays DB-aggregated stats before
         filtering to the team's roster."""
-        import app.services.player_service as player_service_module
-
         team_id = 1
         team_service.data_provider.get_all_dataframes.return_value = (
             sample_totals_df, sample_averages_df, sample_rankings_df
@@ -118,10 +115,6 @@ class TestTeamService:
         }])
         team_service.data_provider.db_service.aggregate_player_games = AsyncMock(
             return_value=(agg_df, date(2026, 1, 2), date(2026, 1, 9))
-        )
-        monkeypatch.setattr(
-            player_service_module, "get_season_roster_keys",
-            AsyncMock(return_value={player_service_module._join_key('Player A')}),
         )
 
         captured = {}
