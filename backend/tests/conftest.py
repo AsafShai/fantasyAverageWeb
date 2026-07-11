@@ -156,30 +156,10 @@ def mock_data_provider_globally():
          patch('app.services.data_provider.get_data_provider', return_value=mock_provider):
         yield mock_provider
 
-@pytest.fixture(scope="session", autouse=True)
-def mock_season_roster_keys_globally():
-    """Avoid real nba_api network calls during the suite by stubbing only the
-    low-level fetch — get_season_roster_keys's own caching logic still runs for
-    real everywhere. An empty roster means every player is 'unknown', so preset
-    periods fall back to the ESPN split value already on the row — preserving
-    pre-existing route-test expectations that all time periods return the same
-    mocked data. TestGetSeasonRosterKeys overrides this per-test to exercise
-    specific fetch results."""
-    with patch('app.services.player_service._fetch_season_roster_keys', return_value=set()):
-        yield
-
-@pytest.fixture(autouse=True)
-def reset_season_roster_cache():
-    """The roster-keys cache is a module-level dict with a multi-hour TTL —
-    reset it every test so state can't leak across tests/files."""
-    from app.services.player_service import _season_roster_cache
-    _season_roster_cache.update({'season': None, 'keys': None, 'ts': None})
-    yield
-    _season_roster_cache.update({'season': None, 'keys': None, 'ts': None})
-
 @pytest.fixture(autouse=True)
 def reset_season_anchor_cache():
-    """Same as reset_season_roster_cache, for the anchor-date cache."""
+    """The anchor-date cache is a module-level dict with a multi-hour TTL —
+    reset it every test so state can't leak across tests/files."""
     from app.services.player_service import _season_anchor_cache
     _season_anchor_cache.update({'season': None, 'date': None, 'ts': None})
     yield
