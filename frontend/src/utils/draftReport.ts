@@ -26,7 +26,25 @@ export interface TeamGrade {
   grade: 'A' | 'B' | 'C' | 'D' | 'F'
 }
 
-const MIN_GP_FOR_RANK = 15
+export interface UnrankedPick {
+  player_name: string
+  badge: DraftBadge
+  gp: number | null
+  pick: number
+}
+
+export interface TeamDiff {
+  team_id: number
+  team_name: string
+  avgDiff: number
+  totalDiff: number
+  n: number
+  total: number
+  unranked: UnrankedPick[]
+}
+
+export const MIN_GP_FOR_RANK = 15
+export const LOW_GP_MIN = 1
 const STEAL_MIN_GP = 50
 const WEIGHTS = Object.fromEntries(CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
 
@@ -38,18 +56,18 @@ function badgeFor(diff: number): DraftBadge {
   return 'Bust'
 }
 
-export function buildScoredPicks(picks: DraftPick[], allPlayers: Player[], calcMode: 'totals' | 'per_game'): ScoredPick[] {
+export function buildScoredPicks(picks: DraftPick[], allPlayers: Player[], calcMode: 'totals' | 'per_game', minGpForRank: number = MIN_GP_FOR_RANK): ScoredPick[] {
   const { available } = partitionByDataAvailability(allPlayers)
   // computePlayerRankings caps its returned pool at 300 (a display-perf limit
   // for the interactive Player Rankings page) — draft report needs every
-  // qualified (GP >= MIN_GP_FOR_RANK) player ranked, not just the top 300, so
+  // qualified (GP >= minGpForRank) player ranked, not just the top 300, so
   // it re-scores anyone the cap dropped against the same referencePool and
   // re-sorts the full qualified set itself.
-  const ranked = computePlayerRankings(available, { calcMode, minGp: MIN_GP_FOR_RANK, minMin: 0, position: null, weights: WEIGHTS })
+  const ranked = computePlayerRankings(available, { calcMode, minGp: minGpForRank, minMin: 0, position: null, weights: WEIGHTS })
   const referencePool = ranked.map(r => r.player)
   const zByName = new Map(ranked.map(r => [r.player.player_name, r.totalZ]))
 
-  const qualified = available.filter(p => p.stats.gp >= MIN_GP_FOR_RANK)
+  const qualified = available.filter(p => p.stats.gp >= minGpForRank)
   const fullyRanked = qualified
     .map(p => ({ player: p, totalZ: zByName.get(p.player_name) ?? scoreAgainstPool(p, referencePool, calcMode, WEIGHTS) }))
     .sort((a, b) => b.totalZ - a.totalZ)
@@ -160,6 +178,35 @@ export function buildTeamGrades(scoredPicks: ScoredPick[]): TeamGrade[] {
       hitRate: t.hitRate,
       grade: gradeForScore(t.score),
     }))
+}
+
+// Signed diff (pick − value rank) averaged per team: positive = the team's
+// picks returned above their draft slot. INJ/DNP picks carry a noisy fallback
+// diff, so only judged picks (real valueRank) count. Sorted best surplus first.
+export function buildTeamDiffRanking(scoredPicks: ScoredPick[]): TeamDiff[] {
+  const byTeam = new Map<number, { team_name: string; diffs: number[]; total: number; unranked: UnrankedPick[] }>()
+  for (const p of scoredPicks) {
+    if (!byTeam.has(p.team_id)) byTeam.set(p.team_id, { team_name: p.team_name, diffs: [], total: 0, unranked: [] })
+    const e = byTeam.get(p.team_id)!
+    e.total++
+    if (p.valueRank !== null && p.diff !== null) e.diffs.push(p.diff)
+    else e.unranked.push({ player_name: p.player_name, badge: p.badge, gp: p.gp, pick: p.pick })
+  }
+  return [...byTeam.entries()]
+    .filter(([, { diffs }]) => diffs.length > 0)
+    .map(([team_id, { team_name, diffs, total, unranked }]) => {
+      const totalDiff = diffs.reduce((s, d) => s + d, 0)
+      return {
+        team_id,
+        team_name,
+        avgDiff: totalDiff / diffs.length,
+        totalDiff,
+        n: diffs.length,
+        total,
+        unranked: unranked.sort((a, b) => a.pick - b.pick),
+      }
+    })
+    .sort((a, b) => b.avgDiff - a.avgDiff)
 }
 
 export function topSteals(scoredPicks: ScoredPick[], limit = 5): ScoredPick[] {
