@@ -54,7 +54,7 @@ export default function DraftReport() {
 
   // const teamGrades = useMemo(() => buildTeamGrades(scoredPicks), [scoredPicks])
   const teamDiffs = useMemo(() => buildTeamDiffRanking(scoredPicks), [scoredPicks])
-  const [diffColWidths, setDiffColWidths] = useState<number[]>([48, 190, 110, 100, 90])
+  const [diffColWidths, setDiffColWidths] = useState<number[]>([48, 190, 100, 90, 110])
   const [expandedTeams, setExpandedTeams] = useState<Set<number>>(new Set())
   const toggleTeam = (id: number) => setExpandedTeams(prev => {
     const next = new Set(prev)
@@ -199,7 +199,7 @@ export default function DraftReport() {
               </colgroup>
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                  {(['#', 'Team', 'Ranked / Picks', 'Total Diff', 'Avg Diff'] as const).map((label, i) => (
+                  {(['#', 'Team', 'Total Diff', 'Avg Diff', 'Ranked / Picks'] as const).map((label, i) => (
                     <th
                       key={label}
                       title={label === 'Ranked / Picks' ? `How many of the team's draft picks earned a value rank — only players with ${minGp}+ GP are ranked, so low-GP / DNP picks are left out` : undefined}
@@ -228,15 +228,15 @@ export default function DraftReport() {
                       >
                         <td className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-400 dark:text-gray-500 font-mono text-xs">{i + 1}</td>
                         <td className="px-2 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 truncate">{t.team_name}</td>
-                        <td className="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-gray-500 dark:text-gray-400 text-xs font-mono whitespace-nowrap">
-                          {t.n}/{t.total}
-                          <span className="inline-block w-3 text-left text-amber-500 dark:text-amber-400">{hasExcluded ? (open ? '▾' : '▸') : ''}</span>
-                        </td>
                         <td className={`px-2 sm:px-3 py-1.5 sm:py-2 text-right font-mono text-xs ${t.totalDiff >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}`}>
                           {t.totalDiff > 0 ? `+${t.totalDiff}` : t.totalDiff}
                         </td>
                         <td className={`px-2 sm:px-3 py-1.5 sm:py-2 text-right font-semibold font-mono ${t.avgDiff >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}`}>
                           {t.avgDiff > 0 ? `+${t.avgDiff.toFixed(1)}` : t.avgDiff.toFixed(1)}
+                        </td>
+                        <td className="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-gray-500 dark:text-gray-400 text-xs font-mono whitespace-nowrap">
+                          {t.n}/{t.total}
+                          <span className="inline-block w-3 text-left text-amber-500 dark:text-amber-400">{hasExcluded ? (open ? '▾' : '▸') : ''}</span>
                         </td>
                       </tr>
                       {open && (
