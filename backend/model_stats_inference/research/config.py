@@ -77,7 +77,7 @@ TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
 # before weighting so a game never leaks into its own features. Applied to the
 # rare-event stats where the flat windows are noisiest (added with the 2026-07
 # BLK improvement; STL joined with the same recipe).
-EWM_STATS: list[str] = ["BLK", "STL", "REB", "AST", "PTS", "FGM", "FGA", "FTM", "FTA"]
+EWM_STATS: list[str] = ["BLK", "STL", "REB", "AST", "PTS", "FGM", "FGA", "FTM", "FTA", "FG3M"]
 EWM_HALFLIVES: list[int] = [5, 15]
 # Halflife for the share-of-games indicator, and the per-stat threshold it
 # counts: P(stat >= threshold). For rare events (blocks/steals) >=1 is the
@@ -88,7 +88,7 @@ EWM_HALFLIVES: list[int] = [5, 15]
 EWM_SHARE_HALFLIFE = 10
 EWM_SHARE_MIN: dict[str, int] = {
     "BLK": 1, "STL": 1, "REB": 6, "AST": 5, "PTS": 20, "FGM": 8, "FGA": 15,
-    "FTM": 5, "FTA": 6,
+    "FTM": 5, "FTA": 6, "FG3M": 4,
 }
 
 # Extra share thresholds (columns named {stat}_share{thr}_*): a coarse CDF of
@@ -99,6 +99,7 @@ EWM_SHARE_MIN: dict[str, int] = {
 EWM_SHARE_EXTRA: dict[str, list[int]] = {
     "FTA": [2, 4],
     "FTM": [3],
+    "FG3M": [2, 3],
 }
 
 # Composite per-minute EWM rates (halflife EWM_COMPOSITE_HALFLIFE): each entry
@@ -111,6 +112,8 @@ EWM_RATE_COMPOSITES: dict[str, dict[str, float]] = {
     "BALLDOM": {"AST": 1.0, "TOV": 1.0},
     "FGA_LOAD": {"FGA": 1.0},
     "USAGE_LOAD": {"FGA": 1.0, "FTA": 0.44, "TOV": 1.0},
+    # FG3A_LOAD — three-point attempt volume (2026-07 FG3M improvement).
+    "FG3A_LOAD": {"FG3A": 1.0},
 }
 
 # Ratio composites: name -> (numerator weights, denominator weights), EWM of
@@ -125,6 +128,8 @@ EWM_RATIO_COMPOSITES: dict[str, tuple[dict[str, float], dict[str, float]]] = {
     "SHOT_DIET3": ({"FG3A": 1.0}, {"FGA": 1.0}),
     # FT_FORM — free-throw % form. Added with the 2026-07 FT improvement.
     "FT_FORM": ({"FTM": 1.0}, {"FTA": 1.0}),
+    # FG3_FORM — 3PT% form ("is his stroke on"). 2026-07 FG3M improvement.
+    "FG3_FORM": ({"FG3M": 1.0}, {"FG3A": 1.0}),
 }
 
 # --- Player bio / anthro (2026-07 BLK model improvement) ---------------------
