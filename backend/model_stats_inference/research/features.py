@@ -106,6 +106,62 @@ def compute_history_features(
     return pd.DataFrame(out, index=df.index)
 
 
+def _ewm_series(values: pd.Series, group: pd.Series, halflife: int) -> pd.Series:
+    """Per-group exponentially-weighted mean of an already-shifted series."""
+    return values.groupby(group, sort=False).transform(
+        lambda s: s.ewm(halflife=halflife, min_periods=1).mean()
+    )
+
+
+def compute_ewm_features(df: pd.DataFrame, shifted: bool = True) -> pd.DataFrame:
+    """EWM block-history features (config.EWM_STAT / halflives), one row per input row.
+
+    ``df`` must be sorted by [PLAYER_ID, GAME_DATE]. With ``shifted=True`` (training)
+    each row's value uses only strictly-prior games; with ``shifted=False`` (as-of
+    serving state) the row's own game is included — the last row per player is then
+    the "as of now" value for predicting the *next*, unplayed game.
+
+    Columns: {stat}_ewm{hl}_mean, {stat}_ewm{hl}_rate (per-minute), plus
+    {stat}_share_ewm{hl} and {stat}_share_global (share of games with >= 1).
+    The ``_rate`` suffix matters: serving auto-generates ``T_x_`` interactions
+    for every rate feature.
+    """
+    stat = config.EWM_STAT
+    group = df["PLAYER_ID"]
+    per_game = df[stat].astype(float)
+    per_min = (per_game / df["MIN"].astype(float)).replace([np.inf, -np.inf], np.nan)
+    has_any = (per_game >= 1).astype(float)
+    if shifted:
+        per_game = per_game.groupby(group, sort=False).shift(1)
+        per_min = per_min.groupby(group, sort=False).shift(1)
+        has_any = has_any.groupby(group, sort=False).shift(1)
+
+    out = pd.DataFrame(index=df.index)
+    for hl in config.EWM_HALFLIVES:
+        out[f"{stat}_ewm{hl}_mean"] = _ewm_series(per_game, group, hl)
+        out[f"{stat}_ewm{hl}_rate"] = _ewm_series(per_min, group, hl)
+    out[f"{stat}_share_ewm{config.EWM_SHARE_HALFLIFE}"] = _ewm_series(
+        has_any, group, config.EWM_SHARE_HALFLIFE
+    )
+    out[f"{stat}_share_global"] = has_any.groupby(group, sort=False).transform(
+        lambda s: s.expanding(min_periods=1).mean()
+    )
+    return out
+
+
+def _bio_features(player_ids: pd.Series, player_bio: pd.DataFrame | None) -> pd.DataFrame:
+    """Static bio columns aligned to ``player_ids`` (all-NaN when no artifact)."""
+    if player_bio is None:
+        return pd.DataFrame(
+            {c: np.full(len(player_ids), np.nan) for c in config.BIO_COLUMNS},
+            index=player_ids.index,
+        )
+    bio = player_bio.drop_duplicates("PLAYER_ID").set_index("PLAYER_ID")
+    aligned = bio.reindex(player_ids.to_numpy())[config.BIO_COLUMNS]
+    aligned.index = player_ids.index
+    return aligned
+
+
 def _opponent_features(players: pd.DataFrame, team_allowed: pd.DataFrame) -> pd.DataFrame:
     """Opponent 'allowed' history aligned to each player-game.
 
@@ -162,20 +218,27 @@ def _efficiency_features(hist: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_feature_matrix(
-    players: pd.DataFrame, team_allowed: pd.DataFrame, team_own: pd.DataFrame
+    players: pd.DataFrame,
+    team_allowed: pd.DataFrame,
+    team_own: pd.DataFrame,
+    player_bio: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Assemble the full player-game feature matrix + targets + meta columns."""
     players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
 
-    # 1) Player history features (mean/var/rate over global + windows).
+    # 1) Player history features (mean/var/rate over global + windows), plus the
+    #    EWM block-history features and static bio columns.
     hist = compute_history_features(players, "PLAYER_ID", config.BASE_STATS, config.RATE_STATS, "")
+    ewm = compute_ewm_features(players, shifted=True)
+    bio = _bio_features(players["PLAYER_ID"], player_bio)
 
     # 2) t and t*rate — the minutes-scaled expectations (most important features).
     t = players["MIN"].to_numpy(dtype=float)
     inter = {"T_MIN": t}
-    for col in hist.columns:
-        if col.endswith("_rate"):
-            inter[f"T_x_{col}"] = t * hist[col].to_numpy()
+    for frame in (hist, ewm):
+        for col in frame.columns:
+            if col.endswith("_rate"):
+                inter[f"T_x_{col}"] = t * frame[col].to_numpy()
     inter = pd.DataFrame(inter, index=players.index)
 
     # 3) Shooting efficiency features (player's true %s over the window).
@@ -222,7 +285,7 @@ def build_feature_matrix(
         index=players.index,
     )
 
-    matrix = pd.concat([meta, ctx, hist, eff, inter, own, opp, targets], axis=1)
+    matrix = pd.concat([meta, ctx, hist, ewm, bio, eff, inter, own, opp, targets], axis=1)
     return matrix
 
 
@@ -259,21 +322,45 @@ def _asof_features(
 
 
 def build_current_state(
-    players: pd.DataFrame, team_allowed: pd.DataFrame, team_own: pd.DataFrame
+    players: pd.DataFrame,
+    team_allowed: pd.DataFrame,
+    team_own: pd.DataFrame,
+    player_bio: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Per-player and per-team 'as of now' vectors used by the live feature store.
 
     Returns (player_vectors, team_allowed_vectors, team_own_vectors):
-      - player_vectors: keyed PLAYER_ID, history mean/var/rate + FG/FG3/FT_EFF, plus
-        PLAYER_NAME, TEAM_ID (current), POSITION, last_game_date, games_count.
+      - player_vectors: keyed PLAYER_ID, history mean/var/rate + FG/FG3/FT_EFF +
+        EWM block features + static bio, plus PLAYER_NAME, TEAM_ID (current),
+        POSITION, last_game_date, games_count.
       - team_allowed_vectors: keyed TEAM_ID, OPP_ALLOWED_* features.
       - team_own_vectors:     keyed TEAM_ID, TEAM_* features.
+
+    ``player_bio`` defaults to the committed artifact (config.BIO_PATH) when it
+    exists; without it the bio columns are NaN and the models degrade gracefully.
     """
+    if player_bio is None and config.BIO_PATH.exists():
+        player_bio = pd.read_parquet(config.BIO_PATH)
+
     # Player vectors.
     p = _asof_features(players, "PLAYER_ID", config.BASE_STATS, config.RATE_STATS, "")
     hist = p.drop(columns=["PLAYER_ID", "GAME_DATE"])
     eff = _efficiency_features(hist)
-    player_vectors = pd.concat([p[["PLAYER_ID"]], hist, eff], axis=1)
+
+    # As-of EWM state: unshifted (includes the most recent game), last row per
+    # player is the current state — mirrors the synthetic-row trick above.
+    sorted_players = players.sort_values(["PLAYER_ID", "GAME_DATE"], kind="stable").reset_index(drop=True)
+    ewm_all = compute_ewm_features(sorted_players, shifted=False)
+    ewm_all["PLAYER_ID"] = sorted_players["PLAYER_ID"]
+    ewm = (
+        ewm_all.groupby("PLAYER_ID", as_index=False, sort=False).tail(1)
+        .set_index("PLAYER_ID")
+        .reindex(p["PLAYER_ID"].to_numpy())
+        .reset_index(drop=True)
+    )
+
+    bio = _bio_features(p["PLAYER_ID"], player_bio).reset_index(drop=True)
+    player_vectors = pd.concat([p[["PLAYER_ID"]], hist, eff, ewm, bio], axis=1)
 
     gp = players.sort_values(["PLAYER_ID", "GAME_DATE"]).groupby("PLAYER_ID", sort=True)
     meta = gp.agg(

@@ -18,7 +18,8 @@ def main() -> None:
     args = parser.parse_args()
 
     players, team_allowed, team_own = data.load_or_build(refresh=args.refresh)
-    matrix = features.build_feature_matrix(players, team_allowed, team_own)
+    player_bio = data.load_or_fetch_bio(refresh=args.refresh)
+    matrix = features.build_feature_matrix(players, team_allowed, team_own, player_bio)
 
     # Persist the full matrix so the training step can load X/y directly.
     matrix_path = config.DATA_DIR / "feature_matrix.parquet"

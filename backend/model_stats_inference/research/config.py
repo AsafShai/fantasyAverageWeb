@@ -65,6 +65,26 @@ OPP_ALLOWED_STATS: list[str] = ["PTS", "REB", "AST", "STL", "BLK", "FG3M", "FG_P
 # Own-team offensive context: the player's own team environment (pace, scoring).
 TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
 
+# --- EWM block-history features (2026-07 BLK model improvement) -------------
+
+# Exponentially-weighted history of blocks: reacts faster than the flat w5/w10
+# windows and never truncates. Halflives are in games; series are shifted one
+# game before weighting so a game never leaks into its own features.
+EWM_STAT = "BLK"
+EWM_HALFLIVES: list[int] = [5, 15]
+# Halflife for the share-of-games-with->=1-block indicator.
+EWM_SHARE_HALFLIFE = 10
+
+# --- Player bio / anthro (2026-07 BLK model improvement) ---------------------
+
+# Static per-player physical features. Height/weight come from `playerindex`
+# (full coverage); wingspan/standing reach from the draft combine (~65% of
+# players — missing values stay NaN, HGB handles them natively).
+BIO_COLUMNS: list[str] = [
+    "HEIGHT_IN", "WEIGHT_LB", "WINGSPAN_IN", "REACH_IN", "WING_MINUS_HEIGHT",
+]
+COMBINE_YEARS = range(2000, 2026)
+
 # --- Feature selection -----------------------------------------------------
 
 N_SELECT = 50          # features to keep per target
@@ -75,3 +95,7 @@ CV_SPLITS = 5          # TimeSeriesSplit folds
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 OUTPUT_DIR = ROOT / "outputs"
+
+# Committed bio artifact — lives next to the model binaries because serving
+# needs it on a fresh clone (research/data/ is gitignored).
+BIO_PATH = ROOT.parent / "models" / "player_bio.parquet"

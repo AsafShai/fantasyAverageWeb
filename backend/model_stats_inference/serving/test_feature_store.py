@@ -34,6 +34,23 @@ def test_global_mean_includes_last_game(store, raw_players):
     assert got == pytest.approx(expected, rel=1e-6)
 
 
+def test_player_vector_has_ewm_block_features(store, raw_players):
+    # As-of EWM state includes the player's last game (unshifted path).
+    vec = store.get_player_state(FULL_PID).vector
+    blk = raw_players.loc[raw_players["PLAYER_ID"] == FULL_PID].sort_values("GAME_DATE")["BLK"]
+    expected = blk.ewm(halflife=5, min_periods=1).mean().iloc[-1]
+    assert vec["BLK_ewm5_mean"] == pytest.approx(expected, rel=1e-6)
+    for col in ("BLK_ewm15_rate", "BLK_share_ewm10", "BLK_share_global"):
+        assert np.isfinite(vec[col])
+
+
+def test_player_vector_has_bio_columns(store):
+    # Synthetic player ids aren't in the committed bio artifact -> columns exist, NaN.
+    vec = store.get_player_state(FULL_PID).vector
+    for col in ("HEIGHT_IN", "WEIGHT_LB", "WINGSPAN_IN", "REACH_IN", "WING_MINUS_HEIGHT"):
+        assert col in vec.index
+
+
 def test_unknown_player_raises(store):
     with pytest.raises(UnknownPlayerError):
         store.get_player_state(99999)

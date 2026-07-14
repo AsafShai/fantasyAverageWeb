@@ -36,6 +36,51 @@ def test_predict_returns_all_stats(store, models_dir):
         assert np.isfinite(v) and v >= 0
 
 
+def test_assembled_row_has_new_blk_features(store, models_dir):
+    # The row handed to the models must carry the EWM/bio features, and the
+    # generic T_x loop must synthesize the minutes interaction for EWM rates.
+    inf = LiveInference(store, models_dir=models_dir)
+    req = _request(FULL_PID, 30, store)
+    state = store.get_player_state(req.player_id)
+    own = store.get_team_state(state.team_id)
+    opp = store.get_team_state(req.opponent_team_id)
+    row = inf._assemble_row(state, own, opp, req)
+    assert np.isfinite(row["BLK_ewm5_mean"])
+    assert "HEIGHT_IN" in row
+    assert row["T_x_BLK_ewm5_rate"] == pytest.approx(30 * row["BLK_ewm5_rate"])
+
+
+def test_model_with_missing_store_feature_degrades_gracefully(store, models_dir, tmp_path):
+    # A model can ship with features older stored vectors don't carry yet (e.g.
+    # right after a deploy, before the nightly re-materialization). Prediction
+    # must fall back to NaN for those features, not KeyError the batch.
+    import joblib
+
+    payload = joblib.load(models_dir / "BLK.joblib")
+    payload["features"] = payload["features"] + ["SOME_FUTURE_FEATURE"]
+    # HGB must know the extra column at fit time for names to match; retrain the
+    # tiny model with an all-NaN extra column.
+    import numpy as np
+    import pandas as pd
+    from model_stats_inference.training import models as registry
+
+    n = 50
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame(rng.uniform(0, 30, size=(n, len(payload["features"]))),
+                     columns=payload["features"])
+    # trained with a partially-missing column (like real bio/anthro coverage) ...
+    X.loc[X.index[: n // 2], "SOME_FUTURE_FEATURE"] = np.nan
+    y = X.iloc[:, 0] * 0.03
+    payload["model"] = registry.build_estimator("hgb_l2").fit(X, y)
+    out = tmp_path / "models"
+    out.mkdir()
+    joblib.dump(payload, out / "BLK.joblib")
+
+    inf = LiveInference(store, models_dir=out)
+    res = inf.predict(_request(FULL_PID, 30, store))
+    assert np.isfinite(res.stats["BLK"].value)
+
+
 def test_more_minutes_more_points(store, models_dir):
     inf = LiveInference(store, models_dir=models_dir)
     low = inf.predict(_request(FULL_PID, 20, store)).stats["PTS"].value
