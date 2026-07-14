@@ -60,3 +60,12 @@ bio/anthro + `PTS_ewm{5,15}_mean/rate` + `T_x_PTS_ewm{5,15}_rate` +
 (`EWM_RATIO_COMPOSITES`, minutes-free). All from existing columns — no new
 data source. Validation gate reproduced the research numbers exactly before
 retraining; the reconciler was rebuilt from the new OOF residuals.
+
+## Post-ship hypothesis tested: multi-threshold shares
+
+Adding P(≥5) and P(≥10) share features (ewm10 + global each) on top of the
+shipped P(≥20): RMSE identical (5.0021), MAE/PoisDev/Spearman microscopically
+better (−0.0005 MAE), 31+ tail slightly worse (9.967 → 9.974). The scoring
+distribution is already pinned by mean + variance + rate + P(≥20); extra
+thresholds are nearly redundant and trade the tail for the body. Rejected —
+fails the improve-all-metrics bar.
