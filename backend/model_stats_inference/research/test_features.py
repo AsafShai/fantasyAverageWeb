@@ -83,10 +83,13 @@ def _blk_player(blk: list[float], mins: list[float] | None = None) -> pd.DataFra
     df = _player(list(range(len(blk))), pts=[0.0] * len(blk), mins=mins or [10.0] * len(blk))
     df["BLK"] = blk
     # compute_ewm_features consumes every stat in config.EWM_STATS plus the
-    # composite-rate source columns.
+    # composite-rate and ratio-composite source columns.
     needed = set(config.EWM_STATS)
-    for cols in config.EWM_RATE_COMPOSITES.values():
-        needed.update(cols)
+    for weights in config.EWM_RATE_COMPOSITES.values():
+        needed.update(weights)
+    for num_w, den_w in config.EWM_RATIO_COMPOSITES.values():
+        needed.update(num_w)
+        needed.update(den_w)
     for stat in needed:
         if stat not in df.columns:
             df[stat] = 0.0
@@ -163,6 +166,30 @@ def test_composite_rate_sums_sources_over_minutes():
     assert r[1] == pytest.approx((4 + 2) / 20)   # only game 0 in history
     expected = pd.Series([6 / 20, 8 / 20]).ewm(halflife=hl, min_periods=1).mean().iloc[-1]
     assert r[2] == pytest.approx(expected)
+
+
+def test_weighted_composite_and_ratio():
+    # USAGE_LOAD = (FGA + 0.44*FTA + TOV)/MIN; TS_EFF = PTS/(2*FGA + 0.88*FTA).
+    df = _blk_player([0, 0], mins=[20.0, 20.0])
+    df["FGA"] = [10.0, 10.0]
+    df["FTA"] = [5.0, 5.0]
+    df["TOV"] = [3.0, 3.0]
+    df["PTS"] = [22.0, 22.0]
+    f = compute_ewm_features(df, shifted=True)
+    hl = config.EWM_COMPOSITE_HALFLIFE
+    assert f[f"USAGE_LOAD_ewm{hl}_rate"].to_numpy()[1] == pytest.approx((10 + 0.44 * 5 + 3) / 20)
+    assert f[f"TS_EFF_ewm{hl}"].to_numpy()[1] == pytest.approx(22 / (2 * 10 + 0.88 * 5))
+
+
+def test_ratio_composite_nan_on_zero_denominator():
+    df = _blk_player([0, 0], mins=[20.0, 20.0])
+    df["FGA"] = [0.0, 10.0]
+    df["FTA"] = [0.0, 0.0]
+    df["PTS"] = [0.0, 20.0]
+    f = compute_ewm_features(df, shifted=True)
+    hl = config.EWM_COMPOSITE_HALFLIFE
+    # game 0 had zero shot volume -> its ratio is NaN, so row 1 has no history.
+    assert np.isnan(f[f"TS_EFF_ewm{hl}"].to_numpy()[1])
 
 
 def test_ewm_covers_every_configured_stat():

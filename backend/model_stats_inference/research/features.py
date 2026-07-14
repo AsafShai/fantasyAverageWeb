@@ -147,16 +147,29 @@ def compute_ewm_features(df: pd.DataFrame, shifted: bool = True) -> pd.DataFrame
             lambda s: s.expanding(min_periods=1).mean()
         )
 
-    # Composite per-minute rates (e.g. ball-dominance = (AST+TOV)/MIN). The
+    # Composite per-minute rates (e.g. usage = (FGA + 0.44*FTA + TOV)/MIN). The
     # _rate suffix opts these into the automatic T_x minutes interaction.
     hl = config.EWM_COMPOSITE_HALFLIFE
-    for name, cols in config.EWM_RATE_COMPOSITES.items():
-        rate = (df[cols].sum(axis=1) / df["MIN"].astype(float)).replace(
+
+    def _weighted(weights: dict[str, float]) -> pd.Series:
+        return sum(w * df[c].astype(float) for c, w in weights.items())
+
+    for name, weights in config.EWM_RATE_COMPOSITES.items():
+        rate = (_weighted(weights) / df["MIN"].astype(float)).replace(
             [np.inf, -np.inf], np.nan
         )
         if shifted:
             rate = rate.groupby(group, sort=False).shift(1)
         out[f"{name}_ewm{hl}_rate"] = _ewm_series(rate, group, hl)
+
+    # Ratio composites (e.g. true-shooting %): per-game ratio, NaN on zero
+    # denominator, then EWM'd. Minutes-free — no _rate suffix, no T_x.
+    for name, (num_w, den_w) in config.EWM_RATIO_COMPOSITES.items():
+        den = _weighted(den_w)
+        ratio = (_weighted(num_w) / den).where(den > 0)
+        if shifted:
+            ratio = ratio.groupby(group, sort=False).shift(1)
+        out[f"{name}_ewm{hl}"] = _ewm_series(ratio, group, hl)
     return out
 
 
