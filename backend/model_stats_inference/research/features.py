@@ -114,38 +114,38 @@ def _ewm_series(values: pd.Series, group: pd.Series, halflife: int) -> pd.Series
 
 
 def compute_ewm_features(df: pd.DataFrame, shifted: bool = True) -> pd.DataFrame:
-    """EWM block-history features (config.EWM_STAT / halflives), one row per input row.
+    """EWM history features (config.EWM_STATS / halflives), one row per input row.
 
     ``df`` must be sorted by [PLAYER_ID, GAME_DATE]. With ``shifted=True`` (training)
     each row's value uses only strictly-prior games; with ``shifted=False`` (as-of
     serving state) the row's own game is included — the last row per player is then
     the "as of now" value for predicting the *next*, unplayed game.
 
-    Columns: {stat}_ewm{hl}_mean, {stat}_ewm{hl}_rate (per-minute), plus
+    Columns per stat: {stat}_ewm{hl}_mean, {stat}_ewm{hl}_rate (per-minute), plus
     {stat}_share_ewm{hl} and {stat}_share_global (share of games with >= 1).
     The ``_rate`` suffix matters: serving auto-generates ``T_x_`` interactions
     for every rate feature.
     """
-    stat = config.EWM_STAT
     group = df["PLAYER_ID"]
-    per_game = df[stat].astype(float)
-    per_min = (per_game / df["MIN"].astype(float)).replace([np.inf, -np.inf], np.nan)
-    has_any = (per_game >= 1).astype(float)
-    if shifted:
-        per_game = per_game.groupby(group, sort=False).shift(1)
-        per_min = per_min.groupby(group, sort=False).shift(1)
-        has_any = has_any.groupby(group, sort=False).shift(1)
-
     out = pd.DataFrame(index=df.index)
-    for hl in config.EWM_HALFLIVES:
-        out[f"{stat}_ewm{hl}_mean"] = _ewm_series(per_game, group, hl)
-        out[f"{stat}_ewm{hl}_rate"] = _ewm_series(per_min, group, hl)
-    out[f"{stat}_share_ewm{config.EWM_SHARE_HALFLIFE}"] = _ewm_series(
-        has_any, group, config.EWM_SHARE_HALFLIFE
-    )
-    out[f"{stat}_share_global"] = has_any.groupby(group, sort=False).transform(
-        lambda s: s.expanding(min_periods=1).mean()
-    )
+    for stat in config.EWM_STATS:
+        per_game = df[stat].astype(float)
+        per_min = (per_game / df["MIN"].astype(float)).replace([np.inf, -np.inf], np.nan)
+        has_any = (per_game >= 1).astype(float)
+        if shifted:
+            per_game = per_game.groupby(group, sort=False).shift(1)
+            per_min = per_min.groupby(group, sort=False).shift(1)
+            has_any = has_any.groupby(group, sort=False).shift(1)
+
+        for hl in config.EWM_HALFLIVES:
+            out[f"{stat}_ewm{hl}_mean"] = _ewm_series(per_game, group, hl)
+            out[f"{stat}_ewm{hl}_rate"] = _ewm_series(per_min, group, hl)
+        out[f"{stat}_share_ewm{config.EWM_SHARE_HALFLIFE}"] = _ewm_series(
+            has_any, group, config.EWM_SHARE_HALFLIFE
+        )
+        out[f"{stat}_share_global"] = has_any.groupby(group, sort=False).transform(
+            lambda s: s.expanding(min_periods=1).mean()
+        )
     return out
 
 

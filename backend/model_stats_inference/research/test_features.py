@@ -82,6 +82,10 @@ def test_count_cap_keeps_last_n():
 def _blk_player(blk: list[float], mins: list[float] | None = None) -> pd.DataFrame:
     df = _player(list(range(len(blk))), pts=[0.0] * len(blk), mins=mins or [10.0] * len(blk))
     df["BLK"] = blk
+    # compute_ewm_features consumes every stat in config.EWM_STATS.
+    for stat in config.EWM_STATS:
+        if stat not in df.columns:
+            df[stat] = 0.0
     return df
 
 
@@ -129,6 +133,15 @@ def test_ewm_rate_is_per_minute():
     df = _blk_player([2, 2], mins=[20.0, 40.0])
     f = compute_ewm_features(df, shifted=True)
     assert f["BLK_ewm5_rate"].to_numpy()[1] == pytest.approx(2 / 20)
+
+
+def test_ewm_covers_every_configured_stat():
+    df = _blk_player([1, 2, 3])
+    f = compute_ewm_features(df, shifted=True)
+    for stat in config.EWM_STATS:
+        for col in (f"{stat}_ewm5_mean", f"{stat}_ewm15_rate",
+                    f"{stat}_share_ewm{config.EWM_SHARE_HALFLIFE}", f"{stat}_share_global"):
+            assert col in f.columns
 
 
 def test_bio_features_align_and_handle_missing():
