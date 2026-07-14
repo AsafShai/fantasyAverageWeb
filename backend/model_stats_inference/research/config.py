@@ -67,10 +67,12 @@ TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
 
 # --- EWM block-history features (2026-07 BLK model improvement) -------------
 
-# Exponentially-weighted history of blocks: reacts faster than the flat w5/w10
-# windows and never truncates. Halflives are in games; series are shifted one
-# game before weighting so a game never leaks into its own features.
-EWM_STAT = "BLK"
+# Exponentially-weighted history: reacts faster than the flat w5/w10 windows
+# and never truncates. Halflives are in games; series are shifted one game
+# before weighting so a game never leaks into its own features. Applied to the
+# rare-event stats where the flat windows are noisiest (added with the 2026-07
+# BLK improvement; STL joined with the same recipe).
+EWM_STATS: list[str] = ["BLK", "STL"]
 EWM_HALFLIVES: list[int] = [5, 15]
 # Halflife for the share-of-games-with->=1-block indicator.
 EWM_SHARE_HALFLIFE = 10
