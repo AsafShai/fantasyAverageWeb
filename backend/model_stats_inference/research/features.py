@@ -146,6 +146,17 @@ def compute_ewm_features(df: pd.DataFrame, shifted: bool = True) -> pd.DataFrame
         out[f"{stat}_share_global"] = has_any.groupby(group, sort=False).transform(
             lambda s: s.expanding(min_periods=1).mean()
         )
+
+    # Composite per-minute rates (e.g. ball-dominance = (AST+TOV)/MIN). The
+    # _rate suffix opts these into the automatic T_x minutes interaction.
+    hl = config.EWM_COMPOSITE_HALFLIFE
+    for name, cols in config.EWM_RATE_COMPOSITES.items():
+        rate = (df[cols].sum(axis=1) / df["MIN"].astype(float)).replace(
+            [np.inf, -np.inf], np.nan
+        )
+        if shifted:
+            rate = rate.groupby(group, sort=False).shift(1)
+        out[f"{name}_ewm{hl}_rate"] = _ewm_series(rate, group, hl)
     return out
 
 
