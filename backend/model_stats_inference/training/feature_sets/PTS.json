@@ -50,6 +50,23 @@
     "FTA_global_rate",
     "OPP_ALLOWED_AST_w10_mean",
     "FT_EFF_global",
-    "TEAM_AST_w10_mean"
+    "TEAM_AST_w10_mean",
+    "HEIGHT_IN",
+    "WEIGHT_LB",
+    "WINGSPAN_IN",
+    "REACH_IN",
+    "WING_MINUS_HEIGHT",
+    "PTS_ewm5_mean",
+    "PTS_ewm15_mean",
+    "PTS_ewm5_rate",
+    "PTS_ewm15_rate",
+    "T_x_PTS_ewm5_rate",
+    "T_x_PTS_ewm15_rate",
+    "PTS_share_ewm10",
+    "PTS_share_global",
+    "USAGE_LOAD_ewm10_rate",
+    "T_x_USAGE_LOAD_ewm10_rate",
+    "FGA_LOAD_ewm10_rate",
+    "TS_EFF_ewm10"
   ]
 }
