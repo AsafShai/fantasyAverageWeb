@@ -146,6 +146,17 @@ def compute_ewm_features(df: pd.DataFrame, shifted: bool = True) -> pd.DataFrame
         out[f"{stat}_share_global"] = has_any.groupby(group, sort=False).transform(
             lambda s: s.expanding(min_periods=1).mean()
         )
+        # Extra thresholds (coarse CDF; see EWM_SHARE_EXTRA in config).
+        for thr in config.EWM_SHARE_EXTRA.get(stat, []):
+            ind = (df[stat].astype(float) >= thr).astype(float)
+            if shifted:
+                ind = ind.groupby(group, sort=False).shift(1)
+            out[f"{stat}_share{thr}_ewm{config.EWM_SHARE_HALFLIFE}"] = _ewm_series(
+                ind, group, config.EWM_SHARE_HALFLIFE
+            )
+            out[f"{stat}_share{thr}_global"] = ind.groupby(group, sort=False).transform(
+                lambda s: s.expanding(min_periods=1).mean()
+            )
 
     # Composite per-minute rates (e.g. usage = (FGA + 0.44*FTA + TOV)/MIN). The
     # _rate suffix opts these into the automatic T_x minutes interaction.

@@ -77,16 +77,28 @@ TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
 # before weighting so a game never leaks into its own features. Applied to the
 # rare-event stats where the flat windows are noisiest (added with the 2026-07
 # BLK improvement; STL joined with the same recipe).
-EWM_STATS: list[str] = ["BLK", "STL", "REB", "AST", "PTS", "FGM", "FGA"]
+EWM_STATS: list[str] = ["BLK", "STL", "REB", "AST", "PTS", "FGM", "FGA", "FTM", "FTA"]
 EWM_HALFLIVES: list[int] = [5, 15]
 # Halflife for the share-of-games indicator, and the per-stat threshold it
 # counts: P(stat >= threshold). For rare events (blocks/steals) >=1 is the
 # meaningful line; for volume stats the thresholds mark the board-crasher
-# (>=6), playmaker (>=5), 20-point-scorer, hot-hand (>=8 makes) and
-# volume-shooter (>=15 attempts) lines instead.
+# (>=6), playmaker (>=5), 20-point-scorer, hot-hand (>=8 makes),
+# volume-shooter (>=15 attempts) and heavy-foul-drawer (>=6 FTA / >=5 FTM)
+# lines instead.
 EWM_SHARE_HALFLIFE = 10
 EWM_SHARE_MIN: dict[str, int] = {
     "BLK": 1, "STL": 1, "REB": 6, "AST": 5, "PTS": 20, "FGM": 8, "FGA": 15,
+    "FTM": 5, "FTA": 6,
+}
+
+# Extra share thresholds (columns named {stat}_share{thr}_*): a coarse CDF of
+# the stat's distribution. Useful where the distribution is bimodal — free
+# throws split non-drawers from drawers, so P(>=2)/P(>=4) attempts and P(>=3)
+# makes carry shape information the single primary threshold misses (2026-07
+# FT tail improvement; the same idea tested as redundant for PTS).
+EWM_SHARE_EXTRA: dict[str, list[int]] = {
+    "FTA": [2, 4],
+    "FTM": [3],
 }
 
 # Composite per-minute EWM rates (halflife EWM_COMPOSITE_HALFLIFE): each entry
@@ -111,6 +123,8 @@ EWM_RATIO_COMPOSITES: dict[str, tuple[dict[str, float], dict[str, float]]] = {
     # mix (diet shifts move makes). Added with the 2026-07 FG improvement.
     "FG_FORM": ({"FGM": 1.0}, {"FGA": 1.0}),
     "SHOT_DIET3": ({"FG3A": 1.0}, {"FGA": 1.0}),
+    # FT_FORM — free-throw % form. Added with the 2026-07 FT improvement.
+    "FT_FORM": ({"FTM": 1.0}, {"FTA": 1.0}),
 }
 
 # --- Player bio / anthro (2026-07 BLK model improvement) ---------------------
