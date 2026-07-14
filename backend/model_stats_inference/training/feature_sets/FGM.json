@@ -50,6 +50,25 @@
     "FG_EFF_w5",
     "REB_w5_mean",
     "FGA_global_rate",
-    "OPP_ALLOWED_FG_PCT_w10_var"
+    "OPP_ALLOWED_FG_PCT_w10_var",
+    "FGM_ewm5_mean",
+    "FGM_ewm15_mean",
+    "FGM_ewm5_rate",
+    "FGM_ewm15_rate",
+    "T_x_FGM_ewm5_rate",
+    "T_x_FGM_ewm15_rate",
+    "FGM_share_ewm10",
+    "FGM_share_global",
+    "FG_FORM_ewm10",
+    "SHOT_DIET3_ewm10",
+    "USAGE_LOAD_ewm10_rate",
+    "T_x_USAGE_LOAD_ewm10_rate",
+    "FGA_LOAD_ewm10_rate",
+    "TS_EFF_ewm10",
+    "HEIGHT_IN",
+    "WEIGHT_LB",
+    "WINGSPAN_IN",
+    "REACH_IN",
+    "WING_MINUS_HEIGHT"
   ]
 }

@@ -60,7 +60,12 @@ RATE_STATS: list[str] = [
 TARGETS: list[str] = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
 
 # Opponent ("rival") stats-allowed features: how much the opponent team gives up.
-OPP_ALLOWED_STATS: list[str] = ["PTS", "REB", "AST", "STL", "BLK", "FG3M", "FG_PCT"]
+# FGA/FTA/TOV joined with the 2026-07 FG improvement — the opponent's allowed
+# shot volume, foul rate and forced turnovers (attempt-suppression defense).
+# All three are columns fs_team_games already stores, so serving needs no
+# schema change.
+OPP_ALLOWED_STATS: list[str] = ["PTS", "REB", "AST", "STL", "BLK", "FG3M", "FG_PCT",
+                                "FGA", "FTA", "TOV"]
 
 # Own-team offensive context: the player's own team environment (pace, scoring).
 TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
@@ -72,14 +77,17 @@ TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
 # before weighting so a game never leaks into its own features. Applied to the
 # rare-event stats where the flat windows are noisiest (added with the 2026-07
 # BLK improvement; STL joined with the same recipe).
-EWM_STATS: list[str] = ["BLK", "STL", "REB", "AST", "PTS"]
+EWM_STATS: list[str] = ["BLK", "STL", "REB", "AST", "PTS", "FGM", "FGA"]
 EWM_HALFLIVES: list[int] = [5, 15]
 # Halflife for the share-of-games indicator, and the per-stat threshold it
 # counts: P(stat >= threshold). For rare events (blocks/steals) >=1 is the
 # meaningful line; for volume stats the thresholds mark the board-crasher
-# (>=6), playmaker (>=5) and 20-point-scorer lines instead.
+# (>=6), playmaker (>=5), 20-point-scorer, hot-hand (>=8 makes) and
+# volume-shooter (>=15 attempts) lines instead.
 EWM_SHARE_HALFLIFE = 10
-EWM_SHARE_MIN: dict[str, int] = {"BLK": 1, "STL": 1, "REB": 6, "AST": 5, "PTS": 20}
+EWM_SHARE_MIN: dict[str, int] = {
+    "BLK": 1, "STL": 1, "REB": 6, "AST": 5, "PTS": 20, "FGM": 8, "FGA": 15,
+}
 
 # Composite per-minute EWM rates (halflife EWM_COMPOSITE_HALFLIFE): each entry
 # is name -> {column: weight}; the weighted sum is divided by MIN. Produces
@@ -99,6 +107,10 @@ EWM_RATE_COMPOSITES: dict[str, dict[str, float]] = {
 # shooting: "is he scoring efficiently lately".
 EWM_RATIO_COMPOSITES: dict[str, tuple[dict[str, float], dict[str, float]]] = {
     "TS_EFF": ({"PTS": 1.0}, {"FGA": 2.0, "FTA": 0.88}),
+    # FG_FORM — raw FG% form ("is he hot"); SHOT_DIET3 — 3PA share of the shot
+    # mix (diet shifts move makes). Added with the 2026-07 FG improvement.
+    "FG_FORM": ({"FGM": 1.0}, {"FGA": 1.0}),
+    "SHOT_DIET3": ({"FG3A": 1.0}, {"FGA": 1.0}),
 }
 
 # --- Player bio / anthro (2026-07 BLK model improvement) ---------------------
