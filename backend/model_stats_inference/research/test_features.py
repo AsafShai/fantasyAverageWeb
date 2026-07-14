@@ -135,6 +135,18 @@ def test_ewm_rate_is_per_minute():
     assert f["BLK_ewm5_rate"].to_numpy()[1] == pytest.approx(2 / 20)
 
 
+def test_share_uses_per_stat_threshold():
+    # REB share counts games with >= EWM_SHARE_MIN['REB'] (6), not >= 1.
+    df = _blk_player([0, 0, 0, 0])
+    df["REB"] = [4, 6, 8, 2]
+    f = compute_ewm_features(df, shifted=True)
+    s = f["REB_share_global"].to_numpy()
+    assert np.isnan(s[0])
+    assert s[1] == pytest.approx(0.0)      # prior: [4]     -> 0 games >= 6
+    assert s[2] == pytest.approx(0.5)      # prior: [4,6]   -> 1 of 2
+    assert s[3] == pytest.approx(2 / 3)    # prior: [4,6,8] -> 2 of 3
+
+
 def test_ewm_covers_every_configured_stat():
     df = _blk_player([1, 2, 3])
     f = compute_ewm_features(df, shifted=True)
