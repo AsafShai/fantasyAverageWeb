@@ -112,7 +112,11 @@ class LiveInference:
         # One predict call per model over the whole batch (vs ~N per player).
         batched: dict[str, np.ndarray] = {}
         for target, payload in self.models.items():
-            vals = payload["model"].predict(X[payload["features"]])
+            # reindex (not X[...]) so a model deployed with features the stored
+            # vectors don't carry yet degrades to NaN (HGB-native) instead of
+            # KeyError-ing the whole batch — vectors self-heal on the next
+            # nightly re-materialization.
+            vals = payload["model"].predict(X.reindex(columns=payload["features"]))
             if payload.get("clip_at_zero", True):
                 vals = np.clip(vals, 0.0, None)
             batched[target] = vals

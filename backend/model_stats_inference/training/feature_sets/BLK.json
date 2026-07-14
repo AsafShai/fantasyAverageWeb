@@ -50,6 +50,19 @@
     "T_x_FG3M_w5_rate",
     "TEAM_FG3M_global_var",
     "TEAM_FG3M_global_mean",
-    "T_x_FG3A_w5_rate"
+    "T_x_FG3A_w5_rate",
+    "HEIGHT_IN",
+    "WEIGHT_LB",
+    "WINGSPAN_IN",
+    "REACH_IN",
+    "WING_MINUS_HEIGHT",
+    "BLK_ewm5_mean",
+    "BLK_ewm15_mean",
+    "BLK_ewm5_rate",
+    "BLK_ewm15_rate",
+    "T_x_BLK_ewm5_rate",
+    "T_x_BLK_ewm15_rate",
+    "BLK_share_ewm10",
+    "BLK_share_global"
   ]
 }

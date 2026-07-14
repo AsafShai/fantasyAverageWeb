@@ -15,7 +15,13 @@ from __future__ import annotations
 import time
 
 import pandas as pd
-from nba_api.stats.endpoints import commonteamroster, playergamelogs, teamgamelogs
+from nba_api.stats.endpoints import (
+    commonteamroster,
+    draftcombineplayeranthro,
+    playergamelogs,
+    playerindex,
+    teamgamelogs,
+)
 from nba_api.stats.static import teams as static_teams
 
 from . import config
@@ -71,6 +77,79 @@ def fetch_positions(seasons: list[str]) -> pd.DataFrame:
                 pos[int(pid)] = position
             time.sleep(0.6)
     return pd.DataFrame({"PLAYER_ID": list(pos), "POSITION": list(pos.values())})
+
+
+# --- Player bio / anthro (static per player) --------------------------------
+
+def _height_to_inches(h: object) -> float:
+    """'6-8' -> 80.0; anything unparseable -> NaN."""
+    try:
+        ft, inch = str(h).split("-")
+        return int(ft) * 12 + int(inch)
+    except (ValueError, AttributeError):
+        return float("nan")
+
+
+def fetch_player_bio(seasons: list[str]) -> pd.DataFrame:
+    """PLAYER_ID -> HEIGHT_IN / WEIGHT_LB (playerindex, latest season wins) plus
+    WINGSPAN_IN / REACH_IN / WING_MINUS_HEIGHT (draft combine, partial coverage).
+
+    Missing combine values stay NaN — the HGB models ingest NaN natively, so a
+    player without combine data simply falls back to the other features.
+    """
+    bio: dict[int, tuple[float, float]] = {}
+    for season in seasons:  # later seasons overwrite -> most recent bio kept
+        print(f"  -> playerindex {season} ...", flush=True)
+        df = playerindex.PlayerIndex(season=season, timeout=REQUEST_TIMEOUT).get_data_frames()[0]
+        for _, r in df.iterrows():
+            bio[int(r["PERSON_ID"])] = (
+                _height_to_inches(r["HEIGHT"]),
+                pd.to_numeric(r["WEIGHT"], errors="coerce"),
+            )
+        time.sleep(SLEEP_BETWEEN_CALLS)
+    out = pd.DataFrame(
+        {
+            "PLAYER_ID": list(bio),
+            "HEIGHT_IN": [v[0] for v in bio.values()],
+            "WEIGHT_LB": [v[1] for v in bio.values()],
+        }
+    )
+
+    frames = []
+    for year in config.COMBINE_YEARS:
+        print(f"  -> combine anthro {year} ...", flush=True)
+        df = draftcombineplayeranthro.DraftCombinePlayerAnthro(
+            league_id="00", season_year=str(year), timeout=REQUEST_TIMEOUT
+        ).get_data_frames()[0]
+        df["COMBINE_YEAR"] = year
+        frames.append(df)
+        time.sleep(SLEEP_BETWEEN_CALLS)
+    anthro = pd.concat(frames, ignore_index=True)
+    anthro = anthro.sort_values("COMBINE_YEAR").drop_duplicates("PLAYER_ID", keep="last")
+    anthro = pd.DataFrame(
+        {
+            "PLAYER_ID": anthro["PLAYER_ID"].astype(int),
+            "WINGSPAN_IN": pd.to_numeric(anthro["WINGSPAN"], errors="coerce"),
+            "REACH_IN": pd.to_numeric(anthro["STANDING_REACH"], errors="coerce"),
+            "_COMBINE_HEIGHT": pd.to_numeric(anthro["HEIGHT_WO_SHOES"], errors="coerce"),
+        }
+    )
+
+    out = out.merge(anthro, on="PLAYER_ID", how="outer")
+    out["WING_MINUS_HEIGHT"] = out["WINGSPAN_IN"] - out["_COMBINE_HEIGHT"]
+    return out.drop(columns=["_COMBINE_HEIGHT"])[["PLAYER_ID", *config.BIO_COLUMNS]]
+
+
+def load_or_fetch_bio(refresh: bool = False) -> pd.DataFrame:
+    """Load the committed bio artifact, fetching + writing it when absent/refresh."""
+    if not refresh and config.BIO_PATH.exists():
+        return pd.read_parquet(config.BIO_PATH)
+    print("Fetching player bio/anthro:")
+    bio = fetch_player_bio(config.SEASONS)
+    config.BIO_PATH.parent.mkdir(parents=True, exist_ok=True)
+    bio.to_parquet(config.BIO_PATH, index=False)
+    print(f"Cached -> {config.BIO_PATH}")
+    return bio
 
 
 # --- Cleaning / filtering --------------------------------------------------
