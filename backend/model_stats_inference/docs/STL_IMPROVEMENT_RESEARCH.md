@@ -52,3 +52,26 @@ shared bio/anthro columns + `STL_ewm{5,15}_mean`, `STL_ewm{5,15}_rate`,
 `T_x_STL_ewm{5,15}_rate`, `STL_share_ewm10`, `STL_share_global` (computed from
 existing STL/MIN columns — no new data source). `EWM_STATS` in
 `research/config.py` generalized from `["BLK"]` to `["BLK", "STL"]`.
+
+## Post-ship hypotheses tested and rejected
+
+The shipped model's per-bucket MAE showed a +0.5% regression on games with
+exactly 1 steal. Buckets are keyed by *outcome*, so any downward calibration
+shift mechanically trades bucket-0 MAE (n=37.5k) against bucket-1 MAE
+(n=22.9k) — the bigger side won. Candidates aimed at recovering bucket 1
+without giving that trade back (all on identical folds, on top of the 63):
+
+| Candidate | RMSE | R² | Spearman | b0 MAE | b1 MAE | verdict |
+|---|---|---|---|---|---|---|
+| shipped 63 | 0.8962 | 0.1665 | 0.3996 | 0.6355 | 0.3188 | — |
+| + P(=1)/P(≥2) share features (4) | 0.8961 | 0.1669 | 0.3995 | 0.6360 | 0.3173 | see-saw; PoisDev/tail worse |
+| + own-team steals scheme (6) | 0.8963 | 0.1665 | 0.3993 | 0.6358 | 0.3184 | see-saw |
+| + years experience / rookie (2) | 0.8963 | 0.1664 | 0.3995 | 0.6359 | 0.3180 | see-saw |
+| + BLK cross-stat activity (3) | 0.8963 | 0.1664 | 0.3992 | 0.6360 | 0.3177 | see-saw |
+| + all three combined (11) | 0.8965 | 0.1661 | 0.3988 | 0.6363 | 0.3176 | strictly worse overall |
+
+Every candidate buys bucket-1 MAE by shifting predictions up and pays for it
+in bucket 0 and the headline metrics. For a near-Poisson stat, P(=1) is a
+function of the rate — there is no independent "=1" signal to find. The
+bucket-1 number is a calibration trade-off, not missing information; the
+shipped 63 stays.
