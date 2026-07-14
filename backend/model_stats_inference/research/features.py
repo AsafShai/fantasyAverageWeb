@@ -131,7 +131,7 @@ def compute_ewm_features(df: pd.DataFrame, shifted: bool = True) -> pd.DataFrame
     for stat in config.EWM_STATS:
         per_game = df[stat].astype(float)
         per_min = (per_game / df["MIN"].astype(float)).replace([np.inf, -np.inf], np.nan)
-        has_any = (per_game >= 1).astype(float)
+        has_any = (per_game >= config.EWM_SHARE_MIN.get(stat, 1)).astype(float)
         if shifted:
             per_game = per_game.groupby(group, sort=False).shift(1)
             per_min = per_min.groupby(group, sort=False).shift(1)

@@ -50,6 +50,19 @@
     "IS_HOME",
     "FTM_global_rate",
     "TEAM_PTS_w5_mean",
-    "AST_w10_var"
+    "AST_w10_var",
+    "HEIGHT_IN",
+    "WEIGHT_LB",
+    "WINGSPAN_IN",
+    "REACH_IN",
+    "WING_MINUS_HEIGHT",
+    "REB_ewm5_mean",
+    "REB_ewm15_mean",
+    "REB_ewm5_rate",
+    "REB_ewm15_rate",
+    "T_x_REB_ewm5_rate",
+    "T_x_REB_ewm15_rate",
+    "REB_share_ewm10",
+    "REB_share_global"
   ]
 }

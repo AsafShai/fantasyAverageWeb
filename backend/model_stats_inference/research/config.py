@@ -72,10 +72,14 @@ TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
 # before weighting so a game never leaks into its own features. Applied to the
 # rare-event stats where the flat windows are noisiest (added with the 2026-07
 # BLK improvement; STL joined with the same recipe).
-EWM_STATS: list[str] = ["BLK", "STL"]
+EWM_STATS: list[str] = ["BLK", "STL", "REB"]
 EWM_HALFLIVES: list[int] = [5, 15]
-# Halflife for the share-of-games-with->=1-block indicator.
+# Halflife for the share-of-games indicator, and the per-stat threshold it
+# counts: P(stat >= threshold). For rare events (blocks/steals) >=1 is the
+# meaningful line; for rebounds nearly every game has >=1, so >=6 separates
+# real board-crashers instead.
 EWM_SHARE_HALFLIFE = 10
+EWM_SHARE_MIN: dict[str, int] = {"BLK": 1, "STL": 1, "REB": 6}
 
 # --- Player bio / anthro (2026-07 BLK model improvement) ---------------------
 
