@@ -82,8 +82,12 @@ def test_count_cap_keeps_last_n():
 def _blk_player(blk: list[float], mins: list[float] | None = None) -> pd.DataFrame:
     df = _player(list(range(len(blk))), pts=[0.0] * len(blk), mins=mins or [10.0] * len(blk))
     df["BLK"] = blk
-    # compute_ewm_features consumes every stat in config.EWM_STATS.
-    for stat in config.EWM_STATS:
+    # compute_ewm_features consumes every stat in config.EWM_STATS plus the
+    # composite-rate source columns.
+    needed = set(config.EWM_STATS)
+    for cols in config.EWM_RATE_COMPOSITES.values():
+        needed.update(cols)
+    for stat in needed:
         if stat not in df.columns:
             df[stat] = 0.0
     return df
@@ -145,6 +149,20 @@ def test_share_uses_per_stat_threshold():
     assert s[1] == pytest.approx(0.0)      # prior: [4]     -> 0 games >= 6
     assert s[2] == pytest.approx(0.5)      # prior: [4,6]   -> 1 of 2
     assert s[3] == pytest.approx(2 / 3)    # prior: [4,6,8] -> 2 of 3
+
+
+def test_composite_rate_sums_sources_over_minutes():
+    # BALLDOM = (AST + TOV) / MIN, shifted then EWM'd — leakage-safe like the rest.
+    df = _blk_player([0, 0, 0], mins=[20.0, 20.0, 20.0])
+    df["AST"] = [4, 6, 8]
+    df["TOV"] = [2, 2, 2]
+    f = compute_ewm_features(df, shifted=True)
+    hl = config.EWM_COMPOSITE_HALFLIFE
+    r = f[f"BALLDOM_ewm{hl}_rate"].to_numpy()
+    assert np.isnan(r[0])
+    assert r[1] == pytest.approx((4 + 2) / 20)   # only game 0 in history
+    expected = pd.Series([6 / 20, 8 / 20]).ewm(halflife=hl, min_periods=1).mean().iloc[-1]
+    assert r[2] == pytest.approx(expected)
 
 
 def test_ewm_covers_every_configured_stat():

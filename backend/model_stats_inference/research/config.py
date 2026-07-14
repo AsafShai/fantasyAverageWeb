@@ -72,14 +72,25 @@ TEAM_OWN_STATS: list[str] = ["PTS", "REB", "AST", "FG3M", "FG_PCT"]
 # before weighting so a game never leaks into its own features. Applied to the
 # rare-event stats where the flat windows are noisiest (added with the 2026-07
 # BLK improvement; STL joined with the same recipe).
-EWM_STATS: list[str] = ["BLK", "STL", "REB"]
+EWM_STATS: list[str] = ["BLK", "STL", "REB", "AST"]
 EWM_HALFLIVES: list[int] = [5, 15]
 # Halflife for the share-of-games indicator, and the per-stat threshold it
 # counts: P(stat >= threshold). For rare events (blocks/steals) >=1 is the
-# meaningful line; for rebounds nearly every game has >=1, so >=6 separates
-# real board-crashers instead.
+# meaningful line; for rebounds/assists nearly every game has >=1, so the
+# thresholds mark the board-crasher (>=6) and playmaker (>=5) lines instead.
 EWM_SHARE_HALFLIFE = 10
-EWM_SHARE_MIN: dict[str, int] = {"BLK": 1, "STL": 1, "REB": 6}
+EWM_SHARE_MIN: dict[str, int] = {"BLK": 1, "STL": 1, "REB": 6, "AST": 5}
+
+# Composite per-minute EWM rates (halflife EWM_COMPOSITE_HALFLIFE): each entry
+# is name -> source columns summed before dividing by MIN. Produces
+# {name}_ewm{hl}_rate (the _rate suffix opts into the automatic T_x minutes
+# interaction). BALLDOM = (AST+TOV)/MIN — "who runs the offense"; FGA_LOAD —
+# shot-creation volume. Added with the 2026-07 AST improvement.
+EWM_COMPOSITE_HALFLIFE = 10
+EWM_RATE_COMPOSITES: dict[str, list[str]] = {
+    "BALLDOM": ["AST", "TOV"],
+    "FGA_LOAD": ["FGA"],
+}
 
 # --- Player bio / anthro (2026-07 BLK model improvement) ---------------------
 

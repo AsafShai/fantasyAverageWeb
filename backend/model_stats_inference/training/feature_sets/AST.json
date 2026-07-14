@@ -50,6 +50,22 @@
     "STL_w10_rate",
     "MIN_w10_var",
     "OPP_ALLOWED_AST_w10_var",
-    "FG3A_w5_mean"
+    "FG3A_w5_mean",
+    "HEIGHT_IN",
+    "WEIGHT_LB",
+    "WINGSPAN_IN",
+    "REACH_IN",
+    "WING_MINUS_HEIGHT",
+    "AST_ewm5_mean",
+    "AST_ewm15_mean",
+    "AST_ewm5_rate",
+    "AST_ewm15_rate",
+    "T_x_AST_ewm5_rate",
+    "T_x_AST_ewm15_rate",
+    "AST_share_ewm10",
+    "AST_share_global",
+    "BALLDOM_ewm10_rate",
+    "T_x_BALLDOM_ewm10_rate",
+    "FGA_LOAD_ewm10_rate"
   ]
 }
