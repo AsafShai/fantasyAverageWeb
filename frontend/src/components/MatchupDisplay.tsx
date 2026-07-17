@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats } from '../types/api';
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
+import { coherentInts } from '../utils/coherentRound';
 import './MatchupDisplay.css';
 
 const RANK_LABELS: Record<keyof DefRanks, string> = {
@@ -122,7 +123,7 @@ function fmtStat(n: number, integer: boolean): string {
 function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
   if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
   if (integer) {
-    const m = Math.round(made), a = Math.max(Math.round(att), m);  // attempts can't trail makes
+    const m = Math.round(made), a = Math.round(att);
     return { pct: a > 0 ? `${Math.round((m / a) * 100)}%` : '—', m: String(m), a: String(a), ok: a > 0 };
   }
   return { pct: `${(pctVal * 100).toFixed(1)}%`, m: made.toFixed(1), a: att.toFixed(1), ok: true };
@@ -193,11 +194,11 @@ export function MatchupExpandRow({
   };
   const isAdjusted = !!proj && Math.round(minutes) !== Math.round(proj.default_minutes);
 
-  // Classic per-stat rounding: each number rounds independently; the displayed
-  // integers may miss PTS = 2·FGM + 3PM + FTM by ±1 (rounding isn't additive —
-  // the decimals themselves are reconciled and exact).
-  const fg = stats ? pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode) : null;
-  const ft = stats ? pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode) : null;
+  // Coherent integer rounding: PTS reads like a plain round while the
+  // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
+  const coherent = integerMode && stats ? coherentInts(stats) : null;
+  const fg = stats ? pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode) : null;
+  const ft = stats ? pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode) : null;
 
   return (
     <tr className="mq-expand-row">
@@ -241,7 +242,9 @@ export function MatchupExpandRow({
                     <b>
                       {key === 'fg_pct' && fg
                         ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                        : fmtStat(stats![key], integerMode)}
+                        : coherent && (key === 'pts' || key === 'three_pm')
+                          ? coherent[key]
+                          : fmtStat(stats![key], integerMode)}
                     </b>
                   </span>
                 ))}

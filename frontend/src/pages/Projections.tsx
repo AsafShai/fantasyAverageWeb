@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
+import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -16,7 +17,7 @@ function fmtStat(n: number, integer: boolean): string {
 function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
   if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
   if (integer) {
-    const m = Math.round(made), a = Math.max(Math.round(att), m);  // attempts can't trail makes
+    const m = Math.round(made), a = Math.round(att);
     return { pct: a > 0 ? `${Math.round((m / a) * 100)}%` : '—', m: String(m), a: String(a), ok: a > 0 };
   }
   return { pct: `${(pctVal * 100).toFixed(1)}%`, m: made.toFixed(1), a: att.toFixed(1), ok: true };
@@ -89,11 +90,11 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
     );
   }
 
-  // Classic per-stat rounding: each number rounds independently; the displayed
-  // integers may miss PTS = 2·FGM + 3PM + FTM by ±1 (rounding isn't additive —
-  // the decimals themselves are reconciled and exact).
-  const fg = pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode);
-  const ft = pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode);
+  // Coherent integer rounding: PTS reads like a plain round while the
+  // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
+  const coherent = integerMode ? coherentInts(stats) : null;
+  const fg = pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode);
+  const ft = pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode);
 
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">
@@ -123,7 +124,9 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
       </td>
       {STAT_COLS.map(([key]) => (
         <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-          {fmtStat(stats[key] as number, integerMode)}
+          {coherent && (key === 'pts' || key === 'three_pm')
+            ? coherent[key]
+            : fmtStat(stats[key] as number, integerMode)}
         </td>
       ))}
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</td>
