@@ -189,6 +189,10 @@ def build_game_rows(event: dict, summary: dict) -> tuple[list[dict], list[dict]]
             vals = a.get("stats") or []
             if a.get("didNotPlay") or len(vals) != len(stat_block["names"]):
                 continue
+            # Rare: a bench DNP entry without an athlete id (all stats "--"/0,
+            # not flagged didNotPlay). Unkeyable and zero-minute — skip it.
+            if "id" not in a.get("athlete", {}):
+                continue
             fgm, fga = _split_made_att(vals[idx["FG"]])
             fg3m, fg3a = _split_made_att(vals[idx["3PT"]])
             ftm, fta = _split_made_att(vals[idx["FT"]])
