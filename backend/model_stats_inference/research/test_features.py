@@ -82,6 +82,17 @@ def test_count_cap_keeps_last_n():
 def _blk_player(blk: list[float], mins: list[float] | None = None) -> pd.DataFrame:
     df = _player(list(range(len(blk))), pts=[0.0] * len(blk), mins=mins or [10.0] * len(blk))
     df["BLK"] = blk
+    # compute_ewm_features consumes every stat in config.EWM_STATS plus the
+    # composite-rate and ratio-composite source columns.
+    needed = set(config.EWM_STATS)
+    for weights in config.EWM_RATE_COMPOSITES.values():
+        needed.update(weights)
+    for num_w, den_w in config.EWM_RATIO_COMPOSITES.values():
+        needed.update(num_w)
+        needed.update(den_w)
+    for stat in needed:
+        if stat not in df.columns:
+            df[stat] = 0.0
     return df
 
 
@@ -129,6 +140,65 @@ def test_ewm_rate_is_per_minute():
     df = _blk_player([2, 2], mins=[20.0, 40.0])
     f = compute_ewm_features(df, shifted=True)
     assert f["BLK_ewm5_rate"].to_numpy()[1] == pytest.approx(2 / 20)
+
+
+def test_share_uses_per_stat_threshold():
+    # REB share counts games with >= EWM_SHARE_MIN['REB'] (6), not >= 1.
+    df = _blk_player([0, 0, 0, 0])
+    df["REB"] = [4, 6, 8, 2]
+    f = compute_ewm_features(df, shifted=True)
+    s = f["REB_share_global"].to_numpy()
+    assert np.isnan(s[0])
+    assert s[1] == pytest.approx(0.0)      # prior: [4]     -> 0 games >= 6
+    assert s[2] == pytest.approx(0.5)      # prior: [4,6]   -> 1 of 2
+    assert s[3] == pytest.approx(2 / 3)    # prior: [4,6,8] -> 2 of 3
+
+
+def test_composite_rate_sums_sources_over_minutes():
+    # BALLDOM = (AST + TOV) / MIN, shifted then EWM'd — leakage-safe like the rest.
+    df = _blk_player([0, 0, 0], mins=[20.0, 20.0, 20.0])
+    df["AST"] = [4, 6, 8]
+    df["TOV"] = [2, 2, 2]
+    f = compute_ewm_features(df, shifted=True)
+    hl = config.EWM_COMPOSITE_HALFLIFE
+    r = f[f"BALLDOM_ewm{hl}_rate"].to_numpy()
+    assert np.isnan(r[0])
+    assert r[1] == pytest.approx((4 + 2) / 20)   # only game 0 in history
+    expected = pd.Series([6 / 20, 8 / 20]).ewm(halflife=hl, min_periods=1).mean().iloc[-1]
+    assert r[2] == pytest.approx(expected)
+
+
+def test_weighted_composite_and_ratio():
+    # USAGE_LOAD = (FGA + 0.44*FTA + TOV)/MIN; TS_EFF = PTS/(2*FGA + 0.88*FTA).
+    df = _blk_player([0, 0], mins=[20.0, 20.0])
+    df["FGA"] = [10.0, 10.0]
+    df["FTA"] = [5.0, 5.0]
+    df["TOV"] = [3.0, 3.0]
+    df["PTS"] = [22.0, 22.0]
+    f = compute_ewm_features(df, shifted=True)
+    hl = config.EWM_COMPOSITE_HALFLIFE
+    assert f[f"USAGE_LOAD_ewm{hl}_rate"].to_numpy()[1] == pytest.approx((10 + 0.44 * 5 + 3) / 20)
+    assert f[f"TS_EFF_ewm{hl}"].to_numpy()[1] == pytest.approx(22 / (2 * 10 + 0.88 * 5))
+
+
+def test_ratio_composite_nan_on_zero_denominator():
+    df = _blk_player([0, 0], mins=[20.0, 20.0])
+    df["FGA"] = [0.0, 10.0]
+    df["FTA"] = [0.0, 0.0]
+    df["PTS"] = [0.0, 20.0]
+    f = compute_ewm_features(df, shifted=True)
+    hl = config.EWM_COMPOSITE_HALFLIFE
+    # game 0 had zero shot volume -> its ratio is NaN, so row 1 has no history.
+    assert np.isnan(f[f"TS_EFF_ewm{hl}"].to_numpy()[1])
+
+
+def test_ewm_covers_every_configured_stat():
+    df = _blk_player([1, 2, 3])
+    f = compute_ewm_features(df, shifted=True)
+    for stat in config.EWM_STATS:
+        for col in (f"{stat}_ewm5_mean", f"{stat}_ewm15_rate",
+                    f"{stat}_share_ewm{config.EWM_SHARE_HALFLIFE}", f"{stat}_share_global"):
+            assert col in f.columns
 
 
 def test_bio_features_align_and_handle_missing():

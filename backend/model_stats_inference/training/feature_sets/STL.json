@@ -50,6 +50,19 @@
     "FGM_w10_var",
     "DREB_global_mean",
     "T_x_OREB_w10_rate",
-    "OPP_ALLOWED_FG3M_w5_mean"
+    "OPP_ALLOWED_FG3M_w5_mean",
+    "HEIGHT_IN",
+    "WEIGHT_LB",
+    "WINGSPAN_IN",
+    "REACH_IN",
+    "WING_MINUS_HEIGHT",
+    "STL_ewm5_mean",
+    "STL_ewm15_mean",
+    "STL_ewm5_rate",
+    "STL_ewm15_rate",
+    "T_x_STL_ewm5_rate",
+    "T_x_STL_ewm15_rate",
+    "STL_share_ewm10",
+    "STL_share_global"
   ]
 }
