@@ -1,36 +1,31 @@
 """Nightly production ingest: fetch one night's real games and score the model.
 
-Pure synchronous pandas/nba_api code — no DB, no asyncio. The app layer
+Pure synchronous pandas/ESPN code — no DB, no asyncio. The app layer
 (app/services/model_nightly_service.py) orchestrates: it builds a FeatureStore
 from rows *before* the night, calls ``evaluate_night`` (predictions therefore
 use no data from the night itself), persists the results, then ingests the
 night's raw rows.
 
-``fetch_night`` also disambiguates a genuine off-night from nba_api lag via the
+``fetch_night`` also disambiguates a genuine off-night from data lag via the
 scoreboard: zero scheduled games is a done state, while missing/unfinal logs
 mean "come back later".
 """
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from datetime import date
 
 import pandas as pd
-from nba_api.stats.endpoints import playergamelogs, scoreboardv2, teamgamelogs
 
+from .. import espn
 from ..research import config as rconfig
 from ..research import data as rdata
 from .feature_store import FeatureStore
 from .inference import LiveInference, PredictionRequest
 from .eval_row import EvalRow, _actual_line
 
-
-def season_for(d: date) -> str:
-    """NBA season string ("YYYY-YY") the given date belongs to (Aug+ = new season)."""
-    start = d.year if d.month >= 8 else d.year - 1
-    return f"{start}-{str(start + 1)[-2:]}"
+season_for = espn.season_for
 
 
 @dataclass
@@ -38,47 +33,22 @@ class NightFetch:
     game_date: date
     player_games: pd.DataFrame   # cleaned player logs (regular season, MIN > 0)
     team_games: pd.DataFrame     # raw team logs (regular season; both teams of each game)
-    expected_games: int          # regular-season games on the scoreboard for the date
+    expected_games: int          # countable regular-season games on the scoreboard
     complete: bool               # all expected games final AND the logs cover them
-
-
-def _fetch_one_day(endpoint_cls, game_date: date) -> pd.DataFrame:
-    ds = game_date.strftime("%m/%d/%Y")
-    df = endpoint_cls(
-        season_nullable=season_for(game_date),
-        season_type_nullable=rconfig.SEASON_TYPE,
-        date_from_nullable=ds,
-        date_to_nullable=ds,
-        timeout=rdata.REQUEST_TIMEOUT,
-    ).get_data_frames()[0]
-    df.insert(0, "SEASON", season_for(game_date))
-    time.sleep(rdata.SLEEP_BETWEEN_CALLS)
-    return rdata._regular_season_only(rdata._to_datetime(df))
-
-
-def _expected_regular_season_games(game_date: date) -> tuple[int, bool]:
-    """(number of regular-season games scheduled on the date, all of them final)."""
-    header = scoreboardv2.ScoreboardV2(
-        game_date=game_date.strftime("%m/%d/%Y"), timeout=rdata.REQUEST_TIMEOUT
-    ).game_header.get_data_frame()
-    time.sleep(rdata.SLEEP_BETWEEN_CALLS)
-    games = header[header["GAME_ID"].astype(str).str.startswith(rdata.REGULAR_SEASON_PREFIX)]
-    all_final = bool((games["GAME_STATUS_ID"].astype(int) == 3).all()) if len(games) else True
-    return len(games), all_final
 
 
 def fetch_night(game_date: date) -> NightFetch:
     """Fetch one night's player + team logs and judge whether the data is complete."""
-    expected, all_final = _expected_regular_season_games(game_date)
-    if expected == 0:
+    day = espn.fetch_day(game_date)
+    if day.expected_games == 0:
         empty = pd.DataFrame()
         return NightFetch(game_date, empty, empty, 0, complete=True)
 
-    player_games = _fetch_one_day(playergamelogs.PlayerGameLogs, game_date)
-    team_games = _fetch_one_day(teamgamelogs.TeamGameLogs, game_date)
+    player_games = rdata._to_datetime(day.players)
+    team_games = rdata._to_datetime(day.teams)
 
-    # DNP rows (MIN null/0) are dropped; the >= 2-minute research/model-quality
-    # filter is no longer applied at write time — it now gates at read time in
+    # DNP rows (MIN null/0) are dropped; the >= MIN_MINUTES research/model-quality
+    # filter is not applied at write time — it gates at read time in
     # DBService.get_fs_rows_before, so storage keeps every played minute for
     # other consumers (e.g. the dynamic time-range player stats aggregation).
     if not player_games.empty:
@@ -86,8 +56,12 @@ def fetch_night(game_date: date) -> NightFetch:
             player_games["MIN"].notna() & (player_games["MIN"] > 0)
         ].reset_index(drop=True)
 
-    complete = all_final and len(team_games) == 2 * expected and not player_games.empty
-    return NightFetch(game_date, player_games, team_games, expected, complete)
+    complete = (
+        day.all_final
+        and len(team_games) == 2 * day.expected_games
+        and not player_games.empty
+    )
+    return NightFetch(game_date, player_games, team_games, day.expected_games, complete)
 
 
 def evaluate_night(
@@ -145,20 +119,25 @@ def evaluate_night(
 
 
 def attach_positions(store: FeatureStore, player_games: pd.DataFrame) -> pd.DataFrame:
-    """Add each player's last-known POSITION from the store to nightly log rows.
+    """Fill missing POSITION values from the player's last-known store position.
 
-    Nightly game logs carry no POSITION, and ``build_current_state`` takes the
-    per-player last() — un-annotated rows would wipe positions on recompute.
-    Brand-new players get "" (position flags 0) until the next roster refresh.
+    ESPN box scores carry POSITION per row, but occasionally leave it empty;
+    ``build_current_state`` takes the per-player last(), so un-annotated rows
+    would wipe positions on recompute. Brand-new players with no store history
+    stay "" (position flags 0) until a later game/roster carries it.
     """
+    out = player_games.copy()
+    if "POSITION" not in out.columns:
+        out["POSITION"] = ""
     known = (
         store.players.dropna(subset=["POSITION"])
         .groupby("PLAYER_ID")["POSITION"].last()
         if "POSITION" in store.players.columns
         else pd.Series(dtype=str)
     )
-    out = player_games.copy()
-    out["POSITION"] = out["PLAYER_ID"].map(known).fillna("")
+    pos = out["POSITION"].fillna("")
+    fallback = out["PLAYER_ID"].map(known).fillna("")
+    out["POSITION"] = pos.where(pos != "", fallback)
     return out
 
 
@@ -179,25 +158,20 @@ def drop_stale_players(players: pd.DataFrame, as_of: date) -> pd.DataFrame:
     return players[last > cutoff].reset_index(drop=True)
 
 
-def bootstrap_frames(
-    until_date: date | None = None, positions: pd.DataFrame | None = None
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def bootstrap_frames(until_date: date | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Fetch and clean the full-history frames used to seed the Postgres store.
 
     Returns (player_games, team_games) for ``research/config.SEASONS``, with the
     same row filter as the nightly fetch. ``until_date`` (exclusive) trims the
-    frames for mid-season replay testing. ``positions`` (PLAYER_ID -> POSITION)
-    is fetched from team rosters when not supplied.
+    frames for mid-season replay testing. POSITION comes per-row from the ESPN
+    box scores, so no separate roster crawl is needed.
     """
-    players = rdata._regular_season_only(rdata._to_datetime(rdata.fetch_player_logs(rconfig.SEASONS)))
-    team_games = rdata._regular_season_only(rdata._to_datetime(rdata.fetch_team_logs(rconfig.SEASONS)))
+    players, team_games = rdata.fetch_game_logs(rconfig.SEASONS)
+    players = rdata._to_datetime(players)
+    team_games = rdata._to_datetime(team_games)
 
     players = players[players["MIN"].notna() & (players["MIN"] > 0)]
     players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-
-    if positions is None:
-        positions = rdata.fetch_positions(rconfig.SEASONS)
-    players = players.merge(positions, on="PLAYER_ID", how="left")
     players["POSITION"] = players["POSITION"].fillna("")
 
     if until_date is not None:

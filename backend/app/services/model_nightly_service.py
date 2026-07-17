@@ -286,7 +286,11 @@ class ModelNightlyService:
         evals = nightly.evaluate_night(store, inference, night)
         night_players = nightly.attach_positions(store, night.player_games)
         # Fold last night in so the stored vectors are current for tonight's games.
-        store.update_with_nightly_results(night_players, night.team_games)
+        # Sub-MIN_MINUTES rows are still persisted (storage keeps every played
+        # minute) but are DNPs to the feature math — same gate as
+        # get_fs_rows_before, so the fold-in matches tomorrow's full rebuild.
+        qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
+        store.update_with_nightly_results(qualifying, night.team_games)
         return evals, night_players, _serialize_vectors(store)
 
     @staticmethod
@@ -341,7 +345,7 @@ class ModelNightlyService:
     # --- one-time init -------------------------------------------------------
 
     async def bootstrap(self, force: bool = False, until_date: Optional[date] = None) -> str:
-        """Seed fs_player_games / fs_team_games from nba_api for research SEASONS,
+        """Seed fs_player_games / fs_team_games from ESPN for research SEASONS,
         then materialize the initial vectors so inference is ready immediately."""
         async with self._lock:
             p_count, t_count = await self._db.fs_counts()
@@ -356,7 +360,7 @@ class ModelNightlyService:
                     return "db_write_failed"
 
             players, team_games = await asyncio.to_thread(
-                nightly.bootstrap_frames, until_date, self._cached_positions()
+                nightly.bootstrap_frames, until_date
             )
             logger.info(
                 f"Bootstrap fetched {len(players)} player rows / {len(team_games)} team rows "
@@ -381,17 +385,6 @@ class ModelNightlyService:
             players, rdata.build_team_allowed(team_games), rdata.build_team_own(team_games)
         )
         return _serialize_vectors(store)
-
-    @staticmethod
-    def _cached_positions() -> Optional[pd.DataFrame]:
-        """PLAYER_ID -> POSITION from the local research cache when present —
-        skips the slow per-team roster crawl. None falls back to fetching."""
-        path = rconfig.DATA_DIR / "players.parquet"
-        if not path.exists():
-            return None
-        df = pd.read_parquet(path, columns=["PLAYER_ID", "POSITION"])
-        return df.dropna().drop_duplicates("PLAYER_ID", keep="last")
-
 
 if __name__ == "__main__":
     import argparse

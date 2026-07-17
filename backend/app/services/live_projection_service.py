@@ -17,7 +17,7 @@ import pandas as pd
 from app.services.model_nightly_service import ModelNightlyService
 from app.services.nba_matchup_service import GameInfo
 from app.utils.name_matching import normalize_player_name
-from app.utils.team_abbr_map import NBA_ABBR_TO_TEAM_ID, espn_to_nba
+from app.utils.team_abbr_map import team_id_for_abbr
 from model_stats_inference.serving.feature_store import FeatureStore
 from model_stats_inference.serving.inference import LiveInference, PredictionRequest
 
@@ -135,7 +135,7 @@ def _build_name_index(store: FeatureStore) -> dict[str, int]:
 
 
 def _opponent_team_id(espn_abbr: str) -> int | None:
-    return NBA_ABBR_TO_TEAM_ID.get(espn_to_nba(espn_abbr))
+    return team_id_for_abbr(espn_abbr)
 
 
 def _default_minutes(store: FeatureStore, player_id: int) -> float:

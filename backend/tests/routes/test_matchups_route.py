@@ -31,12 +31,12 @@ _MOCK_PLAYERS = pd.DataFrame([
 @pytest.fixture
 def mock_services(monkeypatch):
     svc = MagicMock()
-    svc.get_all_def_data.return_value = {
+    svc.get_all_def_data = AsyncMock(return_value={
         'ranks': _MOCK_RANKS,
         'values': _MOCK_VALUES,
         'league_avg_values': _MOCK_LEAGUE_AVG_VALUES,
         'pace': _MOCK_PACE,
-    }
+    })
     svc.get_games_today = AsyncMock(return_value=_MOCK_GAMES)
 
     provider = MagicMock()
@@ -84,7 +84,7 @@ def test_returns_empty_on_no_games(mock_services):
 
 def test_returns_empty_on_service_error(mock_services):
     svc, _ = mock_services
-    svc.get_games_today = AsyncMock(side_effect=Exception('nba_api down'))
+    svc.get_games_today = AsyncMock(side_effect=Exception('data source down'))
     client = TestClient(app)
     resp = client.get('/api/matchups/today')
     assert resp.status_code == 200

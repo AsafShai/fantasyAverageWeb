@@ -1,5 +1,5 @@
-"""Shared player-name normalization for joining across data sources (ESPN,
-nba_api, official NBA injury PDF) that don't agree on diacritics or
+"""Shared player-name normalization for joining across data sources (ESPN
+site/fantasy APIs, official NBA injury PDF) that don't agree on diacritics or
 punctuation (e.g. 'Nikola Jokic' vs 'Nikola Jokić')."""
 
 import re
@@ -16,9 +16,9 @@ def normalize_player_name(name: str) -> str:
     return _NORMALIZE_RE.sub("", _to_ascii(name).lower())
 
 
-# Known ESPN <-> NBA name mismatches that normalize_player_name alone can't
-# resolve (e.g. suffix/nickname differences). Keyed by the ESPN-side
-# normalized name, valued by the nba_api-side normalized name.
+# Known cross-source name mismatches that normalize_player_name alone can't
+# resolve (e.g. suffix/nickname differences). Keyed by the source-side
+# normalized name, valued by the store-side normalized name.
 NAME_OVERRIDES: dict[str, str] = {}
 
 

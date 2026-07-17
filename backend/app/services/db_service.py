@@ -5,6 +5,7 @@ import asyncpg
 import pandas as pd
 from app.config import settings
 from app.models.injury_models import InjuryRecord
+from model_stats_inference.research import config as rconfig
 
 logger = logging.getLogger(__name__)
 
@@ -625,6 +626,45 @@ class DBService:
             logger.error(f"Failed to count feature-store rows: {e}")
             return 0, 0
 
+    async def get_team_defense_aggregates(self, season: str) -> list[dict]:
+        """Season-to-date opponent ("allowed") per-game averages + pace proxy per
+        team, self-joined from fs_team_games (the opponent is the other team of
+        each game). Feeds the matchup page's defensive ranks — previously NBA's
+        precomputed Opponent/Advanced tables, now derived from our own store.
+
+        ``pace`` is the possession proxy (FGA + 0.44·FTA + TOV, both teams
+        averaged) — a few possessions above NBA's official PACE (no offensive-
+        rebound term) but rank/badge-equivalent."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT a.team_id,
+                           COUNT(*)                                      AS gp,
+                           AVG(b.pts)                                    AS opp_pts,
+                           AVG(b.reb)                                    AS opp_reb,
+                           AVG(b.ast)                                    AS opp_ast,
+                           AVG(b.stl)                                    AS opp_stl,
+                           AVG(b.blk)                                    AS opp_blk,
+                           AVG(b.fg3m)                                   AS opp_fg3m,
+                           SUM(b.fg_pct * b.fga) / NULLIF(SUM(b.fga), 0) AS opp_fg_pct,
+                           AVG((a.fga + 0.44 * a.fta + a.tov)
+                             + (b.fga + 0.44 * b.fta + b.tov)) / 2       AS pace
+                    FROM fs_team_games a
+                    JOIN fs_team_games b ON b.game_id = a.game_id AND b.team_id <> a.team_id
+                    WHERE a.season = $1
+                    GROUP BY a.team_id
+                    """,
+                    season,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to aggregate team defense for {season}: {e}")
+            return []
+
     async def fs_has_date(self, game_date: date) -> Optional[bool]:
         """Whether the store already holds the night's rows. None = DB unavailable
         (the caller must NOT treat that as 'safe to predict')."""
@@ -642,16 +682,18 @@ class DBService:
             return None
 
     async def get_fs_rows_before(self, game_date: date) -> tuple[list[dict], list[dict]]:
-        """The model's only read boundary into fs_player_games. min >= 2 mirrors
-        the old write-time MIN_MINUTES filter (now enforced here instead, since
-        storage keeps every played minute for other consumers)."""
+        """The model's only read boundary into fs_player_games. The MIN_MINUTES
+        gate is enforced here (not at write time): storage keeps every played
+        minute for other consumers, but sub-threshold games are DNPs to the
+        feature math — same threshold research/training filters on."""
         pool = await self._get_pool()
         if pool is None:
             return [], []
         try:
             async with pool.acquire() as conn:
                 players = await conn.fetch(
-                    "SELECT * FROM fs_player_games WHERE game_date < $1 AND min >= 2", game_date
+                    "SELECT * FROM fs_player_games WHERE game_date < $1 AND min >= $2",
+                    game_date, rconfig.MIN_MINUTES,
                 )
                 teams = await conn.fetch(
                     "SELECT * FROM fs_team_games WHERE game_date < $1", game_date

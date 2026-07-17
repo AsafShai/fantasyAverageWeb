@@ -1,13 +1,22 @@
+"""Matchup context for the UI: today's schedule (ESPN scoreboard) and each
+team's defensive profile (ranks / allowed values / pace).
+
+Defensive aggregates are computed from our own fs_team_games store (season-to-
+date self-join in Postgres) instead of NBA's precomputed Opponent/Advanced
+tables — one ingestion path, no stats.nba.com dependency. All team keys are
+canonical abbreviations (NYK/GSW/PHL…), the dialect the fantasy side and the
+UI already speak.
+"""
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import httpx
-import pandas as pd
-from nba_api.stats.endpoints import leaguedashteamstats
 
 from app.config import settings
-from app.utils.team_abbr_map import NBA_TEAM_ID_TO_ABBR, nba_to_espn
+from app.services.db_service import DBService
+from app.utils.team_abbr_map import TEAM_ID_TO_ABBR, canonical_abbr
 
 
 def _season_str(season_id: int) -> str:
@@ -16,18 +25,19 @@ def _season_str(season_id: int) -> str:
 
 @dataclass
 class GameInfo:
-    opponent: str  # ESPN abbreviation
+    opponent: str  # canonical abbreviation
     is_home: bool
 
 
+# stat key served to the UI -> aggregate column from get_team_defense_aggregates
 _STAT_COLS: dict[str, str] = {
-    'pts': 'OPP_PTS',
-    'reb': 'OPP_REB',
-    'ast': 'OPP_AST',
-    'stl': 'OPP_STL',
-    'blk': 'OPP_BLK',
-    'three_pm': 'OPP_FG3M',
-    'fg_pct': 'OPP_FG_PCT',
+    'pts': 'opp_pts',
+    'reb': 'opp_reb',
+    'ast': 'opp_ast',
+    'stl': 'opp_stl',
+    'blk': 'opp_blk',
+    'three_pm': 'opp_fg3m',
+    'fg_pct': 'opp_fg_pct',
 }
 
 
@@ -35,6 +45,7 @@ class NbaMatchupService:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
+        self._db = DBService()
         self._def_cache: dict = {
             'ranks': None,
             'values': None,
@@ -44,44 +55,28 @@ class NbaMatchupService:
         }
         self._schedule_cache: dict = {'data': None, 'ts': None}
 
-    def _fetch_nba_stats(self) -> tuple[pd.DataFrame, pd.DataFrame]:
-        season = _season_str(settings.season_id)
-        opp_df = leaguedashteamstats.LeagueDashTeamStats(
-            measure_type_detailed_defense='Opponent',
-            per_mode_detailed='PerGame',
-            season=season,
-            season_type_all_star='Regular Season',
-            league_id_nullable='00',
-        ).get_data_frames()[0]
-        adv_df = leaguedashteamstats.LeagueDashTeamStats(
-            measure_type_detailed_defense='Advanced',
-            per_mode_detailed='PerGame',
-            season=season,
-            season_type_all_star='Regular Season',
-            league_id_nullable='00',
-        ).get_data_frames()[0]
-        return opp_df, adv_df
-
     def _def_cache_valid(self) -> bool:
         return (
             self._def_cache['ts'] is not None
             and datetime.now() - self._def_cache['ts'] < timedelta(minutes=5)
         )
 
-    def _ensure_def_cache(self) -> None:
+    async def _ensure_def_cache(self) -> None:
         if self._def_cache_valid() and self._def_cache['ranks'] is not None:
             return
-        opp_df, adv_df = self._fetch_nba_stats()
+        rows = await self._db.get_team_defense_aggregates(_season_str(settings.season_id))
+        if not rows:
+            self.logger.warning('No team defense aggregates (store empty?) — matchup ranks unavailable')
         self._def_cache.update({
-            'ranks': self._build_ranks(opp_df),
-            'values': self._build_values(opp_df),
-            'league_avg_values': self._build_league_avg_values(opp_df),
-            'pace': self._build_pace(adv_df),
+            'ranks': self._build_ranks(rows),
+            'values': self._build_values(rows),
+            'league_avg_values': self._build_league_avg_values(rows),
+            'pace': self._build_pace(rows),
             'ts': datetime.now(),
         })
 
-    def get_all_def_data(self) -> dict:
-        self._ensure_def_cache()
+    async def get_all_def_data(self) -> dict:
+        await self._ensure_def_cache()
         return {
             'ranks': self._def_cache['ranks'],
             'values': self._def_cache['values'],
@@ -89,48 +84,40 @@ class NbaMatchupService:
             'pace': self._def_cache['pace'],
         }
 
-    def _build_ranks(self, opp_df: pd.DataFrame) -> dict[str, dict[str, int]]:
+    @staticmethod
+    def _team_abbr(row: dict) -> str:
+        return TEAM_ID_TO_ABBR.get(int(row['team_id']), str(row['team_id']))
+
+    def _build_ranks(self, rows: list[dict]) -> dict[str, dict[str, int]]:
         ranks: dict[str, dict[str, int]] = {}
         for stat_key, col in _STAT_COLS.items():
-            if col not in opp_df.columns:
-                continue
-            # ascending → lowest value = rank 1, highest = rank 30 (best matchup)
-            sorted_df = opp_df.sort_values(col, ascending=True).reset_index(drop=True)
-            for rank, (_, row) in enumerate(sorted_df.iterrows(), start=1):
-                espn = nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']])
-                if espn not in ranks:
-                    ranks[espn] = {}
-                ranks[espn][stat_key] = rank
+            # ascending → lowest value allowed = rank 1, highest = rank 30 (best matchup)
+            for rank, row in enumerate(sorted(rows, key=lambda r: float(r[col] or 0)), start=1):
+                ranks.setdefault(self._team_abbr(row), {})[stat_key] = rank
         return ranks
 
-    def _build_values(self, opp_df: pd.DataFrame) -> dict[str, dict[str, float]]:
+    def _build_values(self, rows: list[dict]) -> dict[str, dict[str, float]]:
         values: dict[str, dict[str, float]] = {}
-        for stat_key, col in _STAT_COLS.items():
-            if col not in opp_df.columns:
-                continue
-            for _, row in opp_df.iterrows():
-                espn = nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']])
-                if espn not in values:
-                    values[espn] = {}
-                raw = float(row[col])
-                values[espn][stat_key] = round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
+        for row in rows:
+            abbr = self._team_abbr(row)
+            for stat_key, col in _STAT_COLS.items():
+                raw = float(row[col] or 0)
+                values.setdefault(abbr, {})[stat_key] = (
+                    round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
+                )
         return values
 
-    def _build_league_avg_values(self, opp_df: pd.DataFrame) -> dict[str, float]:
+    def _build_league_avg_values(self, rows: list[dict]) -> dict[str, float]:
         avgs: dict[str, float] = {}
+        if not rows:
+            return avgs
         for stat_key, col in _STAT_COLS.items():
-            if col in opp_df.columns:
-                raw = float(opp_df[col].mean())
-                avgs[stat_key] = round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
+            raw = sum(float(r[col] or 0) for r in rows) / len(rows)
+            avgs[stat_key] = round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
         return avgs
 
-    def _build_pace(self, adv_df: pd.DataFrame) -> dict[str, float]:
-        if 'PACE' not in adv_df.columns:
-            return {}
-        return {
-            nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']]): float(row['PACE'])
-            for _, row in adv_df.iterrows()
-        }
+    def _build_pace(self, rows: list[dict]) -> dict[str, float]:
+        return {self._team_abbr(r): float(r['pace'] or 0) for r in rows}
 
     def get_pace_badge(self, team_pace: float, league_avg_pace: float) -> str:
         diff = team_pace - league_avg_pace
@@ -160,7 +147,9 @@ class NbaMatchupService:
             competitors = event.get('competitions', [{}])[0].get('competitors', [])
             if len(competitors) == 2:
                 a, b = competitors[0], competitors[1]
-                a_abbr, b_abbr = a['team']['abbreviation'], b['team']['abbreviation']
+                # scoreboard abbreviations are site dialect (NY/GS/…) — normalize
+                a_abbr = canonical_abbr(a['team']['abbreviation'])
+                b_abbr = canonical_abbr(b['team']['abbreviation'])
                 games[a_abbr] = GameInfo(opponent=b_abbr, is_home=a.get('homeAway') == 'home')
                 games[b_abbr] = GameInfo(opponent=a_abbr, is_home=b.get('homeAway') == 'home')
 

@@ -23,9 +23,7 @@ async def get_matchups_today(
 ) -> list[PlayerMatchupResponse]:
     try:
         games_today = await _matchup_service.get_games_today(date=date)
-        # nba_api calls are synchronous — run in thread pool to avoid blocking event loop
-        loop = asyncio.get_event_loop()
-        all_def = await loop.run_in_executor(None, _matchup_service.get_all_def_data)
+        all_def = await _matchup_service.get_all_def_data()
     except Exception as e:
         logger.error(f'Matchup data fetch failed: {e}')
         return []
