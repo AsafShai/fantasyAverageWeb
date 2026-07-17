@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from fastapi import APIRouter, Query
 from typing import Optional
@@ -34,10 +35,21 @@ async def get_upcoming_game_dates() -> list[str]:
     options shown to every user."""
     return await _matchup_service.get_upcoming_game_dates()
 
+# Per-slate response cache: the full pipeline (schedule + fantasy roster +
+# batch model predict) is ~5s; repeat opens of the same slate are served
+# instantly. Vectors only change on the nightly refresh, so a short TTL is safe.
+_RESPONSE_CACHE_TTL_S = 300
+_response_cache: dict[str, tuple[float, list[PlayerMatchupResponse]]] = {}
+
+
 @router.get('/today', response_model=list[PlayerMatchupResponse])
 async def get_matchups_today(
     date: Optional[str] = Query(default=None, description='YYYYMMDD — fetch schedule for this date instead of today (for testing)')
 ) -> list[PlayerMatchupResponse]:
+    cache_key = date or 'today'
+    hit = _response_cache.get(cache_key)
+    if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:
+        return hit[1]
     try:
         games_today = await _matchup_service.get_games_today(date=date)
         all_def = await _matchup_service.get_all_def_data()
@@ -127,4 +139,6 @@ async def get_matchups_today(
             projection=projection,
         ))
 
+    if results:
+        _response_cache[cache_key] = (time.monotonic(), results)
     return results

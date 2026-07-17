@@ -140,7 +140,10 @@ def _player_vectors_df(records: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     feat_cols = [c for c in df.columns if c not in _PLAYER_META]
     df[feat_cols] = df[feat_cols].astype(float)  # None -> NaN
-    return df
+    # Consolidate memory blocks: the per-column astype leaves one block per
+    # feature (~240), making every row lookup at predict time ~9ms instead of
+    # ~0.1ms — the whole batch-predict path pays for it.
+    return df.copy()
 
 
 def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
@@ -151,7 +154,7 @@ def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     feat_cols = [c for c in df.columns if c != "TEAM_ID"]
     df[feat_cols] = df[feat_cols].astype(float)
-    return df
+    return df.copy()  # consolidate blocks (see _player_vectors_df)
 
 
 class ModelNightlyService:

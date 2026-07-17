@@ -116,7 +116,14 @@ class LiveInference:
             # vectors don't carry yet degrades to NaN (HGB-native) instead of
             # KeyError-ing the whole batch — vectors self-heal on the next
             # nightly re-materialization.
-            vals = payload["model"].predict(X.reindex(columns=payload["features"]))
+            feats = payload["features"]
+            # Hand sklearn a consolidated float64 block: check_array on the
+            # column-fragmented reindex result costs ~10x the tree traversal.
+            Xm = pd.DataFrame(
+                np.ascontiguousarray(X.reindex(columns=feats).to_numpy(dtype=np.float64)),
+                columns=feats,
+            )
+            vals = payload["model"].predict(Xm)
             if payload.get("clip_at_zero", True):
                 vals = np.clip(vals, 0.0, None)
             batched[target] = vals

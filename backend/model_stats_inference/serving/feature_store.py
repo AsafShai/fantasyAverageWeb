@@ -68,6 +68,17 @@ class FeatureStore:
         self.player_vectors = player_vectors.set_index("PLAYER_ID", drop=False)
         self.team_allowed_vectors = team_allowed_vectors.set_index("TEAM_ID", drop=False)
         self.team_own_vectors = team_own_vectors.set_index("TEAM_ID", drop=False)
+        self._invalidate_read_caches()
+
+    def _invalidate_read_caches(self) -> None:
+        """Reset the memoized read views (called whenever vectors change).
+
+        Label-indexing pandas per call is what they save: slicing 238 feature
+        labels per player and dropping TEAM_ID per team costs ~15s on a full
+        slate; against 30 teams and one stable column set it's pure waste.
+        """
+        self._team_state_cache: dict[int, TeamState] = {}
+        self._player_feature_rows: pd.DataFrame | None = None
 
     # --- construction ------------------------------------------------------
 
@@ -180,6 +191,7 @@ class FeatureStore:
         self.player_vectors = _replace_rows(self.player_vectors, pv, "PLAYER_ID")
         self.team_allowed_vectors = _replace_rows(self.team_allowed_vectors, tav, "TEAM_ID")
         self.team_own_vectors = _replace_rows(self.team_own_vectors, tov, "TEAM_ID")
+        self._invalidate_read_caches()
 
     # --- reads -------------------------------------------------------------
 
@@ -193,22 +205,31 @@ class FeatureStore:
         games = int(row["games_count"])
         if games < config.MIN_INFERENCE_GAMES:
             raise InsufficientHistoryError(player_id, games, config.MIN_INFERENCE_GAMES)
-        feature_cols = [c for c in self.player_vectors.columns if c not in _PLAYER_META]
+        if self._player_feature_rows is None:
+            feature_cols = [c for c in self.player_vectors.columns if c not in _PLAYER_META]
+            # float64 copy: parquet loads arrow-backed columns whose per-value
+            # iteration makes the assembly-time .to_dict() several times slower.
+            self._player_feature_rows = self.player_vectors[feature_cols].astype("float64")
         return PlayerState(
             player_id=player_id,
             team_id=int(row["TEAM_ID"]),
             position=str(row.get("POSITION", "")),
             last_game_date=row["last_game_date"],
             games_count=games,
-            vector=row[feature_cols],
+            vector=self._player_feature_rows.loc[player_id],
         )
 
     def get_team_state(self, team_id: int) -> TeamState:
+        cached = self._team_state_cache.get(team_id)
+        if cached is not None:
+            return cached
         if team_id not in self.team_allowed_vectors.index or team_id not in self.team_own_vectors.index:
             raise UnknownTeamError(f"team {team_id} is not in the feature store")
-        allowed = self.team_allowed_vectors.loc[team_id].drop(labels=["TEAM_ID"])
-        own = self.team_own_vectors.loc[team_id].drop(labels=["TEAM_ID"])
-        return TeamState(team_id=team_id, allowed=allowed, own=own)
+        allowed = self.team_allowed_vectors.loc[team_id].drop(labels=["TEAM_ID"]).astype("float64")
+        own = self.team_own_vectors.loc[team_id].drop(labels=["TEAM_ID"]).astype("float64")
+        state = TeamState(team_id=team_id, allowed=allowed, own=own)
+        self._team_state_cache[team_id] = state
+        return state
 
 
 # --- helpers ---------------------------------------------------------------

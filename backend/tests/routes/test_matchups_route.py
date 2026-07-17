@@ -30,6 +30,8 @@ _MOCK_PLAYERS = pd.DataFrame([
 
 @pytest.fixture
 def mock_services(monkeypatch):
+    # The route caches responses per slate; clear so tests stay independent.
+    monkeypatch.setattr('app.routes.matchups._response_cache', {})
     svc = MagicMock()
     svc.get_all_def_data = AsyncMock(return_value={
         'ranks': _MOCK_RANKS,
