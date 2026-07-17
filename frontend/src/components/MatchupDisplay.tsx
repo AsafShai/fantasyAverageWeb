@@ -119,12 +119,6 @@ function fmtStat(n: number, integer: boolean): string {
   return integer ? String(Math.round(n)) : n.toFixed(1);
 }
 
-// Integer PTS derived from the rounded shooting components, so displayed
-// whole numbers satisfy PTS = 2·FGM + 3PM + FTM exactly (independent rounding breaks it).
-function ptsIntFromComponents(stats: ProjectionStats): number {
-  return 2 * Math.round(stats.fgm) + Math.round(stats.three_pm) + Math.round(stats.ftm);
-}
-
 function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
   if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
   if (integer) {
@@ -244,9 +238,7 @@ export function MatchupExpandRow({
                     <b>
                       {key === 'fg_pct' && fg
                         ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                        : key === 'pts' && integerMode
-                          ? ptsIntFromComponents(stats!)
-                          : fmtStat(stats![key], integerMode)}
+                        : fmtStat(stats![key], integerMode)}
                     </b>
                   </span>
                 ))}
