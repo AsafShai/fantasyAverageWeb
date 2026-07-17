@@ -157,28 +157,6 @@ def build_game_rows(event: dict, summary: dict) -> tuple[list[dict], list[dict]]
         for tid in ids
     }
 
-    # Team rows.
-    team_rows = []
-    for tb in summary["boxscore"]["teams"]:
-        tid = int(tb["team"]["id"])
-        stats = {s["name"]: s["displayValue"] for s in tb.get("statistics", [])}
-        fgm, fga = _split_made_att(stats["fieldGoalsMade-fieldGoalsAttempted"])
-        fg3m, _fg3a = _split_made_att(stats["threePointFieldGoalsMade-threePointFieldGoalsAttempted"])
-        _ftm, fta = _split_made_att(stats["freeThrowsMade-freeThrowsAttempted"])
-        row = {
-            "TEAM_ID": tid,
-            "TEAM_NAME": TEAM_ID_TO_NAME[tid],
-            **meta[tid],
-            "PTS": scores[tid],
-            "FG3M": fg3m,
-            "FG_PCT": fgm / fga if fga else 0.0,
-            "FGA": fga,
-            "FTA": fta,
-        }
-        for espn_name, col in _TEAM_STAT_MAP.items():
-            row[col] = _num(stats[espn_name])
-        team_rows.append(row)
-
     # Player rows.
     player_rows = []
     for block in summary["boxscore"]["players"]:
@@ -221,7 +199,46 @@ def build_game_rows(event: dict, summary: dict) -> tuple[list[dict], list[dict]]
                 "PLUS_MINUS": _num(vals[idx["+/-"]]),
             })
 
+    # Team rows. ESPN's team-boxscore block occasionally glitches (e.g.
+    # totalTurnovers=0) while the player rows of the same game are correct, so
+    # every additive stat is floored by the team's player-row sums (a true team
+    # total can exceed the player sum — team rebounds/turnovers — never trail it).
+    psums = _player_sums(player_rows)
+    team_rows = []
+    for tb in summary["boxscore"]["teams"]:
+        tid = int(tb["team"]["id"])
+        ps = psums.get(tid, {})
+        stats = {s["name"]: s["displayValue"] for s in tb.get("statistics", [])}
+        fgm, fga = _split_made_att(stats["fieldGoalsMade-fieldGoalsAttempted"])
+        fg3m, _fg3a = _split_made_att(stats["threePointFieldGoalsMade-threePointFieldGoalsAttempted"])
+        _ftm, fta = _split_made_att(stats["freeThrowsMade-freeThrowsAttempted"])
+        fgm = max(fgm, ps.get("FGM", 0.0))
+        fga = max(fga, ps.get("FGA", 0.0))
+        row = {
+            "TEAM_ID": tid,
+            "TEAM_NAME": TEAM_ID_TO_NAME[tid],
+            **meta[tid],
+            "PTS": scores[tid],
+            "FG3M": max(fg3m, ps.get("FG3M", 0.0)),
+            "FG_PCT": fgm / fga if fga else 0.0,
+            "FGA": fga,
+            "FTA": max(fta, ps.get("FTA", 0.0)),
+        }
+        for espn_name, col in _TEAM_STAT_MAP.items():
+            row[col] = max(_num(stats[espn_name]), ps.get(col, 0.0))
+        team_rows.append(row)
+
     return player_rows, team_rows
+
+
+def _player_sums(player_rows: list[dict]) -> dict[int, dict[str, float]]:
+    """Per-team sums of the additive stats, from the game's player rows."""
+    out: dict[int, dict[str, float]] = {}
+    for r in player_rows:
+        team = out.setdefault(r["TEAM_ID"], {})
+        for stat in ("REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "FTA", "FG3M"):
+            team[stat] = team.get(stat, 0.0) + r[stat]
+    return out
 
 
 def _frames(player_rows: list[dict], team_rows: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
