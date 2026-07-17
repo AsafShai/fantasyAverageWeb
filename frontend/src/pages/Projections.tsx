@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
+import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -89,8 +90,11 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
     );
   }
 
-  const fg = pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode);
-  const ft = pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode);
+  // Coherent integer rounding: PTS reads like a plain round while the
+  // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
+  const coherent = integerMode ? coherentInts(stats) : null;
+  const fg = pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, stats.fga, integerMode);
+  const ft = pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, stats.fta, integerMode);
 
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">
@@ -120,7 +124,9 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
       </td>
       {STAT_COLS.map(([key]) => (
         <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-          {fmtStat(stats[key] as number, integerMode)}
+          {coherent && (key === 'pts' || key === 'three_pm')
+            ? coherent[key]
+            : fmtStat(stats[key] as number, integerMode)}
         </td>
       ))}
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</td>

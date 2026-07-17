@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats } from '../types/api';
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
+import { coherentInts } from '../utils/coherentRound';
 import './MatchupDisplay.css';
 
 const RANK_LABELS: Record<keyof DefRanks, string> = {
@@ -193,8 +194,11 @@ export function MatchupExpandRow({
   };
   const isAdjusted = !!proj && Math.round(minutes) !== Math.round(proj.default_minutes);
 
-  const fg = stats ? pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode) : null;
-  const ft = stats ? pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode) : null;
+  // Coherent integer rounding: PTS reads like a plain round while the
+  // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
+  const coherent = integerMode && stats ? coherentInts(stats) : null;
+  const fg = stats ? pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, stats.fga, integerMode) : null;
+  const ft = stats ? pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, stats.fta, integerMode) : null;
 
   return (
     <tr className="mq-expand-row">
@@ -238,7 +242,9 @@ export function MatchupExpandRow({
                     <b>
                       {key === 'fg_pct' && fg
                         ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                        : fmtStat(stats![key], integerMode)}
+                        : coherent && (key === 'pts' || key === 'three_pm')
+                          ? coherent[key]
+                          : fmtStat(stats![key], integerMode)}
                     </b>
                   </span>
                 ))}
