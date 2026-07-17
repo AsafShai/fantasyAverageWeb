@@ -174,3 +174,15 @@
 .mq-proj-slider-label { font-size: 0.72rem; color: #999; }
 .mq-proj-slider-row input[type=range] { width: 140px; accent-color: #3b82f6; }
 .mq-proj-slider-value { font-size: 0.8rem; min-width: 18px; text-align: right; }
+.mq-proj-slider-reset {
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  color: #6b7280;
+  background: transparent;
+  cursor: pointer;
+}
+.mq-proj-slider-reset:hover { background: rgba(107, 114, 128, 0.12); }
+.mq-invisible { visibility: hidden; }

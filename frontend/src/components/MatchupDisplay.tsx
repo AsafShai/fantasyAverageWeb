@@ -180,6 +180,16 @@ export function MatchupExpandRow({
     }, 350);
   };
 
+  // Restore default minutes + the original default-t stats (no network round
+  // trip; also cancels any pending re-predict so it can't overwrite them).
+  const resetToDefault = () => {
+    if (!proj) return;
+    clearTimeout(timer.current);
+    setMinutes(proj.default_minutes);
+    setStats(proj.stats);
+  };
+  const isAdjusted = !!proj && Math.round(minutes) !== Math.round(proj.default_minutes);
+
   const fg = stats ? pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode) : null;
   const ft = stats ? pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode) : null;
 
@@ -254,6 +264,14 @@ export function MatchupExpandRow({
                     onChange={(e) => onSlider(Number(e.target.value))}
                   />
                   <span className="mq-proj-slider-value">{Math.round(minutes)}</span>
+                  <button
+                    onClick={resetToDefault}
+                    aria-label="Reset to default minutes"
+                    title={`Reset to default (${Math.round(proj!.default_minutes)} min)`}
+                    className={`mq-proj-slider-reset ${isAdjusted ? '' : 'mq-invisible'}`}
+                  >
+                    ↺
+                  </button>
                 </div>
               )}
             </div>

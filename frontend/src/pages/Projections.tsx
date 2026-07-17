@@ -63,6 +63,15 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
     }, 350);
   };
 
+  // Restore default minutes + the original default-t stats (no network round
+  // trip; also cancels any pending re-predict so it can't overwrite them).
+  const resetToDefault = () => {
+    clearTimeout(timer.current);
+    setMinutes(proj.default_minutes);
+    setStats(proj.stats);
+  };
+  const isAdjusted = Math.round(minutes) !== Math.round(proj.default_minutes);
+
   if (proj.status === 'red' || !stats) {
     return (
       <tr className="border-t border-gray-100 dark:border-gray-800">
@@ -96,6 +105,14 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
             className="w-24 accent-blue-600"
           />
           <span className="tabular-nums w-6 text-right text-sm">{Math.round(minutes)}</span>
+          <button
+            onClick={resetToDefault}
+            aria-label="Reset to default minutes"
+            title={`Reset to default (${Math.round(proj.default_minutes)} min)`}
+            className={`text-xs leading-none px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 ${isAdjusted ? '' : 'invisible'}`}
+          >
+            ↺
+          </button>
         </div>
       </td>
       {STAT_COLS.map(([key]) => (
