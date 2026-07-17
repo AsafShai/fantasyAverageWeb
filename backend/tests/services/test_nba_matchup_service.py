@@ -163,6 +163,27 @@ async def test_get_games_today_normalizes_site_abbrs(service):
 
 
 @pytest.mark.asyncio
+async def test_get_games_today_always_pins_the_date(service):
+    """ESPN's dateless scoreboard returns the NEAREST game day (the season
+    finale all offseason), so the request must always carry an explicit
+    dates= param — US/Eastern today when none is given."""
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {'events': []}
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch.object(service._client, 'get', new_callable=AsyncMock, return_value=mock_resp) as get:
+        await service.get_games_today()
+        url_default = get.call_args[0][0]
+        await service.get_games_today(date='20260412')
+        url_explicit = get.call_args[0][0]
+
+    assert 'dates=' in url_default
+    import re
+    assert re.search(r'dates=\d{8}$', url_default)
+    assert url_explicit.endswith('dates=20260412')
+
+
+@pytest.mark.asyncio
 async def test_get_games_today_empty_on_no_games(service):
     mock_data = {'events': []}
     mock_resp = MagicMock()

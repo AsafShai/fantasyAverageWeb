@@ -11,6 +11,7 @@ UI already speak.
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -135,9 +136,15 @@ class NbaMatchupService:
         ):
             return self._schedule_cache['data']
 
-        url = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard'
-        if date:
-            url = f'{url}?dates={date}'
+        # Always pin the date: ESPN's dateless scoreboard returns the NEAREST
+        # game day (e.g. the season finale all offseason), not "today". "Today"
+        # is the US/Eastern date — the NBA game-day convention — so evening
+        # games stay "today" for viewers ahead of US time.
+        requested = date or datetime.now(ZoneInfo('America/New_York')).strftime('%Y%m%d')
+        url = (
+            'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard'
+            f'?dates={requested}'
+        )
         response = await self._client.get(url)
         response.raise_for_status()
         data = response.json()
