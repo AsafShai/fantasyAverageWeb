@@ -42,7 +42,39 @@ describe('coherentInts', () => {
   });
 
   it('exact integers pass through untouched', () => {
-    const r = coherentInts(stats({ pts: 24, fgm: 9, three_pm: 2, ftm: 4 }));
-    expect(r).toEqual({ pts: 24, fgm: 9, three_pm: 2, ftm: 4 });
+    const r = coherentInts(stats({ pts: 24, fgm: 9, three_pm: 2, ftm: 4, fga: 17, fta: 5, fg_pct: 9 / 17, ft_pct: 4 / 5 }));
+    expect(r).toEqual({ pts: 24, fgm: 9, three_pm: 2, ftm: 4, fga: 17, fta: 5 });
+  });
+
+  it('attempts never render an untrue 100% when makes get rounded up', () => {
+    // FT 4.4/5.0 (88%): the PTS identity can push FTM to 5; FTA must then
+    // move to 6 so the fraction reads 5/6 (83%) instead of 5/5 (100%).
+    const r = coherentInts(stats({
+      pts: 25.4, fgm: 9.0, three_pm: 2.0, ftm: 4.4, fga: 16.0, fta: 5.0,
+      fg_pct: 9.0 / 16.0, ft_pct: 4.4 / 5.0,
+    }));
+    if (r.ftm === 5) {
+      expect(r.fta).toBe(6);
+    } else {
+      expect(r.ftm).toBe(4);
+      expect(r.fta).toBe(5);
+    }
+    expect(r.fta).toBeGreaterThanOrEqual(r.ftm);
+    expect(r.fga).toBeGreaterThanOrEqual(r.fgm);
+  });
+
+  it('attempts stay at least the makes across random-ish lines', () => {
+    const cases = [
+      { pts: 10.3, fgm: 3.6, three_pm: 0.5, ftm: 2.6, fga: 8.1, fta: 2.9 },
+      { pts: 31.8, fgm: 11.4, three_pm: 2.5, ftm: 6.5, fga: 21.9, fta: 7.1 },
+      { pts: 2.2, fgm: 0.9, three_pm: 0.2, ftm: 0.2, fga: 2.4, fta: 0.3 },
+    ];
+    for (const c of cases) {
+      const full = { ...c, fg_pct: c.fgm / c.fga, ft_pct: c.fta > 0 ? c.ftm / c.fta : 0 };
+      const r = coherentInts(stats(full));
+      expect(r.fga).toBeGreaterThanOrEqual(r.fgm);
+      expect(r.fta).toBeGreaterThanOrEqual(r.ftm);
+      expect(r.pts).toBe(2 * r.fgm + r.three_pm + r.ftm);
+    }
   });
 });

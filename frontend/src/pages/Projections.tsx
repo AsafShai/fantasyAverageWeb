@@ -93,8 +93,8 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   // Coherent integer rounding: PTS reads like a plain round while the
   // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
   const coherent = integerMode ? coherentInts(stats) : null;
-  const fg = pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, stats.fga, integerMode);
-  const ft = pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, stats.fta, integerMode);
+  const fg = pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode);
+  const ft = pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode);
 
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">

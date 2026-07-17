@@ -197,8 +197,8 @@ export function MatchupExpandRow({
   // Coherent integer rounding: PTS reads like a plain round while the
   // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
   const coherent = integerMode && stats ? coherentInts(stats) : null;
-  const fg = stats ? pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, stats.fga, integerMode) : null;
-  const ft = stats ? pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, stats.fta, integerMode) : null;
+  const fg = stats ? pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode) : null;
+  const ft = stats ? pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode) : null;
 
   return (
     <tr className="mq-expand-row">
