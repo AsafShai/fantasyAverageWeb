@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats } from '../types/api';
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
 import './MatchupDisplay.css';
@@ -164,6 +164,15 @@ export function MatchupExpandRow({
   const [minutes, setMinutes] = useState(proj?.default_minutes ?? 0);
   const [stats, setStats] = useState<ProjectionStats | null>(proj?.stats ?? null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Re-sync when the underlying projection changes (e.g. slate-date switch):
+  // React reuses components by key, so stale local minutes/stats would
+  // otherwise survive and show the previous slate's numbers.
+  useEffect(() => {
+    clearTimeout(timer.current);
+    setMinutes(proj?.default_minutes ?? 0);
+    setStats(proj?.stats ?? null);
+  }, [proj]);
   const projActive = showProjection && !!proj && proj.status !== 'red' && !!stats;
 
   const onSlider = (v: number) => {

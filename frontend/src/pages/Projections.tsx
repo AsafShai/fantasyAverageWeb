@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
@@ -48,6 +48,15 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   const [minutes, setMinutes] = useState(proj.default_minutes);
   const [stats, setStats] = useState<ProjectionStats | null>(proj.stats);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Re-sync when the underlying projection changes (e.g. slate-date switch):
+  // React reuses row components by key, so stale local minutes/stats would
+  // otherwise survive and show the previous slate's numbers.
+  useEffect(() => {
+    clearTimeout(timer.current);
+    setMinutes(proj.default_minutes);
+    setStats(proj.stats);
+  }, [proj]);
 
   const onSlider = (v: number) => {
     setMinutes(v);
