@@ -665,6 +665,24 @@ class DBService:
             logger.error(f"Failed to aggregate team defense for {season}: {e}")
             return []
 
+    async def get_recent_game_dates(self, limit: int = 60) -> list[date]:
+        """Most recent distinct game dates in the store, newest first — the
+        dates the what-if slate picker can offer without guessing."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT DISTINCT game_date FROM fs_team_games "
+                    "ORDER BY game_date DESC LIMIT $1",
+                    limit,
+                )
+                return [r["game_date"] for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to list recent game dates: {e}")
+            return []
+
     async def fs_has_date(self, game_date: date) -> Optional[bool]:
         """Whether the store already holds the night's rows. None = DB unavailable
         (the caller must NOT treat that as 'safe to predict')."""

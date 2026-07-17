@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
-import { useGetMatchupsTodayQuery } from '../store/api/fantasyApi';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery } from '../store/api/fantasyApi';
 import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
@@ -35,7 +35,14 @@ const Players = () => {
     }
   }, [timePeriod, customRange, data]);
 
-  const { data: matchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
+  // What-if slate date (UI check): shows that game day's matchups/projections
+  // with current player state. Options are the store's known game dates.
+  const [slateDate, setSlateDate] = useState('');
+  const { data: knownDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
+  const { data: matchups = [] } = useGetMatchupsTodayQuery(
+    slateDate ? slateDate.replaceAll('-', '') : undefined,
+    { skip: !FF_MATCHUP_QUALITY }
+  );
   const matchupMap = useMemo(
     () => new Map(matchups.map((m: PlayerMatchup) => [m.player_name, m])),
     [matchups]
@@ -120,6 +127,19 @@ const Players = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {FF_MATCHUP_QUALITY && (
+            <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Show a known game day's matchups. Projections still use current player state — for UI checking.">
+              <span>Slate</span>
+              <select
+                value={slateDate}
+                onChange={(e) => setSlateDate(e.target.value)}
+                className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+              >
+                <option value="">Upcoming (live)</option>
+                {knownDates.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </label>
+          )}
           {FF_PROJECTIONS && (
             <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none">
               <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />

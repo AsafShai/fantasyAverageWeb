@@ -7,6 +7,7 @@ from typing import Optional
 from app.models.matchup_models import DefRanks, DefValues, PlayerMatchupResponse
 from app.models.projection_models import Projection, ProjectionStats
 from app.services.data_provider import DataProvider
+from app.services.db_service import DBService
 from app.services.live_projection_service import LiveProjectionService
 from app.services.nba_matchup_service import NbaMatchupService
 
@@ -16,6 +17,14 @@ logger = logging.getLogger(__name__)
 _matchup_service = NbaMatchupService()
 _data_provider = DataProvider()
 _projection_service = LiveProjectionService()
+
+
+@router.get('/dates', response_model=list[str])
+async def get_known_game_dates() -> list[str]:
+    """Game dates present in the feature store (newest first) — the options
+    the what-if slate picker offers, so users never guess a date."""
+    dates = await DBService().get_recent_game_dates()
+    return [d.isoformat() for d in dates]
 
 @router.get('/today', response_model=list[PlayerMatchupResponse])
 async def get_matchups_today(

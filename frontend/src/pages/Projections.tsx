@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { useGetMatchupsTodayQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -109,7 +109,14 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
 }
 
 export default function Projections() {
-  const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery();
+  // Slate date override (UI check / what-if): shows that date's games, but
+  // predictions still use each player's CURRENT feature-store state. Options
+  // come from the store's known game dates — no guessing.
+  const [slateDate, setSlateDate] = useState('');
+  const { data: knownDates = [] } = useGetMatchupDatesQuery();
+  const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery(
+    slateDate ? slateDate.replaceAll('-', '') : undefined
+  );
   const [integerMode, setIntegerMode] = useState(true);
   const [search, setSearch] = useState('');
   const [nbaTeam, setNbaTeam] = useState('');
@@ -151,9 +158,24 @@ export default function Projections() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Projections</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Live model projections for tonight's games.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {slateDate
+              ? `Slate of ${slateDate} — predictions use current player state (what-if view).`
+              : "Live model projections for tonight's games."}
+          </p>
         </div>
         <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Show a known game day's slate. Predictions still use current player state — for UI checking, not historical accuracy.">
+            <span>Slate</span>
+            <select
+              value={slateDate}
+              onChange={(e) => setSlateDate(e.target.value)}
+              className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+            >
+              <option value="">Upcoming (live)</option>
+              {knownDates.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </label>
           <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
             <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} className="accent-blue-600" />
             Integer projections
@@ -207,7 +229,9 @@ export default function Projections() {
             ))}
             {filtered.length === 0 && (
               <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">
-                {withGames.length === 0 ? 'No games today.' : 'No players match the filters.'}
+                {withGames.length === 0
+                  ? (slateDate ? `No games on ${slateDate}.` : 'No games today.')
+                  : 'No players match the filters.'}
               </td></tr>
             )}
           </tbody>

@@ -114,21 +114,9 @@ def test_pace_badge_boundary_exact_plus_two(service):
 
 @pytest.mark.asyncio
 async def test_get_games_today_both_directions(service):
-    mock_data = {
-        'events': [{
-            'competitions': [{
-                'competitors': [
-                    {'homeAway': 'home', 'team': {'abbreviation': 'LAL'}},
-                    {'homeAway': 'away', 'team': {'abbreviation': 'CHA'}},
-                ]
-            }]
-        }]
-    }
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = mock_data
-    mock_resp.raise_for_status = MagicMock()
+    events = [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=False)]
 
-    with patch.object(service._client, 'get', new_callable=AsyncMock, return_value=mock_resp):
+    with patch.object(service._client, 'get', new_callable=AsyncMock, return_value=_resp(events)):
         games = await service.get_games_today()
 
     assert games['LAL'].opponent == 'CHA'
@@ -141,46 +129,81 @@ async def test_get_games_today_both_directions(service):
 async def test_get_games_today_normalizes_site_abbrs(service):
     """ESPN scoreboards speak the site dialect (NY/GS/…); the games map must be
     keyed by the canonical dialect the fantasy side uses (NYK/GSW/…)."""
-    mock_data = {
-        'events': [{
-            'competitions': [{
-                'competitors': [
-                    {'homeAway': 'home', 'team': {'abbreviation': 'NY'}},
-                    {'homeAway': 'away', 'team': {'abbreviation': 'GS'}},
-                ]
-            }]
-        }]
-    }
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = mock_data
-    mock_resp.raise_for_status = MagicMock()
+    events = [_scoreboard_event(18, 9, 'NY', 'GS', completed=False)]
 
-    with patch.object(service._client, 'get', new_callable=AsyncMock, return_value=mock_resp):
+    with patch.object(service._client, 'get', new_callable=AsyncMock, return_value=_resp(events)):
         games = await service.get_games_today()
 
     assert games['NYK'].opponent == 'GSW'
     assert games['GSW'].opponent == 'NYK'
 
 
+def _scoreboard_event(home_id: int, away_id: int, home_abbr: str, away_abbr: str,
+                      completed: bool, season_type: int = 2) -> dict:
+    return {
+        'season': {'type': season_type},
+        'status': {'type': {'completed': completed}},
+        'competitions': [{
+            'competitors': [
+                {'homeAway': 'home', 'team': {'id': str(home_id), 'abbreviation': home_abbr}},
+                {'homeAway': 'away', 'team': {'id': str(away_id), 'abbreviation': away_abbr}},
+            ],
+            'notes': [],
+        }],
+    }
+
+
+def _resp(events: list[dict]) -> MagicMock:
+    resp = MagicMock()
+    resp.json.return_value = {'events': events}
+    resp.raise_for_status = MagicMock()
+    return resp
+
+
 @pytest.mark.asyncio
-async def test_get_games_today_always_pins_the_date(service):
+async def test_default_view_rolls_forward_to_the_upcoming_slate(service):
     """ESPN's dateless scoreboard returns the NEAREST game day (the season
-    finale all offseason), so the request must always carry an explicit
-    dates= param — US/Eastern today when none is given."""
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {'events': []}
-    mock_resp.raise_for_status = MagicMock()
+    finale all offseason), so the default view pins dates explicitly and rolls
+    forward: today's slate all-final -> tomorrow's pending slate is shown."""
+    yesterday_slate = [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=True)]
+    tomorrow_slate = [_scoreboard_event(18, 9, 'NY', 'GS', completed=False)]
 
-    with patch.object(service._client, 'get', new_callable=AsyncMock, return_value=mock_resp) as get:
-        await service.get_games_today()
-        url_default = get.call_args[0][0]
-        await service.get_games_today(date='20260412')
-        url_explicit = get.call_args[0][0]
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock,
+        side_effect=[_resp(yesterday_slate), _resp(tomorrow_slate)],
+    ) as get:
+        games = await service.get_games_today()
 
-    assert 'dates=' in url_default
+    assert len(get.call_args_list) == 2
     import re
-    assert re.search(r'dates=\d{8}$', url_default)
-    assert url_explicit.endswith('dates=20260412')
+    for call in get.call_args_list:
+        assert re.search(r'dates=\d{8}$', call[0][0])
+    # the picked slate is the pending one, normalized to canonical abbrs
+    assert games['NYK'].opponent == 'GSW'
+    assert 'LAL' not in games
+
+
+@pytest.mark.asyncio
+async def test_default_view_empty_when_no_upcoming_slate(service):
+    """Offseason: no games within the lookahead window -> empty map (never a
+    stale past slate)."""
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, return_value=_resp([])
+    ) as get:
+        games = await service.get_games_today()
+
+    assert games == {}
+    assert len(get.call_args_list) == 8  # today + 7-day lookahead
+
+
+@pytest.mark.asyncio
+async def test_explicit_date_is_used_verbatim(service):
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, return_value=_resp([])
+    ) as get:
+        await service.get_games_today(date='20260412')
+
+    assert get.call_args[0][0].endswith('dates=20260412')
 
 
 @pytest.mark.asyncio

@@ -18,6 +18,11 @@ import httpx
 from app.config import settings
 from app.services.db_service import DBService
 from app.utils.team_abbr_map import TEAM_ID_TO_ABBR, canonical_abbr
+from model_stats_inference.espn.games import is_countable, is_final
+
+# How far forward the default view searches for the next slate. Covers the
+# All-Star break (~6 days); anything longer (offseason) is genuinely "no games".
+_UPCOMING_LOOKAHEAD_DAYS = 7
 
 
 def _season_str(season_id: int) -> str:
@@ -129,28 +134,48 @@ class NbaMatchupService:
         return 'Average'
 
     async def get_games_today(self, date: str | None = None) -> dict[str, GameInfo]:
-        # Skip cache when a specific date is requested (testing only)
+        # Skip cache when a specific date is requested (testing / what-if view)
         if date is None and (
             self._schedule_cache['ts'] is not None
             and datetime.now() - self._schedule_cache['ts'] < timedelta(minutes=5)
         ):
             return self._schedule_cache['data']
 
-        # Always pin the date: ESPN's dateless scoreboard returns the NEAREST
-        # game day (e.g. the season finale all offseason), not "today". "Today"
-        # is the US/Eastern date — the NBA game-day convention — so evening
-        # games stay "today" for viewers ahead of US time.
-        requested = date or datetime.now(ZoneInfo('America/New_York')).strftime('%Y%m%d')
+        if date is not None:
+            return self._games_from(await self._scoreboard_events(date))
+
+        # Default view = the UPCOMING slate. The date is always pinned (ESPN's
+        # dateless scoreboard returns the NEAREST game day — the season finale
+        # all offseason, which is not "upcoming"). Starting from US/Eastern
+        # today (the NBA game-day convention), take the first day that still
+        # has a non-final countable game: today while games are pending or
+        # live, tomorrow once the whole slate is final, the next slate across
+        # the All-Star break, and empty in the offseason.
+        base = datetime.now(ZoneInfo('America/New_York')).date()
+        games: dict[str, GameInfo] = {}
+        for offset in range(_UPCOMING_LOOKAHEAD_DAYS + 1):
+            day = (base + timedelta(days=offset)).strftime('%Y%m%d')
+            events = [e for e in await self._scoreboard_events(day) if is_countable(e)]
+            if any(not is_final(e) for e in events):
+                games = self._games_from(events)
+                break
+
+        self._schedule_cache.update({'data': games, 'ts': datetime.now()})
+        return games
+
+    async def _scoreboard_events(self, date: str) -> list[dict]:
         url = (
             'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard'
-            f'?dates={requested}'
+            f'?dates={date}'
         )
         response = await self._client.get(url)
         response.raise_for_status()
-        data = response.json()
+        return response.json().get('events', [])
 
+    @staticmethod
+    def _games_from(events: list[dict]) -> dict[str, GameInfo]:
         games: dict[str, GameInfo] = {}
-        for event in data.get('events', []):
+        for event in events:
             competitors = event.get('competitions', [{}])[0].get('competitors', [])
             if len(competitors) == 2:
                 a, b = competitors[0], competitors[1]
@@ -159,9 +184,6 @@ class NbaMatchupService:
                 b_abbr = canonical_abbr(b['team']['abbreviation'])
                 games[a_abbr] = GameInfo(opponent=b_abbr, is_home=a.get('homeAway') == 'home')
                 games[b_abbr] = GameInfo(opponent=a_abbr, is_home=b.get('homeAway') == 'home')
-
-        if date is None:
-            self._schedule_cache.update({'data': games, 'ts': datetime.now()})
         return games
 
     async def close(self) -> None:
