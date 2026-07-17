@@ -326,11 +326,15 @@ class ModelNightlyService:
         pv, tav, tov = await self._db.load_feature_vectors()
         if not pv:
             return None
-        return await asyncio.to_thread(
-            lambda: FeatureStore.from_vectors(
-                _player_vectors_df(pv), _team_vectors_df(tav), _team_vectors_df(tov)
-            )
-        )
+        # Ungated last-5-appearances minutes (slider default): the feature
+        # vectors treat sub-MIN_MINUTES games as DNPs, but the default t must
+        # show real recent playing time, so it comes from the raw rows.
+        last5_min = await self._db.get_last5_minutes()
+        def _build() -> FeatureStore:
+            pdf = _player_vectors_df(pv)
+            pdf = pdf.assign(MIN_LAST5_ALL=pdf["PLAYER_ID"].map(last5_min))
+            return FeatureStore.from_vectors(pdf, _team_vectors_df(tav), _team_vectors_df(tov))
+        return await asyncio.to_thread(_build)
 
     def _invalidate_inference_store(self) -> None:
         """Drop the resident store so the next prediction reloads the fresh vectors.

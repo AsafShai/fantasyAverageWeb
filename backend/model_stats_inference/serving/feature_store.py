@@ -25,7 +25,12 @@ from .errors import (
 )
 
 # Columns on the player vector that are metadata, not model features.
-_PLAYER_META = ["PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "POSITION", "last_game_date", "games_count"]
+# MIN_LAST5_ALL is the ungated last-5-appearances minutes average, attached at
+# store-load time for the slider default — never a model input.
+_PLAYER_META = [
+    "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "POSITION", "last_game_date",
+    "games_count", "MIN_LAST5_ALL",
+]
 
 
 @dataclass

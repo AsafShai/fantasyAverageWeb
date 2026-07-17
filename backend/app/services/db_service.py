@@ -665,6 +665,34 @@ class DBService:
             logger.error(f"Failed to aggregate team defense for {season}: {e}")
             return []
 
+    async def get_last5_minutes(self) -> dict[int, float]:
+        """player_id -> plain average minutes over his last 5 appearances,
+        UNGATED (sub-MIN_MINUTES games count — the slider default should show
+        real recent playing time, unlike the feature windows which treat them
+        as DNPs)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return {}
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT player_id, AVG(min) AS avg_min FROM (
+                        SELECT player_id, min,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY player_id
+                                   ORDER BY game_date DESC, game_id DESC
+                               ) AS rn
+                        FROM fs_player_games
+                    ) t WHERE rn <= 5
+                    GROUP BY player_id
+                    """
+                )
+                return {int(r["player_id"]): float(r["avg_min"]) for r in rows}
+        except Exception as e:
+            logger.error(f"Failed to compute last-5 minutes averages: {e}")
+            return {}
+
     async def get_recent_game_dates(self, limit: int = 60) -> list[date]:
         """Most recent distinct game dates in the store, newest first — the
         dates the what-if slate picker can offer without guessing."""

@@ -139,10 +139,13 @@ def _opponent_team_id(espn_abbr: str) -> int | None:
 
 
 def _default_minutes(store: FeatureStore, player_id: int) -> float:
+    """Slider default t: plain average of the last 5 appearances (UNGATED —
+    sub-MIN_MINUTES cameos count, unlike the model's feature windows). The
+    gated window means are only fallbacks for stores without the column."""
     if player_id not in store.player_vectors.index:
         return 0.0
     row = store.player_vectors.loc[player_id]
-    for col in ('MIN_w5_mean', 'MIN_w10_mean', 'MIN_global_mean'):
+    for col in ('MIN_LAST5_ALL', 'MIN_w5_mean', 'MIN_w10_mean', 'MIN_global_mean'):
         v = row.get(col)
         if v is not None and np.isfinite(v):
             return float(round(v, 1))
