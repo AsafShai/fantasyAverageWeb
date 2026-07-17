@@ -60,6 +60,7 @@ class NbaMatchupService:
             'ts': None,
         }
         self._schedule_cache: dict = {'data': None, 'ts': None}
+        self._upcoming_cache: dict = {'data': None, 'ts': None}
 
     def _def_cache_valid(self) -> bool:
         return (
@@ -162,6 +163,31 @@ class NbaMatchupService:
 
         self._schedule_cache.update({'data': games, 'ts': datetime.now()})
         return games
+
+    async def get_upcoming_game_dates(
+        self, count: int = 5, lookahead_days: int = 14
+    ) -> list[str]:
+        """The next ``count`` days that have countable games (ISO dates, today
+        included while its slate is still pending), scanning at most
+        ``lookahead_days`` ahead. Offseason -> empty. Cached 5 minutes."""
+        if (
+            self._upcoming_cache['ts'] is not None
+            and datetime.now() - self._upcoming_cache['ts'] < timedelta(minutes=5)
+        ):
+            return self._upcoming_cache['data']
+
+        base = datetime.now(ZoneInfo('America/New_York')).date()
+        found: list[str] = []
+        for offset in range(lookahead_days + 1):
+            day = base + timedelta(days=offset)
+            events = [e for e in await self._scoreboard_events(day.strftime('%Y%m%d')) if is_countable(e)]
+            if events and (offset > 0 or any(not is_final(e) for e in events)):
+                found.append(day.isoformat())
+                if len(found) >= count:
+                    break
+
+        self._upcoming_cache.update({'data': found, 'ts': datetime.now()})
+        return found
 
     async def _scoreboard_events(self, date: str) -> list[dict]:
         url = (

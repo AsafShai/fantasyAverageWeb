@@ -197,6 +197,35 @@ async def test_default_view_empty_when_no_upcoming_slate(service):
 
 
 @pytest.mark.asyncio
+async def test_upcoming_game_dates_skips_empty_days_and_counts_game_days(service):
+    """Next-5-game-days scan: empty days are skipped, finished-today is skipped,
+    only days with countable pending games are offered."""
+    pending = [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=False)]
+    responses = [
+        _resp([_scoreboard_event(13, 30, 'LAL', 'CHA', completed=True)]),  # today: slate done
+        _resp([]),                                                          # tomorrow: off day
+        _resp(pending), _resp(pending), _resp(pending), _resp([]), _resp(pending), _resp(pending),
+    ]
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=responses
+    ):
+        dates = await service.get_upcoming_game_dates(count=5)
+
+    assert len(dates) == 5
+    assert dates == sorted(dates)  # chronological
+
+
+@pytest.mark.asyncio
+async def test_upcoming_game_dates_empty_in_offseason(service):
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, return_value=_resp([])
+    ):
+        dates = await service.get_upcoming_game_dates()
+
+    assert dates == []
+
+
+@pytest.mark.asyncio
 async def test_explicit_date_is_used_verbatim(service):
     with patch.object(
         service._client, 'get', new_callable=AsyncMock, return_value=_resp([])

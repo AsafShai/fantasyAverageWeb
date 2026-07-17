@@ -22,9 +22,17 @@ _projection_service = LiveProjectionService()
 @router.get('/dates', response_model=list[str])
 async def get_known_game_dates() -> list[str]:
     """Game dates present in the feature store (newest first) — the options
-    the what-if slate picker offers, so users never guess a date."""
+    the what-if slate picker offers, so users never guess a date. The UI only
+    shows these behind the past-slates feature flag (off in production)."""
     dates = await DBService().get_recent_game_dates()
     return [d.isoformat() for d in dates]
+
+
+@router.get('/upcoming-dates', response_model=list[str])
+async def get_upcoming_game_dates() -> list[str]:
+    """The next 5 game days on the schedule (ISO dates) — the default slate
+    options shown to every user."""
+    return await _matchup_service.get_upcoming_game_dates()
 
 @router.get('/today', response_model=list[PlayerMatchupResponse])
 async def get_matchups_today(

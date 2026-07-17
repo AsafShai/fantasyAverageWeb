@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -109,11 +110,11 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
 }
 
 export default function Projections() {
-  // Slate date override (UI check / what-if): shows that date's games, but
-  // predictions still use each player's CURRENT feature-store state. Options
-  // come from the store's known game dates — no guessing.
+  // Slate picker: everyone sees the next game days; past dates (what-if/debug
+  // view — that day's games with CURRENT player state) are flag-gated.
   const [slateDate, setSlateDate] = useState('');
-  const { data: knownDates = [] } = useGetMatchupDatesQuery();
+  const { data: upcomingDates = [] } = useGetUpcomingDatesQuery();
+  const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_PAST_SLATES });
   const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery(
     slateDate ? slateDate.replaceAll('-', '') : undefined
   );
@@ -165,7 +166,7 @@ export default function Projections() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Show a known game day's slate. Predictions still use current player state — for UI checking, not historical accuracy.">
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Pick a game day. Past dates (debug) show that slate with current player state.">
             <span>Slate</span>
             <select
               value={slateDate}
@@ -173,7 +174,12 @@ export default function Projections() {
               className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
             >
               <option value="">Upcoming (live)</option>
-              {knownDates.map((d) => <option key={d} value={d}>{d}</option>)}
+              {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
+              {FF_PAST_SLATES && pastDates.length > 0 && (
+                <optgroup label="Past (debug)">
+                  {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
+                </optgroup>
+              )}
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">

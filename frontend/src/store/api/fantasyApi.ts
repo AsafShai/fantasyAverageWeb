@@ -83,6 +83,9 @@ export const fantasyApi = createApi({
     getMatchupDates: builder.query<string[], void>({
       query: () => '/matchups/dates',
     }),
+    getUpcomingDates: builder.query<string[], void>({
+      query: () => '/matchups/upcoming-dates',
+    }),
     predictProjection: builder.mutation<{ stats: ProjectionStats }, { player_name: string; opponent: string; is_home: boolean; minutes: number }>({
       query: (body) => ({ url: '/projections/predict', method: 'POST', body }),
     }),
@@ -122,6 +125,7 @@ export const {
   useGetNbaTeamDepthChartQuery,
   useGetMatchupsTodayQuery,
   useGetMatchupDatesQuery,
+  useGetUpcomingDatesQuery,
   usePredictProjectionMutation,
   useGetFeatureStorePlayersQuery,
   useGetFeatureStorePlayerStateQuery,
