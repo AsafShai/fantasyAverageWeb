@@ -47,15 +47,16 @@ class TeamTimeSeriesPoint(BaseModel):
     date: date
     team_id: int
     team_name: str
-    rk_fg_pct: Optional[int] = None
-    rk_ft_pct: Optional[int] = None
-    rk_three_pm: Optional[int] = None
-    rk_reb: Optional[int] = None
-    rk_ast: Optional[int] = None
-    rk_stl: Optional[int] = None
-    rk_blk: Optional[int] = None
-    rk_pts: Optional[int] = None
-    rk_total: Optional[int] = None
+    rk_fg_pct: Optional[float] = None
+    rk_ft_pct: Optional[float] = None
+    rk_three_pm: Optional[float] = None
+    rk_reb: Optional[float] = None
+    rk_ast: Optional[float] = None
+    rk_stl: Optional[float] = None
+    rk_blk: Optional[float] = None
+    rk_pts: Optional[float] = None
+    rk_total: Optional[float] = None
+    gp: Optional[int] = None
     fg_pct: Optional[float] = None
     ft_pct: Optional[float] = None
     three_pm: Optional[float] = None
