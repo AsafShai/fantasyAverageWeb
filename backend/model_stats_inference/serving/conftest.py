@@ -1,4 +1,4 @@
-"""Hermetic synthetic fixtures for the serving tests — no nba_api, no network.
+"""Hermetic synthetic fixtures for the serving tests — no external APIs, no network.
 
 Builds a small but realistic dataset: two teams playing a 30-game schedule, three
 full-history players and one low-history player (5 games). Stats scale with minutes

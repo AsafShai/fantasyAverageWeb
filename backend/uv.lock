@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -499,7 +499,6 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-openai" },
-    { name = "nba-api" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pdfplumber" },
@@ -532,7 +531,6 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=0.3.27" },
     { name = "langchain-openai", specifier = ">=0.2.9" },
-    { name = "nba-api", specifier = ">=1.11.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.3.0" },
     { name = "pdfplumber", specifier = ">=0.11.0" },
@@ -1115,20 +1113,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/62/3c/c4ef2164a71c1a63d7f1ae411c4082c5fa872405106db60a4b7114989ad7/narwhals-2.22.1.tar.gz", hash = "sha256:d62920805a0a43b7ff8b54b0c0d3142d796f8a9301836ada37e573d6a33cbcd9", size = 647493, upload-time = "2026-06-05T12:34:34.051Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/48/ca/36339329c4604adbcc99c899b7eb1ce1a555c499b6a6860757dc9bfed36d/narwhals-2.22.1-py3-none-any.whl", hash = "sha256:60567d774edf77db53906f89d9fbd164e66e56d66d388e1e6990f17ac33cfb53", size = 454815, upload-time = "2026-06-05T12:34:32.289Z" },
-]
-
-[[package]]
-name = "nba-api"
-version = "1.11.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0d/f8/761434ce98e39d6bdd1b98611102fdc054920e330a5b5194464cb340adf8/nba_api-1.11.4.tar.gz", hash = "sha256:1dccd70b78f36f64260e1f353c4a02c1644147c4a2a5ce42fbd9f637d70bad3e", size = 177323, upload-time = "2026-02-20T07:02:39.61Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/c2/17c805220de846ea9280f62a003c0cdebddf1de3d387614162891502a3a6/nba_api-1.11.4-py3-none-any.whl", hash = "sha256:f489b2a1d67ee4298f5173775b335d0e43e63455ed157a5612b542094b9f1963", size = 322583, upload-time = "2026-02-20T07:02:36.578Z" },
 ]
 
 [[package]]

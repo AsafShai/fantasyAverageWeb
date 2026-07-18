@@ -37,3 +37,4 @@ class PlayerMatchupResponse(BaseModel):
     def_values: DefValues
     league_avg_def_values: DefValues
     projection: Optional[Projection] = None
+    game_date: Optional[str] = None  # ISO date this slate resolved to (None if unknown)

@@ -1,12 +1,14 @@
-import asyncio
 import logging
+import time
+from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 
 from app.models.matchup_models import DefRanks, DefValues, PlayerMatchupResponse
 from app.models.projection_models import Projection, ProjectionStats
 from app.services.data_provider import DataProvider
+from app.services.db_service import DBService
 from app.services.live_projection_service import LiveProjectionService
 from app.services.nba_matchup_service import NbaMatchupService
 
@@ -17,18 +19,88 @@ _matchup_service = NbaMatchupService()
 _data_provider = DataProvider()
 _projection_service = LiveProjectionService()
 
+
+@router.get('/dates', response_model=list[str])
+async def get_known_game_dates() -> list[str]:
+    """Game dates present in the feature store (newest first) — the options
+    the what-if slate picker offers, so users never guess a date. The UI only
+    shows these behind the past-slates feature flag (off in production)."""
+    dates = await DBService().get_recent_game_dates()
+    return [d.isoformat() for d in dates]
+
+
+@router.get('/upcoming-dates', response_model=list[str])
+async def get_upcoming_game_dates() -> list[str]:
+    """The next 5 game days on the schedule (ISO dates) — the default slate
+    options shown to every user."""
+    return await _matchup_service.get_upcoming_game_dates()
+
+
+@router.get('/current-slate-date', response_model=Optional[str])
+async def get_current_slate_date() -> Optional[str]:
+    """ISO date the default "Upcoming (live)" view currently resolves to, or
+    None in the offseason. Independent of /today's player list — that list
+    can be empty even when a real slate date is known (or vice versa isn't
+    possible, but the two must never be inferred from each other), so the UI
+    needs this to label the picker correctly in every state."""
+    await _matchup_service.get_games_today()
+    return _matchup_service.get_schedule_date()
+
+# Per-slate response cache: the full pipeline (schedule + fantasy roster +
+# batch model predict) is ~1-2s; repeat opens of the same slate are served
+# instantly. Keyed only by dates the slate picker actually offers (see
+# _known_slate_dates), so the key space stays small by construction —
+# no eviction/size-cap machinery needed. Cleared on the nightly refresh
+# (ModelNightlyService._invalidate_inference_store) so it never serves
+# pre-fold-in projections.
+_RESPONSE_CACHE_TTL_S = 300
+_response_cache: dict[str, tuple[float, list[PlayerMatchupResponse]]] = {}
+
+
+def clear_matchup_response_cache() -> None:
+    _response_cache.clear()
+
+
+async def _known_slate_dates() -> set[str]:
+    """YYYYMMDD dates the slate picker actually offers: upcoming game days plus
+    dates already in the feature store. Anything else is rejected before it
+    costs a schedule fetch + model batch."""
+    upcoming = await _matchup_service.get_upcoming_game_dates()
+    recent = await DBService().get_recent_game_dates()
+    known = {d.replace('-', '') for d in upcoming}
+    known.update(d.strftime('%Y%m%d') for d in recent)
+    return known
+
+
 @router.get('/today', response_model=list[PlayerMatchupResponse])
 async def get_matchups_today(
-    date: Optional[str] = Query(default=None, description='YYYYMMDD — fetch schedule for this date instead of today (for testing)')
+    date: Optional[str] = Query(
+        default=None, pattern=r'^\d{8}$',
+        description='YYYYMMDD — must be a date the slate picker offers (upcoming or stored)',
+    )
 ) -> list[PlayerMatchupResponse]:
+    if date is not None and date not in await _known_slate_dates():
+        raise HTTPException(status_code=404, detail=f'Unknown slate date: {date}')
+
+    cache_key = date or 'today'
+    hit = _response_cache.get(cache_key)
+    if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:
+        return hit[1]
     try:
         games_today = await _matchup_service.get_games_today(date=date)
-        # nba_api calls are synchronous — run in thread pool to avoid blocking event loop
-        loop = asyncio.get_event_loop()
-        all_def = await loop.run_in_executor(None, _matchup_service.get_all_def_data)
+        all_def = await _matchup_service.get_all_def_data()
     except Exception as e:
         logger.error(f'Matchup data fetch failed: {e}')
         return []
+
+    # The date the slate actually resolved to — explicit for a pinned date,
+    # otherwise whatever get_games_today's default view landed on (None in
+    # the offseason), so the UI can show which real day "Upcoming (live)" is.
+    resolved_date = (
+        datetime.strptime(date, '%Y%m%d').date().isoformat()
+        if date is not None
+        else _matchup_service.get_schedule_date()
+    )
 
     def_ranks = all_def['ranks']
     def_values = all_def['values']
@@ -110,6 +182,9 @@ async def get_matchups_today(
             ),
             league_avg_def_values=league_avg_def,
             projection=projection,
+            game_date=resolved_date,
         ))
 
+    if results:
+        _response_cache[cache_key] = (time.monotonic(), results)
     return results

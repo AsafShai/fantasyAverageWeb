@@ -27,56 +27,61 @@ def test_season_for_boundaries():
 def _min_filter_player_rows(game_date: date):
     return pd.DataFrame({
         "PLAYER_ID": [1, 2, 3, 4],
-        "GAME_ID": ["0022300001"] * 4,
+        "GAME_ID": ["401700001"] * 4,
         "GAME_DATE": [pd.Timestamp(game_date)] * 4,
         "MIN": [0.0, None, 0.5, 5.0],
         "TEAM_ID": [10, 20, 10, 20],
         "MATCHUP": ["AAA vs. BBB"] * 4,
+        "POSITION": ["G"] * 4,
     })
 
 
 def test_fetch_night_keeps_any_played_minute(monkeypatch):
-    """MIN > 0 is the write-time filter now (previously MIN >= MIN_MINUTES=2.0):
-    a 0.5-minute row must survive, 0/NaN must not."""
+    """MIN > 0 is the write-time filter (the MIN_MINUTES quality gate applies at
+    read time, not here): a 0.5-minute row must survive, 0/NaN must not."""
     game_date = date(2025, 1, 15)
-    monkeypatch.setattr(nightly, "_expected_regular_season_games", lambda d: (1, True))
-
-    def fake_fetch_one_day(endpoint_cls, d):
-        if endpoint_cls is nightly.playergamelogs.PlayerGameLogs:
-            return _min_filter_player_rows(game_date)
-        return pd.DataFrame({
+    day = nightly.espn.DayFetch(
+        game_date=game_date,
+        players=_min_filter_player_rows(game_date),
+        teams=pd.DataFrame({
             "TEAM_ID": [10, 20],
-            "GAME_ID": ["0022300001", "0022300001"],
+            "GAME_ID": ["401700001", "401700001"],
             "GAME_DATE": [pd.Timestamp(game_date)] * 2,
-        })
-
-    monkeypatch.setattr(nightly, "_fetch_one_day", fake_fetch_one_day)
+        }),
+        expected_games=1,
+        all_final=True,
+    )
+    monkeypatch.setattr(nightly.espn, "fetch_day", lambda d: day)
 
     night = nightly.fetch_night(game_date)
 
     assert set(night.player_games["PLAYER_ID"]) == {3, 4}
+    assert night.complete
 
 
 def test_bootstrap_frames_keeps_any_played_minute(monkeypatch):
     game_date = pd.Timestamp(date.today())
     players_raw = pd.DataFrame({
         "PLAYER_ID": [1, 2, 3, 4],
-        "GAME_ID": ["0022300001"] * 4,
+        "GAME_ID": ["401700001"] * 4,
         "GAME_DATE": [game_date] * 4,
         "MIN": [0.0, None, 0.5, 5.0],
+        "POSITION": ["G", "G", None, "F"],
     })
     team_raw = pd.DataFrame({
-        "GAME_ID": ["0022300001", "0022300001"],
+        "GAME_ID": ["401700001", "401700001"],
         "GAME_DATE": [game_date] * 2,
         "TEAM_ID": [10, 20],
     })
-    monkeypatch.setattr(nightly.rdata, "fetch_player_logs", lambda seasons: players_raw)
-    monkeypatch.setattr(nightly.rdata, "fetch_team_logs", lambda seasons: team_raw)
-    positions = pd.DataFrame({"PLAYER_ID": [1, 2, 3, 4], "POSITION": ["G"] * 4})
+    monkeypatch.setattr(
+        nightly.rdata, "fetch_game_logs", lambda seasons: (players_raw, team_raw)
+    )
 
-    players, _ = nightly.bootstrap_frames(positions=positions)
+    players, _ = nightly.bootstrap_frames()
 
     assert set(players["PLAYER_ID"]) == {3, 4}
+    # missing POSITION values are normalized to "" (multi-hot flags 0)
+    assert players.loc[players["PLAYER_ID"] == 3, "POSITION"].iloc[0] == ""
 
 
 def _night_player_row(pid, team, game_id, matchup, minutes=30.0):

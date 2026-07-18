@@ -17,7 +17,7 @@ import pandas as pd
 from app.services.model_nightly_service import ModelNightlyService
 from app.services.nba_matchup_service import GameInfo
 from app.utils.name_matching import normalize_player_name
-from app.utils.team_abbr_map import NBA_ABBR_TO_TEAM_ID, espn_to_nba
+from app.utils.team_abbr_map import team_id_for_abbr
 from model_stats_inference.serving.feature_store import FeatureStore
 from model_stats_inference.serving.inference import LiveInference, PredictionRequest
 
@@ -135,14 +135,17 @@ def _build_name_index(store: FeatureStore) -> dict[str, int]:
 
 
 def _opponent_team_id(espn_abbr: str) -> int | None:
-    return NBA_ABBR_TO_TEAM_ID.get(espn_to_nba(espn_abbr))
+    return team_id_for_abbr(espn_abbr)
 
 
 def _default_minutes(store: FeatureStore, player_id: int) -> float:
+    """Slider default t: plain average of the last 5 appearances (UNGATED —
+    sub-MIN_MINUTES cameos count, unlike the model's feature windows). The
+    gated window means are only fallbacks for stores without the column."""
     if player_id not in store.player_vectors.index:
         return 0.0
     row = store.player_vectors.loc[player_id]
-    for col in ('MIN_w5_mean', 'MIN_w10_mean', 'MIN_global_mean'):
+    for col in ('MIN_LAST5_ALL', 'MIN_w5_mean', 'MIN_w10_mean', 'MIN_global_mean'):
         v = row.get(col)
         if v is not None and np.isfinite(v):
             return float(round(v, 1))

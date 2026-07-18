@@ -16,14 +16,14 @@ from app.models.feature_store_models import (
     TeamSummary,
 )
 from app.services.model_nightly_service import ModelNightlyService
-from app.utils.team_abbr_map import NBA_TEAM_ID_TO_ABBR, nba_to_espn
+from app.utils.team_abbr_map import TEAM_ID_TO_ABBR
 from model_stats_inference.serving import config as sconfig
 from model_stats_inference.serving.errors import UnknownPlayerError, UnknownTeamError
 from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
 
 
 def _abbr(team_id: int) -> str:
-    return nba_to_espn(NBA_TEAM_ID_TO_ABBR.get(team_id, str(team_id)))
+    return TEAM_ID_TO_ABBR.get(team_id, str(team_id))
 
 
 def _clean(v) -> float | None:

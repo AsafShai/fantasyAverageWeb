@@ -140,7 +140,10 @@ def _player_vectors_df(records: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     feat_cols = [c for c in df.columns if c not in _PLAYER_META]
     df[feat_cols] = df[feat_cols].astype(float)  # None -> NaN
-    return df
+    # Consolidate memory blocks: the per-column astype leaves one block per
+    # feature (~240), making every row lookup at predict time ~9ms instead of
+    # ~0.1ms — the whole batch-predict path pays for it.
+    return df.copy()
 
 
 def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
@@ -151,7 +154,7 @@ def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     feat_cols = [c for c in df.columns if c != "TEAM_ID"]
     df[feat_cols] = df[feat_cols].astype(float)
-    return df
+    return df.copy()  # consolidate blocks (see _player_vectors_df)
 
 
 class ModelNightlyService:
@@ -286,7 +289,11 @@ class ModelNightlyService:
         evals = nightly.evaluate_night(store, inference, night)
         night_players = nightly.attach_positions(store, night.player_games)
         # Fold last night in so the stored vectors are current for tonight's games.
-        store.update_with_nightly_results(night_players, night.team_games)
+        # Sub-MIN_MINUTES rows are still persisted (storage keeps every played
+        # minute) but are DNPs to the feature math — same gate as
+        # get_fs_rows_before, so the fold-in matches tomorrow's full rebuild.
+        qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
+        store.update_with_nightly_results(qualifying, night.team_games)
         return evals, night_players, _serialize_vectors(store)
 
     @staticmethod
@@ -322,11 +329,15 @@ class ModelNightlyService:
         pv, tav, tov = await self._db.load_feature_vectors()
         if not pv:
             return None
-        return await asyncio.to_thread(
-            lambda: FeatureStore.from_vectors(
-                _player_vectors_df(pv), _team_vectors_df(tav), _team_vectors_df(tov)
-            )
-        )
+        # Ungated last-5-appearances minutes (slider default): the feature
+        # vectors treat sub-MIN_MINUTES games as DNPs, but the default t must
+        # show real recent playing time, so it comes from the raw rows.
+        last5_min = await self._db.get_last5_minutes()
+        def _build() -> FeatureStore:
+            pdf = _player_vectors_df(pv)
+            pdf = pdf.assign(MIN_LAST5_ALL=pdf["PLAYER_ID"].map(last5_min))
+            return FeatureStore.from_vectors(pdf, _team_vectors_df(tav), _team_vectors_df(tov))
+        return await asyncio.to_thread(_build)
 
     def _invalidate_inference_store(self) -> None:
         """Drop the resident store so the next prediction reloads the fresh vectors.
@@ -337,11 +348,15 @@ class ModelNightlyService:
         morning window, since it can't observe this in-process invalidation.
         """
         self._inference_store = None
+        # Deferred import: app.routes.matchups pulls in this module transitively
+        # (via live_projection_service), so a top-level import here would cycle.
+        from app.routes.matchups import clear_matchup_response_cache
+        clear_matchup_response_cache()
 
     # --- one-time init -------------------------------------------------------
 
     async def bootstrap(self, force: bool = False, until_date: Optional[date] = None) -> str:
-        """Seed fs_player_games / fs_team_games from nba_api for research SEASONS,
+        """Seed fs_player_games / fs_team_games from ESPN for research SEASONS,
         then materialize the initial vectors so inference is ready immediately."""
         async with self._lock:
             p_count, t_count = await self._db.fs_counts()
@@ -356,7 +371,7 @@ class ModelNightlyService:
                     return "db_write_failed"
 
             players, team_games = await asyncio.to_thread(
-                nightly.bootstrap_frames, until_date, self._cached_positions()
+                nightly.bootstrap_frames, until_date
             )
             logger.info(
                 f"Bootstrap fetched {len(players)} player rows / {len(team_games)} team rows "
@@ -381,17 +396,6 @@ class ModelNightlyService:
             players, rdata.build_team_allowed(team_games), rdata.build_team_own(team_games)
         )
         return _serialize_vectors(store)
-
-    @staticmethod
-    def _cached_positions() -> Optional[pd.DataFrame]:
-        """PLAYER_ID -> POSITION from the local research cache when present —
-        skips the slow per-team roster crawl. None falls back to fetching."""
-        path = rconfig.DATA_DIR / "players.parquet"
-        if not path.exists():
-            return None
-        df = pd.read_parquet(path, columns=["PLAYER_ID", "POSITION"])
-        return df.dropna().drop_duplicates("PLAYER_ID", keep="last")
-
 
 if __name__ == "__main__":
     import argparse

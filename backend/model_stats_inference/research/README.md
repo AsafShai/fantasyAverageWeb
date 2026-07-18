@@ -12,7 +12,7 @@ engineered features `X` and the minutes `t` they will play. One model per stat.
 
 ```bash
 cd backend
-# first run pulls from nba_api and caches to research/data/*.parquet
+# first run pulls from ESPN and caches to research/data/*.parquet
 uv run python -m model_stats_inference.research.run --refresh
 # subsequent runs reuse the cache
 uv run python -m model_stats_inference.research.run

@@ -27,6 +27,15 @@ _DB_STAT_COLS = {
 # Custom ranges skip this gate entirely (see build_windowed_players_df) since
 # they have no ESPN split value to protect from being zeroed.
 
+# A known player with zero DB rows in a preset window is ambiguous the same
+# way: fs_player_games can't distinguish "really 0 games" from "our ingest
+# has a gap for this window" (e.g. a night that silently failed to fold in).
+# ESPN's own split value already sitting on the row is safe either way — it
+# agrees with us when we're right (real 0 games -> ESPN reads ~0 too) and
+# self-corrects when we're wrong (gap -> ESPN still has the real number).
+# So presets never force-zero that bucket; only custom ranges do, since they
+# have no ESPN split to fall back to.
+
 # Real calendar "today" is a dead anchor for last_7/15/30 once the season
 # ends (today lands in the offseason, a stretch with zero games league-wide,
 # so ~everyone reads as 0 GP). Anchor to the latest date with actual game
@@ -70,9 +79,9 @@ async def build_windowed_players_df(
     per ESPN (`Pro Team != 'FA'`), independent of whether they've played at
     all this season:
       - known, >=1 game in window -> DB-aggregated totals for the window.
-      - known, 0 games in window  -> zeroed stats, gp=0, has_data=True (a real
-        answer, whether they just didn't play in this window or have been out
-        all season — not missing data).
+      - known, 0 rows in DB window -> ESPN's own split value for this period
+        is kept as-is (covers both a real 0-game stretch and a DB ingest gap
+        — ESPN's number is correct either way, see comment above).
       - unknown (ESPN free agent, no window rows) -> falls back to the ESPN
         split value already on the row.
 
@@ -112,18 +121,14 @@ async def build_windowed_players_df(
 
     merged['has_data'] = True
 
-    # If the DB had zero rows for ANYONE in this window (e.g. pre-season, or
-    # any other edge case the anchor-date resolution doesn't cover), that's a
-    # sign the window itself is empty — not that every matched player had a
-    # blank stretch. Don't overwrite their existing ESPN split value with
-    # zeros in that case; custom ranges have no ESPN fallback to preserve, so
-    # they still zero out as before.
-    skip_zeroing_empty_window = agg_df.empty and not is_custom
-
-    zero_matched = known & ~windowed
-    if zero_matched.any() and not skip_zeroing_empty_window:
-        for espn_col in _DB_STAT_COLS:
-            merged.loc[zero_matched, espn_col] = 0 if espn_col == 'GP' else 0.0
+    # Only custom ranges force-zero known-but-unwindowed players — they have
+    # no ESPN split to fall back to. Presets leave the ESPN value in place
+    # (see the comment above build_windowed_players_df's docstring).
+    if is_custom:
+        zero_matched = ~windowed
+        if zero_matched.any():
+            for espn_col in _DB_STAT_COLS:
+                merged.loc[zero_matched, espn_col] = 0 if espn_col == 'GP' else 0.0
 
     unmatched = ~known
     if unmatched.any():
