@@ -332,6 +332,7 @@ export interface PlayerMatchup {
   def_values: DefValues;
   league_avg_def_values: DefValues;
   projection: Projection | null;
+  game_date: string | null;
 }
 
 export interface PlayerStoreSummary {

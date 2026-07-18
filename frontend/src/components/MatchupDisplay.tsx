@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats } from '../types/api';
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
+import { coherentInts } from '../utils/coherentRound';
 import './MatchupDisplay.css';
 
 const RANK_LABELS: Record<keyof DefRanks, string> = {
@@ -119,12 +120,6 @@ function fmtStat(n: number, integer: boolean): string {
   return integer ? String(Math.round(n)) : n.toFixed(1);
 }
 
-// Integer PTS derived from the rounded shooting components, so displayed
-// whole numbers satisfy PTS = 2·FGM + 3PM + FTM exactly (independent rounding breaks it).
-function ptsIntFromComponents(stats: ProjectionStats): number {
-  return 2 * Math.round(stats.fgm) + Math.round(stats.three_pm) + Math.round(stats.ftm);
-}
-
 function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
   if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
   if (integer) {
@@ -164,6 +159,18 @@ export function MatchupExpandRow({
   const [minutes, setMinutes] = useState(proj?.default_minutes ?? 0);
   const [stats, setStats] = useState<ProjectionStats | null>(proj?.stats ?? null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Re-sync when the underlying slate changes (opponent switches) or the
+  // store recomputes a new default (nightly fold-in) — React reuses
+  // components by key, so stale local minutes/stats would otherwise survive
+  // and show the previous slate's numbers. Keyed on stable primitives, not
+  // the `proj` object identity, so a same-slate refetch (e.g. RTK Query
+  // background revalidation) can't silently wipe an adjusted slider.
+  useEffect(() => {
+    clearTimeout(timer.current);
+    setMinutes(proj?.default_minutes ?? 0);
+    setStats(proj?.stats ?? null);
+  }, [matchup.opponent, proj?.default_minutes]);
   const projActive = showProjection && !!proj && proj.status !== 'red' && !!stats;
 
   const onSlider = (v: number) => {
@@ -180,8 +187,21 @@ export function MatchupExpandRow({
     }, 350);
   };
 
-  const fg = stats ? pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode) : null;
-  const ft = stats ? pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode) : null;
+  // Restore default minutes + the original default-t stats (no network round
+  // trip; also cancels any pending re-predict so it can't overwrite them).
+  const resetToDefault = () => {
+    if (!proj) return;
+    clearTimeout(timer.current);
+    setMinutes(proj.default_minutes);
+    setStats(proj.stats);
+  };
+  const isAdjusted = !!proj && Math.round(minutes) !== Math.round(proj.default_minutes);
+
+  // Coherent integer rounding: PTS reads like a plain round while the
+  // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
+  const coherent = integerMode && stats ? coherentInts(stats) : null;
+  const fg = stats ? pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode) : null;
+  const ft = stats ? pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode) : null;
 
   return (
     <tr className="mq-expand-row">
@@ -225,8 +245,8 @@ export function MatchupExpandRow({
                     <b>
                       {key === 'fg_pct' && fg
                         ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                        : key === 'pts' && integerMode
-                          ? ptsIntFromComponents(stats!)
+                        : coherent && (key === 'pts' || key === 'three_pm')
+                          ? coherent[key]
                           : fmtStat(stats![key], integerMode)}
                     </b>
                   </span>
@@ -254,6 +274,14 @@ export function MatchupExpandRow({
                     onChange={(e) => onSlider(Number(e.target.value))}
                   />
                   <span className="mq-proj-slider-value">{Math.round(minutes)}</span>
+                  <button
+                    onClick={resetToDefault}
+                    aria-label="Reset to default minutes"
+                    title={`Reset to default (${Math.round(proj!.default_minutes)} min)`}
+                    className={`mq-proj-slider-reset ${isAdjusted ? '' : 'mq-invisible'}`}
+                  >
+                    ↺
+                  </button>
                 </div>
               )}
             </div>

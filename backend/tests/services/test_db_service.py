@@ -145,14 +145,19 @@ async def test_get_latest_game_date_db_error_returns_none(db_service, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_get_fs_rows_before_filters_min_at_least_2(db_service, monkeypatch):
+async def test_get_fs_rows_before_filters_min_minutes(db_service, monkeypatch):
+    """The read gate must use the shared MIN_MINUTES knob (research/config.py),
+    so training and the live store always see the same row population."""
+    from model_stats_inference.research import config as rconfig
+
     conn = FakeConn(fetch_result=[])
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
 
     await db_service.get_fs_rows_before(date(2026, 1, 10))
 
-    player_query = conn.fetch.call_args_list[0][0][0]
-    assert "min >= 2" in player_query
+    args = conn.fetch.call_args_list[0][0]
+    assert "min >= $2" in args[0]
+    assert args[2] == rconfig.MIN_MINUTES
 
 
 @pytest.mark.asyncio

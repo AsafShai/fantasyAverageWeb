@@ -1,4 +1,4 @@
-"""Load, filter and cache the nba_api game-log datasets.
+"""Load, filter and cache the ESPN game-log datasets.
 
 Produces two clean, leakage-free-of-filters tables (caching to parquet):
 
@@ -8,148 +8,78 @@ Produces two clean, leakage-free-of-filters tables (caching to parquet):
                         put up against them (ALLOWED_*), plus the opponent id.
 
 Both keep ``GAME_DATE`` as datetime and are sorted for downstream windowing.
+
+All ids are ESPN-native (athlete ids / team ids 1-30 / event ids); regular-season
+filtering happens at fetch time in the espn package (season type + real teams +
+Cup-final exclusion), so there is no game-id-prefix filter here.
 """
 
 from __future__ import annotations
 
-import time
-
 import pandas as pd
-from nba_api.stats.endpoints import (
-    commonteamroster,
-    draftcombineplayeranthro,
-    playergamelogs,
-    playerindex,
-    teamgamelogs,
-)
-from nba_api.stats.static import teams as static_teams
 
+from .. import espn
 from . import config
-
-REQUEST_TIMEOUT = 60
-SLEEP_BETWEEN_CALLS = 1.0
-
-# Regular-season GAME_IDs start with "002" — used as a safety net on top of the
-# season_type request param.
-REGULAR_SEASON_PREFIX = "002"
 
 
 # --- Raw fetch -------------------------------------------------------------
 
-def _fetch(endpoint_cls, seasons: list[str], label: str) -> pd.DataFrame:
-    frames = []
-    for season in seasons:
-        print(f"  -> {label} {season} ...", flush=True)
-        df = endpoint_cls(
-            season_nullable=season,
-            season_type_nullable=config.SEASON_TYPE,
-            timeout=REQUEST_TIMEOUT,
-        ).get_data_frames()[0]
-        df.insert(0, "SEASON", season)
-        frames.append(df)
-        time.sleep(SLEEP_BETWEEN_CALLS)
-    return pd.concat(frames, ignore_index=True)
+def fetch_game_logs(seasons: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(player logs, team logs) for the given seasons, month-cached under
+    DATA_DIR so an interrupted pull resumes where it stopped."""
+    return espn.fetch_seasons(seasons, cache_dir=config.DATA_DIR / "espn_cache")
 
 
-def fetch_player_logs(seasons: list[str]) -> pd.DataFrame:
-    return _fetch(playergamelogs.PlayerGameLogs, seasons, "player logs")
+# --- Player bio (frozen artifact + roster refresh) ---------------------------
 
+def load_bio() -> pd.DataFrame | None:
+    """The committed bio artifact (PLAYER_ID + BIO_COLUMNS), None when absent.
 
-def fetch_team_logs(seasons: list[str]) -> pd.DataFrame:
-    return _fetch(teamgamelogs.TeamGameLogs, seasons, "team logs")
-
-
-def fetch_positions(seasons: list[str]) -> pd.DataFrame:
-    """PLAYER_ID -> POSITION from team rosters (most recent season wins).
-
-    POSITION values look like 'G', 'F', 'C', 'G-F', 'F-C' — encoded downstream as
-    multi-hot IS_GUARD/IS_FORWARD/IS_CENTER.
+    Wingspan/reach come from historical NBA draft-combine measurements and are
+    static per player for life — the artifact is frozen data, not a cache.
     """
-    team_ids = [t["id"] for t in static_teams.get_teams()]
-    pos: dict[int, str] = {}
-    for season in seasons:  # later seasons overwrite -> most recent position kept
-        print(f"  -> rosters {season} ({len(team_ids)} teams) ...", flush=True)
-        for tid in team_ids:
-            df = commonteamroster.CommonTeamRoster(
-                team_id=tid, season=season, timeout=REQUEST_TIMEOUT
-            ).get_data_frames()[0]
-            for pid, position in zip(df["PLAYER_ID"], df["POSITION"]):
-                pos[int(pid)] = position
-            time.sleep(0.6)
-    return pd.DataFrame({"PLAYER_ID": list(pos), "POSITION": list(pos.values())})
+    if not config.BIO_PATH.exists():
+        return None
+    return pd.read_parquet(config.BIO_PATH)
 
 
-# --- Player bio / anthro (static per player) --------------------------------
+def refresh_bio_from_rosters(update_existing: bool = False) -> pd.DataFrame:
+    """Refresh the bio artifact from current ESPN rosters (run once a season).
 
-def _height_to_inches(h: object) -> float:
-    """'6-8' -> 80.0; anything unparseable -> NaN."""
-    try:
-        ft, inch = str(h).split("-")
-        return int(ft) * 12 + int(inch)
-    except (ValueError, AttributeError):
-        return float("nan")
-
-
-def fetch_player_bio(seasons: list[str]) -> pd.DataFrame:
-    """PLAYER_ID -> HEIGHT_IN / WEIGHT_LB (playerindex, latest season wins) plus
-    WINGSPAN_IN / REACH_IN / WING_MINUS_HEIGHT (draft combine, partial coverage).
-
-    Missing combine values stay NaN — the HGB models ingest NaN natively, so a
-    player without combine data simply falls back to the other features.
+    Rostered players missing from the artifact (post-freeze rookies) are added
+    with HEIGHT_IN/WEIGHT_LB; their combine columns stay NaN. With
+    ``update_existing`` the roster height/weight also overwrites existing rows
+    (players do change listed weight between seasons). Combine measurements
+    (WINGSPAN_IN/REACH_IN/WING_MINUS_HEIGHT) are frozen data and never touched.
+    Rewrites the artifact in place and returns it.
     """
-    bio: dict[int, tuple[float, float]] = {}
-    for season in seasons:  # later seasons overwrite -> most recent bio kept
-        print(f"  -> playerindex {season} ...", flush=True)
-        df = playerindex.PlayerIndex(season=season, timeout=REQUEST_TIMEOUT).get_data_frames()[0]
-        for _, r in df.iterrows():
-            bio[int(r["PERSON_ID"])] = (
-                _height_to_inches(r["HEIGHT"]),
-                pd.to_numeric(r["WEIGHT"], errors="coerce"),
-            )
-        time.sleep(SLEEP_BETWEEN_CALLS)
-    out = pd.DataFrame(
-        {
-            "PLAYER_ID": list(bio),
-            "HEIGHT_IN": [v[0] for v in bio.values()],
-            "WEIGHT_LB": [v[1] for v in bio.values()],
-        }
-    )
+    bio = load_bio()
+    rosters = espn.fetch_rosters().set_index("PLAYER_ID")
+    known = set() if bio is None else set(bio["PLAYER_ID"])
 
-    frames = []
-    for year in config.COMBINE_YEARS:
-        print(f"  -> combine anthro {year} ...", flush=True)
-        df = draftcombineplayeranthro.DraftCombinePlayerAnthro(
-            league_id="00", season_year=str(year), timeout=REQUEST_TIMEOUT
-        ).get_data_frames()[0]
-        df["COMBINE_YEAR"] = year
-        frames.append(df)
-        time.sleep(SLEEP_BETWEEN_CALLS)
-    anthro = pd.concat(frames, ignore_index=True)
-    anthro = anthro.sort_values("COMBINE_YEAR").drop_duplicates("PLAYER_ID", keep="last")
-    anthro = pd.DataFrame(
-        {
-            "PLAYER_ID": anthro["PLAYER_ID"].astype(int),
-            "WINGSPAN_IN": pd.to_numeric(anthro["WINGSPAN"], errors="coerce"),
-            "REACH_IN": pd.to_numeric(anthro["STANDING_REACH"], errors="coerce"),
-            "_COMBINE_HEIGHT": pd.to_numeric(anthro["HEIGHT_WO_SHOES"], errors="coerce"),
-        }
-    )
+    new = rosters[~rosters.index.isin(known)].reset_index()
+    for col in config.BIO_COLUMNS:
+        if col not in new.columns:
+            new[col] = float("nan")
+    new = new[["PLAYER_ID", *config.BIO_COLUMNS]]
+    out = new if bio is None else pd.concat([bio, new], ignore_index=True)
 
-    out = out.merge(anthro, on="PLAYER_ID", how="outer")
-    out["WING_MINUS_HEIGHT"] = out["WINGSPAN_IN"] - out["_COMBINE_HEIGHT"]
-    return out.drop(columns=["_COMBINE_HEIGHT"])[["PLAYER_ID", *config.BIO_COLUMNS]]
+    updated = 0
+    if update_existing and bio is not None:
+        for col in ("HEIGHT_IN", "WEIGHT_LB"):
+            fresh = out["PLAYER_ID"].map(rosters[col])
+            changed = fresh.notna() & (fresh != out[col])
+            out.loc[changed, col] = fresh[changed]
+            updated += int(changed.sum())
 
-
-def load_or_fetch_bio(refresh: bool = False) -> pd.DataFrame:
-    """Load the committed bio artifact, fetching + writing it when absent/refresh."""
-    if not refresh and config.BIO_PATH.exists():
-        return pd.read_parquet(config.BIO_PATH)
-    print("Fetching player bio/anthro:")
-    bio = fetch_player_bio(config.SEASONS)
     config.BIO_PATH.parent.mkdir(parents=True, exist_ok=True)
-    bio.to_parquet(config.BIO_PATH, index=False)
-    print(f"Cached -> {config.BIO_PATH}")
-    return bio
+    out.to_parquet(config.BIO_PATH, index=False)
+    print(
+        f"Bio artifact: +{len(new)} new players"
+        + (f", {updated} height/weight values updated" if update_existing else "")
+        + f" -> {config.BIO_PATH}"
+    )
+    return out
 
 
 # --- Cleaning / filtering --------------------------------------------------
@@ -158,10 +88,6 @@ def _to_datetime(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
     return df
-
-
-def _regular_season_only(df: pd.DataFrame) -> pd.DataFrame:
-    return df[df["GAME_ID"].str.startswith(REGULAR_SEASON_PREFIX)].copy()
 
 
 def filter_players(players: pd.DataFrame) -> pd.DataFrame:
@@ -246,19 +172,14 @@ def load_or_build(refresh: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, pd
             pd.read_parquet(own_path),
         )
 
-    print(f"Fetching {config.SEASON_TYPE}: {', '.join(config.SEASONS)}")
-    print("Player game logs:")
-    players = _regular_season_only(_to_datetime(fetch_player_logs(config.SEASONS)))
-    print("Team game logs:")
-    team_logs = _regular_season_only(_to_datetime(fetch_team_logs(config.SEASONS)))
+    print(f"Fetching {config.SEASON_TYPE} from ESPN: {', '.join(config.SEASONS)}")
+    players, team_logs = fetch_game_logs(config.SEASONS)
+    players = _to_datetime(players)
+    team_logs = _to_datetime(team_logs)
 
     print("Filtering players:")
     players = filter_players(players)
     players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-
-    print("Fetching player positions:")
-    positions = fetch_positions(config.SEASONS)
-    players = players.merge(positions, on="PLAYER_ID", how="left")
 
     print("Building opponent allowed + own-team tables:")
     team_allowed = build_team_allowed(team_logs)

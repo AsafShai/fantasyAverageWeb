@@ -80,6 +80,15 @@ export const fantasyApi = createApi({
     getMatchupsToday: builder.query<PlayerMatchup[], string | void>({
       query: (date) => date ? `/matchups/today?date=${date}` : '/matchups/today',
     }),
+    getMatchupDates: builder.query<string[], void>({
+      query: () => '/matchups/dates',
+    }),
+    getUpcomingDates: builder.query<string[], void>({
+      query: () => '/matchups/upcoming-dates',
+    }),
+    getCurrentSlateDate: builder.query<string | null, void>({
+      query: () => '/matchups/current-slate-date',
+    }),
     predictProjection: builder.mutation<{ stats: ProjectionStats }, { player_name: string; opponent: string; is_home: boolean; minutes: number }>({
       query: (body) => ({ url: '/projections/predict', method: 'POST', body }),
     }),
@@ -118,6 +127,9 @@ export const {
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
   useGetMatchupsTodayQuery,
+  useGetMatchupDatesQuery,
+  useGetUpcomingDatesQuery,
+  useGetCurrentSlateDateQuery,
   usePredictProjectionMutation,
   useGetFeatureStorePlayersQuery,
   useGetFeatureStorePlayerStateQuery,

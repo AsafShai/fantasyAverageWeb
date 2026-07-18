@@ -1,13 +1,29 @@
+"""Matchup context for the UI: today's schedule (ESPN scoreboard) and each
+team's defensive profile (ranks / allowed values / pace).
+
+Defensive aggregates are computed from our own fs_team_games store (season-to-
+date self-join in Postgres) instead of NBA's precomputed Opponent/Advanced
+tables — one ingestion path, no stats.nba.com dependency. All team keys are
+canonical abbreviations (NYK/GSW/PHL…), the dialect the fantasy side and the
+UI already speak.
+"""
+
+import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
-import pandas as pd
-from nba_api.stats.endpoints import leaguedashteamstats
 
 from app.config import settings
-from app.utils.team_abbr_map import NBA_TEAM_ID_TO_ABBR, nba_to_espn
+from app.services.db_service import DBService
+from app.utils.team_abbr_map import TEAM_ID_TO_ABBR, canonical_abbr
+from model_stats_inference.espn.games import event_game_date, is_countable, is_final
+
+# How far forward the default view searches for the next slate. Covers the
+# All-Star break (~6 days); anything longer (offseason) is genuinely "no games".
+_UPCOMING_LOOKAHEAD_DAYS = 7
 
 
 def _season_str(season_id: int) -> str:
@@ -16,18 +32,19 @@ def _season_str(season_id: int) -> str:
 
 @dataclass
 class GameInfo:
-    opponent: str  # ESPN abbreviation
+    opponent: str  # canonical abbreviation
     is_home: bool
 
 
+# stat key served to the UI -> aggregate column from get_team_defense_aggregates
 _STAT_COLS: dict[str, str] = {
-    'pts': 'OPP_PTS',
-    'reb': 'OPP_REB',
-    'ast': 'OPP_AST',
-    'stl': 'OPP_STL',
-    'blk': 'OPP_BLK',
-    'three_pm': 'OPP_FG3M',
-    'fg_pct': 'OPP_FG_PCT',
+    'pts': 'opp_pts',
+    'reb': 'opp_reb',
+    'ast': 'opp_ast',
+    'stl': 'opp_stl',
+    'blk': 'opp_blk',
+    'three_pm': 'opp_fg3m',
+    'fg_pct': 'opp_fg_pct',
 }
 
 
@@ -35,6 +52,7 @@ class NbaMatchupService:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
+        self._db = DBService()
         self._def_cache: dict = {
             'ranks': None,
             'values': None,
@@ -42,25 +60,8 @@ class NbaMatchupService:
             'pace': None,
             'ts': None,
         }
-        self._schedule_cache: dict = {'data': None, 'ts': None}
-
-    def _fetch_nba_stats(self) -> tuple[pd.DataFrame, pd.DataFrame]:
-        season = _season_str(settings.season_id)
-        opp_df = leaguedashteamstats.LeagueDashTeamStats(
-            measure_type_detailed_defense='Opponent',
-            per_mode_detailed='PerGame',
-            season=season,
-            season_type_all_star='Regular Season',
-            league_id_nullable='00',
-        ).get_data_frames()[0]
-        adv_df = leaguedashteamstats.LeagueDashTeamStats(
-            measure_type_detailed_defense='Advanced',
-            per_mode_detailed='PerGame',
-            season=season,
-            season_type_all_star='Regular Season',
-            league_id_nullable='00',
-        ).get_data_frames()[0]
-        return opp_df, adv_df
+        self._schedule_cache: dict = {'data': None, 'date': None, 'ts': None}
+        self._upcoming_cache: dict = {'data': None, 'ts': None}
 
     def _def_cache_valid(self) -> bool:
         return (
@@ -68,20 +69,22 @@ class NbaMatchupService:
             and datetime.now() - self._def_cache['ts'] < timedelta(minutes=5)
         )
 
-    def _ensure_def_cache(self) -> None:
+    async def _ensure_def_cache(self) -> None:
         if self._def_cache_valid() and self._def_cache['ranks'] is not None:
             return
-        opp_df, adv_df = self._fetch_nba_stats()
+        rows = await self._db.get_team_defense_aggregates(_season_str(settings.season_id))
+        if not rows:
+            self.logger.warning('No team defense aggregates (store empty?) — matchup ranks unavailable')
         self._def_cache.update({
-            'ranks': self._build_ranks(opp_df),
-            'values': self._build_values(opp_df),
-            'league_avg_values': self._build_league_avg_values(opp_df),
-            'pace': self._build_pace(adv_df),
+            'ranks': self._build_ranks(rows),
+            'values': self._build_values(rows),
+            'league_avg_values': self._build_league_avg_values(rows),
+            'pace': self._build_pace(rows),
             'ts': datetime.now(),
         })
 
-    def get_all_def_data(self) -> dict:
-        self._ensure_def_cache()
+    async def get_all_def_data(self) -> dict:
+        await self._ensure_def_cache()
         return {
             'ranks': self._def_cache['ranks'],
             'values': self._def_cache['values'],
@@ -89,48 +92,40 @@ class NbaMatchupService:
             'pace': self._def_cache['pace'],
         }
 
-    def _build_ranks(self, opp_df: pd.DataFrame) -> dict[str, dict[str, int]]:
+    @staticmethod
+    def _team_abbr(row: dict) -> str:
+        return TEAM_ID_TO_ABBR.get(int(row['team_id']), str(row['team_id']))
+
+    def _build_ranks(self, rows: list[dict]) -> dict[str, dict[str, int]]:
         ranks: dict[str, dict[str, int]] = {}
         for stat_key, col in _STAT_COLS.items():
-            if col not in opp_df.columns:
-                continue
-            # ascending → lowest value = rank 1, highest = rank 30 (best matchup)
-            sorted_df = opp_df.sort_values(col, ascending=True).reset_index(drop=True)
-            for rank, (_, row) in enumerate(sorted_df.iterrows(), start=1):
-                espn = nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']])
-                if espn not in ranks:
-                    ranks[espn] = {}
-                ranks[espn][stat_key] = rank
+            # ascending → lowest value allowed = rank 1, highest = rank 30 (best matchup)
+            for rank, row in enumerate(sorted(rows, key=lambda r: float(r[col] or 0)), start=1):
+                ranks.setdefault(self._team_abbr(row), {})[stat_key] = rank
         return ranks
 
-    def _build_values(self, opp_df: pd.DataFrame) -> dict[str, dict[str, float]]:
+    def _build_values(self, rows: list[dict]) -> dict[str, dict[str, float]]:
         values: dict[str, dict[str, float]] = {}
-        for stat_key, col in _STAT_COLS.items():
-            if col not in opp_df.columns:
-                continue
-            for _, row in opp_df.iterrows():
-                espn = nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']])
-                if espn not in values:
-                    values[espn] = {}
-                raw = float(row[col])
-                values[espn][stat_key] = round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
+        for row in rows:
+            abbr = self._team_abbr(row)
+            for stat_key, col in _STAT_COLS.items():
+                raw = float(row[col] or 0)
+                values.setdefault(abbr, {})[stat_key] = (
+                    round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
+                )
         return values
 
-    def _build_league_avg_values(self, opp_df: pd.DataFrame) -> dict[str, float]:
+    def _build_league_avg_values(self, rows: list[dict]) -> dict[str, float]:
         avgs: dict[str, float] = {}
+        if not rows:
+            return avgs
         for stat_key, col in _STAT_COLS.items():
-            if col in opp_df.columns:
-                raw = float(opp_df[col].mean())
-                avgs[stat_key] = round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
+            raw = sum(float(r[col] or 0) for r in rows) / len(rows)
+            avgs[stat_key] = round(raw, 3) if stat_key == 'fg_pct' else round(raw, 1)
         return avgs
 
-    def _build_pace(self, adv_df: pd.DataFrame) -> dict[str, float]:
-        if 'PACE' not in adv_df.columns:
-            return {}
-        return {
-            nba_to_espn(NBA_TEAM_ID_TO_ABBR[row['TEAM_ID']]): float(row['PACE'])
-            for _, row in adv_df.iterrows()
-        }
+    def _build_pace(self, rows: list[dict]) -> dict[str, float]:
+        return {self._team_abbr(r): float(r['pace'] or 0) for r in rows}
 
     def get_pace_badge(self, team_pace: float, league_avg_pace: float) -> str:
         diff = team_pace - league_avg_pace
@@ -141,31 +136,116 @@ class NbaMatchupService:
         return 'Average'
 
     async def get_games_today(self, date: str | None = None) -> dict[str, GameInfo]:
-        # Skip cache when a specific date is requested (testing only)
+        # Skip cache when a specific date is requested (testing / what-if view)
         if date is None and (
             self._schedule_cache['ts'] is not None
             and datetime.now() - self._schedule_cache['ts'] < timedelta(minutes=5)
         ):
             return self._schedule_cache['data']
 
-        url = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard'
-        if date:
-            url = f'{url}?dates={date}'
+        if date is not None:
+            return self._games_from(await self._scoreboard_events(date))
+
+        # Default view = the UPCOMING slate. The date is always pinned (ESPN's
+        # dateless scoreboard returns the NEAREST game day — the season finale
+        # all offseason, which is not "upcoming"). Starting from US/Eastern
+        # today (the NBA game-day convention), take the first day that still
+        # has a non-final countable game: today while games are pending or
+        # live, tomorrow once the whole slate is final, the next slate across
+        # the All-Star break, and empty in the offseason.
+        base = datetime.now(ZoneInfo('America/New_York')).date()
+        by_day = await self._countable_events_by_day(base, _UPCOMING_LOOKAHEAD_DAYS)
+        games: dict[str, GameInfo] = {}
+        resolved_date: date | None = None
+        for offset in range(_UPCOMING_LOOKAHEAD_DAYS + 1):
+            events = by_day.get(base + timedelta(days=offset), [])
+            if any(not is_final(e) for e in events):
+                games = self._games_from(events)
+                resolved_date = base + timedelta(days=offset)
+                break
+
+        self._schedule_cache.update({
+            'data': games,
+            'date': resolved_date.isoformat() if resolved_date else None,
+            'ts': datetime.now(),
+        })
+        return games
+
+    def get_schedule_date(self) -> str | None:
+        """ISO date the last default-view (date=None) get_games_today call
+        resolved to — None in the offseason, when there's no upcoming slate.
+        Lets the UI show which real calendar day 'Upcoming (live)' means."""
+        return self._schedule_cache['date']
+
+    async def get_upcoming_game_dates(
+        self, count: int = 5, lookahead_days: int = 14
+    ) -> list[str]:
+        """The next ``count`` days that have countable games (ISO dates, today
+        included while its slate is still pending), scanning at most
+        ``lookahead_days`` ahead. Offseason -> empty. Cached 5 minutes."""
+        if (
+            self._upcoming_cache['ts'] is not None
+            and datetime.now() - self._upcoming_cache['ts'] < timedelta(minutes=5)
+        ):
+            return self._upcoming_cache['data']
+
+        base = datetime.now(ZoneInfo('America/New_York')).date()
+        by_day = await self._countable_events_by_day(base, lookahead_days)
+        found: list[str] = []
+        for offset in range(lookahead_days + 1):
+            day = base + timedelta(days=offset)
+            events = by_day.get(day, [])
+            if events and (offset > 0 or any(not is_final(e) for e in events)):
+                found.append(day.isoformat())
+                if len(found) >= count:
+                    break
+
+        self._upcoming_cache.update({'data': found, 'ts': datetime.now()})
+        return found
+
+    async def _countable_events_by_day(
+        self, start: date, lookahead_days: int
+    ) -> dict[date, list[dict]]:
+        """Countable events for [start, start + lookahead_days], grouped by
+        US/Eastern game date. Fetched via whole-month scoreboard calls (1-2
+        requests, run in parallel) instead of one request per day — ESPN's
+        scoreboard endpoint accepts a "YYYYMM" month in addition to a day."""
+        end = start + timedelta(days=lookahead_days)
+        months = sorted({start.strftime('%Y%m'), end.strftime('%Y%m')})
+        event_lists = await asyncio.gather(*(self._scoreboard_events(m) for m in months))
+
+        by_day: dict[date, list[dict]] = {}
+        for events in event_lists:
+            for event in events:
+                if not is_countable(event):
+                    continue
+                day = event_game_date(event)
+                if start <= day <= end:
+                    by_day.setdefault(day, []).append(event)
+        return by_day
+
+    async def _scoreboard_events(self, dates: str) -> list[dict]:
+        """``dates`` is either a day ("YYYYMMDD") or a whole month ("YYYYMM")."""
+        url = (
+            'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard'
+            f'?dates={dates}&limit=1000'
+        )
         response = await self._client.get(url)
         response.raise_for_status()
-        data = response.json()
+        return response.json().get('events', [])
 
+    @staticmethod
+    def _games_from(events: list[dict]) -> dict[str, GameInfo]:
         games: dict[str, GameInfo] = {}
-        for event in data.get('events', []):
+        for event in events:
             competitors = event.get('competitions', [{}])[0].get('competitors', [])
             if len(competitors) == 2:
                 a, b = competitors[0], competitors[1]
-                a_abbr, b_abbr = a['team']['abbreviation'], b['team']['abbreviation']
+                # scoreboard abbreviations are site dialect (NY/GS/…) — normalize
+                a_abbr = canonical_abbr(a['team']['abbreviation'])
+                b_abbr = canonical_abbr(b['team']['abbreviation'])
                 games[a_abbr] = GameInfo(opponent=b_abbr, is_home=a.get('homeAway') == 'home')
                 games[b_abbr] = GameInfo(opponent=a_abbr, is_home=b.get('homeAway') == 'home')
-
-        if date is None:
-            self._schedule_cache.update({'data': games, 'ts': datetime.now()})
         return games
 
     async def close(self) -> None:

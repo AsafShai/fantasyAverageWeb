@@ -3,7 +3,7 @@
 Same retry-window pattern as estimator_scheduler: trigger at each slot between
 9:00 and 11:00 Israel time (NBA games are final by ~8:00 IL). The pipeline's
 model_nightly_runs ledger makes later slots no-ops once a night is processed,
-so the extra slots only matter when nba_api data was late or a run failed.
+so the extra slots only matter when ESPN data was late or a run failed.
 """
 
 import asyncio

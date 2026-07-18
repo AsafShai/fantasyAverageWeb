@@ -1,6 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
-import { useGetMatchupsTodayQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
+import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -10,12 +12,6 @@ const STAT_COLS: [keyof ProjectionStats, string][] = [
 
 function fmtStat(n: number, integer: boolean): string {
   return integer ? String(Math.round(n)) : n.toFixed(1);
-}
-
-// Integer PTS derived from the rounded shooting components, so displayed
-// whole numbers satisfy PTS = 2·FGM + 3PM + FTM exactly (independent rounding breaks it).
-function ptsIntFromComponents(stats: ProjectionStats): number {
-  return 2 * Math.round(stats.fgm) + Math.round(stats.three_pm) + Math.round(stats.ftm);
 }
 
 function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
@@ -48,6 +44,18 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   const [stats, setStats] = useState<ProjectionStats | null>(proj.stats);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // Re-sync when the underlying slate changes (opponent switches) or the
+  // store recomputes a new default (nightly fold-in) — React reuses row
+  // components by key, so stale local minutes/stats would otherwise survive
+  // and show the previous slate's numbers. Keyed on stable primitives, not
+  // the `proj` object identity, so a same-slate refetch (e.g. RTK Query
+  // background revalidation) can't silently wipe an adjusted slider.
+  useEffect(() => {
+    clearTimeout(timer.current);
+    setMinutes(proj.default_minutes);
+    setStats(proj.stats);
+  }, [matchup.opponent, proj.default_minutes]);
+
   const onSlider = (v: number) => {
     setMinutes(v);
     clearTimeout(timer.current);
@@ -61,6 +69,15 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
       } catch { /* ignore transient predict errors */ }
     }, 350);
   };
+
+  // Restore default minutes + the original default-t stats (no network round
+  // trip; also cancels any pending re-predict so it can't overwrite them).
+  const resetToDefault = () => {
+    clearTimeout(timer.current);
+    setMinutes(proj.default_minutes);
+    setStats(proj.stats);
+  };
+  const isAdjusted = Math.round(minutes) !== Math.round(proj.default_minutes);
 
   if (proj.status === 'red' || !stats) {
     return (
@@ -76,8 +93,11 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
     );
   }
 
-  const fg = pctParts(stats.fg_pct, stats.fgm, stats.fga, integerMode);
-  const ft = pctParts(stats.ft_pct, stats.ftm, stats.fta, integerMode);
+  // Coherent integer rounding: PTS reads like a plain round while the
+  // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
+  const coherent = integerMode ? coherentInts(stats) : null;
+  const fg = pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode);
+  const ft = pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode);
 
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">
@@ -95,11 +115,21 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
             className="w-24 accent-blue-600"
           />
           <span className="tabular-nums w-6 text-right text-sm">{Math.round(minutes)}</span>
+          <button
+            onClick={resetToDefault}
+            aria-label="Reset to default minutes"
+            title={`Reset to default (${Math.round(proj.default_minutes)} min)`}
+            className={`text-xs leading-none px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 ${isAdjusted ? '' : 'invisible'}`}
+          >
+            ↺
+          </button>
         </div>
       </td>
       {STAT_COLS.map(([key]) => (
         <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-          {key === 'pts' && integerMode ? ptsIntFromComponents(stats) : fmtStat(stats[key] as number, integerMode)}
+          {coherent && (key === 'pts' || key === 'three_pm')
+            ? coherent[key]
+            : fmtStat(stats[key] as number, integerMode)}
         </td>
       ))}
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</td>
@@ -109,7 +139,15 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
 }
 
 export default function Projections() {
-  const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery();
+  // Slate picker: everyone sees the next game days; past dates (what-if/debug
+  // view — that day's games with CURRENT player state) are flag-gated.
+  const [slateDate, setSlateDate] = useState('');
+  const { data: upcomingDates = [] } = useGetUpcomingDatesQuery();
+  const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_PAST_SLATES });
+  const { data: currentSlateDate } = useGetCurrentSlateDateQuery();
+  const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery(
+    slateDate ? slateDate.replaceAll('-', '') : undefined
+  );
   const [integerMode, setIntegerMode] = useState(true);
   const [search, setSearch] = useState('');
   const [nbaTeam, setNbaTeam] = useState('');
@@ -151,9 +189,35 @@ export default function Projections() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Projections</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Live model projections for tonight's games.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {slateDate
+              ? `Slate of ${slateDate} — predictions use current player state (what-if view).`
+              : "Live model projections for tonight's games."}
+          </p>
         </div>
         <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Pick a game day. Past dates (debug) show that slate with current player state.">
+            <span>Slate</span>
+            <select
+              value={slateDate}
+              onChange={(e) => setSlateDate(e.target.value)}
+              className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+            >
+              <option value="">
+                {slateDate === '' && currentSlateDate
+                  ? `Upcoming (live) — ${currentSlateDate}`
+                  : slateDate === '' && currentSlateDate === null
+                    ? 'Upcoming (live) — no games scheduled'
+                    : 'Upcoming (live)'}
+              </option>
+              {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
+              {FF_PAST_SLATES && pastDates.length > 0 && (
+                <optgroup label="Past (debug)">
+                  {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
+                </optgroup>
+              )}
+            </select>
+          </label>
           <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
             <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} className="accent-blue-600" />
             Integer projections
@@ -207,7 +271,9 @@ export default function Projections() {
             ))}
             {filtered.length === 0 && (
               <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">
-                {withGames.length === 0 ? 'No games today.' : 'No players match the filters.'}
+                {withGames.length === 0
+                  ? (slateDate ? `No games on ${slateDate}.` : 'No games today.')
+                  : 'No players match the filters.'}
               </td></tr>
             )}
           </tbody>

@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
-import { useGetMatchupsTodayQuery } from '../store/api/fantasyApi';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
 import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
 import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
-import { FF_MATCHUP_QUALITY, FF_PROJECTIONS } from '../config/featureFlags';
+import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_PAST_SLATES } from '../config/featureFlags';
 import './Players.css';
 
 const Players = () => {
@@ -35,7 +35,16 @@ const Players = () => {
     }
   }, [timePeriod, customRange, data]);
 
-  const { data: matchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
+  // Slate picker: next game days for everyone; past dates (what-if/debug view
+  // — that day's games with current player state) are flag-gated.
+  const [slateDate, setSlateDate] = useState('');
+  const { data: upcomingDates = [] } = useGetUpcomingDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
+  const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !FF_PAST_SLATES });
+  const { data: currentSlateDate } = useGetCurrentSlateDateQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
+  const { data: matchups = [] } = useGetMatchupsTodayQuery(
+    slateDate ? slateDate.replaceAll('-', '') : undefined,
+    { skip: !FF_MATCHUP_QUALITY }
+  );
   const matchupMap = useMemo(
     () => new Map(matchups.map((m: PlayerMatchup) => [m.player_name, m])),
     [matchups]
@@ -120,6 +129,30 @@ const Players = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {FF_MATCHUP_QUALITY && (
+            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Pick a game day. Past dates (debug) show that slate with current player state.">
+              <span>Slate</span>
+              <select
+                value={slateDate}
+                onChange={(e) => setSlateDate(e.target.value)}
+                className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+              >
+                <option value="">
+                  {slateDate === '' && currentSlateDate
+                    ? `Upcoming (live) — ${currentSlateDate}`
+                    : slateDate === '' && currentSlateDate === null
+                      ? 'Upcoming (live) — no games scheduled'
+                      : 'Upcoming (live)'}
+                </option>
+                {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
+                {FF_PAST_SLATES && pastDates.length > 0 && (
+                  <optgroup label="Past (debug)">
+                    {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+          )}
           {FF_PROJECTIONS && (
             <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none">
               <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />

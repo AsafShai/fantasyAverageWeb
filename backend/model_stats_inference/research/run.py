@@ -1,7 +1,7 @@
 """End-to-end feature research pipeline: load -> features -> select -> plot.
 
     uv run python -m model_stats_inference.research.run            # use cached data
-    uv run python -m model_stats_inference.research.run --refresh  # re-pull nba_api
+    uv run python -m model_stats_inference.research.run --refresh  # re-pull from ESPN
 """
 
 from __future__ import annotations
@@ -14,11 +14,11 @@ from . import config, data, features, plots, selection
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refresh", action="store_true", help="re-pull from nba_api")
+    parser.add_argument("--refresh", action="store_true", help="re-pull from ESPN")
     args = parser.parse_args()
 
     players, team_allowed, team_own = data.load_or_build(refresh=args.refresh)
-    player_bio = data.load_or_fetch_bio(refresh=args.refresh)
+    player_bio = data.load_bio()
     matrix = features.build_feature_matrix(players, team_allowed, team_own, player_bio)
 
     # Persist the full matrix so the training step can load X/y directly.

@@ -11,8 +11,8 @@ from pathlib import Path
 
 # --- Data scope ------------------------------------------------------------
 
-# Last 3 seasons. NBA season string format is "YYYY-YY".
-SEASONS: list[str] = ["2023-24", "2024-25", "2025-26"]
+# Last 4 full seasons. NBA season string format is "YYYY-YY".
+SEASONS: list[str] = ["2022-23", "2023-24", "2024-25", "2025-26"]
 
 # Regular season only (excludes playoffs / play-in / preseason / all-star).
 SEASON_TYPE = "Regular Season"
@@ -32,7 +32,9 @@ MIN_PLAYER_GAMES = 20
 
 # Remove games where the player barely played (DNP / garbage time). These rows
 # are dropped ENTIRELY — not used as targets and not counted in any window/rate.
-MIN_MINUTES = 2.0
+# Shared with serving: DBService.get_fs_rows_before gates feature-store reads
+# on the same threshold, so training and the live store see the same population.
+MIN_MINUTES = 5.0
 
 # A row must have at least this many prior qualifying games to be a TRAINING
 # target. Inference is supported at any depth; this only bounds what we train on.
@@ -134,13 +136,14 @@ EWM_RATIO_COMPOSITES: dict[str, tuple[dict[str, float], dict[str, float]]] = {
 
 # --- Player bio / anthro (2026-07 BLK model improvement) ---------------------
 
-# Static per-player physical features. Height/weight come from `playerindex`
-# (full coverage); wingspan/standing reach from the draft combine (~65% of
-# players — missing values stay NaN, HGB handles them natively).
+# Static per-player physical features, loaded from the frozen committed
+# artifact (BIO_PATH). Wingspan/standing reach originate from NBA draft-combine
+# measurements (no ESPN source, but they never change per player); height and
+# weight for players missing from the artifact come from ESPN rosters.
+# Missing values stay NaN — HGB handles them natively.
 BIO_COLUMNS: list[str] = [
     "HEIGHT_IN", "WEIGHT_LB", "WINGSPAN_IN", "REACH_IN", "WING_MINUS_HEIGHT",
 ]
-COMBINE_YEARS = range(2000, 2026)
 
 # --- Feature selection -----------------------------------------------------
 
