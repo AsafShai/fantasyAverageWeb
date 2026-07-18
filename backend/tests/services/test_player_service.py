@@ -191,10 +191,13 @@ class TestBuildWindowedPlayersDf:
         assert actual_end == date(2026, 1, 9)
 
     @pytest.mark.asyncio
-    async def test_known_player_zero_games_in_window_is_zeroed_not_no_data(
+    async def test_known_player_zero_games_in_window_keeps_espn_value(
         self, sample_window_players_df
     ):
-        # Player Y is on an ESPN roster (Pro Team != 'FA') but has no rows in this window.
+        """Player Y is on an ESPN roster (Pro Team != 'FA') but has no rows in
+        this window — this is indistinguishable from a DB ingest gap for just
+        this player, so the preset keeps ESPN's own split value instead of
+        forcing a zero (unlike custom ranges, which have no ESPN fallback)."""
         agg_df = pd.DataFrame([{
             'player_id': 1, 'player_name': 'Player X', 'gp': 2,
             'pts': 40.0, 'reb': 10.0, 'ast': 8.0, 'stl': 2.0, 'blk': 1.0,
@@ -209,8 +212,8 @@ class TestBuildWindowedPlayersDf:
         )
 
         row = merged[merged['Name'] == 'Player Y'].iloc[0]
-        assert row['GP'] == 0
-        assert row['PTS'] == 0.0
+        assert row['GP'] == 65
+        assert row['PTS'] == 180.0
         assert bool(row['has_data']) is True
 
     @pytest.mark.asyncio
