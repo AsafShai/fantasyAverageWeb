@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
-import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery } from '../store/api/fantasyApi';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
 import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
@@ -40,6 +40,7 @@ const Players = () => {
   const [slateDate, setSlateDate] = useState('');
   const { data: upcomingDates = [] } = useGetUpcomingDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
   const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !FF_PAST_SLATES });
+  const { data: currentSlateDate } = useGetCurrentSlateDateQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
   const { data: matchups = [] } = useGetMatchupsTodayQuery(
     slateDate ? slateDate.replaceAll('-', '') : undefined,
     { skip: !FF_MATCHUP_QUALITY }
@@ -137,7 +138,11 @@ const Players = () => {
                 className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
               >
                 <option value="">
-                  {slateDate === '' && matchups[0]?.game_date ? `Upcoming (live) — ${matchups[0].game_date}` : 'Upcoming (live)'}
+                  {slateDate === '' && currentSlateDate
+                    ? `Upcoming (live) — ${currentSlateDate}`
+                    : slateDate === '' && currentSlateDate === null
+                      ? 'Upcoming (live) — no games scheduled'
+                      : 'Upcoming (live)'}
                 </option>
                 {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
                 {FF_PAST_SLATES && pastDates.length > 0 && (

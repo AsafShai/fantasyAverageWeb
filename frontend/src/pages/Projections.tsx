@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
 import { coherentInts } from '../utils/coherentRound';
@@ -144,6 +144,7 @@ export default function Projections() {
   const [slateDate, setSlateDate] = useState('');
   const { data: upcomingDates = [] } = useGetUpcomingDatesQuery();
   const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_PAST_SLATES });
+  const { data: currentSlateDate } = useGetCurrentSlateDateQuery();
   const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery(
     slateDate ? slateDate.replaceAll('-', '') : undefined
   );
@@ -203,7 +204,11 @@ export default function Projections() {
               className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
             >
               <option value="">
-                {slateDate === '' && matchups[0]?.game_date ? `Upcoming (live) — ${matchups[0].game_date}` : 'Upcoming (live)'}
+                {slateDate === '' && currentSlateDate
+                  ? `Upcoming (live) — ${currentSlateDate}`
+                  : slateDate === '' && currentSlateDate === null
+                    ? 'Upcoming (live) — no games scheduled'
+                    : 'Upcoming (live)'}
               </option>
               {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
               {FF_PAST_SLATES && pastDates.length > 0 && (

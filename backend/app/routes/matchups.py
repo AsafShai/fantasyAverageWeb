@@ -35,6 +35,17 @@ async def get_upcoming_game_dates() -> list[str]:
     options shown to every user."""
     return await _matchup_service.get_upcoming_game_dates()
 
+
+@router.get('/current-slate-date', response_model=Optional[str])
+async def get_current_slate_date() -> Optional[str]:
+    """ISO date the default "Upcoming (live)" view currently resolves to, or
+    None in the offseason. Independent of /today's player list — that list
+    can be empty even when a real slate date is known (or vice versa isn't
+    possible, but the two must never be inferred from each other), so the UI
+    needs this to label the picker correctly in every state."""
+    await _matchup_service.get_games_today()
+    return _matchup_service.get_schedule_date()
+
 # Per-slate response cache: the full pipeline (schedule + fantasy roster +
 # batch model predict) is ~1-2s; repeat opens of the same slate are served
 # instantly. Keyed only by dates the slate picker actually offers (see

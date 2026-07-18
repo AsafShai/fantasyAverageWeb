@@ -99,6 +99,37 @@ def test_game_date_is_null_when_no_upcoming_slate(mock_services):
     assert resp.json() == []
 
 
+def test_current_slate_date_reflects_resolved_date(mock_services):
+    """Must be independent of /today's player list -- the label needs a
+    correct answer even when zero players end up matched for a real slate."""
+    client = TestClient(app)
+    resp = client.get('/api/matchups/current-slate-date')
+    assert resp.status_code == 200
+    assert resp.json() == '2026-01-15'
+
+
+def test_current_slate_date_is_null_in_offseason(mock_services):
+    svc, _ = mock_services
+    svc.get_schedule_date = MagicMock(return_value=None)
+    client = TestClient(app)
+    resp = client.get('/api/matchups/current-slate-date')
+    assert resp.status_code == 200
+    assert resp.json() is None
+
+
+def test_current_slate_date_null_even_with_no_matched_players(mock_services):
+    """The resolved date must not depend on whether any player happened to
+    match -- a real slate can exist with zero matched fantasy-relevant
+    players (edge case), and the picker still needs the correct date."""
+    svc, _ = mock_services
+    svc.get_schedule_date = MagicMock(return_value='2026-02-20')
+    svc.get_games_today = AsyncMock(return_value={})  # no games matched to any player
+    client = TestClient(app)
+    resp = client.get('/api/matchups/current-slate-date')
+    assert resp.status_code == 200
+    assert resp.json() == '2026-02-20'
+
+
 def test_returns_empty_on_no_games(mock_services):
     svc, provider = mock_services
     svc.get_games_today = AsyncMock(return_value={})

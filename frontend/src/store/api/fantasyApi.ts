@@ -86,6 +86,9 @@ export const fantasyApi = createApi({
     getUpcomingDates: builder.query<string[], void>({
       query: () => '/matchups/upcoming-dates',
     }),
+    getCurrentSlateDate: builder.query<string | null, void>({
+      query: () => '/matchups/current-slate-date',
+    }),
     predictProjection: builder.mutation<{ stats: ProjectionStats }, { player_name: string; opponent: string; is_home: boolean; minutes: number }>({
       query: (body) => ({ url: '/projections/predict', method: 'POST', body }),
     }),
@@ -126,6 +129,7 @@ export const {
   useGetMatchupsTodayQuery,
   useGetMatchupDatesQuery,
   useGetUpcomingDatesQuery,
+  useGetCurrentSlateDateQuery,
   usePredictProjectionMutation,
   useGetFeatureStorePlayersQuery,
   useGetFeatureStorePlayerStateQuery,
