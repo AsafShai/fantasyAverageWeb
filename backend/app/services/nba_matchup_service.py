@@ -60,7 +60,7 @@ class NbaMatchupService:
             'pace': None,
             'ts': None,
         }
-        self._schedule_cache: dict = {'data': None, 'ts': None}
+        self._schedule_cache: dict = {'data': None, 'date': None, 'ts': None}
         self._upcoming_cache: dict = {'data': None, 'ts': None}
 
     def _def_cache_valid(self) -> bool:
@@ -156,14 +156,26 @@ class NbaMatchupService:
         base = datetime.now(ZoneInfo('America/New_York')).date()
         by_day = await self._countable_events_by_day(base, _UPCOMING_LOOKAHEAD_DAYS)
         games: dict[str, GameInfo] = {}
+        resolved_date: date | None = None
         for offset in range(_UPCOMING_LOOKAHEAD_DAYS + 1):
             events = by_day.get(base + timedelta(days=offset), [])
             if any(not is_final(e) for e in events):
                 games = self._games_from(events)
+                resolved_date = base + timedelta(days=offset)
                 break
 
-        self._schedule_cache.update({'data': games, 'ts': datetime.now()})
+        self._schedule_cache.update({
+            'data': games,
+            'date': resolved_date.isoformat() if resolved_date else None,
+            'ts': datetime.now(),
+        })
         return games
+
+    def get_schedule_date(self) -> str | None:
+        """ISO date the last default-view (date=None) get_games_today call
+        resolved to — None in the offseason, when there's no upcoming slate.
+        Lets the UI show which real calendar day 'Upcoming (live)' means."""
+        return self._schedule_cache['date']
 
     async def get_upcoming_game_dates(
         self, count: int = 5, lookahead_days: int = 14

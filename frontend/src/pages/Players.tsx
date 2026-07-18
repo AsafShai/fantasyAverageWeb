@@ -136,7 +136,9 @@ const Players = () => {
                 onChange={(e) => setSlateDate(e.target.value)}
                 className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
               >
-                <option value="">Upcoming (live)</option>
+                <option value="">
+                  {slateDate === '' && matchups[0]?.game_date ? `Upcoming (live) — ${matchups[0].game_date}` : 'Upcoming (live)'}
+                </option>
                 {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
                 {FF_PAST_SLATES && pastDates.length > 0 && (
                   <optgroup label="Past (debug)">

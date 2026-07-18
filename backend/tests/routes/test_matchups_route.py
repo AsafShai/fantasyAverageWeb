@@ -40,6 +40,7 @@ def mock_services(monkeypatch):
         'pace': _MOCK_PACE,
     })
     svc.get_games_today = AsyncMock(return_value=_MOCK_GAMES)
+    svc.get_schedule_date = MagicMock(return_value='2026-01-15')
 
     provider = MagicMock()
     provider.get_players_df = AsyncMock(return_value=_MOCK_PLAYERS)
@@ -73,6 +74,29 @@ def test_response_shape(mock_services):
     assert 'pace' in player
     assert 'league_avg_pace' in player
     assert 'pace_badge' not in player
+    assert player['game_date'] == '2026-01-15'
+
+
+def test_game_date_reflects_explicit_date_param(mock_services, monkeypatch):
+    svc, _ = mock_services
+    svc.get_upcoming_game_dates = AsyncMock(return_value=['2026-01-16'])
+    monkeypatch.setattr(
+        'app.routes.matchups.DBService',
+        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[])),
+    )
+    client = TestClient(app)
+    data = client.get('/api/matchups/today?date=20260116').json()
+    assert data[0]['game_date'] == '2026-01-16'
+
+
+def test_game_date_is_null_when_no_upcoming_slate(mock_services):
+    svc, _ = mock_services
+    svc.get_schedule_date = MagicMock(return_value=None)
+    svc.get_games_today = AsyncMock(return_value={})
+    client = TestClient(app)
+    resp = client.get('/api/matchups/today')
+    assert resp.status_code == 200
+    assert resp.json() == []
 
 
 def test_returns_empty_on_no_games(mock_services):

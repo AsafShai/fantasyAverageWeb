@@ -215,6 +215,22 @@ async def test_default_view_rolls_forward_to_the_upcoming_slate(service):
     # the picked slate is the pending one, normalized to canonical abbrs
     assert games['NYK'].opponent == 'GSW'
     assert 'LAL' not in games
+    assert service.get_schedule_date() == tomorrow.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_get_schedule_date_is_none_with_no_upcoming_slate(service):
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day({}),
+    ):
+        await service.get_games_today()
+
+    assert service.get_schedule_date() is None
+
+
+@pytest.mark.asyncio
+async def test_get_schedule_date_unset_before_any_default_view_call(service):
+    assert service.get_schedule_date() is None
 
 
 @pytest.mark.asyncio

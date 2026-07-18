@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
@@ -81,6 +82,15 @@ async def get_matchups_today(
         logger.error(f'Matchup data fetch failed: {e}')
         return []
 
+    # The date the slate actually resolved to — explicit for a pinned date,
+    # otherwise whatever get_games_today's default view landed on (None in
+    # the offseason), so the UI can show which real day "Upcoming (live)" is.
+    resolved_date = (
+        datetime.strptime(date, '%Y%m%d').date().isoformat()
+        if date is not None
+        else _matchup_service.get_schedule_date()
+    )
+
     def_ranks = all_def['ranks']
     def_values = all_def['values']
     league_avg_raw = all_def['league_avg_values']
@@ -161,6 +171,7 @@ async def get_matchups_today(
             ),
             league_avg_def_values=league_avg_def,
             projection=projection,
+            game_date=resolved_date,
         ))
 
     if results:
