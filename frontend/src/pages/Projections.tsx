@@ -44,14 +44,17 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   const [stats, setStats] = useState<ProjectionStats | null>(proj.stats);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Re-sync when the underlying projection changes (e.g. slate-date switch):
-  // React reuses row components by key, so stale local minutes/stats would
-  // otherwise survive and show the previous slate's numbers.
+  // Re-sync when the underlying slate changes (opponent switches) or the
+  // store recomputes a new default (nightly fold-in) — React reuses row
+  // components by key, so stale local minutes/stats would otherwise survive
+  // and show the previous slate's numbers. Keyed on stable primitives, not
+  // the `proj` object identity, so a same-slate refetch (e.g. RTK Query
+  // background revalidation) can't silently wipe an adjusted slider.
   useEffect(() => {
     clearTimeout(timer.current);
     setMinutes(proj.default_minutes);
     setStats(proj.stats);
-  }, [proj]);
+  }, [matchup.opponent, proj.default_minutes]);
 
   const onSlider = (v: number) => {
     setMinutes(v);

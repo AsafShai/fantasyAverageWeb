@@ -1,8 +1,7 @@
-import asyncio
 import logging
 import time
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 
 from app.models.matchup_models import DefRanks, DefValues, PlayerMatchupResponse
@@ -36,16 +35,41 @@ async def get_upcoming_game_dates() -> list[str]:
     return await _matchup_service.get_upcoming_game_dates()
 
 # Per-slate response cache: the full pipeline (schedule + fantasy roster +
-# batch model predict) is ~5s; repeat opens of the same slate are served
-# instantly. Vectors only change on the nightly refresh, so a short TTL is safe.
+# batch model predict) is ~1-2s; repeat opens of the same slate are served
+# instantly. Keyed only by dates the slate picker actually offers (see
+# _known_slate_dates), so the key space stays small by construction —
+# no eviction/size-cap machinery needed. Cleared on the nightly refresh
+# (ModelNightlyService._invalidate_inference_store) so it never serves
+# pre-fold-in projections.
 _RESPONSE_CACHE_TTL_S = 300
 _response_cache: dict[str, tuple[float, list[PlayerMatchupResponse]]] = {}
 
 
+def clear_matchup_response_cache() -> None:
+    _response_cache.clear()
+
+
+async def _known_slate_dates() -> set[str]:
+    """YYYYMMDD dates the slate picker actually offers: upcoming game days plus
+    dates already in the feature store. Anything else is rejected before it
+    costs a schedule fetch + model batch."""
+    upcoming = await _matchup_service.get_upcoming_game_dates()
+    recent = await DBService().get_recent_game_dates()
+    known = {d.replace('-', '') for d in upcoming}
+    known.update(d.strftime('%Y%m%d') for d in recent)
+    return known
+
+
 @router.get('/today', response_model=list[PlayerMatchupResponse])
 async def get_matchups_today(
-    date: Optional[str] = Query(default=None, description='YYYYMMDD — fetch schedule for this date instead of today (for testing)')
+    date: Optional[str] = Query(
+        default=None, pattern=r'^\d{8}$',
+        description='YYYYMMDD — must be a date the slate picker offers (upcoming or stored)',
+    )
 ) -> list[PlayerMatchupResponse]:
+    if date is not None and date not in await _known_slate_dates():
+        raise HTTPException(status_code=404, detail=f'Unknown slate date: {date}')
+
     cache_key = date or 'today'
     hit = _response_cache.get(cache_key)
     if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:

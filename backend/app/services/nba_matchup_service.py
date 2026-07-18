@@ -8,9 +8,10 @@ canonical abbreviations (NYK/GSW/PHL…), the dialect the fantasy side and the
 UI already speak.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -18,7 +19,7 @@ import httpx
 from app.config import settings
 from app.services.db_service import DBService
 from app.utils.team_abbr_map import TEAM_ID_TO_ABBR, canonical_abbr
-from model_stats_inference.espn.games import is_countable, is_final
+from model_stats_inference.espn.games import event_game_date, is_countable, is_final
 
 # How far forward the default view searches for the next slate. Covers the
 # All-Star break (~6 days); anything longer (offseason) is genuinely "no games".
@@ -153,10 +154,10 @@ class NbaMatchupService:
         # live, tomorrow once the whole slate is final, the next slate across
         # the All-Star break, and empty in the offseason.
         base = datetime.now(ZoneInfo('America/New_York')).date()
+        by_day = await self._countable_events_by_day(base, _UPCOMING_LOOKAHEAD_DAYS)
         games: dict[str, GameInfo] = {}
         for offset in range(_UPCOMING_LOOKAHEAD_DAYS + 1):
-            day = (base + timedelta(days=offset)).strftime('%Y%m%d')
-            events = [e for e in await self._scoreboard_events(day) if is_countable(e)]
+            events = by_day.get(base + timedelta(days=offset), [])
             if any(not is_final(e) for e in events):
                 games = self._games_from(events)
                 break
@@ -177,10 +178,11 @@ class NbaMatchupService:
             return self._upcoming_cache['data']
 
         base = datetime.now(ZoneInfo('America/New_York')).date()
+        by_day = await self._countable_events_by_day(base, lookahead_days)
         found: list[str] = []
         for offset in range(lookahead_days + 1):
             day = base + timedelta(days=offset)
-            events = [e for e in await self._scoreboard_events(day.strftime('%Y%m%d')) if is_countable(e)]
+            events = by_day.get(day, [])
             if events and (offset > 0 or any(not is_final(e) for e in events)):
                 found.append(day.isoformat())
                 if len(found) >= count:
@@ -189,10 +191,32 @@ class NbaMatchupService:
         self._upcoming_cache.update({'data': found, 'ts': datetime.now()})
         return found
 
-    async def _scoreboard_events(self, date: str) -> list[dict]:
+    async def _countable_events_by_day(
+        self, start: date, lookahead_days: int
+    ) -> dict[date, list[dict]]:
+        """Countable events for [start, start + lookahead_days], grouped by
+        US/Eastern game date. Fetched via whole-month scoreboard calls (1-2
+        requests, run in parallel) instead of one request per day — ESPN's
+        scoreboard endpoint accepts a "YYYYMM" month in addition to a day."""
+        end = start + timedelta(days=lookahead_days)
+        months = sorted({start.strftime('%Y%m'), end.strftime('%Y%m')})
+        event_lists = await asyncio.gather(*(self._scoreboard_events(m) for m in months))
+
+        by_day: dict[date, list[dict]] = {}
+        for events in event_lists:
+            for event in events:
+                if not is_countable(event):
+                    continue
+                day = event_game_date(event)
+                if start <= day <= end:
+                    by_day.setdefault(day, []).append(event)
+        return by_day
+
+    async def _scoreboard_events(self, dates: str) -> list[dict]:
+        """``dates`` is either a day ("YYYYMMDD") or a whole month ("YYYYMM")."""
         url = (
             'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard'
-            f'?dates={date}'
+            f'?dates={dates}&limit=1000'
         )
         response = await self._client.get(url)
         response.raise_for_status()

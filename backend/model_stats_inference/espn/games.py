@@ -260,7 +260,16 @@ def fetch_day(game_date: date) -> DayFetch:
     for event in events:
         if not is_final(event):
             continue
-        p, t = build_game_rows(event, client.game_summary(str(event["id"])))
+        try:
+            p, t = build_game_rows(event, client.game_summary(str(event["id"])))
+        except (KeyError, ValueError, client.EspnUnavailableError) as e:
+            # One bad/unreachable summary must not sink the whole night: the
+            # other games in player_rows/team_rows still return below, and the
+            # resulting short team_rows count makes NightFetch.complete False
+            # (see nightly.fetch_night), so the scheduler retries just this
+            # game at its next slot instead of losing the night silently.
+            logger.warning(f"skipping event {event['id']} ({game_date}): {e}")
+            continue
         player_rows.extend(p)
         team_rows.extend(t)
 

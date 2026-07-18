@@ -129,7 +129,7 @@ const Players = () => {
         </div>
         <div className="flex items-center gap-2">
           {FF_MATCHUP_QUALITY && (
-            <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Pick a game day. Past dates (debug) show that slate with current player state.">
+            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Pick a game day. Past dates (debug) show that slate with current player state.">
               <span>Slate</span>
               <select
                 value={slateDate}

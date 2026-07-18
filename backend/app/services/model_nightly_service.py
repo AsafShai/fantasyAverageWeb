@@ -348,6 +348,10 @@ class ModelNightlyService:
         morning window, since it can't observe this in-process invalidation.
         """
         self._inference_store = None
+        # Deferred import: app.routes.matchups pulls in this module transitively
+        # (via live_projection_service), so a top-level import here would cycle.
+        from app.routes.matchups import clear_matchup_response_cache
+        clear_matchup_response_cache()
 
     # --- one-time init -------------------------------------------------------
 

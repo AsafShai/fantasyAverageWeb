@@ -91,3 +91,40 @@ def test_returns_empty_on_service_error(mock_services):
     resp = client.get('/api/matchups/today')
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_rejects_malformed_date(mock_services):
+    client = TestClient(app)
+    resp = client.get('/api/matchups/today?date=2026-01-15')  # dashes, not YYYYMMDD
+    assert resp.status_code == 422
+
+
+def test_rejects_date_outside_known_slates(mock_services, monkeypatch):
+    svc, _ = mock_services
+    svc.get_upcoming_game_dates = AsyncMock(return_value=['2026-01-16'])
+    monkeypatch.setattr(
+        'app.routes.matchups.DBService',
+        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[])),
+    )
+    client = TestClient(app)
+    resp = client.get('/api/matchups/today?date=20990101')
+    assert resp.status_code == 404
+
+
+def test_accepts_upcoming_date_in_whitelist(mock_services, monkeypatch):
+    svc, _ = mock_services
+    svc.get_upcoming_game_dates = AsyncMock(return_value=['2026-01-16'])
+    monkeypatch.setattr(
+        'app.routes.matchups.DBService',
+        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[])),
+    )
+    client = TestClient(app)
+    resp = client.get('/api/matchups/today?date=20260116')
+    assert resp.status_code == 200
+
+
+def test_clear_matchup_response_cache_empties_dict(monkeypatch):
+    import app.routes.matchups as matchups_module
+    monkeypatch.setattr(matchups_module, '_response_cache', {'today': (0.0, [])})
+    matchups_module.clear_matchup_response_cache()
+    assert matchups_module._response_cache == {}
