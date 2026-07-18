@@ -7,17 +7,19 @@ simple. All endpoints are unauthenticated JSON GETs.
 
 from __future__ import annotations
 
+import asyncio
 import time
 
+import httpx
 import requests
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
 
 REQUEST_TIMEOUT = 30
 SLEEP_BETWEEN_CALLS = 0.15
-_RETRY_DELAYS = [2.0, 5.0, 15.0]
+RETRY_DELAYS = [2.0, 5.0, 15.0]
 
-_HEADERS = {
+HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -26,7 +28,7 @@ _HEADERS = {
 }
 
 _session = requests.Session()
-_session.headers.update(_HEADERS)
+_session.headers.update(HEADERS)
 
 
 class EspnUnavailableError(RuntimeError):
@@ -36,7 +38,7 @@ class EspnUnavailableError(RuntimeError):
 def get_json(path: str, params: dict | None = None) -> dict:
     url = f"{BASE}/{path}"
     last: Exception | None = None
-    for attempt, delay in enumerate([0.0, *_RETRY_DELAYS]):
+    for attempt, delay in enumerate([0.0, *RETRY_DELAYS]):
         if delay:
             time.sleep(delay)
         try:
@@ -47,7 +49,38 @@ def get_json(path: str, params: dict | None = None) -> dict:
             return data
         except (requests.RequestException, ValueError) as e:
             last = e
-    raise EspnUnavailableError(f"GET {url} failed after {len(_RETRY_DELAYS) + 1} attempts: {last}")
+    raise EspnUnavailableError(f"GET {url} failed after {len(RETRY_DELAYS) + 1} attempts: {last}")
+
+
+async def async_get_json(client: httpx.AsyncClient, path: str, params: dict | None = None) -> dict:
+    """Async twin of ``get_json`` for FastAPI request-time callers (no
+    SLEEP_BETWEEN_CALLS pacing — that's for the nightly bulk pull's hundreds
+    of sequential requests, not a handful of per-request lookups)."""
+    url = f"{BASE}/{path}"
+    last: Exception | None = None
+    for attempt, delay in enumerate([0.0, *RETRY_DELAYS]):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            resp = await client.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            return resp.json()
+        except (httpx.HTTPError, ValueError) as e:
+            last = e
+    raise EspnUnavailableError(f"GET {url} failed after {len(RETRY_DELAYS) + 1} attempts: {last}")
+
+
+async def scoreboard_async(client: httpx.AsyncClient, dates: str) -> dict:
+    """Scoreboard for a day ("YYYYMMDD") or a whole month ("YYYYMM"), async."""
+    return await async_get_json(client, "scoreboard", {"dates": dates, "limit": 1000})
+
+
+async def calendar_whitelist_async(client: httpx.AsyncClient) -> list[str]:
+    """Every game day of the current season (ISO datetime strings, UTC) in one
+    request — includes preseason/playoffs, not just regular season, so callers
+    still need their own countability filter on the days they fetch."""
+    data = await async_get_json(client, "scoreboard", {"calendartype": "whitelist"})
+    return data["leagues"][0]["calendar"]
 
 
 def scoreboard(dates: str) -> dict:

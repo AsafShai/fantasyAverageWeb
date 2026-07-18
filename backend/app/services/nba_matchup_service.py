@@ -19,6 +19,7 @@ import httpx
 from app.config import settings
 from app.services.db_service import DBService
 from app.utils.team_abbr_map import TEAM_ID_TO_ABBR, canonical_abbr
+from model_stats_inference.espn import client as espn_client
 from model_stats_inference.espn.games import event_game_date, is_countable, is_final
 
 # How far forward the default view searches for the next slate. Covers the
@@ -60,8 +61,9 @@ class NbaMatchupService:
             'pace': None,
             'ts': None,
         }
-        self._schedule_cache: dict = {'data': None, 'date': None, 'ts': None}
-        self._upcoming_cache: dict = {'data': None, 'ts': None}
+        self._events_cache: dict = {'by_day': {}, 'ts': None}
+        self._resolved_date: str | None = None
+        self._whitelist_cache: dict = {'dates': None, 'ts': None}
 
     def _def_cache_valid(self) -> bool:
         return (
@@ -136,15 +138,11 @@ class NbaMatchupService:
         return 'Average'
 
     async def get_games_today(self, date: str | None = None) -> dict[str, GameInfo]:
-        # Skip cache when a specific date is requested (testing / what-if view)
-        if date is None and (
-            self._schedule_cache['ts'] is not None
-            and datetime.now() - self._schedule_cache['ts'] < timedelta(minutes=5)
-        ):
-            return self._schedule_cache['data']
-
         if date is not None:
-            return self._games_from(await self._scoreboard_events(date))
+            # Explicit/testing date: trusted verbatim, bypasses the whitelist
+            # and the shared events cache entirely.
+            resp = await espn_client.scoreboard_async(self._client, date)
+            return self._games_from(resp.get('events', []))
 
         # Default view = the UPCOMING slate. The date is always pinned (ESPN's
         # dateless scoreboard returns the NEAREST game day — the season finale
@@ -164,31 +162,21 @@ class NbaMatchupService:
                 resolved_date = base + timedelta(days=offset)
                 break
 
-        self._schedule_cache.update({
-            'data': games,
-            'date': resolved_date.isoformat() if resolved_date else None,
-            'ts': datetime.now(),
-        })
+        self._resolved_date = resolved_date.isoformat() if resolved_date else None
         return games
 
     def get_schedule_date(self) -> str | None:
         """ISO date the last default-view (date=None) get_games_today call
         resolved to — None in the offseason, when there's no upcoming slate.
         Lets the UI show which real calendar day 'Upcoming (live)' means."""
-        return self._schedule_cache['date']
+        return self._resolved_date
 
     async def get_upcoming_game_dates(
         self, count: int = 5, lookahead_days: int = 14
     ) -> list[str]:
         """The next ``count`` days that have countable games (ISO dates, today
         included while its slate is still pending), scanning at most
-        ``lookahead_days`` ahead. Offseason -> empty. Cached 5 minutes."""
-        if (
-            self._upcoming_cache['ts'] is not None
-            and datetime.now() - self._upcoming_cache['ts'] < timedelta(minutes=5)
-        ):
-            return self._upcoming_cache['data']
-
+        ``lookahead_days`` ahead. Offseason -> empty."""
         base = datetime.now(ZoneInfo('America/New_York')).date()
         by_day = await self._countable_events_by_day(base, lookahead_days)
         found: list[str] = []
@@ -200,39 +188,64 @@ class NbaMatchupService:
                 if len(found) >= count:
                     break
 
-        self._upcoming_cache.update({'data': found, 'ts': datetime.now()})
         return found
+
+    async def _ensure_whitelist(self) -> None:
+        """Every game date of the season, from ESPN's whitelist calendar —
+        static once published, so this is worth caching far longer than the
+        5-min schedule caches (a season doesn't grow new game days mid-day)."""
+        if (
+            self._whitelist_cache['ts'] is not None
+            and datetime.now() - self._whitelist_cache['ts'] < timedelta(hours=24)
+        ):
+            return
+        raw = await espn_client.calendar_whitelist_async(self._client)
+        self._whitelist_cache.update({
+            'dates': {
+                datetime.fromisoformat(s.replace('Z', '+00:00'))
+                .astimezone(ZoneInfo('America/New_York'))
+                .date()
+                for s in raw
+            },
+            'ts': datetime.now(),
+        })
 
     async def _countable_events_by_day(
         self, start: date, lookahead_days: int
     ) -> dict[date, list[dict]]:
         """Countable events for [start, start + lookahead_days], grouped by
-        US/Eastern game date. Fetched via whole-month scoreboard calls (1-2
-        requests, run in parallel) instead of one request per day — ESPN's
-        scoreboard endpoint accepts a "YYYYMM" month in addition to a day."""
+        US/Eastern game date. Candidate days come from the whitelist calendar
+        (one cached request for the whole season) — only those specific days
+        get fetched, never a whole month just to find out which days have
+        games. Empty candidates (offseason) short-circuits with zero
+        day-scoreboard calls. Shared 5-min cache — both get_games_today and
+        get_upcoming_game_dates read/populate the same day-events map, so a
+        page load calling both never double-fetches the overlapping range."""
+        await self._ensure_whitelist()
         end = start + timedelta(days=lookahead_days)
-        months = sorted({start.strftime('%Y%m'), end.strftime('%Y%m')})
-        event_lists = await asyncio.gather(*(self._scoreboard_events(m) for m in months))
+        candidates = sorted(d for d in self._whitelist_cache['dates'] if start <= d <= end)
+        if not candidates:
+            return {}
 
-        by_day: dict[date, list[dict]] = {}
-        for events in event_lists:
-            for event in events:
-                if not is_countable(event):
-                    continue
-                day = event_game_date(event)
-                if start <= day <= end:
-                    by_day.setdefault(day, []).append(event)
-        return by_day
-
-    async def _scoreboard_events(self, dates: str) -> list[dict]:
-        """``dates`` is either a day ("YYYYMMDD") or a whole month ("YYYYMM")."""
-        url = (
-            'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard'
-            f'?dates={dates}&limit=1000'
+        cache_fresh = (
+            self._events_cache['ts'] is not None
+            and datetime.now() - self._events_cache['ts'] < timedelta(minutes=5)
         )
-        response = await self._client.get(url)
-        response.raise_for_status()
-        return response.json().get('events', [])
+        if not cache_fresh or not set(candidates) <= self._events_cache['by_day'].keys():
+            responses = await asyncio.gather(
+                *(espn_client.scoreboard_async(self._client, d.strftime('%Y%m%d')) for d in candidates)
+            )
+            by_day: dict[date, list[dict]] = {}
+            for resp in responses:
+                for event in resp.get('events', []):
+                    if not is_countable(event):
+                        continue
+                    day = event_game_date(event)
+                    if start <= day <= end:
+                        by_day.setdefault(day, []).append(event)
+            self._events_cache.update({'by_day': by_day, 'ts': datetime.now()})
+
+        return {d: self._events_cache['by_day'].get(d, []) for d in candidates}
 
     @staticmethod
     def _games_from(events: list[dict]) -> dict[str, GameInfo]:
