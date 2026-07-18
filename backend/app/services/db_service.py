@@ -89,9 +89,9 @@ class DBService:
                         (
                             scoring_period_id, snap_date,
                             int(row['team_id']), str(row['team_name']),
-                            int(row['FG%']), int(row['FT%']), int(row['3PM']),
-                            int(row['REB']), int(row['AST']), int(row['STL']),
-                            int(row['BLK']), int(row['PTS']), int(row['TOTAL_POINTS']),
+                            float(row['FG%']), float(row['FT%']), float(row['3PM']),
+                            float(row['REB']), float(row['AST']), float(row['STL']),
+                            float(row['BLK']), float(row['PTS']), float(row['TOTAL_POINTS']),
                         )
                         for _, row in rankings_df.iterrows()
                     ],
@@ -130,9 +130,9 @@ class DBService:
                         (
                             scoring_period_id, snap_date,
                             int(row['team_id']), str(row['team_name']),
-                            int(row['FG%']), int(row['FT%']), int(row['3PM']),
-                            int(row['REB']), int(row['AST']), int(row['STL']),
-                            int(row['BLK']), int(row['PTS']), int(row['TOTAL_POINTS']),
+                            float(row['FG%']), float(row['FT%']), float(row['3PM']),
+                            float(row['REB']), float(row['AST']), float(row['STL']),
+                            float(row['BLK']), float(row['PTS']), float(row['TOTAL_POINTS']),
                         )
                         for _, row in rankings_totals_df.iterrows()
                     ],
@@ -234,23 +234,29 @@ class DBService:
                 if team_ids:
                     rows = await conn.fetch(
                         f"""
-                        SELECT date, team_id, team_name,
-                               rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
-                               rk_ast, rk_stl, rk_blk, rk_pts, rk_total
-                        FROM {table}
-                        WHERE team_id = ANY($1)
-                        ORDER BY date, team_id
+                        SELECT r.date, r.team_id, r.team_name,
+                               r.rk_fg_pct, r.rk_ft_pct, r.rk_three_pm, r.rk_reb,
+                               r.rk_ast, r.rk_stl, r.rk_blk, r.rk_pts, r.rk_total,
+                               s.gp
+                        FROM {table} r
+                        LEFT JOIN team_daily_snapshot s
+                            ON s.date = r.date AND s.team_id = r.team_id
+                        WHERE r.team_id = ANY($1)
+                        ORDER BY r.date, r.team_id
                         """,
                         team_ids,
                     )
                 else:
                     rows = await conn.fetch(
                         f"""
-                        SELECT date, team_id, team_name,
-                               rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
-                               rk_ast, rk_stl, rk_blk, rk_pts, rk_total
-                        FROM {table}
-                        ORDER BY date, team_id
+                        SELECT r.date, r.team_id, r.team_name,
+                               r.rk_fg_pct, r.rk_ft_pct, r.rk_three_pm, r.rk_reb,
+                               r.rk_ast, r.rk_stl, r.rk_blk, r.rk_pts, r.rk_total,
+                               s.gp
+                        FROM {table} r
+                        LEFT JOIN team_daily_snapshot s
+                            ON s.date = r.date AND s.team_id = r.team_id
+                        ORDER BY r.date, r.team_id
                         """
                     )
                 return [dict(r) for r in rows]

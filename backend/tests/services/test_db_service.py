@@ -14,6 +14,7 @@ class FakeConn:
             self.fetch = AsyncMock(side_effect=RuntimeError("boom"))
         else:
             self.fetch = AsyncMock(return_value=fetch_result or [])
+        self.executemany = AsyncMock(return_value=None)
 
 
 class FakeAcquireCtx:
@@ -168,3 +169,48 @@ async def test_get_fs_rows_before_no_pool_returns_empty_lists(db_service, monkey
 
     assert players == []
     assert teams == []
+
+
+@pytest.mark.asyncio
+async def test_get_rankings_over_time_joins_gp(db_service, monkeypatch):
+    rows = [{"date": date(2025, 11, 5), "team_id": 1, "team_name": "A", "rk_total": 61.5, "gp": 7}]
+    conn = FakeConn(fetch_result=rows)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    result = await db_service.get_rankings_over_time("team_rankings_totals", None)
+
+    assert result == rows
+    query = conn.fetch.call_args[0][0]
+    assert "LEFT JOIN team_daily_snapshot" in query
+    assert "s.gp" in query
+
+
+@pytest.mark.asyncio
+async def test_get_rankings_over_time_with_team_ids_joins_gp(db_service, monkeypatch):
+    conn = FakeConn(fetch_result=[])
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    await db_service.get_rankings_over_time("team_rankings_averages", [1, 2])
+
+    args = conn.fetch.call_args[0]
+    assert "LEFT JOIN team_daily_snapshot" in args[0]
+    assert args[1] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_upsert_rankings_averages_preserves_tie_fraction(db_service, monkeypatch):
+    conn = FakeConn()
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+    df = pd.DataFrame([{
+        "team_id": 1, "team_name": "A",
+        "FG%": 6.5, "FT%": 6.5, "3PM": 6.5, "REB": 6.5,
+        "AST": 6.5, "STL": 6.5, "BLK": 6.5, "PTS": 6.5,
+        "TOTAL_POINTS": 52.0,
+    }])
+
+    await db_service.upsert_rankings_averages(5, df)
+
+    params = conn.executemany.call_args[0][1][0]
+    assert params[4] == 6.5
+    assert params[-1] == 52.0
+    assert isinstance(params[-1], float)
