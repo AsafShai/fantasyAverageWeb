@@ -19,6 +19,7 @@ import httpx
 from app.config import settings
 from app.services.db_service import DBService
 from app.utils.team_abbr_map import TEAM_ID_TO_ABBR, canonical_abbr
+from model_stats_inference.espn import client as espn_client
 from model_stats_inference.espn.games import event_game_date, is_countable, is_final
 
 # How far forward the default view searches for the next slate. Covers the
@@ -62,6 +63,7 @@ class NbaMatchupService:
         }
         self._schedule_cache: dict = {'data': None, 'date': None, 'ts': None}
         self._upcoming_cache: dict = {'data': None, 'ts': None}
+        self._whitelist_cache: dict = {'dates': None, 'ts': None}
 
     def _def_cache_valid(self) -> bool:
         return (
@@ -202,6 +204,26 @@ class NbaMatchupService:
 
         self._upcoming_cache.update({'data': found, 'ts': datetime.now()})
         return found
+
+    async def _ensure_whitelist(self) -> None:
+        """Every game date of the season, from ESPN's whitelist calendar —
+        static once published, so this is worth caching far longer than the
+        5-min schedule caches (a season doesn't grow new game days mid-day)."""
+        if (
+            self._whitelist_cache['ts'] is not None
+            and datetime.now() - self._whitelist_cache['ts'] < timedelta(hours=24)
+        ):
+            return
+        raw = await espn_client.calendar_whitelist_async(self._client)
+        self._whitelist_cache.update({
+            'dates': {
+                datetime.fromisoformat(s.replace('Z', '+00:00'))
+                .astimezone(ZoneInfo('America/New_York'))
+                .date()
+                for s in raw
+            },
+            'ts': datetime.now(),
+        })
 
     async def _countable_events_by_day(
         self, start: date, lookahead_days: int

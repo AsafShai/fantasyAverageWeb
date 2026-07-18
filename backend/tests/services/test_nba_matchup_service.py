@@ -294,3 +294,59 @@ async def test_get_games_today_empty_on_no_games(service):
         games = await service.get_games_today()
 
     assert games == {}
+
+
+def _whitelist_resp(calendar: list[str]) -> MagicMock:
+    resp = MagicMock()
+    resp.json.return_value = {'leagues': [{'calendar': calendar}]}
+    resp.raise_for_status = MagicMock()
+    return resp
+
+
+def _whitelist_get(calendar: list[str]):
+    """Fake ``httpx.AsyncClient.get`` for the whitelist-calendar request —
+    real calls go through ``client.async_get_json`` with ``params=``, not an
+    embedded query string, unlike the day/month scoreboard fakes above."""
+    async def _get(url: str, params: dict | None = None, timeout=None) -> MagicMock:
+        assert params == {'calendartype': 'whitelist'}
+        return _whitelist_resp(calendar)
+    return _get
+
+
+@pytest.mark.asyncio
+async def test_ensure_whitelist_parses_calendar_entries_to_et_dates(service):
+    calendar = ['2025-10-02T07:00Z', '2026-01-29T08:00Z', '2026-06-13T07:00Z']
+
+    with patch.object(service._client, 'get', new_callable=AsyncMock, side_effect=_whitelist_get(calendar)):
+        await service._ensure_whitelist()
+
+    assert service._whitelist_cache['dates'] == {
+        date(2025, 10, 2), date(2026, 1, 29), date(2026, 6, 13),
+    }
+
+
+@pytest.mark.asyncio
+async def test_ensure_whitelist_caches_for_24_hours(service):
+    calendar = ['2025-10-02T07:00Z']
+
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_whitelist_get(calendar),
+    ) as get:
+        await service._ensure_whitelist()
+        await service._ensure_whitelist()
+
+    assert get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_ensure_whitelist_refetches_after_ttl_expiry(service):
+    calendar = ['2025-10-02T07:00Z']
+    service._whitelist_cache = {'dates': {date(2020, 1, 1)}, 'ts': datetime.now() - timedelta(hours=25)}
+
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_whitelist_get(calendar),
+    ) as get:
+        await service._ensure_whitelist()
+
+    assert get.await_count == 1
+    assert service._whitelist_cache['dates'] == {date(2025, 10, 2)}
