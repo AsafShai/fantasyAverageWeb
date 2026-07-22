@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef } from 'react'
 import Footer from './Footer'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS } from '../config/featureFlags'
 
 const Layout = () => {
   const location = useLocation()
@@ -35,6 +35,7 @@ const Layout = () => {
     ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
     ...(FF_PROJECTIONS ? [{ path: '/projections', label: 'Projections', icon: '🔭' }] : []),
     ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
+    ...(FF_TRENDS ? [{ path: '/trends', label: 'Trends', icon: '📈' }] : []),
   ]
 
   const closeMobileMenu = () => setMobileMenuOpen(false)
@@ -167,6 +168,7 @@ const ReorgLayout = ({ darkMode, setDarkMode }: ReorgLayoutProps) => {
     { path: '/trade', label: 'Trade', icon: '🔄' },
     ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
     ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
+    ...(FF_TRENDS ? [{ path: '/trends', label: 'Trends', icon: '📈' }] : []),
   ]
 
   const isToolsActive = toolsItems.some((item) => item.path === location.pathname)

@@ -17,7 +17,8 @@ import NotFound from './pages/NotFound'
 import PlayerRankings from './pages/PlayerRankings'
 import Projections from './pages/Projections'
 import DraftReport from './pages/DraftReport'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT } from './config/featureFlags'
+import Trends from './pages/Trends'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS } from './config/featureFlags'
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
           {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
           {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
           {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
+          {FF_TRENDS && <Route path="trends" element={<Trends />} />}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
