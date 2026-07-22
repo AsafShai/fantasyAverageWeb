@@ -822,6 +822,116 @@ class DBService:
             logger.error(f"Failed to fetch latest game date for season {season}: {e}")
             return None
 
+    async def aggregate_shooting_by_player(
+        self, seasons: list[str], start: Optional[date] = None, end: Optional[date] = None
+    ) -> pd.DataFrame:
+        """Per-player FG/FT/3P makes+attempts summed across `seasons` (a single
+        season for a current-season aggregate, two prior seasons for a
+        regression baseline), optionally bounded to [start, end]. Percentages
+        are SUM(makes)/SUM(attempts), never a mean of per-game ratios."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT
+                        player_id,
+                        (array_agg(player_name ORDER BY game_date DESC))[1] AS player_name,
+                        COUNT(*) AS gp,
+                        SUM(fgm) AS fgm,
+                        SUM(fga) AS fga,
+                        COALESCE(SUM(fgm) / NULLIF(SUM(fga), 0), 0.0) AS fg_pct,
+                        SUM(ftm) AS ftm,
+                        SUM(fta) AS fta,
+                        COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct,
+                        SUM(fg3m) AS fg3m,
+                        SUM(fg3a) AS fg3a,
+                        COALESCE(SUM(fg3m) / NULLIF(SUM(fg3a), 0), 0.0) AS fg3_pct,
+                        SUM(min) AS min
+                    FROM fs_player_games
+                    WHERE season = ANY($1::text[]) AND min > 0
+                      AND ($2::date IS NULL OR game_date >= $2)
+                      AND ($3::date IS NULL OR game_date <= $3)
+                    GROUP BY player_id
+                    """,
+                    seasons, start, end,
+                )
+                return pd.DataFrame([dict(r) for r in rows])
+        except Exception as e:
+            logger.error(f"Failed to aggregate shooting for seasons {seasons}: {e}")
+            return pd.DataFrame()
+
+    async def get_usage_components(self, season: str, start: date, end: date) -> pd.DataFrame:
+        """Per-game rows with everything USG% needs: player FGA/FTA/TOV/MIN plus
+        that game's team FGA/FTA/TOV (fs_team_games) and team total MIN
+        (fs_team_games has no min column — derived via SUM(fs_player_games.min)
+        grouped by team_id+game_id). USG% itself is computed per game in Python
+        (never from summed totals) then averaged over whatever window the
+        caller wants (season, last-5, etc) from this same row set."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT
+                        p.player_id,
+                        p.player_name,
+                        p.game_id,
+                        p.game_date,
+                        p.min AS p_min,
+                        p.fga AS p_fga,
+                        p.fta AS p_fta,
+                        p.tov AS p_tov,
+                        t.fga AS t_fga,
+                        t.fta AS t_fta,
+                        t.tov AS t_tov,
+                        tm.team_min AS t_min
+                    FROM fs_player_games p
+                    JOIN fs_team_games t
+                        ON t.team_id = p.team_id AND t.game_id = p.game_id
+                    JOIN (
+                        SELECT team_id, game_id, SUM(min) AS team_min
+                        FROM fs_player_games
+                        WHERE season = $1 AND game_date BETWEEN $2 AND $3
+                        GROUP BY team_id, game_id
+                    ) tm ON tm.team_id = p.team_id AND tm.game_id = p.game_id
+                    WHERE p.season = $1 AND p.game_date BETWEEN $2 AND $3 AND p.min > 0
+                    """,
+                    season, start, end,
+                )
+                return pd.DataFrame([dict(r) for r in rows])
+        except Exception as e:
+            logger.error(f"Failed to fetch usage components for {start}..{end} ({season}): {e}")
+            return pd.DataFrame()
+
+    async def get_games_since(self, since_date: date) -> dict[int, int]:
+        """player_id -> distinct games played with game_date >= since_date
+        (any season) — trailing-window recency count (e.g. games in the last
+        15 days) used to filter out currently inactive/injured players
+        regardless of season-total GP."""
+        pool = await self._get_pool()
+        if pool is None:
+            return {}
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT player_id, COUNT(DISTINCT game_id) AS g
+                    FROM fs_player_games
+                    WHERE game_date >= $1 AND min > 0
+                    GROUP BY player_id
+                    """,
+                    since_date,
+                )
+                return {int(r["player_id"]): int(r["g"]) for r in rows}
+        except Exception as e:
+            logger.error(f"Failed to count games since {since_date}: {e}")
+            return {}
+
     async def insert_fs_rows(self, player_rows: list[tuple], team_rows: list[tuple]) -> bool:
         """Append raw game rows. Tuple order must match the column lists below.
         ON CONFLICT DO NOTHING makes re-runs of the same night no-ops."""

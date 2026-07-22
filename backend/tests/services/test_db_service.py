@@ -1,7 +1,6 @@
 from datetime import date
 from unittest.mock import AsyncMock
 
-import pandas as pd
 import pytest
 
 from app.services.db_service import DBService
@@ -168,3 +167,138 @@ async def test_get_fs_rows_before_no_pool_returns_empty_lists(db_service, monkey
 
     assert players == []
     assert teams == []
+
+
+@pytest.mark.asyncio
+async def test_aggregate_shooting_by_player_no_pool_returns_empty_df(db_service, monkeypatch):
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=None))
+
+    df = await db_service.aggregate_shooting_by_player(["2025-26"])
+
+    assert df.empty
+
+
+@pytest.mark.asyncio
+async def test_aggregate_shooting_by_player_success(db_service, monkeypatch):
+    rows = [
+        {
+            "player_id": 1, "player_name": "Klay Thompson", "gp": 50,
+            "fgm": 300.0, "fga": 700.0, "fg_pct": 300.0 / 700.0,
+            "ftm": 80.0, "fta": 105.0, "ft_pct": 80.0 / 105.0,
+            "fg3m": 140.0, "fg3a": 420.0, "fg3_pct": 140.0 / 420.0,
+            "min": 1450.0,
+        },
+    ]
+    conn = FakeConn(fetch_result=rows)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    df = await db_service.aggregate_shooting_by_player(["2025-26"])
+
+    assert len(df) == 1
+    row = df.iloc[0]
+    assert row["player_id"] == 1
+    assert row["fg3a"] == 420.0
+    assert row["fg3_pct"] == pytest.approx(140.0 / 420.0)
+    assert row["min"] == 1450.0
+    assert "SUM(min)" in conn.fetch.call_args[0][0]
+
+    query_args = conn.fetch.call_args[0]
+    assert query_args[1] == ["2025-26"]
+    assert query_args[2] is None
+    assert query_args[3] is None
+
+
+@pytest.mark.asyncio
+async def test_aggregate_shooting_by_player_passes_seasons_and_bounds(db_service, monkeypatch):
+    conn = FakeConn(fetch_result=[])
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    await db_service.aggregate_shooting_by_player(
+        ["2023-24", "2024-25"], start=date(2023, 10, 1), end=date(2025, 6, 1)
+    )
+
+    query_args = conn.fetch.call_args[0]
+    assert query_args[1] == ["2023-24", "2024-25"]
+    assert query_args[2] == date(2023, 10, 1)
+    assert query_args[3] == date(2025, 6, 1)
+
+
+@pytest.mark.asyncio
+async def test_aggregate_shooting_by_player_db_error_returns_empty_df(db_service, monkeypatch):
+    conn = FakeConn(raise_on_fetch=True)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    df = await db_service.aggregate_shooting_by_player(["2025-26"])
+
+    assert df.empty
+
+
+@pytest.mark.asyncio
+async def test_get_games_since_no_pool_returns_empty_dict(db_service, monkeypatch):
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=None))
+
+    result = await db_service.get_games_since(date(2026, 6, 1))
+
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_get_games_since_success(db_service, monkeypatch):
+    rows = [{"player_id": 1, "g": 7}, {"player_id": 2, "g": 2}]
+    conn = FakeConn(fetch_result=rows)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    result = await db_service.get_games_since(date(2026, 6, 1))
+
+    assert result == {1: 7, 2: 2}
+    query_args = conn.fetch.call_args[0]
+    assert query_args[1] == date(2026, 6, 1)
+
+
+@pytest.mark.asyncio
+async def test_get_games_since_db_error_returns_empty_dict(db_service, monkeypatch):
+    conn = FakeConn(raise_on_fetch=True)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    result = await db_service.get_games_since(date(2026, 6, 1))
+
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_get_usage_components_no_pool_returns_empty_df(db_service, monkeypatch):
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=None))
+
+    df = await db_service.get_usage_components("2025-26", date(2025, 10, 22), date(2026, 6, 1))
+
+    assert df.empty
+
+
+@pytest.mark.asyncio
+async def test_get_usage_components_success(db_service, monkeypatch):
+    rows = [{
+        "player_id": 1, "player_name": "Ayo Dosunmu", "game_id": "G1", "game_date": date(2026, 1, 1),
+        "p_min": 32.0, "p_fga": 15.0, "p_fta": 3.0, "p_tov": 2.0,
+        "t_fga": 85.0, "t_fta": 20.0, "t_tov": 12.0, "t_min": 240.0,
+    }]
+    conn = FakeConn(fetch_result=rows)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    df = await db_service.get_usage_components("2025-26", date(2025, 10, 22), date(2026, 6, 1))
+
+    assert len(df) == 1
+    row = df.iloc[0]
+    assert row["player_id"] == 1
+    assert row["t_min"] == 240.0
+    query_args = conn.fetch.call_args[0]
+    assert query_args[1:] == ("2025-26", date(2025, 10, 22), date(2026, 6, 1))
+
+
+@pytest.mark.asyncio
+async def test_get_usage_components_db_error_returns_empty_df(db_service, monkeypatch):
+    conn = FakeConn(raise_on_fetch=True)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    df = await db_service.get_usage_components("2025-26", date(2025, 10, 22), date(2026, 6, 1))
+
+    assert df.empty
