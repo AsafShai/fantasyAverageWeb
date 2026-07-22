@@ -218,6 +218,7 @@ export interface TeamTimeSeriesPoint {
   rk_blk?: number;
   rk_pts?: number;
   rk_total?: number;
+  gp?: number;
   fg_pct?: number;
   ft_pct?: number;
   three_pm?: number;
