@@ -378,6 +378,7 @@ export interface TeamStoreState {
 }
 
 export interface MinutesMoverItem {
+  player_id: number;
   player_name: string;
   pro_team: string;
   position: string;
@@ -398,6 +399,7 @@ export interface MinutesResponse {
 }
 
 export interface UsageRoleItem {
+  player_id: number;
   player_name: string;
   pro_team: string;
   position: string;
@@ -432,6 +434,7 @@ export interface RegressionStatItem {
 }
 
 export interface RegressionPlayerGroup {
+  player_id: number;
   player_name: string;
   pro_team: string;
   position: string;
@@ -443,5 +446,34 @@ export interface RegressionPlayerGroup {
 export interface RegressionResponse {
   items: RegressionPlayerGroup[];
   window_days: number;
+  baseline_seasons: number;
   last_updated: string;
+}
+
+export interface GameLogEntry {
+  game_date: string;
+  matchup: string;
+  min: number;
+  usg: number;
+  fgm: number;
+  fga: number;
+  ftm: number;
+  fta: number;
+  fg3m: number;
+  fg3a: number;
+}
+
+export interface GameLogResponse {
+  player_id: number;
+  player_name: string;
+  season: string;
+  window_days: number;
+  window_start: string;
+  season_gp: number;
+  season_mpg: number;
+  season_usg: number;
+  season_pct: Partial<Record<RegressionStat, number>>;
+  baseline_pct: Partial<Record<RegressionStat, number>>;
+  baseline_seasons: number;
+  games: GameLogEntry[];
 }

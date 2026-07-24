@@ -13,6 +13,7 @@ class RegressionStatItem(BaseModel):
 
 
 class RegressionPlayerGroup(BaseModel):
+    player_id: int
     player_name: str
     pro_team: str
     position: str
@@ -24,10 +25,12 @@ class RegressionPlayerGroup(BaseModel):
 class RegressionResponse(BaseModel):
     items: list[RegressionPlayerGroup]
     window_days: int
+    baseline_seasons: int
     last_updated: str
 
 
 class MinutesMoverItem(BaseModel):
+    player_id: int
     player_name: str
     pro_team: str
     position: str
@@ -48,6 +51,7 @@ class MinutesResponse(BaseModel):
 
 
 class UsageRoleItem(BaseModel):
+    player_id: int
     player_name: str
     pro_team: str
     position: str
@@ -68,3 +72,31 @@ class UsageResponse(BaseModel):
     items: list[UsageRoleItem]
     window_days: int
     last_updated: str
+
+
+class GameLogEntry(BaseModel):
+    game_date: str
+    matchup: str
+    min: float
+    usg: float
+    fgm: int
+    fga: int
+    ftm: int
+    fta: int
+    fg3m: int
+    fg3a: int
+
+
+class GameLogResponse(BaseModel):
+    player_id: int
+    player_name: str
+    season: str
+    window_days: int
+    window_start: str
+    season_gp: int
+    season_mpg: float
+    season_usg: float
+    season_pct: dict[str, float]  # '3P%' | 'FT%' | 'FG%' -> season-to-date pct
+    baseline_pct: dict[str, float]  # same keys -> prior-season baseline pct
+    baseline_seasons: int
+    games: list[GameLogEntry]

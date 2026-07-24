@@ -6,6 +6,8 @@ import pandas as pd
 
 from app.config import settings
 from app.models.trend_models import (
+    GameLogEntry,
+    GameLogResponse,
     MinutesMoverItem,
     MinutesResponse,
     RegressionPlayerGroup,
@@ -27,11 +29,16 @@ _TREND_CACHE_TTL = timedelta(hours=6)
 
 # current_min_att / baseline_min_att: sample-size gates below which a pct is
 # too noisy to trust (plan's volume gates), independent of drift_score.
+# baseline_min_att is stated per baseline season and multiplied by how many
+# seasons the baseline spans — a 1-season baseline has half the attempts.
 _STAT_SPECS = {
-    '3P%': {'att': 'fg3a', 'pct': 'fg3_pct', 'current_min_att': 40, 'baseline_min_att': 150},
-    'FT%': {'att': 'fta', 'pct': 'ft_pct', 'current_min_att': 40, 'baseline_min_att': 150},
-    'FG%': {'att': 'fga', 'pct': 'fg_pct', 'current_min_att': 100, 'baseline_min_att': 300},
+    '3P%': {'att': 'fg3a', 'pct': 'fg3_pct', 'current_min_att': 40, 'baseline_min_att_per_season': 75},
+    'FT%': {'att': 'fta', 'pct': 'ft_pct', 'current_min_att': 40, 'baseline_min_att_per_season': 75},
+    'FG%': {'att': 'fga', 'pct': 'fg_pct', 'current_min_att': 100, 'baseline_min_att_per_season': 150},
 }
+
+DEFAULT_BASELINE_SEASONS = 2
+VALID_BASELINE_SEASONS = (1, 2)
 
 
 def compute_regression_groups(
@@ -39,6 +46,7 @@ def compute_regression_groups(
     baseline_df: pd.DataFrame,
     games_last_15d: dict[int, int],
     players_df: pd.DataFrame,
+    baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
 ) -> list[RegressionPlayerGroup]:
     """Pure calc: current-season vs prior-2-season baseline shooting -> volume-gated,
     drift-filtered, player-grouped regression items. No DB/network access."""
@@ -63,7 +71,8 @@ def compute_regression_groups(
         for stat_name, spec in _STAT_SPECS.items():
             current_att = current_row[spec['att']]
             baseline_att = baseline_row[spec['att']]
-            if current_att < spec['current_min_att'] or baseline_att < spec['baseline_min_att']:
+            min_baseline_att = spec['baseline_min_att_per_season'] * baseline_seasons
+            if current_att < spec['current_min_att'] or baseline_att < min_baseline_att:
                 continue
             current_pct = current_row[spec['pct']] * 100
             baseline_pct = baseline_row[spec['pct']] * 100
@@ -95,6 +104,7 @@ def compute_regression_groups(
         position = str(espn_row.get('Positions', 'Unknown')).split(',')[0].strip() or 'Unknown'
 
         groups.append(RegressionPlayerGroup(
+            player_id=player_id,
             player_name=player_name,
             pro_team=str(espn_row.get('Pro Team', 'Unknown')),
             position=position,
@@ -154,6 +164,7 @@ def compute_minutes_movers(
         position = str(espn_row.get('Positions', 'Unknown')).split(',')[0].strip() or 'Unknown'
 
         items.append(MinutesMoverItem(
+            player_id=player_id,
             player_name=player_name,
             pro_team=str(espn_row.get('Pro Team', 'Unknown')),
             position=position,
@@ -253,6 +264,7 @@ def compute_usage_role(
         position = str(espn_row.get('Positions', 'Unknown')).split(',')[0].strip() or 'Unknown'
 
         items.append(UsageRoleItem(
+            player_id=int(player_id),
             player_name=player_name,
             pro_team=str(espn_row.get('Pro Team', 'Unknown')),
             position=position,
@@ -273,45 +285,123 @@ def compute_usage_role(
     return items
 
 
+def _pct(makes, attempts) -> float:
+    return float(makes) / float(attempts) * 100 if attempts else 0.0
+
+
+def _player_pct_map(df: pd.DataFrame, player_id: int) -> dict[str, float]:
+    """Attempt-weighted 3P%/FT%/FG% for one player out of an
+    aggregate_shooting_by_player frame. Empty dict if the player isn't in it
+    (rookie, or no prior-season rows)."""
+    if df.empty:
+        return {}
+    rows = df[df['player_id'] == player_id]
+    if rows.empty:
+        return {}
+    row = rows.iloc[0]
+    return {name: float(row[spec['pct']]) * 100 for name, spec in _STAT_SPECS.items()}
+
+
+def build_game_log(
+    games_df: pd.DataFrame,
+    player_id: int,
+    season: str,
+    window_days: int,
+    window_start,
+    baseline_pct: dict[str, float],
+    baseline_seasons: int,
+) -> GameLogResponse:
+    """Pure calc: per-game rows -> chart-ready game log. USG% per game uses the
+    same _usg_per_game as Usage & Role, so the chart's window mean equals the
+    table's l5_usg by construction. No DB/network access."""
+    usg_series = games_df.apply(_usg_per_game, axis=1)
+    entries = [
+        GameLogEntry(
+            game_date=str(row['game_date']),
+            matchup=str(row['matchup'] or ''),
+            min=float(row['p_min']),
+            usg=float(usg_series.iloc[i]),
+            fgm=int(row['fgm']), fga=int(row['fga']),
+            ftm=int(row['ftm']), fta=int(row['fta']),
+            fg3m=int(row['fg3m']), fg3a=int(row['fg3a']),
+        )
+        for i, (_, row) in enumerate(games_df.iterrows())
+    ]
+    return GameLogResponse(
+        player_id=player_id,
+        player_name=str(games_df.iloc[0]['player_name']),
+        season=season,
+        window_days=window_days,
+        window_start=str(window_start),
+        season_gp=len(entries),
+        season_mpg=float(games_df['p_min'].mean()),
+        season_usg=float(usg_series.mean()),
+        season_pct={
+            '3P%': _pct(games_df['fg3m'].sum(), games_df['fg3a'].sum()),
+            'FT%': _pct(games_df['ftm'].sum(), games_df['fta'].sum()),
+            'FG%': _pct(games_df['fgm'].sum(), games_df['fga'].sum()),
+        },
+        baseline_pct=baseline_pct,
+        baseline_seasons=baseline_seasons,
+        games=entries,
+    )
+
+
 def _normalize_window_days(window_days: int) -> int:
     return window_days if window_days in VALID_RECENCY_WINDOWS_DAYS else DEFAULT_RECENCY_WINDOW_DAYS
+
+
+def _normalize_baseline_seasons(baseline_seasons: int) -> int:
+    return baseline_seasons if baseline_seasons in VALID_BASELINE_SEASONS else DEFAULT_BASELINE_SEASONS
+
+
+def prior_season_strings(baseline_seasons: int) -> list[str]:
+    return [espn_season_string(settings.season_id - n) for n in range(1, baseline_seasons + 1)]
 
 
 class TrendService:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._db = DBService()
-        self._regression_cache: dict[int, dict] = {}
+        self._regression_cache: dict[tuple[int, int], dict] = {}
         self._minutes_cache: dict[int, dict] = {}
         self._usage_cache: dict[int, dict] = {}
+        self._game_log_cache: dict[tuple[int, int, int], dict] = {}
 
     @staticmethod
-    def _cache_valid(cache: dict, window_days: int) -> bool:
-        entry = cache.get(window_days)
+    def _cache_valid(cache: dict, key) -> bool:
+        entry = cache.get(key)
         return entry is not None and datetime.now() - entry['ts'] < _TREND_CACHE_TTL
 
-    async def get_shooting_regression(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> RegressionResponse:
+    async def get_shooting_regression(
+        self,
+        players_df: pd.DataFrame,
+        window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
+        baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
+    ) -> RegressionResponse:
         window_days = _normalize_window_days(window_days)
-        if self._cache_valid(self._regression_cache, window_days):
-            return self._regression_cache[window_days]['data']
+        baseline_seasons = _normalize_baseline_seasons(baseline_seasons)
+        cache_key = (window_days, baseline_seasons)
+        if self._cache_valid(self._regression_cache, cache_key):
+            return self._regression_cache[cache_key]['data']
 
         current_season = espn_season_string(settings.season_id)
         anchor_date = await get_season_anchor_date(current_season, self._db)
-        prior_seasons = [
-            espn_season_string(settings.season_id - 1),
-            espn_season_string(settings.season_id - 2),
-        ]
 
         current_df = await self._db.aggregate_shooting_by_player(
             [current_season], start=settings.season_start, end=anchor_date
         )
-        baseline_df = await self._db.aggregate_shooting_by_player(prior_seasons)
+        baseline_df = await self._db.aggregate_shooting_by_player(prior_season_strings(baseline_seasons))
         games_last_15d = await self._db.get_games_since(anchor_date - timedelta(days=window_days))
 
-        groups = compute_regression_groups(current_df, baseline_df, games_last_15d, players_df)
-        groups = [g for g in groups if g.fantasy_status == 'FA']
-        response = RegressionResponse(items=groups, window_days=window_days, last_updated=datetime.now().isoformat())
-        self._regression_cache[window_days] = {'data': response, 'ts': datetime.now()}
+        groups = compute_regression_groups(current_df, baseline_df, games_last_15d, players_df, baseline_seasons)
+        response = RegressionResponse(
+            items=groups,
+            window_days=window_days,
+            baseline_seasons=baseline_seasons,
+            last_updated=datetime.now().isoformat(),
+        )
+        self._regression_cache[cache_key] = {'data': response, 'ts': datetime.now()}
         return response
 
     async def get_minutes_movers(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> MinutesResponse:
@@ -332,7 +422,6 @@ class TrendService:
         games_last_15d = await self._db.get_games_since(window_start)
 
         items = compute_minutes_movers(season_df, window_df, games_last_15d, players_df)
-        items = [i for i in items if i.fantasy_status == 'FA']
         response = MinutesResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
         self._minutes_cache[window_days] = {'data': response, 'ts': datetime.now()}
         return response
@@ -350,7 +439,37 @@ class TrendService:
         games_last_15d = await self._db.get_games_since(window_start)
 
         items = compute_usage_role(games_df, games_last_15d, players_df, window_start)
-        items = [i for i in items if i.fantasy_status == 'FA']
         response = UsageResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
         self._usage_cache[window_days] = {'data': response, 'ts': datetime.now()}
+        return response
+
+    async def get_player_game_log(
+        self,
+        player_id: int,
+        window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
+        baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
+    ) -> Optional[GameLogResponse]:
+        window_days = _normalize_window_days(window_days)
+        baseline_seasons = _normalize_baseline_seasons(baseline_seasons)
+        cache_key = (player_id, window_days, baseline_seasons)
+        if self._cache_valid(self._game_log_cache, cache_key):
+            return self._game_log_cache[cache_key]['data']
+
+        current_season = espn_season_string(settings.season_id)
+        anchor_date = await get_season_anchor_date(current_season, self._db)
+        window_start = anchor_date - timedelta(days=window_days)
+
+        games_df = await self._db.get_player_game_log(
+            player_id, current_season, settings.season_start, anchor_date
+        )
+        if games_df.empty:
+            return None
+
+        baseline_df = await self._db.aggregate_shooting_by_player(prior_season_strings(baseline_seasons))
+        baseline_pct = _player_pct_map(baseline_df, player_id)
+
+        response = build_game_log(
+            games_df, player_id, current_season, window_days, window_start, baseline_pct, baseline_seasons
+        )
+        self._game_log_cache[cache_key] = {'data': response, 'ts': datetime.now()}
         return response
