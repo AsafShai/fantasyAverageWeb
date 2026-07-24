@@ -14,7 +14,7 @@ import {
 import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
-import type { GameLogEntry, GameLogResponse, RegressionStat } from '../types/api'
+import type { GameLogEntry, GameLogResponse, RegressionStat, RegressionMode } from '../types/api'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 
 export type GameLogMode = 'minutes' | 'usage' | 'shooting'
@@ -187,17 +187,21 @@ interface Props {
   playerId: number
   playerName: string
   mode: GameLogMode
+  regressionMode?: RegressionMode
   windowDays: number
   baselineSeasons?: number
   stat?: RegressionStat
+  zScore?: number | null
   qualifiedStats?: RegressionStat[]
   onStatChange?: (stat: RegressionStat) => void
 }
 
 export default function TrendGameLogChart({
-  playerId, playerName, mode, windowDays, baselineSeasons = 2, stat = '3P%', qualifiedStats = [], onStatChange,
+  playerId, playerName, mode, regressionMode = 'season', windowDays, baselineSeasons = 2,
+  stat = '3P%', zScore = null, qualifiedStats = [], onStatChange,
 }: Props) {
-  const { data: log, isLoading, error } = useGetTrendGameLogQuery({ playerId, windowDays, baselineSeasons })
+  const { data: log, isLoading, error } = useGetTrendGameLogQuery({ playerId, windowDays, baselineSeasons, mode: regressionMode })
+  const isForm = mode === 'shooting' && regressionMode === 'form'
 
   const rows = useMemo(() => (log ? buildRows(log, mode, stat) : []), [log, mode, stat])
 
@@ -216,7 +220,11 @@ export default function TrendGameLogChart({
   const bandStart = windowRows.length ? windowRows[0].label : null
   const bandEnd = rows[rows.length - 1].label
 
-  const seasonRef = mode === 'minutes' ? log.season_mpg : mode === 'usage' ? log.season_usg : log.season_pct[stat]
+  // In form mode the baseline deliberately excludes the window, so drawing the
+  // season line beside it invites the part-whole comparison the mode rejects.
+  const seasonRef = isForm
+    ? undefined
+    : mode === 'minutes' ? log.season_mpg : mode === 'usage' ? log.season_usg : log.season_pct[stat]
   const baselineRef = mode === 'shooting' ? log.baseline_pct[stat] : undefined
   const unit = mode === 'minutes' ? '' : '%'
 
@@ -238,7 +246,7 @@ export default function TrendGameLogChart({
     const attSum = inWindow.reduce((n, g) => n + (g[att] as number), 0)
     if (!attSum) return null
     const madeSum = inWindow.reduce((n, g) => n + (g[made] as number), 0)
-    return { pct: (madeSum / attSum) * 100, attempts: attSum }
+    return { pct: (madeSum / attSum) * 100, attPerGame: attSum / inWindow.length }
   })()
 
   const statRows: [string, string][] =
@@ -255,11 +263,24 @@ export default function TrendGameLogChart({
             ['Season MPG', log.season_mpg.toFixed(1)],
             ['Games', String(log.season_gp)],
           ]
-        : [
+        : isForm
+          ? [
+              [`Last ${windowDays}d ${stat}`, windowShooting === null
+                ? 'no attempts'
+                : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attPerGame.toFixed(1)} att/g`],
+              ['Baseline', baselineRef === undefined ? 'no history' : `${baselineRef.toFixed(1)}%`],
+              ['Gap',
+                baselineRef === undefined || windowShooting === null
+                  ? '—'
+                  : `${windowShooting.pct - baselineRef >= 0 ? '+' : ''}${(windowShooting.pct - baselineRef).toFixed(1)}%`],
+              ['z', zScore === null ? '—' : `${zScore >= 0 ? '+' : ''}${zScore.toFixed(2)}`],
+              ['Games', String(log.season_gp)],
+            ]
+          : [
             [`Season ${stat}`, seasonRef === undefined ? '—' : `${seasonRef.toFixed(1)}%`],
             [`${windowDays}d ${stat}`, windowShooting === null
               ? 'no attempts'
-              : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attempts}`],
+              : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attPerGame.toFixed(1)} att/g`],
             [`Baseline (${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`})`,
               baselineRef === undefined ? 'no prior data' : `${baselineRef.toFixed(1)}%`],
             ['Δ vs baseline',
@@ -369,7 +390,9 @@ export default function TrendGameLogChart({
           dash: '6 3',
         }]),
         ...(baselineRef === undefined ? [] : [{
-          label: `Baseline, ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} — ${baselineRef.toFixed(1)}%`,
+          label: isForm
+            ? `Baseline, everything outside the window — ${baselineRef.toFixed(1)}%`
+            : `Baseline, ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} — ${baselineRef.toFixed(1)}%`,
           color: '#ef4444',
           dash: '2 3',
         }]),

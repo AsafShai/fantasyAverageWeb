@@ -34,6 +34,7 @@ _MOCK_RESPONSE = RegressionResponse(
     ],
     window_days=15,
     baseline_seasons=2,
+    mode='season',
     last_updated='2026-07-18T12:00:00',
 )
 
@@ -181,6 +182,27 @@ def test_get_regression_defaults_to_two_baseline_seasons(mock_services):
     assert svc.get_shooting_regression.call_args.args[2] == 2
 
 
+def test_get_regression_defaults_to_season_mode(mock_services):
+    svc, _ = mock_services
+    client = TestClient(app)
+    client.get('/api/trends/regression')
+
+    assert svc.get_shooting_regression.call_args.args[3] == 'season'
+
+
+def test_get_regression_passes_form_mode(mock_services):
+    svc, _ = mock_services
+    client = TestClient(app)
+    client.get('/api/trends/regression?mode=form')
+
+    assert svc.get_shooting_regression.call_args.args[3] == 'form'
+
+
+def test_get_regression_rejects_unknown_mode(mock_services):
+    client = TestClient(app)
+    assert client.get('/api/trends/regression?mode=vibes').status_code == 422
+
+
 def test_get_game_log_returns_response(mock_services):
     client = TestClient(app)
     resp = client.get('/api/trends/player/1630245/gamelog')
@@ -198,7 +220,7 @@ def test_get_game_log_passes_params_to_service(mock_services):
     client = TestClient(app)
     client.get('/api/trends/player/1630245/gamelog?window_days=30&baseline_seasons=1')
 
-    svc.get_player_game_log.assert_awaited_once_with(1630245, 30, 1)
+    svc.get_player_game_log.assert_awaited_once_with(1630245, 30, 1, 'season')
 
 
 def test_get_game_log_404_when_no_rows(mock_services):

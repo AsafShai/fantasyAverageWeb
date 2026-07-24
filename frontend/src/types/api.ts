@@ -433,7 +433,13 @@ export interface RegressionStatItem {
   drift_score: number;
   window_pct: number | null;
   window_attempts: number;
+  z: number | null;
 }
+
+/** 'season' compares this season to prior seasons; 'form' compares the recency
+ * window to a baseline that excludes it. Same fields, different meanings — see
+ * RegressionStatItem in backend/app/models/trend_models.py. */
+export type RegressionMode = 'season' | 'form';
 
 export interface RegressionPlayerGroup {
   player_id: number;
@@ -449,6 +455,7 @@ export interface RegressionResponse {
   items: RegressionPlayerGroup[];
   window_days: number;
   baseline_seasons: number;
+  mode: RegressionMode;
   last_updated: string;
 }
 

@@ -3,7 +3,15 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 
+RegressionMode = Literal['season', 'form']
+
+
 class RegressionStatItem(BaseModel):
+    """Field meanings shift with the request's mode — the shape is shared so one
+    table can render both. mode=season: current_pct is season-to-date, baseline_pct
+    is prior seasons only, attempts_per_game is season volume, drift_score is the
+    volume-weighted drift. mode=form: current_pct is the window only, baseline_pct
+    excludes the window, attempts_per_game is window volume, drift_score is |z|."""
     stat: Literal['3P%', 'FT%', 'FG%']
     current_pct: float
     baseline_pct: float
@@ -12,6 +20,7 @@ class RegressionStatItem(BaseModel):
     drift_score: float
     window_pct: Optional[float] = None  # None when the window holds no attempts
     window_attempts: int = 0  # sample behind window_pct — small means treat it loosely
+    z: Optional[float] = None  # two-proportion z of dev; mode=form only
 
 
 class RegressionPlayerGroup(BaseModel):
@@ -28,6 +37,7 @@ class RegressionResponse(BaseModel):
     items: list[RegressionPlayerGroup]
     window_days: int
     baseline_seasons: int
+    mode: RegressionMode
     last_updated: str
 
 

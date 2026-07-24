@@ -261,7 +261,7 @@ async def test_get_shooting_regression_recomputes_after_ttl_expires(service):
         mock_db.get_games_since = AsyncMock(return_value={})
 
         await service.get_shooting_regression(players_df)
-        service._regression_cache[(15, 2)]['ts'] = datetime.now() - timedelta(hours=7)
+        service._regression_cache[(15, 2, 'season')]['ts'] = datetime.now() - timedelta(hours=7)
         await service.get_shooting_regression(players_df)
 
         assert mock_db.aggregate_shooting_by_player.call_count == 6  # three calls, twice
@@ -775,3 +775,94 @@ def test_window_frame_omitted_leaves_window_fields_empty():
 
     assert stat.window_pct is None
     assert stat.window_attempts == 0
+
+
+def _form_players_df(name="Klay Thompson"):
+    return _players_df([{
+        "Name": name, "Pro Team": "DAL", "Positions": "SG",
+        "status": "FREEAGENT", "fantasy_team_name": None,
+    }])
+
+
+def test_form_baseline_excludes_the_window():
+    # season 100/300, window 30/60 -> pre is 70/240; prior adds 140/400.
+    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pd.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
+
+    groups = compute_regression_groups(
+        current, baseline, {1: 6}, _form_players_df(), 2, window, 'form'
+    )
+
+    stat = next(s for s in groups[0].stats if s.stat == "3P%")
+    assert stat.baseline_pct == pytest.approx(210 / 640 * 100)
+    assert stat.current_pct == pytest.approx(50.0)
+    assert stat.dev == pytest.approx(50.0 - 210 / 640 * 100)
+    assert stat.attempts_per_game == pytest.approx(10.0)
+    assert stat.window_attempts == 60
+    assert stat.z == pytest.approx(2.68, abs=0.02)
+    assert stat.drift_score == pytest.approx(abs(stat.z))
+
+
+def test_form_mode_ranks_rookie_that_season_mode_drops():
+    current = pd.DataFrame([_current_row(7, "Rookie Guy", 20, fg3m=60, fg3a=200)])
+    window = pd.DataFrame([_current_row(7, "Rookie Guy", 5, fg3m=25, fg3a=50)])
+    players_df = _form_players_df("Rookie Guy")
+
+    form_groups = compute_regression_groups(
+        current, pd.DataFrame(), {7: 5}, players_df, 2, window, 'form'
+    )
+    season_groups = compute_regression_groups(
+        current, pd.DataFrame(), {7: 5}, players_df, 2, window, 'season'
+    )
+
+    assert [g.player_name for g in form_groups] == ["Rookie Guy"]
+    stat = form_groups[0].stats[0]
+    assert stat.baseline_pct == pytest.approx(35 / 150 * 100)
+    assert season_groups == []
+
+
+def test_form_z_gate_rejects_thin_window_and_keeps_thick_one():
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=200, fg3a=500)])
+    players_df = _form_players_df()
+
+    thin_current = pd.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
+    thin_window = pd.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
+    thick_current = pd.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
+    thick_window = pd.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
+
+    thin = compute_regression_groups(
+        thin_current, baseline, {1: 3}, players_df, 2, thin_window, 'form'
+    )
+    thick = compute_regression_groups(
+        thick_current, baseline, {1: 20}, players_df, 2, thick_window, 'form'
+    )
+
+    # Same 10pp gap in both; only the larger sample clears |z| >= 1.5.
+    assert thin == []
+    assert thick[0].stats[0].z == pytest.approx(1.77, abs=0.02)
+
+
+def test_form_mode_skips_players_with_no_window_games():
+    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pd.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
+
+    groups = compute_regression_groups(
+        current, baseline, {1: 0}, _form_players_df(), 2, window, 'form'
+    )
+
+    assert groups == []
+
+
+def test_season_mode_output_unchanged_when_mode_is_explicit():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(9, "Klay Thompson", 5, fg3m=12, fg3a=30)])
+
+    default_groups = compute_regression_groups(current, baseline, {9: 6}, players_df, 2, window)
+    explicit_groups = compute_regression_groups(
+        current, baseline, {9: 6}, players_df, 2, window, 'season'
+    )
+
+    assert default_groups == explicit_groups
+    assert all(s.z is None for g in explicit_groups for s in g.stats)

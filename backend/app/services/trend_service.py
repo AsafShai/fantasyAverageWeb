@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -10,6 +11,7 @@ from app.models.trend_models import (
     GameLogResponse,
     MinutesMoverItem,
     MinutesResponse,
+    RegressionMode,
     RegressionPlayerGroup,
     RegressionResponse,
     RegressionStatItem,
@@ -32,13 +34,106 @@ _TREND_CACHE_TTL = timedelta(hours=6)
 # baseline_min_att is stated per baseline season and multiplied by how many
 # seasons the baseline spans — a 1-season baseline has half the attempts.
 _STAT_SPECS = {
-    '3P%': {'att': 'fg3a', 'pct': 'fg3_pct', 'current_min_att': 40, 'baseline_min_att_per_season': 75},
-    'FT%': {'att': 'fta', 'pct': 'ft_pct', 'current_min_att': 40, 'baseline_min_att_per_season': 75},
-    'FG%': {'att': 'fga', 'pct': 'fg_pct', 'current_min_att': 100, 'baseline_min_att_per_season': 150},
+    '3P%': {'att': 'fg3a', 'mk': 'fg3m', 'pct': 'fg3_pct', 'current_min_att': 40, 'baseline_min_att_per_season': 75},
+    'FT%': {'att': 'fta', 'mk': 'ftm', 'pct': 'ft_pct', 'current_min_att': 40, 'baseline_min_att_per_season': 75},
+    'FG%': {'att': 'fga', 'mk': 'fgm', 'pct': 'fg_pct', 'current_min_att': 100, 'baseline_min_att_per_season': 150},
 }
 
 DEFAULT_BASELINE_SEASONS = 2
 VALID_BASELINE_SEASONS = (1, 2)
+
+DEFAULT_REGRESSION_MODE: RegressionMode = 'season'
+
+# mode='form' gates. The z gate replaces a fixed attempt threshold: the same
+# percentage-point gap is noise on 13 attempts and signal on 90, and free throws
+# and field goals self-calibrate without a per-stat number to tune.
+FORM_MIN_WINDOW_ATT = 10
+FORM_MIN_BASELINE_ATT = 50
+FORM_MIN_ABS_Z = 1.5
+
+
+def _season_outlier_stat(
+    stat_name: str,
+    spec: dict,
+    current_row,
+    baseline_row,
+    window_row,
+    gp,
+    baseline_seasons: int,
+) -> Optional[RegressionStatItem]:
+    """mode='season': this season to date vs prior seasons only."""
+    current_att = current_row[spec['att']]
+    baseline_att = baseline_row[spec['att']]
+    min_baseline_att = spec['baseline_min_att_per_season'] * baseline_seasons
+    if current_att < spec['current_min_att'] or baseline_att < min_baseline_att:
+        return None
+    current_pct = float(current_row[spec['pct']]) * 100
+    baseline_pct = float(baseline_row[spec['pct']]) * 100
+    dev = current_pct - baseline_pct
+    attempts_per_game = float(current_att / gp) if gp else 0.0
+    drift_score = attempts_per_game * abs(dev) / 100
+    if drift_score < DRIFT_THRESHOLD:
+        return None
+    window_att = int(window_row[spec['att']]) if window_row is not None else 0
+    return RegressionStatItem(
+        stat=stat_name,
+        current_pct=current_pct,
+        baseline_pct=baseline_pct,
+        dev=dev,
+        attempts_per_game=attempts_per_game,
+        drift_score=drift_score,
+        window_pct=float(window_row[spec['pct']]) * 100 if window_att else None,
+        window_attempts=window_att,
+    )
+
+
+def _form_stat(
+    stat_name: str,
+    spec: dict,
+    current_row,
+    baseline_row,
+    window_row,
+) -> Optional[RegressionStatItem]:
+    """mode='form': the recency window vs a baseline of prior seasons plus this
+    season before the window. The baseline shares no games with the window, so the
+    two-proportion z-test below is valid — comparing the window against the whole
+    season would compare a part to a whole containing it and shrink every gap."""
+    att_win = int(window_row[spec['att']])
+    mk_win = int(window_row[spec['mk']])
+    att_pre = int(current_row[spec['att']]) - att_win
+    mk_pre = int(current_row[spec['mk']]) - mk_win
+    att_prior = int(baseline_row[spec['att']]) if baseline_row is not None else 0
+    mk_prior = int(baseline_row[spec['mk']]) if baseline_row is not None else 0
+
+    att_base = att_prior + att_pre
+    mk_base = mk_prior + mk_pre
+    if att_win < FORM_MIN_WINDOW_ATT or att_base < FORM_MIN_BASELINE_ATT:
+        return None
+
+    form_pct = mk_win / att_win * 100
+    baseline_pct = mk_base / att_base * 100
+    gap = form_pct - baseline_pct
+
+    pooled = (mk_win + mk_base) / (att_win + att_base)
+    se = math.sqrt(pooled * (1 - pooled) * (1 / att_win + 1 / att_base)) * 100
+    if se <= 0:
+        return None
+    z = gap / se
+    if abs(z) < FORM_MIN_ABS_Z:
+        return None
+
+    window_gp = int(window_row['gp'])
+    return RegressionStatItem(
+        stat=stat_name,
+        current_pct=form_pct,
+        baseline_pct=baseline_pct,
+        dev=gap,
+        attempts_per_game=att_win / window_gp if window_gp else 0.0,
+        drift_score=abs(z),
+        window_pct=form_pct,
+        window_attempts=att_win,
+        z=z,
+    )
 
 
 def compute_regression_groups(
@@ -48,17 +143,24 @@ def compute_regression_groups(
     players_df: pd.DataFrame,
     baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
     window_df: Optional[pd.DataFrame] = None,
+    mode: RegressionMode = DEFAULT_REGRESSION_MODE,
 ) -> list[RegressionPlayerGroup]:
-    """Pure calc: current-season vs prior-2-season baseline shooting -> volume-gated,
-    drift-filtered, player-grouped regression items. No DB/network access."""
-    if current_df.empty or baseline_df.empty:
+    """Pure calc: shooting deviation -> gated, player-grouped items. No DB/network
+    access. mode='season' ranks season-vs-history outliers; mode='form' ranks
+    significant hot/cold stretches inside the recency window."""
+    if current_df.empty:
+        return []
+    if mode == 'season' and baseline_df.empty:
         return []
 
     espn_by_name = {
         resolve_join_key(str(row.get('Name', ''))): row
         for _, row in players_df.iterrows()
     }
-    baseline_by_id = {int(r['player_id']): r for _, r in baseline_df.iterrows()}
+    baseline_by_id = (
+        {int(r['player_id']): r for _, r in baseline_df.iterrows()}
+        if not baseline_df.empty else {}
+    )
     window_by_id = (
         {int(r['player_id']): r for _, r in window_df.iterrows()}
         if window_df is not None and not window_df.empty else {}
@@ -68,36 +170,24 @@ def compute_regression_groups(
     for _, current_row in current_df.iterrows():
         player_id = int(current_row['player_id'])
         baseline_row = baseline_by_id.get(player_id)
-        if baseline_row is None:
-            continue  # no baseline (rookie / first season) -> not ranked
+        window_row = window_by_id.get(player_id)
+        if mode == 'season' and baseline_row is None:
+            continue  # no prior seasons (rookie) -> nothing to deviate from
+        if mode == 'form' and window_row is None:
+            continue  # no games in the window -> no current form to judge
 
         gp = current_row['gp']
-        window_row = window_by_id.get(player_id)
         stats: list[RegressionStatItem] = []
         for stat_name, spec in _STAT_SPECS.items():
-            current_att = current_row[spec['att']]
-            baseline_att = baseline_row[spec['att']]
-            min_baseline_att = spec['baseline_min_att_per_season'] * baseline_seasons
-            if current_att < spec['current_min_att'] or baseline_att < min_baseline_att:
-                continue
-            current_pct = current_row[spec['pct']] * 100
-            baseline_pct = baseline_row[spec['pct']] * 100
-            dev = current_pct - baseline_pct
-            attempts_per_game = current_att / gp if gp else 0.0
-            drift_score = attempts_per_game * abs(dev) / 100
-            if drift_score < DRIFT_THRESHOLD:
-                continue
-            window_att = int(window_row[spec['att']]) if window_row is not None else 0
-            stats.append(RegressionStatItem(
-                stat=stat_name,
-                current_pct=current_pct,
-                baseline_pct=baseline_pct,
-                dev=dev,
-                attempts_per_game=attempts_per_game,
-                drift_score=drift_score,
-                window_pct=float(window_row[spec['pct']]) * 100 if window_att else None,
-                window_attempts=window_att,
-            ))
+            item = (
+                _form_stat(stat_name, spec, current_row, baseline_row, window_row)
+                if mode == 'form'
+                else _season_outlier_stat(
+                    stat_name, spec, current_row, baseline_row, window_row, gp, baseline_seasons
+                )
+            )
+            if item is not None:
+                stats.append(item)
 
         if not stats:
             continue
@@ -108,7 +198,7 @@ def compute_regression_groups(
             logger.warning(f"No ESPN roster match for '{player_name}' — skipped from Shooting Regression")
             continue
 
-        stats.sort(key=lambda s: abs(s.dev), reverse=True)
+        stats.sort(key=(lambda s: s.drift_score) if mode == 'form' else (lambda s: abs(s.dev)), reverse=True)
         fantasy_team_name = espn_row.get('fantasy_team_name')
         position = str(espn_row.get('Positions', 'Unknown')).split(',')[0].strip() or 'Unknown'
 
@@ -311,6 +401,31 @@ def _player_pct_map(df: pd.DataFrame, player_id: int) -> dict[str, float]:
     return {name: float(row[spec['pct']]) * 100 for name, spec in _STAT_SPECS.items()}
 
 
+def _form_baseline_pct(
+    baseline_df: pd.DataFrame,
+    games_df: pd.DataFrame,
+    player_id: int,
+    window_start,
+) -> dict[str, float]:
+    """mode='form' baseline for the chart's reference line: prior seasons pooled
+    with this season's games before the window. Excludes the window itself so the
+    line the chart draws is the one the table's z-score was computed against."""
+    prior = baseline_df[baseline_df['player_id'] == player_id] if not baseline_df.empty else baseline_df
+    prior_row = prior.iloc[0] if not prior.empty else None
+    pre = games_df[games_df['game_date'] < window_start]
+
+    out: dict[str, float] = {}
+    for name, spec in _STAT_SPECS.items():
+        mk = int(pre[spec['mk']].sum())
+        att = int(pre[spec['att']].sum())
+        if prior_row is not None:
+            mk += int(prior_row[spec['mk']])
+            att += int(prior_row[spec['att']])
+        if att:
+            out[name] = mk / att * 100
+    return out
+
+
 def build_game_log(
     games_df: pd.DataFrame,
     player_id: int,
@@ -372,10 +487,10 @@ class TrendService:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._db = DBService()
-        self._regression_cache: dict[tuple[int, int], dict] = {}
+        self._regression_cache: dict[tuple[int, int, str], dict] = {}
         self._minutes_cache: dict[int, dict] = {}
         self._usage_cache: dict[int, dict] = {}
-        self._game_log_cache: dict[tuple[int, int, int], dict] = {}
+        self._game_log_cache: dict[tuple[int, int, int, str], dict] = {}
 
     @staticmethod
     def _cache_valid(cache: dict, key) -> bool:
@@ -387,10 +502,11 @@ class TrendService:
         players_df: pd.DataFrame,
         window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
         baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
+        mode: RegressionMode = DEFAULT_REGRESSION_MODE,
     ) -> RegressionResponse:
         window_days = _normalize_window_days(window_days)
         baseline_seasons = _normalize_baseline_seasons(baseline_seasons)
-        cache_key = (window_days, baseline_seasons)
+        cache_key = (window_days, baseline_seasons, mode)
         if self._cache_valid(self._regression_cache, cache_key):
             return self._regression_cache[cache_key]['data']
 
@@ -408,12 +524,13 @@ class TrendService:
         games_last_15d = await self._db.get_games_since(window_start)
 
         groups = compute_regression_groups(
-            current_df, baseline_df, games_last_15d, players_df, baseline_seasons, window_df
+            current_df, baseline_df, games_last_15d, players_df, baseline_seasons, window_df, mode
         )
         response = RegressionResponse(
             items=groups,
             window_days=window_days,
             baseline_seasons=baseline_seasons,
+            mode=mode,
             last_updated=datetime.now().isoformat(),
         )
         self._regression_cache[cache_key] = {'data': response, 'ts': datetime.now()}
@@ -463,10 +580,11 @@ class TrendService:
         player_id: int,
         window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
         baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
+        mode: RegressionMode = DEFAULT_REGRESSION_MODE,
     ) -> Optional[GameLogResponse]:
         window_days = _normalize_window_days(window_days)
         baseline_seasons = _normalize_baseline_seasons(baseline_seasons)
-        cache_key = (player_id, window_days, baseline_seasons)
+        cache_key = (player_id, window_days, baseline_seasons, mode)
         if self._cache_valid(self._game_log_cache, cache_key):
             return self._game_log_cache[cache_key]['data']
 
@@ -481,7 +599,11 @@ class TrendService:
             return None
 
         baseline_df = await self._db.aggregate_shooting_by_player(prior_season_strings(baseline_seasons))
-        baseline_pct = _player_pct_map(baseline_df, player_id)
+        baseline_pct = (
+            _form_baseline_pct(baseline_df, games_df, player_id, window_start)
+            if mode == 'form'
+            else _player_pct_map(baseline_df, player_id)
+        )
 
         response = build_game_log(
             games_df, player_id, current_season, window_days, window_start, baseline_pct, baseline_seasons

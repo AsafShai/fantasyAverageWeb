@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup, ProjectionStats, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, GameLogResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup, ProjectionStats, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse } from '../../types/api';
 import type { EstimatorResults } from '../../types/estimator';
 
 export const fantasyApi = createApi({
@@ -114,16 +114,16 @@ export const fantasyApi = createApi({
     getTrendsUsage: builder.query<UsageResponse, { windowDays?: number }>({
       query: ({ windowDays = 15 } = {}) => ({ url: '/trends/usage', params: { window_days: windowDays } }),
     }),
-    getTrendsRegression: builder.query<RegressionResponse, { windowDays?: number; baselineSeasons?: number }>({
-      query: ({ windowDays = 15, baselineSeasons = 2 } = {}) => ({
+    getTrendsRegression: builder.query<RegressionResponse, { windowDays?: number; baselineSeasons?: number; mode?: RegressionMode }>({
+      query: ({ windowDays = 15, baselineSeasons = 2, mode = 'season' } = {}) => ({
         url: '/trends/regression',
-        params: { window_days: windowDays, baseline_seasons: baselineSeasons },
+        params: { window_days: windowDays, baseline_seasons: baselineSeasons, mode },
       }),
     }),
-    getTrendGameLog: builder.query<GameLogResponse, { playerId: number; windowDays?: number; baselineSeasons?: number }>({
-      query: ({ playerId, windowDays = 15, baselineSeasons = 2 }) => ({
+    getTrendGameLog: builder.query<GameLogResponse, { playerId: number; windowDays?: number; baselineSeasons?: number; mode?: RegressionMode }>({
+      query: ({ playerId, windowDays = 15, baselineSeasons = 2, mode = 'season' }) => ({
         url: `/trends/player/${playerId}/gamelog`,
-        params: { window_days: windowDays, baseline_seasons: baselineSeasons },
+        params: { window_days: windowDays, baseline_seasons: baselineSeasons, mode },
       }),
       keepUnusedDataFor: 600,
     }),

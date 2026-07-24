@@ -1,10 +1,17 @@
 from fastapi import APIRouter, HTTPException
 
-from app.models.trend_models import GameLogResponse, MinutesResponse, RegressionResponse, UsageResponse
+from app.models.trend_models import (
+    GameLogResponse,
+    MinutesResponse,
+    RegressionMode,
+    RegressionResponse,
+    UsageResponse,
+)
 from app.services.data_provider import DataProvider
 from app.services.trend_service import (
     DEFAULT_BASELINE_SEASONS,
     DEFAULT_RECENCY_WINDOW_DAYS,
+    DEFAULT_REGRESSION_MODE,
     TrendService,
 )
 
@@ -18,9 +25,10 @@ _data_provider = DataProvider()
 async def get_shooting_regression(
     window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
     baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
+    mode: RegressionMode = DEFAULT_REGRESSION_MODE,
 ) -> RegressionResponse:
     players_df = await _data_provider.get_players_df()
-    return await _trend_service.get_shooting_regression(players_df, window_days, baseline_seasons)
+    return await _trend_service.get_shooting_regression(players_df, window_days, baseline_seasons, mode)
 
 
 @router.get('/minutes', response_model=MinutesResponse)
@@ -40,8 +48,9 @@ async def get_player_game_log(
     player_id: int,
     window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
     baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
+    mode: RegressionMode = DEFAULT_REGRESSION_MODE,
 ) -> GameLogResponse:
-    response = await _trend_service.get_player_game_log(player_id, window_days, baseline_seasons)
+    response = await _trend_service.get_player_game_log(player_id, window_days, baseline_seasons, mode)
     if response is None:
         raise HTTPException(status_code=404, detail=f'No game log for player {player_id} this season')
     return response
