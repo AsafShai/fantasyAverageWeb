@@ -27,6 +27,36 @@ const STAT_FIELDS: Record<RegressionStat, { made: keyof GameLogEntry; att: keyof
   'FG%': { made: 'fgm', att: 'fga', label: 'FGM' },
 }
 
+const LINE_COLOR: Record<GameLogMode, string> = {
+  minutes: '#3b82f6',
+  usage: '#f59e0b',
+  shooting: '#10b981',
+}
+
+const BAR_COLOR = '#8b5cf6'
+
+type LegendItem = { label: string; color?: string; band?: boolean; dash?: string; bar?: boolean; marker?: boolean }
+
+function Legend({ items }: { items: LegendItem[] }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400">
+      {items.map(i => (
+        <span key={i.label} className="inline-flex items-center gap-1.5">
+          {i.band && <span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--trend-band)', border: '1px solid var(--trend-band-label)' }} />}
+          {i.bar && <span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: BAR_COLOR, opacity: 0.45 }} />}
+          {i.marker && <span style={{ color: i.color }}>▲</span>}
+          {!i.band && !i.bar && !i.marker && (
+            <svg viewBox="0 0 16 4" className="w-4 h-1 overflow-visible" aria-hidden="true">
+              <line x1="0" y1="2" x2="16" y2="2" stroke={i.color} strokeWidth="2" strokeDasharray={i.dash} />
+            </svg>
+          )}
+          {i.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function shortDate(iso: string): string {
   return iso.slice(5).replace('-', '/')
 }
@@ -150,12 +180,12 @@ interface Props {
   windowDays: number
   baselineSeasons?: number
   stat?: RegressionStat
-  availableStats?: RegressionStat[]
+  qualifiedStats?: RegressionStat[]
   onStatChange?: (stat: RegressionStat) => void
 }
 
 export default function TrendGameLogChart({
-  playerId, playerName, mode, windowDays, baselineSeasons = 2, stat = '3P%', availableStats = [], onStatChange,
+  playerId, playerName, mode, windowDays, baselineSeasons = 2, stat = '3P%', qualifiedStats = [], onStatChange,
 }: Props) {
   const { data: log, isLoading, error } = useGetTrendGameLogQuery({ playerId, windowDays, baselineSeasons })
 
@@ -166,6 +196,9 @@ export default function TrendGameLogChart({
   if (!log || rows.length === 0) {
     return <p className="py-4 text-xs text-gray-500 dark:text-gray-400">No games on record for {playerName} this season.</p>
   }
+
+  const selectableStats = (Object.keys(STAT_FIELDS) as RegressionStat[]).filter(k =>
+    log.games.some(g => (g[STAT_FIELDS[k].att] as number) > 0))
 
   const windowRows = rows.filter(r => r.date >= log.window_start)
   const bandStart = windowRows.length ? windowRows[0].label : null
@@ -220,17 +253,21 @@ export default function TrendGameLogChart({
           {mode === 'usage' && 'usage rate per game, bars = minutes'}
           {mode === 'shooting' && `${stat}, ${ROLLING_GAMES}-game attempt-weighted · bars = attempts`}
         </span>
-        {mode === 'shooting' && availableStats.length > 1 && (
+        {mode === 'shooting' && selectableStats.length > 1 && (
           <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-[11px]">
-            {availableStats.map(s => (
-              <button
-                key={s}
-                onClick={e => { e.stopPropagation(); onStatChange?.(s) }}
-                className={`px-2.5 py-1 ${s === stat ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}
-              >
-                {s}
-              </button>
-            ))}
+            {selectableStats.map(s => {
+              const flagged = qualifiedStats.length > 0 && !qualifiedStats.includes(s)
+              return (
+                <button
+                  key={s}
+                  onClick={e => { e.stopPropagation(); onStatChange?.(s) }}
+                  title={flagged ? `${s} did not clear the table's volume / drift filter — shown here for reference` : undefined}
+                  className={`px-2.5 py-1 ${s === stat ? 'bg-blue-600 text-white' : `bg-white dark:bg-gray-700 ${flagged ? 'text-gray-400 dark:text-gray-500 italic' : 'text-gray-600 dark:text-gray-300'}`}`}
+                >
+                  {s}{flagged ? '*' : ''}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -256,10 +293,9 @@ export default function TrendGameLogChart({
                   x1={bandStart}
                   x2={bandEnd}
                   fill="var(--trend-band)"
-                  label={{ value: `last ${windowDays}d`, position: 'insideTop', fontSize: 9, fill: 'var(--trend-band-label)' }}
                 />
               )}
-              {mode !== 'minutes' && <Bar yAxisId="bar" dataKey="bar" fill="#8b5cf6" fillOpacity={0.45} isAnimationActive={false} />}
+              {mode !== 'minutes' && <Bar yAxisId="bar" dataKey="bar" fill={BAR_COLOR} fillOpacity={0.45} isAnimationActive={false} />}
               {seasonRef !== undefined && (
                 <ReferenceLine
                   yAxisId="main"
@@ -268,7 +304,6 @@ export default function TrendGameLogChart({
                   strokeWidth={1.5}
                   strokeDasharray="6 3"
                   ifOverflow="extendDomain"
-                  label={{ value: `season ${seasonRef.toFixed(1)}${unit}`, position: 'insideTopLeft', fontSize: 9, fontWeight: 600, fill: 'var(--trend-season-line)' }}
                 />
               )}
               {baselineRef !== undefined && (
@@ -279,14 +314,13 @@ export default function TrendGameLogChart({
                   strokeDasharray="2 3"
                   strokeWidth={1.5}
                   ifOverflow="extendDomain"
-                  label={{ value: `baseline ${baselineRef.toFixed(1)}%`, position: 'insideBottomRight', fontSize: 9, fontWeight: 600, fill: '#ef4444' }}
                 />
               )}
               <Line
                 yAxisId="main"
                 type="monotone"
                 dataKey="value"
-                stroke={mode === 'minutes' ? '#3b82f6' : mode === 'usage' ? '#f59e0b' : '#10b981'}
+                stroke={LINE_COLOR[mode]}
                 strokeWidth={2}
                 dot={<CappedDot />}
                 isAnimationActive={false}
@@ -296,6 +330,28 @@ export default function TrendGameLogChart({
         </div>
         <StatBlock rows={statRows} />
       </div>
+
+      <Legend items={[
+        {
+          label: mode === 'minutes' ? 'Minutes per game'
+            : mode === 'usage' ? 'Usage rate per game'
+            : `${stat}, ${ROLLING_GAMES}-game attempt-weighted`,
+          color: LINE_COLOR[mode],
+        },
+        ...(mode === 'minutes' ? [] : [{ label: mode === 'usage' ? 'Minutes played' : 'Attempts', bar: true }]),
+        ...(seasonRef === undefined ? [] : [{
+          label: `This season to date — ${seasonRef.toFixed(1)}${unit}`,
+          color: 'var(--trend-season-line)',
+          dash: '6 3',
+        }]),
+        ...(baselineRef === undefined ? [] : [{
+          label: `Baseline, ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} — ${baselineRef.toFixed(1)}%`,
+          color: '#ef4444',
+          dash: '2 3',
+        }]),
+        { label: `Last ${windowDays} days`, band: true },
+        ...(cappedCount > 0 ? [{ label: 'Capped — true value in tooltip', color: LINE_COLOR[mode], marker: true }] : []),
+      ]} />
     </div>
   )
 }

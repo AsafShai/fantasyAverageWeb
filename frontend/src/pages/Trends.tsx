@@ -16,8 +16,8 @@ type Ownership = 'all' | 'fa' | 'rostered'
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
 const BASELINE_OPTIONS: [number, string, string][] = [
-  [2, 'Prior 2 seasons', 'Attempt-weighted % across the two seasons before this one. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
-  [1, 'Last season', 'Attempt-weighted % for last season only. Reacts faster to a real change, noisier for low-volume shooters.'],
+  [2, 'vs prior 2 seasons', 'Compare this season against the two seasons before it, attempt-weighted. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
+  [1, 'vs last season', 'Compare this season against last season only. Reacts faster to a real change, noisier for low-volume shooters.'],
 ]
 
 const OWNERSHIP_OPTIONS: [Ownership, string][] = [
@@ -486,7 +486,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
                     windowDays={windowDays}
                     baselineSeasons={baselineSeasons}
                     stat={openStat}
-                    availableStats={stats.map(s => s.stat)}
+                    qualifiedStats={stats.map(s => s.stat)}
                     onStatChange={stat => setExpanded(prev => ({ ...prev, [group.player_id]: stat }))}
                   />
                 </ExpandRow>
@@ -600,7 +600,7 @@ export default function Trends() {
               {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             {tab === 'regression' && (
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm" title="Which past seasons this season's shooting is measured against. The current season is always what is being measured — it is the Current% column.">
                 {BASELINE_OPTIONS.map(([value, label, help]) => (
                   <button
                     key={value}
