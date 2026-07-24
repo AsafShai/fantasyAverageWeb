@@ -483,6 +483,8 @@ export interface GameLogResponse {
   season_usg: number;
   season_pct: Partial<Record<RegressionStat, number>>;
   baseline_pct: Partial<Record<RegressionStat, number>>;
+  league_pct: Partial<Record<RegressionStat, number>>;
+  league_usg: number | null;
   baseline_seasons: number;
   games: GameLogEntry[];
 }

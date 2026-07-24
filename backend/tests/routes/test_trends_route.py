@@ -72,6 +72,7 @@ _MOCK_GAME_LOG = GameLogResponse(
     season_mpg=28.0, season_usg=21.4,
     season_pct={'3P%': 35.0, 'FT%': 80.0, 'FG%': 47.0},
     baseline_pct={'3P%': 38.0, 'FT%': 78.0, 'FG%': 49.0},
+    league_pct={'3P%': 36.0, 'FT%': 78.5, 'FG%': 47.0},
     baseline_seasons=2,
     games=[
         GameLogEntry(game_date='2026-07-10', matchup='CHI vs. MIL', min=30.0, usg=22.5,

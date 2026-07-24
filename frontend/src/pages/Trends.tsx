@@ -10,19 +10,26 @@ import TrendGameLogChart from '../components/TrendGameLogChart'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode } from '../types/api'
 
-type TabKey = 'minutes' | 'usage' | 'regression'
+type TabKey = 'minutes' | 'usage' | 'shooting-season' | 'shooting-form'
 type Ownership = 'all' | 'fa' | 'rostered'
+
+const TABS: [TabKey, string, string][] = [
+  ['minutes', 'Minutes Movers', 'Who is playing more or fewer minutes than their season average'],
+  ['usage', 'Usage & Role', 'Whose share of their team’s possessions has moved'],
+  ['shooting-season', 'Shooting · Season', "Whose season shooting line is out of step with their history — the number that will look different by the time you trade them."],
+  ['shooting-form', 'Shooting · Form', "Who is genuinely shooting above or below their own level right now, judged against everything outside the recency window. Small samples are filtered out by significance, not by a fixed attempt count."],
+]
+
+const TAB_MODE: Partial<Record<TabKey, RegressionMode>> = {
+  'shooting-season': 'season',
+  'shooting-form': 'form',
+}
 
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
 const BASELINE_OPTIONS: [number, string, string][] = [
   [2, 'Prior 2 seasons', 'This season measured against the two seasons before it, attempt-weighted. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
   [1, 'Last season only', 'This season measured against last season alone. Reacts faster to a real change, noisier for low-volume shooters.'],
-]
-
-const REGRESSION_MODES: [RegressionMode, string, string][] = [
-  ['season', 'Season outlier', "Whose season shooting line is out of step with their history — the number that will look different by the time you trade them."],
-  ['form', 'Hot or cold now', "Who is genuinely shooting above or below their own level right now, judged against everything outside the recency window. Small samples are filtered out by significance, not by a fixed attempt count."],
 ]
 
 const OWNERSHIP_OPTIONS: [Ownership, string][] = [
@@ -337,27 +344,9 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
   )
 }
 
-const LOW_WINDOW_ATT = 20  // below this the window % is one hot night, not a trend
-
-function WindowPct({ stat, windowDays }: { stat: RegressionStatItem; windowDays: number }) {
-  if (stat.window_pct === null) {
-    return <span className="text-gray-400 dark:text-gray-500" title={`No attempts in the last ${windowDays} days`}>—</span>
-  }
-  const thin = stat.window_attempts < LOW_WINDOW_ATT
-  return (
-    <span
-      className={thin ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}
-      title={`${stat.window_attempts} attempts in the last ${windowDays} days${thin ? ' — small sample, read loosely' : ''}`}
-    >
-      {stat.window_pct.toFixed(1)}%{thin ? '*' : ''}
-    </span>
-  )
-}
-
 const REG_SORT_VAL: Record<string, (s: RegressionStatItem) => number | string> = {
   stat: s => s.stat,
   cur: s => s.current_pct,
-  win: s => s.window_pct ?? -1,
   base: s => s.baseline_pct,
   dev: s => s.dev,
   att: s => s.attempts_per_game,
@@ -394,6 +383,7 @@ function ZCell({ z }: { z: number | null }) {
 
 function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: { items: RegressionPlayerGroup[]; filters: Filters; windowDays: number; baselineSeasons: number; mode: RegressionMode }) {
   const isForm = mode === 'form'
+  const colCount = isForm ? 11 : 10
   const [sortCol, setSortCol] = useState(isForm ? 'z' : 'dev')
   const [sortAsc, setSortAsc] = useState(false)
   const [statFilter, setStatFilter] = useState<'all' | '3P%' | 'FT%' | 'FG%'>('all')
@@ -481,7 +471,6 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
               ) : (
                 <>
                   <Th col="cur" label="Season%" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Shooting % across the whole season to date. This is the number compared against the baseline." />
-                  <Th col="win" label={`${windowDays}d %`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Shooting % over the last ${windowDays} days only. Shows whether the correction has already started. Greyed with * when the window holds fewer than ${LOW_WINDOW_ATT} attempts.`} />
                   <Th col="base" label={`Baseline (${BASELINE_LABEL[baselineSeasons]})`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Attempt-weighted shooting % over the ${BASELINE_LABEL[baselineSeasons]} before this one. Excludes this season.`} />
                   <Th col="dev" label="Δ vs baseline" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Current% minus baseline%, in percentage points (not a relative change). Negative = cold (buy-low), positive = hot (sell-high)" />
                   <Th col="att" label="Att/g" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="Attempts per game this season" />
@@ -492,7 +481,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
             </tr>
           </thead>
           <tbody>
-            {groups.length === 0 && <EmptyRow colSpan={11} />}
+            {groups.length === 0 && <EmptyRow colSpan={colCount} />}
             {groups.map(({ group, stats }) => {
               const openStat = expanded[group.player_id]
               const toggle = (stat: RegressionStat) => toggleStat(group.player_id, stat)
@@ -523,7 +512,6 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
                     {i > 0 && <span className="text-gray-400 dark:text-gray-500">↳ </span>}{s.stat}
                   </td>
                   <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{s.current_pct.toFixed(1)}%</td>
-                  {!isForm && <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><WindowPct stat={s} windowDays={windowDays} /></td>}
                   <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{s.baseline_pct.toFixed(1)}%</td>
                   <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><DeltaPill value={s.dev} unit="%" /></td>
                   {isForm && <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><ZCell z={s.z} /></td>}
@@ -533,7 +521,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
                 </tr>
               )})}
               {openStat !== undefined && (
-                <ExpandRow colSpan={11}>
+                <ExpandRow colSpan={colCount}>
                   <TrendGameLogChart
                     playerId={group.player_id}
                     playerName={group.player_name}
@@ -567,11 +555,16 @@ export default function Trends() {
   const [ownership, setOwnership] = useState<Ownership>('all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
   const [baselineSeasons, setBaselineSeasons] = useState(2)
-  const [regressionMode, setRegressionMode] = useState<RegressionMode>('season')
+
+  const regressionMode = TAB_MODE[tab]
+  const isShooting = regressionMode !== undefined
 
   const minutesQuery = useGetTrendsMinutesQuery({ windowDays }, { skip: tab !== 'minutes' })
   const usageQuery = useGetTrendsUsageQuery({ windowDays }, { skip: tab !== 'usage' })
-  const regressionQuery = useGetTrendsRegressionQuery({ windowDays, baselineSeasons, mode: regressionMode }, { skip: tab !== 'regression' })
+  const regressionQuery = useGetTrendsRegressionQuery(
+    { windowDays, baselineSeasons, mode: regressionMode ?? 'season' },
+    { skip: !isShooting },
+  )
 
   const filters: Filters = { nameFilter, position, minG15: minGames, ownership, fantasyTeam }
 
@@ -590,15 +583,13 @@ export default function Trends() {
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 mb-6 space-y-3">
           <div className="flex flex-wrap gap-2 items-center">
-            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
-              {([
-                ['minutes', 'Minutes Movers'],
-                ['usage', 'Usage & Role'],
-                ['regression', 'Shooting'],
-              ] as [TabKey, string][]).map(([key, label]) => (
+            {/* four tabs overflow one row at 390px, so mobile gets a 2x2 grid */}
+            <div className="grid grid-cols-2 sm:flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
+              {TABS.map(([key, label, help]) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
+                  title={help}
                   className={`px-3 py-1.5 whitespace-nowrap ${tab === key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                 >
                   {label}
@@ -652,21 +643,7 @@ export default function Trends() {
               <option value="">All fantasy teams</option>
               {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            {tab === 'regression' && (
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
-                {REGRESSION_MODES.map(([value, label, help]) => (
-                  <button
-                    key={value}
-                    onClick={() => setRegressionMode(value)}
-                    title={help}
-                    className={`px-2.5 py-1.5 whitespace-nowrap ${regressionMode === value ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {tab === 'regression' && (
+            {isShooting && (
               <label className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-300" title="This season's shooting is always what gets measured (the Current% column). This picks the past period it is measured against.">
               Compare this season to
               <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
@@ -703,7 +680,7 @@ export default function Trends() {
             <>
               {tab === 'minutes' && minutesQuery.data && <MinutesTable items={minutesQuery.data.items} filters={filters} windowDays={windowDays} />}
               {tab === 'usage' && usageQuery.data && <UsageTable items={usageQuery.data.items} filters={filters} windowDays={windowDays} />}
-              {tab === 'regression' && regressionQuery.data && (
+              {isShooting && regressionQuery.data && (
                 <RegressionTable
                   key={regressionQuery.data.mode}
                   items={regressionQuery.data.items}

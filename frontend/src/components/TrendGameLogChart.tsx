@@ -37,6 +37,7 @@ const BAR_COLOR = '#8b5cf6'
 // Distinct from every series colour (blue / amber / green) and from the bars,
 // so a capped point never reads as part of the line it sits on.
 const CAPPED_COLOR = '#d946ef'
+const LEAGUE_COLOR = '#f59e0b'
 
 type LegendItem = { label: string; hint?: string; color?: string; band?: boolean; dash?: string; bar?: boolean; marker?: boolean }
 
@@ -221,11 +222,14 @@ export default function TrendGameLogChart({
 
   const seasonRef = mode === 'minutes' ? log.season_mpg : mode === 'usage' ? log.season_usg : log.season_pct[stat]
   const baselineRef = mode === 'shooting' ? log.baseline_pct[stat] : undefined
+  const leagueRef = mode === 'shooting'
+    ? log.league_pct[stat]
+    : mode === 'usage' ? (log.league_usg ?? undefined) : undefined
   const unit = mode === 'minutes' ? '' : '%'
 
   const { domain, cap } = chartScale(
     rows.map(r => r.value),
-    [seasonRef, baselineRef].filter((v): v is number => v !== undefined),
+    [seasonRef, baselineRef, leagueRef].filter((v): v is number => v !== undefined),
   )
   const cappedRows = rows.map(r => (r.value > cap ? { ...r, value: cap, capped: true } : r))
   const cappedCount = cappedRows.filter(r => r.capped).length
@@ -263,7 +267,7 @@ export default function TrendGameLogChart({
               [`Last ${windowDays}d ${stat}`, windowShooting === null
                 ? 'no attempts'
                 : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attPerGame.toFixed(1)} att/g`],
-              [`Baseline (through ${shortDate(log.window_start)})`,
+              [`Baseline (${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} + this season thru ${shortDate(log.window_start)})`,
                 baselineRef === undefined ? 'no history' : `${baselineRef.toFixed(1)}%`],
               ['Gap',
                 baselineRef === undefined || windowShooting === null
@@ -337,6 +341,16 @@ export default function TrendGameLogChart({
                 />
               )}
               {mode !== 'minutes' && <Bar yAxisId="bar" dataKey="bar" fill={BAR_COLOR} fillOpacity={0.45} isAnimationActive={false} />}
+              {leagueRef !== undefined && (
+                <ReferenceLine
+                  yAxisId="main"
+                  y={leagueRef}
+                  stroke={LEAGUE_COLOR}
+                  strokeWidth={1.5}
+                  strokeDasharray="1 4"
+                  ifOverflow="extendDomain"
+                />
+              )}
               {seasonRef !== undefined && (
                 <ReferenceLine
                   yAxisId="main"
@@ -394,14 +408,24 @@ export default function TrendGameLogChart({
           dash: '6 3',
         }]),
         ...(baselineRef === undefined ? [] : [{
-          label: `Baseline ${baselineRef.toFixed(1)}%`,
+          label: isForm
+            ? `Baseline ${baselineRef.toFixed(1)}% = ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} + this season thru ${shortDate(log.window_start)}`
+            : `Baseline ${baselineRef.toFixed(1)}% = ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`}, this season excluded`,
           hint: isForm
             ? `${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} plus this season up to ${shortDate(log.window_start)} — excludes the window, and is what the gap is measured against`
             : `${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`}, excludes this season`,
           color: '#ef4444',
           dash: '2 3',
         }]),
-        { label: `Last ${windowDays}d`, hint: `The recency window — games since ${shortDate(log.window_start)}`, band: true },
+        ...(leagueRef === undefined ? [] : [{
+          label: `NBA ${leagueRef.toFixed(1)}%`,
+          hint: mode === 'usage'
+            ? 'League-wide USG%, minutes-weighted. It sits near 20% by construction — five players on the floor split every possession — so read it as the line that separates a high-usage role from a low-usage one, not as a figure that moves.'
+            : `League-wide ${stat} this season, every player's makes over every player's attempts — shows whether he helps or hurts the category, which his own history cannot`,
+          color: LEAGUE_COLOR,
+          dash: '1 4',
+        }]),
+        { label: `Last ${windowDays}d window`, hint: `The recency window — games since ${shortDate(log.window_start)}`, band: true },
         ...(cappedCount > 0 ? [{ label: 'Capped', hint: 'Off-scale point pinned to the axis — true value in the tooltip', color: CAPPED_COLOR, marker: true }] : []),
       ]} />
     </div>

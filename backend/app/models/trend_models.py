@@ -110,5 +110,7 @@ class GameLogResponse(BaseModel):
     season_usg: float
     season_pct: dict[str, float]  # '3P%' | 'FT%' | 'FG%' -> season-to-date pct
     baseline_pct: dict[str, float]  # same keys -> prior-season baseline pct
+    league_pct: dict[str, float]  # same keys -> league-wide pct this season
+    league_usg: Optional[float] = None  # minutes-weighted league USG%, ~20 by construction
     baseline_seasons: int
     games: list[GameLogEntry]

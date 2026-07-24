@@ -401,6 +401,20 @@ def _player_pct_map(df: pd.DataFrame, player_id: int) -> dict[str, float]:
     return {name: float(row[spec['pct']]) * 100 for name, spec in _STAT_SPECS.items()}
 
 
+def _league_pct_map(df: pd.DataFrame) -> dict[str, float]:
+    """League-wide 3P%/FT%/FG% from an aggregate_shooting_by_player frame:
+    every player's makes over every player's attempts. Answers 'is this player
+    hurting the category', which his own history cannot."""
+    if df.empty:
+        return {}
+    out: dict[str, float] = {}
+    for name, spec in _STAT_SPECS.items():
+        att = int(df[spec['att']].sum())
+        if att:
+            out[name] = int(df[spec['mk']].sum()) / att * 100
+    return out
+
+
 def _form_baseline_pct(
     baseline_df: pd.DataFrame,
     games_df: pd.DataFrame,
@@ -434,6 +448,8 @@ def build_game_log(
     window_start,
     baseline_pct: dict[str, float],
     baseline_seasons: int,
+    league_pct: Optional[dict[str, float]] = None,
+    league_usg: Optional[float] = None,
 ) -> GameLogResponse:
     """Pure calc: per-game rows -> chart-ready game log. USG% per game uses the
     same _usg_per_game as Usage & Role, so the chart's window mean equals the
@@ -466,6 +482,8 @@ def build_game_log(
             'FG%': _pct(games_df['fgm'].sum(), games_df['fga'].sum()),
         },
         baseline_pct=baseline_pct,
+        league_pct=league_pct or {},
+        league_usg=league_usg,
         baseline_seasons=baseline_seasons,
         games=entries,
     )
@@ -491,6 +509,7 @@ class TrendService:
         self._minutes_cache: dict[int, dict] = {}
         self._usage_cache: dict[int, dict] = {}
         self._game_log_cache: dict[tuple[int, int, int, str], dict] = {}
+        self._league_cache: dict[str, dict] = {}
 
     @staticmethod
     def _cache_valid(cache: dict, key) -> bool:
@@ -575,6 +594,30 @@ class TrendService:
         self._usage_cache[window_days] = {'data': response, 'ts': datetime.now()}
         return response
 
+    async def _get_league_refs(self, season: str, end) -> tuple[dict[str, float], Optional[float]]:
+        """League-wide shooting pcts and USG%, cached together — one pull serves
+        every player's chart. USG% lands at ~20 by construction (five players
+        split 100% of possessions), which is exactly why it is a useful anchor
+        for judging whether a given usage is high."""
+        if self._cache_valid(self._league_cache, season):
+            entry = self._league_cache[season]['data']
+            return entry['pct'], entry['usg']
+
+        shooting_df = await self._db.aggregate_shooting_by_player(
+            [season], start=settings.season_start, end=end
+        )
+        usage_df = await self._db.get_usage_components(season, settings.season_start, end)
+        league_usg = None
+        if not usage_df.empty:
+            usg = usage_df.apply(_usg_per_game, axis=1)
+            total_min = usage_df['p_min'].sum()
+            if total_min:
+                league_usg = float((usg * usage_df['p_min']).sum() / total_min)
+
+        data = {'pct': _league_pct_map(shooting_df), 'usg': league_usg}
+        self._league_cache[season] = {'data': data, 'ts': datetime.now()}
+        return data['pct'], data['usg']
+
     async def get_player_game_log(
         self,
         player_id: int,
@@ -605,8 +648,11 @@ class TrendService:
             else _player_pct_map(baseline_df, player_id)
         )
 
+        league_pct, league_usg = await self._get_league_refs(current_season, anchor_date)
+
         response = build_game_log(
-            games_df, player_id, current_season, window_days, window_start, baseline_pct, baseline_seasons
+            games_df, player_id, current_season, window_days, window_start,
+            baseline_pct, baseline_seasons, league_pct, league_usg,
         )
         self._game_log_cache[cache_key] = {'data': response, 'ts': datetime.now()}
         return response
