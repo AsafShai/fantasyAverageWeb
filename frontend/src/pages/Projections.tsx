@@ -5,6 +5,7 @@ import type { PlayerMatchup, ProjectionStats } from '../types/api';
 import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import InjuryBadge from '../components/InjuryBadge';
 
 const STAT_COLS: [keyof ProjectionStats, string][] = [
   ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['three_pm', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
@@ -83,7 +84,7 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
     return (
       <tr className="border-t border-gray-100 dark:border-gray-800">
         <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100 sticky left-0 z-10 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
-          <StatusDot status="red" reason={proj.reason} /> <span className="ml-1">{matchup.player_name}</span>
+          <StatusDot status="red" reason={proj.reason} /> <span className="ml-1">{matchup.player_name}</span> <InjuryBadge status={matchup.injury_status} />
         </td>
         <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
           {matchup.pro_team} {matchup.is_home ? 'vs' : '@'} {matchup.opponent}
@@ -102,7 +103,7 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">
       <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100 sticky left-0 z-10 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
-        <StatusDot status={proj.status} reason={proj.reason} /> <span className="ml-1">{matchup.player_name}</span>
+        <StatusDot status={proj.status} reason={proj.reason} /> <span className="ml-1">{matchup.player_name}</span> <InjuryBadge status={matchup.injury_status} />
       </td>
       <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
         {matchup.pro_team} {matchup.is_home ? 'vs' : '@'} {matchup.opponent}
@@ -162,7 +163,17 @@ export default function Projections() {
     return m;
   }, [allPlayers]);
 
-  const withGames = useMemo(() => matchups.filter((m) => m.projection != null), [matchups]);
+  // Live slate = the "Upcoming (live)" view resolving to today's real slate date.
+  // Only there do we hide Out players outright; an explicit picked date is a
+  // what-if/debug view where Out is tag-only (InjuryBadge), never filtered.
+  const isLiveSlate = slateDate === '' && !!currentSlateDate;
+
+  const withGames = useMemo(() => matchups.filter((m) => {
+    if (m.projection == null) return false;
+    if (!m.on_depth_chart) return false;
+    if (isLiveSlate && m.injury_status === 'Out') return false;
+    return true;
+  }), [matchups, isLiveSlate]);
 
   const nbaTeamOptions = useMemo(
     () => Array.from(new Set(withGames.map((m) => m.pro_team))).sort(),
