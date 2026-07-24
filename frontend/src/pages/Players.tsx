@@ -129,14 +129,14 @@ const Players = () => {
             Showing {filteredPlayers.length} players
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {FF_MATCHUP_QUALITY && (
             <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Pick a game day. Past dates (debug) show that slate with current player state.">
               <span>Slate</span>
               <select
                 value={slateDate}
                 onChange={(e) => setSlateDate(e.target.value)}
-                className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 max-w-[50vw] sm:max-w-none"
               >
                 <option value="">
                   {slateDate === '' && currentSlateDate
