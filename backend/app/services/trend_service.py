@@ -47,6 +47,7 @@ def compute_regression_groups(
     games_last_15d: dict[int, int],
     players_df: pd.DataFrame,
     baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
+    window_df: Optional[pd.DataFrame] = None,
 ) -> list[RegressionPlayerGroup]:
     """Pure calc: current-season vs prior-2-season baseline shooting -> volume-gated,
     drift-filtered, player-grouped regression items. No DB/network access."""
@@ -58,6 +59,10 @@ def compute_regression_groups(
         for _, row in players_df.iterrows()
     }
     baseline_by_id = {int(r['player_id']): r for _, r in baseline_df.iterrows()}
+    window_by_id = (
+        {int(r['player_id']): r for _, r in window_df.iterrows()}
+        if window_df is not None and not window_df.empty else {}
+    )
 
     groups: list[RegressionPlayerGroup] = []
     for _, current_row in current_df.iterrows():
@@ -67,6 +72,7 @@ def compute_regression_groups(
             continue  # no baseline (rookie / first season) -> not ranked
 
         gp = current_row['gp']
+        window_row = window_by_id.get(player_id)
         stats: list[RegressionStatItem] = []
         for stat_name, spec in _STAT_SPECS.items():
             current_att = current_row[spec['att']]
@@ -81,6 +87,7 @@ def compute_regression_groups(
             drift_score = attempts_per_game * abs(dev) / 100
             if drift_score < DRIFT_THRESHOLD:
                 continue
+            window_att = int(window_row[spec['att']]) if window_row is not None else 0
             stats.append(RegressionStatItem(
                 stat=stat_name,
                 current_pct=current_pct,
@@ -88,6 +95,8 @@ def compute_regression_groups(
                 dev=dev,
                 attempts_per_game=attempts_per_game,
                 drift_score=drift_score,
+                window_pct=float(window_row[spec['pct']]) * 100 if window_att else None,
+                window_attempts=window_att,
             ))
 
         if not stats:
@@ -388,13 +397,19 @@ class TrendService:
         current_season = espn_season_string(settings.season_id)
         anchor_date = await get_season_anchor_date(current_season, self._db)
 
+        window_start = anchor_date - timedelta(days=window_days)
         current_df = await self._db.aggregate_shooting_by_player(
             [current_season], start=settings.season_start, end=anchor_date
         )
+        window_df = await self._db.aggregate_shooting_by_player(
+            [current_season], start=window_start, end=anchor_date
+        )
         baseline_df = await self._db.aggregate_shooting_by_player(prior_season_strings(baseline_seasons))
-        games_last_15d = await self._db.get_games_since(anchor_date - timedelta(days=window_days))
+        games_last_15d = await self._db.get_games_since(window_start)
 
-        groups = compute_regression_groups(current_df, baseline_df, games_last_15d, players_df, baseline_seasons)
+        groups = compute_regression_groups(
+            current_df, baseline_df, games_last_15d, players_df, baseline_seasons, window_df
+        )
         response = RegressionResponse(
             items=groups,
             window_days=window_days,

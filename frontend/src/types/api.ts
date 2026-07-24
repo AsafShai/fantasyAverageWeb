@@ -431,6 +431,8 @@ export interface RegressionStatItem {
   dev: number;
   attempts_per_game: number;
   drift_score: number;
+  window_pct: number | null;
+  window_attempts: number;
 }
 
 export interface RegressionPlayerGroup {

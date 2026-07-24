@@ -219,9 +219,11 @@ async def test_get_shooting_regression_wires_db_calls_and_returns_response(servi
         response = await service.get_shooting_regression(players_df)
 
         assert response.items == []
-        assert mock_db.aggregate_shooting_by_player.call_count == 2
-        current_call, baseline_call = mock_db.aggregate_shooting_by_player.call_args_list
+        assert mock_db.aggregate_shooting_by_player.call_count == 3
+        current_call, window_call, baseline_call = mock_db.aggregate_shooting_by_player.call_args_list
         assert current_call.args[0] == ["2025-26"]
+        assert window_call.args[0] == ["2025-26"]
+        assert window_call.kwargs["start"] == date(2026, 5, 17)
         assert baseline_call.args[0] == ["2024-25", "2023-24"]
         mock_db.get_games_since.assert_awaited_once_with(date(2026, 5, 17))
 
@@ -242,7 +244,7 @@ async def test_get_shooting_regression_uses_cache_within_ttl(service):
         await service.get_shooting_regression(players_df)
         await service.get_shooting_regression(players_df)
 
-        assert mock_db.aggregate_shooting_by_player.call_count == 2  # only the first call
+        assert mock_db.aggregate_shooting_by_player.call_count == 3  # only the first call
 
 
 @pytest.mark.asyncio
@@ -262,7 +264,7 @@ async def test_get_shooting_regression_recomputes_after_ttl_expires(service):
         service._regression_cache[(15, 2)]['ts'] = datetime.now() - timedelta(hours=7)
         await service.get_shooting_regression(players_df)
 
-        assert mock_db.aggregate_shooting_by_player.call_count == 4  # two calls, twice
+        assert mock_db.aggregate_shooting_by_player.call_count == 6  # three calls, twice
 
 
 def _season_row(player_id, player_name, gp, min_total):
@@ -721,3 +723,55 @@ def test_build_game_log_preserves_game_order_and_shot_counts():
 
     assert [g.game_date for g in log.games] == ["2026-06-01", "2026-06-03"]
     assert [g.fg3a for g in log.games] == [5, 3]
+
+
+def _regression_case():
+    current = pd.DataFrame([_current_row(9, "Window Guy", 50, fg3m=140, fg3a=420)])
+    baseline = pd.DataFrame([_current_row(9, "Window Guy", 100, fg3m=320, fg3a=800)])
+    players_df = _players_df([{
+        "Name": "Window Guy", "Pro Team": "GSW", "Positions": "SG",
+        "status": "FREEAGENT", "fantasy_team_name": None,
+    }])
+    return current, baseline, players_df
+
+
+def test_window_pct_reported_from_window_frame():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(9, "Window Guy", 6, fg3m=15, fg3a=30)])
+
+    groups = compute_regression_groups(current, baseline, {9: 6}, players_df, 2, window)
+    stat = groups[0].stats[0]
+
+    assert stat.window_pct == pytest.approx(50.0)
+    assert stat.window_attempts == 30
+    assert stat.current_pct == pytest.approx(140 / 420 * 100)
+
+
+def test_window_pct_is_none_when_window_has_no_attempts():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(9, "Window Guy", 2, fg3m=0, fg3a=0)])
+
+    groups = compute_regression_groups(current, baseline, {9: 2}, players_df, 2, window)
+    stat = groups[0].stats[0]
+
+    assert stat.window_pct is None
+    assert stat.window_attempts == 0
+
+
+def test_window_pct_is_none_when_player_absent_from_window():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
+
+    groups = compute_regression_groups(current, baseline, {9: 0}, players_df, 2, window)
+
+    assert groups[0].stats[0].window_pct is None
+
+
+def test_window_frame_omitted_leaves_window_fields_empty():
+    current, baseline, players_df = _regression_case()
+
+    groups = compute_regression_groups(current, baseline, {9: 6}, players_df)
+    stat = groups[0].stats[0]
+
+    assert stat.window_pct is None
+    assert stat.window_attempts == 0

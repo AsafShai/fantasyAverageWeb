@@ -332,9 +332,27 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
   )
 }
 
+const LOW_WINDOW_ATT = 20  // below this the window % is one hot night, not a trend
+
+function WindowPct({ stat, windowDays }: { stat: RegressionStatItem; windowDays: number }) {
+  if (stat.window_pct === null) {
+    return <span className="text-gray-400 dark:text-gray-500" title={`No attempts in the last ${windowDays} days`}>—</span>
+  }
+  const thin = stat.window_attempts < LOW_WINDOW_ATT
+  return (
+    <span
+      className={thin ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}
+      title={`${stat.window_attempts} attempts in the last ${windowDays} days${thin ? ' — small sample, read loosely' : ''}`}
+    >
+      {stat.window_pct.toFixed(1)}%{thin ? '*' : ''}
+    </span>
+  )
+}
+
 const REG_SORT_VAL: Record<string, (s: RegressionStatItem) => number | string> = {
   stat: s => s.stat,
   cur: s => s.current_pct,
+  win: s => s.window_pct ?? -1,
   base: s => s.baseline_pct,
   dev: s => s.dev,
   att: s => s.attempts_per_game,
@@ -430,7 +448,8 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
               <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="NBA team" />
               <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Games played in the last ${windowDays} days`} />
               <Th col="stat" label="Stat" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Shooting category: 3P%, FT%, or FG%" />
-              <Th col="cur" label="Current%" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Shooting % this season to date" />
+              <Th col="cur" label="Season%" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Shooting % across the whole season to date. This is the number compared against the baseline." />
+              <Th col="win" label={`${windowDays}d %`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Shooting % over the last ${windowDays} days only. Shows whether the correction has already started. Greyed with * when the window holds fewer than ${LOW_WINDOW_ATT} attempts.`} />
               <Th col="base" label={`Baseline (${BASELINE_LABEL[baselineSeasons]})`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Attempt-weighted shooting % over the ${BASELINE_LABEL[baselineSeasons]} before this one. Excludes this season.`} />
               <Th col="dev" label="Δ vs baseline" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Current% minus baseline%, in percentage points (not a relative change). Negative = cold (buy-low), positive = hot (sell-high)" />
               <Th col="att" label="Att/g" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="Attempts per game this season" />
@@ -439,7 +458,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
             </tr>
           </thead>
           <tbody>
-            {groups.length === 0 && <EmptyRow colSpan={10} />}
+            {groups.length === 0 && <EmptyRow colSpan={11} />}
             {groups.map(({ group, stats }) => {
               const openStat = expanded[group.player_id]
               const toggle = (stat: RegressionStat) => toggleStat(group.player_id, stat)
@@ -470,6 +489,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
                     {i > 0 && <span className="text-gray-400 dark:text-gray-500">↳ </span>}{s.stat}
                   </td>
                   <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{s.current_pct.toFixed(1)}%</td>
+                  <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><WindowPct stat={s} windowDays={windowDays} /></td>
                   <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{s.baseline_pct.toFixed(1)}%</td>
                   <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><DeltaPill value={s.dev} unit="%" /></td>
                   <td className="hidden sm:table-cell px-3 py-2 text-gray-700 dark:text-gray-300">{s.attempts_per_game.toFixed(1)}</td>
@@ -478,7 +498,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
                 </tr>
               )})}
               {openStat !== undefined && (
-                <ExpandRow colSpan={10}>
+                <ExpandRow colSpan={11}>
                   <TrendGameLogChart
                     playerId={group.player_id}
                     playerName={group.player_name}

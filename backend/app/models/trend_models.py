@@ -10,6 +10,8 @@ class RegressionStatItem(BaseModel):
     dev: float
     attempts_per_game: float
     drift_score: float
+    window_pct: Optional[float] = None  # None when the window holds no attempts
+    window_attempts: int = 0  # sample behind window_pct — small means treat it loosely
 
 
 class RegressionPlayerGroup(BaseModel):

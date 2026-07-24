@@ -231,6 +231,16 @@ export default function TrendGameLogChart({
     ? windowRows.reduce((s, r) => s + r.value, 0) / windowRows.length
     : null
 
+  const windowShooting = (() => {
+    if (mode !== 'shooting') return null
+    const { made, att } = STAT_FIELDS[stat]
+    const inWindow = log.games.filter(g => g.game_date >= log.window_start)
+    const attSum = inWindow.reduce((n, g) => n + (g[att] as number), 0)
+    if (!attSum) return null
+    const madeSum = inWindow.reduce((n, g) => n + (g[made] as number), 0)
+    return { pct: (madeSum / attSum) * 100, attempts: attSum }
+  })()
+
   const statRows: [string, string][] =
     mode === 'minutes'
       ? [
@@ -247,6 +257,9 @@ export default function TrendGameLogChart({
           ]
         : [
             [`Season ${stat}`, seasonRef === undefined ? '—' : `${seasonRef.toFixed(1)}%`],
+            [`${windowDays}d ${stat}`, windowShooting === null
+              ? 'no attempts'
+              : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attempts}`],
             [`Baseline (${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`})`,
               baselineRef === undefined ? 'no prior data' : `${baselineRef.toFixed(1)}%`],
             ['Δ vs baseline',
