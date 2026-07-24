@@ -35,6 +35,10 @@ The caller supplies the opponent and the **minutes `t`**; the player's own team 
 from the store. `T_MIN` and every `t*rate` feature are recomputed at predict time, so
 varying `t` changes the line (more minutes → more counting stats).
 
+The models are **minutes-exposure** models (`ŷ = t · rate`), so `t = 0` yields an
+exactly-zero line on every counting stat and predictions are monotone in minutes —
+structurally, not by a special case. See `docs/MINUTES_EXPOSURE.md`.
+
 Players with `< MIN_INFERENCE_GAMES` history raise `InsufficientHistoryError`
 (start of season / rookies / just-traded), rather than returning a garbage line.
 
