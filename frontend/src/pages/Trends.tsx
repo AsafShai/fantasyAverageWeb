@@ -542,7 +542,6 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
                     windowDays={windowDays}
                     baselineSeasons={baselineSeasons}
                     stat={openStat}
-                    zScore={stats.find(s => s.stat === openStat)?.z ?? null}
                     qualifiedStats={stats.map(s => s.stat)}
                     onStatChange={stat => setExpanded(prev => ({ ...prev, [group.player_id]: stat }))}
                   />

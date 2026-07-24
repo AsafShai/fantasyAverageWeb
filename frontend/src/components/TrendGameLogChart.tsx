@@ -38,13 +38,13 @@ const BAR_COLOR = '#8b5cf6'
 // so a capped point never reads as part of the line it sits on.
 const CAPPED_COLOR = '#d946ef'
 
-type LegendItem = { label: string; color?: string; band?: boolean; dash?: string; bar?: boolean; marker?: boolean }
+type LegendItem = { label: string; hint?: string; color?: string; band?: boolean; dash?: string; bar?: boolean; marker?: boolean }
 
 function Legend({ items }: { items: LegendItem[] }) {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400">
       {items.map(i => (
-        <span key={i.label} className="inline-flex items-center gap-1.5">
+        <span key={i.label} title={i.hint} className={`inline-flex items-center gap-1.5 ${i.hint ? 'cursor-help' : ''}`}>
           {i.band && <span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--trend-band)', border: '1px solid var(--trend-band-label)' }} />}
           {i.bar && <span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: BAR_COLOR, opacity: 0.45 }} />}
           {i.marker && <span style={{ color: i.color }}>▲</span>}
@@ -191,14 +191,13 @@ interface Props {
   windowDays: number
   baselineSeasons?: number
   stat?: RegressionStat
-  zScore?: number | null
   qualifiedStats?: RegressionStat[]
   onStatChange?: (stat: RegressionStat) => void
 }
 
 export default function TrendGameLogChart({
   playerId, playerName, mode, regressionMode = 'season', windowDays, baselineSeasons = 2,
-  stat = '3P%', zScore = null, qualifiedStats = [], onStatChange,
+  stat = '3P%', qualifiedStats = [], onStatChange,
 }: Props) {
   const { data: log, isLoading, error } = useGetTrendGameLogQuery({ playerId, windowDays, baselineSeasons, mode: regressionMode })
   const isForm = mode === 'shooting' && regressionMode === 'form'
@@ -220,11 +219,7 @@ export default function TrendGameLogChart({
   const bandStart = windowRows.length ? windowRows[0].label : null
   const bandEnd = rows[rows.length - 1].label
 
-  // In form mode the baseline deliberately excludes the window, so drawing the
-  // season line beside it invites the part-whole comparison the mode rejects.
-  const seasonRef = isForm
-    ? undefined
-    : mode === 'minutes' ? log.season_mpg : mode === 'usage' ? log.season_usg : log.season_pct[stat]
+  const seasonRef = mode === 'minutes' ? log.season_mpg : mode === 'usage' ? log.season_usg : log.season_pct[stat]
   const baselineRef = mode === 'shooting' ? log.baseline_pct[stat] : undefined
   const unit = mode === 'minutes' ? '' : '%'
 
@@ -268,12 +263,13 @@ export default function TrendGameLogChart({
               [`Last ${windowDays}d ${stat}`, windowShooting === null
                 ? 'no attempts'
                 : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attPerGame.toFixed(1)} att/g`],
-              ['Baseline', baselineRef === undefined ? 'no history' : `${baselineRef.toFixed(1)}%`],
+              [`Baseline (through ${shortDate(log.window_start)})`,
+                baselineRef === undefined ? 'no history' : `${baselineRef.toFixed(1)}%`],
               ['Gap',
                 baselineRef === undefined || windowShooting === null
                   ? '—'
                   : `${windowShooting.pct - baselineRef >= 0 ? '+' : ''}${(windowShooting.pct - baselineRef).toFixed(1)}%`],
-              ['z', zScore === null ? '—' : `${zScore >= 0 ? '+' : ''}${zScore.toFixed(2)}`],
+              [`Season ${stat}`, seasonRef === undefined ? '—' : `${seasonRef.toFixed(1)}%`],
               ['Games', String(log.season_gp)],
             ]
           : [
@@ -297,7 +293,7 @@ export default function TrendGameLogChart({
           {playerName} —{' '}
           {mode === 'minutes' && 'minutes in each game'}
           {mode === 'usage' && 'usage rate in each game · bars = minutes'}
-          {mode === 'shooting' && `${stat}, ${ROLLING_GAMES}-game attempt-weighted · bars = attempts`}
+          {mode === 'shooting' && `${stat}, rolling ${ROLLING_GAMES} games · bars = attempts`}
         </span>
         {mode === 'shooting' && selectableStats.length > 1 && (
           <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-[11px]">
@@ -378,26 +374,35 @@ export default function TrendGameLogChart({
 
       <Legend items={[
         {
-          label: mode === 'minutes' ? 'Minutes — single game'
-            : mode === 'usage' ? 'USG% — single game'
-            : `${stat} — trailing ${ROLLING_GAMES} games, attempt-weighted`,
+          label: mode === 'minutes' ? 'Minutes' : mode === 'usage' ? 'USG%' : `${stat} · ${ROLLING_GAMES}g`,
+          hint: mode === 'shooting'
+            ? `Rolling ${ROLLING_GAMES} games: total makes ÷ total attempts, so a 1-for-1 night doesn't count as a 100% game`
+            : 'One point per game',
           color: LINE_COLOR[mode],
         },
-        ...(mode === 'minutes' ? [] : [{ label: mode === 'usage' ? 'Minutes — single game' : 'Attempts — single game', bar: true }]),
+        ...(mode === 'minutes' ? [] : [{
+          label: mode === 'usage' ? 'Minutes' : 'Attempts',
+          hint: 'One bar per game',
+          bar: true,
+        }]),
         ...(seasonRef === undefined ? [] : [{
-          label: `This season to date — ${seasonRef.toFixed(1)}${unit}`,
+          label: `Season ${seasonRef.toFixed(1)}${unit}`,
+          hint: isForm
+            ? 'This season to date — includes the recency window, so it is context, not the comparison'
+            : 'This season to date',
           color: 'var(--trend-season-line)',
           dash: '6 3',
         }]),
         ...(baselineRef === undefined ? [] : [{
-          label: isForm
-            ? `Baseline, everything outside the window — ${baselineRef.toFixed(1)}%`
-            : `Baseline, ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} — ${baselineRef.toFixed(1)}%`,
+          label: `Baseline ${baselineRef.toFixed(1)}%`,
+          hint: isForm
+            ? `${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} plus this season up to ${shortDate(log.window_start)} — excludes the window, and is what the gap is measured against`
+            : `${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`}, excludes this season`,
           color: '#ef4444',
           dash: '2 3',
         }]),
-        { label: `Last ${windowDays} days`, band: true },
-        ...(cappedCount > 0 ? [{ label: 'Capped — true value in tooltip', color: CAPPED_COLOR, marker: true }] : []),
+        { label: `Last ${windowDays}d`, hint: `The recency window — games since ${shortDate(log.window_start)}`, band: true },
+        ...(cappedCount > 0 ? [{ label: 'Capped', hint: 'Off-scale point pinned to the axis — true value in the tooltip', color: CAPPED_COLOR, marker: true }] : []),
       ]} />
     </div>
   )
