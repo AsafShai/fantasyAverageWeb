@@ -261,13 +261,16 @@ const StandingsRace = () => {
   const endIdx = brushEnd == null ? lastIdx : Math.min(Math.max(brushEnd, 0), lastIdx)
   const endRow = chartData[endIdx] as Record<string, number | string> | undefined
 
-  // Reserve just enough gutter to show the full team names, but cap it so the plot
-  // still has room on a phone. Names that don't fit are trimmed at a word boundary.
+  // Reserve enough gutter to show full team names, but keep the plot dominant —
+  // especially on phones, where the graph matters more than fitting every full name.
+  // The cap is a small share of the width, so on mobile names trim at a word boundary
+  // rather than shrinking the chart; on wider screens full names fit comfortably.
   const { labelGutter, fittedNames } = useMemo(() => {
     const width = wrapWidth || 360
     const longest = teams.reduce((max, t) => Math.max(max, measureText(t.team_name)), 0)
+    const maxGutter = Math.min(Math.max(width * 0.22, 76), 200)
     // 8px inner padding on each side of the label text.
-    const gutter = Math.round(Math.min(longest + 16, Math.max(width * 0.42, 88), 220))
+    const gutter = Math.round(Math.min(longest + 16, maxGutter))
     const maxTextWidth = gutter - 12
     const fitted = new Map(teams.map(t => [t.team_name, fitLabel(t.team_name, maxTextWidth)]))
     return { labelGutter: gutter, fittedNames: fitted }
