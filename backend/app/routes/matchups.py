@@ -9,8 +9,10 @@ from app.models.matchup_models import DefRanks, DefValues, PlayerMatchupResponse
 from app.models.projection_models import Projection, ProjectionStats
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
+from app.services.depth_chart_service import DepthChartService
 from app.services.live_projection_service import LiveProjectionService
 from app.services.nba_matchup_service import NbaMatchupService
+from app.utils.name_matching import normalize_player_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -18,6 +20,7 @@ logger = logging.getLogger(__name__)
 _matchup_service = NbaMatchupService()
 _data_provider = DataProvider()
 _projection_service = LiveProjectionService()
+_depth_chart_service = DepthChartService()
 
 
 @router.get('/dates', response_model=list[str])
@@ -124,6 +127,10 @@ async def get_matchups_today(
 
     players_df = await _data_provider.get_players_df(stat_split_type_id=0)
 
+    depth_chart_names = await _depth_chart_service.get_on_depth_chart_names(set(games_today.keys()))
+    injury_rows = await DBService().load_all_injury_statuses()
+    injury_lookup = {normalize_player_name(row['player']): row['status'] for row in injury_rows}
+
     try:
         projections = await _projection_service.project_today(players_df, games_today)
     except Exception as e:
@@ -183,6 +190,8 @@ async def get_matchups_today(
             league_avg_def_values=league_avg_def,
             projection=projection,
             game_date=resolved_date,
+            on_depth_chart=normalize_player_name(row['Name']) in depth_chart_names.get(pro_team, set()),
+            injury_status=injury_lookup.get(normalize_player_name(row['Name'])),
         ))
 
     if results:
