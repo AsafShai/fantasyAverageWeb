@@ -89,34 +89,41 @@ def _make_team_logs(rng) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def raw_players() -> pd.DataFrame:
     return _make_players(np.random.default_rng(0))
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def team_logs() -> pd.DataFrame:
     return _make_team_logs(np.random.default_rng(1))
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def team_tables(team_logs):
     return rdata.build_team_allowed(team_logs), rdata.build_team_own(team_logs)
 
 
 @pytest.fixture
 def store(raw_players, team_tables) -> FeatureStore:
+    # Function-scoped: test_feature_store.py's test_nightly_update_appends_and_recomputes
+    # mutates the store in place via update_with_nightly_results, so it can't be
+    # shared across tests. Cheap to rebuild (no training) -- unlike feature_matrix
+    # / models_dir below, which stay module-scoped for the real time savings.
     team_allowed, team_own = team_tables
     return FeatureStore.build(raw_players, team_allowed, team_own)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def feature_matrix(raw_players, team_tables) -> pd.DataFrame:
     team_allowed, team_own = team_tables
     return rfeatures.build_feature_matrix(raw_players, team_allowed, team_own)
 
 
-@pytest.fixture
+# Deterministic fixed-seed synthetic data + read-only consumers (verified across
+# test_inference.py/test_reconcile.py/test_nightly.py) -- module scope trains
+# these tiny models once per file instead of once per test.
+@pytest.fixture(scope="module")
 def models_dir(feature_matrix, tmp_path_factory):
     """Train tiny per-target models on the synthetic data so inference can run,
     plus a reconciler built from in-sample residuals (pseudo-OOF)."""
