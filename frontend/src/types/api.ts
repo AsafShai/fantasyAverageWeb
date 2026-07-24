@@ -378,6 +378,7 @@ export interface TeamStoreState {
 }
 
 export interface MinutesMoverItem {
+  player_id: number;
   player_name: string;
   pro_team: string;
   position: string;
@@ -398,6 +399,7 @@ export interface MinutesResponse {
 }
 
 export interface UsageRoleItem {
+  player_id: number;
   player_name: string;
   pro_team: string;
   position: string;
@@ -429,9 +431,18 @@ export interface RegressionStatItem {
   dev: number;
   attempts_per_game: number;
   drift_score: number;
+  window_pct: number | null;
+  window_attempts: number;
+  z: number | null;
 }
 
+/** 'season' compares this season to prior seasons; 'form' compares the recency
+ * window to a baseline that excludes it. Same fields, different meanings — see
+ * RegressionStatItem in backend/app/models/trend_models.py. */
+export type RegressionMode = 'season' | 'form';
+
 export interface RegressionPlayerGroup {
+  player_id: number;
   player_name: string;
   pro_team: string;
   position: string;
@@ -443,5 +454,37 @@ export interface RegressionPlayerGroup {
 export interface RegressionResponse {
   items: RegressionPlayerGroup[];
   window_days: number;
+  baseline_seasons: number;
+  mode: RegressionMode;
   last_updated: string;
+}
+
+export interface GameLogEntry {
+  game_date: string;
+  matchup: string;
+  min: number;
+  usg: number;
+  fgm: number;
+  fga: number;
+  ftm: number;
+  fta: number;
+  fg3m: number;
+  fg3a: number;
+}
+
+export interface GameLogResponse {
+  player_id: number;
+  player_name: string;
+  season: string;
+  window_days: number;
+  window_start: string;
+  season_gp: number;
+  season_mpg: number;
+  season_usg: number;
+  season_pct: Partial<Record<RegressionStat, number>>;
+  baseline_pct: Partial<Record<RegressionStat, number>>;
+  league_pct: Partial<Record<RegressionStat, number>>;
+  league_usg: number | null;
+  baseline_seasons: number;
+  games: GameLogEntry[];
 }

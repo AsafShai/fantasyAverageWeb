@@ -10,6 +10,22 @@ html, body {
   max-width: 100%;
 }
 
+/* Trend game-log chart palette. The recency band needs a different hue per
+   theme: blue-on-white reads as a highlight, but on the dark navy page it
+   competes with the blue minutes line, so dark mode uses teal. */
+:root {
+  --trend-band: rgba(59, 130, 246, 0.20);
+  --trend-band-label: #2563eb;
+  --trend-season-line: #6b7280;
+  --trend-grid: #e5e7eb;
+}
+.dark {
+  --trend-band: rgba(45, 212, 191, 0.26);
+  --trend-band-label: #5eead4;
+  --trend-season-line: #cbd5e1;
+  --trend-grid: #374151;
+}
+
 /* ── Dark mode base ── */
 .dark body {
   background-color: #111827;

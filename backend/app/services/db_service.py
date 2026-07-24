@@ -914,6 +914,50 @@ class DBService:
             logger.error(f"Failed to fetch usage components for {start}..{end} ({season}): {e}")
             return pd.DataFrame()
 
+    async def get_player_game_log(self, player_id: int, season: str, start: date, end: date) -> pd.DataFrame:
+        """Single player's per-game rows with the same team components
+        get_usage_components returns, so USG% per game can be computed with the
+        identical formula and the chart agrees with the table by construction."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT
+                        p.player_name,
+                        p.game_date,
+                        p.matchup,
+                        p.min AS p_min,
+                        p.fgm, p.fga, p.ftm, p.fta, p.fg3m, p.fg3a,
+                        p.fga AS p_fga,
+                        p.fta AS p_fta,
+                        p.tov AS p_tov,
+                        t.fga AS t_fga,
+                        t.fta AS t_fta,
+                        t.tov AS t_tov,
+                        tm.team_min AS t_min
+                    FROM fs_player_games p
+                    JOIN fs_team_games t
+                        ON t.team_id = p.team_id AND t.game_id = p.game_id
+                    JOIN (
+                        SELECT team_id, game_id, SUM(min) AS team_min
+                        FROM fs_player_games
+                        WHERE season = $2 AND game_date BETWEEN $3 AND $4
+                        GROUP BY team_id, game_id
+                    ) tm ON tm.team_id = p.team_id AND tm.game_id = p.game_id
+                    WHERE p.player_id = $1 AND p.season = $2
+                      AND p.game_date BETWEEN $3 AND $4 AND p.min > 0
+                    ORDER BY p.game_date
+                    """,
+                    player_id, season, start, end,
+                )
+                return pd.DataFrame([dict(r) for r in rows])
+        except Exception as e:
+            logger.error(f"Failed to fetch game log for player {player_id} ({season}): {e}")
+            return pd.DataFrame()
+
     async def get_games_since(self, since_date: date) -> dict[int, int]:
         """player_id -> distinct games played with game_date >= since_date
         (any season) — trailing-window recency count (e.g. games in the last

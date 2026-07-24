@@ -7,10 +7,13 @@ import pytest
 from app.config import settings
 from app.services.trend_service import (
     TrendService,
+    _normalize_baseline_seasons,
+    build_game_log,
     classify_role_badge,
     compute_minutes_movers,
     compute_regression_groups,
     compute_usage_role,
+    prior_season_strings,
 )
 
 
@@ -217,9 +220,11 @@ async def test_get_shooting_regression_wires_db_calls_and_returns_response(servi
         response = await service.get_shooting_regression(players_df)
 
         assert response.items == []
-        assert mock_db.aggregate_shooting_by_player.call_count == 2
-        current_call, baseline_call = mock_db.aggregate_shooting_by_player.call_args_list
+        assert mock_db.aggregate_shooting_by_player.call_count == 3
+        current_call, window_call, baseline_call = mock_db.aggregate_shooting_by_player.call_args_list
         assert current_call.args[0] == ["2025-26"]
+        assert window_call.args[0] == ["2025-26"]
+        assert window_call.kwargs["start"] == date(2026, 5, 17)
         assert baseline_call.args[0] == ["2024-25", "2023-24"]
         mock_db.get_games_since.assert_awaited_once_with(date(2026, 5, 17))
 
@@ -240,7 +245,7 @@ async def test_get_shooting_regression_uses_cache_within_ttl(service):
         await service.get_shooting_regression(players_df)
         await service.get_shooting_regression(players_df)
 
-        assert mock_db.aggregate_shooting_by_player.call_count == 2  # only the first call
+        assert mock_db.aggregate_shooting_by_player.call_count == 3  # only the first call
 
 
 @pytest.mark.asyncio
@@ -257,10 +262,10 @@ async def test_get_shooting_regression_recomputes_after_ttl_expires(service):
         mock_db.get_games_since = AsyncMock(return_value={})
 
         await service.get_shooting_regression(players_df)
-        service._regression_cache[15]['ts'] = datetime.now() - timedelta(hours=7)
+        service._regression_cache[(15, 2, 'season')]['ts'] = datetime.now() - timedelta(hours=7)
         await service.get_shooting_regression(players_df)
 
-        assert mock_db.aggregate_shooting_by_player.call_count == 4  # two calls, twice
+        assert mock_db.aggregate_shooting_by_player.call_count == 6  # three calls, twice
 
 
 def _season_row(player_id, player_name, gp, min_total):
@@ -615,3 +620,275 @@ async def test_get_usage_role_uses_cache_within_ttl(service):
         await service.get_usage_role(players_df)
 
         assert mock_db.get_usage_components.call_count == 1
+
+
+def _one_season_baseline_case():
+    """~90 baseline 3PA: passes the 1-season gate (75), fails the 2-season one (150)."""
+    current = pd.DataFrame([_current_row(1, "Thin Baseline", 50, fg3m=120, fg3a=400)])
+    baseline = pd.DataFrame([_current_row(1, "Thin Baseline", 30, fg3m=36, fg3a=90)])
+    players_df = _players_df([{
+        "Name": "Thin Baseline", "Pro Team": "PHX", "Positions": "SG",
+        "status": "FREEAGENT", "fantasy_team_name": None,
+    }])
+    return current, baseline, players_df
+
+
+def test_baseline_gate_scales_down_for_one_season_baseline():
+    current, baseline, players_df = _one_season_baseline_case()
+
+    assert compute_regression_groups(current, baseline, {1: 5}, players_df, baseline_seasons=2) == []
+    groups = compute_regression_groups(current, baseline, {1: 5}, players_df, baseline_seasons=1)
+
+    assert len(groups) == 1
+    assert groups[0].stats[0].stat == "3P%"
+
+
+def test_prior_season_strings_length_follows_baseline_seasons():
+    with patch.object(settings, "season_id", 2026):
+        assert prior_season_strings(1) == ["2024-25"]
+        assert prior_season_strings(2) == ["2024-25", "2023-24"]
+
+
+def test_regression_items_carry_player_id():
+    current = pd.DataFrame([_current_row(77, "Id Carrier", 50, fg3m=140, fg3a=420)])
+    baseline = pd.DataFrame([_current_row(77, "Id Carrier", 100, fg3m=320, fg3a=800)])
+    players_df = _players_df([{
+        "Name": "Id Carrier", "Pro Team": "MIA", "Positions": "SF",
+        "status": "FREEAGENT", "fantasy_team_name": None,
+    }])
+
+    groups = compute_regression_groups(current, baseline, {77: 5}, players_df)
+
+    assert groups[0].player_id == 77
+
+
+def test_rostered_players_are_no_longer_filtered_out():
+    current = pd.DataFrame([_current_row(1, "Rostered Guy", 50, fg3m=140, fg3a=420)])
+    baseline = pd.DataFrame([_current_row(1, "Rostered Guy", 100, fg3m=320, fg3a=800)])
+    players_df = _players_df([{
+        "Name": "Rostered Guy", "Pro Team": "BOS", "Positions": "SF",
+        "status": "ONTEAM", "fantasy_team_name": "Team Rocket",
+    }])
+
+    groups = compute_regression_groups(current, baseline, {1: 5}, players_df)
+
+    assert [g.fantasy_status for g in groups] == ["Team Rocket"]
+
+
+def _game_log_row(game_date, p_min, fgm, fga, ftm, fta, fg3m, fg3a, tov=2.0):
+    return {
+        "player_name": "Log Guy", "game_date": game_date, "matchup": "BOS vs. MIA",
+        "p_min": p_min, "fgm": fgm, "fga": fga, "ftm": ftm, "fta": fta,
+        "fg3m": fg3m, "fg3a": fg3a,
+        "p_fga": fga, "p_fta": fta, "p_tov": tov,
+        "t_fga": 88.0, "t_fta": 20.0, "t_tov": 13.0, "t_min": 240.0,
+    }
+
+
+def test_build_game_log_aggregates_season_percentages_from_totals():
+    games_df = pd.DataFrame([
+        _game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5),
+        _game_log_row(date(2026, 6, 3), 26.0, 5, 12, 4, 6, 1, 3),
+    ])
+
+    log = build_game_log(
+        games_df, 42, "2025-26", 15, date(2026, 5, 20), {"3P%": 38.0}, 2
+    )
+
+    assert log.season_gp == 2
+    assert log.season_mpg == pytest.approx(28.0)
+    assert log.season_pct["FG%"] == pytest.approx(12 / 26 * 100)
+    assert log.season_pct["3P%"] == pytest.approx(3 / 8 * 100)
+    assert log.season_pct["FT%"] == pytest.approx(6 / 8 * 100)
+    assert log.baseline_pct == {"3P%": 38.0}
+    assert log.baseline_seasons == 2
+
+
+def test_build_game_log_usg_matches_usage_role_formula():
+    games_df = pd.DataFrame([_game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5)])
+
+    log = build_game_log(games_df, 42, "2025-26", 15, date(2026, 5, 20), {}, 2)
+
+    expected = 100 * (14 + 0.44 * 2 + 2.0) * (240.0 / 5) / (30.0 * (88.0 + 0.44 * 20.0 + 13.0))
+    assert log.games[0].usg == pytest.approx(expected)
+    assert log.season_usg == pytest.approx(expected)
+
+
+def test_build_game_log_preserves_game_order_and_shot_counts():
+    games_df = pd.DataFrame([
+        _game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5),
+        _game_log_row(date(2026, 6, 3), 26.0, 5, 12, 4, 6, 1, 3),
+    ])
+
+    log = build_game_log(games_df, 42, "2025-26", 15, date(2026, 5, 20), {}, 2)
+
+    assert [g.game_date for g in log.games] == ["2026-06-01", "2026-06-03"]
+    assert [g.fg3a for g in log.games] == [5, 3]
+
+
+def _regression_case():
+    current = pd.DataFrame([_current_row(9, "Window Guy", 50, fg3m=140, fg3a=420)])
+    baseline = pd.DataFrame([_current_row(9, "Window Guy", 100, fg3m=320, fg3a=800)])
+    players_df = _players_df([{
+        "Name": "Window Guy", "Pro Team": "GSW", "Positions": "SG",
+        "status": "FREEAGENT", "fantasy_team_name": None,
+    }])
+    return current, baseline, players_df
+
+
+def test_window_pct_reported_from_window_frame():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(9, "Window Guy", 6, fg3m=15, fg3a=30)])
+
+    groups = compute_regression_groups(current, baseline, {9: 6}, players_df, 2, window)
+    stat = groups[0].stats[0]
+
+    assert stat.window_pct == pytest.approx(50.0)
+    assert stat.window_attempts == 30
+    assert stat.current_pct == pytest.approx(140 / 420 * 100)
+
+
+def test_window_pct_is_none_when_window_has_no_attempts():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(9, "Window Guy", 2, fg3m=0, fg3a=0)])
+
+    groups = compute_regression_groups(current, baseline, {9: 2}, players_df, 2, window)
+    stat = groups[0].stats[0]
+
+    assert stat.window_pct is None
+    assert stat.window_attempts == 0
+
+
+def test_window_pct_is_none_when_player_absent_from_window():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
+
+    groups = compute_regression_groups(current, baseline, {9: 0}, players_df, 2, window)
+
+    assert groups[0].stats[0].window_pct is None
+
+
+def test_window_frame_omitted_leaves_window_fields_empty():
+    current, baseline, players_df = _regression_case()
+
+    groups = compute_regression_groups(current, baseline, {9: 6}, players_df)
+    stat = groups[0].stats[0]
+
+    assert stat.window_pct is None
+    assert stat.window_attempts == 0
+
+
+def _form_players_df(name="Klay Thompson"):
+    return _players_df([{
+        "Name": name, "Pro Team": "DAL", "Positions": "SG",
+        "status": "FREEAGENT", "fantasy_team_name": None,
+    }])
+
+
+def test_form_baseline_excludes_the_window():
+    # season 100/300, window 30/60 -> pre is 70/240; prior adds 140/400.
+    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pd.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
+
+    groups = compute_regression_groups(
+        current, baseline, {1: 6}, _form_players_df(), 2, window, 'form'
+    )
+
+    stat = next(s for s in groups[0].stats if s.stat == "3P%")
+    assert stat.baseline_pct == pytest.approx(210 / 640 * 100)
+    assert stat.current_pct == pytest.approx(50.0)
+    assert stat.dev == pytest.approx(50.0 - 210 / 640 * 100)
+    assert stat.attempts_per_game == pytest.approx(10.0)
+    assert stat.window_attempts == 60
+    assert stat.z == pytest.approx(2.68, abs=0.02)
+    assert stat.drift_score == pytest.approx(abs(stat.z))
+
+
+def test_form_mode_ranks_rookie_that_season_mode_drops():
+    current = pd.DataFrame([_current_row(7, "Rookie Guy", 20, fg3m=60, fg3a=200)])
+    window = pd.DataFrame([_current_row(7, "Rookie Guy", 5, fg3m=25, fg3a=50)])
+    players_df = _form_players_df("Rookie Guy")
+
+    form_groups = compute_regression_groups(
+        current, pd.DataFrame(), {7: 5}, players_df, 2, window, 'form'
+    )
+    season_groups = compute_regression_groups(
+        current, pd.DataFrame(), {7: 5}, players_df, 2, window, 'season'
+    )
+
+    assert [g.player_name for g in form_groups] == ["Rookie Guy"]
+    stat = form_groups[0].stats[0]
+    assert stat.baseline_pct == pytest.approx(35 / 150 * 100)
+    assert season_groups == []
+
+
+def test_form_z_gate_rejects_thin_window_and_keeps_thick_one():
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=200, fg3a=500)])
+    players_df = _form_players_df()
+
+    thin_current = pd.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
+    thin_window = pd.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
+    thick_current = pd.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
+    thick_window = pd.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
+
+    thin = compute_regression_groups(
+        thin_current, baseline, {1: 3}, players_df, 2, thin_window, 'form'
+    )
+    thick = compute_regression_groups(
+        thick_current, baseline, {1: 20}, players_df, 2, thick_window, 'form'
+    )
+
+    # Same 10pp gap in both; only the larger sample clears |z| >= 1.5.
+    assert thin == []
+    assert thick[0].stats[0].z == pytest.approx(1.77, abs=0.02)
+
+
+def test_form_mode_skips_players_with_no_window_games():
+    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pd.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
+
+    groups = compute_regression_groups(
+        current, baseline, {1: 0}, _form_players_df(), 2, window, 'form'
+    )
+
+    assert groups == []
+
+
+def test_season_mode_output_unchanged_when_mode_is_explicit():
+    current, baseline, players_df = _regression_case()
+    window = pd.DataFrame([_current_row(9, "Klay Thompson", 5, fg3m=12, fg3a=30)])
+
+    default_groups = compute_regression_groups(current, baseline, {9: 6}, players_df, 2, window)
+    explicit_groups = compute_regression_groups(
+        current, baseline, {9: 6}, players_df, 2, window, 'season'
+    )
+
+    assert default_groups == explicit_groups
+    assert all(s.z is None for g in explicit_groups for s in g.stats)
+
+
+def test_zero_baseline_seasons_judges_form_against_this_season_only():
+    # prior seasons exist but must be ignored: baseline is 70/240 from the
+    # pre-window games alone, not pooled with the 140/400 prior rows.
+    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pd.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
+
+    pooled = compute_regression_groups(
+        current, baseline, {1: 6}, _form_players_df(), 2, window, 'form'
+    )
+    this_season = compute_regression_groups(
+        current, pd.DataFrame(), {1: 6}, _form_players_df(), 0, window, 'form'
+    )
+
+    assert next(s for s in pooled[0].stats if s.stat == "3P%").baseline_pct == pytest.approx(210 / 640 * 100)
+    assert next(s for s in this_season[0].stats if s.stat == "3P%").baseline_pct == pytest.approx(70 / 240 * 100)
+
+
+def test_zero_baseline_seasons_is_rejected_for_season_mode():
+    assert _normalize_baseline_seasons(0, 'form') == 0
+    assert _normalize_baseline_seasons(0, 'season') == 2
+    assert _normalize_baseline_seasons(1, 'form') == 1
+    assert _normalize_baseline_seasons(9, 'form') == 2
