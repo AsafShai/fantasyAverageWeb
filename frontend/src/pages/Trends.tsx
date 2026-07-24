@@ -65,6 +65,16 @@ function ExpandRow({ colSpan, children }: { colSpan: number; children: React.Rea
   )
 }
 
+function useExpandedSet() {
+  const [open, setOpen] = useState<Set<number>>(new Set())
+  const toggle = (id: number) => setOpen(prev => {
+    const next = new Set(prev)
+    if (!next.delete(id)) next.add(id)
+    return next
+  })
+  return { open, toggle }
+}
+
 function Caret({ open }: { open: boolean }) {
   return (
     <svg
@@ -149,7 +159,7 @@ const MIN_SORT_VAL: Record<string, (r: MinutesMoverItem) => number | string> = {
 function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[]; filters: Filters; windowDays: number }) {
   const [sortCol, setSortCol] = useState('delta')
   const [sortAsc, setSortAsc] = useState(false)
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const { open: expanded, toggle } = useExpandedSet()
 
   const rows = useMemo(() => {
     const filtered = items.filter(r => passesShared(r, filters))
@@ -185,15 +195,15 @@ function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[
         <tbody>
           {rows.length === 0 && <EmptyRow colSpan={9} />}
           {rows.map(r => {
-            const open = expanded === r.player_id
+            const open = expanded.has(r.player_id)
             return (
             <Fragment key={r.player_id}>
             <tr
-              onClick={() => setExpanded(open ? null : r.player_id)}
+              onClick={() => toggle(r.player_id)}
               tabIndex={0}
               role="button"
               aria-expanded={open}
-              onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpanded(open ? null : r.player_id)}
+              onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && toggle(r.player_id)}
               className="group cursor-pointer border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
             >
               <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700">
@@ -246,7 +256,7 @@ function RoleBadge({ badge }: { badge: string | null }) {
 function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; filters: Filters; windowDays: number }) {
   const [sortCol, setSortCol] = useState('delta')
   const [sortAsc, setSortAsc] = useState(false)
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const { open: expanded, toggle } = useExpandedSet()
 
   const rows = useMemo(() => {
     const filtered = items.filter(r => passesShared(r, filters))
@@ -287,15 +297,15 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
           <tbody>
             {rows.length === 0 && <EmptyRow colSpan={9} />}
             {rows.map(r => {
-              const open = expanded === r.player_id
+              const open = expanded.has(r.player_id)
               return (
               <Fragment key={r.player_id}>
               <tr
-                onClick={() => setExpanded(open ? null : r.player_id)}
+                onClick={() => toggle(r.player_id)}
                 tabIndex={0}
                 role="button"
                 aria-expanded={open}
-                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpanded(open ? null : r.player_id)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && toggle(r.player_id)}
                 className="group cursor-pointer border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
               >
                 <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700"><Caret open={open} />{r.player_name}</td>
@@ -352,7 +362,14 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
   const [sortCol, setSortCol] = useState('dev')
   const [sortAsc, setSortAsc] = useState(false)
   const [statFilter, setStatFilter] = useState<'all' | '3P%' | 'FT%' | 'FG%'>('all')
-  const [expanded, setExpanded] = useState<{ playerId: number; stat: RegressionStat } | null>(null)
+  const [expanded, setExpanded] = useState<Record<number, RegressionStat>>({})
+
+  const toggleStat = (playerId: number, stat: RegressionStat) => setExpanded(prev => {
+    const next = { ...prev }
+    if (next[playerId] === stat) delete next[playerId]
+    else next[playerId] = stat
+    return next
+  })
 
   const groups = useMemo(() => {
     const filtered = items
@@ -424,13 +441,12 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
           <tbody>
             {groups.length === 0 && <EmptyRow colSpan={10} />}
             {groups.map(({ group, stats }) => {
-              const groupOpen = expanded?.playerId === group.player_id
-              const toggle = (stat: RegressionStat) =>
-                setExpanded(groupOpen && expanded?.stat === stat ? null : { playerId: group.player_id, stat })
+              const openStat = expanded[group.player_id]
+              const toggle = (stat: RegressionStat) => toggleStat(group.player_id, stat)
               return (
               <Fragment key={group.player_id}>
               {stats.map((s, i) => {
-                const active = groupOpen && expanded?.stat === s.stat
+                const active = openStat === s.stat
                 return (
                 <tr
                   key={`${group.player_id}-${s.stat}`}
@@ -444,7 +460,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
                   {i === 0 && (
                     <>
                       <td rowSpan={stats.length} className="align-top px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-                        <Caret open={groupOpen} />{group.player_name}
+                        <Caret open={openStat !== undefined} />{group.player_name}
                       </td>
                       <td rowSpan={stats.length} className="hidden sm:table-cell align-top px-3 py-2 text-gray-500 dark:text-gray-400">{group.pro_team}</td>
                       <td rowSpan={stats.length} className="hidden sm:table-cell align-top px-3 py-2 text-gray-700 dark:text-gray-300">{group.games_last_15d}</td>
@@ -461,7 +477,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
                   {i === 0 && <td rowSpan={stats.length} className="align-top px-1.5 sm:px-3 py-1.5 sm:py-2"><StatusBadge fantasyStatus={group.fantasy_status} /></td>}
                 </tr>
               )})}
-              {groupOpen && expanded && (
+              {openStat !== undefined && (
                 <ExpandRow colSpan={10}>
                   <TrendGameLogChart
                     playerId={group.player_id}
@@ -469,9 +485,9 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
                     mode="shooting"
                     windowDays={windowDays}
                     baselineSeasons={baselineSeasons}
-                    stat={expanded.stat}
+                    stat={openStat}
                     availableStats={stats.map(s => s.stat)}
-                    onStatChange={stat => setExpanded({ playerId: group.player_id, stat })}
+                    onStatChange={stat => setExpanded(prev => ({ ...prev, [group.player_id]: stat }))}
                   />
                 </ExpandRow>
               )}
@@ -496,7 +512,7 @@ export default function Trends() {
   const [position, setPosition] = useState<string | null>(null)
   const [windowDays, setWindowDays] = useState<number>(15)
   const [minGames, setMinGames] = useState(3)
-  const [ownership, setOwnership] = useState<Ownership>('fa')
+  const [ownership, setOwnership] = useState<Ownership>('all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
   const [baselineSeasons, setBaselineSeasons] = useState(2)
 

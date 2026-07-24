@@ -35,18 +35,22 @@ interface ChartRow {
   date: string
   label: string
   matchup: string
-  value: number
+  value: number      // plotted value, capped at the axis ceiling
+  trueValue: number  // what actually happened, always shown in the tooltip
+  capped: boolean
   bar: number
   rawPct: number | null
+  minutes: number
 }
 
 function buildRows(log: GameLogResponse, mode: GameLogMode, stat: RegressionStat): ChartRow[] {
   return log.games.map((g, i) => {
+    const base = { date: g.game_date, label: shortDate(g.game_date), matchup: g.matchup, minutes: g.min, capped: false }
     if (mode === 'minutes') {
-      return { date: g.game_date, label: shortDate(g.game_date), matchup: g.matchup, value: g.min, bar: 0, rawPct: null }
+      return { ...base, value: g.min, trueValue: g.min, bar: 0, rawPct: null }
     }
     if (mode === 'usage') {
-      return { date: g.game_date, label: shortDate(g.game_date), matchup: g.matchup, value: g.usg, bar: g.min, rawPct: null }
+      return { ...base, value: g.usg, trueValue: g.usg, bar: g.min, rawPct: null }
     }
     const { made, att } = STAT_FIELDS[stat]
     const from = Math.max(0, i - ROLLING_GAMES + 1)
@@ -54,11 +58,11 @@ function buildRows(log: GameLogResponse, mode: GameLogMode, stat: RegressionStat
     const madeSum = slice.reduce((s, x) => s + (x[made] as number), 0)
     const attSum = slice.reduce((s, x) => s + (x[att] as number), 0)
     const attempts = g[att] as number
+    const rolling = attSum ? (madeSum / attSum) * 100 : 0
     return {
-      date: g.game_date,
-      label: shortDate(g.game_date),
-      matchup: g.matchup,
-      value: attSum ? (madeSum / attSum) * 100 : 0,
+      ...base,
+      value: rolling,
+      trueValue: rolling,
       bar: attempts,
       rawPct: attempts ? ((g[made] as number) / attempts) * 100 : null,
     }
@@ -71,16 +75,34 @@ function percentile(sorted: number[], q: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo)
 }
 
-// A garbage-time game (2 minutes, one shot) produces a USG% north of 100 and a
-// single-game shooting % of 0 or 100. Scaling to those makes the actual trend a
-// flat line, so the axis covers the 5th-95th percentile and outliers clip.
-function robustDomain(values: number[], refs: number[]): [number, number] {
+const OUTLIER_HEADROOM = 1.35
+
+// USG% is a rate per minute on court, so a 2-minute cameo with one shot scores
+// as if that pace held for a whole game and lands north of 100. The axis must
+// not scale to those or the real trend flattens — but it must never cut off the
+// bottom or a legitimately low game vanishes. So: floor is always the true
+// minimum, ceiling only backs off when the top outliers sit far above the 95th
+// percentile, and any point above it is capped and marked rather than clipped.
+function chartScale(values: number[], refs: number[]): { domain: [number, number]; cap: number } {
   const sorted = [...values].sort((a, b) => a - b)
-  let lo = percentile(sorted, 0.05)
-  let hi = percentile(sorted, 0.95)
+  const dataMin = sorted[0]
+  const dataMax = sorted[sorted.length - 1]
+  const p95 = percentile(sorted, 0.95)
+
+  const cap = dataMax > p95 * OUTLIER_HEADROOM ? p95 * OUTLIER_HEADROOM : dataMax
+
+  let lo = dataMin
+  let hi = cap
   for (const r of refs) { lo = Math.min(lo, r); hi = Math.max(hi, r) }
-  const pad = (hi - lo || 1) * 0.15
-  return [Math.max(0, lo - pad), hi + pad]
+  const pad = (hi - lo || 1) * 0.08
+  return { domain: [Math.max(0, lo - pad), hi + pad], cap }
+}
+
+function CappedDot(props: { cx?: number; cy?: number; payload?: ChartRow; stroke?: string }) {
+  const { cx, cy, payload, stroke } = props
+  if (cx === undefined || cy === undefined) return null
+  if (!payload?.capped) return <circle cx={cx} cy={cy} r={2} fill={stroke} />
+  return <path d={`M${cx - 4},${cy + 3} L${cx},${cy - 3} L${cx + 4},${cy + 3} Z`} fill={stroke} />
 }
 
 function StatBlock({ rows }: { rows: [string, string][] }) {
@@ -109,7 +131,8 @@ function ChartTooltip({ active, payload, mode, stat }: {
   return (
     <div className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-[11px] shadow">
       <div className="font-semibold text-gray-800 dark:text-gray-100">{r.label} · {r.matchup}</div>
-      <div className="text-gray-600 dark:text-gray-300">{main}: {r.value.toFixed(1)}{unit}</div>
+      <div className="text-gray-600 dark:text-gray-300">{main}: {r.trueValue.toFixed(1)}{unit}</div>
+      {r.capped && <div className="text-amber-600 dark:text-amber-400">above the axis — {r.minutes.toFixed(0)} min played</div>}
       {mode === 'usage' && <div className="text-gray-500 dark:text-gray-400">MIN: {r.bar.toFixed(0)}</div>}
       {mode === 'shooting' && (
         <div className="text-gray-500 dark:text-gray-400">
@@ -152,10 +175,12 @@ export default function TrendGameLogChart({
   const baselineRef = mode === 'shooting' ? log.baseline_pct[stat] : undefined
   const unit = mode === 'minutes' ? '' : '%'
 
-  const domain = robustDomain(
+  const { domain, cap } = chartScale(
     rows.map(r => r.value),
     [seasonRef, baselineRef].filter((v): v is number => v !== undefined),
   )
+  const cappedRows = rows.map(r => (r.value > cap ? { ...r, value: cap, capped: true } : r))
+  const cappedCount = cappedRows.filter(r => r.capped).length
 
   const windowMean = windowRows.length
     ? windowRows.reduce((s, r) => s + r.value, 0) / windowRows.length
@@ -210,11 +235,17 @@ export default function TrendGameLogChart({
         )}
       </div>
 
+      {cappedCount > 0 && (
+        <p className="text-[10px] text-amber-600 dark:text-amber-400 mb-1">
+          ▲ {cappedCount} {cappedCount === 1 ? 'game sits' : 'games sit'} above the axis — short garbage-time
+          appearances where a per-minute rate overstates the real role. Hover for the true value.
+        </p>
+      )}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch">
         <div className="w-full min-w-0 flex-none h-[150px] sm:flex-1 sm:h-[180px]">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-gray-200 dark:text-gray-700" />
+            <ComposedChart data={cappedRows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--trend-grid)" />
               <XAxis dataKey="label" tick={{ fontSize: 9 }} interval="preserveStartEnd" minTickGap={24} />
               <YAxis yAxisId="main" tick={{ fontSize: 9 }} domain={domain} allowDataOverflow width={34} tickFormatter={(v: number) => v.toFixed(0)} />
               <YAxis yAxisId="bar" orientation="right" hide domain={[0, (max: number) => max * 3]} />
@@ -224,9 +255,8 @@ export default function TrendGameLogChart({
                   yAxisId="main"
                   x1={bandStart}
                   x2={bandEnd}
-                  fill="#3b82f6"
-                  fillOpacity={0.12}
-                  label={{ value: `last ${windowDays}d`, position: 'insideTop', fontSize: 9, fill: '#3b82f6' }}
+                  fill="var(--trend-band)"
+                  label={{ value: `last ${windowDays}d`, position: 'insideTop', fontSize: 9, fill: 'var(--trend-band-label)' }}
                 />
               )}
               {mode !== 'minutes' && <Bar yAxisId="bar" dataKey="bar" fill="#8b5cf6" fillOpacity={0.45} isAnimationActive={false} />}
@@ -234,9 +264,11 @@ export default function TrendGameLogChart({
                 <ReferenceLine
                   yAxisId="main"
                   y={seasonRef}
-                  stroke="#9ca3af"
-                  strokeDasharray="5 4"
-                  label={{ value: `season ${seasonRef.toFixed(1)}${unit}`, position: 'insideTopRight', fontSize: 9, fill: '#9ca3af' }}
+                  stroke="var(--trend-season-line)"
+                  strokeWidth={1.5}
+                  strokeDasharray="6 3"
+                  ifOverflow="extendDomain"
+                  label={{ value: `season ${seasonRef.toFixed(1)}${unit}`, position: 'insideTopLeft', fontSize: 9, fontWeight: 600, fill: 'var(--trend-season-line)' }}
                 />
               )}
               {baselineRef !== undefined && (
@@ -245,7 +277,9 @@ export default function TrendGameLogChart({
                   y={baselineRef}
                   stroke="#ef4444"
                   strokeDasharray="2 3"
-                  label={{ value: `baseline ${baselineRef.toFixed(1)}%`, position: 'insideBottomLeft', fontSize: 9, fill: '#ef4444' }}
+                  strokeWidth={1.5}
+                  ifOverflow="extendDomain"
+                  label={{ value: `baseline ${baselineRef.toFixed(1)}%`, position: 'insideBottomRight', fontSize: 9, fontWeight: 600, fill: '#ef4444' }}
                 />
               )}
               <Line
@@ -254,7 +288,7 @@ export default function TrendGameLogChart({
                 dataKey="value"
                 stroke={mode === 'minutes' ? '#3b82f6' : mode === 'usage' ? '#f59e0b' : '#10b981'}
                 strokeWidth={2}
-                dot={{ r: 2 }}
+                dot={<CappedDot />}
                 isAnimationActive={false}
               />
             </ComposedChart>
