@@ -45,8 +45,19 @@ def mock_services(monkeypatch):
     provider = MagicMock()
     provider.get_players_df = AsyncMock(return_value=_MOCK_PLAYERS)
 
+    depth_chart_svc = MagicMock()
+    depth_chart_svc.get_on_depth_chart_names = AsyncMock(return_value={'LAL': {'anthonydavis'}})
+
     monkeypatch.setattr('app.routes.matchups._matchup_service', svc)
     monkeypatch.setattr('app.routes.matchups._data_provider', provider)
+    monkeypatch.setattr('app.routes.matchups._depth_chart_service', depth_chart_svc)
+    monkeypatch.setattr(
+        'app.routes.matchups.DBService',
+        lambda: MagicMock(
+            load_all_injury_statuses=AsyncMock(return_value=[]),
+            get_recent_game_dates=AsyncMock(return_value=[]),
+        ),
+    )
     return svc, provider
 
 
@@ -75,6 +86,34 @@ def test_response_shape(mock_services):
     assert 'league_avg_pace' in player
     assert 'pace_badge' not in player
     assert player['game_date'] == '2026-01-15'
+    assert player['on_depth_chart'] is True
+    assert player['injury_status'] is None
+
+
+def test_tags_player_not_on_depth_chart(mock_services, monkeypatch):
+    depth_chart_svc = MagicMock()
+    depth_chart_svc.get_on_depth_chart_names = AsyncMock(return_value={'LAL': set()})
+    monkeypatch.setattr('app.routes.matchups._depth_chart_service', depth_chart_svc)
+    client = TestClient(app)
+    data = client.get('/api/matchups/today').json()
+    # Backend tags only -- filtering happens client-side, so the player still
+    # appears in the response even when absent from the depth chart.
+    assert len(data) == 1
+    assert data[0]['on_depth_chart'] is False
+
+
+def test_tags_injury_status_from_db(mock_services, monkeypatch):
+    monkeypatch.setattr(
+        'app.routes.matchups.DBService',
+        lambda: MagicMock(
+            load_all_injury_statuses=AsyncMock(return_value=[
+                {'team': 'LAL', 'player': 'Anthony Davis', 'status': 'Out'},
+            ]),
+        ),
+    )
+    client = TestClient(app)
+    data = client.get('/api/matchups/today').json()
+    assert data[0]['injury_status'] == 'Out'
 
 
 def test_game_date_reflects_explicit_date_param(mock_services, monkeypatch):
@@ -82,7 +121,7 @@ def test_game_date_reflects_explicit_date_param(mock_services, monkeypatch):
     svc.get_upcoming_game_dates = AsyncMock(return_value=['2026-01-16'])
     monkeypatch.setattr(
         'app.routes.matchups.DBService',
-        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[])),
+        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[]), load_all_injury_statuses=AsyncMock(return_value=[])),
     )
     client = TestClient(app)
     data = client.get('/api/matchups/today?date=20260116').json()
@@ -159,7 +198,7 @@ def test_rejects_date_outside_known_slates(mock_services, monkeypatch):
     svc.get_upcoming_game_dates = AsyncMock(return_value=['2026-01-16'])
     monkeypatch.setattr(
         'app.routes.matchups.DBService',
-        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[])),
+        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[]), load_all_injury_statuses=AsyncMock(return_value=[])),
     )
     client = TestClient(app)
     resp = client.get('/api/matchups/today?date=20990101')
@@ -171,7 +210,7 @@ def test_accepts_upcoming_date_in_whitelist(mock_services, monkeypatch):
     svc.get_upcoming_game_dates = AsyncMock(return_value=['2026-01-16'])
     monkeypatch.setattr(
         'app.routes.matchups.DBService',
-        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[])),
+        lambda: MagicMock(get_recent_game_dates=AsyncMock(return_value=[]), load_all_injury_statuses=AsyncMock(return_value=[])),
     )
     client = TestClient(app)
     resp = client.get('/api/matchups/today?date=20260116')

@@ -38,3 +38,5 @@ class PlayerMatchupResponse(BaseModel):
     league_avg_def_values: DefValues
     projection: Optional[Projection] = None
     game_date: Optional[str] = None  # ISO date this slate resolved to (None if unknown)
+    on_depth_chart: bool = True
+    injury_status: Optional[str] = None

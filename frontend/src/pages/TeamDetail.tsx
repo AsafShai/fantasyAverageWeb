@@ -10,6 +10,7 @@ import { CoverageNotice } from '../components/DateRangePicker'
 import DataDateBadge from '../components/DataDateBadge'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay'
+import InjuryBadge from '../components/InjuryBadge'
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS } from '../config/featureFlags'
 
 const TeamDetail = () => {
@@ -511,7 +512,7 @@ const TeamDetail = () => {
                           title={noData ? 'Excluded from average — no data for this range' : undefined}
                         />
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-200">{player.player_name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-200">{player.player_name} <InjuryBadge status={matchup?.injury_status} /></td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
                       {noData ? (

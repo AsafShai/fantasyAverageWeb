@@ -334,6 +334,8 @@ export interface PlayerMatchup {
   league_avg_def_values: DefValues;
   projection: Projection | null;
   game_date: string | null;
+  on_depth_chart: boolean;
+  injury_status: string | null;
 }
 
 export interface PlayerStoreSummary {
