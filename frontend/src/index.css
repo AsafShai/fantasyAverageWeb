@@ -2,6 +2,14 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+/* Guard against any child pushing the page wider than the viewport on
+   mobile — without this, one overflowing element scrolls the whole body
+   horizontally, revealing unstyled space past the layout's background. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 /* ── Dark mode base ── */
 .dark body {
   background-color: #111827;
