@@ -40,7 +40,11 @@ _STAT_SPECS = {
 }
 
 DEFAULT_BASELINE_SEASONS = 2
-VALID_BASELINE_SEASONS = (1, 2)
+# 0 = no prior seasons, so mode='form' judges the window against this season
+# alone. Meaningless for mode='season', which has nothing left to compare to —
+# the service coerces it back to the default there.
+VALID_BASELINE_SEASONS = (0, 1, 2)
+DEFAULT_FORM_BASELINE_SEASONS = 0
 
 DEFAULT_REGRESSION_MODE: RegressionMode = 'season'
 
@@ -493,8 +497,12 @@ def _normalize_window_days(window_days: int) -> int:
     return window_days if window_days in VALID_RECENCY_WINDOWS_DAYS else DEFAULT_RECENCY_WINDOW_DAYS
 
 
-def _normalize_baseline_seasons(baseline_seasons: int) -> int:
-    return baseline_seasons if baseline_seasons in VALID_BASELINE_SEASONS else DEFAULT_BASELINE_SEASONS
+def _normalize_baseline_seasons(baseline_seasons: int, mode: RegressionMode = DEFAULT_REGRESSION_MODE) -> int:
+    if baseline_seasons not in VALID_BASELINE_SEASONS:
+        return DEFAULT_BASELINE_SEASONS
+    if baseline_seasons == 0 and mode != 'form':
+        return DEFAULT_BASELINE_SEASONS
+    return baseline_seasons
 
 
 def prior_season_strings(baseline_seasons: int) -> list[str]:
@@ -524,7 +532,7 @@ class TrendService:
         mode: RegressionMode = DEFAULT_REGRESSION_MODE,
     ) -> RegressionResponse:
         window_days = _normalize_window_days(window_days)
-        baseline_seasons = _normalize_baseline_seasons(baseline_seasons)
+        baseline_seasons = _normalize_baseline_seasons(baseline_seasons, mode)
         cache_key = (window_days, baseline_seasons, mode)
         if self._cache_valid(self._regression_cache, cache_key):
             return self._regression_cache[cache_key]['data']
@@ -539,7 +547,7 @@ class TrendService:
         window_df = await self._db.aggregate_shooting_by_player(
             [current_season], start=window_start, end=anchor_date
         )
-        baseline_df = await self._db.aggregate_shooting_by_player(prior_season_strings(baseline_seasons))
+        baseline_df = await self._prior_shooting(baseline_seasons)
         games_last_15d = await self._db.get_games_since(window_start)
 
         groups = compute_regression_groups(
@@ -594,6 +602,12 @@ class TrendService:
         self._usage_cache[window_days] = {'data': response, 'ts': datetime.now()}
         return response
 
+    async def _prior_shooting(self, baseline_seasons: int) -> pd.DataFrame:
+        seasons = prior_season_strings(baseline_seasons)
+        if not seasons:
+            return pd.DataFrame()
+        return await self._db.aggregate_shooting_by_player(seasons)
+
     async def _get_league_refs(self, season: str, end) -> tuple[dict[str, float], Optional[float]]:
         """League-wide shooting pcts and USG%, cached together — one pull serves
         every player's chart. USG% lands at ~20 by construction (five players
@@ -626,7 +640,7 @@ class TrendService:
         mode: RegressionMode = DEFAULT_REGRESSION_MODE,
     ) -> Optional[GameLogResponse]:
         window_days = _normalize_window_days(window_days)
-        baseline_seasons = _normalize_baseline_seasons(baseline_seasons)
+        baseline_seasons = _normalize_baseline_seasons(baseline_seasons, mode)
         cache_key = (player_id, window_days, baseline_seasons, mode)
         if self._cache_valid(self._game_log_cache, cache_key):
             return self._game_log_cache[cache_key]['data']
@@ -641,7 +655,7 @@ class TrendService:
         if games_df.empty:
             return None
 
-        baseline_df = await self._db.aggregate_shooting_by_player(prior_season_strings(baseline_seasons))
+        baseline_df = await self._prior_shooting(baseline_seasons)
         baseline_pct = (
             _form_baseline_pct(baseline_df, games_df, player_id, window_start)
             if mode == 'form'

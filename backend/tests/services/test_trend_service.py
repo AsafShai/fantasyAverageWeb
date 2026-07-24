@@ -7,6 +7,7 @@ import pytest
 from app.config import settings
 from app.services.trend_service import (
     TrendService,
+    _normalize_baseline_seasons,
     build_game_log,
     classify_role_badge,
     compute_minutes_movers,
@@ -866,3 +867,28 @@ def test_season_mode_output_unchanged_when_mode_is_explicit():
 
     assert default_groups == explicit_groups
     assert all(s.z is None for g in explicit_groups for s in g.stats)
+
+
+def test_zero_baseline_seasons_judges_form_against_this_season_only():
+    # prior seasons exist but must be ignored: baseline is 70/240 from the
+    # pre-window games alone, not pooled with the 140/400 prior rows.
+    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pd.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
+
+    pooled = compute_regression_groups(
+        current, baseline, {1: 6}, _form_players_df(), 2, window, 'form'
+    )
+    this_season = compute_regression_groups(
+        current, pd.DataFrame(), {1: 6}, _form_players_df(), 0, window, 'form'
+    )
+
+    assert next(s for s in pooled[0].stats if s.stat == "3P%").baseline_pct == pytest.approx(210 / 640 * 100)
+    assert next(s for s in this_season[0].stats if s.stat == "3P%").baseline_pct == pytest.approx(70 / 240 * 100)
+
+
+def test_zero_baseline_seasons_is_rejected_for_season_mode():
+    assert _normalize_baseline_seasons(0, 'form') == 0
+    assert _normalize_baseline_seasons(0, 'season') == 2
+    assert _normalize_baseline_seasons(1, 'form') == 1
+    assert _normalize_baseline_seasons(9, 'form') == 2

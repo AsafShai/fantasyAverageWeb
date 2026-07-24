@@ -28,8 +28,16 @@ const TAB_MODE: Partial<Record<TabKey, RegressionMode>> = {
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
 const BASELINE_OPTIONS: [number, string, string][] = [
-  [2, 'Prior 2 seasons', 'This season measured against the two seasons before it, attempt-weighted. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
-  [1, 'Last season only', 'This season measured against last season alone. Reacts faster to a real change, noisier for low-volume shooters.'],
+  [2, 'Prior 2 seasons', 'Measured against the two seasons before this one, attempt-weighted. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
+  [1, 'Last season only', 'Measured against last season alone. Reacts faster to a real change, noisier for low-volume shooters.'],
+]
+
+// mode='form' only: no prior seasons at all, so the window is judged against
+// this season alone. Right when a player's level has genuinely moved (new role,
+// new team, second-year jump) and his older seasons no longer describe him.
+const FORM_BASELINE_OPTIONS: [number, string, string][] = [
+  [0, 'This season', 'The window measured against the rest of this season only. Follows a player whose level has actually changed; ignores who he used to be.'],
+  ...BASELINE_OPTIONS.map(([v, l, h]) => [v, l, `${h} Pooled with this season up to the window.`] as [number, string, string]),
 ]
 
 const OWNERSHIP_OPTIONS: [Ownership, string][] = [
@@ -434,11 +442,11 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-2">
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         <select
           value={statFilter}
           onChange={e => setStatFilter(e.target.value as typeof statFilter)}
-          className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-xs"
+          className="w-full sm:w-auto px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-xs"
         >
           <option value="all">All stats</option>
           <option value="3P%">3P%</option>
@@ -554,10 +562,16 @@ export default function Trends() {
   const [minGames, setMinGames] = useState(3)
   const [ownership, setOwnership] = useState<Ownership>('all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
-  const [baselineSeasons, setBaselineSeasons] = useState(2)
+  // one remembered choice per tab: "prior 2 seasons" is the right default when
+  // judging a season line, "this season" when judging current form
+  const [seasonBaseline, setSeasonBaseline] = useState(2)
+  const [formBaseline, setFormBaseline] = useState(0)
 
   const regressionMode = TAB_MODE[tab]
   const isShooting = regressionMode !== undefined
+  const isFormTab = regressionMode === 'form'
+  const baselineSeasons = isFormTab ? formBaseline : seasonBaseline
+  const setBaselineSeasons = isFormTab ? setFormBaseline : setSeasonBaseline
 
   const minutesQuery = useGetTrendsMinutesQuery({ windowDays }, { skip: tab !== 'minutes' })
   const usageQuery = useGetTrendsUsageQuery({ windowDays }, { skip: tab !== 'usage' })
@@ -581,10 +595,10 @@ export default function Trends() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">📈 Trends</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Whose situation just changed — minutes, usage, shooting. Click any player for their game-by-game chart.</p>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 mb-6 space-y-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 sm:p-4 mb-6 space-y-4">
           {/* mobile: one control group per full-width row, buttons stretched to a
               common edge; desktop keeps the flowing single row */}
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-x-2 sm:gap-y-3 sm:items-center">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:flex sm:flex-wrap sm:gap-x-2 sm:gap-y-3 sm:items-center">
             {/* four tabs overflow one row at 390px, so mobile gets a 2x2 grid */}
             <div className="col-span-2 grid grid-cols-2 sm:flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
               {TABS.map(([key, label, help]) => (
@@ -592,7 +606,7 @@ export default function Trends() {
                   key={key}
                   onClick={() => setTab(key)}
                   title={help}
-                  className={`px-3 py-1.5 whitespace-nowrap ${tab === key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  className={`px-3 py-2 sm:py-1.5 whitespace-nowrap ${tab === key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                 >
                   {label}
                 </button>
@@ -603,12 +617,12 @@ export default function Trends() {
               placeholder="Search player…"
               value={nameFilter}
               onChange={e => setNameFilter(e.target.value)}
-              className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm sm:min-w-[150px]"
+              className="px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm sm:min-w-[150px]"
             />
             <select
               value={position ?? ''}
               onChange={e => setPosition(e.target.value || null)}
-              className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+              className="px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
             >
               <option value="">All positions</option>
               {ALL_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -619,7 +633,7 @@ export default function Trends() {
                 <button
                   key={d}
                   onClick={() => setWindowDays(d)}
-                  className={`flex-1 sm:flex-none px-2.5 py-1.5 whitespace-nowrap ${windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 whitespace-nowrap ${windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                 >
                   {d}d
                 </button>
@@ -630,7 +644,7 @@ export default function Trends() {
                 <button
                   key={key}
                   onClick={() => { setOwnership(key); if (key === 'fa') setFantasyTeam(null) }}
-                  className={`flex-1 sm:flex-none px-2.5 py-1.5 whitespace-nowrap ${ownership === key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 whitespace-nowrap ${ownership === key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                 >
                   {label}
                 </button>
@@ -640,33 +654,11 @@ export default function Trends() {
               value={fantasyTeam ?? ''}
               onChange={e => { setFantasyTeam(e.target.value || null); if (e.target.value) setOwnership('all') }}
               title="Show only players on one fantasy team"
-              className="col-span-2 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm sm:max-w-[170px]"
+              className="col-span-2 px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm sm:max-w-[170px]"
             >
               <option value="">All fantasy teams</option>
               {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            {isShooting && (
-              <label
-                className="col-span-2 flex items-center gap-1.5 sm:ml-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300"
-                title={regressionMode === 'form'
-                  ? 'Which past seasons feed the baseline. On this tab the baseline also includes this season up to the start of the window.'
-                  : "Which past seasons this season's shooting is measured against."}
-              >
-                <span className="w-[72px] sm:w-auto shrink-0">Baseline</span>
-                <div className="flex flex-1 sm:flex-none rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
-                  {BASELINE_OPTIONS.map(([value, label, help]) => (
-                    <button
-                      key={value}
-                      onClick={() => setBaselineSeasons(value)}
-                      title={help}
-                      className={`flex-1 sm:flex-none px-2.5 py-1.5 whitespace-nowrap ${baselineSeasons === value ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </label>
-            )}
             <label className="col-span-2 flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
               <span className="w-[72px] sm:w-auto shrink-0">Min games</span>
               <input
@@ -675,9 +667,31 @@ export default function Trends() {
                 value={minGames}
                 onChange={e => setMinGames(Math.max(0, Number(e.target.value)))}
                 title={`Minimum games played in the last ${windowDays} days`}
-                className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                className="flex-1 sm:flex-none sm:w-16 px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               />
             </label>
+            {isShooting && (
+              <label
+                className="col-span-2 flex flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:gap-1.5 sm:ml-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300"
+                title={isFormTab
+                  ? 'What the last-N-days window is judged against. Whichever past seasons you pick are pooled with this season up to the start of the window — never the window itself.'
+                  : "Which past seasons this season's shooting is measured against."}
+              >
+                <span className="shrink-0">Baseline</span>
+                <div className="flex flex-1 sm:flex-none rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
+                  {(isFormTab ? FORM_BASELINE_OPTIONS : BASELINE_OPTIONS).map(([value, label, help]) => (
+                    <button
+                      key={value}
+                      onClick={() => setBaselineSeasons(value)}
+                      title={help}
+                      className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 whitespace-nowrap ${baselineSeasons === value ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            )}
           </div>
 
           {activeQuery.isLoading && <LoadingSpinner />}

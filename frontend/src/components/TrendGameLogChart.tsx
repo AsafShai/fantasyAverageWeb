@@ -238,6 +238,12 @@ export default function TrendGameLogChart({
     ? windowRows.reduce((s, r) => s + r.value, 0) / windowRows.length
     : null
 
+  // baseline_seasons can be 0 in form mode: no prior seasons, this season only
+  const priorLabel = BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`
+  const formSpan = log.baseline_seasons === 0
+    ? `this season thru ${shortDate(log.window_start)}`
+    : `${priorLabel} + this season thru ${shortDate(log.window_start)}`
+
   const windowShooting = (() => {
     if (mode !== 'shooting') return null
     const { made, att } = STAT_FIELDS[stat]
@@ -267,7 +273,7 @@ export default function TrendGameLogChart({
               [`Last ${windowDays}d ${stat}`, windowShooting === null
                 ? 'no attempts'
                 : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attPerGame.toFixed(1)} att/g`],
-              [`Baseline (${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} + this season thru ${shortDate(log.window_start)})`,
+              [`Baseline (${formSpan})`,
                 baselineRef === undefined ? 'no history' : `${baselineRef.toFixed(1)}%`],
               ['Gap',
                 baselineRef === undefined || windowShooting === null
@@ -281,7 +287,7 @@ export default function TrendGameLogChart({
             [`${windowDays}d ${stat}`, windowShooting === null
               ? 'no attempts'
               : `${windowShooting.pct.toFixed(1)}% on ${windowShooting.attPerGame.toFixed(1)} att/g`],
-            [`Baseline (${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`})`,
+            [`Baseline (${priorLabel})`,
               baselineRef === undefined ? 'no prior data' : `${baselineRef.toFixed(1)}%`],
             ['Δ vs baseline',
               baselineRef === undefined || seasonRef === undefined
@@ -409,11 +415,11 @@ export default function TrendGameLogChart({
         }]),
         ...(baselineRef === undefined ? [] : [{
           label: isForm
-            ? `Baseline ${baselineRef.toFixed(1)}% = ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} + this season thru ${shortDate(log.window_start)}`
-            : `Baseline ${baselineRef.toFixed(1)}% = ${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`}, this season excluded`,
+            ? `Baseline ${baselineRef.toFixed(1)}% = ${formSpan}`
+            : `Baseline ${baselineRef.toFixed(1)}% = ${priorLabel}, this season excluded`,
           hint: isForm
-            ? `${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`} plus this season up to ${shortDate(log.window_start)} — excludes the window, and is what the gap is measured against`
-            : `${BASELINE_LABEL[log.baseline_seasons] ?? `${log.baseline_seasons} seasons`}, excludes this season`,
+            ? `${formSpan} — excludes the window itself, and is what the gap is measured against`
+            : `${priorLabel}, excludes this season`,
           color: '#ef4444',
           dash: '2 3',
         }]),
