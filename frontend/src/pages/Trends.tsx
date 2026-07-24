@@ -16,8 +16,8 @@ type Ownership = 'all' | 'fa' | 'rostered'
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
 const BASELINE_OPTIONS: [number, string, string][] = [
-  [2, 'vs prior 2 seasons', 'Compare this season against the two seasons before it, attempt-weighted. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
-  [1, 'vs last season', 'Compare this season against last season only. Reacts faster to a real change, noisier for low-volume shooters.'],
+  [2, 'Prior 2 seasons', 'This season measured against the two seasons before it, attempt-weighted. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
+  [1, 'Last season only', 'This season measured against last season alone. Reacts faster to a real change, noisier for low-volume shooters.'],
 ]
 
 const OWNERSHIP_OPTIONS: [Ownership, string][] = [
@@ -596,7 +596,9 @@ export default function Trends() {
               {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             {tab === 'regression' && (
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm" title="Which past seasons this season's shooting is measured against. The current season is always what is being measured — it is the Current% column.">
+              <label className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-300" title="This season's shooting is always what gets measured (the Current% column). This picks the past period it is measured against.">
+              Compare this season to
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
                 {BASELINE_OPTIONS.map(([value, label, help]) => (
                   <button
                     key={value}
@@ -608,6 +610,7 @@ export default function Trends() {
                   </button>
                 ))}
               </div>
+              </label>
             )}
             <label className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
               Min games
