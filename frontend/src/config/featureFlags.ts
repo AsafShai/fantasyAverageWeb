@@ -9,3 +9,4 @@ export const FF_NAV_REORG = import.meta.env.VITE_FF_NAV_REORG === 'true';
 export const FF_CUSTOM_RANGE = import.meta.env.VITE_FF_CUSTOM_RANGE === 'true';
 export const FF_DRAFT_REPORT = import.meta.env.VITE_FF_DRAFT_REPORT === 'true';
 export const FF_DRAFT_STEALS_BUSTS = import.meta.env.VITE_FF_DRAFT_STEALS_BUSTS === 'true';
+export const FF_TRENDS = import.meta.env.VITE_FF_TRENDS === 'true';

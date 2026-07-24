@@ -1,4 +1,3 @@
-import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -146,20 +145,19 @@ def _resp(events: list[dict]) -> MagicMock:
 
 
 def _client_get_by_day(events_by_day: dict[date, list[dict]]):
-    """Fake ``httpx.AsyncClient.get`` that answers both day ("YYYYMMDD") and
-    whole-month ("YYYYMM") scoreboard requests from one day->events map —
-    mirrors how ESPN's real scoreboard endpoint buckets by the requested range."""
-    async def _get(url: str) -> MagicMock:
-        key = re.search(r'dates=(\d+)', url).group(1)
-        if len(key) == 8:
-            d = date(int(key[:4]), int(key[4:6]), int(key[6:8]))
-            return _resp(events_by_day.get(d, []))
-        year, month = int(key[:4]), int(key[4:6])
-        matched = [
-            e for d, evs in events_by_day.items()
-            if d.year == year and d.month == month for e in evs
-        ]
-        return _resp(matched)
+    """Fake ``httpx.AsyncClient.get`` for the async ESPN client — answers the
+    whitelist-calendar request (candidates derived from ``events_by_day``'s
+    own keys, so every day with events is a valid candidate) and per-day
+    scoreboard requests. Real calls go through ``client.async_get_json`` with
+    ``params=``, not an embedded query string."""
+    calendar = [f'{d.isoformat()}T07:00Z' for d in events_by_day]
+
+    async def _get(url: str, params: dict, timeout: float | None = None) -> MagicMock:
+        if params.get('calendartype') == 'whitelist':
+            return _whitelist_resp(calendar)
+        dates = params['dates']
+        d = date(int(dates[:4]), int(dates[4:6]), int(dates[6:8]))
+        return _resp(events_by_day.get(d, []))
     return _get
 
 
@@ -207,11 +205,13 @@ async def test_default_view_rolls_forward_to_the_upcoming_slate(service):
     ) as get:
         games = await service.get_games_today()
 
-    # month-batched: at most 2 calls (start month + end-of-lookahead month),
-    # never one call per day of the 8-day window.
-    assert len(get.call_args_list) <= 2
-    for call in get.call_args_list:
-        assert re.search(r'dates=\d{6}(&|$)', call[0][0])
+    # 1 whitelist call + one day-fetch per whitelist candidate (today,
+    # tomorrow) — never one call per calendar day of the 8-day window.
+    assert len(get.call_args_list) == 3
+    day_calls = [c for c in get.call_args_list if c.kwargs['params'].get('calendartype') != 'whitelist']
+    assert len(day_calls) == 2
+    for call in day_calls:
+        assert len(call.kwargs['params']['dates']) == 8
     # the picked slate is the pending one, normalized to canonical abbrs
     assert games['NYK'].opponent == 'GSW'
     assert 'LAL' not in games
@@ -243,7 +243,9 @@ async def test_default_view_empty_when_no_upcoming_slate(service):
         games = await service.get_games_today()
 
     assert games == {}
-    assert len(get.call_args_list) <= 2  # month-batched, not one call per day
+    # offseason short circuit: whitelist has zero candidates in range -> only
+    # the whitelist call itself, no day-scoreboard fetches at all.
+    assert len(get.call_args_list) == 1
 
 
 @pytest.mark.asyncio
@@ -283,7 +285,7 @@ async def test_explicit_date_is_used_verbatim(service):
     ) as get:
         await service.get_games_today(date='20260412')
 
-    assert 'dates=20260412' in get.call_args[0][0]
+    assert get.call_args.kwargs['params']['dates'] == '20260412'
 
 
 @pytest.mark.asyncio
@@ -294,3 +296,83 @@ async def test_get_games_today_empty_on_no_games(service):
         games = await service.get_games_today()
 
     assert games == {}
+
+
+def _whitelist_resp(calendar: list[str]) -> MagicMock:
+    resp = MagicMock()
+    resp.json.return_value = {'leagues': [{'calendar': calendar}]}
+    resp.raise_for_status = MagicMock()
+    return resp
+
+
+def _whitelist_get(calendar: list[str]):
+    """Fake ``httpx.AsyncClient.get`` for the whitelist-calendar request —
+    real calls go through ``client.async_get_json`` with ``params=``, not an
+    embedded query string, unlike the day/month scoreboard fakes above."""
+    async def _get(url: str, params: dict | None = None, timeout=None) -> MagicMock:
+        assert params == {'calendartype': 'whitelist'}
+        return _whitelist_resp(calendar)
+    return _get
+
+
+@pytest.mark.asyncio
+async def test_ensure_whitelist_parses_calendar_entries_to_et_dates(service):
+    calendar = ['2025-10-02T07:00Z', '2026-01-29T08:00Z', '2026-06-13T07:00Z']
+
+    with patch.object(service._client, 'get', new_callable=AsyncMock, side_effect=_whitelist_get(calendar)):
+        await service._ensure_whitelist()
+
+    assert service._whitelist_cache['dates'] == {
+        date(2025, 10, 2), date(2026, 1, 29), date(2026, 6, 13),
+    }
+
+
+@pytest.mark.asyncio
+async def test_ensure_whitelist_caches_for_24_hours(service):
+    calendar = ['2025-10-02T07:00Z']
+
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_whitelist_get(calendar),
+    ) as get:
+        await service._ensure_whitelist()
+        await service._ensure_whitelist()
+
+    assert get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_ensure_whitelist_refetches_after_ttl_expiry(service):
+    calendar = ['2025-10-02T07:00Z']
+    service._whitelist_cache = {'dates': {date(2020, 1, 1)}, 'ts': datetime.now() - timedelta(hours=25)}
+
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_whitelist_get(calendar),
+    ) as get:
+        await service._ensure_whitelist()
+
+    assert get.await_count == 1
+    assert service._whitelist_cache['dates'] == {date(2025, 10, 2)}
+
+
+@pytest.mark.asyncio
+async def test_get_games_today_and_get_upcoming_game_dates_share_one_fetch(service):
+    """Both callers read the same underlying day-events cache — a page load
+    that calls both (as /today's route does via _known_slate_dates) must not
+    double the ESPN traffic for the overlapping date range."""
+    today = _today()
+    events_by_day = {
+        today: [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=today)],
+        today + timedelta(days=3): [
+            _scoreboard_event(18, 9, 'NY', 'GS', completed=False, game_date=today + timedelta(days=3))
+        ],
+    }
+
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+    ) as get:
+        await service.get_upcoming_game_dates(lookahead_days=14)
+        first_call_count = len(get.call_args_list)
+        await service.get_games_today()
+
+    assert first_call_count > 0
+    assert len(get.call_args_list) == first_call_count

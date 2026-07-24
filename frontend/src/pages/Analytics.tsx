@@ -3,7 +3,7 @@ import { useGetHeatmapDataQuery, useGetLeagueSummaryQuery } from '../store/api/f
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DataDateBadge from '../components/DataDateBadge'
-import RankingsOverTimeChart from '../components/RankingsOverTimeChart'
+import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
@@ -369,7 +369,7 @@ const Analytics = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <RankingsOverTimeChart />
+          <StandingsRace />
         </div>
       </div>
     )
@@ -411,7 +411,7 @@ const Analytics = () => {
 
       {activeTab === 'rankingsOverTime' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <RankingsOverTimeChart />
+          <StandingsRace />
         </div>
       )}
 

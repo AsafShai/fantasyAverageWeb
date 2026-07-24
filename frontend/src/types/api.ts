@@ -218,6 +218,7 @@ export interface TeamTimeSeriesPoint {
   rk_blk?: number;
   rk_pts?: number;
   rk_total?: number;
+  gp?: number;
   fg_pct?: number;
   ft_pct?: number;
   three_pm?: number;
@@ -372,4 +373,73 @@ export interface TeamStoreState {
   team_abbr: string;
   own: Record<string, number | null>;
   allowed: Record<string, number | null>;
+}
+
+export interface MinutesMoverItem {
+  player_name: string;
+  pro_team: string;
+  position: string;
+  fantasy_status: string;
+  games_last_15d: number;
+  season_mpg: number;
+  l5_mpg: number;
+  delta_mpg: number;
+  season_gp: number;
+  window_gp: number;
+  low_sample: boolean;
+}
+
+export interface MinutesResponse {
+  items: MinutesMoverItem[];
+  window_days: number;
+  last_updated: string;
+}
+
+export interface UsageRoleItem {
+  player_name: string;
+  pro_team: string;
+  position: string;
+  fantasy_status: string;
+  games_last_15d: number;
+  season_usg: number;
+  l5_usg: number;
+  delta_usg: number;
+  season_mpg: number;
+  l5_mpg: number;
+  delta_mpg: number;
+  season_gp: number;
+  window_gp: number;
+  role_badge: string | null;
+}
+
+export interface UsageResponse {
+  items: UsageRoleItem[];
+  window_days: number;
+  last_updated: string;
+}
+
+export type RegressionStat = '3P%' | 'FT%' | 'FG%';
+
+export interface RegressionStatItem {
+  stat: RegressionStat;
+  current_pct: number;
+  baseline_pct: number;
+  dev: number;
+  attempts_per_game: number;
+  drift_score: number;
+}
+
+export interface RegressionPlayerGroup {
+  player_name: string;
+  pro_team: string;
+  position: string;
+  fantasy_status: string;
+  games_last_15d: number;
+  stats: RegressionStatItem[];
+}
+
+export interface RegressionResponse {
+  items: RegressionPlayerGroup[];
+  window_days: number;
+  last_updated: string;
 }
