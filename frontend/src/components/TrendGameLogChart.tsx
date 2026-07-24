@@ -34,6 +34,9 @@ const LINE_COLOR: Record<GameLogMode, string> = {
 }
 
 const BAR_COLOR = '#8b5cf6'
+// Distinct from every series colour (blue / amber / green) and from the bars,
+// so a capped point never reads as part of the line it sits on.
+const CAPPED_COLOR = '#d946ef'
 
 type LegendItem = { label: string; color?: string; band?: boolean; dash?: string; bar?: boolean; marker?: boolean }
 
@@ -132,7 +135,14 @@ function CappedDot(props: { cx?: number; cy?: number; payload?: ChartRow; stroke
   const { cx, cy, payload, stroke } = props
   if (cx === undefined || cy === undefined) return null
   if (!payload?.capped) return <circle cx={cx} cy={cy} r={2} fill={stroke} />
-  return <path d={`M${cx - 4},${cy + 3} L${cx},${cy - 3} L${cx + 4},${cy + 3} Z`} fill={stroke} />
+  return (
+    <path
+      d={`M${cx - 5},${cy + 4} L${cx},${cy - 4} L${cx + 5},${cy + 4} Z`}
+      fill={CAPPED_COLOR}
+      stroke="var(--trend-grid)"
+      strokeWidth={1}
+    />
+  )
 }
 
 function StatBlock({ rows }: { rows: [string, string][] }) {
@@ -162,7 +172,7 @@ function ChartTooltip({ active, payload, mode, stat }: {
     <div className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-[11px] shadow">
       <div className="font-semibold text-gray-800 dark:text-gray-100">{r.label} · {r.matchup}</div>
       <div className="text-gray-600 dark:text-gray-300">{main}: {r.trueValue.toFixed(1)}{unit}</div>
-      {r.capped && <div className="text-amber-600 dark:text-amber-400">above the axis — {r.minutes.toFixed(0)} min played</div>}
+      {r.capped && <div style={{ color: CAPPED_COLOR }}>above the axis — {r.minutes.toFixed(0)} min played</div>}
       {mode === 'usage' && <div className="text-gray-500 dark:text-gray-400">MIN: {r.bar.toFixed(0)}</div>}
       {mode === 'shooting' && (
         <div className="text-gray-500 dark:text-gray-400">
@@ -273,7 +283,7 @@ export default function TrendGameLogChart({
       </div>
 
       {cappedCount > 0 && (
-        <p className="text-[10px] text-amber-600 dark:text-amber-400 mb-1">
+        <p className="text-[10px] mb-1" style={{ color: CAPPED_COLOR }}>
           ▲ {cappedCount} {cappedCount === 1 ? 'game sits' : 'games sit'} above the axis — short garbage-time
           appearances where a per-minute rate overstates the real role. Hover for the true value.
         </p>
@@ -293,6 +303,9 @@ export default function TrendGameLogChart({
                   x1={bandStart}
                   x2={bandEnd}
                   fill="var(--trend-band)"
+                  fillOpacity={1}
+                  stroke="var(--trend-band-label)"
+                  strokeOpacity={0.5}
                 />
               )}
               {mode !== 'minutes' && <Bar yAxisId="bar" dataKey="bar" fill={BAR_COLOR} fillOpacity={0.45} isAnimationActive={false} />}
@@ -350,7 +363,7 @@ export default function TrendGameLogChart({
           dash: '2 3',
         }]),
         { label: `Last ${windowDays} days`, band: true },
-        ...(cappedCount > 0 ? [{ label: 'Capped — true value in tooltip', color: LINE_COLOR[mode], marker: true }] : []),
+        ...(cappedCount > 0 ? [{ label: 'Capped — true value in tooltip', color: CAPPED_COLOR, marker: true }] : []),
       ]} />
     </div>
   )

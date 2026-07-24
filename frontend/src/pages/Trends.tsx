@@ -496,10 +496,6 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons }: { item
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
-        Buy-low = negative Δ (cold vs the player's own {BASELINE_LABEL[baselineSeasons]}). Sell-high = positive Δ (hot vs their own history).
-        Δ is in percentage points, not a relative change. Click any stat row for the game-by-game chart.
-      </p>
     </div>
   )
 }
