@@ -7,8 +7,9 @@ import {
   CartesianGrid,
   Tooltip,
   Brush,
-  LabelList,
   ResponsiveContainer,
+  usePlotArea,
+  useYAxisScale,
 } from 'recharts'
 import { useGetRankingsOverTimeQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -44,6 +45,8 @@ const METRICS: MetricOption[] = [
 ]
 
 const shortName = (name: string) => (name.length > 14 ? name.slice(0, 13) + '…' : name)
+// Tighter truncation for the end-of-line labels so they fit inside the right margin.
+const endLabelName = (name: string) => (name.length > 12 ? name.slice(0, 11) + '…' : name)
 
 const formatDate = (dateStr: string) => {
   const d = new Date(dateStr)
@@ -64,11 +67,83 @@ function computeBumpRanks(rows: { teamId: number; value: number }[]): Map<number
   return ranks
 }
 
+const LABEL_GAP = 13
+
+type Team = { team_id: number; team_name: string }
+
+// End-of-line team labels, rendered as a single coordinated layer so they can be
+// spread vertically to avoid overlapping. Reads the live y-scale/plot area from the
+// chart, so it stays correct when the Brush zooms into a sub-range.
+function EndLabels({
+  row,
+  teams,
+  colorForTeam,
+  isOn,
+  hasHighlight,
+}: {
+  row: Record<string, number | string> | undefined
+  teams: Team[]
+  colorForTeam: (idx: number) => string
+  isOn: (teamId: number) => boolean
+  hasHighlight: boolean
+}) {
+  const plot = usePlotArea()
+  const yScale = useYAxisScale()
+  if (!plot || !yScale || !row) return null
+
+  const labels: { name: string; y: number; color: string }[] = []
+  teams.forEach((team, idx) => {
+    const on = isOn(team.team_id)
+    // When a team is spotlighted, only label the highlighted lines to cut clutter.
+    if (hasHighlight && !on) return
+    const value = Number(row[team.team_name])
+    if (Number.isNaN(value)) return
+    const yPix = yScale(value)
+    if (yPix == null || Number.isNaN(yPix)) return
+    labels.push({
+      name: endLabelName(team.team_name),
+      y: yPix as number,
+      color: on ? colorForTeam(idx) : DIM_COLOR,
+    })
+  })
+  if (labels.length === 0) return null
+
+  // Spread labels so they never overlap: push each one below the previous when too close,
+  // then shift the whole stack back inside the plot area if it overflowed.
+  labels.sort((a, b) => a.y - b.y)
+  for (let i = 1; i < labels.length; i++) {
+    if (labels[i].y < labels[i - 1].y + LABEL_GAP) labels[i].y = labels[i - 1].y + LABEL_GAP
+  }
+  const top = plot.y
+  const bottom = plot.y + plot.height
+  const overflow = labels[labels.length - 1].y - bottom
+  if (overflow > 0) for (const l of labels) l.y -= overflow
+  if (labels[0].y < top) {
+    const shift = top - labels[0].y
+    for (const l of labels) l.y += shift
+    for (let i = 1; i < labels.length; i++) {
+      if (labels[i].y < labels[i - 1].y + LABEL_GAP) labels[i].y = labels[i - 1].y + LABEL_GAP
+    }
+  }
+
+  const x = plot.x + plot.width + 6
+  return (
+    <g>
+      {labels.map((l, i) => (
+        <text key={i} x={x} y={l.y} fontSize={11} fontWeight={600} fill={l.color} dominantBaseline="middle">
+          {l.name}
+        </text>
+      ))}
+    </g>
+  )
+}
+
 const StandingsRace = () => {
   const [source, setSource] = useState<OverTimeSource>('rankings_totals')
   const [view, setView] = useState<ViewMode>('points')
   const [metric, setMetric] = useState<string>('rk_total')
   const [highlighted, setHighlighted] = useState<Set<number>>(new Set())
+  const [brushEnd, setBrushEnd] = useState<number | null>(null)
 
   const { data, error, isLoading } = useGetRankingsOverTimeQuery({ source })
 
@@ -128,7 +203,8 @@ const StandingsRace = () => {
   const toggleHighlight = (teamId: number) => {
     setHighlighted(prev => {
       const next = new Set(prev)
-      next.has(teamId) ? next.delete(teamId) : next.add(teamId)
+      if (next.has(teamId)) next.delete(teamId)
+      else next.add(teamId)
       return next
     })
   }
@@ -136,6 +212,12 @@ const StandingsRace = () => {
 
   const hasHighlight = highlighted.size > 0
   const isOn = (teamId: number) => !hasHighlight || highlighted.has(teamId)
+
+  // Anchor the end-of-line labels to the last *visible* point so they don't disappear
+  // when the Brush zooms to a range that excludes the final date.
+  const lastIdx = chartData.length - 1
+  const endIdx = brushEnd == null ? lastIdx : Math.min(Math.max(brushEnd, 0), lastIdx)
+  const endRow = chartData[endIdx] as Record<string, number | string> | undefined
 
   return (
     <div>
@@ -226,7 +308,7 @@ const StandingsRace = () => {
 
           {!isLoading && !error && chartData.length > 0 && (
             <ResponsiveContainer width="100%" height={420} minHeight={320}>
-              <LineChart data={chartData} margin={{ top: 4, right: 70, left: -10, bottom: 36 }}>
+              <LineChart data={chartData} margin={{ top: 4, right: 84, left: -10, bottom: 36 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-10" />
                 <XAxis
                   dataKey="date"
@@ -280,6 +362,7 @@ const StandingsRace = () => {
                   travellerWidth={10}
                   stroke="#d1d5db"
                   fill="#f9fafb"
+                  onChange={range => setBrushEnd(range?.endIndex ?? null)}
                 />
                 {teams.map((team, idx) => {
                   const color = TEAM_COLORS[idx % TEAM_COLORS.length]
@@ -295,23 +378,16 @@ const StandingsRace = () => {
                       dot={false}
                       connectNulls
                       isAnimationActive={false}
-                    >
-                      <LabelList
-                        dataKey={team.team_name}
-                        content={(props: unknown) => {
-                          const { x, y, value, index } = props as { x: number; y: number; value: number; index: number }
-                          if (index !== chartData.length - 1) return null
-                          if (value === undefined || value === null || Number.isNaN(value)) return null
-                          return (
-                            <text x={x + 6} y={y + 3} fontSize={11} fontWeight={600} fill={on ? color : DIM_COLOR}>
-                              {shortName(team.team_name)}
-                            </text>
-                          )
-                        }}
-                      />
-                    </Line>
+                    />
                   )
                 })}
+                <EndLabels
+                  row={endRow}
+                  teams={teams}
+                  colorForTeam={idx => TEAM_COLORS[idx % TEAM_COLORS.length]}
+                  isOn={isOn}
+                  hasHighlight={hasHighlight}
+                />
               </LineChart>
             </ResponsiveContainer>
           )}
