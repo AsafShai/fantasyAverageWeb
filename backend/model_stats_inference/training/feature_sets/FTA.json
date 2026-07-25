@@ -80,6 +80,9 @@
     "FTA_share4_ewm10",
     "FTA_share4_global",
     "FTM_share3_ewm10",
-    "FTM_share3_global"
+    "FTM_share3_global",
+    "USG_w5_mean",
+    "USG_w10_mean",
+    "USG_global_mean"
   ]
 }
