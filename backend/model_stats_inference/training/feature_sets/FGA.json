@@ -87,6 +87,7 @@
     "OPP_ALLOWED_TOV_w10_mean",
     "OPP_ALLOWED_TOV_w10_var",
     "OPP_ALLOWED_TOV_w5_mean",
-    "OPP_ALLOWED_TOV_w5_var"
+    "OPP_ALLOWED_TOV_w5_var",
+    "USG_w10_mean"
   ]
 }
