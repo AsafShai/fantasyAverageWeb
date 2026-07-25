@@ -22,7 +22,7 @@ export const TeamRankingsBar: React.FC<TeamRankingsBarProps> = ({ categoryRanks 
   };
 
   return (
-    <div className="mb-3 border border-gray-200 rounded-lg overflow-hidden">
+    <div className="mb-3 border border-gray-200 rounded-lg overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="bg-gray-50">

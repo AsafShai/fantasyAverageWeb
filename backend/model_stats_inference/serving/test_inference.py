@@ -88,6 +88,18 @@ def test_more_minutes_more_points(store, models_dir):
     assert high > low
 
 
+def test_zero_minutes_zero_stats(store, models_dir):
+    # Minutes-exposure guarantee (ŷ = t·rate): a player projected for 0 minutes
+    # scores exactly 0 on every counting stat — structurally, not via a special
+    # case. Derived percentages fall back to 0 (0/0).
+    inf = LiveInference(store, models_dir=models_dir)
+    res = inf.predict(_request(FULL_PID, 0, store))
+    for stat in ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]:
+        assert res.stats[stat].value == 0.0, f"{stat} != 0 at t=0"
+    # Coherence is trivially preserved: 0 = 2·0 + 0 + 0.
+    assert res.stats["FG_PCT"].value == 0.0 and res.stats["FT_PCT"].value == 0.0
+
+
 def test_rmse_band_present(store, models_dir):
     inf = LiveInference(store, models_dir=models_dir)
     pts = inf.predict(_request(FULL_PID, 30, store)).stats["PTS"]

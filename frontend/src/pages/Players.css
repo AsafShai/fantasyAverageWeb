@@ -2,6 +2,7 @@
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
+  overflow-x: hidden;
 }
 
 .filter-toggle {
@@ -201,7 +202,9 @@
 
 .table-container {
   max-height: 600px;
+  overflow-x: auto;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #fff;

@@ -41,7 +41,11 @@ CLIP_AT_ZERO = True
 # The production model/loss. Must be a key in `training.models.ESTIMATORS`.
 # Change this one line to swap model family or loss; add new candidates in
 # training/models.py (they auto-appear in the compare_models bake-off).
-MODEL_NAME = "hgb_poisson"
+#
+# hgb_poisson_exposure models each stat as minutes × per-minute-rate (ŷ = t·rate):
+# t=0 ⇒ 0 exactly, monotone in minutes, and a small consistent RMSE gain over the
+# bare hgb_poisson count model on identical inputs. See docs/MINUTES_EXPOSURE.md.
+MODEL_NAME = "hgb_poisson_exposure"
 
 
 def make_model() -> BaseEstimator:
