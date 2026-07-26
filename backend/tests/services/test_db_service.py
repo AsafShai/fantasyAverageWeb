@@ -162,13 +162,12 @@ async def test_get_fs_rows_before_filters_min_minutes(db_service, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_fs_rows_before_no_pool_returns_empty_lists(db_service, monkeypatch):
+async def test_get_fs_rows_before_no_pool_returns_empty_frames(db_service, monkeypatch):
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=None))
 
     players, teams = await db_service.get_fs_rows_before(date(2026, 1, 10))
 
-    assert players == []
-    assert teams == []
+    assert players.empty and teams.empty
 
 
 @pytest.mark.asyncio
@@ -349,3 +348,36 @@ async def test_upsert_rankings_averages_preserves_tie_fraction(db_service, monke
     assert params[4] == 6.5
     assert params[-1] == 52.0
     assert isinstance(params[-1], float)
+
+
+class _FakeRecord(tuple):
+    """Mimics asyncpg.Record: a tuple of values that also exposes .keys()."""
+
+    def __new__(cls, mapping):
+        obj = super().__new__(cls, mapping.values())
+        obj._k = list(mapping)
+        return obj
+
+    def keys(self):
+        return self._k
+
+
+def test_fs_records_to_frame_reads_asyncpg_rows_without_dicts():
+    """Built straight from the records (a dict per row costs ~80 MB on a full
+    history), so it must work on Record objects, not just mappings."""
+    from app.services.db_service import fs_records_to_frame
+
+    df = fs_records_to_frame([
+        _FakeRecord({"player_id": 1, "game_date": date(2026, 1, 5), "min": 31.5}),
+        _FakeRecord({"player_id": 2, "game_date": date(2026, 1, 6), "min": 8.0}),
+    ])
+
+    assert list(df.columns) == ["PLAYER_ID", "GAME_DATE", "MIN"]   # uppercased
+    assert str(df["GAME_DATE"].dtype).startswith("datetime64")     # date -> Timestamp
+    assert df["MIN"].tolist() == [31.5, 8.0]
+
+
+def test_fs_records_to_frame_handles_no_rows():
+    from app.services.db_service import fs_records_to_frame
+
+    assert fs_records_to_frame([]).empty

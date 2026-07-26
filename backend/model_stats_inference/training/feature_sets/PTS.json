@@ -67,6 +67,7 @@
     "USAGE_LOAD_ewm10_rate",
     "T_x_USAGE_LOAD_ewm10_rate",
     "FGA_LOAD_ewm10_rate",
-    "TS_EFF_ewm10"
+    "TS_EFF_ewm10",
+    "USG_w10_mean"
   ]
 }
