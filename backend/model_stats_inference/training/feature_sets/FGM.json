@@ -69,7 +69,6 @@
     "WEIGHT_LB",
     "WINGSPAN_IN",
     "REACH_IN",
-    "WING_MINUS_HEIGHT",
-    "USG_w5_mean"
+    "WING_MINUS_HEIGHT"
   ]
 }
