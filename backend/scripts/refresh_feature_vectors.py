@@ -124,19 +124,43 @@ async def _main(args: argparse.Namespace) -> int:
         )
         print(f"\n  {fresh:,} player vectors stamped updated_at within the last 10 min")
         if args.expect_feature:
+            # Only the rows this run wrote can be judged: the upsert never deletes,
+            # so a player the rebuild no longer produces keeps whatever it had.
+            # Failing on those would conflate "the code does not emit this feature"
+            # with "the table has stale rows", which are very different problems.
+            written_ids = [r[0] for r in players_v]
             have = await conn.fetchval(
-                "SELECT COUNT(*) FROM fs_player_vectors WHERE features ? $1", args.expect_feature
+                "SELECT COUNT(*) FROM fs_player_vectors "
+                "WHERE player_id = ANY($1::bigint[]) AND features ? $2",
+                written_ids, args.expect_feature,
             )
-            total = await conn.fetchval("SELECT COUNT(*) FROM fs_player_vectors")
-            print(f"  {have:,}/{total:,} player vectors carry {args.expect_feature!r}")
-            if have < total:
+            print(f"  {have:,}/{len(written_ids):,} rebuilt vectors carry {args.expect_feature!r}")
+            if have < len(written_ids):
                 print(
-                    f"ERROR: {total - have:,} vectors are missing {args.expect_feature!r} — is the "
-                    "deployed code the version that emits it?",
+                    f"ERROR: {len(written_ids) - have:,} of the vectors just written lack "
+                    f"{args.expect_feature!r} — is the deployed code the version that emits it?",
                     file=sys.stderr,
                 )
                 await db.close()
                 return 1
+
+            stale = await conn.fetch(
+                "SELECT player_id, games_count, eligible FROM fs_player_vectors "
+                "WHERE NOT (player_id = ANY($1::bigint[]))",
+                written_ids,
+            )
+            if stale:
+                servable = [r["player_id"] for r in stale if r["eligible"]]
+                print(
+                    f"\n  note: {len(stale)} player vector(s) were not rebuilt — they have no "
+                    f"games at or above MIN_MINUTES, so the feature engine no longer produces "
+                    f"them. They keep their previous features."
+                )
+                print(
+                    f"  {len(servable)} of them are marked eligible"
+                    + (f" and would be served with stale features: {servable}"
+                       if servable else " (the rest cannot be served anyway)")
+                )
 
     print(f"\nDone in {time.perf_counter() - t0:.1f}s — vectors re-materialized; "
           "restart the app so it loads them (and any new models).")
