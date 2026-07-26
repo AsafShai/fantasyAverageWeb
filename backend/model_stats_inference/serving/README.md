@@ -73,7 +73,7 @@ Two consequences:
 - **It does need a re-materialization**, because the vectors are a *precomputed
   cache* rather than something computed per request. This is automatic — see below.
 
-### Deploying is enough: the store self-heals
+### Detecting a stale store
 
 `run_catchup` starts with `_ensure_vectors_current()`, which compares the features
 the deployed models ask for (the union over `training/feature_sets/*.json`, minus the
@@ -81,33 +81,37 @@ ones `_assemble_row` derives per request) against the keys stored across **all t
 vector tables. The union matters: a feature row is composed from the player vector
 plus the `TEAM_*` and `OPP_ALLOWED_*` team vectors, so checking `fs_player_vectors`
 alone would report ~77 team features as permanently missing and rebuild every night.
-If the models need something the store lacks, it rebuilds **all** vectors once,
-exactly like an init:
 
-```bash
-# 1. deploy the branch  (models/*.joblib are git-tracked and ship with it)
-# 2. restart the app
-# 3. nothing — the next nightly detects the new feature and rebuilds the vectors
-```
+Detection always runs and costs three `LIMIT 1` queries. What happens next is
+**`MODEL_FEATURE_HEAL_AUTO`**:
 
-It is self-limiting: after the rebuild the keys match, so every later night costs three
-`LIMIT 1` queries (one per vector table) and does nothing. The rebuild itself is ~2 s
-of compute for ~660 players × ~250 columns. If a feature is *still* absent afterwards
-the run reports `vectors_refresh_incomplete` and logs an error rather than retrying
-nightly — that means the feature sets and the feature engine disagree.
+| | behaviour |
+|---|---|
+| `false` (**default**) | logs which features are missing and the exact command to run; the store is left alone. Status `manual_refresh_required`. |
+| `true` | rebuilds all vectors once, like an init (~2 s compute, **~380 MB peak**). Status `vectors_refreshed`. |
+
+It defaults to off because the rebuild's memory is more than a small container can
+spare mid-flight: it gets OOM-killed *before* the upsert lands, so the gap survives
+and every later run tries again — a crash loop. Turn it on only where the container
+can afford the peak.
+
+With auto on it is self-limiting: after the rebuild the keys match and later nights do
+nothing. If a feature is *still* absent afterwards the run reports
+`vectors_refresh_incomplete` and logs an error rather than retrying nightly — that
+means the feature sets and the feature engine disagree.
 
 Why the check lives in `run_catchup` and not `_run_for_date`: the per-night path
 already rebuilds every vector (`_process_sync` → `FeatureStore.build` over all stored
 rows), but only on nights that **have games**. Off-nights return early at `no_games`,
-so during the off-season nothing would recompute for months. Hoisting the check above
-the loop makes a deploy heal regardless of the calendar.
+so during the off-season nothing would recompute for months.
 
-> Requires `MODEL_NIGHTLY_ENABLED=true` — the scheduler is off by default
-> (`app/config.py`). Without it, use the manual script below.
+> Both need `MODEL_NIGHTLY_ENABLED=true` — the scheduler is off by default
+> (`app/config.py`). Without it nothing is detected either, so run the script after
+> any feature change.
 
-### Manual override
+### Rebuilding the vectors manually
 
-To apply a feature change immediately instead of waiting for the next nightly:
+The supported way to apply a feature change (and the default, given the flag above):
 
 ```bash
 cd backend    # must run from here: pydantic loads .env (SEASON_ID, LEAGUE_ID) from the CWD

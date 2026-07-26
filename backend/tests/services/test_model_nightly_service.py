@@ -266,7 +266,7 @@ def test_vector_serialize_roundtrip():
     assert json.loads(prows[1][7])["PTS_global_mean"] is None
 
 
-# --- feature drift: self-healing rebuild after a deploy ---------------------
+# --- missing features: healing the store after a deploy --------------------
 
 
 def _real_stored_keys() -> tuple[set[str], set[str]]:
@@ -294,6 +294,12 @@ def _real_stored_keys() -> tuple[set[str], set[str]]:
     return player | team, player
 
 
+def _auto_heal(monkeypatch, enabled=True):
+    """MODEL_FEATURE_HEAL_AUTO defaults to off, so tests that exercise the
+    rebuild have to opt in."""
+    monkeypatch.setattr(mns.settings, "model_feature_heal_auto", enabled)
+
+
 def _count_refreshes(monkeypatch) -> list:
     """Record every _refresh_vectors_through call while keeping real behaviour."""
     calls = []
@@ -318,7 +324,7 @@ def test_required_stored_features_excludes_request_time_ones():
 
 
 def test_every_required_feature_is_produced_by_some_vector_table():
-    """The drift check must compare against all three tables, not just the player one.
+    """The check must compare against all three tables, not just the player one.
 
     A model's feature row is composed from the player vector plus the OPP_ALLOWED_*
     and TEAM_* team vectors, so checking `fs_player_vectors` alone reports the team
@@ -339,21 +345,22 @@ def test_every_required_feature_is_produced_by_some_vector_table():
 
 
 @pytest.mark.asyncio
-async def test_no_drift_when_store_matches_the_deployed_models(service, monkeypatch):
+async def test_no_rebuild_when_store_matches_the_deployed_models(service, monkeypatch):
     """The realistic case: a store built by the real engine needs no rebuild."""
     service._db.vector_feature_keys, _ = _real_stored_keys()
     _allow_fetch(monkeypatch, _night(expected_games=0))
     calls = _count_refreshes(monkeypatch)
 
     statuses = await service.run_catchup()
-    assert "feature_drift" not in statuses
+    assert "missing_features" not in statuses
     assert calls == []
     assert service._db.vectors_written is None
 
 
 @pytest.mark.asyncio
-async def test_feature_drift_rebuilds_vectors_exactly_once(service, monkeypatch):
+async def test_missing_features_rebuild_vectors_exactly_once(service, monkeypatch):
     """A deploy that adds a feature heals on the next run — and only that run."""
+    _auto_heal(monkeypatch)
     union, _ = _real_stored_keys()
     service._db.vector_feature_keys = union - {"USG_w10_mean"}   # store predates the deploy
     service._db.keys_after_upsert = union                        # the rebuild lands
@@ -363,21 +370,22 @@ async def test_feature_drift_rebuilds_vectors_exactly_once(service, monkeypatch)
     calls = _count_refreshes(monkeypatch)
 
     statuses = await service.run_catchup()
-    assert statuses["feature_drift"] == "vectors_refreshed"
+    assert statuses["missing_features"] == "vectors_refreshed"
     assert len(calls) == 1
     assert service._db.vectors_written is not None
 
     # The stored keys now match, so the next morning is a no-op — no second rebuild.
     service._db.vectors_written = None
     statuses = await service.run_catchup()
-    assert "feature_drift" not in statuses
+    assert "missing_features" not in statuses
     assert len(calls) == 1                       # still one — no second rebuild
     assert service._db.vectors_written is None
 
 
 @pytest.mark.asyncio
-async def test_drift_that_survives_the_rebuild_escalates(service, monkeypatch):
+async def test_missing_features_that_survive_the_rebuild_escalate(service, monkeypatch):
     """A feature the engine cannot produce must be reported, not retried forever."""
+    _auto_heal(monkeypatch)
     union, _ = _real_stored_keys()
     service._db.vector_feature_keys = union - {"USG_w10_mean"}
     # The rebuild "succeeds" but the keys never change (stale feature set / renamed
@@ -386,40 +394,62 @@ async def test_drift_that_survives_the_rebuild_escalates(service, monkeypatch):
     calls = _count_refreshes(monkeypatch)
 
     statuses = await service.run_catchup()
-    assert statuses["feature_drift"] == "vectors_refresh_incomplete"
+    assert statuses["missing_features"] == "vectors_refresh_incomplete"
     assert len(calls) == 1
 
 
 @pytest.mark.asyncio
-async def test_drift_check_skipped_before_bootstrap(service, monkeypatch):
+async def test_missing_feature_check_skipped_before_bootstrap(service, monkeypatch):
     # No vectors materialized yet -> nothing to heal; bootstrap owns that case.
     service._db.vector_feature_keys = None
     _allow_fetch(monkeypatch, _night(expected_games=0))
     calls = _count_refreshes(monkeypatch)
 
     statuses = await service.run_catchup()
-    assert "feature_drift" not in statuses
+    assert "missing_features" not in statuses
     assert calls == []
 
 
 @pytest.mark.asyncio
-async def test_failed_drift_rebuild_is_reported(service, monkeypatch):
+async def test_failed_rebuild_is_reported(service, monkeypatch):
+    _auto_heal(monkeypatch)
     union, _ = _real_stored_keys()
     service._db.vector_feature_keys = union - {"USG_w10_mean"}
     service._db.vec_insert_ok = False           # upsert fails
     _allow_fetch(monkeypatch, _night(expected_games=0))
 
     statuses = await service.run_catchup()
-    assert statuses["feature_drift"] == "vectors_refresh_failed"
+    assert statuses["missing_features"] == "vectors_refresh_failed"
 
 
 @pytest.mark.asyncio
-async def test_drift_rebuild_without_raw_rows_is_skipped_not_failed(service, monkeypatch):
+async def test_rebuild_without_raw_rows_is_skipped_not_failed(service, monkeypatch):
     """Tri-state: "nothing to write" must not be reported as a write failure."""
+    _auto_heal(monkeypatch)
     union, _ = _real_stored_keys()
     service._db.vector_feature_keys = union - {"USG_w10_mean"}
     service._db.player_recs = pd.DataFrame()    # store not bootstrapped
     _allow_fetch(monkeypatch, _night(expected_games=0))
 
     statuses = await service.run_catchup()
-    assert statuses["feature_drift"] == "vectors_refresh_skipped"
+    assert statuses["missing_features"] == "vectors_refresh_skipped"
+
+
+@pytest.mark.asyncio
+async def test_missing_features_reported_not_rebuilt_when_auto_heal_is_off(service, monkeypatch):
+    """Default mode: detect and say what to run, but never rebuild.
+
+    The rebuild needs ~380 MB, which a small container cannot spare mid-flight —
+    it gets OOM-killed before the upsert lands, so the gap survives and every
+    later run tries again. Detection is three queries and stays on.
+    """
+    union, _ = _real_stored_keys()
+    service._db.vector_feature_keys = union - {"USG_w10_mean"}
+    _auto_heal(monkeypatch, enabled=False)
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+    calls = _count_refreshes(monkeypatch)
+
+    statuses = await service.run_catchup()
+    assert statuses["missing_features"] == "manual_refresh_required"
+    assert calls == []                              # nothing rebuilt
+    assert service._db.vectors_written is None      # store untouched

@@ -30,6 +30,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from app.config import settings
 from app.services.db_service import DBService
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
@@ -177,12 +178,12 @@ class ModelNightlyService:
         DB failure): ingesting later days before an earlier day would leave the
         store with a hole under those predictions.
 
-        Runs the feature-drift check first, outside the loop, so a deploy that adds
+        Runs the missing-feature check first, outside the loop, so a deploy that adds
         a feature heals even when no date in the window has games (off-season).
         """
-        drift = await self._ensure_vectors_current()
+        missing = await self._ensure_vectors_current()
         yesterday = (datetime.now(ISRAEL_TZ) - timedelta(days=1)).date()
-        statuses: dict[str, str] = {"feature_drift": drift} if drift else {}
+        statuses: dict[str, str] = {"missing_features": missing} if missing else {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = yesterday - timedelta(days=offset)
             status = await self.run_for_date(d)
@@ -279,7 +280,7 @@ class ModelNightlyService:
         vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
         return await self._db.upsert_feature_vectors(*vectors)
 
-    # --- feature-set drift (self-healing after a deploy) ---------------------
+    # --- missing features (heal the store after a deploy) --------------------
 
     @staticmethod
     def _required_stored_features() -> set[str]:
@@ -309,9 +310,10 @@ class ModelNightlyService:
         this on its own, but only on nights that have games: off-nights and the
         whole off-season return early, so a deploy could sit un-healed for months.
 
-        Runs before the catch-up loop, costs one query per vector table when
-        nothing changed, and is self-limiting — once rewritten the keys match and
-        this is a no-op.
+        Runs before the catch-up loop and costs one query per vector table when
+        nothing changed. Whether it *fixes* the gap or only reports it is
+        MODEL_FEATURE_HEAL_AUTO; when it does fix it, it is self-limiting — once
+        rewritten the keys match and this is a no-op.
         """
         stored = await self._db.get_feature_vector_keys()
         if stored is None:
@@ -320,17 +322,32 @@ class ModelNightlyService:
         if not missing:
             return None
 
-        preview = ", ".join(sorted(missing)[:5])
+        preview = ", ".join(sorted(missing)[:5]) + (", ..." if len(missing) > 5 else "")
+
+        # Detection is cheap; the rebuild is not (~380 MB), which is more than a
+        # small container can spare mid-flight — it gets OOM-killed before the
+        # upsert lands, so the gap survives and every later run tries again.
+        # Off by default: say exactly what to run and leave the store alone.
+        if not settings.model_feature_heal_auto:
+            logger.warning(
+                f"Feature vectors are missing {len(missing)} feature(s) the models need "
+                f"({preview}). Auto-heal is off (MODEL_FEATURE_HEAL_AUTO), so the models "
+                f"will read them as NaN until the vectors are rebuilt. Run:\n"
+                f"    cd backend && python scripts/refresh_feature_vectors.py "
+                f"--database-url <url> --expect-feature {sorted(missing)[0]}"
+            )
+            return "manual_refresh_required"
+
         logger.warning(
             f"Feature vectors are missing {len(missing)} feature(s) the models need "
-            f"({preview}{', ...' if len(missing) > 5 else ''}) — rebuilding all vectors"
+            f"({preview}) — rebuilding all vectors"
         )
         written = await self._refresh_vectors_through(datetime.now(ISRAEL_TZ).date())
         if written is None:
-            logger.warning("Feature-drift rebuild skipped: no raw rows to rebuild from")
+            logger.warning("Vector rebuild skipped: no raw rows to rebuild from")
             return "vectors_refresh_skipped"
         if not written:
-            logger.error("Feature-drift rebuild failed; vectors left unchanged")
+            logger.error("Vector rebuild failed; vectors left unchanged")
             return "vectors_refresh_failed"
         self._invalidate_inference_store()
 
