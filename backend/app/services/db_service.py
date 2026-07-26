@@ -1090,40 +1090,6 @@ class DBService:
             logger.error(f"Failed to upsert feature vectors: {e}")
             return False
 
-    async def get_feature_vector_keys(self) -> Optional[set[str]]:
-        """Feature names stored across **all three** vector tables, or None if unknown.
-
-        The union matters: a model's feature row is composed from all three
-        (`LiveInference._assemble_row` merges the player vector, the own-team
-        `TEAM_*` vector and the opponent `OPP_ALLOWED_*` vector), so checking only
-        `fs_player_vectors` would report every team feature as permanently missing.
-
-        Sampled from one row per table — each table is written from a single column
-        set in one upsert, so one row characterises it. None means "cannot tell"
-        (nothing materialized yet, or the query failed); callers should skip any
-        staleness comparison rather than assume everything is missing.
-        """
-        pool = await self._get_pool()
-        if pool is None:
-            return None
-        keys: set[str] = set()
-        try:
-            async with pool.acquire() as conn:
-                for table in (
-                    "fs_player_vectors",
-                    "fs_team_allowed_vectors",
-                    "fs_team_own_vectors",
-                ):
-                    row = await conn.fetchval(
-                        f"SELECT ARRAY(SELECT jsonb_object_keys(features)) FROM {table} LIMIT 1"
-                    )
-                    if row:
-                        keys.update(row)
-        except Exception as e:
-            logger.error(f"Failed to read feature vector keys: {e}")
-            return None
-        return keys or None
-
     async def load_feature_vectors(self) -> tuple[list[dict], list[dict], list[dict]]:
         """(player_vectors, team_allowed_vectors, team_own_vectors) rows for serving."""
         pool = await self._get_pool()
