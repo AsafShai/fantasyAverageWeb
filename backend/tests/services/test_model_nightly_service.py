@@ -28,8 +28,8 @@ class FakeDB:
     def __init__(self):
         self.run = None
         self.has_date = False
-        self.player_recs = [{"player_id": 1}]
-        self.team_recs = [{"team_id": 10}]
+        self.player_recs = pd.DataFrame([{"PLAYER_ID": 1}])
+        self.team_recs = pd.DataFrame([{"TEAM_ID": 10}])
         self.eval_insert_ok = True
         self.fs_insert_ok = True
         self.vec_insert_ok = True
@@ -37,6 +37,11 @@ class FakeDB:
         self.eval_rows = None
         self.fs_rows = None
         self.vectors_written = None
+        self.vector_feature_keys = None   # union across the 3 vector tables; None = unknown
+        self.keys_after_upsert = None     # what a successful rebuild writes, if set
+
+    async def get_feature_vector_keys(self):
+        return self.vector_feature_keys
 
     async def get_model_nightly_run(self, d):
         return self.run
@@ -57,6 +62,9 @@ class FakeDB:
 
     async def upsert_feature_vectors(self, player_rows, team_allowed_rows, team_own_rows):
         self.vectors_written = (player_rows, team_allowed_rows, team_own_rows)
+        if self.vec_insert_ok and self.keys_after_upsert is not None:
+            # A real rebuild rewrites the blobs, so the stored keys change with it.
+            self.vector_feature_keys = self.keys_after_upsert
         return self.vec_insert_ok
 
     async def upsert_model_nightly_run(self, d, status, num_games, num_rows):
@@ -105,7 +113,7 @@ def service(monkeypatch):
     )
     # Never build a real store from the fake records in unit tests.
     monkeypatch.setattr(
-        ModelNightlyService, "_vectors_from_records",
+        ModelNightlyService, "_vectors_from_frames",
         staticmethod(lambda p, t: ([], [], [])),
     )
     yield svc
@@ -168,7 +176,7 @@ async def test_incomplete_data_left_unmarked_for_retry(service, monkeypatch):
 @pytest.mark.asyncio
 async def test_empty_store_requires_bootstrap(service, monkeypatch):
     _allow_fetch(monkeypatch, _night())
-    service._db.player_recs = []
+    service._db.player_recs = pd.DataFrame()
     assert await service.run_for_date(GAME_DATE) == "store_not_bootstrapped"
 
 
@@ -256,3 +264,192 @@ def test_vector_serialize_roundtrip():
     assert tav2.loc[10, "OPP_ALLOWED_PTS_global_mean"] == 110.0
     # features JSON is valid and NaN was stored as null
     assert json.loads(prows[1][7])["PTS_global_mean"] is None
+
+
+# --- missing features: healing the store after a deploy --------------------
+
+
+def _real_stored_keys() -> tuple[set[str], set[str]]:
+    """(union of all three vector tables, player table alone) from a real build.
+
+    Deliberately NOT derived from `_required_stored_features()`: `required` comes
+    from feature_sets/*.json and `stored` from actually running the feature engine
+    over the synthetic serving fixtures, so the two sides are independent and a
+    mismatch is a real mismatch.
+    """
+    import numpy as np
+
+    from model_stats_inference.research import data as rdata
+    from model_stats_inference.serving import conftest as synth
+    from model_stats_inference.serving.feature_store import FeatureStore
+
+    players = synth._make_players(np.random.default_rng(0))
+    team_logs = synth._make_team_logs(np.random.default_rng(1))
+    store = FeatureStore.build(
+        players, rdata.build_team_allowed(team_logs), rdata.build_team_own(team_logs)
+    )
+    prows, tarows, torows = _serialize_vectors(store)
+    player = set(json.loads(prows[0][7]))
+    team = set(json.loads(tarows[0][1])) | set(json.loads(torows[0][1]))
+    return player | team, player
+
+
+def _auto_heal(monkeypatch, enabled=True):
+    """MODEL_FEATURE_HEAL_AUTO defaults to off, so tests that exercise the
+    rebuild have to opt in."""
+    monkeypatch.setattr(mns.settings, "model_feature_heal_auto", enabled)
+
+
+def _count_refreshes(monkeypatch) -> list:
+    """Record every _refresh_vectors_through call while keeping real behaviour."""
+    calls = []
+    original = ModelNightlyService._refresh_vectors_through
+
+    async def counting(self, game_date):
+        calls.append(game_date)
+        return await original(self, game_date)
+
+    monkeypatch.setattr(ModelNightlyService, "_refresh_vectors_through", counting)
+    return calls
+
+
+def test_required_stored_features_excludes_request_time_ones():
+    # Anything LiveInference derives per request is never in the store, so counting
+    # it as "missing" would rebuild the vectors every single night.
+    required = ModelNightlyService._required_stored_features()
+    assert required, "feature sets should contribute stored features"
+    assert not (required & mns.REQUEST_TIME_FEATURES)
+    assert not [f for f in required if f.startswith(mns.REQUEST_TIME_PREFIX)]
+    assert "USG_w10_mean" in required   # the feature this change adds
+
+
+def test_every_required_feature_is_produced_by_some_vector_table():
+    """The check must compare against all three tables, not just the player one.
+
+    A model's feature row is composed from the player vector plus the OPP_ALLOWED_*
+    and TEAM_* team vectors, so checking `fs_player_vectors` alone reports the team
+    features as permanently missing and rebuilds every night forever.
+    """
+    required = ModelNightlyService._required_stored_features()
+    union, player_only = _real_stored_keys()
+
+    assert not (required - union), (
+        f"{len(required - union)} required feature(s) are produced by no vector table: "
+        f"{sorted(required - union)[:5]}"
+    )
+    # Guard the regression directly: the player table alone is NOT sufficient.
+    assert required - player_only, (
+        "expected team features to live outside fs_player_vectors; if this ever "
+        "becomes empty the union below is no longer load-bearing"
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_rebuild_when_store_matches_the_deployed_models(service, monkeypatch):
+    """The realistic case: a store built by the real engine needs no rebuild."""
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+    calls = _count_refreshes(monkeypatch)
+
+    statuses = await service.run_catchup()
+    assert "missing_features" not in statuses
+    assert calls == []
+    assert service._db.vectors_written is None
+
+
+@pytest.mark.asyncio
+async def test_missing_features_rebuild_vectors_exactly_once(service, monkeypatch):
+    """A deploy that adds a feature heals on the next run — and only that run."""
+    _auto_heal(monkeypatch)
+    union, _ = _real_stored_keys()
+    service._db.vector_feature_keys = union - {"USG_w10_mean"}   # store predates the deploy
+    service._db.keys_after_upsert = union                        # the rebuild lands
+    # Off-season: no games on any catch-up date, so the per-night rebuild never
+    # runs. The heal must still happen.
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+    calls = _count_refreshes(monkeypatch)
+
+    statuses = await service.run_catchup()
+    assert statuses["missing_features"] == "vectors_refreshed"
+    assert len(calls) == 1
+    assert service._db.vectors_written is not None
+
+    # The stored keys now match, so the next morning is a no-op — no second rebuild.
+    service._db.vectors_written = None
+    statuses = await service.run_catchup()
+    assert "missing_features" not in statuses
+    assert len(calls) == 1                       # still one — no second rebuild
+    assert service._db.vectors_written is None
+
+
+@pytest.mark.asyncio
+async def test_missing_features_that_survive_the_rebuild_escalate(service, monkeypatch):
+    """A feature the engine cannot produce must be reported, not retried forever."""
+    _auto_heal(monkeypatch)
+    union, _ = _real_stored_keys()
+    service._db.vector_feature_keys = union - {"USG_w10_mean"}
+    # The rebuild "succeeds" but the keys never change (stale feature set / renamed
+    # column), which without the post-check would rebuild again every night.
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+    calls = _count_refreshes(monkeypatch)
+
+    statuses = await service.run_catchup()
+    assert statuses["missing_features"] == "vectors_refresh_incomplete"
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_missing_feature_check_skipped_before_bootstrap(service, monkeypatch):
+    # No vectors materialized yet -> nothing to heal; bootstrap owns that case.
+    service._db.vector_feature_keys = None
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+    calls = _count_refreshes(monkeypatch)
+
+    statuses = await service.run_catchup()
+    assert "missing_features" not in statuses
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_failed_rebuild_is_reported(service, monkeypatch):
+    _auto_heal(monkeypatch)
+    union, _ = _real_stored_keys()
+    service._db.vector_feature_keys = union - {"USG_w10_mean"}
+    service._db.vec_insert_ok = False           # upsert fails
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+
+    statuses = await service.run_catchup()
+    assert statuses["missing_features"] == "vectors_refresh_failed"
+
+
+@pytest.mark.asyncio
+async def test_rebuild_without_raw_rows_is_skipped_not_failed(service, monkeypatch):
+    """Tri-state: "nothing to write" must not be reported as a write failure."""
+    _auto_heal(monkeypatch)
+    union, _ = _real_stored_keys()
+    service._db.vector_feature_keys = union - {"USG_w10_mean"}
+    service._db.player_recs = pd.DataFrame()    # store not bootstrapped
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+
+    statuses = await service.run_catchup()
+    assert statuses["missing_features"] == "vectors_refresh_skipped"
+
+
+@pytest.mark.asyncio
+async def test_missing_features_reported_not_rebuilt_when_auto_heal_is_off(service, monkeypatch):
+    """Default mode: detect and say what to run, but never rebuild.
+
+    The rebuild needs ~380 MB, which a small container cannot spare mid-flight —
+    it gets OOM-killed before the upsert lands, so the gap survives and every
+    later run tries again. Detection is three queries and stays on.
+    """
+    union, _ = _real_stored_keys()
+    service._db.vector_feature_keys = union - {"USG_w10_mean"}
+    _auto_heal(monkeypatch, enabled=False)
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+    calls = _count_refreshes(monkeypatch)
+
+    statuses = await service.run_catchup()
+    assert statuses["missing_features"] == "manual_refresh_required"
+    assert calls == []                              # nothing rebuilt
+    assert service._db.vectors_written is None      # store untouched

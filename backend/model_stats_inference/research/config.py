@@ -43,11 +43,19 @@ MIN_HISTORY_GAMES = 1
 # --- Stats -----------------------------------------------------------------
 
 # Base per-game stats we engineer history features (mean/var/rate) from.
+# USG is not a box-score column — it is derived per game by features.attach_usage
+# (see USG_TEAM_MINUTES below) and must be attached before the window engine runs.
 BASE_STATS: list[str] = [
     "PTS", "REB", "OREB", "DREB", "AST", "FG3M", "FG3A",
     "STL", "BLK", "TOV", "FGM", "FGA", "FTM", "FTA",
-    "MIN", "PF", "PLUS_MINUS",
+    "MIN", "PF", "PLUS_MINUS", "USG",
 ]
+
+# Team player-minutes in a regulation game — the `Tm MP` term of the usage-rate
+# formula; `Tm MP / 5` is the 48-minute game length. Overtime games run longer,
+# an approximation we accept: USG is a ratio, so the error is small and largely
+# cancels once the per-game values are averaged over a window.
+USG_TEAM_MINUTES = 240.0
 
 # Counting stats that get rate features: rate = sum(stat) / sum(MIN) over window.
 # (Percentages and MIN/PLUS_MINUS are excluded — a per-minute rate is meaningless
