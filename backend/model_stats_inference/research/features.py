@@ -38,6 +38,70 @@ def _window_specs() -> list[tuple[str, int | None, int | None]]:
     return specs
 
 
+def attach_usage(players: pd.DataFrame, team_own: pd.DataFrame) -> pd.DataFrame:
+    """Add the per-game ``USG`` column (Dean Oliver's usage rate) to ``players``.
+
+        USG% = 100 * (FGA + 0.44*FTA + TOV) * (Tm MP / 5) / (MIN * Tm POSS)
+
+    ``Tm POSS`` is the team's possession estimate for that game, already computed
+    upstream as ``team_own.TEAM_PACE`` (= FGA + 0.44*FTA + TOV, see data.py). The
+    0.44 converts free-throw attempts to possessions — not every trip to the line
+    ends one (and-ones, technicals, three-shot fouls).
+
+    This differs from the existing ``USAGE_LOAD`` composite, which is only the
+    per-minute numerator: dividing by team possessions removes pace, so USG
+    measures the share of his team's offense a player runs rather than how fast
+    that team plays.
+
+    The result must never be NaN: ``compute_history_features`` accumulates with
+    ``np.cumsum``, so one NaN would poison every later window for that player.
+    Hence the median-pace imputation and the final fillna.
+    """
+    if "USG" in players.columns:
+        return players
+
+    pace = team_own[["GAME_ID", "TEAM_ID", "TEAM_PACE"]].drop_duplicates(["GAME_ID", "TEAM_ID"])
+    out = players.merge(pace, on=["GAME_ID", "TEAM_ID"], how="left")
+    out.index = players.index
+    tm_poss = out.pop("TEAM_PACE")
+    # A team-game absent from `team_own` would divide to NaN. With `pace_source`
+    # threaded through this should be unreachable, so say so rather than impute in
+    # silence — the league-median fallback only keeps the window sums finite.
+    if tm_poss.isna().any():
+        print(f"  WARNING: {int(tm_poss.isna().sum())} player-games have no team pace row; "
+              "imputing the league median (check the pace_source passed in)")
+        tm_poss = tm_poss.fillna(tm_poss.median())
+
+    minutes = out["MIN"].astype(float)
+    player_poss = out["FGA"].astype(float) + 0.44 * out["FTA"].astype(float) + out["TOV"].astype(float)
+    usg = (100.0 * player_poss * (config.USG_TEAM_MINUTES / 5.0) / (minutes * tm_poss))
+    usg = usg.replace([np.inf, -np.inf], np.nan)
+
+    # Sub-MIN_MINUTES games are DNPs to the feature math everywhere else. They must
+    # be excluded here too, and for a stronger reason than consistency: USG is a
+    # per-game ratio with MIN in the denominator that is then *averaged* over a
+    # window, so a 2-minute cameo with 3 FGA scores ~72 against a typical 10-35 and
+    # skews the mean at full weight. (The `_rate` features divide sum by sum, so a
+    # short game is nearly weightless there — this failure mode is specific to USG.)
+    # Training never sees such rows; the bootstrap serving path does.
+    usg = usg.where(minutes >= config.MIN_MINUTES)
+
+    # Impute from the player's own running mean rather than 0 — a fabricated "zero
+    # usage" would drag the window means down. Expanding over prior+current
+    # qualifying games only, so nothing leaks from the future.
+    if usg.isna().any():
+        running = usg.groupby(out["PLAYER_ID"], sort=False).transform(
+            lambda s: s.expanding(min_periods=1).mean().ffill()
+        )
+        usg = usg.fillna(running)
+
+    # Last resort (a player whose every game is sub-threshold): the league median,
+    # then 0. USG must never be NaN — compute_history_features accumulates with
+    # np.cumsum, so one NaN would poison every later window for that player.
+    out["USG"] = usg.fillna(usg.median()).fillna(0.0)
+    return out
+
+
 def compute_history_features(
     df: pd.DataFrame,
     group_key: str,
@@ -260,6 +324,9 @@ def build_feature_matrix(
 ) -> pd.DataFrame:
     """Assemble the full player-game feature matrix + targets + meta columns."""
     players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
+    # USG is derived (needs the game's team pace), so it must exist before the
+    # window engine runs over BASE_STATS. Serving does the same in build_current_state.
+    players = attach_usage(players, team_own)
 
     # 1) Player history features (mean/var/rate over global + windows), plus the
     #    EWM block-history features and static bio columns.
@@ -334,6 +401,12 @@ def feature_columns(matrix: pd.DataFrame) -> list[str]:
 
 # --- Current-state ("as of now") vectors for serving -----------------------
 
+# Players per batch when materializing the serving vectors. Bounds the transient
+# memory of a full rebuild (see build_current_state); output is identical to any
+# other value because every player feature is computed within its own group.
+PLAYER_VECTOR_CHUNK = 100
+
+
 def _asof_features(
     df: pd.DataFrame, group_key: str, stats: list[str], rate_stats: list[str], prefix: str
 ) -> pd.DataFrame:
@@ -361,6 +434,7 @@ def build_current_state(
     team_allowed: pd.DataFrame,
     team_own: pd.DataFrame,
     player_bio: pd.DataFrame | None = None,
+    pace_source: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Per-player and per-team 'as of now' vectors used by the live feature store.
 
@@ -373,11 +447,59 @@ def build_current_state(
 
     ``player_bio`` defaults to the committed artifact (config.BIO_PATH) when it
     exists; without it the bio columns are NaN and the models degrade gracefully.
+
+    ``pace_source`` supplies the team-pace rows for the USG derivation. It defaults
+    to ``team_own``, but callers that pass a *filtered* ``team_own`` (the nightly
+    recompute only carries the teams that played) must pass the full frame here —
+    otherwise a traded player's earlier games would find no pace row.
     """
     if player_bio is None and config.BIO_PATH.exists():
         player_bio = pd.read_parquet(config.BIO_PATH)
 
-    # Player vectors.
+    pace = team_own if pace_source is None else pace_source
+
+    # Player vectors, computed in batches of PLAYER_VECTOR_CHUNK players.
+    #
+    # Every player feature is derived within a PLAYER_ID group, so batching is
+    # exact (verified identical to one-shot) — but it matters a lot for memory.
+    # One-shot allocates a full-length float array per feature for the entire
+    # league at once: on four seasons that is ~360 MB of transient peak versus
+    # ~110 MB batched, which is the difference between fitting in a small
+    # container and being OOM-killed mid-rebuild.
+    ids = players["PLAYER_ID"].unique()
+    if len(ids) == 0:
+        player_vectors = _player_vectors(players, pace, player_bio)
+    else:
+        batches = [
+            _player_vectors(
+                players[players["PLAYER_ID"].isin(ids[i:i + PLAYER_VECTOR_CHUNK])],
+                pace, player_bio,
+            )
+            for i in range(0, len(ids), PLAYER_VECTOR_CHUNK)
+        ]
+        player_vectors = (
+            batches[0] if len(batches) == 1 else pd.concat(batches, ignore_index=True)
+        )
+
+    # Team vectors (small: 30 teams over ~10k team-games, no batching needed).
+    allowed_cols = [c for c in team_allowed.columns if c.startswith("ALLOWED_")]
+    ta = _asof_features(team_allowed, "TEAM_ID", allowed_cols, [], "OPP_")
+    team_allowed_vectors = ta.drop(columns=["GAME_DATE"])
+
+    own_cols = [c for c in team_own.columns if c.startswith("TEAM_") and c != "TEAM_ID"]
+    to = _asof_features(team_own, "TEAM_ID", own_cols, [], "")
+    team_own_vectors = to.drop(columns=["GAME_DATE"])
+
+    return player_vectors, team_allowed_vectors, team_own_vectors
+
+
+def _player_vectors(
+    players: pd.DataFrame, pace_source: pd.DataFrame, player_bio: pd.DataFrame | None
+) -> pd.DataFrame:
+    """The player half of ``build_current_state`` for one batch of players."""
+    # Same derived-USG step as build_feature_matrix, so train and serve match.
+    players = attach_usage(players, pace_source)
+
     p = _asof_features(players, "PLAYER_ID", config.BASE_STATS, config.RATE_STATS, "")
     hist = p.drop(columns=["PLAYER_ID", "GAME_DATE"])
     eff = _efficiency_features(hist)
@@ -407,15 +529,4 @@ def build_current_state(
         meta = meta.merge(gp["PLAYER_NAME"].last().rename("PLAYER_NAME").reset_index(), on="PLAYER_ID")
     if "POSITION" in players.columns:
         meta = meta.merge(gp["POSITION"].last().rename("POSITION").reset_index(), on="PLAYER_ID")
-    player_vectors = player_vectors.merge(meta, on="PLAYER_ID")
-
-    # Team vectors.
-    allowed_cols = [c for c in team_allowed.columns if c.startswith("ALLOWED_")]
-    ta = _asof_features(team_allowed, "TEAM_ID", allowed_cols, [], "OPP_")
-    team_allowed_vectors = ta.drop(columns=["GAME_DATE"])
-
-    own_cols = [c for c in team_own.columns if c.startswith("TEAM_") and c != "TEAM_ID"]
-    to = _asof_features(team_own, "TEAM_ID", own_cols, [], "")
-    team_own_vectors = to.drop(columns=["GAME_DATE"])
-
-    return player_vectors, team_allowed_vectors, team_own_vectors
+    return player_vectors.merge(meta, on="PLAYER_ID")

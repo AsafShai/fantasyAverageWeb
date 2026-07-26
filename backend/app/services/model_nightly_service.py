@@ -30,14 +30,20 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from app.config import settings
 from app.services.db_service import DBService
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
 from model_stats_inference.serving import config as sconfig
 from model_stats_inference.serving import nightly
-from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
-from model_stats_inference.serving.inference import LiveInference
 from model_stats_inference.serving.eval_row import EvalRow
+from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
+from model_stats_inference.serving.inference import (
+    REQUEST_TIME_FEATURES,
+    REQUEST_TIME_PREFIX,
+    LiveInference,
+)
+from model_stats_inference.training import config as tconfig
 
 logger = logging.getLogger(__name__)
 
@@ -56,15 +62,6 @@ _FS_TEAM_COLS = [
     "TEAM_ID", "GAME_ID", "SEASON", "GAME_DATE", "TEAM_NAME", "MATCHUP",
     "PTS", "REB", "AST", "STL", "BLK", "FG3M", "FG_PCT", "FGA", "FTA", "TOV",
 ]
-
-
-def _records_to_frame(records: list[dict]) -> pd.DataFrame:
-    """DB rows (lowercase columns, date game_date) -> pipeline frame (uppercase,
-    Timestamp GAME_DATE)."""
-    df = pd.DataFrame.from_records(records)
-    df.columns = [c.upper() for c in df.columns]
-    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
-    return df
 
 
 def _frame_to_tuples(df: pd.DataFrame, cols: list[str]) -> list[tuple]:
@@ -180,9 +177,13 @@ class ModelNightlyService:
         Stops at the first date that isn't in a terminal state (incomplete data,
         DB failure): ingesting later days before an earlier day would leave the
         store with a hole under those predictions.
+
+        Runs the missing-feature check first, outside the loop, so a deploy that adds
+        a feature heals even when no date in the window has games (off-season).
         """
+        missing = await self._ensure_vectors_current()
         yesterday = (datetime.now(ISRAEL_TZ) - timedelta(days=1)).date()
-        statuses: dict[str, str] = {}
+        statuses: dict[str, str] = {"missing_features": missing} if missing else {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = yesterday - timedelta(days=offset)
             status = await self.run_for_date(d)
@@ -211,7 +212,10 @@ class ModelNightlyService:
         if has_date is None:
             return "db_unavailable"
         if has_date:
-            await self._refresh_vectors_through(game_date)
+            # None ("no raw rows") is impossible here — has_date implies rows exist —
+            # so only an actual write failure is treated as one.
+            if await self._refresh_vectors_through(game_date) is False:
+                return "db_write_failed"
             self._invalidate_inference_store()
             await db.upsert_model_nightly_run(game_date, "store_already_ingested", 0, 0)
             return "store_already_ingested"
@@ -227,13 +231,13 @@ class ModelNightlyService:
             )
             return "incomplete_data"
 
-        player_recs, team_recs = await db.get_fs_rows_before(game_date)
-        if not player_recs or not team_recs:
+        players, team_games = await db.get_fs_rows_before(game_date)
+        if players.empty or team_games.empty:
             logger.error("Feature-store tables are empty — run --bootstrap first")
             return "store_not_bootstrapped"
 
         evals, night_players, vectors = await asyncio.to_thread(
-            self._process_sync, player_recs, team_recs, night
+            self._process_sync, players, team_games, night
         )
 
         eval_rows = [_eval_to_tuple(ev, game_date) for ev in evals]
@@ -263,23 +267,114 @@ class ModelNightlyService:
         )
         return "processed"
 
-    async def _refresh_vectors_through(self, game_date: date) -> None:
-        """Rebuild and upsert vectors from all rows up to and including game_date."""
-        player_recs, team_recs = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
-        if not player_recs or not team_recs:
-            return
-        vectors = await asyncio.to_thread(self._vectors_from_records, player_recs, team_recs)
-        await self._db.upsert_feature_vectors(*vectors)
+    async def _refresh_vectors_through(self, game_date: date) -> Optional[bool]:
+        """Rebuild and upsert vectors from all rows up to and including game_date.
+
+        Tri-state so callers can tell the two non-success cases apart:
+        ``True`` written, ``False`` the write failed, ``None`` there was nothing to
+        write (no raw rows — the store is not bootstrapped).
+        """
+        players, team_games = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
+        if players.empty or team_games.empty:
+            return None
+        vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
+        return await self._db.upsert_feature_vectors(*vectors)
+
+    # --- missing features (heal the store after a deploy) --------------------
+
+    @staticmethod
+    def _required_stored_features() -> set[str]:
+        """Feature names the deployed models expect to read from the store.
+
+        The union over ``training/feature_sets/*.json``, minus the ones
+        ``LiveInference._assemble_row`` derives per request (game context and the
+        minutes-dependent ``T_MIN`` / ``T_x_*`` block), which are never stored.
+        """
+        required: set[str] = set()
+        for path in sorted(tconfig.FEATURE_SETS_DIR.glob("*.json")):
+            try:
+                required.update(json.loads(path.read_text()).get("features", []))
+            except (OSError, ValueError) as e:
+                logger.warning(f"Could not read feature set {path.name}: {e}")
+        return {
+            f for f in required
+            if f not in REQUEST_TIME_FEATURES and not f.startswith(REQUEST_TIME_PREFIX)
+        }
+
+    async def _ensure_vectors_current(self) -> Optional[str]:
+        """Rebuild every vector when the models need a feature the store lacks.
+
+        A feature-set change (a new column) otherwise leaves the models reading
+        NaN for it — ``LiveInference`` reindexes missing columns rather than
+        raising, so it degrades silently. The per-night rebuild would normally fix
+        this on its own, but only on nights that have games: off-nights and the
+        whole off-season return early, so a deploy could sit un-healed for months.
+
+        Runs before the catch-up loop and costs one query per vector table when
+        nothing changed. Whether it *fixes* the gap or only reports it is
+        MODEL_FEATURE_HEAL_AUTO; when it does fix it, it is self-limiting — once
+        rewritten the keys match and this is a no-op.
+        """
+        stored = await self._db.get_feature_vector_keys()
+        if stored is None:
+            return None  # not bootstrapped yet, or DB unavailable — nothing to heal
+        missing = self._required_stored_features() - stored
+        if not missing:
+            return None
+
+        preview = ", ".join(sorted(missing)[:5]) + (", ..." if len(missing) > 5 else "")
+
+        # Detection is cheap; the rebuild is not (~380 MB), which is more than a
+        # small container can spare mid-flight — it gets OOM-killed before the
+        # upsert lands, so the gap survives and every later run tries again.
+        # Off by default: say exactly what to run and leave the store alone.
+        if not settings.model_feature_heal_auto:
+            logger.warning(
+                f"Feature vectors are missing {len(missing)} feature(s) the models need "
+                f"({preview}). Auto-heal is off (MODEL_FEATURE_HEAL_AUTO), so the models "
+                f"will read them as NaN until the vectors are rebuilt. Run:\n"
+                f"    cd backend && python scripts/refresh_feature_vectors.py "
+                f"--database-url <url> --expect-feature {sorted(missing)[0]}"
+            )
+            return "manual_refresh_required"
+
+        logger.warning(
+            f"Feature vectors are missing {len(missing)} feature(s) the models need "
+            f"({preview}) — rebuilding all vectors"
+        )
+        written = await self._refresh_vectors_through(datetime.now(ISRAEL_TZ).date())
+        if written is None:
+            logger.warning("Vector rebuild skipped: no raw rows to rebuild from")
+            return "vectors_refresh_skipped"
+        if not written:
+            logger.error("Vector rebuild failed; vectors left unchanged")
+            return "vectors_refresh_failed"
+        self._invalidate_inference_store()
+
+        # Escalate instead of looping: if a feature is still absent the deployed
+        # code cannot produce it (a stale feature set, a renamed column), and every
+        # later run would rebuild again for nothing.
+        still_missing = self._required_stored_features() - (
+            await self._db.get_feature_vector_keys() or set()
+        )
+        if still_missing:
+            logger.error(
+                f"After rebuilding, {len(still_missing)} feature(s) are still absent "
+                f"({', '.join(sorted(still_missing)[:5])}) — the deployed code does not "
+                "produce them; the feature sets and the feature engine disagree"
+            )
+            return "vectors_refresh_incomplete"
+        logger.info(f"Feature vectors rebuilt with {len(missing)} new feature(s)")
+        return "vectors_refreshed"
 
     @staticmethod
     def _process_sync(
-        player_recs: list[dict], team_recs: list[dict], night: nightly.NightFetch
+        players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch
     ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
         """Heavy pandas/sklearn work in a thread: build the pre-night store, score
         the night (leakage-safe), then fold the night in to materialize post-night
         vectors."""
-        players = _records_to_frame(player_recs).sort_values(["PLAYER_ID", "GAME_DATE"])
-        team_games = _records_to_frame(team_recs)
+        players = players.sort_values(["PLAYER_ID", "GAME_DATE"])
         store = FeatureStore.build(
             players.reset_index(drop=True),
             rdata.build_team_allowed(team_games),
@@ -296,18 +391,6 @@ class ModelNightlyService:
         store.update_with_nightly_results(qualifying, night.team_games)
         return evals, night_players, _serialize_vectors(store)
 
-    @staticmethod
-    def _vectors_from_records(
-        player_recs: list[dict], team_recs: list[dict]
-    ) -> tuple[list, list, list]:
-        players = _records_to_frame(player_recs).sort_values(["PLAYER_ID", "GAME_DATE"])
-        team_games = _records_to_frame(team_recs)
-        store = FeatureStore.build(
-            players.reset_index(drop=True),
-            rdata.build_team_allowed(team_games),
-            rdata.build_team_own(team_games),
-        )
-        return _serialize_vectors(store)
 
     # --- serving: resident in-memory store (for a future inference tab) -------
 

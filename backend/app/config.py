@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     injury_scheduler_enabled: bool = Field(default=True, alias="INJURY_SCHEDULER_ENABLED")
     model_nightly_enabled: bool = Field(default=False, alias="MODEL_NIGHTLY_ENABLED")
+    # When the deployed models need a feature the stored vectors lack, should the
+    # nightly rebuild them itself? Detection is always on and costs three queries;
+    # the rebuild is what needs memory (~380 MB), so it defaults to OFF and the
+    # nightly just logs what to run. Turn on only where the container can afford it.
+    model_feature_heal_auto: bool = Field(default=False, alias="MODEL_FEATURE_HEAL_AUTO")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

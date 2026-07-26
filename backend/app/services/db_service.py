@@ -23,6 +23,22 @@ _RANKINGS_COL_MAP = {
 }
 
 
+def fs_records_to_frame(records) -> pd.DataFrame:
+    """asyncpg rows -> pipeline frame (uppercase columns, Timestamp GAME_DATE).
+
+    Built straight from the records. The obvious ``[dict(r) for r in records]``
+    first costs ~80 MB of transient peak on a full ~96k-row history — the records
+    already hold boxed Python values, so the dicts add pure container overhead for
+    nothing.
+    """
+    if not records:
+        return pd.DataFrame()
+    df = pd.DataFrame.from_records(records, columns=list(records[0].keys()))
+    df.columns = [c.upper() for c in df.columns]
+    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
+    return df
+
+
 class DBService:
     _instance = None
 
@@ -733,14 +749,19 @@ class DBService:
             logger.error(f"Failed to check fs rows for {game_date}: {e}")
             return None
 
-    async def get_fs_rows_before(self, game_date: date) -> tuple[list[dict], list[dict]]:
+    async def get_fs_rows_before(self, game_date: date) -> tuple[pd.DataFrame, pd.DataFrame]:
         """The model's only read boundary into fs_player_games. The MIN_MINUTES
         gate is enforced here (not at write time): storage keeps every played
         minute for other consumers, but sub-threshold games are DNPs to the
-        feature math — same threshold research/training filters on."""
+        feature math — same threshold research/training filters on.
+
+        Returns pipeline-ready frames rather than dict rows: a full history is
+        ~96k rows, and materializing a dict per row cost ~80 MB of transient peak
+        on top of the records themselves — enough to matter on a small container
+        (see fs_records_to_frame)."""
         pool = await self._get_pool()
         if pool is None:
-            return [], []
+            return pd.DataFrame(), pd.DataFrame()
         try:
             async with pool.acquire() as conn:
                 players = await conn.fetch(
@@ -750,10 +771,10 @@ class DBService:
                 teams = await conn.fetch(
                     "SELECT * FROM fs_team_games WHERE game_date < $1", game_date
                 )
-                return [dict(r) for r in players], [dict(r) for r in teams]
+                return fs_records_to_frame(players), fs_records_to_frame(teams)
         except Exception as e:
             logger.error(f"Failed to fetch fs rows before {game_date}: {e}")
-            return [], []
+            return pd.DataFrame(), pd.DataFrame()
 
     async def aggregate_player_games(
         self, start: date, end: date, season: str
@@ -1089,6 +1110,40 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to upsert feature vectors: {e}")
             return False
+
+    async def get_feature_vector_keys(self) -> Optional[set[str]]:
+        """Feature names stored across **all three** vector tables, or None if unknown.
+
+        The union matters: a model's feature row is composed from all three
+        (`LiveInference._assemble_row` merges the player vector, the own-team
+        `TEAM_*` vector and the opponent `OPP_ALLOWED_*` vector), so checking only
+        `fs_player_vectors` would report every team feature as permanently missing.
+
+        Sampled from one row per table — each table is written from a single column
+        set in one upsert, so one row characterises it. None means "cannot tell"
+        (nothing materialized yet, or the query failed); callers should skip any
+        staleness comparison rather than assume everything is missing.
+        """
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        keys: set[str] = set()
+        try:
+            async with pool.acquire() as conn:
+                for table in (
+                    "fs_player_vectors",
+                    "fs_team_allowed_vectors",
+                    "fs_team_own_vectors",
+                ):
+                    row = await conn.fetchval(
+                        f"SELECT ARRAY(SELECT jsonb_object_keys(features)) FROM {table} LIMIT 1"
+                    )
+                    if row:
+                        keys.update(row)
+        except Exception as e:
+            logger.error(f"Failed to read feature vector keys: {e}")
+            return None
+        return keys or None
 
     async def load_feature_vectors(self) -> tuple[list[dict], list[dict], list[dict]]:
         """(player_vectors, team_allowed_vectors, team_own_vectors) rows for serving."""

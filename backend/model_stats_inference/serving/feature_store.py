@@ -187,6 +187,10 @@ class FeatureStore:
             self.players[self.players["PLAYER_ID"].isin(player_ids)],
             self.team_allowed[self.team_allowed["TEAM_ID"].isin(team_ids)],
             self.team_own[self.team_own["TEAM_ID"].isin(team_ids)],
+            # Team vectors only need the affected teams, but the USG derivation
+            # needs pace for every game in these players' histories — including
+            # games played for a former club that isn't in `team_ids`.
+            pace_source=self.team_own,
         )
         self.player_vectors = _replace_rows(self.player_vectors, pv, "PLAYER_ID")
         self.team_allowed_vectors = _replace_rows(self.team_allowed_vectors, tav, "TEAM_ID")

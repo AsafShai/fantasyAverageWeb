@@ -20,6 +20,19 @@ from .feature_store import FeatureStore
 from .reconcile import Reconciler
 
 
+# Features `_assemble_row` computes per request instead of reading from the stored
+# vector: the game context, and the minutes-dependent `T_MIN` / `T_x_*` block. They
+# are never present in the feature-store JSONB, so anything comparing a model's
+# feature set against the store must exclude them (see
+# ModelNightlyService._required_stored_features) — otherwise they read as
+# permanently "missing" and trigger a rebuild every night.
+REQUEST_TIME_FEATURES = frozenset({
+    "IS_HOME", "REST_DAYS", "IS_BACK_TO_BACK", "HISTORY_GAMES",
+    "IS_GUARD", "IS_FORWARD", "IS_CENTER", "T_MIN",
+})
+REQUEST_TIME_PREFIX = "T_x_"
+
+
 @dataclass
 class PredictionRequest:
     player_id: int
