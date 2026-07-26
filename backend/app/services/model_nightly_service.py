@@ -35,14 +35,9 @@ from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
 from model_stats_inference.serving import config as sconfig
 from model_stats_inference.serving import nightly
-from model_stats_inference.serving.eval_row import EvalRow
 from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
-from model_stats_inference.serving.inference import (
-    REQUEST_TIME_FEATURES,
-    REQUEST_TIME_PREFIX,
-    LiveInference,
-)
-from model_stats_inference.training import config as tconfig
+from model_stats_inference.serving.inference import LiveInference
+from model_stats_inference.serving.eval_row import EvalRow
 
 logger = logging.getLogger(__name__)
 
@@ -185,13 +180,9 @@ class ModelNightlyService:
         Stops at the first date that isn't in a terminal state (incomplete data,
         DB failure): ingesting later days before an earlier day would leave the
         store with a hole under those predictions.
-
-        Runs the feature-drift check first, outside the loop, so a deploy that adds
-        a feature heals even when no date in the window has games (off-season).
         """
-        drift = await self._ensure_vectors_current()
         yesterday = (datetime.now(ISRAEL_TZ) - timedelta(days=1)).date()
-        statuses: dict[str, str] = {"feature_drift": drift} if drift else {}
+        statuses: dict[str, str] = {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = yesterday - timedelta(days=offset)
             status = await self.run_for_date(d)
@@ -220,10 +211,7 @@ class ModelNightlyService:
         if has_date is None:
             return "db_unavailable"
         if has_date:
-            # None ("no raw rows") is impossible here — has_date implies rows exist —
-            # so only an actual write failure is treated as one.
-            if await self._refresh_vectors_through(game_date) is False:
-                return "db_write_failed"
+            await self._refresh_vectors_through(game_date)
             self._invalidate_inference_store()
             await db.upsert_model_nightly_run(game_date, "store_already_ingested", 0, 0)
             return "store_already_ingested"
@@ -275,89 +263,13 @@ class ModelNightlyService:
         )
         return "processed"
 
-    async def _refresh_vectors_through(self, game_date: date) -> Optional[bool]:
-        """Rebuild and upsert vectors from all rows up to and including game_date.
-
-        Tri-state so callers can tell the two non-success cases apart:
-        ``True`` written, ``False`` the write failed, ``None`` there was nothing to
-        write (no raw rows — the store is not bootstrapped).
-        """
+    async def _refresh_vectors_through(self, game_date: date) -> None:
+        """Rebuild and upsert vectors from all rows up to and including game_date."""
         player_recs, team_recs = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
         if not player_recs or not team_recs:
-            return None
+            return
         vectors = await asyncio.to_thread(self._vectors_from_records, player_recs, team_recs)
-        return await self._db.upsert_feature_vectors(*vectors)
-
-    # --- feature-set drift (self-healing after a deploy) ---------------------
-
-    @staticmethod
-    def _required_stored_features() -> set[str]:
-        """Feature names the deployed models expect to read from the store.
-
-        The union over ``training/feature_sets/*.json``, minus the ones
-        ``LiveInference._assemble_row`` derives per request (game context and the
-        minutes-dependent ``T_MIN`` / ``T_x_*`` block), which are never stored.
-        """
-        required: set[str] = set()
-        for path in sorted(tconfig.FEATURE_SETS_DIR.glob("*.json")):
-            try:
-                required.update(json.loads(path.read_text()).get("features", []))
-            except (OSError, ValueError) as e:
-                logger.warning(f"Could not read feature set {path.name}: {e}")
-        return {
-            f for f in required
-            if f not in REQUEST_TIME_FEATURES and not f.startswith(REQUEST_TIME_PREFIX)
-        }
-
-    async def _ensure_vectors_current(self) -> Optional[str]:
-        """Rebuild every vector when the models need a feature the store lacks.
-
-        A feature-set change (a new column) otherwise leaves the models reading
-        NaN for it — ``LiveInference`` reindexes missing columns rather than
-        raising, so it degrades silently. The per-night rebuild would normally fix
-        this on its own, but only on nights that have games: off-nights and the
-        whole off-season return early, so a deploy could sit un-healed for months.
-
-        Runs before the catch-up loop, costs one query per vector table when
-        nothing changed, and is self-limiting — once rewritten the keys match and
-        this is a no-op.
-        """
-        stored = await self._db.get_feature_vector_keys()
-        if stored is None:
-            return None  # not bootstrapped yet, or DB unavailable — nothing to heal
-        missing = self._required_stored_features() - stored
-        if not missing:
-            return None
-
-        preview = ", ".join(sorted(missing)[:5])
-        logger.warning(
-            f"Feature vectors are missing {len(missing)} feature(s) the models need "
-            f"({preview}{', ...' if len(missing) > 5 else ''}) — rebuilding all vectors"
-        )
-        written = await self._refresh_vectors_through(datetime.now(ISRAEL_TZ).date())
-        if written is None:
-            logger.warning("Feature-drift rebuild skipped: no raw rows to rebuild from")
-            return "vectors_refresh_skipped"
-        if not written:
-            logger.error("Feature-drift rebuild failed; vectors left unchanged")
-            return "vectors_refresh_failed"
-        self._invalidate_inference_store()
-
-        # Escalate instead of looping: if a feature is still absent the deployed
-        # code cannot produce it (a stale feature set, a renamed column), and every
-        # later run would rebuild again for nothing.
-        still_missing = self._required_stored_features() - (
-            await self._db.get_feature_vector_keys() or set()
-        )
-        if still_missing:
-            logger.error(
-                f"After rebuilding, {len(still_missing)} feature(s) are still absent "
-                f"({', '.join(sorted(still_missing)[:5])}) — the deployed code does not "
-                "produce them; the feature sets and the feature engine disagree"
-            )
-            return "vectors_refresh_incomplete"
-        logger.info(f"Feature vectors rebuilt with {len(missing)} new feature(s)")
-        return "vectors_refreshed"
+        await self._db.upsert_feature_vectors(*vectors)
 
     @staticmethod
     def _process_sync(

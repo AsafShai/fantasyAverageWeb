@@ -38,70 +38,6 @@ def _window_specs() -> list[tuple[str, int | None, int | None]]:
     return specs
 
 
-def attach_usage(players: pd.DataFrame, team_own: pd.DataFrame) -> pd.DataFrame:
-    """Add the per-game ``USG`` column (Dean Oliver's usage rate) to ``players``.
-
-        USG% = 100 * (FGA + 0.44*FTA + TOV) * (Tm MP / 5) / (MIN * Tm POSS)
-
-    ``Tm POSS`` is the team's possession estimate for that game, already computed
-    upstream as ``team_own.TEAM_PACE`` (= FGA + 0.44*FTA + TOV, see data.py). The
-    0.44 converts free-throw attempts to possessions — not every trip to the line
-    ends one (and-ones, technicals, three-shot fouls).
-
-    This differs from the existing ``USAGE_LOAD`` composite, which is only the
-    per-minute numerator: dividing by team possessions removes pace, so USG
-    measures the share of his team's offense a player runs rather than how fast
-    that team plays.
-
-    The result must never be NaN: ``compute_history_features`` accumulates with
-    ``np.cumsum``, so one NaN would poison every later window for that player.
-    Hence the median-pace imputation and the final fillna.
-    """
-    if "USG" in players.columns:
-        return players
-
-    pace = team_own[["GAME_ID", "TEAM_ID", "TEAM_PACE"]].drop_duplicates(["GAME_ID", "TEAM_ID"])
-    out = players.merge(pace, on=["GAME_ID", "TEAM_ID"], how="left")
-    out.index = players.index
-    tm_poss = out.pop("TEAM_PACE")
-    # A team-game absent from `team_own` would divide to NaN. With `pace_source`
-    # threaded through this should be unreachable, so say so rather than impute in
-    # silence — the league-median fallback only keeps the window sums finite.
-    if tm_poss.isna().any():
-        print(f"  WARNING: {int(tm_poss.isna().sum())} player-games have no team pace row; "
-              "imputing the league median (check the pace_source passed in)")
-        tm_poss = tm_poss.fillna(tm_poss.median())
-
-    minutes = out["MIN"].astype(float)
-    player_poss = out["FGA"].astype(float) + 0.44 * out["FTA"].astype(float) + out["TOV"].astype(float)
-    usg = (100.0 * player_poss * (config.USG_TEAM_MINUTES / 5.0) / (minutes * tm_poss))
-    usg = usg.replace([np.inf, -np.inf], np.nan)
-
-    # Sub-MIN_MINUTES games are DNPs to the feature math everywhere else. They must
-    # be excluded here too, and for a stronger reason than consistency: USG is a
-    # per-game ratio with MIN in the denominator that is then *averaged* over a
-    # window, so a 2-minute cameo with 3 FGA scores ~72 against a typical 10-35 and
-    # skews the mean at full weight. (The `_rate` features divide sum by sum, so a
-    # short game is nearly weightless there — this failure mode is specific to USG.)
-    # Training never sees such rows; the bootstrap serving path does.
-    usg = usg.where(minutes >= config.MIN_MINUTES)
-
-    # Impute from the player's own running mean rather than 0 — a fabricated "zero
-    # usage" would drag the window means down. Expanding over prior+current
-    # qualifying games only, so nothing leaks from the future.
-    if usg.isna().any():
-        running = usg.groupby(out["PLAYER_ID"], sort=False).transform(
-            lambda s: s.expanding(min_periods=1).mean().ffill()
-        )
-        usg = usg.fillna(running)
-
-    # Last resort (a player whose every game is sub-threshold): the league median,
-    # then 0. USG must never be NaN — compute_history_features accumulates with
-    # np.cumsum, so one NaN would poison every later window for that player.
-    out["USG"] = usg.fillna(usg.median()).fillna(0.0)
-    return out
-
-
 def compute_history_features(
     df: pd.DataFrame,
     group_key: str,
@@ -324,9 +260,6 @@ def build_feature_matrix(
 ) -> pd.DataFrame:
     """Assemble the full player-game feature matrix + targets + meta columns."""
     players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-    # USG is derived (needs the game's team pace), so it must exist before the
-    # window engine runs over BASE_STATS. Serving does the same in build_current_state.
-    players = attach_usage(players, team_own)
 
     # 1) Player history features (mean/var/rate over global + windows), plus the
     #    EWM block-history features and static bio columns.
@@ -428,7 +361,6 @@ def build_current_state(
     team_allowed: pd.DataFrame,
     team_own: pd.DataFrame,
     player_bio: pd.DataFrame | None = None,
-    pace_source: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Per-player and per-team 'as of now' vectors used by the live feature store.
 
@@ -441,17 +373,9 @@ def build_current_state(
 
     ``player_bio`` defaults to the committed artifact (config.BIO_PATH) when it
     exists; without it the bio columns are NaN and the models degrade gracefully.
-
-    ``pace_source`` supplies the team-pace rows for the USG derivation. It defaults
-    to ``team_own``, but callers that pass a *filtered* ``team_own`` (the nightly
-    recompute only carries the teams that played) must pass the full frame here —
-    otherwise a traded player's earlier games would find no pace row.
     """
     if player_bio is None and config.BIO_PATH.exists():
         player_bio = pd.read_parquet(config.BIO_PATH)
-
-    # Same derived-USG step as build_feature_matrix, so train and serve match.
-    players = attach_usage(players, team_own if pace_source is None else pace_source)
 
     # Player vectors.
     p = _asof_features(players, "PLAYER_ID", config.BASE_STATS, config.RATE_STATS, "")
