@@ -401,6 +401,12 @@ def feature_columns(matrix: pd.DataFrame) -> list[str]:
 
 # --- Current-state ("as of now") vectors for serving -----------------------
 
+# Players per batch when materializing the serving vectors. Bounds the transient
+# memory of a full rebuild (see build_current_state); output is identical to any
+# other value because every player feature is computed within its own group.
+PLAYER_VECTOR_CHUNK = 100
+
+
 def _asof_features(
     df: pd.DataFrame, group_key: str, stats: list[str], rate_stats: list[str], prefix: str
 ) -> pd.DataFrame:
@@ -450,10 +456,50 @@ def build_current_state(
     if player_bio is None and config.BIO_PATH.exists():
         player_bio = pd.read_parquet(config.BIO_PATH)
 
-    # Same derived-USG step as build_feature_matrix, so train and serve match.
-    players = attach_usage(players, team_own if pace_source is None else pace_source)
+    pace = team_own if pace_source is None else pace_source
 
-    # Player vectors.
+    # Player vectors, computed in batches of PLAYER_VECTOR_CHUNK players.
+    #
+    # Every player feature is derived within a PLAYER_ID group, so batching is
+    # exact (verified identical to one-shot) — but it matters a lot for memory.
+    # One-shot allocates a full-length float array per feature for the entire
+    # league at once: on four seasons that is ~360 MB of transient peak versus
+    # ~110 MB batched, which is the difference between fitting in a small
+    # container and being OOM-killed mid-rebuild.
+    ids = players["PLAYER_ID"].unique()
+    if len(ids) == 0:
+        player_vectors = _player_vectors(players, pace, player_bio)
+    else:
+        batches = [
+            _player_vectors(
+                players[players["PLAYER_ID"].isin(ids[i:i + PLAYER_VECTOR_CHUNK])],
+                pace, player_bio,
+            )
+            for i in range(0, len(ids), PLAYER_VECTOR_CHUNK)
+        ]
+        player_vectors = (
+            batches[0] if len(batches) == 1 else pd.concat(batches, ignore_index=True)
+        )
+
+    # Team vectors (small: 30 teams over ~10k team-games, no batching needed).
+    allowed_cols = [c for c in team_allowed.columns if c.startswith("ALLOWED_")]
+    ta = _asof_features(team_allowed, "TEAM_ID", allowed_cols, [], "OPP_")
+    team_allowed_vectors = ta.drop(columns=["GAME_DATE"])
+
+    own_cols = [c for c in team_own.columns if c.startswith("TEAM_") and c != "TEAM_ID"]
+    to = _asof_features(team_own, "TEAM_ID", own_cols, [], "")
+    team_own_vectors = to.drop(columns=["GAME_DATE"])
+
+    return player_vectors, team_allowed_vectors, team_own_vectors
+
+
+def _player_vectors(
+    players: pd.DataFrame, pace_source: pd.DataFrame, player_bio: pd.DataFrame | None
+) -> pd.DataFrame:
+    """The player half of ``build_current_state`` for one batch of players."""
+    # Same derived-USG step as build_feature_matrix, so train and serve match.
+    players = attach_usage(players, pace_source)
+
     p = _asof_features(players, "PLAYER_ID", config.BASE_STATS, config.RATE_STATS, "")
     hist = p.drop(columns=["PLAYER_ID", "GAME_DATE"])
     eff = _efficiency_features(hist)
@@ -483,15 +529,4 @@ def build_current_state(
         meta = meta.merge(gp["PLAYER_NAME"].last().rename("PLAYER_NAME").reset_index(), on="PLAYER_ID")
     if "POSITION" in players.columns:
         meta = meta.merge(gp["POSITION"].last().rename("POSITION").reset_index(), on="PLAYER_ID")
-    player_vectors = player_vectors.merge(meta, on="PLAYER_ID")
-
-    # Team vectors.
-    allowed_cols = [c for c in team_allowed.columns if c.startswith("ALLOWED_")]
-    ta = _asof_features(team_allowed, "TEAM_ID", allowed_cols, [], "OPP_")
-    team_allowed_vectors = ta.drop(columns=["GAME_DATE"])
-
-    own_cols = [c for c in team_own.columns if c.startswith("TEAM_") and c != "TEAM_ID"]
-    to = _asof_features(team_own, "TEAM_ID", own_cols, [], "")
-    team_own_vectors = to.drop(columns=["GAME_DATE"])
-
-    return player_vectors, team_allowed_vectors, team_own_vectors
+    return player_vectors.merge(meta, on="PLAYER_ID")
