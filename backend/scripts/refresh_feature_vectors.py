@@ -89,21 +89,21 @@ async def _main(args: argparse.Namespace) -> int:
     # so the upsert result is actually checked — that helper discards it, which would
     # turn a failed write into a silent no-op.
     print(f"\nReading raw rows through {through} ...")
-    player_recs, team_recs = await db.get_fs_rows_before(through + timedelta(days=1))
-    if not player_recs or not team_recs:
+    players, team_games = await db.get_fs_rows_before(through + timedelta(days=1))
+    if players.empty or team_games.empty:
         print(
-            f"ERROR: no raw rows found (players={len(player_recs)}, teams={len(team_recs)}). "
+            f"ERROR: no raw rows found (players={len(players)}, teams={len(team_games)}). "
             "Is fs_player_games populated? Run the bootstrap first.",
             file=sys.stderr,
         )
         await db.close()
         return 1
-    print(f"  {len(player_recs):,} player-games, {len(team_recs):,} team-games")
+    print(f"  {len(players):,} player-games, {len(team_games):,} team-games")
 
     print("Recomputing feature vectors ...")
     t0 = time.perf_counter()
     vectors = await asyncio.to_thread(
-        ModelNightlyService._vectors_from_records, player_recs, team_recs
+        ModelNightlyService._vectors_from_frames, players, team_games
     )
     players_v, allowed_v, own_v = vectors
     print(f"  built {len(players_v):,} player + {len(allowed_v)} allowed + {len(own_v)} own "

@@ -63,15 +63,6 @@ _FS_TEAM_COLS = [
 ]
 
 
-def _records_to_frame(records: list[dict]) -> pd.DataFrame:
-    """DB rows (lowercase columns, date game_date) -> pipeline frame (uppercase,
-    Timestamp GAME_DATE)."""
-    df = pd.DataFrame.from_records(records)
-    df.columns = [c.upper() for c in df.columns]
-    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
-    return df
-
-
 def _frame_to_tuples(df: pd.DataFrame, cols: list[str]) -> list[tuple]:
     out = []
     for row in df[cols].itertuples(index=False):
@@ -239,13 +230,13 @@ class ModelNightlyService:
             )
             return "incomplete_data"
 
-        player_recs, team_recs = await db.get_fs_rows_before(game_date)
-        if not player_recs or not team_recs:
+        players, team_games = await db.get_fs_rows_before(game_date)
+        if players.empty or team_games.empty:
             logger.error("Feature-store tables are empty — run --bootstrap first")
             return "store_not_bootstrapped"
 
         evals, night_players, vectors = await asyncio.to_thread(
-            self._process_sync, player_recs, team_recs, night
+            self._process_sync, players, team_games, night
         )
 
         eval_rows = [_eval_to_tuple(ev, game_date) for ev in evals]
@@ -282,10 +273,10 @@ class ModelNightlyService:
         ``True`` written, ``False`` the write failed, ``None`` there was nothing to
         write (no raw rows — the store is not bootstrapped).
         """
-        player_recs, team_recs = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
-        if not player_recs or not team_recs:
+        players, team_games = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
+        if players.empty or team_games.empty:
             return None
-        vectors = await asyncio.to_thread(self._vectors_from_records, player_recs, team_recs)
+        vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
         return await self._db.upsert_feature_vectors(*vectors)
 
     # --- feature-set drift (self-healing after a deploy) ---------------------
@@ -361,13 +352,12 @@ class ModelNightlyService:
 
     @staticmethod
     def _process_sync(
-        player_recs: list[dict], team_recs: list[dict], night: nightly.NightFetch
+        players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch
     ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
         """Heavy pandas/sklearn work in a thread: build the pre-night store, score
         the night (leakage-safe), then fold the night in to materialize post-night
         vectors."""
-        players = _records_to_frame(player_recs).sort_values(["PLAYER_ID", "GAME_DATE"])
-        team_games = _records_to_frame(team_recs)
+        players = players.sort_values(["PLAYER_ID", "GAME_DATE"])
         store = FeatureStore.build(
             players.reset_index(drop=True),
             rdata.build_team_allowed(team_games),
@@ -384,18 +374,6 @@ class ModelNightlyService:
         store.update_with_nightly_results(qualifying, night.team_games)
         return evals, night_players, _serialize_vectors(store)
 
-    @staticmethod
-    def _vectors_from_records(
-        player_recs: list[dict], team_recs: list[dict]
-    ) -> tuple[list, list, list]:
-        players = _records_to_frame(player_recs).sort_values(["PLAYER_ID", "GAME_DATE"])
-        team_games = _records_to_frame(team_recs)
-        store = FeatureStore.build(
-            players.reset_index(drop=True),
-            rdata.build_team_allowed(team_games),
-            rdata.build_team_own(team_games),
-        )
-        return _serialize_vectors(store)
 
     # --- serving: resident in-memory store (for a future inference tab) -------
 

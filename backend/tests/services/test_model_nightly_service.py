@@ -28,8 +28,8 @@ class FakeDB:
     def __init__(self):
         self.run = None
         self.has_date = False
-        self.player_recs = [{"player_id": 1}]
-        self.team_recs = [{"team_id": 10}]
+        self.player_recs = pd.DataFrame([{"PLAYER_ID": 1}])
+        self.team_recs = pd.DataFrame([{"TEAM_ID": 10}])
         self.eval_insert_ok = True
         self.fs_insert_ok = True
         self.vec_insert_ok = True
@@ -113,7 +113,7 @@ def service(monkeypatch):
     )
     # Never build a real store from the fake records in unit tests.
     monkeypatch.setattr(
-        ModelNightlyService, "_vectors_from_records",
+        ModelNightlyService, "_vectors_from_frames",
         staticmethod(lambda p, t: ([], [], [])),
     )
     yield svc
@@ -176,7 +176,7 @@ async def test_incomplete_data_left_unmarked_for_retry(service, monkeypatch):
 @pytest.mark.asyncio
 async def test_empty_store_requires_bootstrap(service, monkeypatch):
     _allow_fetch(monkeypatch, _night())
-    service._db.player_recs = []
+    service._db.player_recs = pd.DataFrame()
     assert await service.run_for_date(GAME_DATE) == "store_not_bootstrapped"
 
 
@@ -418,7 +418,7 @@ async def test_drift_rebuild_without_raw_rows_is_skipped_not_failed(service, mon
     """Tri-state: "nothing to write" must not be reported as a write failure."""
     union, _ = _real_stored_keys()
     service._db.vector_feature_keys = union - {"USG_w10_mean"}
-    service._db.player_recs = []                # store not bootstrapped
+    service._db.player_recs = pd.DataFrame()    # store not bootstrapped
     _allow_fetch(monkeypatch, _night(expected_games=0))
 
     statuses = await service.run_catchup()
