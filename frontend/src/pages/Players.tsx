@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { usePersistedState } from '../hooks/usePersistedState';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
 import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
@@ -12,10 +13,10 @@ import './Players.css';
 
 const Players = () => {
   const [filters, setFilters] = useState<PlayerFilters>({});
-  const [showAverages, setShowAverages] = useState(true);
+  const [showAverages, setShowAverages] = usePersistedState('players.showAverages', true);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null);
-  const [integerMode, setIntegerMode] = useState(true);
+  const [integerMode, setIntegerMode] = usePersistedState('players.integerMode', true);
 
   const { data, isLoading, error } = useGetAllPlayersQuery({
     page: 1,

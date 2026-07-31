@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useTransition } from 'react'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetAllPlayersQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -45,12 +46,12 @@ export default function PlayerRankings() {
     [allPlayers]
   )
 
-  const [calcMode, setCalcMode] = useState<'totals' | 'per_game'>('per_game')
-  const [displayMode, setDisplayMode] = useState<'totals' | 'per_game'>('per_game')
-  const [minGp, setMinGp] = useState(0)
-  const [minMin, setMinMin] = useState(0)
-  const [position, setPosition] = useState<string | null>(null)
-  const [weights, setWeights] = useState<Record<RankingCategory, number>>({ ...DEFAULT_WEIGHTS })
+  const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.calcMode', 'per_game')
+  const [displayMode, setDisplayMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.displayMode', 'per_game')
+  const [minGp, setMinGp] = usePersistedState('playerRankings.minGp', 0)
+  const [minMin, setMinMin] = usePersistedState('playerRankings.minMin', 0)
+  const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
+  const [weights, setWeights] = usePersistedState<Record<RankingCategory, number>>('playerRankings.weights', { ...DEFAULT_WEIGHTS })
   const [displayLimit, setDisplayLimit] = useState<number | null>(null)
   const [sliderResetKey, setSliderResetKey] = useState(0)
   const [sortCol, setSortCol] = useState<SortCol>('totalZ')

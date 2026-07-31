@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { usePersistedState } from '../../hooks/usePersistedState';
 import { TeamSelector } from './components/TeamSelector';
 import { TradeSuggestionCard } from './components/TradeSuggestionCard';
 import { useGetTradeSuggestionsQuery } from '../../store/api/fantasyApi';
@@ -31,7 +32,7 @@ const getErrorMessage = (error: unknown): string => {
 
 export const TradeSuggestions: React.FC = () => {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('totals');
+  const [viewMode, setViewMode] = usePersistedState<ViewMode>('tradeSuggestions.viewMode', 'totals');
   const [shouldFetch, setShouldFetch] = useState<boolean>(false);
 
   const {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { usePersistedState, usePersistedSetState } from '../hooks/usePersistedState';
 import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -95,8 +96,8 @@ function FilterCheckbox({
 
 function DepthChartView({ teamId }: { teamId: string }) {
   const { data, isLoading, error } = useGetNbaTeamDepthChartQuery(teamId);
-  const [excludedStatuses, setExcludedStatuses] = useState<Set<string>>(new Set());
-  const [removeDuplicates, setRemoveDuplicates] = useState(false);
+  const [excludedStatuses, setExcludedStatuses] = usePersistedSetState<string>(`nbaTeams.${teamId}.excludedStatuses`, new Set());
+  const [removeDuplicates, setRemoveDuplicates] = usePersistedState(`nbaTeams.${teamId}.removeDuplicates`, false);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message="Failed to load depth chart" />;

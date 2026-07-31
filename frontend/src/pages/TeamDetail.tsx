@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router'
 import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery } from '../store/api/fantasyApi'
 import type { TimePeriod, PlayerMatchup, CustomDateRange } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -38,8 +39,8 @@ const TeamDetail = () => {
   }, [timePeriod, customRange, team_detail])
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [showAverages, setShowAverages] = useState(true)
-  const [integerMode, setIntegerMode] = useState(true)
+  const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
+  const [integerMode, setIntegerMode] = usePersistedState('teamDetail.integerMode', true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
   const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY })
   const matchupMap = useMemo(() => {
