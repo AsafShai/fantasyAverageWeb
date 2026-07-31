@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePersistedState } from '../hooks/usePersistedState';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
@@ -149,7 +150,7 @@ export default function Projections() {
   const { data: matchups = [], isLoading, error } = useGetMatchupsTodayQuery(
     slateDate ? slateDate.replaceAll('-', '') : undefined
   );
-  const [integerMode, setIntegerMode] = useState(true);
+  const [integerMode, setIntegerMode] = usePersistedState('projections.integerMode', true);
   const [search, setSearch] = useState('');
   const [nbaTeam, setNbaTeam] = useState('');
   const [fantasyTeamId, setFantasyTeamId] = useState('');
