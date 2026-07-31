@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetDraftReportQuery, useGetAllPlayersQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -36,8 +37,8 @@ function heatColor(p: ScoredPick): string {
 }
 
 export default function DraftReport() {
-  const [calcMode, setCalcMode] = useState<'totals' | 'per_game'>('per_game')
-  const [includeLowGp, setIncludeLowGp] = useState(false)
+  const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('draftReport.calcMode', 'per_game')
+  const [includeLowGp, setIncludeLowGp] = usePersistedState('draftReport.includeLowGp', false)
   const minGp = includeLowGp ? LOW_GP_MIN : MIN_GP_FOR_RANK
   const { data: draftReport, isLoading: draftLoading, error: draftError } = useGetDraftReportQuery()
   // Same pool Player Rankings uses (season, full ESPN universe) — keeps the

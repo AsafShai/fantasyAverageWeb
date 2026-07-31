@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
+import { usePersistedState } from '../hooks/usePersistedState'
 import {
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
@@ -558,14 +559,14 @@ export default function Trends() {
   const [tab, setTab] = useState<TabKey>('minutes')
   const [nameFilter, setNameFilter] = useState('')
   const [position, setPosition] = useState<string | null>(null)
-  const [windowDays, setWindowDays] = useState<number>(15)
-  const [minGames, setMinGames] = useState(3)
-  const [ownership, setOwnership] = useState<Ownership>('all')
+  const [windowDays, setWindowDays] = usePersistedState<number>('trends.windowDays', 15)
+  const [minGames, setMinGames] = usePersistedState('trends.minGames', 3)
+  const [ownership, setOwnership] = usePersistedState<Ownership>('trends.ownership', 'all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
   // one remembered choice per tab: "prior 2 seasons" is the right default when
   // judging a season line, "this season" when judging current form
-  const [seasonBaseline, setSeasonBaseline] = useState(2)
-  const [formBaseline, setFormBaseline] = useState(0)
+  const [seasonBaseline, setSeasonBaseline] = usePersistedState('trends.seasonBaseline', 2)
+  const [formBaseline, setFormBaseline] = usePersistedState('trends.formBaseline', 0)
 
   const regressionMode = TAB_MODE[tab]
   const isShooting = regressionMode !== undefined
