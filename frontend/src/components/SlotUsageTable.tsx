@@ -44,26 +44,25 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
   })
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Slot Usage</h2>
           <p className="text-xs text-gray-500 mt-1">
-            Rate is per slot vs the NBA rate. Max and Est. cover the whole column — UTIL is 3
-            slots, cap (246+2).
+            Rate is per slot. Max and Est. are the whole column — UTIL cap (246+2).
           </p>
         </div>
         <div className="text-xs text-gray-500 space-y-1 sm:text-right">
           {typeof avgPace === 'number' && (
             <div>
-              NBA avg: <span className="font-medium text-gray-700">{avgPace.toFixed(1)} GP/team</span>
+              NBA <span className="font-medium text-gray-700">{avgPace.toFixed(1)}</span> GP/team
               {typeof gameDaysLeft === 'number' && (
-                <span> · <span className="font-medium text-gray-700">{gameDaysLeft}</span> game days left</span>
+                <span> · <span className="font-medium text-gray-700">{gameDaysLeft}</span> days left</span>
               )}
             </div>
           )}
           {!colored && (
-            <div className="text-gray-400">Too early to judge pace — colors start above 10 GP/team.</div>
+            <div className="text-gray-400">Too early — colors start at 10 GP/team.</div>
           )}
         </div>
       </div>
@@ -72,23 +71,24 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
         <div className="space-y-1 text-xs text-gray-600 mb-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-semibold text-gray-500 w-10">Rate</span>
-            <LegendSwatch className="bg-green-100" label="within 5%" />
-            <LegendSwatch className="bg-yellow-100" label="5–10% off" />
-            <LegendSwatch className="bg-orange-100" label="10–15% off" />
-            <LegendSwatch className="bg-red-100" label="15%+ off" />
-            <span className="text-gray-400">games ahead of / behind the NBA rate</span>
+            <LegendSwatch className="bg-green-100" label="<5%" />
+            <LegendSwatch className="bg-yellow-100" label="5–10%" />
+            <LegendSwatch className="bg-orange-100" label="10–15%" />
+            <LegendSwatch className="bg-red-100" label="15%+" />
+            <span className="text-gray-400">off the NBA rate, either way</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-semibold text-gray-500 w-10">Max</span>
-            <LegendSwatch className="bg-green-100" label="full season still reachable" />
-            <LegendSwatch className="bg-red-100" label="no longer reachable" />
+            <LegendSwatch className="bg-green-100" label="still reachable" />
+            <LegendSwatch className="bg-red-100" label="gone" />
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-semibold text-gray-500 w-10">Est.</span>
-            <LegendSwatch className="bg-green-100" label="82+ per slot" />
+            <LegendSwatch className="bg-green-100" label="82+" />
             <LegendSwatch className="bg-yellow-100" label="80–82" />
             <LegendSwatch className="bg-orange-100" label="78–80" />
-            <LegendSwatch className="bg-red-100" label="under 78" />
+            <LegendSwatch className="bg-red-100" label="<78" />
+            <span className="text-gray-400">per slot</span>
           </div>
         </div>
       )}
@@ -115,7 +115,7 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
             <tr>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
                 {ROW_LABELS.rate}
-                <div className="font-normal text-gray-400 normal-case">used · vs NBA rate</div>
+                <div className="font-normal text-gray-400 normal-case">used · vs NBA</div>
               </th>
               {columns.map(({ slot, projection }) => {
                 if (!projection) return <EmptyCell key={slot} />
@@ -136,7 +136,7 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
             <tr>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
                 {ROW_LABELS.max}
-                <div className="font-normal text-gray-400 normal-case">most still reachable</div>
+                <div className="font-normal text-gray-400 normal-case">still reachable</div>
               </th>
               {columns.map(({ slot, projection }) => {
                 if (!projection) return <EmptyCell key={slot} />
@@ -155,7 +155,7 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
             <tr>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
                 {ROW_LABELS.estimated}
-                <div className="font-normal text-gray-400 normal-case">projected finish</div>
+                <div className="font-normal text-gray-400 normal-case">projected</div>
               </th>
               {columns.map(({ slot, projection }) => {
                 if (!projection) return <EmptyCell key={slot} />
