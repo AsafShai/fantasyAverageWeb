@@ -153,6 +153,16 @@ class ResponseBuilder:
             data_date=data_date,
         )
     
+    def _player_id_from_row(self, row: pd.Series) -> Optional[int]:
+        raw = row.get('player_id')
+        if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
     def build_players_list(self, team_players: pd.DataFrame) -> List[Player]:
         """Build list of Player objects from players DataFrame"""
         players = []
@@ -179,6 +189,7 @@ class ResponseBuilder:
                 ),
                 team_id=int(row['team_id']),
                 status=str(row.get('status', 'ONTEAM')),
+                player_id=self._player_id_from_row(row),
                 has_data=bool(row.get('has_data', True)),
             ))
         return players
@@ -294,6 +305,7 @@ class ResponseBuilder:
                 ),
                 team_id=int(row['team_id']),
                 status=str(row.get('status', 'ONTEAM')),
+                player_id=self._player_id_from_row(row),
                 injured=bool(row.get('injured', False)),
                 fantasy_team_name=row.get('fantasy_team_name') or None,
                 season_rating=float(row['season_rating']) if row.get('season_rating') is not None else None,

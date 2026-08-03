@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, PlayerMatchup, ProjectionStats, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse } from '../../types/api';
+import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
 export const fantasyApi = createApi({
@@ -7,7 +8,7 @@ export const fantasyApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   }),
-  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator'],
+  tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'MinigameLeaderboard'],
   endpoints: (builder) => ({
     getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string }>({
       query: ({ sortBy, order = 'asc', startDate, endDate } = {}) => ({
@@ -77,6 +78,20 @@ export const fantasyApi = createApi({
     getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
       query: (teamId) => `/nba-teams/${teamId}/depthchart`,
     }),
+    getNbaPlayer: builder.query<NbaPlayerBio, string>({
+      query: (playerId) => `/nba-players/${playerId}`,
+      keepUnusedDataFor: 3600,
+    }),
+    getNbaPlayerStats: builder.query<
+      NbaPlayerStatsResponse,
+      { playerId: string; time_period?: TimePeriod; start?: string; end?: string }
+    >({
+      query: ({ playerId, time_period = 'season', start, end }) => ({
+        url: `/nba-players/${playerId}/stats`,
+        params: { time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) },
+      }),
+      keepUnusedDataFor: 300,
+    }),
     getMatchupsToday: builder.query<PlayerMatchup[], string | void>({
       query: (date) => date ? `/matchups/today?date=${date}` : '/matchups/today',
     }),
@@ -127,6 +142,35 @@ export const fantasyApi = createApi({
       }),
       keepUnusedDataFor: 600,
     }),
+    getMinigamePlayers: builder.query<MinigamePlayerBundle, void>({
+      query: () => '/minigames/players',
+      keepUnusedDataFor: 3600,
+    }),
+    getMinigameLeaderboard: builder.query<{ rows: LeaderboardRow[] }, GameSlug>({
+      query: (gameSlug) => `/minigames/${gameSlug}/leaderboard`,
+      providesTags: (_r, _e, slug) => [{ type: 'MinigameLeaderboard', id: slug }],
+    }),
+    checkMinigameQualify: builder.mutation<
+      { qualifies: boolean },
+      { gameSlug: GameSlug; bestStreak: number; hintsUsed?: number }
+    >({
+      query: ({ gameSlug, bestStreak, hintsUsed }) => ({
+        url: `/minigames/${gameSlug}/leaderboard/qualify`,
+        method: 'POST',
+        body: { bestStreak, ...(hintsUsed !== undefined ? { hintsUsed } : {}) },
+      }),
+    }),
+    submitMinigameLeaderboard: builder.mutation<
+      { rows: LeaderboardRow[] },
+      { gameSlug: GameSlug; displayName: string; bestStreak: number; hintsUsed?: number }
+    >({
+      query: ({ gameSlug, displayName, bestStreak, hintsUsed }) => ({
+        url: `/minigames/${gameSlug}/leaderboard`,
+        method: 'POST',
+        body: { displayName, bestStreak, ...(hintsUsed !== undefined ? { hintsUsed } : {}) },
+      }),
+      invalidatesTags: (_r, _e, arg) => [{ type: 'MinigameLeaderboard', id: arg.gameSlug }],
+    }),
   }),
 });
 
@@ -145,6 +189,8 @@ export const {
   useGetEstimatorResultsQuery,
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
+  useGetNbaPlayerQuery,
+  useGetNbaPlayerStatsQuery,
   useGetMatchupsTodayQuery,
   useGetMatchupDatesQuery,
   useGetUpcomingDatesQuery,
@@ -159,4 +205,8 @@ export const {
   useGetTrendsUsageQuery,
   useGetTrendsRegressionQuery,
   useGetTrendGameLogQuery,
+  useGetMinigamePlayersQuery,
+  useGetMinigameLeaderboardQuery,
+  useCheckMinigameQualifyMutation,
+  useSubmitMinigameLeaderboardMutation,
 } = fantasyApi;

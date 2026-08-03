@@ -3,6 +3,7 @@ import { usePersistedState, usePersistedSetState } from '../hooks/usePersistedSt
 import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import PlayerNameLink from '../components/PlayerNameLink';
 import type { DepthChartPosition } from '../types/api';
 import { applyDepthChartFilters } from '../utils/depthChartFilters';
 
@@ -48,7 +49,7 @@ function DepthChartTable({ positions }: { positions: DepthChartPosition[] }) {
                   <td key={i} className="px-4 py-2.5 whitespace-nowrap">
                     {player ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-800 dark:text-gray-100">{player.display_name}</span>
+                        <PlayerNameLink name={player.display_name} playerId={player.id} />
                         {player.injury && (
                           <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-semibold ${injuryStyle(player.injury.status)}`}>
                             {player.injury.status}
