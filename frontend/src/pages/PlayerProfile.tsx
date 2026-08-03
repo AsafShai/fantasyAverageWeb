@@ -45,7 +45,7 @@ const PlayerProfile = () => {
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
-  const [customRange, setCustomRange] = useState<CustomDateRange | undefined>()
+  const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const [showAverages, setShowAverages] = useState(true)
 
   const handleBack = () => {
