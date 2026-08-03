@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef } from 'react'
 import Footer from './Footer'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES } from '../config/featureFlags'
 
 const Layout = () => {
   const location = useLocation()
@@ -31,6 +31,7 @@ const Layout = () => {
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
     { path: '/nba-teams', label: 'NBA', icon: '🏀' },
+    ...(FF_MINIGAMES ? [{ path: '/minigames', label: 'Minigames', icon: '🎮' }] : []),
     ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
     ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
     ...(FF_PROJECTIONS ? [{ path: '/projections', label: 'Projections', icon: '🔭' }] : []),
@@ -388,6 +389,22 @@ const ReorgLayout = ({ darkMode, setDarkMode }: ReorgLayoutProps) => {
         { path: '/trade', label: 'Trade Analyzer', icon: '🔄' },
       ],
     },
+    ...(FF_MINIGAMES
+      ? [
+          {
+            key: 'minigames',
+            label: 'Minigames',
+            icon: '🎮',
+            items: [
+              { path: '/minigames', label: 'All Games', icon: '🎮' },
+              { path: '/minigames/hangman', label: 'Hangman', icon: '🔤' },
+              { path: '/minigames/who-he-play-for', label: 'Who He Play For?', icon: '🏟️' },
+              { path: '/minigames/who-am-i', label: 'Who Am I?', icon: '🕵️' },
+              { path: '/minigames/now-you-see-me', label: 'Now You See Me', icon: '👁️' },
+            ],
+          },
+        ]
+      : []),
     {
       key: 'nba',
       label: 'NBA',

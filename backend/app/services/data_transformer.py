@@ -65,6 +65,7 @@ class DataTransformer:
                 ratings = player_entry.get('ratings', {})
 
                 player_name = player.get('fullName', 'Unknown')
+                espn_player_id = player.get('id') or player_entry.get('id')
                 pro_team_id = player.get('proTeamId', 0)
                 pro_team = PRO_TEAM_MAP.get(pro_team_id, 'Unknown')
                 injured = bool(player.get('injured', False))
@@ -92,6 +93,7 @@ class DataTransformer:
 
                         mapped_stats.update({
                             'Name': player_name,
+                            'player_id': int(espn_player_id) if espn_player_id is not None else None,
                             'team_id': team_id,
                             'Pro Team': pro_team,
                             'Positions': positions,
@@ -111,7 +113,9 @@ class DataTransformer:
                 raise ValueError("No valid player data found")
 
             df = pd.DataFrame(all_players)
-            df = df.fillna(0)
+            # Keep player_id nulls intact (fillna(0) would create bogus /player/0 links).
+            fill_cols = [c for c in df.columns if c != 'player_id']
+            df[fill_cols] = df[fill_cols].fillna(0)
             return self._organize_player_columns(df)
 
         except Exception as e:
@@ -143,7 +147,8 @@ class DataTransformer:
             if not all_players:
                 raise ValueError("No valid player data found")
             df = pd.DataFrame(all_players)
-            df = df.fillna(0)
+            fill_cols = [c for c in df.columns if c != 'player_id']
+            df[fill_cols] = df[fill_cols].fillna(0)
             return self._organize_player_columns(df)
             
         except Exception as e:
@@ -213,6 +218,7 @@ class DataTransformer:
 
             # Extract basic player info
             player_name = player.get('fullName', 'Unknown')
+            espn_player_id = player.get('id') or entry.get('playerId')
             pro_team_id = player.get('proTeamId', 0)
             pro_team = PRO_TEAM_MAP.get(pro_team_id, 'Unknown')
 
@@ -237,6 +243,7 @@ class DataTransformer:
                     # Add player info
                     mapped_stats.update({
                         'Name': player_name,
+                        'player_id': int(espn_player_id) if espn_player_id is not None else None,
                         'team_id': team_id,
                         'Pro Team': pro_team,
                         'Positions': positions
@@ -252,7 +259,7 @@ class DataTransformer:
     
     def _organize_player_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Organize player DataFrame columns in logical order"""
-        info_cols = ['Name', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name', 'season_rating', 'last7_rating', 'last15_rating', 'last30_rating']
+        info_cols = ['Name', 'player_id', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name', 'season_rating', 'last7_rating', 'last15_rating', 'last30_rating']
         stat_cols = [col for col in df.columns if col not in info_cols]
         available_info_cols = [col for col in info_cols if col in df.columns]
         return df.reindex(columns=available_info_cols + stat_cols)
