@@ -77,6 +77,24 @@ def division_for_abbr(abbr: str) -> str:
     return TEAM_DIVISION.get(a, "Unknown")
 
 
+def load_previous_players_by_id(path: Path) -> dict[str, dict]:
+    """Load existing players keyed by id, for filling nulls on re-fetch."""
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    players = data.get("players") if isinstance(data, dict) else None
+    if not isinstance(players, list):
+        return {}
+    by_id: dict[str, dict] = {}
+    for p in players:
+        if isinstance(p, dict) and isinstance(p.get("id"), str):
+            by_id[p["id"]] = p
+    return by_id
+
+
 def main() -> None:
     teams_data = fetch_json(
         "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams?limit=100"
@@ -157,6 +175,18 @@ def main() -> None:
             by_name[key] = p
     unique = list(by_name.values())
 
+    # Preserve prior non-null fields when ESPN returns null for the same player.
+    previous_by_id = load_previous_players_by_id(OUT)
+    preserved = 0
+    for p in unique:
+        prev = previous_by_id.get(p.get("id"))
+        if not prev:
+            continue
+        for key, value in list(p.items()):
+            if value is None and prev.get(key) is not None:
+                p[key] = prev[key]
+                preserved += 1
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "seasonLabel": "2025-26",
@@ -169,6 +199,8 @@ def main() -> None:
     }
     OUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {len(unique)} players to {OUT}")
+    if previous_by_id:
+        print(f"Preserved {preserved} prior non-null field(s) from {OUT.name}")
 
 
 if __name__ == "__main__":
