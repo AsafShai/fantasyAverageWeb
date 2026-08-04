@@ -177,7 +177,7 @@ const mobileItemClass = (active: boolean) =>
 interface DesktopNavGroupProps {
   group: NavGroupDef
   openKey: string | null
-  setOpenKey: (key: string | null) => void
+  setOpenKey: React.Dispatch<React.SetStateAction<string | null>>
   isActive: boolean
 }
 
@@ -186,8 +186,34 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   const groupRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const isOpen = openKey === group.key
+
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current !== null) {
+      clearTimeout(closeTimeoutRef.current)
+      closeTimeoutRef.current = null
+    }
+  }
+
+  const openMenu = () => {
+    clearCloseTimeout()
+    setOpenKey(group.key)
+  }
+
+  // Delay close so the pointer can cross the gap between the nav and the fixed menu.
+  // Only close if this group is still open — otherwise a pending close from group A
+  // would flash-close group B right after switching.
+  const scheduleCloseMenu = () => {
+    clearCloseTimeout()
+    closeTimeoutRef.current = setTimeout(() => {
+      setOpenKey((current) => (current === group.key ? null : current))
+      closeTimeoutRef.current = null
+    }, 150)
+  }
+
+  useEffect(() => () => clearCloseTimeout(), [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -197,6 +223,7 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
         !groupRef.current.contains(e.target as Node) &&
         !menuRef.current?.contains(e.target as Node)
       ) {
+        clearCloseTimeout()
         setOpenKey(null)
       }
     }
@@ -207,9 +234,10 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   useEffect(() => {
     if (!isOpen) return
     const updatePos = () => {
-      const rect = buttonRef.current?.getBoundingClientRect()
+      // Anchor to the full group hit area (nav-height), not the shorter button.
+      const rect = groupRef.current?.getBoundingClientRect()
       if (rect) {
-        setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+        setMenuPos({ top: rect.bottom, right: window.innerWidth - rect.right })
       }
     }
     updatePos()
@@ -223,23 +251,26 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
 
   const handleButtonKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Escape') {
+      clearCloseTimeout()
       setOpenKey(null)
       buttonRef.current?.focus()
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setOpenKey(group.key)
+      openMenu()
       requestAnimationFrame(() => {
         const firstLink = menuRef.current?.querySelector('a')
         ;(firstLink as HTMLAnchorElement | null)?.focus()
       })
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
+      clearCloseTimeout()
       setOpenKey(isOpen ? null : group.key)
     }
   }
 
   const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
+      clearCloseTimeout()
       setOpenKey(null)
       buttonRef.current?.focus()
     }
@@ -248,16 +279,19 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   return (
     <div
       ref={groupRef}
-      className="relative"
-      onMouseEnter={() => setOpenKey(group.key)}
-      onMouseLeave={() => setOpenKey(null)}
+      className="relative h-14 flex items-center"
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleCloseMenu}
     >
       <button
         ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        onClick={() => setOpenKey(isOpen ? null : group.key)}
+        onClick={() => {
+          clearCloseTimeout()
+          setOpenKey(isOpen ? null : group.key)
+        }}
         onKeyDown={handleButtonKeyDown}
         className={desktopItemClass(isActive)}
         title={group.label}
@@ -267,31 +301,40 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
         <span className="text-[10px]">▾</span>
       </button>
       {isOpen && menuPos && (
+        // Outer shell includes a top padding bridge so hover stays active while
+        // moving from the group into the visually offset menu panel.
         <div
           ref={menuRef}
-          role="menu"
-          onKeyDown={handleMenuKeyDown}
-          onMouseEnter={() => setOpenKey(group.key)}
-          onMouseLeave={() => setOpenKey(null)}
+          onMouseEnter={openMenu}
+          onMouseLeave={scheduleCloseMenu}
           style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
-          className="min-w-[11rem] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 z-50"
+          className="pt-1 z-50"
         >
-          {group.items.map((item) => (
-            <Link
-              key={item.path}
-              role="menuitem"
-              to={item.path}
-              onClick={() => setOpenKey(null)}
-              className={`flex items-center gap-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
-                location.pathname === item.path
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
-              }`}
-            >
-              <span className="text-sm">{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          <div
+            role="menu"
+            onKeyDown={handleMenuKeyDown}
+            className="min-w-[11rem] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1"
+          >
+            {group.items.map((item) => (
+              <Link
+                key={item.path}
+                role="menuitem"
+                to={item.path}
+                onClick={() => {
+                  clearCloseTimeout()
+                  setOpenKey(null)
+                }}
+                className={`flex items-center gap-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
+                  location.pathname === item.path
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <span className="text-sm">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>
