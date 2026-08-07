@@ -2,10 +2,11 @@ import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef } from 'react'
 import Footer from './Footer'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH } from '../config/featureFlags'
 
 function useGlobalSearchShortcut(setSearchOpen: (open: boolean) => void) {
   useEffect(() => {
+    if (!FF_GLOBAL_SEARCH) return
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       const isTyping =
@@ -28,34 +29,40 @@ const SearchIcon = () => (
   </svg>
 )
 
-const SearchButton = ({ onClick }: { onClick: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title="Search (Ctrl K)"
-    className="hidden md:flex items-center gap-2 w-40 lg:w-56 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-3.5 py-1.5 text-gray-400 dark:text-gray-500 shrink-0 transition-colors hover:border-blue-300 hover:bg-white hover:text-gray-500 dark:hover:border-blue-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-  >
-    <SearchIcon />
-    <span className="flex-1 text-left text-sm truncate">Search…</span>
-    <kbd className="hidden lg:inline rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500">
-      Ctrl K
-    </kbd>
-  </button>
-)
+const SearchButton = ({ onClick }: { onClick: () => void }) => {
+  if (!FF_GLOBAL_SEARCH) return null
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Search (Ctrl K)"
+      className="hidden md:flex items-center gap-2 w-40 lg:w-56 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-3.5 py-1.5 text-gray-400 dark:text-gray-500 shrink-0 transition-colors hover:border-blue-300 hover:bg-white hover:text-gray-500 dark:hover:border-blue-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+    >
+      <SearchIcon />
+      <span className="flex-1 text-left text-sm truncate">Search…</span>
+      <kbd className="hidden lg:inline rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500">
+        Ctrl K
+      </kbd>
+    </button>
+  )
+}
 
-const MobileSearchIconButton = ({ onClick }: { onClick: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-label="Search"
-    className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-  >
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M14 14L18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  </button>
-)
+const MobileSearchIconButton = ({ onClick }: { onClick: () => void }) => {
+  if (!FF_GLOBAL_SEARCH) return null
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Search"
+      className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+    >
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M14 14L18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    </button>
+  )
+}
 
 const Layout = () => {
   const location = useLocation()
@@ -101,7 +108,7 @@ const Layout = () => {
   if (FF_NAV_REORG) {
     return (
       <>
-        <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+        {FF_GLOBAL_SEARCH && <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />}
         <ReorgLayout darkMode={darkMode} setDarkMode={setDarkMode} setSearchOpen={setSearchOpen} />
       </>
     )
@@ -109,7 +116,7 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex flex-col">
-      <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+      {FF_GLOBAL_SEARCH && <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />}
       <nav className="sticky top-0 z-40 bg-white dark:bg-gray-900 shadow-lg border-b border-gray-200 dark:border-gray-700">
         <div className="w-full px-3">
           <div className="flex items-center justify-between h-14 gap-2">
