@@ -1,7 +1,8 @@
 import logging
 import math
-from datetime import datetime, timedelta
-from typing import Optional
+from collections import OrderedDict
+from datetime import date, datetime, timedelta
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -509,20 +510,100 @@ def prior_season_strings(baseline_seasons: int) -> list[str]:
     return [espn_season_string(settings.season_id - n) for n in range(1, baseline_seasons + 1)]
 
 
+class _TTLLRUCache:
+    """OrderedDict-backed cache with a size cap and a per-entry TTL. Reads
+    evict on expiry and refresh recency; writes sweep expired entries first
+    (cheap, the dict is capped) then evict the least-recently-used entry
+    until back under maxsize."""
+
+    def __init__(self, maxsize: int, ttl: timedelta):
+        self._maxsize = maxsize
+        self._ttl = ttl
+        self._data: OrderedDict[Any, tuple[Any, datetime]] = OrderedDict()
+
+    def get(self, key: Any) -> Any:
+        entry = self._data.get(key)
+        if entry is None:
+            return None
+        value, expires_at = entry
+        if datetime.now() >= expires_at:
+            del self._data[key]
+            return None
+        self._data.move_to_end(key)
+        return value
+
+    def set(self, key: Any, value: Any) -> None:
+        now = datetime.now()
+        expired = [k for k, (_, expires_at) in self._data.items() if now >= expires_at]
+        for k in expired:
+            del self._data[k]
+        self._data[key] = (value, now + self._ttl)
+        self._data.move_to_end(key)
+        while len(self._data) > self._maxsize:
+            self._data.popitem(last=False)
+
+    def clear(self) -> None:
+        self._data.clear()
+
+
+_GAME_LOG_CACHE_MAXSIZE = 64
+
+
 class TrendService:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._db = DBService()
+        self._anchor: Optional[date] = None
         self._regression_cache: dict[tuple[int, int, str], dict] = {}
         self._minutes_cache: dict[int, dict] = {}
         self._usage_cache: dict[int, dict] = {}
-        self._game_log_cache: dict[tuple[int, int, int, str], dict] = {}
+        self._game_log_cache = _TTLLRUCache(maxsize=_GAME_LOG_CACHE_MAXSIZE, ttl=_TREND_CACHE_TTL)
         self._league_cache: dict[str, dict] = {}
+        self._season_shooting_cache: dict[str, pd.DataFrame] = {}
+        self._season_usage_cache: dict[str, pd.DataFrame] = {}
+        self._baseline_cache: dict[int, pd.DataFrame] = {}
 
     @staticmethod
     def _cache_valid(cache: dict, key) -> bool:
         entry = cache.get(key)
         return entry is not None and datetime.now() - entry['ts'] < _TREND_CACHE_TTL
+
+    @staticmethod
+    def _cache_preset_response(cache: dict, window_days: int, cache_key, response) -> None:
+        if window_days in VALID_RECENCY_WINDOWS_DAYS:
+            cache[cache_key] = {'data': response, 'ts': datetime.now()}
+
+    def _sync_anchor(self, anchor: date) -> None:
+        """anchor is deliberately not part of any cache key: it advances at
+        most once/day, so keying by it would mint a fresh entry every day and
+        orphan the previous one instead of ever being reused. Detecting the
+        change here and clearing everything anchor-derived in one move gets
+        the same correctness without that churn."""
+        if self._anchor == anchor:
+            return
+        self._season_shooting_cache.clear()
+        self._season_usage_cache.clear()
+        self._baseline_cache.clear()
+        self._league_cache.clear()
+        self._minutes_cache.clear()
+        self._usage_cache.clear()
+        self._regression_cache.clear()
+        self._game_log_cache.clear()
+        self._anchor = anchor
+
+    async def _get_season_shooting(self, season: str, anchor: date) -> pd.DataFrame:
+        if season not in self._season_shooting_cache:
+            self._season_shooting_cache[season] = await self._db.aggregate_shooting_by_player(
+                [season], start=settings.season_start, end=anchor
+            )
+        return self._season_shooting_cache[season]
+
+    async def _get_season_usage(self, season: str, anchor: date) -> pd.DataFrame:
+        if season not in self._season_usage_cache:
+            self._season_usage_cache[season] = await self._db.get_usage_components(
+                season, settings.season_start, anchor
+            )
+        return self._season_usage_cache[season]
 
     async def get_shooting_regression(
         self,
@@ -533,17 +614,17 @@ class TrendService:
     ) -> RegressionResponse:
         window_days = _normalize_window_days(window_days)
         baseline_seasons = _normalize_baseline_seasons(baseline_seasons, mode)
+
+        current_season = espn_season_string(settings.season_id)
+        anchor_date = await get_season_anchor_date(current_season, self._db)
+        self._sync_anchor(anchor_date)
+
         cache_key = (window_days, baseline_seasons, mode)
         if self._cache_valid(self._regression_cache, cache_key):
             return self._regression_cache[cache_key]['data']
 
-        current_season = espn_season_string(settings.season_id)
-        anchor_date = await get_season_anchor_date(current_season, self._db)
-
         window_start = anchor_date - timedelta(days=window_days)
-        current_df = await self._db.aggregate_shooting_by_player(
-            [current_season], start=settings.season_start, end=anchor_date
-        )
+        current_df = await self._get_season_shooting(current_season, anchor_date)
         window_df = await self._db.aggregate_shooting_by_player(
             [current_season], start=window_start, end=anchor_date
         )
@@ -560,21 +641,21 @@ class TrendService:
             mode=mode,
             last_updated=datetime.now().isoformat(),
         )
-        self._regression_cache[cache_key] = {'data': response, 'ts': datetime.now()}
+        self._cache_preset_response(self._regression_cache, window_days, cache_key, response)
         return response
 
     async def get_minutes_movers(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> MinutesResponse:
         window_days = _normalize_window_days(window_days)
-        if self._cache_valid(self._minutes_cache, window_days):
-            return self._minutes_cache[window_days]['data']
 
         current_season = espn_season_string(settings.season_id)
         anchor_date = await get_season_anchor_date(current_season, self._db)
+        self._sync_anchor(anchor_date)
+
+        if self._cache_valid(self._minutes_cache, window_days):
+            return self._minutes_cache[window_days]['data']
 
         window_start = anchor_date - timedelta(days=window_days)
-        season_df = await self._db.aggregate_shooting_by_player(
-            [current_season], start=settings.season_start, end=anchor_date
-        )
+        season_df = await self._get_season_shooting(current_season, anchor_date)
         window_df = await self._db.aggregate_shooting_by_player(
             [current_season], start=window_start, end=anchor_date
         )
@@ -582,45 +663,51 @@ class TrendService:
 
         items = compute_minutes_movers(season_df, window_df, games_last_15d, players_df)
         response = MinutesResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
-        self._minutes_cache[window_days] = {'data': response, 'ts': datetime.now()}
+        self._cache_preset_response(self._minutes_cache, window_days, window_days, response)
         return response
 
     async def get_usage_role(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> UsageResponse:
         window_days = _normalize_window_days(window_days)
-        if self._cache_valid(self._usage_cache, window_days):
-            return self._usage_cache[window_days]['data']
 
         current_season = espn_season_string(settings.season_id)
         anchor_date = await get_season_anchor_date(current_season, self._db)
+        self._sync_anchor(anchor_date)
+
+        if self._cache_valid(self._usage_cache, window_days):
+            return self._usage_cache[window_days]['data']
 
         window_start = anchor_date - timedelta(days=window_days)
-        games_df = await self._db.get_usage_components(current_season, settings.season_start, anchor_date)
+        games_df = await self._get_season_usage(current_season, anchor_date)
         games_last_15d = await self._db.get_games_since(window_start)
 
         items = compute_usage_role(games_df, games_last_15d, players_df, window_start)
         response = UsageResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
-        self._usage_cache[window_days] = {'data': response, 'ts': datetime.now()}
+        self._cache_preset_response(self._usage_cache, window_days, window_days, response)
         return response
 
     async def _prior_shooting(self, baseline_seasons: int) -> pd.DataFrame:
-        seasons = prior_season_strings(baseline_seasons)
-        if not seasons:
-            return pd.DataFrame()
-        return await self._db.aggregate_shooting_by_player(seasons)
+        if baseline_seasons not in self._baseline_cache:
+            seasons = prior_season_strings(baseline_seasons)
+            self._baseline_cache[baseline_seasons] = (
+                await self._db.aggregate_shooting_by_player(seasons) if seasons else pd.DataFrame()
+            )
+        return self._baseline_cache[baseline_seasons]
 
     async def _get_league_refs(self, season: str, end) -> tuple[dict[str, float], Optional[float]]:
         """League-wide shooting pcts and USG%, cached together — one pull serves
         every player's chart. USG% lands at ~20 by construction (five players
         split 100% of possessions), which is exactly why it is a useful anchor
-        for judging whether a given usage is high."""
-        if self._cache_valid(self._league_cache, season):
-            entry = self._league_cache[season]['data']
+        for judging whether a given usage is high. `end` is the anchor date;
+        routing it through _sync_anchor (rather than into the cache key) is
+        what makes this key/invalidate consistently instead of silently
+        ignoring `end` the way it used to."""
+        self._sync_anchor(end)
+        if season in self._league_cache:
+            entry = self._league_cache[season]
             return entry['pct'], entry['usg']
 
-        shooting_df = await self._db.aggregate_shooting_by_player(
-            [season], start=settings.season_start, end=end
-        )
-        usage_df = await self._db.get_usage_components(season, settings.season_start, end)
+        shooting_df = await self._get_season_shooting(season, end)
+        usage_df = await self._get_season_usage(season, end)
         league_usg = None
         if not usage_df.empty:
             usg = usage_df.apply(_usg_per_game, axis=1)
@@ -629,7 +716,7 @@ class TrendService:
                 league_usg = float((usg * usage_df['p_min']).sum() / total_min)
 
         data = {'pct': _league_pct_map(shooting_df), 'usg': league_usg}
-        self._league_cache[season] = {'data': data, 'ts': datetime.now()}
+        self._league_cache[season] = data
         return data['pct'], data['usg']
 
     async def get_player_game_log(
@@ -641,12 +728,16 @@ class TrendService:
     ) -> Optional[GameLogResponse]:
         window_days = _normalize_window_days(window_days)
         baseline_seasons = _normalize_baseline_seasons(baseline_seasons, mode)
-        cache_key = (player_id, window_days, baseline_seasons, mode)
-        if self._cache_valid(self._game_log_cache, cache_key):
-            return self._game_log_cache[cache_key]['data']
 
         current_season = espn_season_string(settings.season_id)
         anchor_date = await get_season_anchor_date(current_season, self._db)
+        self._sync_anchor(anchor_date)
+
+        cache_key = (player_id, window_days, baseline_seasons, mode)
+        cached = self._game_log_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         window_start = anchor_date - timedelta(days=window_days)
 
         games_df = await self._db.get_player_game_log(
@@ -668,5 +759,5 @@ class TrendService:
             games_df, player_id, current_season, window_days, window_start,
             baseline_pct, baseline_seasons, league_pct, league_usg,
         )
-        self._game_log_cache[cache_key] = {'data': response, 'ts': datetime.now()}
+        self._game_log_cache.set(cache_key, response)
         return response
