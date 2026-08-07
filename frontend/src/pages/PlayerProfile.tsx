@@ -6,6 +6,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import PlayerTrendsCard from '../components/PlayerTrendsCard'
 
 function backLabel(from: string | undefined): string {
   if (!from) return '← Back'
@@ -239,6 +240,8 @@ const PlayerProfile = () => {
           </div>
         )}
       </div>
+
+      <PlayerTrendsCard playerId={Number(playerId)} />
     </div>
   )
 }
