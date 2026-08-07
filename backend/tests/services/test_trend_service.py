@@ -8,8 +8,11 @@ import pytest
 from app.config import settings
 from app.services import trend_service
 from app.services.trend_service import (
+    MAX_RECENCY_WINDOW_DAYS,
+    MIN_RECENCY_WINDOW_DAYS,
     TrendService,
     _normalize_baseline_seasons,
+    _normalize_window_days,
     _TTLLRUCache,
     build_game_log,
     classify_role_badge,
@@ -958,6 +961,23 @@ class TestCachePresetResponse:
         svc._cache_preset_response(cache, 15, 15, 'response')
 
         assert cache[15]['data'] == 'response'
+
+
+class TestNormalizeWindowDays:
+    def test_below_min_clamps_up(self):
+        assert _normalize_window_days(1) == MIN_RECENCY_WINDOW_DAYS
+
+    def test_above_max_clamps_down(self):
+        assert _normalize_window_days(500) == MAX_RECENCY_WINDOW_DAYS
+
+    def test_off_preset_value_is_honoured(self):
+        assert _normalize_window_days(21) == 21
+
+    def test_min_boundary_passes_through(self):
+        assert _normalize_window_days(MIN_RECENCY_WINDOW_DAYS) == MIN_RECENCY_WINDOW_DAYS
+
+    def test_max_boundary_passes_through(self):
+        assert _normalize_window_days(MAX_RECENCY_WINDOW_DAYS) == MAX_RECENCY_WINDOW_DAYS
 
 
 @pytest.mark.asyncio

@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 DRIFT_THRESHOLD = 0.35  # makes/g-equivalent, provisional — see trends_page_plan.md
 DEFAULT_RECENCY_WINDOW_DAYS = 15
 VALID_RECENCY_WINDOWS_DAYS = (7, 15, 30)
+MIN_RECENCY_WINDOW_DAYS = 5
+MAX_RECENCY_WINDOW_DAYS = 60
 _TREND_CACHE_TTL = timedelta(hours=6)
 
 # current_min_att / baseline_min_att: sample-size gates below which a pct is
@@ -495,7 +497,7 @@ def build_game_log(
 
 
 def _normalize_window_days(window_days: int) -> int:
-    return window_days if window_days in VALID_RECENCY_WINDOWS_DAYS else DEFAULT_RECENCY_WINDOW_DAYS
+    return max(MIN_RECENCY_WINDOW_DAYS, min(MAX_RECENCY_WINDOW_DAYS, window_days))
 
 
 def _normalize_baseline_seasons(baseline_seasons: int, mode: RegressionMode = DEFAULT_REGRESSION_MODE) -> int:
