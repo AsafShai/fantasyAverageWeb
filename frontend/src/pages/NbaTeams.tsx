@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { usePersistedState, usePersistedSetState } from '../hooks/usePersistedState';
 import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -153,7 +154,13 @@ function DepthChartView({ teamId }: { teamId: string }) {
 
 export default function NbaTeams() {
   const { data: teams, isLoading, error } = useGetNbaTeamsListQuery();
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(searchParams.get('team') ?? '');
+
+  const handleSelectTeam = (teamId: string) => {
+    setSelectedTeamId(teamId);
+    setSearchParams(teamId ? { team: teamId } : {}, { replace: true });
+  };
 
   return (
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -173,7 +180,7 @@ export default function NbaTeams() {
           <div className="mb-6">
             <select
               value={selectedTeamId}
-              onChange={(e) => setSelectedTeamId(e.target.value)}
+              onChange={(e) => handleSelectTeam(e.target.value)}
               className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select a team...</option>
