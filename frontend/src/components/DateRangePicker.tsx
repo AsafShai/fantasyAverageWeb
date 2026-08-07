@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import type { CustomDateRange } from '../types/api'
-import { validateDateRange, formatShort } from '../utils/dateRange'
-
-const todayIso = () => new Date().toISOString().split('T')[0]
+import { validateDateRange, formatShort, todayIso } from '../utils/dateRange'
 
 interface DateRangePickerProps {
   seasonStart?: string

@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import type { RankingStats } from '../types/api'
+import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
 
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -18,13 +19,7 @@ const Rankings = () => {
   const [dateError, setDateError] = useState<string>('')
   const [appliedDates, setAppliedDates] = useState<{ startDate?: string; endDate?: string }>({})
 
-  const today = new Date().toISOString().split('T')[0]
-
-  function getDateNDaysAgo(n: number): string {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return d.toISOString().split('T')[0];
-  }
+  const today = todayIso()
 
   const { data, error, isLoading } = useGetRankingsQuery(appliedDates)
   const { data: summary, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
