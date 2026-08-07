@@ -1,4 +1,6 @@
 import type { SlotUsage } from '../types/api'
+import InfoTip from './InfoTip'
+import { METRIC_GLOSSARY } from '../constants/metricGlossary'
 import {
   SLOT_NAMES,
   TONE_CLASS,
@@ -113,8 +115,11 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
           </thead>
           <tbody>
             <tr>
-              <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
-                {ROW_LABELS.rate}
+              <th className="relative z-20 px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1">
+                  {ROW_LABELS.rate}
+                  <InfoTip title={METRIC_GLOSSARY.slotRate.title} body={METRIC_GLOSSARY.slotRate.body} />
+                </span>
                 <div className="font-normal text-gray-400 normal-case">used · vs NBA</div>
               </th>
               {columns.map(({ slot, projection }) => {
@@ -134,8 +139,11 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
               })}
             </tr>
             <tr>
-              <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
-                {ROW_LABELS.max}
+              <th className="relative z-20 px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1">
+                  {ROW_LABELS.max}
+                  <InfoTip title={METRIC_GLOSSARY.slotMax.title} body={METRIC_GLOSSARY.slotMax.body} />
+                </span>
                 <div className="font-normal text-gray-400 normal-case">still reachable</div>
               </th>
               {columns.map(({ slot, projection }) => {
@@ -153,8 +161,11 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
               })}
             </tr>
             <tr>
-              <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
-                {ROW_LABELS.estimated}
+              <th className="relative z-20 px-3 py-3 text-left text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1">
+                  {ROW_LABELS.estimated}
+                  <InfoTip title={METRIC_GLOSSARY.slotEstimated.title} body={METRIC_GLOSSARY.slotEstimated.body} />
+                </span>
                 <div className="font-normal text-gray-400 normal-case">projected</div>
               </th>
               {columns.map(({ slot, projection }) => {
