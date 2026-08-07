@@ -125,15 +125,18 @@ export const fantasyApi = createApi({
     }),
     getTrendsMinutes: builder.query<MinutesResponse, { windowDays?: number }>({
       query: ({ windowDays = 15 } = {}) => ({ url: '/trends/minutes', params: { window_days: windowDays } }),
+      keepUnusedDataFor: 600,
     }),
     getTrendsUsage: builder.query<UsageResponse, { windowDays?: number }>({
       query: ({ windowDays = 15 } = {}) => ({ url: '/trends/usage', params: { window_days: windowDays } }),
+      keepUnusedDataFor: 600,
     }),
     getTrendsRegression: builder.query<RegressionResponse, { windowDays?: number; baselineSeasons?: number; mode?: RegressionMode }>({
       query: ({ windowDays = 15, baselineSeasons = 2, mode = 'season' } = {}) => ({
         url: '/trends/regression',
         params: { window_days: windowDays, baseline_seasons: baselineSeasons, mode },
       }),
+      keepUnusedDataFor: 600,
     }),
     getTrendGameLog: builder.query<GameLogResponse, { playerId: number; windowDays?: number; baselineSeasons?: number; mode?: RegressionMode }>({
       query: ({ playerId, windowDays = 15, baselineSeasons = 2, mode = 'season' }) => ({
