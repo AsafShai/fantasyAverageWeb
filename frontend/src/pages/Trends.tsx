@@ -654,6 +654,17 @@ export default function Trends() {
 
   const activeQuery = tab === 'minutes' ? minutesQuery : tab === 'usage' ? usageQuery : regressionQuery
 
+  // No endpoint returns a league-wide game-night count directly, so this
+  // approximates it from the loaded data: the most games any single player
+  // logged in the window is, in practice, the number of nights the league
+  // actually played (a full-minutes player hits every one of them).
+  const gameNights = useMemo(() => {
+    const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? regressionQuery.data?.items ?? []
+    return items.reduce((max, r) => Math.max(max, r.games_last_15d), 0) || null
+  }, [minutesQuery.data, usageQuery.data, regressionQuery.data])
+
+  const isShootingSeasonTab = tab === 'shooting-season'
+
   const teamOptions = useMemo(() => {
     const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? regressionQuery.data?.items ?? []
     return [...new Set(items.map(i => i.fantasy_status).filter(t => t !== 'FA'))].sort()
@@ -699,7 +710,15 @@ export default function Trends() {
             </select>
             <span className="hidden sm:block flex-1" />
             <div className="col-span-2 flex flex-wrap items-center gap-2">
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm" title="Recency window for the G column and eligibility filter">
+              {isShootingSeasonTab && (
+                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">Activity window</span>
+              )}
+              <div
+                className={`flex rounded-lg border overflow-hidden text-xs sm:text-sm ${isShootingSeasonTab ? 'border-gray-200 dark:border-gray-700 opacity-70' : 'border-gray-300 dark:border-gray-600'}`}
+                title={isShootingSeasonTab
+                  ? 'Only filters by recent games played — the season-vs-prior-seasons comparison on this tab barely uses this window.'
+                  : 'Recency window for the G column and eligibility filter'}
+              >
                 {WINDOW_OPTIONS.map(d => (
                   <button
                     key={d}
@@ -722,7 +741,15 @@ export default function Trends() {
                   since {formatShort(customStartIso)} · {windowDays} days
                 </span>
               )}
+              {gameNights !== null && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{gameNights} game nights</span>
+              )}
             </div>
+            {!isShootingSeasonTab && windowDays < 10 && (
+              <p className="col-span-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                ⚠ Short window ({windowDays}d) — most rows will be based on very few games and marked <span className="font-semibold">partial</span>.
+              </p>
+            )}
             {customOpen && (
               <div className="col-span-2">
                 {!anchorIso ? (
