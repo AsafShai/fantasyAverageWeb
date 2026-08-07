@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
 import TrendGameLogChart from './TrendGameLogChart'
-import type { RegressionStat } from '../types/api'
+import DateRangePicker from './DateRangePicker'
+import type { RegressionStat, CustomDateRange } from '../types/api'
 import { FF_TRENDS } from '../config/featureFlags'
 import { LOW_SAMPLE_GP } from '../utils/trendBaseline'
+import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import { STAT_FIELDS, seasonAttempts, summarize, fmtValue, fmtDelta, type CardMode } from '../utils/playerTrendsSummary'
 
-const WINDOW_DAYS = 15
+const DEFAULT_WINDOW_DAYS = 15
+const PRESET_WINDOWS = [7, 15, 30] as const
+const MIN_CUSTOM_WINDOW_DAYS = 5
+const MAX_CUSTOM_WINDOW_DAYS = 60
 
 const MODE_CHIPS: { key: CardMode; label: string }[] = [
   { key: 'minutes', label: 'Minutes' },
@@ -18,6 +23,17 @@ const MODE_CHIPS: { key: CardMode; label: string }[] = [
 
 function shortDate(iso: string): string {
   return iso.slice(5).replace('-', '/')
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + days)
+  return toLocalIso(dt)
+}
+
+function subDaysIso(iso: string, days: number): string {
+  return addDaysIso(iso, -days)
 }
 
 function Tile({ label, value, games, muted, badge }: {
@@ -69,9 +85,13 @@ interface Props {
 
 export default function PlayerTrendsCard({ playerId }: Props) {
   const [mode, setMode] = useState<CardMode>('minutes')
+  const [windowDays, setWindowDays] = useState(DEFAULT_WINDOW_DAYS)
+  const [customStartIso, setCustomStartIso] = useState<string | null>(null)
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customError, setCustomError] = useState<string | null>(null)
 
   const { data: log, error, isLoading, refetch } = useGetTrendGameLogQuery(
-    { playerId, windowDays: WINDOW_DAYS, baselineSeasons: 0, mode: 'form' },
+    { playerId, windowDays, baselineSeasons: 0, mode: 'form' },
     { skip: !playerId, refetchOnFocus: false },
   )
 
@@ -79,6 +99,31 @@ export default function PlayerTrendsCard({ playerId }: Props) {
     if (!log) return []
     return (Object.keys(STAT_FIELDS) as RegressionStat[]).filter((s) => seasonAttempts(log.games, s) > 0)
   }, [log])
+
+  // anchor (latest game day) is invariant across windows, so any loaded
+  // response - whichever window it was fetched for - can derive it
+  const anchorIso = log ? addDaysIso(log.window_start, log.window_days) : null
+  const customMinStartIso = anchorIso ? subDaysIso(anchorIso, MAX_CUSTOM_WINDOW_DAYS) : undefined
+
+  const selectPreset = (d: number) => {
+    setWindowDays(d)
+    setCustomStartIso(null)
+    setCustomError(null)
+    setCustomOpen(false)
+  }
+
+  const handleCustomApply = (range: CustomDateRange) => {
+    if (!anchorIso) return
+    const days = daysBetween(range.start, anchorIso)
+    if (days < MIN_CUSTOM_WINDOW_DAYS || days > MAX_CUSTOM_WINDOW_DAYS) {
+      setCustomError(`That's ${days} day${days === 1 ? '' : 's'} — pick a start between ${MIN_CUSTOM_WINDOW_DAYS} and ${MAX_CUSTOM_WINDOW_DAYS} days before ${formatShort(anchorIso)}.`)
+      return
+    }
+    setCustomError(null)
+    setCustomStartIso(range.start)
+    setWindowDays(days)
+    setCustomOpen(false)
+  }
 
   if (!FF_TRENDS) return null
 
@@ -111,6 +156,46 @@ export default function PlayerTrendsCard({ playerId }: Props) {
 
       {!isLoading && !error && log && (
         <>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs">
+              {PRESET_WINDOWS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => selectPreset(d)}
+                  className={`px-2.5 py-1.5 whitespace-nowrap ${!customStartIso && windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                >
+                  {d}d
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCustomOpen((o) => !o)}
+                title="Pick a custom start date — the window always ends on the latest game day"
+                className={`px-2.5 py-1.5 whitespace-nowrap ${customStartIso ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+              >
+                📆
+              </button>
+            </div>
+            {customStartIso && !customOpen && (
+              <span className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                since {formatShort(customStartIso)} · {windowDays}d
+              </span>
+            )}
+          </div>
+
+          {customOpen && anchorIso && (
+            <div className="mb-3">
+              <DateRangePicker
+                seasonStart={customMinStartIso}
+                fixedEnd={anchorIso}
+                initialStart={customStartIso ?? ''}
+                onApply={handleCustomApply}
+              />
+              {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2 mb-4">
             {MODE_CHIPS.filter(
               (c) => c.key === 'minutes' || c.key === 'usage' || availableShootingStats.includes(c.key as RegressionStat),
@@ -136,7 +221,7 @@ export default function PlayerTrendsCard({ playerId }: Props) {
             return (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <Tile label="Season" value={fmtValue(summary.seasonValue, mode)} games={summary.seasonGames} />
-                <Tile label={`Last ${WINDOW_DAYS}d`} value={fmtValue(summary.windowValue, mode)} games={summary.windowGames} />
+                <Tile label={`Last ${windowDays}d`} value={fmtValue(summary.windowValue, mode)} games={summary.windowGames} />
                 <Tile
                   label="Δ vs season"
                   value={fmtDelta(summary.delta, mode)}
@@ -154,7 +239,7 @@ export default function PlayerTrendsCard({ playerId }: Props) {
             playerName={log.player_name}
             mode={mode === 'minutes' || mode === 'usage' ? mode : 'shooting'}
             regressionMode="form"
-            windowDays={WINDOW_DAYS}
+            windowDays={windowDays}
             baselineSeasons={0}
             stat={mode === 'minutes' || mode === 'usage' ? undefined : mode}
             qualifiedStats={availableShootingStats}
