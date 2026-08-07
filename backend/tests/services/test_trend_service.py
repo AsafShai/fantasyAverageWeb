@@ -1,3 +1,4 @@
+import asyncio
 import time
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
@@ -1072,3 +1073,51 @@ class TestAnchorInvalidation:
         pct_2, _ = await svc._get_league_refs('2025-26', date(2026, 1, 10))
 
         assert pct_1['FG%'] != pct_2['FG%']
+
+
+@pytest.mark.asyncio
+class TestInFlightCoalescing:
+    async def test_concurrent_callers_on_same_key_share_one_db_call(self):
+        svc = TrendService()
+        call_count = 0
+
+        async def fake_shooting(seasons, start=None, end=None):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.05)
+            return pd.DataFrame({'fgm': [1]})
+
+        with patch.object(svc._db, 'aggregate_shooting_by_player', fake_shooting):
+            results = await asyncio.gather(*[
+                svc._get_season_shooting('2025-26', date(2026, 1, 15)) for _ in range(10)
+            ])
+
+        assert call_count == 1
+        assert all(r['fgm'].iloc[0] == 1 for r in results)
+
+    async def test_raising_computation_propagates_to_waiters_and_clears_slot(self):
+        svc = TrendService()
+        call_count = 0
+
+        async def flaky_shooting(seasons, start=None, end=None):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.02)
+            if call_count == 1:
+                raise RuntimeError('db exploded')
+            return pd.DataFrame({'fgm': [1]})
+
+        with patch.object(svc._db, 'aggregate_shooting_by_player', flaky_shooting):
+            results = await asyncio.gather(
+                *[svc._get_season_shooting('2025-26', date(2026, 1, 15)) for _ in range(5)],
+                return_exceptions=True,
+            )
+
+            assert call_count == 1
+            assert all(isinstance(r, RuntimeError) for r in results)
+            assert svc._season_shooting_inflight == {}
+
+            second = await svc._get_season_shooting('2025-26', date(2026, 1, 15))
+
+        assert call_count == 2
+        assert second['fgm'].iloc[0] == 1

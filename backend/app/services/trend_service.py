@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import math
 from collections import OrderedDict
@@ -557,13 +558,21 @@ class TrendService:
         self._db = DBService()
         self._anchor: Optional[date] = None
         self._regression_cache: dict[tuple[int, int, str], dict] = {}
+        self._regression_inflight: dict[tuple[int, int, str], asyncio.Future] = {}
         self._minutes_cache: dict[int, dict] = {}
+        self._minutes_inflight: dict[int, asyncio.Future] = {}
         self._usage_cache: dict[int, dict] = {}
+        self._usage_inflight: dict[int, asyncio.Future] = {}
         self._game_log_cache = _TTLLRUCache(maxsize=_GAME_LOG_CACHE_MAXSIZE, ttl=_TREND_CACHE_TTL)
+        self._game_log_inflight: dict[tuple, asyncio.Future] = {}
         self._league_cache: dict[str, dict] = {}
+        self._league_inflight: dict[str, asyncio.Future] = {}
         self._season_shooting_cache: dict[str, pd.DataFrame] = {}
+        self._season_shooting_inflight: dict[str, asyncio.Future] = {}
         self._season_usage_cache: dict[str, pd.DataFrame] = {}
+        self._season_usage_inflight: dict[str, asyncio.Future] = {}
         self._baseline_cache: dict[int, pd.DataFrame] = {}
+        self._baseline_inflight: dict[int, asyncio.Future] = {}
 
     @staticmethod
     def _cache_valid(cache: dict, key) -> bool:
@@ -574,6 +583,32 @@ class TrendService:
     def _cache_preset_response(cache: dict, window_days: int, cache_key, response) -> None:
         if window_days in VALID_RECENCY_WINDOWS_DAYS:
             cache[cache_key] = {'data': response, 'ts': datetime.now()}
+
+    @staticmethod
+    async def _coalesced(inflight: dict, key, compute):
+        """First caller on `key` runs `compute` and registers its Future so
+        concurrent callers on the same key await it instead of issuing a
+        duplicate DB round-trip. The finally block must run even when compute()
+        raises — otherwise a failed computation leaves its Future registered
+        forever and every later caller on that key awaits a permanently-failed
+        Future until process restart."""
+        existing = inflight.get(key)
+        if existing is not None:
+            return await existing
+
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        inflight[key] = future
+        try:
+            result = await compute()
+        except BaseException as exc:
+            future.set_exception(exc)
+            future.exception()
+            raise
+        else:
+            future.set_result(result)
+            return result
+        finally:
+            inflight.pop(key, None)
 
     def _sync_anchor(self, anchor: date) -> None:
         """anchor is deliberately not part of any cache key: it advances at
@@ -594,18 +629,28 @@ class TrendService:
         self._anchor = anchor
 
     async def _get_season_shooting(self, season: str, anchor: date) -> pd.DataFrame:
-        if season not in self._season_shooting_cache:
-            self._season_shooting_cache[season] = await self._db.aggregate_shooting_by_player(
+        if season in self._season_shooting_cache:
+            return self._season_shooting_cache[season]
+
+        async def _compute():
+            df = await self._db.aggregate_shooting_by_player(
                 [season], start=settings.season_start, end=anchor
             )
-        return self._season_shooting_cache[season]
+            self._season_shooting_cache[season] = df
+            return df
+
+        return await self._coalesced(self._season_shooting_inflight, season, _compute)
 
     async def _get_season_usage(self, season: str, anchor: date) -> pd.DataFrame:
-        if season not in self._season_usage_cache:
-            self._season_usage_cache[season] = await self._db.get_usage_components(
-                season, settings.season_start, anchor
-            )
-        return self._season_usage_cache[season]
+        if season in self._season_usage_cache:
+            return self._season_usage_cache[season]
+
+        async def _compute():
+            df = await self._db.get_usage_components(season, settings.season_start, anchor)
+            self._season_usage_cache[season] = df
+            return df
+
+        return await self._coalesced(self._season_usage_inflight, season, _compute)
 
     async def get_shooting_regression(
         self,
@@ -625,26 +670,29 @@ class TrendService:
         if self._cache_valid(self._regression_cache, cache_key):
             return self._regression_cache[cache_key]['data']
 
-        window_start = anchor_date - timedelta(days=window_days)
-        current_df = await self._get_season_shooting(current_season, anchor_date)
-        window_df = await self._db.aggregate_shooting_by_player(
-            [current_season], start=window_start, end=anchor_date
-        )
-        baseline_df = await self._prior_shooting(baseline_seasons)
-        games_last_15d = await self._db.get_games_since(window_start)
+        async def _compute():
+            window_start = anchor_date - timedelta(days=window_days)
+            current_df = await self._get_season_shooting(current_season, anchor_date)
+            window_df = await self._db.aggregate_shooting_by_player(
+                [current_season], start=window_start, end=anchor_date
+            )
+            baseline_df = await self._prior_shooting(baseline_seasons)
+            games_last_15d = await self._db.get_games_since(window_start)
 
-        groups = compute_regression_groups(
-            current_df, baseline_df, games_last_15d, players_df, baseline_seasons, window_df, mode
-        )
-        response = RegressionResponse(
-            items=groups,
-            window_days=window_days,
-            baseline_seasons=baseline_seasons,
-            mode=mode,
-            last_updated=datetime.now().isoformat(),
-        )
-        self._cache_preset_response(self._regression_cache, window_days, cache_key, response)
-        return response
+            groups = compute_regression_groups(
+                current_df, baseline_df, games_last_15d, players_df, baseline_seasons, window_df, mode
+            )
+            response = RegressionResponse(
+                items=groups,
+                window_days=window_days,
+                baseline_seasons=baseline_seasons,
+                mode=mode,
+                last_updated=datetime.now().isoformat(),
+            )
+            self._cache_preset_response(self._regression_cache, window_days, cache_key, response)
+            return response
+
+        return await self._coalesced(self._regression_inflight, cache_key, _compute)
 
     async def get_minutes_movers(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> MinutesResponse:
         window_days = _normalize_window_days(window_days)
@@ -656,17 +704,20 @@ class TrendService:
         if self._cache_valid(self._minutes_cache, window_days):
             return self._minutes_cache[window_days]['data']
 
-        window_start = anchor_date - timedelta(days=window_days)
-        season_df = await self._get_season_shooting(current_season, anchor_date)
-        window_df = await self._db.aggregate_shooting_by_player(
-            [current_season], start=window_start, end=anchor_date
-        )
-        games_last_15d = await self._db.get_games_since(window_start)
+        async def _compute():
+            window_start = anchor_date - timedelta(days=window_days)
+            season_df = await self._get_season_shooting(current_season, anchor_date)
+            window_df = await self._db.aggregate_shooting_by_player(
+                [current_season], start=window_start, end=anchor_date
+            )
+            games_last_15d = await self._db.get_games_since(window_start)
 
-        items = compute_minutes_movers(season_df, window_df, games_last_15d, players_df)
-        response = MinutesResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
-        self._cache_preset_response(self._minutes_cache, window_days, window_days, response)
-        return response
+            items = compute_minutes_movers(season_df, window_df, games_last_15d, players_df)
+            response = MinutesResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
+            self._cache_preset_response(self._minutes_cache, window_days, window_days, response)
+            return response
+
+        return await self._coalesced(self._minutes_inflight, window_days, _compute)
 
     async def get_usage_role(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> UsageResponse:
         window_days = _normalize_window_days(window_days)
@@ -678,22 +729,29 @@ class TrendService:
         if self._cache_valid(self._usage_cache, window_days):
             return self._usage_cache[window_days]['data']
 
-        window_start = anchor_date - timedelta(days=window_days)
-        games_df = await self._get_season_usage(current_season, anchor_date)
-        games_last_15d = await self._db.get_games_since(window_start)
+        async def _compute():
+            window_start = anchor_date - timedelta(days=window_days)
+            games_df = await self._get_season_usage(current_season, anchor_date)
+            games_last_15d = await self._db.get_games_since(window_start)
 
-        items = compute_usage_role(games_df, games_last_15d, players_df, window_start)
-        response = UsageResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
-        self._cache_preset_response(self._usage_cache, window_days, window_days, response)
-        return response
+            items = compute_usage_role(games_df, games_last_15d, players_df, window_start)
+            response = UsageResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
+            self._cache_preset_response(self._usage_cache, window_days, window_days, response)
+            return response
+
+        return await self._coalesced(self._usage_inflight, window_days, _compute)
 
     async def _prior_shooting(self, baseline_seasons: int) -> pd.DataFrame:
-        if baseline_seasons not in self._baseline_cache:
+        if baseline_seasons in self._baseline_cache:
+            return self._baseline_cache[baseline_seasons]
+
+        async def _compute():
             seasons = prior_season_strings(baseline_seasons)
-            self._baseline_cache[baseline_seasons] = (
-                await self._db.aggregate_shooting_by_player(seasons) if seasons else pd.DataFrame()
-            )
-        return self._baseline_cache[baseline_seasons]
+            df = await self._db.aggregate_shooting_by_player(seasons) if seasons else pd.DataFrame()
+            self._baseline_cache[baseline_seasons] = df
+            return df
+
+        return await self._coalesced(self._baseline_inflight, baseline_seasons, _compute)
 
     async def _get_league_refs(self, season: str, end) -> tuple[dict[str, float], Optional[float]]:
         """League-wide shooting pcts and USG%, cached together — one pull serves
@@ -708,17 +766,21 @@ class TrendService:
             entry = self._league_cache[season]
             return entry['pct'], entry['usg']
 
-        shooting_df = await self._get_season_shooting(season, end)
-        usage_df = await self._get_season_usage(season, end)
-        league_usg = None
-        if not usage_df.empty:
-            usg = usage_df.apply(_usg_per_game, axis=1)
-            total_min = usage_df['p_min'].sum()
-            if total_min:
-                league_usg = float((usg * usage_df['p_min']).sum() / total_min)
+        async def _compute():
+            shooting_df = await self._get_season_shooting(season, end)
+            usage_df = await self._get_season_usage(season, end)
+            league_usg = None
+            if not usage_df.empty:
+                usg = usage_df.apply(_usg_per_game, axis=1)
+                total_min = usage_df['p_min'].sum()
+                if total_min:
+                    league_usg = float((usg * usage_df['p_min']).sum() / total_min)
 
-        data = {'pct': _league_pct_map(shooting_df), 'usg': league_usg}
-        self._league_cache[season] = data
+            data = {'pct': _league_pct_map(shooting_df), 'usg': league_usg}
+            self._league_cache[season] = data
+            return data
+
+        data = await self._coalesced(self._league_inflight, season, _compute)
         return data['pct'], data['usg']
 
     async def get_player_game_log(
@@ -740,26 +802,29 @@ class TrendService:
         if cached is not None:
             return cached
 
-        window_start = anchor_date - timedelta(days=window_days)
+        async def _compute():
+            window_start = anchor_date - timedelta(days=window_days)
 
-        games_df = await self._db.get_player_game_log(
-            player_id, current_season, settings.season_start, anchor_date
-        )
-        if games_df.empty:
-            return None
+            games_df = await self._db.get_player_game_log(
+                player_id, current_season, settings.season_start, anchor_date
+            )
+            if games_df.empty:
+                return None
 
-        baseline_df = await self._prior_shooting(baseline_seasons)
-        baseline_pct = (
-            _form_baseline_pct(baseline_df, games_df, player_id, window_start)
-            if mode == 'form'
-            else _player_pct_map(baseline_df, player_id)
-        )
+            baseline_df = await self._prior_shooting(baseline_seasons)
+            baseline_pct = (
+                _form_baseline_pct(baseline_df, games_df, player_id, window_start)
+                if mode == 'form'
+                else _player_pct_map(baseline_df, player_id)
+            )
 
-        league_pct, league_usg = await self._get_league_refs(current_season, anchor_date)
+            league_pct, league_usg = await self._get_league_refs(current_season, anchor_date)
 
-        response = build_game_log(
-            games_df, player_id, current_season, window_days, window_start,
-            baseline_pct, baseline_seasons, league_pct, league_usg,
-        )
-        self._game_log_cache.set(cache_key, response)
-        return response
+            response = build_game_log(
+                games_df, player_id, current_season, window_days, window_start,
+                baseline_pct, baseline_seasons, league_pct, league_usg,
+            )
+            self._game_log_cache.set(cache_key, response)
+            return response
+
+        return await self._coalesced(self._game_log_inflight, cache_key, _compute)
