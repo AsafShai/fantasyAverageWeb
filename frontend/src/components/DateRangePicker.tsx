@@ -7,6 +7,7 @@ interface DateRangePickerProps {
   today?: string
   initialStart?: string
   initialEnd?: string
+  fixedEnd?: string
   onApply: (range: CustomDateRange) => void
 }
 
@@ -15,35 +16,39 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
   today = todayIso(),
   initialStart = '',
   initialEnd = '',
+  fixedEnd,
   onApply,
 }) => {
   const [start, setStart] = useState(initialStart)
   const [end, setEnd] = useState(initialEnd)
 
-  const error = validateDateRange(start, end, seasonStart, today)
-  const applyDisabled = !start || !end || !!error
+  const effectiveEnd = fixedEnd ?? end
+  const error = fixedEnd
+    ? validateDateRange(start, fixedEnd, seasonStart, fixedEnd)
+    : validateDateRange(start, end, seasonStart, today)
+  const applyDisabled = !start || !effectiveEnd || !!error
 
   const handleApply = () => {
     if (applyDisabled) return
-    onApply({ start, end })
+    onApply({ start, end: effectiveEnd })
   }
 
   const handleClear = () => {
     setStart('')
-    setEnd('')
+    if (!fixedEnd) setEnd('')
   }
 
   return (
     <div className="mt-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm w-full min-w-[260px] sm:w-auto sm:inline-block">
       <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
         <div className="flex flex-col gap-1 w-full sm:w-auto">
-          <label className="text-xs text-gray-600 dark:text-gray-300 font-medium">Start</label>
+          <label className="text-xs text-gray-600 dark:text-gray-300 font-medium">{fixedEnd ? 'Window starts' : 'Start'}</label>
           <input
             type="date"
             aria-label="Start date"
             value={start}
             min={seasonStart}
-            max={end || today}
+            max={fixedEnd ?? (end || today)}
             onChange={(e) => setStart(e.target.value)}
             className={`w-full sm:w-auto px-3 py-1.5 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${
               error ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
@@ -55,11 +60,12 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <input
             type="date"
             aria-label="End date"
-            value={end}
+            value={effectiveEnd}
             min={start || seasonStart}
             max={today}
-            onChange={(e) => setEnd(e.target.value)}
-            className={`w-full sm:w-auto px-3 py-1.5 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+            disabled={!!fixedEnd}
+            onChange={(e) => !fixedEnd && setEnd(e.target.value)}
+            className={`w-full sm:w-auto px-3 py-1.5 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60 disabled:cursor-not-allowed ${
               error ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
             }`}
           />
@@ -81,7 +87,9 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
         </div>
       </div>
       <p className="mt-2 text-[0.7rem] text-gray-500 dark:text-gray-400">
-        min = season start{seasonStart ? ` (${seasonStart})` : ''} · max = today · both required
+        {fixedEnd
+          ? `window ends ${fixedEnd} (latest game day)${seasonStart ? ` · min ${seasonStart}` : ''} · start required`
+          : `min = season start${seasonStart ? ` (${seasonStart})` : ''} · max = today · both required`}
       </p>
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {error}</p>}
     </div>

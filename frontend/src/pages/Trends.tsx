@@ -4,13 +4,30 @@ import {
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
   useGetTrendsRegressionQuery,
+  useGetTrendGameLogQuery,
 } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import TrendGameLogChart from '../components/TrendGameLogChart'
 import InfoTip from '../components/InfoTip'
+import DateRangePicker from '../components/DateRangePicker'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
-import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode } from '../types/api'
+import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
+import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange } from '../types/api'
+
+const MIN_CUSTOM_WINDOW_DAYS = 5
+const MAX_CUSTOM_WINDOW_DAYS = 60
+
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + days)
+  return toLocalIso(dt)
+}
+
+function subDaysIso(iso: string, days: number): string {
+  return addDaysIso(iso, -days)
+}
 
 type TabKey = 'minutes' | 'usage' | 'shooting-season' | 'shooting-form'
 type Ownership = 'all' | 'fa' | 'rostered'
@@ -572,6 +589,9 @@ export default function Trends() {
   // judging a season line, "this season" when judging current form
   const [seasonBaseline, setSeasonBaseline] = usePersistedState('trends.seasonBaseline', 2)
   const [formBaseline, setFormBaseline] = usePersistedState('trends.formBaseline', 0)
+  const [customStartIso, setCustomStartIso] = useState<string | null>(null)
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customError, setCustomError] = useState<string | null>(null)
 
   const regressionMode = TAB_MODE[tab]
   const isShooting = regressionMode !== undefined
@@ -586,9 +606,64 @@ export default function Trends() {
     { skip: !isShooting },
   )
 
+  // The recency window always ends on the latest game day, not wall-clock
+  // today — none of the three tab payloads carry that date directly, but
+  // GameLogResponse does (window_start + window_days). Borrow it from
+  // whichever player is first in the currently active tab's results, only
+  // while the custom panel is open, so this doesn't add a request otherwise.
+  const anchorSourceId = tab === 'minutes'
+    ? minutesQuery.data?.items[0]?.player_id
+    : tab === 'usage'
+      ? usageQuery.data?.items[0]?.player_id
+      : regressionQuery.data?.items[0]?.player_id
+
+  const anchorQuery = useGetTrendGameLogQuery(
+    { playerId: anchorSourceId ?? 0, windowDays },
+    { skip: !customOpen || anchorSourceId === undefined },
+  )
+
+  const anchorIso = useMemo(() => {
+    const d = anchorQuery.data
+    if (!d) return null
+    return addDaysIso(d.window_start, d.window_days)
+  }, [anchorQuery.data])
+
+  const customMinStartIso = anchorIso ? subDaysIso(anchorIso, MAX_CUSTOM_WINDOW_DAYS) : undefined
+
+  const handleCustomApply = (range: CustomDateRange) => {
+    if (!anchorIso) return
+    const days = daysBetween(range.start, anchorIso)
+    if (days < MIN_CUSTOM_WINDOW_DAYS || days > MAX_CUSTOM_WINDOW_DAYS) {
+      setCustomError(`That's ${days} day${days === 1 ? '' : 's'} — pick a start between ${MIN_CUSTOM_WINDOW_DAYS} and ${MAX_CUSTOM_WINDOW_DAYS} days before ${formatShort(anchorIso)}.`)
+      return
+    }
+    setCustomError(null)
+    setCustomStartIso(range.start)
+    setWindowDays(days)
+    setCustomOpen(false)
+  }
+
+  const selectPreset = (d: number) => {
+    setWindowDays(d)
+    setCustomStartIso(null)
+    setCustomError(null)
+    setCustomOpen(false)
+  }
+
   const filters: Filters = { nameFilter, position, minG15: minGames, ownership, fantasyTeam }
 
   const activeQuery = tab === 'minutes' ? minutesQuery : tab === 'usage' ? usageQuery : regressionQuery
+
+  // No endpoint returns a league-wide game-night count directly, so this
+  // approximates it from the loaded data: the most games any single player
+  // logged in the window is, in practice, the number of nights the league
+  // actually played (a full-minutes player hits every one of them).
+  const gameNights = useMemo(() => {
+    const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? regressionQuery.data?.items ?? []
+    return items.reduce((max, r) => Math.max(max, r.games_last_15d), 0) || null
+  }, [minutesQuery.data, usageQuery.data, regressionQuery.data])
+
+  const isShootingSeasonTab = tab === 'shooting-season'
 
   const teamOptions = useMemo(() => {
     const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? regressionQuery.data?.items ?? []
@@ -634,17 +709,66 @@ export default function Trends() {
               {ALL_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <span className="hidden sm:block flex-1" />
-            <div className="col-span-2 flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm" title="Recency window for the G column and eligibility filter">
-              {WINDOW_OPTIONS.map(d => (
+            <div className="col-span-2 flex flex-wrap items-center gap-2">
+              {isShootingSeasonTab && (
+                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">Activity window</span>
+              )}
+              <div
+                className={`flex rounded-lg border overflow-hidden text-xs sm:text-sm ${isShootingSeasonTab ? 'border-gray-200 dark:border-gray-700 opacity-70' : 'border-gray-300 dark:border-gray-600'}`}
+                title={isShootingSeasonTab
+                  ? 'Only filters by recent games played — the season-vs-prior-seasons comparison on this tab barely uses this window.'
+                  : 'Recency window for the G column and eligibility filter'}
+              >
+                {WINDOW_OPTIONS.map(d => (
+                  <button
+                    key={d}
+                    onClick={() => selectPreset(d)}
+                    className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 whitespace-nowrap ${!customStartIso && windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  >
+                    {d}d
+                  </button>
+                ))}
                 <button
-                  key={d}
-                  onClick={() => setWindowDays(d)}
-                  className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 whitespace-nowrap ${windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  onClick={() => setCustomOpen(o => !o)}
+                  title="Pick a custom start date — the window always ends on the latest game day"
+                  className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 whitespace-nowrap ${customStartIso ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                 >
-                  {d}d
+                  📆 Custom
                 </button>
-              ))}
+              </div>
+              {customStartIso && !customOpen && (
+                <span className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                  since {formatShort(customStartIso)} · {windowDays} days
+                </span>
+              )}
+              {gameNights !== null && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{gameNights} game nights</span>
+              )}
             </div>
+            {!isShootingSeasonTab && windowDays < 10 && (
+              <p className="col-span-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                ⚠ Short window ({windowDays}d) — most rows will be based on very few games and marked <span className="font-semibold">partial</span>.
+              </p>
+            )}
+            {customOpen && (
+              <div className="col-span-2">
+                {!anchorIso ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 py-2">
+                    {anchorQuery.isFetching || anchorSourceId === undefined ? 'Loading latest game day…' : 'Could not determine the latest game day.'}
+                  </p>
+                ) : (
+                  <>
+                    <DateRangePicker
+                      seasonStart={customMinStartIso}
+                      fixedEnd={anchorIso}
+                      initialStart={customStartIso ?? ''}
+                      onApply={handleCustomApply}
+                    />
+                    {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
+                  </>
+                )}
+              </div>
+            )}
             <div className="col-span-2 flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm" title="Which players to show: everyone, free agents only, or rostered only">
               {OWNERSHIP_OPTIONS.map(([key, label]) => (
                 <button
