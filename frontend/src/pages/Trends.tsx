@@ -8,6 +8,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import TrendGameLogChart from '../components/TrendGameLogChart'
+import InfoTip from '../components/InfoTip'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode } from '../types/api'
 
@@ -143,15 +144,19 @@ function Th({ col, label, sortCol, sortAsc, onSort, className = '', title }: {
   const active = sortCol === col
   return (
     <th
-      onClick={() => onSort(col)}
-      tabIndex={0}
-      role="button"
-      title={title}
-      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSort(col)}
-      aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
-      className={`px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide cursor-pointer select-none whitespace-nowrap ${active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} ${className}`}
+      className={`px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide whitespace-nowrap ${active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} ${className}`}
     >
-      {label}{active ? (sortAsc ? ' ▲' : ' ▼') : ''}
+      <span
+        onClick={() => onSort(col)}
+        tabIndex={0}
+        role="button"
+        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSort(col)}
+        aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
+        className="inline-flex items-center gap-1 cursor-pointer select-none"
+      >
+        {label}{active ? (sortAsc ? ' ▲' : ' ▼') : ''}
+      </span>
+      {title && <InfoTip title={label} body={title} className="normal-case font-normal align-middle ml-0.5" />}
     </th>
   )
 }
@@ -203,13 +208,13 @@ function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
-            <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="NBA team" />
-            <Th col="pos" label="Pos" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="Position" />
+            <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+            <Th col="pos" label="Pos" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
             <Th col="season" label="Season MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Minutes per game, full season" />
             <Th col="l5" label={`${windowDays}d MPG`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Minutes per game over the last ${windowDays} days`} />
             <Th col="delta" label="Δ MPG vs season" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Change: ${windowDays}d MPG minus season MPG`} />
-            <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="Games played this season" />
-            <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Games played in the last ${windowDays} days`} />
+            <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+            <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
             <th className="px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" title="Fantasy owner, or FA if unrostered">Owner</th>
           </tr>
         </thead>
@@ -305,12 +310,12 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
-              <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="NBA team" />
+              <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
               <Th col="season" label="Season USG%" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Usage rate (% of team plays used by this player while on court), full season" />
               <Th col="l5" label={`${windowDays}d USG%`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Usage rate over the last ${windowDays} days`} />
-              <Th col="delta" label="Δ USG vs season" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Change: ${windowDays}d usage rate minus season usage rate, in percentage points (not a relative change)`} />
+              <Th col="delta" label="Δ USG vs season" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`${windowDays}d usage minus season usage, in points.`} />
               <Th col="dmpg" label="Δ MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Change: ${windowDays}d MPG minus season MPG`} />
-              <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Games played in the last ${windowDays} days`} />
+              <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
               <th className="px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" title="Role change label based on ΔUSG and ΔMPG thresholds — see note above">Role</th>
               <th className="px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" title="Fantasy owner, or FA if unrostered">Owner</th>
             </tr>
@@ -465,25 +470,25 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
-              <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="NBA team" />
-              <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Games played in the last ${windowDays} days`} />
+              <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+              <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
               <Th col="stat" label="Stat" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Shooting category: 3P%, FT%, or FG%" />
               {isForm ? (
                 <>
                   <Th col="cur" label={`Last ${windowDays}d %`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Shooting % over the last ${windowDays} days only — the stretch being judged.`} />
-                  <Th col="base" label="Baseline %" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`What he normally shoots: the ${BASELINE_LABEL[baselineSeasons]} before this one pooled with this season up to the last ${windowDays} days. Excludes the window itself.`} />
-                  <Th col="dev" label="Gap" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Last-window % minus baseline %, in percentage points. Negative = ice cold right now, positive = red hot." />
-                  <Th col="z" label="z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="How many standard errors the gap sits from zero. Above 1.5 is more than the sample size alone would produce — the bigger the number, the less likely it is luck. Sorts by size, so hot and cold rank together; sort by Gap to separate them." />
-                  <Th col="att" label="Att/g" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Attempts per game over the last ${windowDays} days`} />
-                  <Th col="impact" label="If it normalizes" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Expected change in makes per game going forward if he returns to his baseline %, at his current attempt volume" />
+                  <Th col="base" label="Baseline %" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="What he normally shoots, excluding this window." />
+                  <Th col="dev" label="Gap" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Window % minus baseline %. Negative = cold, positive = hot." />
+                  <Th col="z" label="z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="How unlikely the gap is to be luck. Above 1.5 = notable." />
+                  <Th col="att" label="Att/g" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+                  <Th col="impact" label="If it normalizes" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Makes/game change if he reverts to baseline, at current volume." />
                 </>
               ) : (
                 <>
                   <Th col="cur" label="Season%" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Shooting % across the whole season to date. This is the number compared against the baseline." />
-                  <Th col="base" label={`Baseline (${BASELINE_LABEL[baselineSeasons]})`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Attempt-weighted shooting % over the ${BASELINE_LABEL[baselineSeasons]} before this one. Excludes this season.`} />
-                  <Th col="dev" label="Δ vs baseline" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Current% minus baseline%, in percentage points (not a relative change). Negative = cold (buy-low), positive = hot (sell-high)" />
-                  <Th col="att" label="Att/g" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title="Attempts per game this season" />
-                  <Th col="drift" label="If it normalizes" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Expected change in makes per game if this stat returns to the player's baseline %, at current attempt volume" />
+                  <Th col="base" label={`Baseline (${BASELINE_LABEL[baselineSeasons]})`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="What he shot before this season." />
+                  <Th col="dev" label="Δ vs baseline" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Season% minus baseline%. Negative = cold, positive = hot." />
+                  <Th col="att" label="Att/g" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+                  <Th col="drift" label="If it normalizes" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="Makes/game change if he reverts to baseline, at current volume." />
                 </>
               )}
               <th className="px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" title="Fantasy owner, or FA if unrostered">Owner</th>

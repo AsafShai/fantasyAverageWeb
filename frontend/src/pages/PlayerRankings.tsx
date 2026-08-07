@@ -7,6 +7,8 @@ import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import PlayerNameLink from '../components/PlayerNameLink'
 import { formatShort } from '../utils/dateRange'
+import InfoTip from '../components/InfoTip'
+import { METRIC_GLOSSARY, type MetricInfo } from '../constants/metricGlossary'
 import type { TimePeriod, CustomDateRange } from '../types/api'
 import {
   computePlayerRankings,
@@ -286,10 +288,10 @@ export default function PlayerRankings() {
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                   <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">#</th>
-                  <Th col="totalZ" label="Z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
+                  <Th col="totalZ" label="Z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} tip={METRIC_GLOSSARY.totalZ} />
                   <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">Player</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
-                  <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Pos</th>
+                  <th className="hidden sm:table-cell px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Pos</th>
                   <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
                   {CATEGORIES.map(cat => (
@@ -307,7 +309,7 @@ export default function PlayerRankings() {
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{fmt(ranked.totalZ)}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700"><PlayerNameLink name={ranked.player.player_name} playerId={ranked.player.player_id} /></td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.pro_team}</td>
-                    <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.positions.join(', ')}</td>
+                    <td className="hidden sm:table-cell px-2 py-2 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{ranked.player.positions.join(', ')}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{ranked.player.stats.gp}</td>
                     <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>
                     {CATEGORIES.map(cat => (
@@ -316,7 +318,7 @@ export default function PlayerRankings() {
                       </td>
                     ))}
                     {CATEGORIES.map(cat => (
-                      <td key={`z-${cat}`} className={`px-3 py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                      <td key={`z-${cat}`} className={`px-1.5 sm:px-3 py-1.5 sm:py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                         {fmt(ranked.zScores[cat])}
                       </td>
                     ))}
@@ -394,7 +396,7 @@ function WeightSliders({ initialWeights, onCommit }: {
   )
 }
 
-function Th({ col, label, sortCol, sortAsc, onSort, punted, className = '' }: {
+function Th({ col, label, sortCol, sortAsc, onSort, punted, className = '', tip }: {
   col: SortCol
   label: string
   sortCol: SortCol
@@ -402,18 +404,26 @@ function Th({ col, label, sortCol, sortAsc, onSort, punted, className = '' }: {
   onSort: (col: SortCol) => void
   punted?: boolean
   className?: string
+  tip?: MetricInfo
 }) {
   const active = sortCol === col
   return (
     <th
-      onClick={() => onSort(col)}
-      tabIndex={0}
-      role="button"
-      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSort(col)}
-      aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
-      className={`px-1.5 py-2 sm:px-3 text-right text-xs font-semibold cursor-pointer select-none ${punted ? 'text-gray-300 dark:text-gray-600' : active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} ${className}`}
+      className={`px-1.5 py-2 sm:px-3 text-right text-xs font-semibold select-none whitespace-nowrap ${punted ? 'text-gray-300 dark:text-gray-600' : active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} ${className}`}
     >
-      {label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}
+      <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+        <span
+          onClick={() => onSort(col)}
+          tabIndex={0}
+          role="button"
+          onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onSort(col)}
+          aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}
+          className="cursor-pointer"
+        >
+          {label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}
+        </span>
+        {tip && <InfoTip title={tip.title} body={tip.body} formula={tip.formula} />}
+      </span>
     </th>
   )
 }
