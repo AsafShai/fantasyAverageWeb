@@ -16,6 +16,7 @@ export const fantasyApi = createApi({
         params: { sort_by: sortBy, order, ...(startDate ? { start_date: startDate } : {}), ...(endDate ? { end_date: endDate } : {}) },
       }),
       providesTags: ['Rankings'],
+      keepUnusedDataFor: 300,
     }),
     getTeamDetail: builder.query<TeamDetail, { teamId: number; time_period?: TimePeriod; start?: string; end?: string }>({
       query: ({ teamId, time_period = 'season', start, end }) => ({
@@ -27,6 +28,7 @@ export const fantasyApi = createApi({
     getLeagueSummary: builder.query<LeagueSummary, void>({
       query: () => '/league/summary',
       providesTags: ['League'],
+      keepUnusedDataFor: 300,
     }),
     getHeatmapData: builder.query<HeatmapData, { startDate?: string; endDate?: string }>({
       query: ({ startDate, endDate } = {}) => ({

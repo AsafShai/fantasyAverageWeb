@@ -46,6 +46,15 @@ _SEASON_ANCHOR_TTL = timedelta(hours=1)
 _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 
 
+# The windowed DataFrame for a preset period (season/last_7/last_15/last_30)
+# only moves on nightly ingest, but build_windowed_players_df reruns a full
+# fs_player_games aggregation + pandas merge on every /players request.
+# Cached briefly per preset. Custom ranges are never cached here — the key
+# space is unbounded (any start/end pair), so caching them would grow forever.
+_WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
+_windowed_players_cache: dict = {}
+
+
 async def get_season_anchor_date(season: str, db_service: DBService) -> date:
     cached = _season_anchor_cache
     now = datetime.now()
@@ -169,15 +178,25 @@ class PlayerService:
             start: Start date, required when time_period is custom
             end: End date, required when time_period is custom
         """
-        stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
-        players_df = await self.data_provider.get_players_df(stat_split_id)
+        is_preset = time_period != StatTimePeriod.CUSTOM
+        cached = _windowed_players_cache.get(time_period) if is_preset else None
+        if cached is not None and datetime.now() - cached['ts'] < _WINDOWED_PLAYERS_TTL:
+            players_df, actual_start, actual_end = cached['df'], cached['start'], cached['end']
+        else:
+            stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
+            espn_players_df = await self.data_provider.get_players_df(stat_split_id)
 
-        if players_df is None or players_df.empty:
-            raise ResourceNotFoundError("No players found")
+            if espn_players_df is None or espn_players_df.empty:
+                raise ResourceNotFoundError("No players found")
 
-        players_df, actual_start, actual_end = await build_windowed_players_df(
-            time_period, players_df, self.data_provider.db_service, start, end
-        )
+            players_df, actual_start, actual_end = await build_windowed_players_df(
+                time_period, espn_players_df, self.data_provider.db_service, start, end
+            )
+            if is_preset:
+                _windowed_players_cache[time_period] = {
+                    'df': players_df, 'start': actual_start, 'end': actual_end,
+                    'ts': datetime.now(),
+                }
 
         total_count = len(players_df)
         start_idx = (page - 1) * limit

@@ -178,6 +178,27 @@ def reset_season_anchor_cache():
     yield
     _season_anchor_cache.update({'season': None, 'date': None, 'ts': None})
 
+@pytest.fixture(autouse=True)
+def reset_windowed_players_cache():
+    """Same as reset_season_anchor_cache, for the windowed-players preset cache."""
+    from app.services.player_service import _windowed_players_cache
+    _windowed_players_cache.clear()
+    yield
+    _windowed_players_cache.clear()
+
+@pytest.fixture(autouse=True)
+def reset_nba_stats_service_singleton():
+    """NBAStatsService is a singleton (pooled httpx client + TTL caches
+    persisting across requests in production) — reset it every test so
+    cached values/mocked clients from one test can't leak into another,
+    across any test file."""
+    from app.services.nba_stats_service import NBAStatsService
+    NBAStatsService._instance = None
+    NBAStatsService._initialized = False
+    yield
+    NBAStatsService._instance = None
+    NBAStatsService._initialized = False
+
 @pytest.fixture
 def test_client():
     """Create a test client for the FastAPI application."""
