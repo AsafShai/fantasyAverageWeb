@@ -2,6 +2,7 @@ import asyncio
 import logging
 import httpx
 import json
+from datetime import datetime, timedelta
 from typing import Dict, Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
@@ -31,6 +32,7 @@ class DataProvider:
             self._fetch_lock = asyncio.Lock()
             self._db_sync_lock = asyncio.Lock()
             self._last_synced_period = 0
+            self._players_inflight: dict[int, asyncio.Future] = {}
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
@@ -136,51 +138,60 @@ class DataProvider:
             cache_key = f'players_{stat_split_type_id}'
 
             if not hasattr(self.cache_manager, cache_key):
-                setattr(self.cache_manager, cache_key, {'data': None, 'timestamp': None})
+                setattr(self.cache_manager, cache_key, {'data': None, 'timestamp': None, 'etag': None})
 
             cache = getattr(self.cache_manager, cache_key)
 
             if cache.get('data') is not None and cache.get('timestamp'):
-                from datetime import datetime, timedelta
                 if datetime.now() - cache['timestamp'] < timedelta(minutes=5):
                     return cache['data']
 
-            headers = {}
+            async def _fetch_and_transform():
+                headers = {}
 
-            # ESPN's kona_player_info universe plateaus at ~1069 players (verified
-            # 2026-07-11); 1200 covers it with headroom. A lower limit here (this
-            # used to be 500) silently drops any player outside the ownership-rank
-            # cutoff — including drafted players later dropped to 0% owned, who
-            # are still real players with real games (e.g. Reed Sheppard).
-            espn_filter = {
-                "players": {
-                    "filterStatus": {"value": ["ONTEAM", "FREEAGENT", "WAIVERS"]},
-                    "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
-                    "limit": 1200,
-                    "offset": 0
+                # ESPN's kona_player_info universe plateaus at ~1069 players (verified
+                # 2026-07-11); 1200 covers it with headroom. A lower limit here (this
+                # used to be 500) silently drops any player outside the ownership-rank
+                # cutoff — including drafted players later dropped to 0% owned, who
+                # are still real players with real games (e.g. Reed Sheppard).
+                espn_filter = {
+                    "players": {
+                        "filterStatus": {"value": ["ONTEAM", "FREEAGENT", "WAIVERS"]},
+                        "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
+                        "limit": 1200,
+                        "offset": 0
+                    }
                 }
-            }
-            headers['X-Fantasy-Filter'] = json.dumps(espn_filter)
+                headers['X-Fantasy-Filter'] = json.dumps(espn_filter)
+                if cache.get('etag'):
+                    headers['If-None-Match'] = cache['etag']
 
-            response = await self._client.get(self.espn_players_url, headers=headers)
-            response.raise_for_status()
-            api_data = response.json()
+                response = await self._client.get(self.espn_players_url, headers=headers)
 
-            if self.cache_manager.totals_cache.get('data') is None:
-                await self.get_totals_df()
+                if response.status_code == 304:
+                    cache['timestamp'] = datetime.now()
+                    return cache['data']
 
-            fantasy_team_map = {}
-            totals_data = self.cache_manager.totals_cache.get('data')
-            if totals_data is not None:
-                fantasy_team_map = dict(zip(totals_data['team_id'], totals_data['team_name']))
+                response.raise_for_status()
+                api_data = response.json()
 
-            players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id, fantasy_team_map)
+                if self.cache_manager.totals_cache.get('data') is None:
+                    await self.get_totals_df()
 
-            from datetime import datetime
-            cache['timestamp'] = datetime.now()
-            cache['data'] = players_df
+                fantasy_team_map = {}
+                totals_data = self.cache_manager.totals_cache.get('data')
+                if totals_data is not None:
+                    fantasy_team_map = dict(zip(totals_data['team_id'], totals_data['team_name']))
 
-            return players_df
+                players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id, fantasy_team_map)
+
+                cache['etag'] = response.headers.get('ETag')
+                cache['timestamp'] = datetime.now()
+                cache['data'] = players_df
+
+                return players_df
+
+            return await self._coalesced(self._players_inflight, stat_split_type_id, _fetch_and_transform)
 
         except httpx.RequestError as e:
             self.logger.error(f"Error fetching players data from ESPN API: {e}")
@@ -191,6 +202,32 @@ class DataProvider:
         except Exception as e:
             self.logger.error(f"Unexpected error fetching ESPN players data: {e}")
             raise DataSourceError("Unexpected error fetching ESPN players data")
+
+    @staticmethod
+    async def _coalesced(inflight: dict, key, compute):
+        """First caller on `key` runs `compute` and registers its Future so
+        concurrent callers on the same key await it instead of issuing a
+        duplicate ESPN request. The finally block must run even when compute()
+        raises — otherwise a failed computation leaves its Future registered
+        forever and every later caller on that key awaits a permanently-failed
+        Future until process restart."""
+        existing = inflight.get(key)
+        if existing is not None:
+            return await existing
+
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        inflight[key] = future
+        try:
+            result = await compute()
+        except BaseException as exc:
+            future.set_exception(exc)
+            future.exception()
+            raise
+        else:
+            future.set_result(result)
+            return result
+        finally:
+            inflight.pop(key, None)
 
     def get_data_date(self):
         """Returns the data_date from cache if serving DB fallback, else None."""

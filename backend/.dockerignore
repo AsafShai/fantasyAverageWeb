@@ -83,3 +83,9 @@ docker-compose*.yml
 # Tests (exclude for production builds)
 tests/
 .pytest_cache/
+
+# Research/training artifacts (not needed at runtime)
+model_stats_inference/research/data/feature_matrix.parquet
+model_stats_inference/research/data/espn_cache/
+model_stats_inference/research/outputs/
+model_stats_inference/training/outputs/
