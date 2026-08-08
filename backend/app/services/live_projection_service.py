@@ -103,6 +103,30 @@ class LiveProjectionService:
             out[name] = _to_projection(inference.store, pid, default_min, today, res, err)
         return out
 
+    async def project_next_game(
+        self, player_name: str, opponent: str, is_home: bool, minutes: float | None = None
+    ) -> dict | None:
+        """Single player, full projection envelope (default_minutes + status +
+        stats) — the player-page card, which has no batch slate to read from."""
+        inference = await self._ensure_inference()
+        if inference is None:
+            return None
+        pid = self._name_index.get(normalize_player_name(player_name))
+        if pid is None:
+            logger.warning(f"No feature-store match for '{player_name}' — next-game projection skipped")
+            return None
+        opp_id = _opponent_team_id(opponent)
+        if opp_id is None:
+            return None
+        today = pd.Timestamp.now().normalize()
+        default_min = _default_minutes(inference.store, pid)
+        req = PredictionRequest(
+            player_id=pid, opponent_team_id=opp_id, is_home=is_home,
+            game_date=today, minutes=default_min if minutes is None else minutes,
+        )
+        results, errors = await asyncio.to_thread(inference.predict_many, [req])
+        return _to_projection(inference.store, pid, default_min, today, results[0], errors[0])
+
     async def project_one(
         self, player_name: str, opponent: str, is_home: bool, minutes: float
     ) -> dict | None:

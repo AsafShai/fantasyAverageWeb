@@ -8,6 +8,7 @@ import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 import { FF_NAV_REORG } from '../config/featureFlags'
+import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
 
 type AnalyticsTab = 'heatmap' | 'rankingsOverTime' | 'shootingStats'
 
@@ -52,13 +53,7 @@ const Analytics = () => {
   const [dateError, setDateError] = useState<string>('')
   const [appliedDates, setAppliedDates] = useState<{ startDate?: string; endDate?: string }>({})
 
-  const today = new Date().toISOString().split('T')[0]
-
-  function getDateNDaysAgo(n: number): string {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return d.toISOString().split('T')[0];
-  }
+  const today = todayIso()
 
   const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery(appliedDates)
   const { data: summary } = useGetLeagueSummaryQuery()

@@ -830,6 +830,59 @@ class DBService:
             logger.error(f"Failed to aggregate player games for {start}..{end} ({season}): {e}")
             return pd.DataFrame(), None, None
 
+    async def aggregate_single_player_games(
+        self, player_id: int, start: date, end: date, season: str
+    ) -> tuple[Optional[dict], Optional[date], Optional[date]]:
+        """Totals for one ESPN athlete over [start, end]. Returns
+        (row_dict | None, actual_start, actual_end)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None, None, None
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT
+                        player_id,
+                        (array_agg(player_name ORDER BY game_date DESC))[1] AS player_name,
+                        COUNT(*) AS gp,
+                        SUM(pts) AS pts,
+                        SUM(reb) AS reb,
+                        SUM(ast) AS ast,
+                        SUM(stl) AS stl,
+                        SUM(blk) AS blk,
+                        SUM(fgm) AS fgm,
+                        SUM(fga) AS fga,
+                        SUM(ftm) AS ftm,
+                        SUM(fta) AS fta,
+                        SUM(fg3m) AS three_pm,
+                        SUM(min) AS min,
+                        COALESCE(SUM(fgm) / NULLIF(SUM(fga), 0), 0.0) AS fg_pct,
+                        COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct,
+                        MIN(game_date) AS actual_start,
+                        MAX(game_date) AS actual_end
+                    FROM fs_player_games
+                    WHERE season = $1
+                      AND player_id = $2
+                      AND game_date BETWEEN $3 AND $4
+                      AND min > 0
+                    GROUP BY player_id
+                    """,
+                    season, player_id, start, end,
+                )
+                if row is None:
+                    return None, None, None
+                data = dict(row)
+                actual_start = data.pop("actual_start", None)
+                actual_end = data.pop("actual_end", None)
+                return data, actual_start, actual_end
+        except Exception as e:
+            logger.error(
+                f"Failed to aggregate games for player {player_id} "
+                f"{start}..{end} ({season}): {e}"
+            )
+            return None, None, None
+
     async def get_latest_game_date(self, season: str) -> Optional[date]:
         """Most recent game_date with real box scores this season, or None if
         none exist yet. Used as the anchor for last_7/15/30 instead of real

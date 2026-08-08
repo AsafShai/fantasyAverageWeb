@@ -18,7 +18,13 @@ import PlayerRankings from './pages/PlayerRankings'
 import Projections from './pages/Projections'
 import DraftReport from './pages/DraftReport'
 import Trends from './pages/Trends'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS } from './config/featureFlags'
+import Minigames from './pages/Minigames'
+import HangmanGame from './pages/minigames/HangmanGame'
+import WhoHePlayForGame from './pages/minigames/WhoHePlayForGame'
+import WhoAmIGame from './pages/minigames/WhoAmIGame'
+import NowYouSeeMeGame from './pages/minigames/NowYouSeeMeGame'
+import PlayerProfile from './pages/PlayerProfile'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES } from './config/featureFlags'
 
 function App() {
   return (
@@ -41,12 +47,18 @@ function App() {
           <Route path="players" element={<Players />} />
           <Route path="injuries" element={<Injuries />} />
           <Route path="nba-teams" element={<NbaTeams />} />
+          <Route path="player/:playerId" element={<PlayerProfile />} />
           {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}
           {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
           {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
           {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
           {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
           {FF_TRENDS && <Route path="trends" element={<Trends />} />}
+          {FF_MINIGAMES && <Route path="minigames" element={<Minigames />} />}
+          {FF_MINIGAMES && <Route path="minigames/hangman" element={<HangmanGame />} />}
+          {FF_MINIGAMES && <Route path="minigames/who-he-play-for" element={<WhoHePlayForGame />} />}
+          {FF_MINIGAMES && <Route path="minigames/who-am-i" element={<WhoAmIGame />} />}
+          {FF_MINIGAMES && <Route path="minigames/now-you-see-me" element={<NowYouSeeMeGame />} />}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

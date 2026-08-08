@@ -81,6 +81,8 @@ class Player(BaseModel):
     stats: PlayerStats
     team_id: int
     status: str
+    # ESPN athlete id (same id used by /api/nba-players/{id} and depth charts).
+    player_id: Optional[int] = None
     injured: bool = False
     fantasy_team_name: Optional[str] = None
     season_rating: Optional[float] = None

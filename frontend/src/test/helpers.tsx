@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
+import { MemoryRouter } from 'react-router';
 import { fantasyApi } from '../store/api/fantasyApi';
 
 export function createTestStore() {
@@ -20,7 +21,11 @@ export function renderWithProviders(
 ) {
   const { store = createTestStore(), ...renderOptions } = options;
   function Wrapper({ children }: { children: ReactNode }) {
-    return <Provider store={store}>{children}</Provider>;
+    return (
+      <MemoryRouter>
+        <Provider store={store}>{children}</Provider>
+      </MemoryRouter>
+    );
   }
   return { store, ...render(ui, { wrapper: Wrapper, ...renderOptions }) };
 }

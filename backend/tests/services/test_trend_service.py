@@ -1,3 +1,5 @@
+import asyncio
+import time
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -5,9 +7,14 @@ import pandas as pd
 import pytest
 
 from app.config import settings
+from app.services import trend_service
 from app.services.trend_service import (
+    MAX_RECENCY_WINDOW_DAYS,
+    MIN_RECENCY_WINDOW_DAYS,
     TrendService,
     _normalize_baseline_seasons,
+    _normalize_window_days,
+    _TTLLRUCache,
     build_game_log,
     classify_role_badge,
     compute_minutes_movers,
@@ -15,6 +22,10 @@ from app.services.trend_service import (
     compute_usage_role,
     prior_season_strings,
 )
+
+
+def _empty_players_df() -> pd.DataFrame:
+    return pd.DataFrame({'Name': [], 'Pro Team': [], 'Positions': [], 'fantasy_team_name': []})
 
 
 def _current_row(player_id, player_name, gp, fg3m=0, fg3a=0, ftm=0, fta=0, fgm=0, fga=0):
@@ -265,7 +276,10 @@ async def test_get_shooting_regression_recomputes_after_ttl_expires(service):
         service._regression_cache[(15, 2, 'season')]['ts'] = datetime.now() - timedelta(hours=7)
         await service.get_shooting_regression(players_df)
 
-        assert mock_db.aggregate_shooting_by_player.call_count == 6  # three calls, twice
+        # season + baseline shooting are hoisted (keyed by season/baseline_seasons,
+        # unaffected by the regression cache's own TTL), so only the per-window
+        # aggregate recomputes on the second call: 3 calls, then 1 more.
+        assert mock_db.aggregate_shooting_by_player.call_count == 4
 
 
 def _season_row(player_id, player_name, gp, min_total):
@@ -892,3 +906,218 @@ def test_zero_baseline_seasons_is_rejected_for_season_mode():
     assert _normalize_baseline_seasons(0, 'season') == 2
     assert _normalize_baseline_seasons(1, 'form') == 1
     assert _normalize_baseline_seasons(9, 'form') == 2
+
+
+class TestTTLLRUCache:
+    def test_evicts_past_maxsize(self):
+        cache = _TTLLRUCache(maxsize=2, ttl=timedelta(hours=1))
+        cache.set('a', 1)
+        cache.set('b', 2)
+        cache.set('c', 3)
+
+        assert cache.get('a') is None
+        assert cache.get('b') == 2
+        assert cache.get('c') == 3
+
+    def test_lru_evicts_least_recently_used_not_oldest_insertion(self):
+        cache = _TTLLRUCache(maxsize=2, ttl=timedelta(hours=1))
+        cache.set('a', 1)
+        cache.set('b', 2)
+        cache.get('a')  # touch 'a' -> 'b' becomes the least-recently-used
+        cache.set('c', 3)
+
+        assert cache.get('b') is None
+        assert cache.get('a') == 1
+        assert cache.get('c') == 3
+
+    def test_ttl_expiry_on_read(self):
+        cache = _TTLLRUCache(maxsize=10, ttl=timedelta(milliseconds=20))
+        cache.set('a', 1)
+        time.sleep(0.05)
+
+        assert cache.get('a') is None
+
+    def test_sweep_on_write_clears_expired_entries(self):
+        cache = _TTLLRUCache(maxsize=10, ttl=timedelta(milliseconds=20))
+        cache.set('a', 1)
+        time.sleep(0.05)
+        cache.set('b', 2)
+
+        assert len(cache._data) == 1
+        assert 'a' not in cache._data
+        assert 'b' in cache._data
+
+
+class TestCachePresetResponse:
+    def test_non_preset_window_is_not_cached(self):
+        svc = TrendService()
+        cache: dict = {}
+        svc._cache_preset_response(cache, 45, 45, 'response')
+
+        assert cache == {}
+
+    def test_preset_window_is_cached(self):
+        svc = TrendService()
+        cache: dict = {}
+        svc._cache_preset_response(cache, 15, 15, 'response')
+
+        assert cache[15]['data'] == 'response'
+
+
+class TestNormalizeWindowDays:
+    def test_below_min_clamps_up(self):
+        assert _normalize_window_days(1) == MIN_RECENCY_WINDOW_DAYS
+
+    def test_above_max_clamps_down(self):
+        assert _normalize_window_days(500) == MAX_RECENCY_WINDOW_DAYS
+
+    def test_off_preset_value_is_honoured(self):
+        assert _normalize_window_days(21) == 21
+
+    def test_min_boundary_passes_through(self):
+        assert _normalize_window_days(MIN_RECENCY_WINDOW_DAYS) == MIN_RECENCY_WINDOW_DAYS
+
+    def test_max_boundary_passes_through(self):
+        assert _normalize_window_days(MAX_RECENCY_WINDOW_DAYS) == MAX_RECENCY_WINDOW_DAYS
+
+
+@pytest.mark.asyncio
+class TestHoistedInputs:
+    async def test_season_shooting_reused_across_multiple_windows(self, monkeypatch):
+        svc = TrendService()
+        anchor = date(2026, 1, 15)
+        monkeypatch.setattr(trend_service, 'get_season_anchor_date', AsyncMock(return_value=anchor))
+        monkeypatch.setattr(svc._db, 'get_games_since', AsyncMock(return_value={}))
+
+        season_calls = []
+
+        async def fake_shooting(seasons, start=None, end=None):
+            if start == settings.season_start:
+                season_calls.append((start, end))
+            return pd.DataFrame()
+
+        monkeypatch.setattr(svc._db, 'aggregate_shooting_by_player', fake_shooting)
+
+        players_df = _empty_players_df()
+        for window_days in (7, 15, 30):
+            await svc.get_minutes_movers(players_df, window_days)
+
+        assert len(season_calls) == 1
+
+    async def test_season_usage_reused_across_multiple_windows(self, monkeypatch):
+        svc = TrendService()
+        anchor = date(2026, 1, 15)
+        monkeypatch.setattr(trend_service, 'get_season_anchor_date', AsyncMock(return_value=anchor))
+        monkeypatch.setattr(svc._db, 'get_games_since', AsyncMock(return_value={}))
+
+        usage_calls = []
+
+        async def fake_usage(season, start, end):
+            usage_calls.append((season, start, end))
+            return pd.DataFrame()
+
+        monkeypatch.setattr(svc._db, 'get_usage_components', fake_usage)
+
+        players_df = _empty_players_df()
+        for window_days in (7, 15, 30):
+            await svc.get_usage_role(players_df, window_days)
+
+        assert len(usage_calls) == 1
+
+
+@pytest.mark.asyncio
+class TestAnchorInvalidation:
+    async def test_anchor_change_clears_caches_and_recomputes(self, monkeypatch):
+        svc = TrendService()
+        anchor_a = date(2026, 1, 15)
+        anchor_b = date(2026, 1, 16)
+        monkeypatch.setattr(
+            trend_service, 'get_season_anchor_date', AsyncMock(side_effect=[anchor_a, anchor_a, anchor_b])
+        )
+        monkeypatch.setattr(svc._db, 'get_games_since', AsyncMock(return_value={}))
+
+        season_calls = []
+
+        async def fake_shooting(seasons, start=None, end=None):
+            if start == settings.season_start:
+                season_calls.append(end)
+            return pd.DataFrame()
+
+        monkeypatch.setattr(svc._db, 'aggregate_shooting_by_player', fake_shooting)
+
+        players_df = _empty_players_df()
+        await svc.get_minutes_movers(players_df, 7)
+        await svc.get_minutes_movers(players_df, 7)  # same anchor+window -> response cache hit
+        await svc.get_minutes_movers(players_df, 7)  # anchor moved -> must recompute
+
+        assert season_calls == [anchor_a, anchor_b]
+
+    async def test_league_refs_reflects_different_end_within_same_season(self, monkeypatch):
+        # Regression test for defect (3): _get_league_refs used to key/cache on
+        # `season` alone and silently ignore `end`, so a second call with a
+        # different `end` in the same season returned stale figures.
+        svc = TrendService()
+
+        async def fake_shooting(seasons, start=None, end=None):
+            fgm = 10 + (end.day if end else 0)
+            return pd.DataFrame({
+                'fgm': [fgm], 'fga': [20],
+                'ftm': [5], 'fta': [10],
+                'fg3m': [3], 'fg3a': [9],
+            })
+
+        monkeypatch.setattr(svc._db, 'aggregate_shooting_by_player', fake_shooting)
+        monkeypatch.setattr(svc._db, 'get_usage_components', AsyncMock(return_value=pd.DataFrame()))
+
+        pct_1, _ = await svc._get_league_refs('2025-26', date(2026, 1, 1))
+        pct_2, _ = await svc._get_league_refs('2025-26', date(2026, 1, 10))
+
+        assert pct_1['FG%'] != pct_2['FG%']
+
+
+@pytest.mark.asyncio
+class TestInFlightCoalescing:
+    async def test_concurrent_callers_on_same_key_share_one_db_call(self):
+        svc = TrendService()
+        call_count = 0
+
+        async def fake_shooting(seasons, start=None, end=None):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.05)
+            return pd.DataFrame({'fgm': [1]})
+
+        with patch.object(svc._db, 'aggregate_shooting_by_player', fake_shooting):
+            results = await asyncio.gather(*[
+                svc._get_season_shooting('2025-26', date(2026, 1, 15)) for _ in range(10)
+            ])
+
+        assert call_count == 1
+        assert all(r['fgm'].iloc[0] == 1 for r in results)
+
+    async def test_raising_computation_propagates_to_waiters_and_clears_slot(self):
+        svc = TrendService()
+        call_count = 0
+
+        async def flaky_shooting(seasons, start=None, end=None):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.02)
+            if call_count == 1:
+                raise RuntimeError('db exploded')
+            return pd.DataFrame({'fgm': [1]})
+
+        with patch.object(svc._db, 'aggregate_shooting_by_player', flaky_shooting):
+            results = await asyncio.gather(
+                *[svc._get_season_shooting('2025-26', date(2026, 1, 15)) for _ in range(5)],
+                return_exceptions=True,
+            )
+
+            assert call_count == 1
+            assert all(isinstance(r, RuntimeError) for r in results)
+            assert svc._season_shooting_inflight == {}
+
+            second = await svc._get_season_shooting('2025-26', date(2026, 1, 15))
+
+        assert call_count == 2
+        assert second['fgm'].iloc[0] == 1

@@ -143,6 +143,8 @@ export interface Player {
   stats: PlayerStats;
   team_id: number;
   status: "ONTEAM" | "FREEAGENT" | "WAIVERS";
+  /** ESPN athlete id — used to open /player/:id */
+  player_id?: number | null;
   injured?: boolean;
   fantasy_team_name?: string | null;
   season_rating?: number | null;
@@ -262,6 +264,30 @@ export interface DepthChartPlayer {
   injury?: NbaInjury | null;
 }
 
+export interface NbaPlayerBio {
+  id: string;
+  display_name: string;
+  team: string;
+  team_abbr: string;
+  conference: string;
+  division: string;
+  position: string;
+  photo_url: string | null;
+  height: string | null;
+  nationality: string | null;
+  age: number | null;
+  jersey_number: string | null;
+}
+
+export interface NbaPlayerStatsResponse {
+  player_id: number;
+  totals: PlayerStats;
+  averages: PlayerStats;
+  has_data: boolean;
+  actual_start?: string | null;
+  actual_end?: string | null;
+}
+
 export interface DepthChartPosition {
   abbreviation: string;
   display_name: string;
@@ -315,6 +341,19 @@ export interface ProjectionStats {
 }
 
 export interface Projection {
+  default_minutes: number;
+  status: ProjectionStatus;
+  reason: string;
+  stats: ProjectionStats | null;
+}
+
+export interface PlayerNextGameProjection {
+  player_name: string;
+  team: string;
+  game_date: string | null;
+  opponent: string | null;
+  is_home: boolean;
+  scheduled: boolean;
   default_minutes: number;
   status: ProjectionStatus;
   reason: string;

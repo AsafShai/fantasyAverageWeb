@@ -72,4 +72,54 @@ describe('DateRangePicker', () => {
     expect(screen.getByText(new RegExp(SEASON_START))).toBeInTheDocument()
     expect(screen.getByText(/both required/i)).toBeInTheDocument()
   })
+
+  describe('fixedEnd', () => {
+    const ANCHOR = '2026-07-10'
+
+    it('renders the end input disabled at the fixed value', () => {
+      render(<DateRangePicker fixedEnd={ANCHOR} onApply={vi.fn()} />)
+      const endInput = screen.getByLabelText(/end date/i)
+      expect(endInput).toBeDisabled()
+      expect(endInput).toHaveValue(ANCHOR)
+    })
+
+    it('relabels the start field and disables Apply until a start is picked', async () => {
+      render(<DateRangePicker fixedEnd={ANCHOR} onApply={vi.fn()} />)
+      expect(screen.getByText('Window starts')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /apply/i })).toBeDisabled()
+    })
+
+    it('calls onApply with the fixed end once a start is picked, without an end-date error', async () => {
+      const onApply = vi.fn()
+      render(<DateRangePicker fixedEnd={ANCHOR} onApply={onApply} />)
+      const user = userEvent.setup()
+
+      await user.type(screen.getByLabelText(/start date/i), '2026-06-19')
+      expect(screen.queryByText(/before end date/i)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /apply/i })).toBeEnabled()
+
+      await user.click(screen.getByRole('button', { name: /apply/i }))
+      expect(onApply).toHaveBeenCalledWith({ start: '2026-06-19', end: ANCHOR })
+    })
+
+    it('still enforces seasonStart as a lower bound', async () => {
+      render(<DateRangePicker seasonStart={SEASON_START} fixedEnd={ANCHOR} onApply={vi.fn()} />)
+      const user = userEvent.setup()
+
+      await user.type(screen.getByLabelText(/start date/i), '2025-10-01')
+      expect(screen.getByText(/cannot be before season start/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /apply/i })).toBeDisabled()
+    })
+
+    it('Clear only resets the start field, not the fixed end', async () => {
+      render(<DateRangePicker fixedEnd={ANCHOR} initialStart="2026-06-19" onApply={vi.fn()} />)
+      const user = userEvent.setup()
+
+      expect(screen.getByLabelText(/start date/i)).toHaveValue('2026-06-19')
+      await user.click(screen.getByRole('button', { name: /clear/i }))
+
+      expect(screen.getByLabelText(/start date/i)).toHaveValue('')
+      expect(screen.getByLabelText(/end date/i)).toHaveValue(ANCHOR)
+    })
+  })
 })

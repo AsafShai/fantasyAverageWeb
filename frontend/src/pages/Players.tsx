@@ -8,6 +8,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector';
 import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
 import InjuryBadge from '../components/InjuryBadge';
+import PlayerNameLink from '../components/PlayerNameLink';
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_PAST_SLATES } from '../config/featureFlags';
 import './Players.css';
 
@@ -497,7 +498,7 @@ const PlayerTable = ({
           return (
             <React.Fragment key={`${player.player_name}-${idx}`}>
               <tr>
-                <td>{player.player_name} <InjuryBadge status={matchup?.injury_status} /></td>
+                <td><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
                 <td>{player.pro_team}</td>
                 <td>{player.positions.join(', ')}</td>
                 <td>{getTeamDisplay(player)}</td>

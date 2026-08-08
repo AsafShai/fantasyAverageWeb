@@ -231,3 +231,27 @@ def test_get_game_log_404_when_no_rows(mock_services):
     resp = client.get('/api/trends/player/999/gamelog')
 
     assert resp.status_code == 404
+
+
+@pytest.mark.parametrize('endpoint', [
+    '/api/trends/regression',
+    '/api/trends/minutes',
+    '/api/trends/usage',
+    '/api/trends/player/1630245/gamelog',
+])
+@pytest.mark.parametrize('window_days', [0, 4, 61, 500])
+def test_out_of_range_window_days_returns_422(mock_services, endpoint, window_days):
+    client = TestClient(app)
+    resp = client.get(f'{endpoint}?window_days={window_days}')
+
+    assert resp.status_code == 422
+
+
+def test_in_range_off_preset_window_days_is_honoured(mock_services):
+    svc, _ = mock_services
+    client = TestClient(app)
+    resp = client.get('/api/trends/minutes?window_days=21')
+
+    assert resp.status_code == 200
+    svc.get_minutes_movers.assert_awaited_once()
+    assert svc.get_minutes_movers.call_args.args[1] == 21

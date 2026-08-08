@@ -1,14 +1,78 @@
 import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef } from 'react'
 import Footer from './Footer'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS } from '../config/featureFlags'
+import CommandPalette from './CommandPalette'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH } from '../config/featureFlags'
+
+function useGlobalSearchShortcut(setSearchOpen: (open: boolean) => void) {
+  useEffect(() => {
+    if (!FF_GLOBAL_SEARCH) return
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      const isTyping =
+        !!target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !isTyping) {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [setSearchOpen])
+}
+
+const SearchIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+    <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M14 14L18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+)
+
+const SearchButton = ({ onClick }: { onClick: () => void }) => {
+  if (!FF_GLOBAL_SEARCH) return null
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Search (Ctrl K)"
+      className="hidden md:flex items-center gap-2 w-40 lg:w-56 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-3.5 py-1.5 text-gray-400 dark:text-gray-500 shrink-0 transition-colors hover:border-blue-300 hover:bg-white hover:text-gray-500 dark:hover:border-blue-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+    >
+      <SearchIcon />
+      <span className="flex-1 text-left text-sm truncate">Search…</span>
+      <kbd className="hidden lg:inline rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500">
+        Ctrl K
+      </kbd>
+    </button>
+  )
+}
+
+const MobileSearchIconButton = ({ onClick }: { onClick: () => void }) => {
+  if (!FF_GLOBAL_SEARCH) return null
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Search"
+      className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+    >
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M14 14L18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    </button>
+  )
+}
 
 const Layout = () => {
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark'
   })
+
+  useGlobalSearchShortcut(setSearchOpen)
 
   useEffect(() => {
     if (darkMode) {
@@ -31,6 +95,7 @@ const Layout = () => {
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
     { path: '/nba-teams', label: 'NBA', icon: '🏀' },
+    ...(FF_MINIGAMES ? [{ path: '/minigames', label: 'Minigames', icon: '🎮' }] : []),
     ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
     ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
     ...(FF_PROJECTIONS ? [{ path: '/projections', label: 'Projections', icon: '🔭' }] : []),
@@ -41,11 +106,17 @@ const Layout = () => {
   const closeMobileMenu = () => setMobileMenuOpen(false)
 
   if (FF_NAV_REORG) {
-    return <ReorgLayout darkMode={darkMode} setDarkMode={setDarkMode} />
+    return (
+      <>
+        {FF_GLOBAL_SEARCH && <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />}
+        <ReorgLayout darkMode={darkMode} setDarkMode={setDarkMode} setSearchOpen={setSearchOpen} />
+      </>
+    )
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex flex-col">
+      {FF_GLOBAL_SEARCH && <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />}
       <nav className="sticky top-0 z-40 bg-white dark:bg-gray-900 shadow-lg border-b border-gray-200 dark:border-gray-700">
         <div className="w-full px-3">
           <div className="flex items-center justify-between h-14 gap-2">
@@ -71,6 +142,7 @@ const Layout = () => {
                 </Link>
               ))}
               <div className="mx-3 h-6 w-0.5 bg-gray-300 dark:bg-gray-500 shrink-0 rounded-full" />
+              <SearchButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
                 className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
@@ -81,8 +153,9 @@ const Layout = () => {
               </button>
             </div>
 
-            {/* Mobile: dark toggle + hamburger */}
+            {/* Mobile: search + dark toggle + hamburger */}
             <div className="md:hidden flex items-center gap-1">
+              <MobileSearchIconButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
                 className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -144,6 +217,7 @@ const Layout = () => {
 interface ReorgLayoutProps {
   darkMode: boolean
   setDarkMode: React.Dispatch<React.SetStateAction<boolean>>
+  setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 interface NavLeaf {
@@ -176,7 +250,7 @@ const mobileItemClass = (active: boolean) =>
 interface DesktopNavGroupProps {
   group: NavGroupDef
   openKey: string | null
-  setOpenKey: (key: string | null) => void
+  setOpenKey: React.Dispatch<React.SetStateAction<string | null>>
   isActive: boolean
 }
 
@@ -185,8 +259,34 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   const groupRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const isOpen = openKey === group.key
+
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current !== null) {
+      clearTimeout(closeTimeoutRef.current)
+      closeTimeoutRef.current = null
+    }
+  }
+
+  const openMenu = () => {
+    clearCloseTimeout()
+    setOpenKey(group.key)
+  }
+
+  // Delay close so the pointer can cross the gap between the nav and the fixed menu.
+  // Only close if this group is still open — otherwise a pending close from group A
+  // would flash-close group B right after switching.
+  const scheduleCloseMenu = () => {
+    clearCloseTimeout()
+    closeTimeoutRef.current = setTimeout(() => {
+      setOpenKey((current) => (current === group.key ? null : current))
+      closeTimeoutRef.current = null
+    }, 150)
+  }
+
+  useEffect(() => () => clearCloseTimeout(), [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -196,6 +296,7 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
         !groupRef.current.contains(e.target as Node) &&
         !menuRef.current?.contains(e.target as Node)
       ) {
+        clearCloseTimeout()
         setOpenKey(null)
       }
     }
@@ -206,9 +307,10 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   useEffect(() => {
     if (!isOpen) return
     const updatePos = () => {
-      const rect = buttonRef.current?.getBoundingClientRect()
+      // Anchor to the full group hit area (nav-height), not the shorter button.
+      const rect = groupRef.current?.getBoundingClientRect()
       if (rect) {
-        setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+        setMenuPos({ top: rect.bottom, right: window.innerWidth - rect.right })
       }
     }
     updatePos()
@@ -222,23 +324,26 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
 
   const handleButtonKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Escape') {
+      clearCloseTimeout()
       setOpenKey(null)
       buttonRef.current?.focus()
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setOpenKey(group.key)
+      openMenu()
       requestAnimationFrame(() => {
         const firstLink = menuRef.current?.querySelector('a')
         ;(firstLink as HTMLAnchorElement | null)?.focus()
       })
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
+      clearCloseTimeout()
       setOpenKey(isOpen ? null : group.key)
     }
   }
 
   const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
+      clearCloseTimeout()
       setOpenKey(null)
       buttonRef.current?.focus()
     }
@@ -247,16 +352,19 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   return (
     <div
       ref={groupRef}
-      className="relative"
-      onMouseEnter={() => setOpenKey(group.key)}
-      onMouseLeave={() => setOpenKey(null)}
+      className="relative h-14 flex items-center"
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleCloseMenu}
     >
       <button
         ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        onClick={() => setOpenKey(isOpen ? null : group.key)}
+        onClick={() => {
+          clearCloseTimeout()
+          setOpenKey(isOpen ? null : group.key)
+        }}
         onKeyDown={handleButtonKeyDown}
         className={desktopItemClass(isActive)}
         title={group.label}
@@ -266,31 +374,40 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
         <span className="text-[10px]">▾</span>
       </button>
       {isOpen && menuPos && (
+        // Outer shell includes a top padding bridge so hover stays active while
+        // moving from the group into the visually offset menu panel.
         <div
           ref={menuRef}
-          role="menu"
-          onKeyDown={handleMenuKeyDown}
-          onMouseEnter={() => setOpenKey(group.key)}
-          onMouseLeave={() => setOpenKey(null)}
+          onMouseEnter={openMenu}
+          onMouseLeave={scheduleCloseMenu}
           style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
-          className="min-w-[11rem] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 z-50"
+          className="pt-1 z-50"
         >
-          {group.items.map((item) => (
-            <Link
-              key={item.path}
-              role="menuitem"
-              to={item.path}
-              onClick={() => setOpenKey(null)}
-              className={`flex items-center gap-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
-                location.pathname === item.path
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
-              }`}
-            >
-              <span className="text-sm">{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          <div
+            role="menu"
+            onKeyDown={handleMenuKeyDown}
+            className="min-w-[11rem] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1"
+          >
+            {group.items.map((item) => (
+              <Link
+                key={item.path}
+                role="menuitem"
+                to={item.path}
+                onClick={() => {
+                  clearCloseTimeout()
+                  setOpenKey(null)
+                }}
+                className={`flex items-center gap-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
+                  location.pathname === item.path
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <span className="text-sm">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -342,7 +459,7 @@ const MobileNavGroup = ({ group, openKey, setOpenKey, isActive, onNavigate }: Mo
   )
 }
 
-const ReorgLayout = ({ darkMode, setDarkMode }: ReorgLayoutProps) => {
+const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps) => {
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openGroup, setOpenGroup] = useState<string | null>(null)
@@ -388,6 +505,22 @@ const ReorgLayout = ({ darkMode, setDarkMode }: ReorgLayoutProps) => {
         { path: '/trade', label: 'Trade Analyzer', icon: '🔄' },
       ],
     },
+    ...(FF_MINIGAMES
+      ? [
+          {
+            key: 'minigames',
+            label: 'Minigames',
+            icon: '🎮',
+            items: [
+              { path: '/minigames', label: 'All Games', icon: '🎮' },
+              { path: '/minigames/hangman', label: 'Hangman', icon: '🔤' },
+              { path: '/minigames/who-he-play-for', label: 'Who He Play For?', icon: '🏟️' },
+              { path: '/minigames/who-am-i', label: 'Who Am I?', icon: '🕵️' },
+              { path: '/minigames/now-you-see-me', label: 'Now You See Me', icon: '👁️' },
+            ],
+          },
+        ]
+      : []),
     {
       key: 'nba',
       label: 'NBA',
@@ -431,6 +564,7 @@ const ReorgLayout = ({ darkMode, setDarkMode }: ReorgLayoutProps) => {
               ))}
 
               <div className="mx-3 h-6 w-0.5 bg-gray-300 dark:bg-gray-500 shrink-0 rounded-full" />
+              <SearchButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
                 className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
@@ -441,8 +575,9 @@ const ReorgLayout = ({ darkMode, setDarkMode }: ReorgLayoutProps) => {
               </button>
             </div>
 
-            {/* Mobile: dark toggle + hamburger */}
+            {/* Mobile: search + dark toggle + hamburger */}
             <div className="md:hidden flex items-center gap-1">
+              <MobileSearchIconButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
                 className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
