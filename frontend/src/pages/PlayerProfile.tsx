@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router'
-import { useGetNbaPlayerQuery, useGetNbaPlayerStatsQuery } from '../store/api/fantasyApi'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetNbaPlayerStatsQuery } from '../store/api/fantasyApi'
 import type { CustomDateRange, PlayerStats, TimePeriod } from '../types/api'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import PlayerTrendsCard from '../components/PlayerTrendsCard'
+import PlayerNextGameCard from '../components/PlayerNextGameCard'
 
 function backLabel(from: string | undefined): string {
   if (!from) return '← Back'
@@ -82,6 +83,12 @@ const PlayerProfile = () => {
     { skip: !playerId || (timePeriod === 'custom' && !customRange) },
   )
 
+  // Fantasy roster status (owner / free agent) — reuses the same paginated
+  // players list the Players/Projections pages already query, so it's often
+  // already warm in the RTK Query cache rather than a fresh fetch.
+  const { data: allPlayers } = useGetAllPlayersQuery({ page: 1, limit: 1200 })
+  const fantasyEntry = allPlayers?.players.find((p) => p.player_id === Number(playerId))
+
   if (!playerId) return <ErrorMessage message="Missing player id" />
   if (bioLoading) return <LoadingSpinner />
   if (bioError || !bio) return <ErrorMessage message="Failed to load player" />
@@ -125,9 +132,25 @@ const PlayerProfile = () => {
               </span>
             ) : null}
           </h1>
-          <p className="text-gray-700 dark:text-gray-300 text-lg mb-3">
+          <p className="text-gray-700 dark:text-gray-300 text-lg mb-2">
             {bio.team} ({bio.team_abbr}) · {bio.position}
           </p>
+          {fantasyEntry && (
+            <p className="mb-3">
+              {fantasyEntry.status === 'ONTEAM' && fantasyEntry.fantasy_team_name ? (
+                <Link
+                  to={`/team/${fantasyEntry.team_id}`}
+                  className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-900/60"
+                >
+                  Rostered by {fantasyEntry.fantasy_team_name}
+                </Link>
+              ) : (
+                <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600">
+                  {fantasyEntry.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}
+                </span>
+              )}
+            </p>
+          )}
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
             <div>
               <dt className="text-gray-500 dark:text-gray-400">Conference</dt>
@@ -242,6 +265,8 @@ const PlayerProfile = () => {
       </div>
 
       <PlayerTrendsCard playerId={Number(playerId)} />
+
+      <PlayerNextGameCard playerId={playerId} />
     </div>
   )
 }
