@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import pandas as pd
 from datetime import date
@@ -33,9 +34,10 @@ class LeagueService:
 
         try:
             nba_service = NBAStatsService()
-            nba_avg_pace = await nba_service.get_nba_average_pace(settings.season_id)
-            nba_game_days_left = await nba_service.get_nba_game_days_remaining()
-            await nba_service.close()
+            nba_avg_pace, nba_game_days_left = await asyncio.gather(
+                nba_service.get_nba_average_pace(settings.season_id),
+                nba_service.get_nba_game_days_remaining(),
+            )
         except Exception as e:
             self.logger.warning(f"Failed to fetch NBA stats: {e}")
 
