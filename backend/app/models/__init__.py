@@ -4,7 +4,6 @@ from .league import *
 from .stats import *
 from .team import *
 from .requests import *
-from .trades import *
 from .player import *
 from .estimator import TeamPrediction, TeamRanking, TeamRankProbability, EstimatorResults
 
@@ -33,8 +32,4 @@ __all__ = [
     "PaginatedPlayers",
     "StatTimePeriod",
     "TeamPlayers",
-    "TradeSuggestionsResponse",
-    "TradeSuggestion",
-    "TradeSuggestionAI",
-    "TradeSuggestionAIResponse"
 ]

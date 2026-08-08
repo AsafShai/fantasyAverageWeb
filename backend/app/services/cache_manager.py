@@ -1,4 +1,3 @@
-import pandas as pd
 from typing import Optional, Dict
 import threading
 
@@ -25,35 +24,6 @@ class CacheManager:
             self.draft_detail_cache: Optional[Dict] = None
             self.players_directory_cache: Optional[Dict[int, str]] = None
             self._initialized = True
-    
-    def get_totals(self, etag: str, calculator_func) -> Optional[pd.DataFrame]:
-        """Get totals DataFrame from cache or calculate and cache it"""
-        if (self.totals_cache['etag'] == etag and 
-            self.totals_cache['data'] is not None):
-            return self.totals_cache['data']
-        
-        # Calculate fresh and cache
-        totals_df = calculator_func()
-        if totals_df is not None:
-            self.totals_cache = {
-                'etag': etag,
-                'data': totals_df.copy()
-            }
-        return totals_df
-    
-    def get_players(self, etag: str, calculator_func) -> Optional[pd.DataFrame]:
-        if (self.players_cache['etag'] == etag and 
-            self.players_cache['data'] is not None):
-            return self.players_cache['data']
-        
-        # Calculate fresh and cache
-        players_df = calculator_func()
-        if players_df is not None:
-            self.players_cache = {
-                'etag': etag,
-                'data': players_df.copy()
-            }
-        return players_df
     
     def invalidate_cache(self):
         """Clear all cached data"""

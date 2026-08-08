@@ -1,5 +1,7 @@
+import asyncio
 import pytest
 import httpx
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
@@ -129,6 +131,98 @@ async def test_get_players_df_fetch_error_raises(provider):
 
     with pytest.raises(DataSourceError, match="Error fetching players"):
         await provider.get_players_df(0)
+
+
+@pytest.mark.asyncio
+async def test_get_players_df_304_returns_cached(provider):
+    cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
+    provider.cache_manager.players_0 = {"data": cached, "etag": "e1", "timestamp": datetime.now()}
+    # Force the TTL check to be bypassed by expiring the timestamp, so the
+    # 304 branch (not the fresh in-memory hit) is what's under test.
+    from datetime import timedelta
+    provider.cache_manager.players_0["timestamp"] = datetime.now() - timedelta(minutes=10)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 304
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    df = await provider.get_players_df(0)
+
+    pd.testing.assert_frame_equal(df, cached)
+    provider.data_transformer.raw_all_players_to_df.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_players_df_sends_if_none_match(provider):
+    from datetime import timedelta
+    cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
+    provider.cache_manager.players_0 = {
+        "data": cached,
+        "etag": "e1",
+        "timestamp": datetime.now() - timedelta(minutes=10),
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e2"}
+    mock_resp.json.return_value = {"players": []}
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    await provider.get_players_df(0)
+
+    _, kwargs = provider._client.get.call_args
+    assert kwargs["headers"]["If-None-Match"] == "e1"
+
+
+@pytest.mark.asyncio
+async def test_get_players_df_concurrent_calls_coalesce(provider):
+    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.players_0 = {"data": None, "timestamp": None, "etag": None}
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e1"}
+    mock_resp.json.return_value = {"players": []}
+
+    async def slow_get(*args, **kwargs):
+        await asyncio.sleep(0.05)
+        return mock_resp
+
+    provider._client.get = AsyncMock(side_effect=slow_get)
+
+    results = await asyncio.gather(
+        provider.get_players_df(0),
+        provider.get_players_df(0),
+    )
+
+    assert provider._client.get.await_count == 1
+    pd.testing.assert_frame_equal(results[0], results[1])
+
+
+@pytest.mark.asyncio
+async def test_get_players_df_different_splits_do_not_block(provider):
+    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.players_0 = {"data": None, "timestamp": None, "etag": None}
+    provider.cache_manager.players_1 = {"data": None, "timestamp": None, "etag": None}
+    mock_resp_0 = MagicMock()
+    mock_resp_0.status_code = 200
+    mock_resp_0.headers = {"ETag": "e-split0"}
+    mock_resp_0.json.return_value = {"players": []}
+
+    calls = []
+
+    async def routed_get(*args, **kwargs):
+        calls.append(kwargs)
+        await asyncio.sleep(0.05)
+        return mock_resp_0
+
+    provider._client.get = AsyncMock(side_effect=routed_get)
+
+    df0, df1 = await asyncio.gather(
+        provider.get_players_df(0),
+        provider.get_players_df(1),
+    )
+
+    assert provider._client.get.await_count == 2
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,19 @@ import Footer from './Footer'
 import CommandPalette from './CommandPalette'
 import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH } from '../config/featureFlags'
 
+const prefetchMap: Record<string, () => Promise<unknown>> = {
+  '/trends': () => import('../pages/Trends'),
+  '/projections': () => import('../pages/Projections'),
+  '/feature-store': () => import('../pages/FeatureStore'),
+  '/analytics': () => import('../pages/Analytics'),
+  '/players': () => import('../pages/Players'),
+  '/estimator': () => import('../pages/Estimator'),
+}
+
+const prefetchRoute = (path: string) => {
+  prefetchMap[path]?.()
+}
+
 function useGlobalSearchShortcut(setSearchOpen: (open: boolean) => void) {
   useEffect(() => {
     if (!FF_GLOBAL_SEARCH) return
@@ -130,6 +143,8 @@ const Layout = () => {
                 <Link
                   key={item.path}
                   to={item.path}
+                  onMouseEnter={() => prefetchRoute(item.path)}
+                  onTouchStart={() => prefetchRoute(item.path)}
                   className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-200 ${
                     location.pathname === item.path
                       ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
@@ -189,6 +204,7 @@ const Layout = () => {
                     key={item.path}
                     to={item.path}
                     onClick={closeMobileMenu}
+                    onTouchStart={() => prefetchRoute(item.path)}
                     className={`inline-flex items-center px-4 py-3 rounded-md text-base font-medium transition-all duration-200 ${
                       location.pathname === item.path
                         ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
@@ -393,6 +409,8 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
                 key={item.path}
                 role="menuitem"
                 to={item.path}
+                onMouseEnter={() => prefetchRoute(item.path)}
+                onTouchStart={() => prefetchRoute(item.path)}
                 onClick={() => {
                   clearCloseTimeout()
                   setOpenKey(null)
@@ -447,6 +465,7 @@ const MobileNavGroup = ({ group, openKey, setOpenKey, isActive, onNavigate }: Mo
               key={item.path}
               to={item.path}
               onClick={onNavigate}
+              onTouchStart={() => prefetchRoute(item.path)}
               className={mobileItemClass(location.pathname === item.path)}
             >
               <span className="mr-3 text-xl">{item.icon}</span>
