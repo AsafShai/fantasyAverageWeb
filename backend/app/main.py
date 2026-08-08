@@ -27,6 +27,7 @@ from app.config import settings
 import logging
 from datetime import datetime
 from app.services.data_provider import DataProvider
+from app.services.nba_stats_service import NBAStatsService
 from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
     try:
         data_provider = DataProvider()
         await data_provider.close()
+        await NBAStatsService().close()
         logger.info("Closed httpx client connections")
     except Exception as e:
         logger.error(f"Error during shutdown cleanup: {e}")

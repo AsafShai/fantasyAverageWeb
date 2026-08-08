@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
+import { useDebounce } from '../hooks/useDebounce';
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
 import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
@@ -58,12 +59,14 @@ const Players = () => {
     return new Map(teams.map(team => [team.team_id, team.team_name]));
   }, [teams]);
 
+  const debouncedSearch = useDebounce(filters.search, 250);
+
   const filteredPlayers = useMemo(() => {
     if (!data?.players) return [];
 
     return data.players.filter(player => {
-      if (filters.search) {
-        const search = filters.search.toLowerCase();
+      if (debouncedSearch) {
+        const search = debouncedSearch.toLowerCase();
         const matchesName = player.player_name.toLowerCase().includes(search);
         const matchesTeam = player.pro_team.toLowerCase().includes(search);
         const matchesPosition = player.positions.some(p =>
@@ -111,7 +114,7 @@ const Players = () => {
 
       return true;
     });
-  }, [data, filters, showAverages]);
+  }, [data, filters, showAverages, debouncedSearch]);
 
   if (isLoading) return <div className="loading">Loading players...</div>;
   if (error) return <div className="error">Error loading players</div>;

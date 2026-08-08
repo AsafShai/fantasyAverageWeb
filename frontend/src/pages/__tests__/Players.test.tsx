@@ -93,7 +93,7 @@ describe('Players page', () => {
     renderWithProviders(<Players />);
     await waitFor(() => expect(screen.getByText('Bench Guy')).toBeInTheDocument());
     await user.type(screen.getByPlaceholderText(/search players/i), 'Alpha');
-    expect(screen.getAllByText(/showing 1 players/i).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/showing 1 players/i).length).toBeGreaterThan(0));
     expect(screen.queryByText('Bench Guy')).not.toBeInTheDocument();
   });
 
