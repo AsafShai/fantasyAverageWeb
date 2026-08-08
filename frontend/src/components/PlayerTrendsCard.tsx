@@ -130,8 +130,8 @@ export default function PlayerTrendsCard({ playerId }: Props) {
   const is404 = error && 'status' in error && error.status === 404
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6 mt-6">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Trends</h2>
+    <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-5 sm:p-6 mt-6">
+      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">Trends</h2>
 
       {isLoading && <Skeleton />}
 
@@ -156,32 +156,53 @@ export default function PlayerTrendsCard({ playerId }: Props) {
 
       {!isLoading && !error && log && (
         <>
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs">
-              {PRESET_WINDOWS.map((d) => (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+            <div className="flex flex-wrap gap-2 order-2 sm:order-1">
+              {MODE_CHIPS.filter(
+                (c) => c.key === 'minutes' || c.key === 'usage' || availableShootingStats.includes(c.key as RegressionStat),
+              ).map((c) => (
                 <button
-                  key={d}
+                  key={c.key}
                   type="button"
-                  onClick={() => selectPreset(d)}
-                  className={`px-2.5 py-1.5 whitespace-nowrap ${!customStartIso && windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  onClick={() => setMode(c.key)}
+                  className={`px-3 py-1.5 text-sm rounded-lg border whitespace-nowrap transition-colors ${
+                    mode === c.key
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
                 >
-                  {d}d
+                  {c.label}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => setCustomOpen((o) => !o)}
-                title="Pick a custom start date — the window always ends on the latest game day"
-                className={`px-2.5 py-1.5 whitespace-nowrap ${customStartIso ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-              >
-                📆
-              </button>
             </div>
-            {customStartIso && !customOpen && (
-              <span className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                since {formatShort(customStartIso)} · {windowDays}d
-              </span>
-            )}
+
+            <div className="flex flex-wrap items-center gap-2 order-1 sm:order-2">
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs">
+                {PRESET_WINDOWS.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => selectPreset(d)}
+                    className={`px-2.5 py-1.5 whitespace-nowrap ${!customStartIso && windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCustomOpen((o) => !o)}
+                  title="Pick a custom start date — the window always ends on the latest game day"
+                  className={`px-2.5 py-1.5 whitespace-nowrap ${customStartIso ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                >
+                  📆
+                </button>
+              </div>
+              {customStartIso && !customOpen && (
+                <span className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                  since {formatShort(customStartIso)} · {windowDays}d
+                </span>
+              )}
+            </div>
           </div>
 
           {customOpen && anchorIso && (
@@ -195,25 +216,6 @@ export default function PlayerTrendsCard({ playerId }: Props) {
               {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
             </div>
           )}
-
-          <div className="flex flex-wrap gap-2 mb-4">
-            {MODE_CHIPS.filter(
-              (c) => c.key === 'minutes' || c.key === 'usage' || availableShootingStats.includes(c.key as RegressionStat),
-            ).map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => setMode(c.key)}
-                className={`px-3 py-1.5 text-sm rounded-lg border whitespace-nowrap transition-colors ${
-                  mode === c.key
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
 
           {(() => {
             const summary = summarize(log, mode)

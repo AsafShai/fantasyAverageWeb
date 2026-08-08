@@ -27,6 +27,19 @@ class Projection(BaseModel):
     stats: Optional[ProjectionStats] = None
 
 
+class PlayerNextGameProjection(BaseModel):
+    player_name: str
+    team: str
+    game_date: Optional[str] = None
+    opponent: Optional[str] = None
+    is_home: bool = True
+    scheduled: bool = True
+    default_minutes: float
+    status: ProjectionStatus
+    reason: str = ''
+    stats: Optional[ProjectionStats] = None
+
+
 class PredictProjectionRequest(BaseModel):
     player_name: str
     opponent: str  # ESPN abbreviation

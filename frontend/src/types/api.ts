@@ -347,6 +347,19 @@ export interface Projection {
   stats: ProjectionStats | null;
 }
 
+export interface PlayerNextGameProjection {
+  player_name: string;
+  team: string;
+  game_date: string | null;
+  opponent: string | null;
+  is_home: boolean;
+  scheduled: boolean;
+  default_minutes: number;
+  status: ProjectionStatus;
+  reason: string;
+  stats: ProjectionStats | null;
+}
+
 export interface PlayerMatchup {
   player_name: string;
   pro_team: string;
