@@ -35,8 +35,7 @@ logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('fantasy_api.log')
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
