@@ -4,6 +4,7 @@ import LeaderboardCard from '../../components/minigames/LeaderboardCard'
 import NameEntryModal from '../../components/minigames/NameEntryModal'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
+import { getErrorMessage } from '../../utils/errorMessage'
 import { useMinigamePlayers } from '../../minigames/useMinigamePlayers'
 import { pickRandomPlayer } from '../../minigames/players'
 import { createStreakState, incrementHints, onRoundLoss, onRoundWin } from '../../minigames/streak'
@@ -147,7 +148,7 @@ export default function HangmanGame() {
   }
 
   if (isLoading) return <LoadingSpinner />
-  if (error || !players.length) return <ErrorMessage message="Failed to load players" />
+  if (error || !players.length) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
   return (
     <div className="max-w-5xl mx-auto px-4 pb-12">

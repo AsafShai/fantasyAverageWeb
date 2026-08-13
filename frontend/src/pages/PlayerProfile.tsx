@@ -6,6 +6,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import PlayerTrendsCard from '../components/PlayerTrendsCard'
 import PlayerNextGameCard from '../components/PlayerNextGameCard'
 
@@ -91,7 +92,7 @@ const PlayerProfile = () => {
 
   if (!playerId) return <ErrorMessage message="Missing player id" />
   if (bioLoading) return <LoadingSpinner />
-  if (bioError || !bio) return <ErrorMessage message="Failed to load player" />
+  if (bioError || !bio) return <ErrorMessage message={getErrorMessage(bioError, 'Failed to load player')} />
 
   const stats = showAverages ? statsResponse?.averages : statsResponse?.totals
   const hasData = Boolean(statsResponse?.has_data && stats)
@@ -227,7 +228,7 @@ const PlayerProfile = () => {
             <LoadingSpinner />
           </div>
         ) : statsError ? (
-          <ErrorMessage message="Failed to load player stats" />
+          <ErrorMessage message={getErrorMessage(statsError, 'Failed to load player stats')} />
         ) : !hasData || !stats ? (
           <div className="py-12 text-center text-gray-400 text-sm">
             No stats available for this time range.

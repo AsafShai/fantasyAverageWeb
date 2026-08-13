@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import Optional, Annotated
 from datetime import date
 from app.models import LeagueRankings
-from app.exceptions import InvalidParameterError, ResourceNotFoundError
+from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.models.requests import SortOrder
 from app.services.ranking_service import RankingService
 from app.config import settings
@@ -45,6 +45,8 @@ async def get_rankings(
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting rankings: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve rankings: {e}")

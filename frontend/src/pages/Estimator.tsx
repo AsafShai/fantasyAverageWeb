@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useGetEstimatorResultsQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import type { TeamRankProbability, TeamRanking, TeamPrediction } from '../types/estimator'
 
 const STAT_LABELS: Record<string, string> = {
@@ -291,7 +292,7 @@ const Estimator = () => {
   const { data, error, isLoading } = useGetEstimatorResultsQuery()
 
   if (isLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message="No estimator data available yet. Data is generated daily after NBA games are completed." />
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'No estimator data available yet. Data is generated daily after NBA games are completed.')} />
 
   if (!data) return <ErrorMessage message="No estimator data available yet." />
 

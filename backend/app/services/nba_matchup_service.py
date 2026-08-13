@@ -162,6 +162,18 @@ class NbaMatchupService:
                 resolved_date = base + timedelta(days=offset)
                 break
 
+        # Preseason: nothing within the normal lookahead window, but the real
+        # season opener (settings.season_start, now derived from the NBA
+        # schedule) is a known future date — preview it instead of reporting
+        # a flat offseason "no games".
+        if resolved_date is None and base < settings.season_start:
+            opener_events = (await self._countable_events_by_day(settings.season_start, 0)).get(
+                settings.season_start, []
+            )
+            if opener_events:
+                games = self._games_from(opener_events)
+                resolved_date = settings.season_start
+
         self._resolved_date = resolved_date.isoformat() if resolved_date else None
         return games
 

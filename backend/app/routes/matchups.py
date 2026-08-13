@@ -141,12 +141,17 @@ async def get_matchups_today(
     for _, row in players_df.iterrows():
         pro_team: str = str(row.get('Pro Team', ''))
         game = games_today.get(pro_team)
-        if game is None or game.opponent not in def_ranks:
+        if game is None:
             continue
         opponent = game.opponent
 
+        # def_ranks/def_values are season-to-date opponent defense — genuinely
+        # empty before this season's first game is ingested. That's not a
+        # reason to hide the player/projection too: fall back to neutral
+        # values (rank 15 = league-average, matching the existing per-category
+        # fallback below) rather than dropping the row entirely.
         team_pace = pace_map.get(opponent, league_avg_pace)
-        opp_ranks = def_ranks[opponent]
+        opp_ranks = def_ranks.get(opponent, {})
         opp_vals = def_values.get(opponent, {})
         positions_raw: str = str(row.get('Positions', 'Unknown'))
         positions = [p.strip() for p in positions_raw.split(',') if p.strip() and p.strip() != 'Unknown']

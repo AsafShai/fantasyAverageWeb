@@ -8,6 +8,7 @@ import {
 } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import TrendGameLogChart from '../components/TrendGameLogChart'
 import InfoTip from '../components/InfoTip'
 import DateRangePicker from '../components/DateRangePicker'
@@ -825,7 +826,7 @@ export default function Trends() {
           </div>
 
           {activeQuery.isLoading && <LoadingSpinner />}
-          {activeQuery.error && <ErrorMessage message="Failed to load trends data." />}
+          {activeQuery.error && <ErrorMessage message={getErrorMessage(activeQuery.error, 'Failed to load trends data.')} />}
 
           {!activeQuery.isLoading && !activeQuery.error && (
             <>

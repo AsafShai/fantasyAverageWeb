@@ -27,11 +27,14 @@ async def get_team_slot_pace_df() -> pd.DataFrame:
     slot_usage = await data_provider.get_slot_usage()
     totals_df = await data_provider.get_totals_df()
 
+    # NBAStatsService is a shared singleton (closed once at app shutdown in
+    # main.py's lifespan) — must not be closed here, since other concurrent
+    # callers (e.g. estimator_service's own pace fetch, run via the same
+    # asyncio.gather) may still be using its httpx client.
     nba_avg_pace, game_days_remaining = await asyncio.gather(
         nba_service.get_nba_average_pace(settings.season_id),
-        nba_service.get_nba_game_days_remaining(),
+        nba_service.get_nba_game_days_remaining(settings.season_id),
     )
-    await nba_service.close()
 
     team_name_map = dict(zip(totals_df['team_id'], totals_df['team_name']))
     resolved_pace = nba_avg_pace if nba_avg_pace is not None else _NBA_AVG_PACE_FALLBACK

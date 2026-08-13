@@ -85,11 +85,16 @@ class DataTransformer:
                 for stat in stats:
                     if stat.get('scoringPeriodId') == 0 and stat.get('statSplitTypeId') == stat_split_type_id and stat.get('seasonId') == settings.season_id:
                         player_stats = stat.get('stats', {})
-                        mapped_stats = {
-                            ESPN_COLUMN_MAP.get(key, key): value
+                        # ESPN tags this split with the current season before any games
+                        # have been played, but leaves 'stats' empty — treat that as a
+                        # real zero row (0 GP) rather than dropping the player, so the
+                        # DataFrame always has every ESPN_COLUMN_MAP column.
+                        mapped_stats: Dict[str, object] = {col: 0 for col in ESPN_COLUMN_MAP.values()}
+                        mapped_stats.update({
+                            ESPN_COLUMN_MAP[key]: value
                             for key, value in player_stats.items()
                             if key in ESPN_COLUMN_MAP
-                        }
+                        })
 
                         mapped_stats.update({
                             'Name': player_name,
@@ -155,6 +160,20 @@ class DataTransformer:
             self.logger.error(f"Error transforming ESPN players data to DataFrame: {e}")
             raise Exception("Error transforming ESPN players data to DataFrame")
 
+    def raw_standings_to_team_names(self, espn_standings_data: Dict) -> list:
+        """
+        Extract just team_id/team_name from the same standings payload, independent
+        of valuesByStat — team identity exists on ESPN's side even before any
+        games are played, unlike per-team stat totals.
+        """
+        if not espn_standings_data or 'teams' not in espn_standings_data:
+            return []
+        return [
+            {"team_id": team['id'], "team_name": team['name'].strip()}
+            for team in espn_standings_data['teams']
+            if 'id' in team and team.get('name')
+        ]
+
     def raw_standings_to_totals_df(self, espn_standings_data: Dict) -> pd.DataFrame:
         """
         Convert raw ESPN API standings data to totals DataFrame
@@ -167,17 +186,21 @@ class DataTransformer:
             if not espn_standings_data or 'teams' not in espn_standings_data:
                 raise ValueError("Invalid ESPN standings data structure")
             
-            # Extract team data from ESPN response
+            # Extract team data from ESPN response. ESPN omits valuesByStat
+            # entirely before any games are played (preseason) — that's a real
+            # zero-stat team, not a missing one, so synthesize zeros rather than
+            # drop the team (same treatment as the players zero-row case).
             teams_data = []
             for team in espn_standings_data['teams']:
-                if 'id' in team and 'name' in team and 'valuesByStat' in team:
+                if 'id' in team and 'name' in team:
+                    values_by_stat = team.get('valuesByStat') or {key: 0 for key in ESPN_COLUMN_MAP}
                     team_data = {
-                        "team_id": team['id'], 
-                        "team_name": team['name'].strip(), 
-                        **team['valuesByStat']
+                        "team_id": team['id'],
+                        "team_name": team['name'].strip(),
+                        **values_by_stat
                     }
                     teams_data.append(team_data)
-            
+
             if not teams_data:
                 raise ValueError("No valid team data found")
                 

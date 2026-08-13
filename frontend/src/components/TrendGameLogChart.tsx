@@ -14,6 +14,7 @@ import {
 import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import type { GameLogEntry, GameLogResponse, RegressionStat, RegressionMode } from '../types/api'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 
@@ -206,7 +207,7 @@ export default function TrendGameLogChart({
   const rows = useMemo(() => (log ? buildRows(log, mode, stat) : []), [log, mode, stat])
 
   if (isLoading) return <div className="py-6"><LoadingSpinner /></div>
-  if (error) return <ErrorMessage message={`Could not load ${playerName}'s game log.`} />
+  if (error) return <ErrorMessage message={getErrorMessage(error, `Could not load ${playerName}'s game log.`)} />
   if (!log || rows.length === 0) {
     return <p className="py-4 text-xs text-gray-500 dark:text-gray-400">No games on record for {playerName} this season.</p>
   }

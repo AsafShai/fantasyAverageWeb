@@ -2,12 +2,13 @@ import { Link } from 'react-router'
 import { useGetTeamsListQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 
 const Teams = () => {
   const { data: teams, error, isLoading } = useGetTeamsListQuery()
 
   if (isLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message="Failed to load teams" />
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load teams')} />
   if (!teams || teams.length === 0) return <ErrorMessage message="No teams found" />
 
   return (

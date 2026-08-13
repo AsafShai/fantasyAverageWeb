@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from app.models import PaginatedPlayers, StatTimePeriod
-from app.exceptions import ResourceNotFoundError
+from app.exceptions import ResourceNotFoundError, DataSourceError
 from app.services.player_service import PlayerService
 from typing import Annotated, Optional
 from datetime import date
@@ -42,6 +42,8 @@ async def get_all_players(
         raise
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting all players: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve players")
