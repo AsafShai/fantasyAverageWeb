@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
-from app.exceptions import InvalidParameterError, ResourceNotFoundError
+from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.services.team_service import TeamService
 from typing import Annotated, List, Optional
 from datetime import date
@@ -24,6 +24,8 @@ async def get_teams_list(
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting teams list: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve teams list")
@@ -62,6 +64,8 @@ async def get_team_detail(
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting team stats for {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team statistics")
@@ -82,6 +86,8 @@ async def get_team_players(
         raise HTTPException(status_code=422, detail=str(e))
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting players for team ID {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team players")

@@ -3,6 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetDraftReportQuery, useGetAllPlayersQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import { FF_DRAFT_STEALS_BUSTS } from '../config/featureFlags'
 import { buildScoredPicks, buildTeamDiffRanking, topSteals, topBusts, MIN_GP_FOR_RANK, LOW_GP_MIN, type ScoredPick, type DraftBadge } from '../utils/draftReport'
 
@@ -120,7 +121,7 @@ export default function DraftReport() {
   }
 
   if (draftLoading || poolLoading) return <LoadingSpinner />
-  if (draftError || poolError) return <ErrorMessage message="Failed to load draft report." />
+  if (draftError || poolError) return <ErrorMessage message={getErrorMessage(draftError ?? poolError, 'Failed to load draft report.')} />
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">

@@ -14,6 +14,7 @@ import {
 import { useGetRankingsOverTimeQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import type { OverTimeSource, TeamTimeSeriesPoint } from '../types/api'
 
 const TEAM_COLORS = [
@@ -359,7 +360,7 @@ const StandingsRace = () => {
           </div>
 
           {isLoading && <LoadingSpinner />}
-          {error && <ErrorMessage message="Failed to load standings history" />}
+          {error && <ErrorMessage message={getErrorMessage(error, 'Failed to load standings history')} />}
           {!isLoading && !error && chartData.length === 0 && (
             <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-8">No data available yet. Stats accumulate daily.</p>
           )}

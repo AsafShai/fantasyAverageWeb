@@ -61,13 +61,16 @@ class DataProvider:
 
                 response.raise_for_status()
                 api_data = response.json()
+                # Cache raw payload before the stats transform, which can fail on its
+                # own (e.g. preseason: teams exist but carry no valuesByStat yet) —
+                # get_team_names_df() still needs team identity from this same fetch.
+                self.cache_manager.totals_cache['raw'] = api_data
 
                 totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
 
                 scoring_period_id = api_data.get('scoringPeriodId', 0)
                 self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
                 self.cache_manager.totals_cache['data'] = totals_df
-                self.cache_manager.totals_cache['raw'] = api_data
                 self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
                 self.cache_manager.totals_cache['data_date'] = None
 
@@ -101,7 +104,9 @@ class DataProvider:
                 return False
 
         completed_period = scoring_period_id - 1
-        max_snap = await self.db_service.get_db_max_scoring_period('team_daily_snapshot')
+        max_snap = await self.db_service.get_db_max_scoring_period(
+            'team_daily_snapshot', settings.league_id, settings.season_id
+        )
         if max_snap >= completed_period:
             self.logger.info(f"sync_db_now: snapshot already current (period {completed_period}), skipping")
             return False
@@ -111,9 +116,9 @@ class DataProvider:
 
     async def _fallback_from_db(self) -> pd.DataFrame:
         """Build a totals DataFrame from the latest DB snapshot. Stores data_date in cache."""
-        snap_date, rows = await self.db_service.get_latest_snapshot()
+        snap_date, rows = await self.db_service.get_latest_snapshot(settings.league_id, settings.season_id)
         if not rows:
-            raise Exception("ESPN unavailable and no DB fallback data found")
+            raise DataSourceError("ESPN unavailable and no DB fallback data found for this league/season")
         df = pd.DataFrame(rows)
         df = df.rename(columns={
             'fg_pct': 'FG%', 'ft_pct': 'FT%', 'three_pm': '3PM',
@@ -122,11 +127,31 @@ class DataProvider:
             'ftm': 'FTM', 'fta': 'FTA',
         })
         df = df.drop(columns=['date'], errors='ignore')
+        # asyncpg returns Decimal for NUMERIC columns; cast to float here so every
+        # totals DataFrame (ESPN or DB fallback) is uniformly float downstream.
+        numeric_cols = [c for c in RANKING_CATEGORIES + ['GP'] if c in df.columns]
+        df[numeric_cols] = df[numeric_cols].astype(float)
         self.cache_manager.totals_cache['data'] = df
         self.cache_manager.totals_cache['data_date'] = snap_date
         self.cache_manager.totals_cache['etag'] = None
         self.logger.warning(f"Serving DB fallback data from {snap_date}")
         return df
+
+    async def get_team_names(self) -> list:
+        """team_id/team_name pairs, independent of whether stat totals exist yet.
+        Reuses the raw standings payload already cached by get_totals_df when
+        possible; falls back to a fresh fetch only if nothing is cached."""
+        raw = self.cache_manager.totals_cache.get('raw')
+        if raw is None:
+            try:
+                response = await self._client.get(self.espn_standings_url)
+                response.raise_for_status()
+                raw = response.json()
+                self.cache_manager.totals_cache['raw'] = raw
+            except httpx.RequestError as e:
+                self.logger.error(f"Error fetching team names from ESPN API: {e}")
+                raise DataSourceError("Error fetching team names from ESPN API")
+        return self.data_transformer.raw_standings_to_team_names(raw)
 
     async def get_players_df(self, stat_split_type_id: int = 0) -> pd.DataFrame:
         """Get ALL players (roster + FA + waivers) DataFrame with caching
@@ -176,7 +201,13 @@ class DataProvider:
                 api_data = response.json()
 
                 if self.cache_manager.totals_cache.get('data') is None:
-                    await self.get_totals_df()
+                    # Best-effort only: fantasy_team_name is optional enrichment
+                    # (handled below via `if totals_data is not None`) — a totals
+                    # failure must not block the players list itself.
+                    try:
+                        await self.get_totals_df()
+                    except Exception as e:
+                        self.logger.warning(f"Could not fetch totals for fantasy_team_map: {e}")
 
                 fantasy_team_map = {}
                 totals_data = self.cache_manager.totals_cache.get('data')
@@ -305,19 +336,20 @@ class DataProvider:
                 totals_for_ranking = totals_for_ranking[[c for c in cols_to_keep if c in totals_for_ranking.columns]]
                 rankings_totals_df = self.data_transformer.averages_to_rankings_df(totals_for_ranking)
 
+                league_id, season_id = settings.league_id, settings.season_id
                 max_avg, max_tot, max_snap = await asyncio.gather(
-                    self.db_service.get_db_max_scoring_period('team_rankings_averages'),
-                    self.db_service.get_db_max_scoring_period('team_rankings_totals'),
-                    self.db_service.get_db_max_scoring_period('team_daily_snapshot'),
+                    self.db_service.get_db_max_scoring_period('team_rankings_averages', league_id, season_id),
+                    self.db_service.get_db_max_scoring_period('team_rankings_totals', league_id, season_id),
+                    self.db_service.get_db_max_scoring_period('team_daily_snapshot', league_id, season_id),
                 )
 
                 tasks = []
                 if max_avg < completed_period:
-                    tasks.append(self.db_service.upsert_rankings_averages(completed_period, rankings_avg_df))
+                    tasks.append(self.db_service.upsert_rankings_averages(completed_period, rankings_avg_df, league_id, season_id))
                 if max_tot < completed_period:
-                    tasks.append(self.db_service.upsert_rankings_totals(completed_period, rankings_totals_df))
+                    tasks.append(self.db_service.upsert_rankings_totals(completed_period, rankings_totals_df, league_id, season_id))
                 if max_snap < completed_period:
-                    tasks.append(self.db_service.upsert_daily_snapshot(completed_period, totals_df))
+                    tasks.append(self.db_service.upsert_daily_snapshot(completed_period, totals_df, league_id, season_id))
 
                 if tasks:
                     await asyncio.gather(*tasks)

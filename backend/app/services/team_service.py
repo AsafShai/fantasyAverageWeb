@@ -1,9 +1,9 @@
 import asyncio
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
-from app.exceptions import InvalidParameterError, ResourceNotFoundError
+from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.services.data_provider import DataProvider
 from app.services.player_service import build_windowed_players_df
 from app.builders.response_builder import ResponseBuilder
@@ -74,16 +74,22 @@ class TeamService:
         )
     
     async def get_teams_list(self) -> List[Team]:
-        """Get list of all teams"""
-        totals_df = await self.data_provider.get_totals_df()
-        if totals_df is None:
-            raise Exception("Unable to fetch teams data from ESPN API")
-        
-        teams = self._extract_teams_from_dataframe(totals_df)
-        
+        """Get list of all teams. Falls back to identity-only data (no stats
+        yet, e.g. preseason) when stat totals aren't available — the teams
+        themselves still exist on ESPN's side even before games are played."""
+        try:
+            totals_df = await self.data_provider.get_totals_df()
+            teams = self._extract_teams_from_dataframe(totals_df)
+            if teams:
+                return teams
+        except DataSourceError:
+            pass
+
+        team_names = await self.data_provider.get_team_names()
+        teams = [Team(team_id=int(t['team_id']), team_name=t['team_name']) for t in team_names]
         if not teams:
             raise ResourceNotFoundError("No teams found in the data")
-        
+
         return teams
     
     async def get_team_players(self, team_id: int) -> TeamPlayers:
@@ -95,7 +101,10 @@ class TeamService:
         team_players = self._filter_team_players(players_df, team_id)
 
         if team_players.empty:
-            raise ResourceNotFoundError(f"No players found for team ID {team_id}")
+            # A valid team with no roster yet (e.g. pre-draft) is a real, empty
+            # state — not a lookup failure. team_id validity is already checked
+            # by the caller via is_team_exists.
+            return TeamPlayers(team_id=team_id, players=[], last_updated=datetime.now())
 
         return self.response_builder.build_team_players_response(team_players)
     

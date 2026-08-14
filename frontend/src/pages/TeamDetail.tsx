@@ -6,6 +6,7 @@ import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQue
 import type { TimePeriod, PlayerMatchup, CustomDateRange } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import DataDateBadge from '../components/DataDateBadge'
@@ -107,7 +108,7 @@ const TeamDetail = () => {
   }
 
   if (isLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message="Failed to load team details" />
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load team details')} />
   if (!team_detail) return <ErrorMessage message="Team not found" />
 
   const columns = [

@@ -36,7 +36,7 @@ class LeagueService:
             nba_service = NBAStatsService()
             nba_avg_pace, nba_game_days_left = await asyncio.gather(
                 nba_service.get_nba_average_pace(settings.season_id),
-                nba_service.get_nba_game_days_remaining(),
+                nba_service.get_nba_game_days_remaining(settings.season_id),
             )
         except Exception as e:
             self.logger.warning(f"Failed to fetch NBA stats: {e}")
@@ -86,7 +86,9 @@ class LeagueService:
         from app.services.data_transformer import DataTransformer
 
         actual_end_date, actual_start_date, rows_end, rows_start = \
-            await self.data_provider.db_service.get_snapshots_for_date_range(start_date, end_date)
+            await self.data_provider.db_service.get_snapshots_for_date_range(
+                start_date, end_date, settings.league_id, settings.season_id
+            )
 
         if actual_end_date is None or not rows_end:
             raise ResourceNotFoundError("No data available for the requested date range")

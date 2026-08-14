@@ -2,6 +2,7 @@ import { useState, useEffect, type JSX } from 'react'
 import { useGetHeatmapDataQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
@@ -105,10 +106,12 @@ const Analytics = () => {
     setAppliedDates({})
   }
 
-  if (isLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message="Failed to load analytics data" />
+  const isDateRangeActive = !!(appliedDates.startDate && appliedDates.endDate)
 
-  const isDateRangeActive = appliedDates.startDate && appliedDates.endDate
+  if (isLoading) return <LoadingSpinner />
+  // Same reasoning as Rankings: a bad custom range shouldn't take down the
+  // whole page — only a failure on the default (no range) query is fatal.
+  if (error && !isDateRangeActive) return <ErrorMessage message={getErrorMessage(error, 'Failed to load analytics data')} />
   const hasDateMismatch = heatmapData && isDateRangeActive && (
     (heatmapData.actual_start_date && heatmapData.actual_start_date !== heatmapData.date_range_start) ||
     (heatmapData.actual_end_date && heatmapData.actual_end_date !== heatmapData.date_range_end)
@@ -248,6 +251,12 @@ const Analytics = () => {
         {hasDateMismatch && (
           <div className="mb-3 px-4 py-2 bg-amber-50 dark:bg-gray-700 border border-amber-200 dark:border-gray-600 rounded-md text-sm text-amber-700 dark:text-amber-300">
             Note: closest available data used - showing {formatDate(heatmapData!.actual_start_date!)} - {formatDate(heatmapData!.actual_end_date!)}
+          </div>
+        )}
+
+        {error && isDateRangeActive && (
+          <div className="mb-3 px-4 py-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">
+            {getErrorMessage(error, 'Could not load analytics data for this date range.')}
           </div>
         )}
 

@@ -31,6 +31,7 @@ from app.services.nba_stats_service import NBAStatsService
 from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
+from app.exceptions import ResourceNotFoundError, DataSourceError
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +50,15 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan for proper resource cleanup"""
     # Startup
     logger.info("Starting Fantasy League Dashboard API")
+    try:
+        derived_start = await NBAStatsService().get_regular_season_start_date(settings.season_id)
+        if derived_start is not None:
+            logger.info(f"Derived regular-season start from NBA schedule: {derived_start} (was {settings.season_start})")
+            settings.season_start = derived_start
+        else:
+            logger.warning(f"Could not derive regular-season start; keeping configured SEASON_START={settings.season_start}")
+    except Exception as e:
+        logger.warning(f"Failed to derive regular-season start, keeping configured SEASON_START={settings.season_start}: {e}")
     await injury_service.initialize()
     if settings.injury_scheduler_enabled:
         asyncio.create_task(injury_service.start_scheduler())
@@ -77,6 +87,15 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.exception_handler(ResourceNotFoundError)
+async def resource_not_found_handler(request: Request, exc: ResourceNotFoundError):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+@app.exception_handler(DataSourceError)
+async def data_source_error_handler(request: Request, exc: DataSourceError):
+    logger.warning(f"Data source unavailable for {request.url}: {exc}")
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

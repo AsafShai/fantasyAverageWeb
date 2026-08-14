@@ -7,6 +7,7 @@ import {
 } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import { getErrorMessage } from '../utils/errorMessage';
 
 const fmt = (v: number | null) => {
   if (v == null) return '—';
@@ -98,7 +99,7 @@ export default function FeatureStore() {
   }, [list?.players, playerFilter]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message="Failed to load the feature store. Is the backend running?" />;
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load the feature store. Is the backend running?')} />;
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">

@@ -311,12 +311,14 @@ async def test_get_rankings_over_time_joins_gp(db_service, monkeypatch):
     conn = FakeConn(fetch_result=rows)
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
 
-    result = await db_service.get_rankings_over_time("team_rankings_totals", None)
+    result = await db_service.get_rankings_over_time("team_rankings_totals", None, 1234567890, 2026)
 
     assert result == rows
     query = conn.fetch.call_args[0][0]
     assert "LEFT JOIN team_daily_snapshot" in query
     assert "s.gp" in query
+    query_args = conn.fetch.call_args[0]
+    assert query_args[1:] == (1234567890, 2026)
 
 
 @pytest.mark.asyncio
@@ -324,11 +326,11 @@ async def test_get_rankings_over_time_with_team_ids_joins_gp(db_service, monkeyp
     conn = FakeConn(fetch_result=[])
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
 
-    await db_service.get_rankings_over_time("team_rankings_averages", [1, 2])
+    await db_service.get_rankings_over_time("team_rankings_averages", [1, 2], 1234567890, 2026)
 
     args = conn.fetch.call_args[0]
     assert "LEFT JOIN team_daily_snapshot" in args[0]
-    assert args[1] == [1, 2]
+    assert args[1:] == (1234567890, 2026, [1, 2])
 
 
 @pytest.mark.asyncio
@@ -342,10 +344,12 @@ async def test_upsert_rankings_averages_preserves_tie_fraction(db_service, monke
         "TOTAL_POINTS": 52.0,
     }])
 
-    await db_service.upsert_rankings_averages(5, df)
+    await db_service.upsert_rankings_averages(5, df, 1234567890, 2026)
 
     params = conn.executemany.call_args[0][1][0]
-    assert params[4] == 6.5
+    assert params[0] == 1234567890
+    assert params[1] == 2026
+    assert params[6] == 6.5
     assert params[-1] == 52.0
     assert isinstance(params[-1], float)
 

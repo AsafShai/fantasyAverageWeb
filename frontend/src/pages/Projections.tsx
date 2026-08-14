@@ -40,10 +40,10 @@ function StatusDot({ status, reason }: { status: 'green' | 'amber' | 'red'; reas
 }
 
 function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integerMode: boolean }) {
-  const proj = matchup.projection!;
+  const proj = matchup.projection;
   const [predict] = usePredictProjectionMutation();
-  const [minutes, setMinutes] = useState(proj.default_minutes);
-  const [stats, setStats] = useState<ProjectionStats | null>(proj.stats);
+  const [minutes, setMinutes] = useState(proj?.default_minutes ?? 0);
+  const [stats, setStats] = useState<ProjectionStats | null>(proj?.stats ?? null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Re-sync when the underlying slate changes (opponent switches) or the
@@ -54,9 +54,9 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   // background revalidation) can't silently wipe an adjusted slider.
   useEffect(() => {
     clearTimeout(timer.current);
-    setMinutes(proj.default_minutes);
-    setStats(proj.stats);
-  }, [matchup.opponent, proj.default_minutes]);
+    setMinutes(proj?.default_minutes ?? 0);
+    setStats(proj?.stats ?? null);
+  }, [matchup.opponent, proj?.default_minutes]);
 
   const onSlider = (v: number) => {
     setMinutes(v);
@@ -76,21 +76,24 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   // trip; also cancels any pending re-predict so it can't overwrite them).
   const resetToDefault = () => {
     clearTimeout(timer.current);
-    setMinutes(proj.default_minutes);
-    setStats(proj.stats);
+    setMinutes(proj?.default_minutes ?? 0);
+    setStats(proj?.stats ?? null);
   };
-  const isAdjusted = Math.round(minutes) !== Math.round(proj.default_minutes);
+  const isAdjusted = Math.round(minutes) !== Math.round(proj?.default_minutes ?? 0);
 
-  if (proj.status === 'red' || !stats) {
+  // No projection at all (e.g. a rookie with no feature-store history yet) is
+  // the same "not enough data" case as a red-status/no-stats projection —
+  // still show the player and their game, just without projected numbers.
+  if (!proj || proj.status === 'red' || !stats) {
     return (
       <tr className="border-t border-gray-100 dark:border-gray-800">
         <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100 sticky left-0 z-10 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
-          <StatusDot status="red" reason={proj.reason} /> <span className="ml-1">{matchup.player_name}</span> <InjuryBadge status={matchup.injury_status} />
+          <StatusDot status="red" reason={proj?.reason} /> <span className="ml-1">{matchup.player_name}</span> <InjuryBadge status={matchup.injury_status} />
         </td>
         <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
           {matchup.pro_team} {matchup.is_home ? 'vs' : '@'} {matchup.opponent}
         </td>
-        <td colSpan={9} className="px-3 py-2 italic text-gray-400 text-sm" title={proj.reason}>not enough data</td>
+        <td colSpan={9} className="px-3 py-2 italic text-gray-400 text-sm" title={proj?.reason}>not enough data</td>
       </tr>
     );
   }
@@ -170,7 +173,6 @@ export default function Projections() {
   const isLiveSlate = slateDate === '' && !!currentSlateDate;
 
   const withGames = useMemo(() => matchups.filter((m) => {
-    if (m.projection == null) return false;
     if (!m.on_depth_chart) return false;
     if (isLiveSlate && m.injury_status === 'Out') return false;
     return true;

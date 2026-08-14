@@ -2,6 +2,7 @@ import { useGetLeagueSummaryQuery, useGetRankingsQuery } from '../store/api/fant
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DeadlineCountdown from '../components/DeadlineCountdown'
+import { getErrorMessage } from '../utils/errorMessage'
 
 const Dashboard = () => {
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
@@ -12,7 +13,7 @@ const Dashboard = () => {
   }
 
   if (summaryError || rankingsError) {
-    return <ErrorMessage message="Failed to load dashboard data" />
+    return <ErrorMessage message={getErrorMessage(summaryError ?? rankingsError, 'Failed to load dashboard data')} />
   }
 
   const topTeams = rankings?.averages_rankings.slice(0, 5) || []
@@ -23,26 +24,22 @@ const Dashboard = () => {
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">League Overview</h2>
 
-        {(summary?.nba_avg_pace || summary?.nba_game_days_left !== undefined) && (
+        {summary && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {summary?.nba_avg_pace && (
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-xl border border-amber-200">
-                <h3 className="font-semibold text-amber-900 mb-1">NBA Avg Pace</h3>
-                <p className="text-3xl font-bold text-amber-600">
-                  {summary.nba_avg_pace.toFixed(1)}
-                </p>
-                <p className="text-xs text-amber-700 mt-2">games played per team</p>
-              </div>
-            )}
-            {summary?.nba_game_days_left !== undefined && summary.nba_game_days_left !== null && (
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-5 rounded-xl border border-emerald-200">
-                <h3 className="font-semibold text-emerald-900 mb-1">Game Days Left</h3>
-                <p className="text-3xl font-bold text-emerald-600">
-                  {summary.nba_game_days_left}
-                </p>
-                <p className="text-xs text-emerald-700 mt-2">until regular season ends</p>
-              </div>
-            )}
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-xl border border-amber-200">
+              <h3 className="font-semibold text-amber-900 mb-1">NBA Avg Pace</h3>
+              <p className="text-3xl font-bold text-amber-600">
+                {(summary.nba_avg_pace ?? 0).toFixed(1)}
+              </p>
+              <p className="text-xs text-amber-700 mt-2">games played per team</p>
+            </div>
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-5 rounded-xl border border-emerald-200">
+              <h3 className="font-semibold text-emerald-900 mb-1">Game Days Left</h3>
+              <p className="text-3xl font-bold text-emerald-600">
+                {summary.nba_game_days_left ?? 0}
+              </p>
+              <p className="text-xs text-emerald-700 mt-2">until regular season ends</p>
+            </div>
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200">
               <h3 className="font-semibold text-blue-900 mb-1">Total Teams</h3>
               <p className="text-3xl font-bold text-blue-600">{summary?.total_teams}</p>

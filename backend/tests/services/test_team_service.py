@@ -6,7 +6,7 @@ import pandas as pd
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.team_service import TeamService
 from app.models import Team, TeamDetail, TeamPlayers, Player, ShotChartStats, AverageStats, RankingStats, PlayerStats, StatTimePeriod
-from app.exceptions import InvalidParameterError, ResourceNotFoundError
+from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 import app.services.player_service as player_service_module
 
 @pytest.fixture(autouse=True)
@@ -168,13 +168,31 @@ class TestTeamService:
         team_service.data_provider.get_totals_df.assert_called_once()
     
     @pytest.mark.asyncio
-    async def test_get_teams_list_data_provider_returns_none(self, team_service):
-        """Test get_teams_list when data provider returns None"""
-        team_service.data_provider.get_totals_df.return_value = None
-        
-        with pytest.raises(Exception, match="Unable to fetch teams data from ESPN API"):
+    async def test_get_teams_list_totals_unavailable_falls_back_to_team_names(self, team_service):
+        """When ESPN stat totals aren't available yet (e.g. preseason), get_teams_list
+        falls back to team identity data instead of raising."""
+        team_service.data_provider.get_totals_df.side_effect = DataSourceError("ESPN unavailable")
+        team_service.data_provider.get_team_names.return_value = [
+            {"team_id": 1, "team_name": "Team Alpha"},
+            {"team_id": 2, "team_name": "Team Beta"},
+        ]
+
+        result = await team_service.get_teams_list()
+
+        assert len(result) == 2
+        assert all(isinstance(team, Team) for team in result)
+        assert {t.team_id for t in result} == {1, 2}
+        assert {t.team_name for t in result} == {"Team Alpha", "Team Beta"}
+
+    @pytest.mark.asyncio
+    async def test_get_teams_list_totals_unavailable_and_no_team_names_raises(self, team_service):
+        """When both stat totals and team identity data are unavailable, raise ResourceNotFoundError."""
+        team_service.data_provider.get_totals_df.side_effect = DataSourceError("ESPN unavailable")
+        team_service.data_provider.get_team_names.return_value = []
+
+        with pytest.raises(ResourceNotFoundError, match="No teams found in the data"):
             await team_service.get_teams_list()
-    
+
     @pytest.mark.asyncio
     async def test_get_teams_list_empty_data(self, team_service):
         """Test get_teams_list with empty DataFrame"""
@@ -207,12 +225,16 @@ class TestTeamService:
     
     @pytest.mark.asyncio
     async def test_get_team_players_no_players_found(self, team_service, team_service_players_df):
-        """Test get_team_players when no players found for team"""
+        """A valid team with no roster yet (e.g. pre-draft) returns an empty
+        players list rather than a lookup failure"""
         team_id = 999
         team_service.data_provider.get_players_df.return_value = team_service_players_df
-        
-        with pytest.raises(ResourceNotFoundError, match=f"No players found for team ID {team_id}"):
-            await team_service.get_team_players(team_id)
+
+        result = await team_service.get_team_players(team_id)
+
+        assert result.team_id == team_id
+        assert result.players == []
+        team_service.response_builder.build_team_players_response.assert_not_called()
 
 
 class TestTeamServiceResponseBuilding:

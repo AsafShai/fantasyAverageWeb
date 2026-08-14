@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.models import LeagueSummary, LeagueShotsData, DraftReport
 from app.services.league_service import LeagueService
 from app.services.draft_report_service import DraftReportService
-from app.exceptions import ResourceNotFoundError
+from app.exceptions import ResourceNotFoundError, DataSourceError
 from typing import Annotated
 import logging
 
@@ -22,6 +22,10 @@ async def get_league_summary(
         return await league_service.get_league_summary()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting league summary: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve league summary") from e
@@ -36,6 +40,10 @@ async def get_league_shots(
         return await league_service.get_league_shots_data()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting league shots data: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve league shots data") from e
@@ -50,6 +58,8 @@ async def get_draft_report(
         return await draft_report_service.get_draft_report()
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting draft report: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve draft report") from e

@@ -1,7 +1,7 @@
 import pytest
 import httpx
 from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime
+from datetime import datetime, date
 from app.services.nba_stats_service import NBAStatsService
 
 
@@ -231,7 +231,7 @@ class TestNBAStatsServiceGameDaysRemaining:
                 mock_datetime.now.return_value.date.return_value = datetime(2026, 2, 28).date()
                 mock_datetime.fromisoformat = datetime.fromisoformat
 
-                result = await nba_stats_service.get_nba_game_days_remaining()
+                result = await nba_stats_service.get_nba_game_days_remaining(2026)
 
                 assert result is not None
                 assert isinstance(result, int)
@@ -259,41 +259,52 @@ class TestNBAStatsServiceGameDaysRemaining:
                 mock_datetime.now.return_value.date.return_value = datetime(2026, 2, 15).date()
                 mock_datetime.fromisoformat = datetime.fromisoformat
 
-                result = await nba_stats_service.get_nba_game_days_remaining()
+                result = await nba_stats_service.get_nba_game_days_remaining(2026)
 
                 assert result == 2
 
     @pytest.mark.asyncio
     async def test_get_nba_game_days_remaining_filters_post_season(self, nba_stats_service):
-        """Test that dates after regular season end are filtered out"""
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            'leagues': [
-                {
-                    'calendar': [
-                        '2026-04-01T00:00:00Z',
-                        '2026-04-15T00:00:00Z',
-                        '2026-05-01T00:00:00Z'
-                    ]
-                }
-            ]
-        }
-        mock_response.raise_for_status = Mock()
+        """Dates at/after the detected postseason boundary are excluded, even
+        though they're still in the future relative to `today`."""
+        nba_stats_service._get_regular_season_calendar = AsyncMock(
+            return_value=(
+                [date(2026, 4, 1), date(2026, 4, 15), date(2026, 5, 1)],
+                0,  # start_idx: whole window is regular season or later
+                0,  # end_idx: only index 0 (04-01) is still regular season
+            )
+        )
+        with patch('app.services.nba_stats_service.datetime') as mock_datetime:
+            mock_datetime.now.return_value.date.return_value = datetime(2026, 3, 1).date()
 
-        with patch.object(nba_stats_service._client, 'get', new_callable=AsyncMock, return_value=mock_response):
-            with patch('app.services.nba_stats_service.datetime') as mock_datetime:
-                mock_datetime.now.return_value.date.return_value = datetime(2026, 3, 1).date()
-                mock_datetime.fromisoformat = datetime.fromisoformat
+            result = await nba_stats_service.get_nba_game_days_remaining(2026)
 
-                result = await nba_stats_service.get_nba_game_days_remaining()
+            assert result == 1
 
-                assert result == 1
+    @pytest.mark.asyncio
+    async def test_get_nba_game_days_remaining_uses_resolved_window(self, nba_stats_service):
+        """Only dates within [start_idx, end_idx] of the resolved calendar count,
+        regardless of how many extra dates the raw ESPN calendar contains."""
+        nba_stats_service._get_regular_season_calendar = AsyncMock(
+            return_value=(
+                [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1), date(2026, 4, 1), date(2026, 6, 1)],
+                1,  # start_idx: preseason date at index 0 excluded
+                3,  # end_idx: postseason date at index 4 excluded
+            )
+        )
+        with patch('app.services.nba_stats_service.datetime') as mock_datetime:
+            mock_datetime.now.return_value.date.return_value = datetime(2026, 1, 15).date()
+
+            result = await nba_stats_service.get_nba_game_days_remaining(2026)
+
+            # window is [02-01, 03-01, 04-01]; all >= 2026-01-15
+            assert result == 3
 
     @pytest.mark.asyncio
     async def test_get_nba_game_days_remaining_http_error(self, nba_stats_service):
         """Test handling of HTTP request error"""
         with patch.object(nba_stats_service._client, 'get', side_effect=httpx.RequestError("Connection failed")):
-            result = await nba_stats_service.get_nba_game_days_remaining()
+            result = await nba_stats_service.get_nba_game_days_remaining(2026)
 
             assert result is None
 
@@ -305,7 +316,7 @@ class TestNBAStatsServiceGameDaysRemaining:
         mock_response.raise_for_status = Mock()
 
         with patch.object(nba_stats_service._client, 'get', new_callable=AsyncMock, return_value=mock_response):
-            result = await nba_stats_service.get_nba_game_days_remaining()
+            result = await nba_stats_service.get_nba_game_days_remaining(2026)
 
             assert result is None
 
@@ -317,7 +328,7 @@ class TestNBAStatsServiceGameDaysRemaining:
         mock_response.raise_for_status = Mock()
 
         with patch.object(nba_stats_service._client, 'get', new_callable=AsyncMock, return_value=mock_response):
-            result = await nba_stats_service.get_nba_game_days_remaining()
+            result = await nba_stats_service.get_nba_game_days_remaining(2026)
 
             assert result is None
 
@@ -335,9 +346,91 @@ class TestNBAStatsServiceGameDaysRemaining:
         mock_response.raise_for_status = Mock()
 
         with patch.object(nba_stats_service._client, 'get', new_callable=AsyncMock, return_value=mock_response):
-            result = await nba_stats_service.get_nba_game_days_remaining()
+            result = await nba_stats_service.get_nba_game_days_remaining(2026)
 
             assert result is None
+
+
+def _routed_client_mock(calendar_dates, season_types):
+    """Fake httpx client 'get' that returns the whitelist calendar for the
+    calendar-lookup URL, and a per-day season-type event payload for the
+    single-day scoreboard probe URLs used by the start/end binary search.
+    `season_types` maps 'YYYYMMDD' -> ESPN season.type (1=pre, 2=regular, 3+=post)."""
+    import re
+
+    async def _get(url, *args, **kwargs):
+        resp = Mock()
+        resp.raise_for_status = Mock()
+        if 'calendartype=whitelist' in url:
+            resp.json.return_value = {'leagues': [{'calendar': calendar_dates}]}
+        else:
+            m = re.search(r'dates=(\d{8})', url)
+            season_type = season_types.get(m.group(1)) if m else None
+            events = [{'season': {'type': season_type}}] if season_type is not None else []
+            resp.json.return_value = {'events': events}
+        return resp
+
+    return AsyncMock(side_effect=_get)
+
+
+class TestNBAStatsServiceRegularSeasonCalendar:
+    """Test suite for _get_regular_season_calendar / _binary_search_first /
+    get_regular_season_start_date — the ESPN-calendar-derived season window
+    that replaced the old hand-maintained SEASON_START/SEASON_END dates."""
+
+    @pytest.mark.asyncio
+    async def test_get_regular_season_calendar_finds_start_and_end(self, nba_stats_service):
+        calendar_dates = [
+            '2025-10-15T00:00:00Z',  # preseason
+            '2025-10-22T00:00:00Z',  # regular season start
+            '2026-03-01T00:00:00Z',  # regular season
+            '2026-04-15T00:00:00Z',  # postseason start
+        ]
+        season_types = {
+            '20251015': 1,
+            '20251022': 2,
+            '20260301': 2,
+            '20260415': 3,
+        }
+        with patch.object(nba_stats_service._client, 'get', _routed_client_mock(calendar_dates, season_types)):
+            dates, start_idx, end_idx = await nba_stats_service._get_regular_season_calendar(2026)
+
+        assert dates[start_idx] == date(2025, 10, 22)
+        assert dates[end_idx] == date(2026, 3, 1)
+
+    @pytest.mark.asyncio
+    async def test_get_regular_season_calendar_no_postseason_probed_keeps_last_date(self, nba_stats_service):
+        """When every probed date resolves to regular season (no postseason
+        detected), the window runs through the end of the raw calendar."""
+        calendar_dates = ['2025-10-22T00:00:00Z', '2026-03-01T00:00:00Z']
+        season_types = {'20251022': 2, '20260301': 2}
+        with patch.object(nba_stats_service._client, 'get', _routed_client_mock(calendar_dates, season_types)):
+            dates, start_idx, end_idx = await nba_stats_service._get_regular_season_calendar(2026)
+
+        assert start_idx == 0
+        assert end_idx == len(dates) - 1
+
+    @pytest.mark.asyncio
+    async def test_get_regular_season_calendar_empty_calendar_raises(self, nba_stats_service):
+        with patch.object(nba_stats_service._client, 'get', _routed_client_mock([], {})):
+            with pytest.raises(ValueError, match="No calendar data"):
+                await nba_stats_service._get_regular_season_calendar(2026)
+
+    @pytest.mark.asyncio
+    async def test_get_regular_season_start_date_returns_first_regular_season_day(self, nba_stats_service):
+        calendar_dates = ['2025-10-15T00:00:00Z', '2025-10-22T00:00:00Z']
+        season_types = {'20251015': 1, '20251022': 2}
+        with patch.object(nba_stats_service._client, 'get', _routed_client_mock(calendar_dates, season_types)):
+            start = await nba_stats_service.get_regular_season_start_date(2026)
+
+        assert start == date(2025, 10, 22)
+
+    @pytest.mark.asyncio
+    async def test_get_regular_season_start_date_returns_none_on_failure(self, nba_stats_service):
+        with patch.object(nba_stats_service._client, 'get', side_effect=httpx.RequestError("boom")):
+            start = await nba_stats_service.get_regular_season_start_date(2026)
+
+        assert start is None
 
 
 class TestNBAStatsServiceClose:

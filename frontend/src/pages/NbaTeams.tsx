@@ -4,6 +4,7 @@ import { usePersistedState, usePersistedSetState } from '../hooks/usePersistedSt
 import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import { getErrorMessage } from '../utils/errorMessage';
 import PlayerNameLink from '../components/PlayerNameLink';
 import type { DepthChartPosition } from '../types/api';
 import { applyDepthChartFilters } from '../utils/depthChartFilters';
@@ -102,7 +103,7 @@ function DepthChartView({ teamId }: { teamId: string }) {
   const [removeDuplicates, setRemoveDuplicates] = usePersistedState(`nbaTeams.${teamId}.removeDuplicates`, false);
 
   if (isLoading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message="Failed to load depth chart" />;
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load depth chart')} />;
   if (!data) return null;
 
   const toggleStatus = (status: string) => {
@@ -174,7 +175,7 @@ export default function NbaTeams() {
       {isLoading ? (
         <LoadingSpinner />
       ) : error ? (
-        <ErrorMessage message="Failed to load teams" />
+        <ErrorMessage message={getErrorMessage(error, 'Failed to load teams')} />
       ) : (
         <>
           <div className="mb-6">
