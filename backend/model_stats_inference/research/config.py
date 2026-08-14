@@ -12,7 +12,7 @@ from pathlib import Path
 # --- Data scope ------------------------------------------------------------
 
 # Last 4 full seasons. NBA season string format is "YYYY-YY".
-SEASONS: list[str] = ["2022-23", "2023-24", "2024-25", "2025-26"]
+SEASONS: list[str] = ["2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
 
 # Regular season only (excludes playoffs / play-in / preseason / all-star).
 SEASON_TYPE = "Regular Season"
