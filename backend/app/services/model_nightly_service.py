@@ -461,13 +461,21 @@ class ModelNightlyService:
                 f"for {', '.join(rconfig.SEASONS)}"
                 + (f" (until {until_date})" if until_date else "")
             )
+            logger.info("Bootstrap: writing raw game rows...")
+            # Tables are empty here (either freshly created or just truncated), so
+            # COPY is safe and turns a multi-minute per-row insert into seconds.
             if not await self._db.insert_fs_rows(
                 _frame_to_tuples(players, _FS_PLAYER_COLS),
                 _frame_to_tuples(team_games, _FS_TEAM_COLS),
+                use_copy=True,
             ):
                 return "db_write_failed"
 
+            logger.info("Bootstrap: building feature vectors (this is the slow step)...")
             vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
+            logger.info(
+                f"Bootstrap: writing {len(vectors[0])} player / {len(vectors[1])} team vectors..."
+            )
             if not await self._db.upsert_feature_vectors(*vectors):
                 return "db_write_failed"
             self._invalidate_inference_store()

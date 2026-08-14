@@ -143,16 +143,20 @@ async def check_eligibility(conn, d: date, rep: Report) -> int:
         "WHERE game_date = $1 AND NOT eligible GROUP BY reason ORDER BY n DESC", d)
     if not reasons:
         rep.info("ineligible reasons", "none")
+    # Reasons embed the player id, so each is unique — group by kind, not by string.
     unknown_players = 0
+    insufficient_history = 0
     for r in reasons:
         reason = (r["reason"] or "").lower()
         if BENIGN_REASON in reason:
-            rep.info("ineligible: insufficient history", f"{r['n']} rows")
+            insufficient_history += r["n"]
         elif TEAM_REASON in reason:
             rep.check(False, "ineligible: unknown opponent team",
                       f"{r['n']} rows - team-id space broken: {r['reason'][:60]}")
         else:
             unknown_players += r["n"]
+    if insufficient_history:
+        rep.info("ineligible: insufficient history", f"{insufficient_history} rows")
     if unknown_players:
         share = unknown_players / total
         rep.check(share <= UNKNOWN_PLAYER_SHARE_LIMIT, "unknown players within tolerance",

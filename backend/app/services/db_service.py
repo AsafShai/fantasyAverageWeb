@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import date, timedelta
 from typing import Optional
 import asyncpg
@@ -1119,9 +1120,17 @@ class DBService:
             logger.error(f"Failed to count games since {since_date}: {e}")
             return {}
 
-    async def insert_fs_rows(self, player_rows: list[tuple], team_rows: list[tuple]) -> bool:
+    async def insert_fs_rows(
+        self, player_rows: list[tuple], team_rows: list[tuple], use_copy: bool = False
+    ) -> bool:
         """Append raw game rows. Tuple order must match the column lists below.
-        ON CONFLICT DO NOTHING makes re-runs of the same night no-ops."""
+        ON CONFLICT DO NOTHING makes re-runs of the same night no-ops.
+
+        ``use_copy`` swaps the per-row INSERT for COPY, which has no conflict
+        handling — only valid when the tables are known to be empty (bootstrap,
+        which truncates first). A nightly's ~200 rows don't need it; a
+        bootstrap's ~95k rows take minutes as individual INSERTs.
+        """
         pool = await self._get_pool()
         if pool is None:
             return False
@@ -1133,6 +1142,8 @@ class DBService:
             "team_id, game_id, season, game_date, team_name, matchup, "
             "pts, reb, ast, stl, blk, fg3m, fg_pct, fga, fta, tov"
         )
+        if use_copy:
+            return await self._copy_fs_rows(pool, player_rows, team_rows, player_cols, team_cols)
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
@@ -1154,6 +1165,34 @@ class DBService:
             return True
         except Exception as e:
             logger.error(f"Failed to insert fs rows: {e}")
+            return False
+
+    async def _copy_fs_rows(
+        self, pool, player_rows: list[tuple], team_rows: list[tuple],
+        player_cols: str, team_cols: str,
+    ) -> bool:
+        """COPY path for insert_fs_rows(use_copy=True). Empty tables only."""
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    for table, cols, rows in (
+                        ("fs_player_games", player_cols, player_rows),
+                        ("fs_team_games", team_cols, team_rows),
+                    ):
+                        if not rows:
+                            continue
+                        t0 = time.perf_counter()
+                        await conn.copy_records_to_table(
+                            table,
+                            records=rows,
+                            columns=[c.strip() for c in cols.split(",")],
+                        )
+                        logger.info(
+                            f"COPY {len(rows)} rows into {table} in {time.perf_counter() - t0:.1f}s"
+                        )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to COPY fs rows: {e}")
             return False
 
     async def truncate_fs_tables(self) -> bool:
