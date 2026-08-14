@@ -33,6 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from model_stats_inference.research import config as rconfig  # noqa: E402  (needs sys.path above)
+
 EVAL_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
 
 # Ineligible reasons come from serving/errors.py. "N game(s) of history" is the
@@ -205,8 +207,12 @@ async def check_vectors(conn, d: date, rep: Report) -> None:
         rep.check(age <= timedelta(days=VECTOR_STALENESS_DAYS), "vectors refreshed recently",
                   f"updated_at={row['updated']:%Y-%m-%d %H:%M} ({age.days}d old)")
 
+    # Sub-MIN_MINUTES appearances are excluded from the feature store by design
+    # (get_fs_rows_before gates on the same threshold), so a garbage-time debut
+    # legitimately has no vector — only players above the threshold must have one.
     played = await conn.fetch(
-        "SELECT DISTINCT player_id FROM fs_player_games WHERE game_date = $1 LIMIT 50", d)
+        "SELECT DISTINCT player_id FROM fs_player_games "
+        "WHERE game_date = $1 AND min >= $2 LIMIT 50", d, rconfig.MIN_MINUTES)
     missing = 0
     null_features = 0
     for r in played:
