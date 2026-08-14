@@ -22,11 +22,12 @@ REQUEST_TIMEOUT = 30
 SLEEP_BETWEEN_CALLS = 0.15
 RETRY_DELAYS = [2.0, 5.0, 15.0]
 
+# No User-Agent override: ESPN's edge 403s browser-style UAs sent by a non-browser
+# client (a Chrome UA without Chrome's TLS fingerprint reads as a bot), and 403s
+# unrecognized custom UAs too. Library defaults (python-requests/*, python-httpx/*,
+# curl/*) are served normally — so the honest default is the one that works. The
+# async path already relies on httpx's default for the same reason.
 HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-    ),
     "Accept": "application/json",
 }
 

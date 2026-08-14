@@ -66,6 +66,59 @@ def _print_counts(title: str, counts: dict[str, int]) -> None:
         print(f"  {t:<28} {'(missing)' if n < 0 else f'{n:,}'}")
 
 
+async def _feature_gap(db, service_cls) -> set[str] | None:
+    """Features the deployed models need that the stored vectors don't carry.
+
+    Same comparison the nightly makes on startup (_ensure_vectors_current), so a
+    clean result here means that warning will not fire. None = not bootstrapped.
+    """
+    stored = await db.get_feature_vector_keys()
+    if stored is None:
+        return None
+    return service_cls._required_stored_features() - stored
+
+
+async def _report_gap(db, service_cls, pool, header: str) -> int:
+    """Print the missing-feature verdict. Returns a process exit code."""
+    missing = await _feature_gap(db, service_cls)
+    print(f"\n{header}")
+    if missing is None:
+        print("  vectors not bootstrapped (or DB unreachable) - nothing to check")
+        return 1
+    if missing:
+        print(f"  FAIL: {len(missing)} feature(s) the models need are absent from the vectors:")
+        for f in sorted(missing):
+            print(f"    - {f}")
+        print("  The nightly will log its 'Feature vectors are missing N feature(s)' warning")
+        print("  and read these as NaN. Re-run this script without --check to rebuild.")
+        return 1
+    print("  PASS: every feature the deployed models need is present in the stored vectors")
+
+    # get_feature_vector_keys samples one row per table, which only characterises
+    # the table while every row carries the same keys. A player who drops out of a
+    # rebuild keeps their old blob, so check uniformity rather than trusting it.
+    odd = await _nonuniform_player_vectors(pool)
+    if odd:
+        print(f"  WARN: {odd} player vector(s) carry a different feature-key set than the "
+              "majority - stale rows the last rebuild did not rewrite")
+    return 0
+
+
+async def _nonuniform_player_vectors(pool) -> int:
+    """Player vectors whose feature-key count differs from the most common one."""
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            """
+            WITH sizes AS (
+                SELECT player_id, (SELECT COUNT(*) FROM jsonb_object_keys(features)) AS n
+                FROM fs_player_vectors
+            ),
+            modal AS (SELECT n FROM sizes GROUP BY n ORDER BY COUNT(*) DESC LIMIT 1)
+            SELECT COUNT(*) FROM sizes WHERE n <> (SELECT n FROM modal)
+            """
+        )
+
+
 async def _main(args: argparse.Namespace) -> int:
     # Imported here so --database-url (exported below) is seen by app settings.
     from app.services.db_service import DBService
@@ -84,6 +137,11 @@ async def _main(args: argparse.Namespace) -> int:
         else datetime.now(ZoneInfo("Asia/Jerusalem")).date()
     )
     _print_counts("Current vector counts:", await _counts(pool, VECTOR_TABLES))
+
+    if args.check:
+        code = await _report_gap(db, ModelNightlyService, pool, "Feature check (read-only, nothing written):")
+        await db.close()
+        return code
 
     # Steps are inlined rather than calling ModelNightlyService._refresh_vectors_through
     # so the upsert result is actually checked — that helper discards it, which would
@@ -117,7 +175,10 @@ async def _main(args: argparse.Namespace) -> int:
 
     _print_counts("New vector counts:", await _counts(pool, VECTOR_TABLES))
 
-    # Prove the write landed rather than trusting the return value alone.
+    # Prove the write landed rather than trusting the return value alone. Every exit
+    # stays inside the acquire block; closing the pool while a connection is checked
+    # out makes Pool.close() block for 60s waiting on a connection it cannot reclaim.
+    expect_failed = 0
     async with pool.acquire() as conn:
         fresh = await conn.fetchval(
             "SELECT COUNT(*) FROM fs_player_vectors WHERE updated_at >= NOW() - INTERVAL '10 minutes'"
@@ -129,19 +190,28 @@ async def _main(args: argparse.Namespace) -> int:
             )
             total = await conn.fetchval("SELECT COUNT(*) FROM fs_player_vectors")
             print(f"  {have:,}/{total:,} player vectors carry {args.expect_feature!r}")
-            if have < total:
-                print(
-                    f"ERROR: {total - have:,} vectors are missing {args.expect_feature!r} — is the "
-                    "deployed code the version that emits it?",
-                    file=sys.stderr,
-                )
-                await db.close()
-                return 1
+            expect_failed = total - have
+
+    if expect_failed:
+        # Stricter than --check: this counts every stored row, including rows the
+        # rebuild no longer produces (players dropped for staleness / sub-MIN_MINUTES),
+        # which keep their old blob. --check asks the question the models actually ask.
+        print(
+            f"ERROR: {expect_failed:,} vector(s) lack {args.expect_feature!r}. If --check passes, "
+            "these are stale rows no longer rebuilt, not a code-version problem.",
+            file=sys.stderr,
+        )
+        await db.close()
+        return 1
+
+    # The real proof: not "did rows get written" but "does the store now satisfy
+    # every feature the deployed models load". Same check the nightly runs.
+    code = await _report_gap(db, ModelNightlyService, pool, "Verification:")
 
     print(f"\nDone in {time.perf_counter() - t0:.1f}s — vectors re-materialized; "
           "restart the app so it loads them (and any new models).")
     await db.close()
-    return 0
+    return code
 
 
 if __name__ == "__main__":
@@ -152,6 +222,11 @@ if __name__ == "__main__":
         "--expect-feature",
         help="verify every player vector carries this feature key afterwards "
              "(e.g. USG_w10_mean); exits non-zero if any is missing",
+    )
+    parser.add_argument(
+        "--check", action="store_true",
+        help="read-only: report whether the stored vectors satisfy every feature the "
+             "deployed models need, then exit. Writes nothing. Non-zero if any is missing",
     )
     args = parser.parse_args()
 

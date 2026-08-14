@@ -315,23 +315,31 @@ def fetch_seasons(
 
     With ``cache_dir`` each month's frames are parquet-cached, so an
     interrupted multi-thousand-request pull resumes where it stopped.
+
+    Only *finished* months are cached: caching the current (or a future) month
+    would freeze a half-played month's games into a file that is never refetched,
+    silently thinning every later pull.
     """
+    current_month = date.today().strftime("%Y%m")
     player_frames: list[pd.DataFrame] = []
     team_frames: list[pd.DataFrame] = []
     for season in seasons:
         for month in season_months(season):
-            if cache_dir is not None:
-                p_path = cache_dir / f"espn_{month}_players.parquet"
-                t_path = cache_dir / f"espn_{month}_teams.parquet"
-                if p_path.exists() and t_path.exists():
-                    player_frames.append(pd.read_parquet(p_path))
-                    team_frames.append(pd.read_parquet(t_path))
-                    continue
+            paths = (
+                (cache_dir / f"espn_{month}_players.parquet",
+                 cache_dir / f"espn_{month}_teams.parquet")
+                if cache_dir is not None and month < current_month
+                else None
+            )
+            if paths is not None and paths[0].exists() and paths[1].exists():
+                player_frames.append(pd.read_parquet(paths[0]))
+                team_frames.append(pd.read_parquet(paths[1]))
+                continue
             players, teams = fetch_month(month)
-            if cache_dir is not None:
-                cache_dir.mkdir(parents=True, exist_ok=True)
-                players.to_parquet(p_path, index=False)
-                teams.to_parquet(t_path, index=False)
+            if paths is not None:
+                paths[0].parent.mkdir(parents=True, exist_ok=True)
+                players.to_parquet(paths[0], index=False)
+                teams.to_parquet(paths[1], index=False)
             player_frames.append(players)
             team_frames.append(teams)
 
