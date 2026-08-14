@@ -109,7 +109,7 @@ def test_season_and_date_stamped_correctly(night):
 
 
 def test_matchup_format(night):
-    assert night.players["MATCHUP"].str.contains(r"^[A-Z]{2,3} (vs\.|@) [A-Z]{2,3}$", regex=True).all()
+    assert night.players["MATCHUP"].str.contains(r"^[A-Z]{2,3} (?:vs\.|@) [A-Z]{2,3}$", regex=True).all()
 
 
 def test_cup_final_is_excluded():
