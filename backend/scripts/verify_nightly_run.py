@@ -88,7 +88,7 @@ def espn_countable_games(game_date: date) -> tuple[int, bool]:
 
 async def check_ledger(conn, d: date, rep: Report) -> dict | None:
     row = await conn.fetchrow("SELECT * FROM model_nightly_runs WHERE game_date = $1", d)
-    if not rep.check(row is not None, "ledger row exists", "" if row else "no model_nightly_runs row — the job never ran for this date"):
+    if not rep.check(row is not None, "ledger row exists", "" if row else "no model_nightly_runs row - the job never ran for this date"):
         return None
     row = dict(row)
     rep.check(
@@ -150,7 +150,7 @@ async def check_eligibility(conn, d: date, rep: Report) -> int:
             rep.info("ineligible: insufficient history", f"{r['n']} rows")
         elif TEAM_REASON in reason:
             rep.check(False, "ineligible: unknown opponent team",
-                      f"{r['n']} rows — team-id space broken: {r['reason'][:60]}")
+                      f"{r['n']} rows - team-id space broken: {r['reason'][:60]}")
         else:
             unknown_players += r["n"]
     if unknown_players:
@@ -229,27 +229,23 @@ async def _main(args: argparse.Namespace) -> int:
     db = DBService()
     pool = await db._get_pool()
     if pool is None:
-        print("ERROR: cannot connect — check --database-url / DATABASE_URL", file=sys.stderr)
+        print("ERROR: cannot connect - check --database-url / DATABASE_URL", file=sys.stderr)
         return 1
 
     rep = Report()
     print(f"Verifying nightly run for {d} (MAE tolerance x{args.mae_tolerance})")
+    # Every early exit stays inside the acquire block; closing the pool while a
+    # connection is still checked out makes Pool.close() hang until it times out.
     async with pool.acquire() as conn:
         ledger = await check_ledger(conn, d, rep)
-        if ledger is None:
-            await db.close()
-            rep.print()
-            return 1
-        if ledger["status"] == "no_games":
-            rep.info("no games", "off-night — nothing further to verify")
-            await db.close()
-            return 0 if rep.print() else 1
-
-        await check_coverage(conn, d, ledger, rep, args.espn)
-        eligible = await check_eligibility(conn, d, rep)
-        if eligible:
-            await check_accuracy(conn, d, rep, args.mae_tolerance)
-        await check_vectors(conn, d, rep)
+        if ledger is not None and ledger["status"] == "no_games":
+            rep.info("no games", "off-night - nothing further to verify")
+        elif ledger is not None:
+            await check_coverage(conn, d, ledger, rep, args.espn)
+            eligible = await check_eligibility(conn, d, rep)
+            if eligible:
+                await check_accuracy(conn, d, rep, args.mae_tolerance)
+            await check_vectors(conn, d, rep)
 
     await db.close()
     return 0 if rep.print() else 1
