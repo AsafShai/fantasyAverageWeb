@@ -99,13 +99,13 @@ class NBAStatsService:
             return round(average_pace, 1)
 
         except httpx.RequestError as e:
-            self.logger.warning(f"Failed to fetch NBA standings: {e}")
+            self.logger.warning(f"Failed to fetch NBA standings: {type(e).__name__}: {e}")
             return None
         except (KeyError, ValueError, IndexError) as e:
-            self.logger.warning(f"Failed to parse NBA standings response: {e}")
+            self.logger.warning(f"Failed to parse NBA standings response: {type(e).__name__}: {e}")
             return None
         except Exception as e:
-            self.logger.warning(f"Unexpected error fetching NBA average pace: {e}")
+            self.logger.warning(f"Unexpected error fetching NBA average pace: {type(e).__name__}: {e}")
             return None
 
     async def get_nba_game_days_remaining(self, season_id: int) -> Optional[int]:
@@ -138,7 +138,7 @@ class NBAStatsService:
             dates, start_idx, _ = await self._get_regular_season_calendar(season_id)
             return dates[start_idx]
         except Exception as e:
-            self.logger.warning(f"Failed to derive regular season start for {season_id}: {e}")
+            self.logger.warning(f"Failed to derive regular season start for {season_id}: {type(e).__name__}: {e}")
             return None
 
     async def _get_event_season_type(self, day) -> Optional[int]:
@@ -151,7 +151,7 @@ class NBAStatsService:
             events = response.json().get('events', [])
             return events[0].get('season', {}).get('type') if events else None
         except Exception as e:
-            self.logger.warning(f"Failed to fetch season type for {day}: {e}")
+            self.logger.warning(f"Failed to fetch season type for {day}: {type(e).__name__}: {e}")
             return None
 
     async def _binary_search_first(self, calendar_dates: list, min_type: int) -> Optional[int]:
@@ -209,13 +209,13 @@ class NBAStatsService:
             future_game_dates = [d for d in regular_season_dates if d >= today]
             return len(future_game_dates)
         except httpx.RequestError as e:
-            self.logger.warning(f"Failed to fetch NBA calendar: {e}")
+            self.logger.warning(f"Failed to fetch NBA calendar: {type(e).__name__}: {e}")
             return None
         except (KeyError, ValueError, IndexError) as e:
-            self.logger.warning(f"Failed to parse NBA calendar response: {e}")
+            self.logger.warning(f"Failed to parse NBA calendar response: {type(e).__name__}: {e}")
             return None
         except Exception as e:
-            self.logger.warning(f"Unexpected error fetching NBA game days remaining: {e}")
+            self.logger.warning(f"Unexpected error fetching NBA game days remaining: {type(e).__name__}: {e}")
             return None
 
     async def close(self):

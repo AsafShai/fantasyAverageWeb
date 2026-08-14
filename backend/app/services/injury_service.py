@@ -58,7 +58,7 @@ async def fetch_pdf_bytes(url: str) -> bytes | None:
             logger.warning(f"Injury PDF fetch got HTTP {response.status_code}: {url}")
             return None
     except httpx.HTTPError as e:
-        logger.warning(f"Injury PDF fetch failed: {e}")
+        logger.warning(f"Injury PDF fetch failed: {type(e).__name__}: {e} (url={url})")
         return None
 
 
@@ -525,7 +525,7 @@ async def start_scheduler() -> None:
             try:
                 success = await _try_update_injury_data()
             except Exception as e:
-                logger.error(f"Injury update cycle error at +{offset}s: {e}", exc_info=True)
+                logger.error(f"Injury update cycle error at +{offset}s: {type(e).__name__}: {e}", exc_info=True)
                 success = False
             if success:
                 break

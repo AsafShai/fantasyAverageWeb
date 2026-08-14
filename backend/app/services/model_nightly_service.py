@@ -186,7 +186,11 @@ class ModelNightlyService:
         statuses: dict[str, str] = {"missing_features": missing} if missing else {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = yesterday - timedelta(days=offset)
-            status = await self.run_for_date(d)
+            try:
+                status = await self.run_for_date(d)
+            except Exception as e:
+                logger.error(f"Model nightly run_for_date({d}) raised: {type(e).__name__}: {e}")
+                raise
             statuses[d.isoformat()] = status
             if status not in ("processed", "no_games", "already_processed", "store_already_ingested"):
                 logger.warning(f"Model nightly catch-up stopped at {d}: {status}")
@@ -332,8 +336,8 @@ class ModelNightlyService:
             logger.warning(
                 f"Feature vectors are missing {len(missing)} feature(s) the models need "
                 f"({preview}). Auto-heal is off (MODEL_FEATURE_HEAL_AUTO), so the models "
-                f"will read them as NaN until the vectors are rebuilt. Run:\n"
-                f"    cd backend && python scripts/refresh_feature_vectors.py "
+                f"will read them as NaN until the vectors are rebuilt. Run: "
+                f"cd backend && python scripts/refresh_feature_vectors.py "
                 f"--database-url <url> --expect-feature {sorted(missing)[0]}"
             )
             return "manual_refresh_required"

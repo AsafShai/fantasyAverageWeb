@@ -53,5 +53,5 @@ class DepthChartService:
                         names.add(normalize_player_name(display_name))
             return names
         except Exception as e:
-            logger.error(f"Depth chart fetch/parse failed for team {team_id}: {e}")
+            logger.error(f"Depth chart fetch/parse failed for team {team_id}: {type(e).__name__}: {e}")
             return set()

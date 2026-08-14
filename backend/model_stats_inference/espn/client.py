@@ -8,10 +8,13 @@ simple. All endpoints are unauthenticated JSON GETs.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 
 import httpx
 import requests
+
+logger = logging.getLogger(__name__)
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
 
@@ -35,8 +38,24 @@ class EspnUnavailableError(RuntimeError):
     """ESPN kept failing after retries — treat like 'come back later'."""
 
 
+def _status_and_body(e: Exception) -> tuple[int | None, str]:
+    """Best-effort HTTP status code + a short response-body snippet from a
+    requests/httpx exception, so a 403/429/5xx is greppable from the log line
+    alone (the exception's own str() doesn't always include the body)."""
+    resp = getattr(e, "response", None)
+    if resp is None:
+        return None, ""
+    status = getattr(resp, "status_code", None)
+    try:
+        body = resp.text[:200]
+    except Exception:
+        body = ""
+    return status, body
+
+
 def get_json(path: str, params: dict | None = None) -> dict:
     url = f"{BASE}/{path}"
+    attempts = len(RETRY_DELAYS) + 1
     last: Exception | None = None
     for attempt, delay in enumerate([0.0, *RETRY_DELAYS]):
         if delay:
@@ -49,7 +68,13 @@ def get_json(path: str, params: dict | None = None) -> dict:
             return data
         except (requests.RequestException, ValueError) as e:
             last = e
-    raise EspnUnavailableError(f"GET {url} failed after {len(RETRY_DELAYS) + 1} attempts: {last}")
+            status, body = _status_and_body(e)
+            logger.warning(
+                f"ESPN GET {url} attempt {attempt + 1}/{attempts} failed (status={status}): "
+                f"{type(e).__name__}: {e}" + (f" body={body!r}" if body else "")
+            )
+    logger.error(f"ESPN GET {url} gave up after {attempts} attempts: {type(last).__name__}: {last}")
+    raise EspnUnavailableError(f"GET {url} failed after {attempts} attempts: {last}")
 
 
 async def async_get_json(client: httpx.AsyncClient, path: str, params: dict | None = None) -> dict:
@@ -57,6 +82,7 @@ async def async_get_json(client: httpx.AsyncClient, path: str, params: dict | No
     SLEEP_BETWEEN_CALLS pacing — that's for the nightly bulk pull's hundreds
     of sequential requests, not a handful of per-request lookups)."""
     url = f"{BASE}/{path}"
+    attempts = len(RETRY_DELAYS) + 1
     last: Exception | None = None
     for attempt, delay in enumerate([0.0, *RETRY_DELAYS]):
         if delay:
@@ -67,7 +93,13 @@ async def async_get_json(client: httpx.AsyncClient, path: str, params: dict | No
             return resp.json()
         except (httpx.HTTPError, ValueError) as e:
             last = e
-    raise EspnUnavailableError(f"GET {url} failed after {len(RETRY_DELAYS) + 1} attempts: {last}")
+            status, body = _status_and_body(e)
+            logger.warning(
+                f"ESPN GET {url} attempt {attempt + 1}/{attempts} failed (status={status}): "
+                f"{type(e).__name__}: {e}" + (f" body={body!r}" if body else "")
+            )
+    logger.error(f"ESPN GET {url} gave up after {attempts} attempts: {type(last).__name__}: {last}")
+    raise EspnUnavailableError(f"GET {url} failed after {attempts} attempts: {last}")
 
 
 async def scoreboard_async(client: httpx.AsyncClient, dates: str) -> dict:
