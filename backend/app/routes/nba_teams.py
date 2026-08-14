@@ -24,7 +24,7 @@ async def get_depth_chart(team_id: int):
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url)
     except httpx.HTTPError as e:
-        logger.error(f"ESPN depth chart fetch failed for team {team_id}: {e}")
+        logger.error(f"ESPN depth chart fetch failed for team {team_id}: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch depth chart from ESPN")
 
     if resp.status_code != 200:

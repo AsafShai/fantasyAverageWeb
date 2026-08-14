@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
         else:
             logger.warning(f"Could not derive regular-season start; keeping configured SEASON_START={settings.season_start}")
     except Exception as e:
-        logger.warning(f"Failed to derive regular-season start, keeping configured SEASON_START={settings.season_start}: {e}")
+        logger.warning(f"Failed to derive regular-season start, keeping configured SEASON_START={settings.season_start}: {type(e).__name__}: {e}")
     await injury_service.initialize()
     if settings.injury_scheduler_enabled:
         asyncio.create_task(injury_service.start_scheduler())
@@ -99,7 +99,7 @@ async def data_source_error_handler(request: Request, exc: DataSourceError):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception in {request.url}: {str(exc)}", exc_info=True)
+    logger.error(f"Unhandled exception in {request.url}: {type(exc).__name__}: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={
