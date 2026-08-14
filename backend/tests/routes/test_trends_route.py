@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.exceptions import DataSourceError, ResourceNotFoundError
 from app.models.trend_models import (
     GameLogEntry,
     GameLogResponse,
@@ -255,3 +256,29 @@ def test_in_range_off_preset_window_days_is_honoured(mock_services):
     assert resp.status_code == 200
     svc.get_minutes_movers.assert_awaited_once()
     assert svc.get_minutes_movers.call_args.args[1] == 21
+
+
+class TestGlobalExceptionHandlers:
+    """trends routes don't catch DataSourceError/ResourceNotFoundError
+    themselves, so they're a good probe for main.py's app-wide handlers that
+    map these to 503/404 instead of a generic 500."""
+
+    def test_data_source_error_surfaces_as_503(self, mock_services):
+        _, provider = mock_services
+        provider.get_players_df = AsyncMock(side_effect=DataSourceError("ESPN unavailable"))
+        client = TestClient(app)
+
+        resp = client.get('/api/trends/regression')
+
+        assert resp.status_code == 503
+        assert resp.json()['detail'] == "ESPN unavailable"
+
+    def test_resource_not_found_error_surfaces_as_404(self, mock_services):
+        _, provider = mock_services
+        provider.get_players_df = AsyncMock(side_effect=ResourceNotFoundError("No players found"))
+        client = TestClient(app)
+
+        resp = client.get('/api/trends/regression')
+
+        assert resp.status_code == 404
+        assert resp.json()['detail'] == "No players found"

@@ -6,6 +6,7 @@ from app.models import HeatmapData
 from app.models.base import Team
 from app.models import RankingsOverTimeResponse
 from app.services.db_service import DBService
+from app.config import settings
 
 
 def test_get_heatmap(test_client):
@@ -38,7 +39,7 @@ def test_get_over_time_snapshot_source(test_client):
     try:
         response = test_client.get("/api/analytics/over-time?source=snapshot")
         assert response.status_code == 200
-        inst.get_snapshot_over_time.assert_awaited_once_with(None)
+        inst.get_snapshot_over_time.assert_awaited_once_with(None, settings.league_id, settings.season_id)
     finally:
         app.dependency_overrides.pop(DBService, None)
 
