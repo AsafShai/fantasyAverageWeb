@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.nba_matchup_service import NbaMatchupService
+from app.config import settings
 
 _ET = ZoneInfo('America/New_York')
 
@@ -376,3 +377,61 @@ async def test_get_games_today_and_get_upcoming_game_dates_share_one_fetch(servi
 
     assert first_call_count > 0
     assert len(get.call_args_list) == first_call_count
+
+
+class TestPreseasonOpenerPreview:
+    """Preseason: nothing within the normal lookahead window, but the real
+    season opener (settings.season_start) is a known future date — it should
+    be previewed instead of reporting a flat offseason 'no games'."""
+
+    @pytest.mark.asyncio
+    async def test_previews_season_opener_when_nothing_in_lookahead_window(self, service, monkeypatch):
+        today = _today()
+        opener = today + timedelta(days=30)  # well beyond the 7-day lookahead window
+        monkeypatch.setattr(settings, 'season_start', opener)
+        events_by_day = {
+            opener: [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=opener)],
+        }
+
+        with patch.object(
+            service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+        ):
+            games = await service.get_games_today()
+
+        assert games['LAL'].opponent == 'CHA'
+        assert service.get_schedule_date() == opener.isoformat()
+
+    @pytest.mark.asyncio
+    async def test_stays_empty_when_opener_itself_has_no_events_yet(self, service, monkeypatch):
+        """The opener date is known but ESPN hasn't published its events yet
+        (whitelist calendar doesn't include it) — still a flat empty result,
+        not a crash."""
+        today = _today()
+        opener = today + timedelta(days=30)
+        monkeypatch.setattr(settings, 'season_start', opener)
+
+        with patch.object(
+            service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day({}),
+        ):
+            games = await service.get_games_today()
+
+        assert games == {}
+        assert service.get_schedule_date() is None
+
+    @pytest.mark.asyncio
+    async def test_does_not_preview_opener_once_season_has_started(self, service, monkeypatch):
+        """base >= season_start (regular season underway) must never trigger
+        the preseason preview branch, even with an empty lookahead window."""
+        today = _today()
+        monkeypatch.setattr(settings, 'season_start', today - timedelta(days=1))
+
+        with patch.object(
+            service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day({}),
+        ) as get:
+            games = await service.get_games_today()
+
+        assert games == {}
+        assert service.get_schedule_date() is None
+        # only the single whitelist call from the normal lookahead scan —
+        # no extra opener-day probe
+        assert len(get.call_args_list) == 1

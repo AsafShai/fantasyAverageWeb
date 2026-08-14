@@ -5,6 +5,7 @@ import { PlayerDropdown } from './PlayerDropdown';
 import { TeamRankingsBar } from './TeamRankingsBar';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import ErrorMessage from '../../../components/ErrorMessage';
+import { getErrorMessage } from '../../../utils/errorMessage';
 
 interface TeamTradeSectionProps {
   title: string;
@@ -60,7 +61,7 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
         {isLoadingTeams ? (
           <LoadingSpinner />
         ) : teamsError ? (
-          <ErrorMessage message="Failed to load teams" />
+          <ErrorMessage message={getErrorMessage(teamsError, 'Failed to load teams')} />
         ) : (
           <select
             value={selectedTeam?.team_id ?? ''}
@@ -96,7 +97,7 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
           {isLoadingPlayers ? (
             <LoadingSpinner />
           ) : playersError ? (
-            <ErrorMessage message="Failed to load players" />
+            <ErrorMessage message={getErrorMessage(playersError, 'Failed to load players')} />
           ) : (
             <PlayerDropdown
               players={players}

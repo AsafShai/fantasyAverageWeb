@@ -3,6 +3,7 @@ import { useGetLeagueShotsQuery } from '../store/api/fantasyApi'
 import { Link } from 'react-router'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from './DataDateBadge'
 import type { TeamShotStats } from '../types/api'
 
@@ -46,7 +47,7 @@ const ShootingStatsSection = () => {
   }
 
   if (isLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message="Failed to load shots data" />
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load shots data')} />
 
   const rawShots = data?.shots || []
 

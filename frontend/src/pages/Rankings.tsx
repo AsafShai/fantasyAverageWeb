@@ -3,6 +3,7 @@ import { useGetRankingsQuery, useGetLeagueSummaryQuery } from '../store/api/fant
 import { Link } from 'react-router'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import type { RankingStats } from '../types/api'
 import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
@@ -67,8 +68,13 @@ const Rankings = () => {
     }
   }
 
+  const isDateRangeActive = !!(appliedDates.startDate && appliedDates.endDate)
+
   if (isLoading || summaryLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message="Failed to load rankings" />
+  // A custom-range failure (e.g. no data for that window) shouldn't blow away
+  // the whole page — the date controls and default-season data stay usable;
+  // only a failure on the default (no range) query is page-fatal.
+  if (error && !isDateRangeActive) return <ErrorMessage message={getErrorMessage(error, 'Failed to load rankings')} />
 
   const rawRankings = mode === 'averages'
     ? (data?.averages_rankings || [])
@@ -102,7 +108,6 @@ const Rankings = () => {
     { key: 'gp', label: 'GP', sortable: true },
   ]
 
-  const isDateRangeActive = appliedDates.startDate && appliedDates.endDate
   const hasDateMismatch = data && isDateRangeActive && (
     (data.actual_start_date && data.actual_start_date !== data.date_range_start) ||
     (data.actual_end_date && data.actual_end_date !== data.date_range_end)
@@ -115,30 +120,26 @@ const Rankings = () => {
           <DataDateBadge dataDate={data.data_date} />
         </div>
       )}
-      {(summary?.nba_avg_pace || summary?.nba_game_days_left !== undefined) && (
+      {summary && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:flex sm:justify-center sm:gap-4">
-          {summary?.nba_avg_pace && (
-            <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
-              <div className="flex items-center justify-center w-8 h-8 bg-amber-100 rounded-full sm:w-10 sm:h-10">
-                <span className="text-lg sm:text-xl">⚡</span>
-              </div>
-              <div className="text-center sm:text-left">
-                <div className="text-xs text-gray-500 font-medium">NBA Avg Pace</div>
-                <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_avg_pace.toFixed(1)}</div>
-              </div>
+          <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
+            <div className="flex items-center justify-center w-8 h-8 bg-amber-100 rounded-full sm:w-10 sm:h-10">
+              <span className="text-lg sm:text-xl">⚡</span>
             </div>
-          )}
-          {summary?.nba_game_days_left !== undefined && summary.nba_game_days_left !== null && (
-            <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
-              <div className="flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full sm:w-10 sm:h-10">
-                <span className="text-lg sm:text-xl">📅</span>
-              </div>
-              <div className="text-center sm:text-left">
-                <div className="text-xs text-gray-500 font-medium">Days Remaining</div>
-                <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_game_days_left}</div>
-              </div>
+            <div className="text-center sm:text-left">
+              <div className="text-xs text-gray-500 font-medium">NBA Avg Pace</div>
+              <div className="text-xl font-bold text-gray-900 sm:text-2xl">{(summary.nba_avg_pace ?? 0).toFixed(1)}</div>
             </div>
-          )}
+          </div>
+          <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
+            <div className="flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full sm:w-10 sm:h-10">
+              <span className="text-lg sm:text-xl">📅</span>
+            </div>
+            <div className="text-center sm:text-left">
+              <div className="text-xs text-gray-500 font-medium">Days Remaining</div>
+              <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_game_days_left ?? 0}</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -255,6 +256,12 @@ const Rankings = () => {
         {hasDateMismatch && (
           <div className="px-6 py-2 bg-amber-50 dark:bg-gray-700 border-b border-amber-200 dark:border-gray-600 text-sm text-amber-700 dark:text-amber-300">
             Note: closest available data used - showing {formatDate(data!.actual_start_date!)} - {formatDate(data!.actual_end_date!)}
+          </div>
+        )}
+
+        {error && isDateRangeActive && (
+          <div className="px-6 py-2 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+            {getErrorMessage(error, 'Could not load rankings for this date range.')}
           </div>
         )}
 

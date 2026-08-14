@@ -56,8 +56,9 @@ class FakeDB:
         self.eval_rows = rows
         return self.eval_insert_ok
 
-    async def insert_fs_rows(self, player_rows, team_rows):
+    async def insert_fs_rows(self, player_rows, team_rows, use_copy=False):
         self.fs_rows = (player_rows, team_rows)
+        self.fs_used_copy = use_copy
         return self.fs_insert_ok
 
     async def upsert_feature_vectors(self, player_rows, team_allowed_rows, team_own_rows):

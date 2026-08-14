@@ -47,5 +47,6 @@ async def start_scheduler():
         try:
             statuses = await service.run_catchup()
             logger.info(f"Model nightly catch-up finished: {statuses}")
-        except Exception:
-            logger.exception("Model nightly pipeline failed; will retry at next slot")
+        except Exception as e:
+            logger.error(f"Model nightly pipeline failed: {type(e).__name__}: {e}; will retry at next slot")
+            logger.exception("Model nightly pipeline failure traceback")

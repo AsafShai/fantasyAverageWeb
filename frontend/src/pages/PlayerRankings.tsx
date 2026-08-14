@@ -3,6 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetAllPlayersQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { getErrorMessage } from '../utils/errorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import PlayerNameLink from '../components/PlayerNameLink'
@@ -152,7 +153,7 @@ export default function PlayerRankings() {
   }
 
   if (isLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message="Failed to load players." />
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players.')} />
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">

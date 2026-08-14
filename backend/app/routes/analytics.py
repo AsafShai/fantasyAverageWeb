@@ -4,7 +4,7 @@ from app.models import HeatmapData, RankingsOverTimeResponse, TeamTimeSeriesPoin
 from app.services.league_service import LeagueService
 from app.services.db_service import DBService
 from typing import Annotated, Optional
-from app.exceptions import ResourceNotFoundError
+from app.exceptions import ResourceNotFoundError, DataSourceError
 from datetime import date, date as date_type
 from app.config import settings
 
@@ -43,6 +43,8 @@ async def get_heatmap(
     except ResourceNotFoundError as e:
         logger.warning(f"Invalid request for heatmap: {e}")
         raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting heatmap data: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve heatmap data")
@@ -63,12 +65,12 @@ async def get_over_time(
                 raise HTTPException(status_code=400, detail="Invalid team_ids format")
 
         if source == "snapshot":
-            rows = await db_service.get_snapshot_over_time(parsed_team_ids)
+            rows = await db_service.get_snapshot_over_time(parsed_team_ids, settings.league_id, settings.season_id)
         elif source == "averages":
-            rows = await db_service.get_averages_over_time(parsed_team_ids)
+            rows = await db_service.get_averages_over_time(parsed_team_ids, settings.league_id, settings.season_id)
         else:
             table = _SOURCE_TO_TABLE[source]
-            rows = await db_service.get_rankings_over_time(table, parsed_team_ids)
+            rows = await db_service.get_rankings_over_time(table, parsed_team_ids, settings.league_id, settings.season_id)
 
         points = [TeamTimeSeriesPoint(**{k: (v.isoformat() if isinstance(v, date_type) else v) for k, v in row.items()}) for row in rows]
         return RankingsOverTimeResponse(data=points)

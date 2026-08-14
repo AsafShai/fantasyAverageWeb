@@ -4,6 +4,7 @@ import { PlayerStatsCard } from './PlayerStatsCard';
 import { PlayerSearchInput } from '../../../components/PlayerSearchInput';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import ErrorMessage from '../../../components/ErrorMessage';
+import { getErrorMessage } from '../../../utils/errorMessage';
 
 interface FreeAgentSectionProps {
   players: Player[];
@@ -44,7 +45,7 @@ export const FreeAgentSection: React.FC<FreeAgentSectionProps> = ({
         {isLoading ? (
           <LoadingSpinner />
         ) : error ? (
-          <ErrorMessage message="Failed to load free agents" />
+          <ErrorMessage message={getErrorMessage(error, 'Failed to load free agents')} />
         ) : (
           <PlayerSearchInput
             players={players}

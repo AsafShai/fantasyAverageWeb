@@ -7,6 +7,7 @@ from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
 from app.utils.constants import RANKING_CATEGORIES, PER_GAME_CATEGORIES
+from app.config import settings
 
 class RankingService:
     """Service for ranking-related operations"""
@@ -45,7 +46,9 @@ class RankingService:
     async def _get_rankings_for_range(self, start_date: date, end_date: date,
                                        sort_by: Optional[str], order: str) -> LeagueRankings:
         actual_end_date, actual_start_date, rows_end, rows_start = \
-            await self.data_provider.db_service.get_snapshots_for_date_range(start_date, end_date)
+            await self.data_provider.db_service.get_snapshots_for_date_range(
+                start_date, end_date, settings.league_id, settings.season_id
+            )
 
         if actual_end_date is None or not rows_end:
             raise ResourceNotFoundError("No data available for the requested date range")

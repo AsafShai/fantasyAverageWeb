@@ -30,7 +30,9 @@ ml-research = ["shap>=0.52.0", "matplotlib>=3.11.0", "lightgbm>=4.6.0"]
 default-groups = ["test"]
 
 [tool.pytest.ini_options]
+addopts = "-m 'not live'"
 markers = [
     "real_dataprovider: use real DataProvider singleton (nested patch) for unit tests",
+    "live: hits a real external API (ESPN); excluded by default, run with -m live",
 ]
 

@@ -186,7 +186,11 @@ class ModelNightlyService:
         statuses: dict[str, str] = {"missing_features": missing} if missing else {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = yesterday - timedelta(days=offset)
-            status = await self.run_for_date(d)
+            try:
+                status = await self.run_for_date(d)
+            except Exception as e:
+                logger.error(f"Model nightly run_for_date({d}) raised: {type(e).__name__}: {e}")
+                raise
             statuses[d.isoformat()] = status
             if status not in ("processed", "no_games", "already_processed", "store_already_ingested"):
                 logger.warning(f"Model nightly catch-up stopped at {d}: {status}")
@@ -332,8 +336,8 @@ class ModelNightlyService:
             logger.warning(
                 f"Feature vectors are missing {len(missing)} feature(s) the models need "
                 f"({preview}). Auto-heal is off (MODEL_FEATURE_HEAL_AUTO), so the models "
-                f"will read them as NaN until the vectors are rebuilt. Run:\n"
-                f"    cd backend && python scripts/refresh_feature_vectors.py "
+                f"will read them as NaN until the vectors are rebuilt. Run: "
+                f"cd backend && python scripts/refresh_feature_vectors.py "
                 f"--database-url <url> --expect-feature {sorted(missing)[0]}"
             )
             return "manual_refresh_required"
@@ -461,13 +465,21 @@ class ModelNightlyService:
                 f"for {', '.join(rconfig.SEASONS)}"
                 + (f" (until {until_date})" if until_date else "")
             )
+            logger.info("Bootstrap: writing raw game rows...")
+            # Tables are empty here (either freshly created or just truncated), so
+            # COPY is safe and turns a multi-minute per-row insert into seconds.
             if not await self._db.insert_fs_rows(
                 _frame_to_tuples(players, _FS_PLAYER_COLS),
                 _frame_to_tuples(team_games, _FS_TEAM_COLS),
+                use_copy=True,
             ):
                 return "db_write_failed"
 
+            logger.info("Bootstrap: building feature vectors (this is the slow step)...")
             vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
+            logger.info(
+                f"Bootstrap: writing {len(vectors[0])} player / {len(vectors[1])} team vectors..."
+            )
             if not await self._db.upsert_feature_vectors(*vectors):
                 return "db_write_failed"
             self._invalidate_inference_store()

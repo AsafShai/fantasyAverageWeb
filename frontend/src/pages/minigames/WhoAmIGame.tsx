@@ -9,6 +9,7 @@ import {
 import PlayerPicker from '../../components/minigames/PlayerPicker'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
+import { getErrorMessage } from '../../utils/errorMessage'
 import { useConferenceDivisionTree } from '../../minigames/conferenceDivisionTree'
 import { useMinigamePlayers } from '../../minigames/useMinigamePlayers'
 import { pickRandomPlayer } from '../../minigames/players'
@@ -151,7 +152,7 @@ export default function WhoAmIGame() {
   }
 
   if (isLoading) return <LoadingSpinner />
-  if (error || !players.length) return <ErrorMessage message="Failed to load players" />
+  if (error || !players.length) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
   return (
     <div className="max-w-6xl mx-auto px-4 pb-12">

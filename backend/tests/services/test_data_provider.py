@@ -242,3 +242,86 @@ async def test_get_all_dataframes_tuple(provider):
 
     t, a, r = await provider.get_all_dataframes()
     assert len(t) == len(a) == len(r)
+
+
+@pytest.mark.asyncio
+async def test_fallback_from_db_raises_when_no_rows(provider):
+    """No DB fallback data for this league/season is a real 'nothing to
+    serve' state, not a generic crash — the route layer maps DataSourceError
+    to 503 so the frontend can show a specific message."""
+    provider.db_service.get_latest_snapshot = AsyncMock(return_value=(None, []))
+
+    with pytest.raises(DataSourceError, match="ESPN unavailable and no DB fallback data"):
+        await provider._fallback_from_db()
+
+
+@pytest.mark.asyncio
+async def test_fallback_from_db_casts_decimal_columns_to_float(provider):
+    """asyncpg returns Decimal for NUMERIC columns; the DB-fallback totals
+    DataFrame must be uniformly float (like the ESPN path) so downstream
+    consumers (e.g. the heatmap) don't crash mixing Decimal and float."""
+    from decimal import Decimal
+
+    rows = [{
+        "team_id": 1, "team_name": "T", "date": "2025-01-01",
+        "fg_pct": Decimal("46.7"), "ft_pct": Decimal("74.9"),
+        "three_pm": Decimal("15"), "reb": Decimal("43"), "ast": Decimal("28"),
+        "stl": Decimal("9"), "blk": Decimal("4"), "pts": Decimal("112"),
+        "gp": Decimal("10"), "fgm": Decimal("40"), "fga": Decimal("85"),
+        "ftm": Decimal("20"), "fta": Decimal("27"),
+    }]
+    provider.db_service.get_latest_snapshot = AsyncMock(return_value=("2025-01-01", rows))
+
+    df = await provider._fallback_from_db()
+
+    for col in ["FG%", "FT%", "3PM", "REB", "AST", "STL", "BLK", "PTS", "GP"]:
+        assert df[col].dtype == float, f"{col} should be cast to float, got {df[col].dtype}"
+
+
+@pytest.mark.asyncio
+async def test_get_team_names_reuses_cached_raw_payload(provider):
+    """Reuses the raw standings payload already cached by get_totals_df —
+    doesn't make an extra ESPN request when one is already in memory."""
+    provider.cache_manager.totals_cache["raw"] = {"teams": [{"id": 1, "name": "Alpha"}]}
+    provider.data_transformer.raw_standings_to_team_names.return_value = [
+        {"team_id": 1, "team_name": "Alpha"}
+    ]
+    provider._client.get = AsyncMock()
+
+    result = await provider.get_team_names()
+
+    provider._client.get.assert_not_awaited()
+    provider.data_transformer.raw_standings_to_team_names.assert_called_once_with(
+        {"teams": [{"id": 1, "name": "Alpha"}]}
+    )
+    assert result == [{"team_id": 1, "team_name": "Alpha"}]
+
+
+@pytest.mark.asyncio
+async def test_get_team_names_fetches_fresh_when_nothing_cached(provider):
+    """No cached payload yet (e.g. totals were never successfully fetched
+    this run, as in preseason) -> a fresh standings request is made."""
+    provider.cache_manager.totals_cache["raw"] = None
+    raw_payload = {"teams": [{"id": 2, "name": "Beta"}]}
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = raw_payload
+    provider._client.get = AsyncMock(return_value=mock_resp)
+    provider.data_transformer.raw_standings_to_team_names.return_value = [
+        {"team_id": 2, "team_name": "Beta"}
+    ]
+
+    result = await provider.get_team_names()
+
+    provider._client.get.assert_awaited_once()
+    mock_resp.raise_for_status.assert_called_once()
+    assert provider.cache_manager.totals_cache["raw"] == raw_payload
+    assert result == [{"team_id": 2, "team_name": "Beta"}]
+
+
+@pytest.mark.asyncio
+async def test_get_team_names_raises_data_source_error_on_fetch_failure(provider):
+    provider.cache_manager.totals_cache["raw"] = None
+    provider._client.get = AsyncMock(side_effect=httpx.ConnectError("down"))
+
+    with pytest.raises(DataSourceError, match="Error fetching team names"):
+        await provider.get_team_names()

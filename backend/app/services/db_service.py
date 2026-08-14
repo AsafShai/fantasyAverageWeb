@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import date, timedelta
 from typing import Optional
 import asyncpg
@@ -8,8 +9,6 @@ from app.models.injury_models import InjuryRecord
 from model_stats_inference.research import config as rconfig
 
 logger = logging.getLogger(__name__)
-
-_SEASON_START = settings.season_start
 
 _RANKINGS_COL_MAP = {
     'FG%': 'rk_fg_pct',
@@ -63,33 +62,39 @@ class DBService:
                 return None
         return self._pool
 
-    async def get_db_max_scoring_period(self, table: str) -> int:
+    async def get_db_max_scoring_period(self, table: str, league_id: int, season_id: int) -> int:
         pool = await self._get_pool()
         if pool is None:
             return 0
         try:
             async with pool.acquire() as conn:
-                row = await conn.fetchrow(f"SELECT COALESCE(MAX(scoring_period_id), 0) AS max_period FROM {table}")
+                row = await conn.fetchrow(
+                    f"SELECT COALESCE(MAX(scoring_period_id), 0) AS max_period FROM {table} "
+                    "WHERE league_id = $1 AND season_id = $2",
+                    league_id, season_id,
+                )
                 return row['max_period']
         except Exception as e:
             logger.error(f"Failed to query max scoring_period_id from {table}: {e}")
             return 0
 
-    async def upsert_rankings_averages(self, scoring_period_id: int, rankings_df: pd.DataFrame) -> None:
+    async def upsert_rankings_averages(
+        self, scoring_period_id: int, rankings_df: pd.DataFrame, league_id: int, season_id: int
+    ) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
-        snap_date = _SEASON_START + timedelta(days=scoring_period_id - 1)
+        snap_date = settings.season_start + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
                 await conn.executemany(
                     """
                     INSERT INTO team_rankings_averages
-                        (scoring_period_id, date, team_id, team_name,
+                        (league_id, season_id, scoring_period_id, date, team_id, team_name,
                          rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
                          rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-                    ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                    ON CONFLICT (league_id, season_id, scoring_period_id, team_id) DO UPDATE SET
                         team_name   = EXCLUDED.team_name,
                         rk_fg_pct   = EXCLUDED.rk_fg_pct,
                         rk_ft_pct   = EXCLUDED.rk_ft_pct,
@@ -103,7 +108,7 @@ class DBService:
                     """,
                     [
                         (
-                            scoring_period_id, snap_date,
+                            league_id, season_id, scoring_period_id, snap_date,
                             int(row['team_id']), str(row['team_name']),
                             float(row['FG%']), float(row['FT%']), float(row['3PM']),
                             float(row['REB']), float(row['AST']), float(row['STL']),
@@ -112,25 +117,30 @@ class DBService:
                         for _, row in rankings_df.iterrows()
                     ],
                 )
-            logger.info(f"Upserted team_rankings_averages for scoring_period_id={scoring_period_id}")
+            logger.info(
+                f"Upserted team_rankings_averages for league_id={league_id} season_id={season_id} "
+                f"scoring_period_id={scoring_period_id}"
+            )
         except Exception as e:
             logger.error(f"Failed to upsert team_rankings_averages: {e}")
 
-    async def upsert_rankings_totals(self, scoring_period_id: int, rankings_totals_df: pd.DataFrame) -> None:
+    async def upsert_rankings_totals(
+        self, scoring_period_id: int, rankings_totals_df: pd.DataFrame, league_id: int, season_id: int
+    ) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
-        snap_date = _SEASON_START + timedelta(days=scoring_period_id - 1)
+        snap_date = settings.season_start + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
                 await conn.executemany(
                     """
                     INSERT INTO team_rankings_totals
-                        (scoring_period_id, date, team_id, team_name,
+                        (league_id, season_id, scoring_period_id, date, team_id, team_name,
                          rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
                          rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-                    ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                    ON CONFLICT (league_id, season_id, scoring_period_id, team_id) DO UPDATE SET
                         team_name   = EXCLUDED.team_name,
                         rk_fg_pct   = EXCLUDED.rk_fg_pct,
                         rk_ft_pct   = EXCLUDED.rk_ft_pct,
@@ -144,7 +154,7 @@ class DBService:
                     """,
                     [
                         (
-                            scoring_period_id, snap_date,
+                            league_id, season_id, scoring_period_id, snap_date,
                             int(row['team_id']), str(row['team_name']),
                             float(row['FG%']), float(row['FT%']), float(row['3PM']),
                             float(row['REB']), float(row['AST']), float(row['STL']),
@@ -153,15 +163,20 @@ class DBService:
                         for _, row in rankings_totals_df.iterrows()
                     ],
                 )
-            logger.info(f"Upserted team_rankings_totals for scoring_period_id={scoring_period_id}")
+            logger.info(
+                f"Upserted team_rankings_totals for league_id={league_id} season_id={season_id} "
+                f"scoring_period_id={scoring_period_id}"
+            )
         except Exception as e:
             logger.error(f"Failed to upsert team_rankings_totals: {e}")
 
-    async def upsert_daily_snapshot(self, scoring_period_id: int, totals_df: pd.DataFrame) -> None:
+    async def upsert_daily_snapshot(
+        self, scoring_period_id: int, totals_df: pd.DataFrame, league_id: int, season_id: int
+    ) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
-        snap_date = _SEASON_START + timedelta(days=scoring_period_id - 1)
+        snap_date = settings.season_start + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
                 rows = []
@@ -171,7 +186,7 @@ class DBService:
                     ftm = int(row['FTM'])
                     fta = int(row['FTA'])
                     rows.append((
-                        scoring_period_id, snap_date,
+                        league_id, season_id, scoring_period_id, snap_date,
                         int(row['team_id']), str(row['team_name']),
                         int(row['GP']),
                         fgm, fga, round(fgm / fga, 4) if fga > 0 else 0.0,
@@ -182,11 +197,11 @@ class DBService:
                 await conn.executemany(
                     """
                     INSERT INTO team_daily_snapshot
-                        (scoring_period_id, date, team_id, team_name,
+                        (league_id, season_id, scoring_period_id, date, team_id, team_name,
                          gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                          three_pm, reb, ast, stl, blk, pts)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-                    ON CONFLICT (scoring_period_id, team_id) DO UPDATE SET
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+                    ON CONFLICT (league_id, season_id, scoring_period_id, team_id) DO UPDATE SET
                         team_name = EXCLUDED.team_name,
                         gp        = EXCLUDED.gp,
                         fgm       = EXCLUDED.fgm,
@@ -204,11 +219,14 @@ class DBService:
                     """,
                     rows,
                 )
-            logger.info(f"Upserted team_daily_snapshot for scoring_period_id={scoring_period_id}")
+            logger.info(
+                f"Upserted team_daily_snapshot for league_id={league_id} season_id={season_id} "
+                f"scoring_period_id={scoring_period_id}"
+            )
         except Exception as e:
             logger.error(f"Failed to upsert team_daily_snapshot: {e}")
 
-    async def get_latest_snapshot(self):
+    async def get_latest_snapshot(self, league_id: int, season_id: int):
         """
         Returns (date, rows) where rows is a list of dicts with team totals.
         Returns (None, []) if DB unavailable or empty.
@@ -219,7 +237,9 @@ class DBService:
         try:
             async with pool.acquire() as conn:
                 max_row = await conn.fetchrow(
-                    "SELECT COALESCE(MAX(scoring_period_id), 0) AS max_period FROM team_daily_snapshot"
+                    "SELECT COALESCE(MAX(scoring_period_id), 0) AS max_period FROM team_daily_snapshot "
+                    "WHERE league_id = $1 AND season_id = $2",
+                    league_id, season_id,
                 )
                 max_period = max_row['max_period']
                 if max_period == 0:
@@ -229,9 +249,9 @@ class DBService:
                     SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                            three_pm, reb, ast, stl, blk, pts, date
                     FROM team_daily_snapshot
-                    WHERE scoring_period_id = $1
+                    WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3
                     """,
-                    max_period
+                    league_id, season_id, max_period
                 )
                 if not rows:
                     return None, []
@@ -241,7 +261,9 @@ class DBService:
             logger.error(f"Failed to fetch latest snapshot: {e}")
             return None, []
 
-    async def get_rankings_over_time(self, table: str, team_ids: list[int] | None) -> list[dict]:
+    async def get_rankings_over_time(
+        self, table: str, team_ids: list[int] | None, league_id: int, season_id: int
+    ) -> list[dict]:
         pool = await self._get_pool()
         if pool is None:
             return []
@@ -257,10 +279,11 @@ class DBService:
                         FROM {table} r
                         LEFT JOIN team_daily_snapshot s
                             ON s.date = r.date AND s.team_id = r.team_id
-                        WHERE r.team_id = ANY($1)
+                            AND s.league_id = r.league_id AND s.season_id = r.season_id
+                        WHERE r.league_id = $1 AND r.season_id = $2 AND r.team_id = ANY($3)
                         ORDER BY r.date, r.team_id
                         """,
-                        team_ids,
+                        league_id, season_id, team_ids,
                     )
                 else:
                     rows = await conn.fetch(
@@ -272,19 +295,24 @@ class DBService:
                         FROM {table} r
                         LEFT JOIN team_daily_snapshot s
                             ON s.date = r.date AND s.team_id = r.team_id
+                            AND s.league_id = r.league_id AND s.season_id = r.season_id
+                        WHERE r.league_id = $1 AND r.season_id = $2
                         ORDER BY r.date, r.team_id
-                        """
+                        """,
+                        league_id, season_id,
                     )
                 return [dict(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to fetch rankings over time from {table}: {e}")
             return []
 
-    async def get_snapshot_over_time(self, team_ids: list[int] | None) -> list[dict]:
+    async def get_snapshot_over_time(
+        self, team_ids: list[int] | None, league_id: int, season_id: int
+    ) -> list[dict]:
         pool = await self._get_pool()
         if pool is None:
             return []
-        cutoff = _SEASON_START + timedelta(days=10)
+        cutoff = settings.season_start + timedelta(days=10)
         try:
             async with pool.acquire() as conn:
                 if team_ids:
@@ -293,10 +321,11 @@ class DBService:
                         SELECT date, team_id, team_name,
                                fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
                         FROM team_daily_snapshot
-                        WHERE date >= $1 AND team_id = ANY($2)
+                        WHERE league_id = $1 AND season_id = $2
+                          AND date >= $3 AND team_id = ANY($4)
                         ORDER BY date, team_id
                         """,
-                        cutoff, team_ids,
+                        league_id, season_id, cutoff, team_ids,
                     )
                 else:
                     rows = await conn.fetch(
@@ -304,17 +333,19 @@ class DBService:
                         SELECT date, team_id, team_name,
                                fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
                         FROM team_daily_snapshot
-                        WHERE date >= $1
+                        WHERE league_id = $1 AND season_id = $2 AND date >= $3
                         ORDER BY date, team_id
                         """,
-                        cutoff,
+                        league_id, season_id, cutoff,
                     )
                 return [dict(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to fetch snapshot over time: {e}")
             return []
 
-    async def get_averages_over_time(self, team_ids: list[int] | None) -> list[dict]:
+    async def get_averages_over_time(
+        self, team_ids: list[int] | None, league_id: int, season_id: int
+    ) -> list[dict]:
         pool = await self._get_pool()
         if pool is None:
             return []
@@ -329,21 +360,28 @@ class DBService:
                    ROUND((blk::numeric    / NULLIF(gp, 0)), 4) AS blk,
                    ROUND((pts::numeric    / NULLIF(gp, 0)), 4) AS pts
             FROM team_daily_snapshot
-            WHERE date >= $1
+            WHERE league_id = $1 AND season_id = $2 AND date >= $3
         """
         try:
             async with pool.acquire() as conn:
-                cutoff = _SEASON_START + timedelta(days=10)
+                cutoff = settings.season_start + timedelta(days=10)
                 if team_ids:
-                    rows = await conn.fetch(_base + " AND team_id = ANY($2) ORDER BY date, team_id", cutoff, team_ids)
+                    rows = await conn.fetch(
+                        _base + " AND team_id = ANY($4) ORDER BY date, team_id",
+                        league_id, season_id, cutoff, team_ids,
+                    )
                 else:
-                    rows = await conn.fetch(_base + " ORDER BY date, team_id", cutoff)
+                    rows = await conn.fetch(
+                        _base + " ORDER BY date, team_id", league_id, season_id, cutoff
+                    )
                 return [dict(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to fetch averages over time: {e}")
             return []
 
-    async def get_snapshots_for_date_range(self, start_date: date, end_date: date):
+    async def get_snapshots_for_date_range(
+        self, start_date: date, end_date: date, league_id: int, season_id: int
+    ):
         """
         Returns (actual_end_date, actual_start_date, rows_end, rows_start) for delta calculation.
         - actual_end_date: closest date <= end_date in DB
@@ -357,14 +395,18 @@ class DBService:
         try:
             async with pool.acquire() as conn:
                 end_row = await conn.fetchrow(
-                    "SELECT MAX(date) AS d FROM team_daily_snapshot WHERE date <= $1", end_date
+                    "SELECT MAX(date) AS d FROM team_daily_snapshot "
+                    "WHERE league_id = $1 AND season_id = $2 AND date <= $3",
+                    league_id, season_id, end_date,
                 )
                 actual_end_date = end_row['d'] if end_row else None
                 if actual_end_date is None:
                     return None, None, [], []
 
                 start_row = await conn.fetchrow(
-                    "SELECT MIN(date) AS d FROM team_daily_snapshot WHERE date >= $1", start_date
+                    "SELECT MIN(date) AS d FROM team_daily_snapshot "
+                    "WHERE league_id = $1 AND season_id = $2 AND date >= $3",
+                    league_id, season_id, start_date,
                 )
                 actual_start_date = start_row['d'] if start_row else None
 
@@ -372,9 +414,10 @@ class DBService:
                     """
                     SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                            three_pm, reb, ast, stl, blk, pts
-                    FROM team_daily_snapshot WHERE date = $1
+                    FROM team_daily_snapshot
+                    WHERE league_id = $1 AND season_id = $2 AND date = $3
                     """,
-                    actual_end_date
+                    league_id, season_id, actual_end_date
                 )
 
                 rows_start = []
@@ -383,9 +426,10 @@ class DBService:
                         """
                         SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                                three_pm, reb, ast, stl, blk, pts
-                        FROM team_daily_snapshot WHERE date = $1
+                        FROM team_daily_snapshot
+                        WHERE league_id = $1 AND season_id = $2 AND date = $3
                         """,
-                        actual_start_date
+                        league_id, season_id, actual_start_date
                     )
 
                 return actual_end_date, actual_start_date, [dict(r) for r in rows_end], [dict(r) for r in rows_start]
@@ -393,27 +437,30 @@ class DBService:
             logger.error(f"Failed to fetch snapshots for date range: {e}")
             return None, None, [], []
 
-    async def upsert_estimator_prediction(self, df: pd.DataFrame) -> None:
+    async def upsert_estimator_prediction(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    await conn.execute("DELETE FROM estimator_prediction")
+                    await conn.execute(
+                        "DELETE FROM estimator_prediction WHERE league_id = $1 AND season_id = $2",
+                        league_id, season_id,
+                    )
                     for _, row in df.iterrows():
                         await conn.execute(
                             """
                             INSERT INTO estimator_prediction (
-                                team_id, team_name, as_of_date, projected_total_gp,
+                                league_id, season_id, team_id, team_name, as_of_date, projected_total_gp,
                                 estimated_final_fg_pct, estimated_final_ft_pct, estimated_final_three_pm,
                                 estimated_final_reb, estimated_final_ast, estimated_final_stl,
                                 estimated_final_blk, estimated_final_pts,
                                 variance_fg_pct, variance_ft_pct, variance_three_pm,
                                 variance_reb, variance_ast, variance_stl, variance_blk, variance_pts,
                                 nba_avg_pace
-                            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-                            ON CONFLICT (team_id) DO UPDATE SET
+                            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+                            ON CONFLICT (league_id, season_id, team_id) DO UPDATE SET
                                 team_name = EXCLUDED.team_name,
                                 as_of_date = EXCLUDED.as_of_date,
                                 projected_total_gp = EXCLUDED.projected_total_gp,
@@ -435,6 +482,8 @@ class DBService:
                                 variance_pts = EXCLUDED.variance_pts,
                                 nba_avg_pace = EXCLUDED.nba_avg_pace
                             """,
+                            league_id,
+                            season_id,
                             int(row['team_id']),
                             str(row['team_name']),
                             row['as_of_date'],
@@ -457,28 +506,31 @@ class DBService:
                             float(row['variance_pts']),
                             float(row['nba_avg_pace']),
                         )
-            logger.info("Upserted estimator_prediction")
+            logger.info(f"Upserted estimator_prediction for league_id={league_id} season_id={season_id}")
         except Exception as e:
             logger.error(f"Failed to upsert estimator_prediction: {e}")
 
-    async def upsert_estimator_ranking(self, df: pd.DataFrame) -> None:
+    async def upsert_estimator_ranking(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    await conn.execute("DELETE FROM estimator_ranking")
+                    await conn.execute(
+                        "DELETE FROM estimator_ranking WHERE league_id = $1 AND season_id = $2",
+                        league_id, season_id,
+                    )
                     for _, row in df.iterrows():
                         await conn.execute(
                             """
                             INSERT INTO estimator_ranking (
-                                team_id, team_name, rank, total_expected_pts,
+                                league_id, season_id, team_id, team_name, rank, total_expected_pts,
                                 expected_pts_fg_pct, expected_pts_ft_pct, expected_pts_three_pm,
                                 expected_pts_reb, expected_pts_ast, expected_pts_stl,
                                 expected_pts_blk, expected_pts_pts, projected_total_gp
-                            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-                            ON CONFLICT (team_id) DO UPDATE SET
+                            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                            ON CONFLICT (league_id, season_id, team_id) DO UPDATE SET
                                 team_name = EXCLUDED.team_name,
                                 rank = EXCLUDED.rank,
                                 total_expected_pts = EXCLUDED.total_expected_pts,
@@ -492,6 +544,8 @@ class DBService:
                                 expected_pts_pts = EXCLUDED.expected_pts_pts,
                                 projected_total_gp = EXCLUDED.projected_total_gp
                             """,
+                            league_id,
+                            season_id,
                             int(row['team_id']),
                             str(row['team_name']),
                             int(row['rank']),
@@ -506,46 +560,53 @@ class DBService:
                             float(row['expected_pts_pts']),
                             float(row['projected_total_gp']),
                         )
-            logger.info("Upserted estimator_ranking")
+            logger.info(f"Upserted estimator_ranking for league_id={league_id} season_id={season_id}")
         except Exception as e:
             logger.error(f"Failed to upsert estimator_ranking: {e}")
 
-    async def upsert_estimator_rank_probability(self, df: pd.DataFrame) -> None:
+    async def upsert_estimator_rank_probability(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    await conn.execute("DELETE FROM estimator_rank_probability")
+                    await conn.execute(
+                        "DELETE FROM estimator_rank_probability WHERE league_id = $1 AND season_id = $2",
+                        league_id, season_id,
+                    )
                     await conn.executemany(
                         """
-                        INSERT INTO estimator_rank_probability (team_id, team_name, rank, prob)
-                        VALUES ($1, $2, $3, $4)
+                        INSERT INTO estimator_rank_probability (league_id, season_id, team_id, team_name, rank, prob)
+                        VALUES ($1, $2, $3, $4, $5, $6)
                         """,
                         [
-                            (int(row['team_id']), str(row['team_name']), int(row['rank']), float(row['prob']))
+                            (league_id, season_id, int(row['team_id']), str(row['team_name']), int(row['rank']), float(row['prob']))
                             for _, row in df.iterrows()
                         ],
                     )
-            logger.info("Upserted estimator_rank_probability")
+            logger.info(f"Upserted estimator_rank_probability for league_id={league_id} season_id={season_id}")
         except Exception as e:
             logger.error(f"Failed to upsert estimator_rank_probability: {e}")
 
-    async def get_estimator_latest(self) -> dict:
+    async def get_estimator_latest(self, league_id: int, season_id: int) -> dict:
         pool = await self._get_pool()
         if pool is None:
             return {}
         try:
             async with pool.acquire() as conn:
                 predictions = await conn.fetch(
-                    "SELECT * FROM estimator_prediction ORDER BY team_id"
+                    "SELECT * FROM estimator_prediction WHERE league_id = $1 AND season_id = $2 ORDER BY team_id",
+                    league_id, season_id,
                 )
                 rankings = await conn.fetch(
-                    "SELECT * FROM estimator_ranking ORDER BY rank"
+                    "SELECT * FROM estimator_ranking WHERE league_id = $1 AND season_id = $2 ORDER BY rank",
+                    league_id, season_id,
                 )
                 rank_probs = await conn.fetch(
-                    "SELECT * FROM estimator_rank_probability ORDER BY team_id, rank"
+                    "SELECT * FROM estimator_rank_probability WHERE league_id = $1 AND season_id = $2 "
+                    "ORDER BY team_id, rank",
+                    league_id, season_id,
                 )
                 return {
                     "predictions": [dict(r) for r in predictions],
@@ -556,13 +617,16 @@ class DBService:
             logger.error(f"Failed to fetch estimator latest: {e}")
             return {}
 
-    async def estimator_has_data(self) -> bool:
+    async def estimator_has_data(self, league_id: int, season_id: int) -> bool:
         pool = await self._get_pool()
         if pool is None:
             return False
         try:
             async with pool.acquire() as conn:
-                count = await conn.fetchval("SELECT COUNT(*) FROM estimator_ranking")
+                count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM estimator_ranking WHERE league_id = $1 AND season_id = $2",
+                    league_id, season_id,
+                )
                 return (count or 0) > 0
         except Exception as e:
             logger.error(f"Failed to check estimator data: {e}")
@@ -1056,9 +1120,17 @@ class DBService:
             logger.error(f"Failed to count games since {since_date}: {e}")
             return {}
 
-    async def insert_fs_rows(self, player_rows: list[tuple], team_rows: list[tuple]) -> bool:
+    async def insert_fs_rows(
+        self, player_rows: list[tuple], team_rows: list[tuple], use_copy: bool = False
+    ) -> bool:
         """Append raw game rows. Tuple order must match the column lists below.
-        ON CONFLICT DO NOTHING makes re-runs of the same night no-ops."""
+        ON CONFLICT DO NOTHING makes re-runs of the same night no-ops.
+
+        ``use_copy`` swaps the per-row INSERT for COPY, which has no conflict
+        handling — only valid when the tables are known to be empty (bootstrap,
+        which truncates first). A nightly's ~200 rows don't need it; a
+        bootstrap's ~95k rows take minutes as individual INSERTs.
+        """
         pool = await self._get_pool()
         if pool is None:
             return False
@@ -1070,6 +1142,8 @@ class DBService:
             "team_id, game_id, season, game_date, team_name, matchup, "
             "pts, reb, ast, stl, blk, fg3m, fg_pct, fga, fta, tov"
         )
+        if use_copy:
+            return await self._copy_fs_rows(pool, player_rows, team_rows, player_cols, team_cols)
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
@@ -1091,6 +1165,34 @@ class DBService:
             return True
         except Exception as e:
             logger.error(f"Failed to insert fs rows: {e}")
+            return False
+
+    async def _copy_fs_rows(
+        self, pool, player_rows: list[tuple], team_rows: list[tuple],
+        player_cols: str, team_cols: str,
+    ) -> bool:
+        """COPY path for insert_fs_rows(use_copy=True). Empty tables only."""
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    for table, cols, rows in (
+                        ("fs_player_games", player_cols, player_rows),
+                        ("fs_team_games", team_cols, team_rows),
+                    ):
+                        if not rows:
+                            continue
+                        t0 = time.perf_counter()
+                        await conn.copy_records_to_table(
+                            table,
+                            records=rows,
+                            columns=[c.strip() for c in cols.split(",")],
+                        )
+                        logger.info(
+                            f"COPY {len(rows)} rows into {table} in {time.perf_counter() - t0:.1f}s"
+                        )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to COPY fs rows: {e}")
             return False
 
     async def truncate_fs_tables(self) -> bool:

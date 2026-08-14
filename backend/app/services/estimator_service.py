@@ -41,8 +41,10 @@ class EstimatorService:
                        gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                        three_pm, reb, ast, stl, blk, pts
                 FROM team_daily_snapshot
+                WHERE league_id = $1 AND season_id = $2
                 ORDER BY team_id, scoring_period_id
-                """
+                """,
+                settings.league_id, settings.season_id,
             )
         if not rows:
             raise RuntimeError("No snapshot data in DB")
@@ -54,8 +56,11 @@ class EstimatorService:
     async def _get_nba_avg_pace(self) -> float:
         try:
             nba_service = NBAStatsService()
+            # NBAStatsService is a shared singleton (closed once at app
+            # shutdown) — this runs concurrently with get_team_slot_pace_df's
+            # own use of it via the same asyncio.gather, so closing here would
+            # break whichever call is still in flight.
             pace = await nba_service.get_nba_average_pace(settings.season_id)
-            await nba_service.close()
             if pace is not None:
                 return pace
         except Exception as e:
@@ -69,12 +74,14 @@ class EstimatorService:
             logger.info("Estimator already ran today (cached), skipping")
             return False
 
-        if await self.db_service.estimator_has_data():
+        if await self.db_service.estimator_has_data(settings.league_id, settings.season_id):
             pool = await self.db_service._get_pool()
             if pool:
                 async with pool.acquire() as conn:
                     stored_date = await conn.fetchval(
-                        "SELECT as_of_date FROM estimator_prediction LIMIT 1"
+                        "SELECT as_of_date FROM estimator_prediction "
+                        "WHERE league_id = $1 AND season_id = $2 LIMIT 1",
+                        settings.league_id, settings.season_id,
                     )
                 if stored_date == today:
                     logger.info("Estimator data already up to date for today, skipping")
@@ -95,9 +102,9 @@ class EstimatorService:
             )
 
             await asyncio.gather(
-                self.db_service.upsert_estimator_prediction(prediction_df),
-                self.db_service.upsert_estimator_ranking(ranking_df),
-                self.db_service.upsert_estimator_rank_probability(rank_prob_df),
+                self.db_service.upsert_estimator_prediction(prediction_df, settings.league_id, settings.season_id),
+                self.db_service.upsert_estimator_ranking(ranking_df, settings.league_id, settings.season_id),
+                self.db_service.upsert_estimator_rank_probability(rank_prob_df, settings.league_id, settings.season_id),
             )
 
             self._cache = {
@@ -118,7 +125,7 @@ class EstimatorService:
         if self._cache and self._cache_date == today:
             return self._cache
 
-        result = await self.db_service.get_estimator_latest()
+        result = await self.db_service.get_estimator_latest(settings.league_id, settings.season_id)
         if result.get("rankings"):
             self._cache = result
             predictions = result.get("predictions", [])
