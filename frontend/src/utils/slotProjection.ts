@@ -37,9 +37,6 @@ export function slotCeiling(slot: SlotName): number {
 /** Below this NBA pace the season is too young for any of these signals to mean anything. */
 export const MIN_PACE_FOR_COLOR = 10
 
-/** Below this the slot is close enough to the NBA rate that saying so is noise. */
-export const BEHIND_PACE_GAMES = 3
-
 export interface SlotProjection {
   /** Games used, normalised to a single slot (UTIL divided by 3). */
   used: number
@@ -136,11 +133,12 @@ export function projectSlot(
  * with nothing lost produces three nulls, and the table prints nothing for it — colour
  * and words only ever appear together, on the exceptions.
  *
- * `behindPace` is per slot so UTIL is comparable with the rest; `short` and `lost` are
- * whole-column counts, because a lost game is a lost game whichever slot it belonged to.
+ * `behindPace` is per slot so UTIL is comparable with the rest, and flags any gap once it
+ * rounds to a whole game; `short` and `lost` are whole-column counts, because a lost game
+ * is a lost game whichever slot it belonged to.
  */
 export interface SlotStatus {
-  /** Games this slot is behind the NBA rate, per slot. Null when ahead or close enough. */
+  /** Games this slot is behind the NBA rate, per slot. Null when at or ahead of pace. */
   behindPace: number | null
   /** Games the projection falls short of the column cap. Null when it reaches it. */
   short: number | null
@@ -162,7 +160,8 @@ export function slotStatus(
   const lost = projection.maxGamesTotal === null ? 0 : cap - projection.maxGamesTotal
 
   return {
-    behindPace: behind >= BEHIND_PACE_GAMES ? behind : null,
+    // A fractional game (69.3 vs 69) is not a real gap — round before flagging it.
+    behindPace: Math.round(behind) > 0 ? behind : null,
     short: short > 0 ? short : null,
     lost: lost > 0 ? lost : null,
   }

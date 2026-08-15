@@ -151,10 +151,11 @@ describe('slotStatus', () => {
     expect(status(60, 'PG', ctx)).toEqual({ behindPace: null, short: null, lost: null })
   })
 
-  it('reports games behind pace once the gap reaches 3', () => {
+  it('reports any gap that rounds to a whole game behind pace', () => {
     const ctx = { avgPace: 60, gameDaysLeft: 22 }
-    expect(status(58, 'PG', ctx).behindPace).toBeNull()
-    expect(status(57, 'PG', ctx).behindPace).toBe(3)
+    expect(status(60, 'PG', ctx).behindPace).toBeNull()
+    expect(status(59.6, 'PG', ctx).behindPace).toBeNull()
+    expect(status(59, 'PG', ctx).behindPace).toBe(1)
     expect(status(48, 'PG', ctx).behindPace).toBe(12)
   })
 
@@ -164,7 +165,7 @@ describe('slotStatus', () => {
 
   it('measures behindPace per slot, so UTIL is comparable with the rest', () => {
     const ctx = { avgPace: 60, gameDaysLeft: 22 }
-    expect(status(175, 'UTIL', ctx).behindPace).toBeNull()
+    expect(status(180, 'UTIL', ctx).behindPace).toBeNull()
     expect(status(150, 'UTIL', ctx).behindPace).toBe(10)
   })
 
