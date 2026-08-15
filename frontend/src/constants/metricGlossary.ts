@@ -38,9 +38,17 @@ export const METRIC_GLOSSARY = {
     title: 'High-volume games',
     body: 'Games on nights with at least 10 NBA games league-wide. This is a sparse slate-density flag, not a recommendation.',
   },
-  scheduleRest: {
-    title: 'Average rest',
-    body: 'Average number of calendar rest days between this team’s published games. The first game has no rest value.',
+  slateSize: {
+    title: 'Games per night',
+    body: 'NBA games league-wide on that date. Fifteen is the theoretical maximum; a real night runs 2 to 13.',
+  },
+  slateDelta: {
+    title: 'Games vs typical',
+    body: 'Whole games above or below the count most teams have in this window. A dash means ordinary. Over short windows almost every team is ordinary, so this only separates the extremes.',
+  },
+  slateB2B: {
+    title: 'Back-to-backs in window',
+    body: 'Games this team plays on the night straight after another game, inside the selected window.',
   },
 } as const satisfies Record<string, MetricInfo>
 

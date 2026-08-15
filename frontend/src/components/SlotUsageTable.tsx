@@ -167,7 +167,7 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
                   {visibleSegments.map((segment, index) => (
                     <span
                       key={segment.key}
-                      title={segmentTooltip(segment, values)}
+                      aria-label={segmentTooltip(segment, values)}
                       className={`group relative h-full min-w-[2px] ${segment.className} ${index === 0 ? 'rounded-l-full' : ''} ${index === visibleSegments.length - 1 ? 'rounded-r-full' : ''}`}
                       style={{ width: `${(segment.value / cap) * 100}%` }}
                     >
