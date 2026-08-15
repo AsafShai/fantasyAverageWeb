@@ -62,6 +62,7 @@ class DayFetch:
     teams: pd.DataFrame
     expected_games: int   # countable games on the scoreboard
     all_final: bool       # every countable game is final
+    total_events: int = 0  # raw scoreboard event count, before the countability filter
 
 
 def season_for(d: date) -> str:
@@ -252,6 +253,7 @@ def _frames(player_rows: list[dict], team_rows: list[dict]) -> tuple[pd.DataFram
 def fetch_day(game_date: date) -> DayFetch:
     """One night's countable games with box scores (the nightly-ingest fetch)."""
     sb = client.scoreboard(game_date.strftime("%Y%m%d"))
+    total_events = len(sb.get("events", []))
     events = [e for e in sb.get("events", []) if is_countable(e)]
     all_final = all(is_final(e) for e in events) if events else True
 
@@ -274,7 +276,7 @@ def fetch_day(game_date: date) -> DayFetch:
         team_rows.extend(t)
 
     players, teams = _frames(player_rows, team_rows)
-    return DayFetch(game_date, players, teams, len(events), all_final)
+    return DayFetch(game_date, players, teams, len(events), all_final, total_events)
 
 
 def fetch_month(yyyymm: str) -> tuple[pd.DataFrame, pd.DataFrame]:

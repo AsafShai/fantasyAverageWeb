@@ -121,6 +121,12 @@ def scoreboard(dates: str) -> dict:
     return get_json("scoreboard", {"dates": dates, "limit": 1000})
 
 
+def calendar_whitelist() -> list[str]:
+    """Sync twin of ``calendar_whitelist_async`` for the pure-sync nightly path."""
+    data = get_json("scoreboard", {"calendartype": "whitelist"})
+    return data["leagues"][0]["calendar"]
+
+
 def game_summary(event_id: str) -> dict:
     """Full game summary (boxscore, header) for one event."""
     return get_json("summary", {"event": event_id})
