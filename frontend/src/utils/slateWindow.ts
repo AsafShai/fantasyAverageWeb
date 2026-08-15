@@ -36,8 +36,15 @@ export interface SlateWindow {
   darkNights: number
 }
 
+/** Today as ESPN dates games: the US Eastern calendar day, not the viewer's.
+ *  toISOString() would give the UTC day, which is already tomorrow between
+ *  7pm and midnight ET — that dropped the in-progress slate from the window. */
+export function easternToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
+}
+
 export function firstScheduleDay(days: ScheduleCalendarDay[]): string {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = easternToday()
   return days.find(day => day.date >= today)?.date ?? days[0]?.date ?? ''
 }
 

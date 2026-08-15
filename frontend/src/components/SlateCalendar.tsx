@@ -86,14 +86,20 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
           </div>
           <label className="flex items-center gap-2 rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-semibold text-gray-600">
             through
+            {/* Uncontrolled + keyed: a controlled value snaps back on every
+                half-typed date, so typing a date was impossible. The key
+                remounts it when a preset moves the window instead. */}
             <input
+              key={endDate}
               type="date"
-              value={endDate}
+              defaultValue={endDate}
               min={addDays(startDate, 1)}
               max={lastDate}
               onChange={event => {
-                if (!event.target.value) return
-                setEndDate(clampEnd(event.target.value))
+                const picked = event.target.value
+                if (!picked) return
+                const bounded = picked < startDate ? addDays(startDate, 1) : clampEnd(picked)
+                setEndDate(bounded)
                 setSelectedDayIndex(0)
               }}
               className="rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs font-bold text-gray-900"
@@ -123,8 +129,10 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
             <InfoTip title={METRIC_GLOSSARY.slateSize.title} body={METRIC_GLOSSARY.slateSize.body} />
           </h2>
           <span className="text-xs text-gray-500">
-            {window.totalGames} games over {days.length} nights · {window.highVolumeNights} at {HIGH_VOLUME_GAMES}+
-            {window.darkNights > 0 && ` · ${window.darkNights} with no games`}
+            {window.totalGames} games over {days.length} nights · {window.highVolumeNights} night
+            {window.highVolumeNights === 1 ? '' : 's'} at {HIGH_VOLUME_GAMES}+ games
+            {window.darkNights > 0 &&
+              ` · ${window.darkNights} night${window.darkNights === 1 ? '' : 's'} with no games at all`}
           </span>
         </div>
 
@@ -258,6 +266,10 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
           below the count most teams have; <b className="text-gray-600">—</b> means ordinary.{' '}
           <b className="text-gray-600">B2B</b> = back-to-backs inside the window.{' '}
           <b className="text-gray-600">Next</b> = first game from today.
+        </p>
+        <p className="mt-2 text-xs text-gray-500">
+          Nights are <b className="text-gray-600">US Eastern game dates</b>, the same dates ESPN scores against — so a night
+          shown here tips overnight Israel time.
         </p>
       </div>
     </div>

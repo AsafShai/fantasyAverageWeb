@@ -16,11 +16,11 @@ interface TeamNightGridProps {
 }
 
 const STICKY = {
-  team: 'sticky left-0 z-20 w-[50px] min-w-[50px] sm:w-[60px] sm:min-w-[60px]',
-  games: 'sticky left-[50px] sm:left-[60px] z-20 w-[26px] min-w-[26px] sm:w-[32px] sm:min-w-[32px]',
-  delta: 'sticky left-[76px] sm:left-[92px] z-20 w-[32px] min-w-[32px] sm:w-[38px] sm:min-w-[38px]',
-  b2b: 'hidden sm:table-cell sm:sticky sm:left-[130px] sm:z-20 sm:w-[38px] sm:min-w-[38px]',
-  next: 'hidden sm:table-cell sm:sticky sm:left-[168px] sm:z-20 sm:w-[58px] sm:min-w-[58px] sm:border-r-2 sm:border-gray-300',
+  team: 'sticky left-0 z-20 w-[54px] min-w-[54px] sm:w-[64px] sm:min-w-[64px]',
+  games: 'sticky left-[54px] sm:left-[64px] z-20 w-[28px] min-w-[28px] sm:w-[34px] sm:min-w-[34px]',
+  delta: 'sticky left-[82px] sm:left-[98px] z-20 w-[34px] min-w-[34px] sm:w-[40px] sm:min-w-[40px]',
+  b2b: 'hidden sm:table-cell sm:sticky sm:left-[138px] sm:z-20 sm:w-[40px] sm:min-w-[40px]',
+  next: 'hidden sm:table-cell sm:sticky sm:left-[178px] sm:z-20 sm:w-[62px] sm:min-w-[62px] sm:border-r-2 sm:border-gray-300',
 }
 
 function deltaLabel(delta: number): string {
@@ -107,8 +107,8 @@ export default function TeamNightGrid({
                 scope="col"
                 onClick={() => onSelectDay(index)}
                 title={`${formatSlateDate(day.date, { weekday: 'long', month: 'short', day: 'numeric' })} — ${day.slateSize} games`}
-                className={`cursor-pointer px-0.5 py-2 text-center text-[9px] font-semibold leading-tight sm:text-[10px] ${
-                  index === selectedDayIndex ? 'bg-blue-100 text-blue-800' : day.slateSize === 0 ? 'bg-gray-200 text-gray-400' : 'text-gray-500'
+                className={`w-[24px] min-w-[24px] cursor-pointer px-1 py-2 text-center text-[10px] font-semibold leading-tight sm:w-[28px] sm:min-w-[28px] sm:text-[11px] ${
+                  index === selectedDayIndex ? 'bg-blue-100 text-blue-800' : day.slateSize === 0 ? 'bg-gray-200 text-gray-400 dark:bg-gray-700' : 'text-gray-500'
                 }`}
               >
                 {formatSlateDate(day.date, { weekday: 'narrow' })}
@@ -139,10 +139,10 @@ export default function TeamNightGrid({
                 {row.plays.map((playing, index) => (
                   <td
                     key={days[index].date}
-                    className={`px-0.5 py-1 text-center ${index === selectedDayIndex ? 'bg-blue-50' : ''}`}
+                    className={`w-[24px] min-w-[24px] px-1 py-1.5 text-center sm:w-[28px] sm:min-w-[28px] ${index === selectedDayIndex ? 'bg-blue-50' : ''}`}
                   >
                     <span
-                      className={`inline-block h-[9px] w-[9px] rounded-[2px] sm:h-[11px] sm:w-[11px] ${dotTone(
+                      className={`inline-block h-[14px] w-[14px] rounded-[3px] sm:h-[16px] sm:w-[16px] ${dotTone(
                         playing,
                         playing && index > 0 && row.plays[index - 1],
                         days[index].slateSize === 0
