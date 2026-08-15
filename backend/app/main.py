@@ -22,6 +22,7 @@ from app.routes.matchups import router as matchups_router
 from app.routes.projections import router as projections_router
 from app.routes.feature_store import router as feature_store_router
 from app.routes.trends import router as trends_router
+from app.routes.schedule import router as schedule_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
@@ -132,6 +133,7 @@ app.include_router(matchups_router, prefix='/api/matchups', tags=['Matchups'])
 app.include_router(projections_router, prefix='/api/projections', tags=['Projections'])
 app.include_router(feature_store_router, prefix='/api/feature-store', tags=['Feature Store'])
 app.include_router(trends_router, prefix='/api/trends', tags=['Trends'])
+app.include_router(schedule_router, prefix='/api/nba', tags=['NBA Schedule'])
 
 
 

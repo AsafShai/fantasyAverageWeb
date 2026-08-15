@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useDebounce } from '../hooks/useDebounce';
-import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { useGetAllPlayersQuery, useGetScheduleQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
 import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
 import type { PlayerMatchup } from '../types/api';
@@ -10,7 +10,7 @@ import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
 import InjuryBadge from '../components/InjuryBadge';
 import PlayerNameLink from '../components/PlayerNameLink';
-import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_PAST_SLATES } from '../config/featureFlags';
+import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_PAST_SLATES, FF_SCHEDULE } from '../config/featureFlags';
 import './Players.css';
 
 const Players = () => {
@@ -27,6 +27,7 @@ const Players = () => {
     ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   });
   const { data: teams } = useGetTeamsListQuery();
+  const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE || !FF_MATCHUP_QUALITY });
 
   useEffect(() => {
     if (timePeriod !== 'custom' || !customRange || !data?.players) return
@@ -45,6 +46,16 @@ const Players = () => {
   const { data: upcomingDates = [] } = useGetUpcomingDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
   const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !FF_PAST_SLATES });
   const { data: currentSlateDate } = useGetCurrentSlateDateQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
+  const selectedSlateDate = slateDate || currentSlateDate || '';
+  const playingTeamsOnSlate = useMemo(() => {
+    if (!selectedSlateDate || !schedule) return null;
+    return new Set(
+      schedule.teams
+        .filter(team => team.games.some(game => game.date === selectedSlateDate))
+        .map(team => team.abbreviation)
+    );
+  }, [schedule, selectedSlateDate]);
+  const [playingOnSlateOnly, setPlayingOnSlateOnly] = useState(false);
   const { data: matchups = [] } = useGetMatchupsTodayQuery(
     slateDate ? slateDate.replaceAll('-', '') : undefined,
     { skip: !FF_MATCHUP_QUALITY }
@@ -89,6 +100,10 @@ const Players = () => {
         if (player.team_id !== filters.team_id) return false;
       }
 
+      if (playingOnSlateOnly && (!playingTeamsOnSlate || !playingTeamsOnSlate.has(player.pro_team))) {
+        return false;
+      }
+
       if (filters.stat_filters?.length) {
         for (const filter of filters.stat_filters) {
           const statValue = player.stats[filter.stat];
@@ -114,7 +129,7 @@ const Players = () => {
 
       return true;
     });
-  }, [data, filters, showAverages, debouncedSearch]);
+  }, [data, filters, showAverages, debouncedSearch, playingOnSlateOnly, playingTeamsOnSlate]);
 
   if (isLoading) return <div className="loading">Loading players...</div>;
   if (error) return <div className="error">Error loading players</div>;
@@ -154,9 +169,42 @@ const Players = () => {
                 {FF_PAST_SLATES && pastDates.length > 0 && (
                   <optgroup label="Past (debug)">
                     {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </optgroup>
-                )}
-              </select>
+                </optgroup>
+              )}
+            </select>
+          </label>
+          )}
+          {FF_MATCHUP_QUALITY && FF_SCHEDULE && (
+            <label
+              className={`group inline-flex h-8 items-center gap-2 rounded-md border px-2 text-xs transition-colors focus-within:ring-2 focus-within:ring-blue-300 ${
+                !selectedSlateDate || !playingTeamsOnSlate
+                  ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
+                  : playingOnSlateOnly
+                    ? 'cursor-pointer border-blue-600 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100'
+                    : 'cursor-pointer border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50/40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-gray-700'
+              }`}
+              title="Keep only players whose NBA team plays on the selected slate."
+            >
+              <input
+                className="sr-only"
+                type="checkbox"
+                checked={playingOnSlateOnly}
+                disabled={!selectedSlateDate || !playingTeamsOnSlate}
+                onChange={(e) => setPlayingOnSlateOnly(e.target.checked)}
+              />
+              <span
+                aria-hidden="true"
+                className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
+                  !selectedSlateDate || !playingTeamsOnSlate
+                    ? 'bg-gray-300 dark:bg-gray-600'
+                    : playingOnSlateOnly
+                      ? 'bg-blue-600'
+                      : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${playingOnSlateOnly ? 'translate-x-[14px]' : ''}`} />
+              </span>
+              <span className="whitespace-nowrap font-medium">Only playing on slate</span>
             </label>
           )}
           {FF_PROJECTIONS && (
@@ -494,12 +542,12 @@ const PlayerTable = ({
         </tr>
       </thead>
       <tbody>
-        {sortedPlayers.map((player, idx) => {
+        {sortedPlayers.map((player) => {
           const matchup = matchupMap.get(player.player_name);
           const isExpanded = expandedRows.has(player.player_name);
           const noData = player.has_data === false;
           return (
-            <React.Fragment key={`${player.player_name}-${idx}`}>
+            <React.Fragment key={player.player_id ?? player.player_name}>
               <tr>
                 <td><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
                 <td>{player.pro_team}</td>

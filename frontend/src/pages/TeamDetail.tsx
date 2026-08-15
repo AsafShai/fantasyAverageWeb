@@ -15,7 +15,8 @@ import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay'
 import InjuryBadge from '../components/InjuryBadge'
 import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
-import { FF_MATCHUP_QUALITY, FF_PROJECTIONS } from '../config/featureFlags'
+import RosterCoverage from '../components/RosterCoverage'
+import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_SCHEDULE } from '../config/featureFlags'
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -363,6 +364,7 @@ const TeamDetail = () => {
           gameDaysLeft={leagueSummary?.nba_game_days_left}
         />
       )}
+      {FF_SCHEDULE && <RosterCoverage players={team_detail.players ?? []} teamId={teamIdNumber} />}
 
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">

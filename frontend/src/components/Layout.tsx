@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef } from 'react'
 import Footer from './Footer'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
 
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/trends': () => import('../pages/Trends'),
@@ -545,7 +545,8 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
       label: 'NBA',
       icon: '🏀',
       items: [
-        { path: '/nba-teams', label: 'NBA Depth Charts', icon: '🏀' },
+        { path: '/nba-teams', label: 'NBA Teams', icon: '🏀' },
+        ...(FF_SCHEDULE ? [{ path: '/schedule', label: 'Season Schedule', icon: '🗓️' }] : []),
         { path: '/injuries', label: 'Injuries', icon: '🩺' },
       ],
     },
