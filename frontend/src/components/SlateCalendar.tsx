@@ -15,6 +15,7 @@ import {
 
 const BAR_AREA_PX = 110
 const PRESETS = [7, 14, 28] as const
+type WindowMode = (typeof PRESETS)[number] | 'custom'
 
 interface SlateCalendarProps {
   schedule: ScheduleResponse
@@ -26,9 +27,17 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
   const lastDate = calendarDays[calendarDays.length - 1]?.date ?? startDate
 
   const clampEnd = (date: string) => (date > lastDate ? lastDate : date)
-  const [endDate, setEndDate] = useState(() => clampEnd(addDays(firstScheduleDay(calendarDays), 13)))
+  // Mode is explicit rather than inferred from the end date. Inferring it made
+  // a hand-picked date that happened to match a preset flip the active button,
+  // and left no way to say "the user is choosing their own end date".
+  const [mode, setMode] = useState<WindowMode>(14)
+  const [customEnd, setCustomEnd] = useState(lastDate)
+  const [draftEnd, setDraftEnd] = useState<string | null>(null)
   const [selectedDayIndex, setSelectedDayIndex] = useState(0)
   const [tracedTeam, setTracedTeam] = useState<string | null>(null)
+
+  const endDate = mode === 'custom' ? customEnd : clampEnd(addDays(startDate, mode - 1))
+  const minEnd = addDays(startDate, 1)
 
   const matchups = useMemo(() => matchupsByDate(schedule), [schedule])
   const window = useMemo(
@@ -46,16 +55,15 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
     ? days.filter(day => day.matchups.some(m => m.away === tracedTeam || m.home === tracedTeam)).length
     : 0
 
-  const applyPreset = (nights: number | 'rest') => {
-    setEndDate(nights === 'rest' ? lastDate : clampEnd(addDays(startDate, nights - 1)))
+  const chooseMode = (next: WindowMode) => {
+    if (next === 'custom') setCustomEnd(lastDate)
+    setMode(next)
+    setDraftEnd(null)
     setSelectedDayIndex(0)
   }
 
   const toggleTeam = (abbreviation: string) =>
     setTracedTeam(current => (current === abbreviation ? null : abbreviation))
-
-  const activePreset = PRESETS.find(nights => clampEnd(addDays(startDate, nights - 1)) === endDate)
-  const isRest = endDate === lastDate
 
   return (
     <div className="mb-6 space-y-4">
@@ -66,9 +74,9 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
               <button
                 key={nights}
                 type="button"
-                onClick={() => applyPreset(nights)}
+                onClick={() => chooseMode(nights)}
                 className={`rounded-md px-2.5 py-1.5 sm:px-3 sm:py-2 ${
-                  activePreset === nights && !isRest ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                  mode === nights ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {nights} days
@@ -76,35 +84,43 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
             ))}
             <button
               type="button"
-              onClick={() => applyPreset('rest')}
+              onClick={() => chooseMode('custom')}
               className={`rounded-md px-2.5 py-1.5 sm:px-3 sm:py-2 ${
-                isRest ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                mode === 'custom' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
-              Rest of season
+              Pick an end date
             </button>
           </div>
-          <label className="flex items-center gap-2 rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-semibold text-gray-600">
+          <label
+            className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold ${
+              mode === 'custom' ? 'bg-gray-100 text-gray-600' : 'bg-gray-50 text-gray-400'
+            }`}
+          >
             through
-            {/* Uncontrolled + keyed: a controlled value snaps back on every
-                half-typed date, so typing a date was impossible. The key
-                remounts it when a preset moves the window instead. */}
+            {/* Draft state lets the field hold a half-typed date. A plain
+                controlled value snaps back on every incomplete keystroke, and
+                remounting it on each change blanked the field mid-pick. */}
             <input
-              key={endDate}
               type="date"
-              defaultValue={endDate}
-              min={addDays(startDate, 1)}
+              value={draftEnd ?? endDate}
+              min={minEnd}
               max={lastDate}
+              disabled={mode !== 'custom'}
               onChange={event => {
                 const picked = event.target.value
-                if (!picked) return
-                const bounded = picked < startDate ? addDays(startDate, 1) : clampEnd(picked)
-                setEndDate(bounded)
+                setDraftEnd(picked)
+                if (!picked || picked < minEnd || picked > lastDate) return
+                setCustomEnd(picked)
                 setSelectedDayIndex(0)
               }}
-              className="rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs font-bold text-gray-900"
+              onBlur={() => setDraftEnd(null)}
+              className="rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs font-bold text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             />
           </label>
+          {mode !== 'custom' && (
+            <span className="text-xs text-gray-400">choose “Pick an end date” to set your own</span>
+          )}
         </div>
 
         {tracedTeam && (
