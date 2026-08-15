@@ -17,6 +17,9 @@ export const SLOT_MULTIPLICITY: Record<SlotName, number> = {
   PG: 1, SG: 1, SF: 1, PF: 1, C: 1, G: 1, F: 1, UTIL: 3,
 }
 
+/** A single slot can be filled on at most 82 NBA game days. */
+export const GAMES_PER_SLOT = 82
+
 /**
  * Season allowance per column. UTIL is three slots plus two spare games (3 * 82 + 2):
  * an ESPN quirk lets you leave one UTIL open on the last game week and still play all
@@ -26,9 +29,6 @@ export const SLOT_CAPS: Record<SlotName, number> = {
   PG: 82, SG: 82, SF: 82, PF: 82, C: 82, G: 82, F: 82, UTIL: 248,
 }
 
-/** A single slot can be filled on at most 82 NBA game days. */
-export const GAMES_PER_SLOT = 82
-
 /** The cap a single slot of this column may reach — 82 everywhere, 82.67 for UTIL. */
 export function slotCeiling(slot: SlotName): number {
   return SLOT_CAPS[slot] / SLOT_MULTIPLICITY[slot]
@@ -37,20 +37,8 @@ export function slotCeiling(slot: SlotName): number {
 /** Below this NBA pace the season is too young for any of these signals to mean anything. */
 export const MIN_PACE_FOR_COLOR = 10
 
-/**
- * Estimate bands, per slot: at 82 you finish the season, under 78 you have lost real games.
- * Scaled by the column's slot count before comparing, so UTIL is judged against 3 × these.
- */
-export const EST_GREEN = 82
-export const EST_YELLOW = 80
-export const EST_ORANGE = 78
-
-/** Rate bands, as absolute drift away from 1.0 — in either direction. */
-export const RATE_GREEN = 0.05
-export const RATE_YELLOW = 0.1
-export const RATE_ORANGE = 0.15
-
-export type SlotTone = 'neutral' | 'green' | 'yellow' | 'orange' | 'red'
+/** Below this the slot is close enough to the NBA rate that saying so is noise. */
+export const BEHIND_PACE_GAMES = 3
 
 export interface SlotProjection {
   /** Games used, normalised to a single slot (UTIL divided by 3). */
@@ -98,13 +86,21 @@ export function projectSlot(
   const used = gamesUsed / multiplicity
   const ceiling = slotCeiling(slot)
 
+  // The ceiling needs no pace: it is games already banked plus one per remaining game day.
+  // With the remaining days still unknown, the whole cap is in principle reachable.
+  const daysLeft = typeof gameDaysLeft === 'number' ? gameDaysLeft : null
+  const maxGames = daysLeft === null ? ceiling : Math.min(used + daysLeft, ceiling)
+  // Every remaining game day can fill each slot in the column, so UTIL gains three a day.
+  const maxGamesTotal =
+    daysLeft === null ? cap : Math.min(gamesUsed + daysLeft * multiplicity, cap)
+
   if (typeof avgPace !== 'number' || avgPace <= 0) {
     return {
       used,
       usedTotal: gamesUsed,
       rate: null,
-      maxGames: null,
-      maxGamesTotal: null,
+      maxGames,
+      maxGamesTotal,
       estimated: null,
       estimatedRounded: null,
       estimatedPerSlot: null,
@@ -112,12 +108,6 @@ export function projectSlot(
   }
 
   const rate = used / avgPace
-
-  const daysLeft = typeof gameDaysLeft === 'number' ? gameDaysLeft : null
-  const maxGames = daysLeft === null ? null : Math.min(used + daysLeft, ceiling)
-  // Every remaining game day can fill each slot in the column, so UTIL gains three a day.
-  const maxGamesTotal =
-    daysLeft === null ? null : Math.min(gamesUsed + daysLeft * multiplicity, SLOT_CAPS[slot])
 
   // Worked on the column total against the column cap, exactly as the backend estimator does.
   // Method 1 — extrapolate the current rate over a full 82-game season.
@@ -142,67 +132,52 @@ export function projectSlot(
 }
 
 /**
- * Rate is graded on how far off pace the slot is, in either direction — burning games
- * too fast is as much of a problem as falling behind. The arrow carries the direction.
+ * What the row has to say, if anything. A slot on pace, projecting a full season and
+ * with nothing lost produces three nulls, and the table prints nothing for it — colour
+ * and words only ever appear together, on the exceptions.
+ *
+ * `behindPace` is per slot so UTIL is comparable with the rest; `short` and `lost` are
+ * whole-column counts, because a lost game is a lost game whichever slot it belonged to.
  */
-export function rateTone(rate: number | null, ctx: PaceContext): SlotTone {
-  if (rate === null || !canColor(ctx)) return 'neutral'
-  const drift = Math.abs(rate - 1)
-  if (drift < RATE_GREEN) return 'green'
-  if (drift < RATE_YELLOW) return 'yellow'
-  if (drift < RATE_ORANGE) return 'orange'
-  return 'red'
+export interface SlotStatus {
+  /** Games this slot is behind the NBA rate, per slot. Null when ahead or close enough. */
+  behindPace: number | null
+  /** Games the projection falls short of the column cap. Null when it reaches it. */
+  short: number | null
+  /** Games the column can no longer play, whatever happens now. Null when none. */
+  lost: number | null
+}
+
+export function slotStatus(
+  projection: SlotProjection,
+  slot: SlotName,
+  ctx: PaceContext,
+): SlotStatus {
+  if (!canColor(ctx)) return { behindPace: null, short: null, lost: null }
+
+  const { avgPace } = ctx
+  const cap = SLOT_CAPS[slot]
+  const behind = typeof avgPace === 'number' ? avgPace - projection.used : 0
+  const short = projection.estimatedRounded === null ? 0 : cap - projection.estimatedRounded
+  const lost = projection.maxGamesTotal === null ? 0 : cap - projection.maxGamesTotal
+
+  return {
+    behindPace: behind >= BEHIND_PACE_GAMES ? behind : null,
+    short: short > 0 ? short : null,
+    lost: lost > 0 ? lost : null,
+  }
 }
 
 /**
- * How many games the slot is off the NBA rate, signed: 69 used against a rate of 69.3
- * reads −0.3. The colour still comes from rateTone, which grades the gap in percent.
- */
-export function formatRateDelta(used: number, avgPace: number | null | undefined): string {
-  if (typeof avgPace !== 'number' || !Number.isFinite(avgPace)) return '-'
-  const delta = used - avgPace
-  if (Math.abs(delta) < 0.05) return 'on pace'
-  return `${delta > 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)}`
-}
-
-/**
- * Binary: either the column can still be filled out completely, or it cannot.
- * Compared against the whole column's cap, so UTIL is judged against 248 rather than 82.
- */
-export function maxTone(maxGamesTotal: number | null, slot: SlotName, ctx: PaceContext): SlotTone {
-  if (maxGamesTotal === null || !canColor(ctx)) return 'neutral'
-  return maxGamesTotal < SLOT_CAPS[slot] ? 'red' : 'green'
-}
-
-/** Takes the column total, so UTIL is graded against 3 × each band. */
-export function estimatedTone(estimated: number | null, slot: SlotName, ctx: PaceContext): SlotTone {
-  if (estimated === null || !canColor(ctx)) return 'neutral'
-  const slots = SLOT_MULTIPLICITY[slot]
-  if (estimated >= EST_GREEN * slots) return 'green'
-  if (estimated >= EST_YELLOW * slots) return 'yellow'
-  if (estimated >= EST_ORANGE * slots) return 'orange'
-  return 'red'
-}
-
-export const TONE_CLASS: Record<SlotTone, string> = {
-  neutral: 'bg-gray-100 text-gray-600',
-  green: 'bg-green-100 text-green-800',
-  yellow: 'bg-yellow-100 text-yellow-800',
-  orange: 'bg-orange-100 text-orange-800',
-  red: 'bg-red-100 text-red-800',
-}
-
-
-/**
- * The cap as a denominator. UTIL is written (246+2) rather than 248 so the two spare
- * games stay visible as the oddity they are, instead of hiding inside a round total.
+ * The cap as a denominator. UTIL is written 246+2 rather than 248 so the two spare
+ * games stay visible as the ESPN quirk they are, instead of hiding inside a round total.
  */
 export function formatCap(slot: SlotName): string {
   const slots = SLOT_MULTIPLICITY[slot]
   if (slots === 1) return String(SLOT_CAPS[slot])
   const base = GAMES_PER_SLOT * slots
   const spare = SLOT_CAPS[slot] - base
-  return spare === 0 ? String(base) : `(${base}+${spare})`
+  return spare === 0 ? String(base) : `${base}+${spare}`
 }
 
 /** Trims a trailing `.0` so whole numbers stay readable in a dense table. */

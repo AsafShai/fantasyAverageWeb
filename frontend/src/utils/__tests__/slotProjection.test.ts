@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   projectSlot,
-  rateTone,
-  formatRateDelta,
-  maxTone,
-  estimatedTone,
+  slotStatus,
   canColor,
   formatCap,
   formatSlotNumber,
@@ -99,18 +96,6 @@ describe('projectSlot', () => {
     expect(estimatedRounded).toBe(81)
   })
 
-  it('grades the rounded estimate, so 81.7 counts as a full season', () => {
-    const ctx = { avgPace: 41.3, gameDaysLeft: 82 }
-    const { estimatedRounded } = projectSlot(41, 'PG', ctx)
-    expect(estimatedTone(estimatedRounded, 'PG', ctx)).toBe('green')
-  })
-
-  it('still grades 81.1 as short of a full season', () => {
-    const ctx = { avgPace: 60.4, gameDaysLeft: 44 }
-    const { estimatedRounded } = projectSlot(58, 'PG', ctx)
-    expect(estimatedTone(estimatedRounded, 'PG', ctx)).toBe('yellow')
-  })
-
   it('projects UTIL as a whole column, capped at 248', () => {
     const { estimated, estimatedPerSlot } = projectSlot(248, 'UTIL', { avgPace: 80, gameDaysLeft: 20 })
     expect(estimated).toBeCloseTo(248, 6)
@@ -131,11 +116,12 @@ describe('projectSlot', () => {
     expect(estimated).toBeCloseTo(expected, 6)
   })
 
-  it('returns nulls when pace is unavailable', () => {
+  it('returns nulls when pace is unavailable, but still knows the ceiling', () => {
     const p = projectSlot(40, 'PG', { avgPace: null, gameDaysLeft: 40 })
     expect(p.rate).toBeNull()
-    expect(p.maxGames).toBeNull()
     expect(p.estimated).toBeNull()
+    expect(p.maxGames).toBe(80)
+    expect(p.maxGamesTotal).toBe(80)
   })
 
   it('returns nulls when pace is zero', () => {
@@ -144,9 +130,58 @@ describe('projectSlot', () => {
   })
 
   it('falls back to pace extrapolation when game days are unknown', () => {
-    const { estimated, maxGames } = projectSlot(40, 'PG', { avgPace: 41, gameDaysLeft: null })
-    expect(maxGames).toBeNull()
+    const { estimated } = projectSlot(40, 'PG', { avgPace: 41, gameDaysLeft: null })
     expect(estimated).toBeCloseTo(80, 6)
+  })
+
+  it('treats the whole cap as reachable while the remaining game days are unknown', () => {
+    const p = projectSlot(40, 'PG', { avgPace: 41, gameDaysLeft: null })
+    expect(p.maxGames).toBe(82)
+    expect(p.maxGamesTotal).toBe(82)
+    expect(projectSlot(120, 'UTIL', { avgPace: 41, gameDaysLeft: null }).maxGamesTotal).toBe(248)
+  })
+})
+
+describe('slotStatus', () => {
+  const status = (used: number, slot: Parameters<typeof projectSlot>[1], ctx: typeof midSeason) =>
+    slotStatus(projectSlot(used, slot, ctx), slot, ctx)
+
+  it('says nothing at all for a slot on pace with a full season reachable', () => {
+    const ctx = { avgPace: 60, gameDaysLeft: 22 }
+    expect(status(60, 'PG', ctx)).toEqual({ behindPace: null, short: null, lost: null })
+  })
+
+  it('reports games behind pace once the gap reaches 3', () => {
+    const ctx = { avgPace: 60, gameDaysLeft: 22 }
+    expect(status(58, 'PG', ctx).behindPace).toBeNull()
+    expect(status(57, 'PG', ctx).behindPace).toBe(3)
+    expect(status(48, 'PG', ctx).behindPace).toBe(12)
+  })
+
+  it('never reports being ahead of pace', () => {
+    expect(status(70, 'PG', { avgPace: 60, gameDaysLeft: 22 }).behindPace).toBeNull()
+  })
+
+  it('measures behindPace per slot, so UTIL is comparable with the rest', () => {
+    const ctx = { avgPace: 60, gameDaysLeft: 22 }
+    expect(status(175, 'UTIL', ctx).behindPace).toBeNull()
+    expect(status(150, 'UTIL', ctx).behindPace).toBe(10)
+  })
+
+  it('counts lost games against the whole column cap', () => {
+    const ctx = { avgPace: 60, gameDaysLeft: 12 }
+    expect(status(48, 'PG', ctx).lost).toBe(22)
+    expect(status(82, 'PG', ctx).lost).toBeNull()
+  })
+
+  it('rounds the projection before calling it short, so 81.7 is a full season', () => {
+    expect(status(41, 'PG', { avgPace: 41.3, gameDaysLeft: 82 }).short).toBeNull()
+    expect(status(58, 'PG', { avgPace: 60.4, gameDaysLeft: 44 }).short).toBe(1)
+  })
+
+  it('stays silent while the season is too young to judge', () => {
+    expect(status(2, 'PG', { avgPace: 6, gameDaysLeft: 140 }))
+      .toEqual({ behindPace: null, short: null, lost: null })
   })
 })
 
@@ -165,122 +200,13 @@ describe('canColor', () => {
   })
 })
 
-describe('rateTone', () => {
-  it('is green inside the 5% band, either way', () => {
-    expect(rateTone(1.02, midSeason)).toBe('green')
-    expect(rateTone(0.98, midSeason)).toBe('green')
-  })
-
-  it('grades a slot burning games too fast by how far off it is', () => {
-    expect(rateTone(1.06, midSeason)).toBe('yellow')
-    expect(rateTone(1.12, midSeason)).toBe('orange')
-    expect(rateTone(1.2, midSeason)).toBe('red')
-  })
-
-  it('grades a slot falling behind the same way', () => {
-    expect(rateTone(0.94, midSeason)).toBe('yellow')
-    expect(rateTone(0.88, midSeason)).toBe('orange')
-    expect(rateTone(0.8, midSeason)).toBe('red')
-  })
-
-  it('stays neutral early in the season', () => {
-    expect(rateTone(1.5, { avgPace: 6, gameDaysLeft: 140 })).toBe('neutral')
-    expect(rateTone(0.2, { avgPace: 6, gameDaysLeft: 140 })).toBe('neutral')
-  })
-})
-
-describe('formatRateDelta', () => {
-  it('counts the games behind the NBA rate', () => {
-    expect(formatRateDelta(69, 69.3)).toBe('−0.3')
-  })
-
-  it('counts the games ahead of it', () => {
-    expect(formatRateDelta(74, 69.6)).toBe('+4.4')
-  })
-
-  it('says so when the slot sits on the rate', () => {
-    expect(formatRateDelta(69.3, 69.3)).toBe('on pace')
-  })
-
-  it('renders a dash without a rate', () => {
-    expect(formatRateDelta(40, null)).toBe('-')
-  })
-
-  it('leaves the colour to rateTone, which still grades in percent', () => {
-    // 69 against 69.3 is only 0.4% off, so it stays green despite the visible −0.3.
-    expect(rateTone(69 / 69.3, { avgPace: 69.3, gameDaysLeft: 25 })).toBe('green')
-  })
-})
-
-describe('maxTone', () => {
-  it('is green while the full column is still reachable', () => {
-    expect(maxTone(82, 'PG', midSeason)).toBe('green')
-  })
-
-  it('is red once the column can no longer be filled', () => {
-    expect(maxTone(81.5, 'PG', midSeason)).toBe('red')
-  })
-
-  it('judges UTIL against 248, not 82', () => {
-    expect(maxTone(248, 'UTIL', midSeason)).toBe('green')
-    expect(maxTone(247, 'UTIL', midSeason)).toBe('red')
-    expect(maxTone(90, 'UTIL', midSeason)).toBe('red')
-  })
-
-  it('only ever returns green or red', () => {
-    for (const value of [0, 40, 82, 200]) {
-      expect(['green', 'red']).toContain(maxTone(value, 'PG', midSeason))
-    }
-  })
-
-  it('stays neutral early in the season', () => {
-    expect(maxTone(40, 'PG', { avgPace: 6, gameDaysLeft: 140 })).toBe('neutral')
-  })
-})
-
-describe('estimatedTone', () => {
-  it('is green at 82 and above', () => {
-    expect(estimatedTone(82, 'PG', midSeason)).toBe('green')
-    expect(estimatedTone(82.6, 'PG', midSeason)).toBe('green')
-  })
-
-  it('is yellow between 80 and 82', () => {
-    expect(estimatedTone(81.9, 'PG', midSeason)).toBe('yellow')
-    expect(estimatedTone(80, 'PG', midSeason)).toBe('yellow')
-  })
-
-  it('is orange between 78 and 80', () => {
-    expect(estimatedTone(79.9, 'PG', midSeason)).toBe('orange')
-    expect(estimatedTone(78, 'PG', midSeason)).toBe('orange')
-  })
-
-  it('is red under 78', () => {
-    expect(estimatedTone(77.9, 'PG', midSeason)).toBe('red')
-  })
-
-  it('scales every band by three for UTIL', () => {
-    expect(estimatedTone(246, 'UTIL', midSeason)).toBe('green')
-    expect(estimatedTone(245, 'UTIL', midSeason)).toBe('yellow')
-    expect(estimatedTone(239, 'UTIL', midSeason)).toBe('orange')
-    expect(estimatedTone(233, 'UTIL', midSeason)).toBe('red')
-  })
-
-  it('does not read a full UTIL column as a failing single slot', () => {
-    expect(estimatedTone(248, 'UTIL', midSeason)).toBe('green')
-  })
-
-  it('stays neutral early in the season', () => {
-    expect(estimatedTone(20, 'PG', { avgPace: 6, gameDaysLeft: 140 })).toBe('neutral')
-  })
-})
-
 describe('formatCap', () => {
   it('is a plain 82 for single slots', () => {
     expect(formatCap('PG')).toBe('82')
   })
 
-  it('splits the UTIL cap so the two spare ESPN games stay visible', () => {
-    expect(formatCap('UTIL')).toBe('(246+2)')
+  it('keeps the two spare ESPN games visible on the UTIL cap', () => {
+    expect(formatCap('UTIL')).toBe('246+2')
   })
 })
 
