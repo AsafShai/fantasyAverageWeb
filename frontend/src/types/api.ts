@@ -253,6 +253,45 @@ export interface NbaTeamInfo {
   team_name: string;
 }
 
+export interface ScheduleCalendarDay {
+  date: string;
+  slate_size: number;
+  high_volume: boolean;
+}
+
+export interface ScheduleGame {
+  game_id: string;
+  date: string;
+  opponent_id: number;
+  opponent: string;
+  opponent_abbreviation: string;
+  is_home: boolean;
+  rest_days: number | null;
+  slate_size: number;
+  high_volume: boolean;
+}
+
+export interface ScheduleTeam {
+  team_id: number;
+  abbreviation: string;
+  team_name: string;
+  games: ScheduleGame[];
+  monthly_games: Record<string, number>;
+  total_games: number;
+  b2b_count: number;
+  high_volume_games: number;
+  avg_rest_days: number | null;
+}
+
+export interface ScheduleResponse {
+  season: string;
+  high_volume_threshold: number;
+  calendar_days: ScheduleCalendarDay[];
+  teams: ScheduleTeam[];
+  published_games_min: number;
+  published_games_max: number;
+}
+
 export interface NbaInjury {
   status: string;
 }

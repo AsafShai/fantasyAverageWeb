@@ -8,6 +8,8 @@ import { getErrorMessage } from '../utils/errorMessage';
 import PlayerNameLink from '../components/PlayerNameLink';
 import type { DepthChartPosition } from '../types/api';
 import { applyDepthChartFilters } from '../utils/depthChartFilters';
+import TeamScheduleView from '../components/TeamScheduleView';
+import { FF_SCHEDULE } from '../config/featureFlags';
 
 const MAX_DEPTH = 5;
 const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th'];
@@ -169,7 +171,7 @@ export default function NbaTeams() {
         <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
           NBA Teams
         </h1>
-        <p className="text-gray-600">Select a team to view their depth chart</p>
+        <p className="text-gray-600">Select a team to explore its depth chart and schedule</p>
       </div>
 
       {isLoading ? (
@@ -193,7 +195,19 @@ export default function NbaTeams() {
             </select>
           </div>
 
-          {selectedTeamId && <DepthChartView key={selectedTeamId} teamId={selectedTeamId} />}
+          {selectedTeamId && (
+            <div className="space-y-10">
+              <section aria-labelledby="nba-depth-chart-heading">
+                <h2 id="nba-depth-chart-heading" className="mb-4 text-xl font-semibold text-gray-900">Depth chart</h2>
+                <DepthChartView key={`depth-${selectedTeamId}`} teamId={selectedTeamId} />
+              </section>
+              {FF_SCHEDULE && (
+                <section aria-labelledby="nba-team-schedule-heading">
+                  <TeamScheduleView key={`schedule-${selectedTeamId}`} teamId={selectedTeamId} />
+                </section>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
