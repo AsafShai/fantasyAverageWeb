@@ -212,11 +212,43 @@
 }
 
 .player-table {
-  width: 100%;
+  table-layout: fixed;
+  min-width: 1238px;
   border-collapse: collapse;
   background: #fff;
   font-size: 14px;
 }
+
+.player-table th:nth-child(1),
+.player-table td:nth-child(1) { width: 190px; }
+.player-table th:nth-child(2),
+.player-table td:nth-child(2) { width: 80px; }
+.player-table th:nth-child(3),
+.player-table td:nth-child(3) { width: 90px; }
+.player-table th:nth-child(4),
+.player-table td:nth-child(4) { width: 130px; }
+.player-table th:nth-child(5),
+.player-table td:nth-child(5) { width: 60px; }
+.player-table th:nth-child(6),
+.player-table td:nth-child(6) { width: 70px; }
+.player-table th:nth-child(7),
+.player-table td:nth-child(7) { width: 70px; }
+.player-table th:nth-child(8),
+.player-table td:nth-child(8) { width: 58px; }
+.player-table th:nth-child(9),
+.player-table td:nth-child(9) { width: 58px; }
+.player-table th:nth-child(10),
+.player-table td:nth-child(10) { width: 58px; }
+.player-table th:nth-child(11),
+.player-table td:nth-child(11) { width: 58px; }
+.player-table th:nth-child(12),
+.player-table td:nth-child(12) { width: 58px; }
+.player-table th:nth-child(13),
+.player-table td:nth-child(13) { width: 58px; }
+.player-table th:nth-child(14),
+.player-table td:nth-child(14) { width: 50px; }
+.player-table th:nth-child(15),
+.player-table td:nth-child(15) { width: 150px; }
 
 .player-table th {
   background: #f5f5f5;
@@ -250,6 +282,7 @@
   z-index: 11;
   background: #fff;
   border-right: 1px solid #ddd;
+  contain: layout paint;
 }
 
 .player-table th:first-child {
@@ -259,6 +292,16 @@
 
 .player-table tbody tr:hover {
   background: #f9f9f9;
+}
+
+/* Skip paint/layout for off-screen rows so the raster thread doesn't fall
+   behind on a fast fling — rows stay in the DOM (Ctrl-F, selection still
+   work), unlike JS virtualization which was rejected for the same symptom.
+   Excludes the matchup expand row: its height is dynamic (slider UI), and a
+   wrong contain-intrinsic-size guess there would jump the scrollbar. */
+.player-table tbody tr:not(.mq-expand-row) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 50px;
 }
 
 .status-badge {

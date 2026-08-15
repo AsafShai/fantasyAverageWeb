@@ -494,12 +494,12 @@ const PlayerTable = ({
         </tr>
       </thead>
       <tbody>
-        {sortedPlayers.map((player, idx) => {
+        {sortedPlayers.map((player) => {
           const matchup = matchupMap.get(player.player_name);
           const isExpanded = expandedRows.has(player.player_name);
           const noData = player.has_data === false;
           return (
-            <React.Fragment key={`${player.player_name}-${idx}`}>
+            <React.Fragment key={player.player_id ?? player.player_name}>
               <tr>
                 <td><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
                 <td>{player.pro_team}</td>
