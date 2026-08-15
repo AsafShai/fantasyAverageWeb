@@ -474,6 +474,23 @@ const PlayerTable = ({
 
   return (
     <table className="player-table">
+      <colgroup>
+        <col style={{ width: 211 }} />
+        <col style={{ width: 95 }} />
+        <col style={{ width: 67 }} />
+        <col style={{ width: 97 }} />
+        <col style={{ width: 54 }} />
+        <col style={{ width: 79 }} />
+        <col style={{ width: 79 }} />
+        <col style={{ width: 48 }} />
+        <col style={{ width: 49 }} />
+        <col style={{ width: 50 }} />
+        <col style={{ width: 48 }} />
+        <col style={{ width: 49 }} />
+        <col style={{ width: 61 }} />
+        <col style={{ width: 39 }} />
+        {FF_MATCHUP_QUALITY && <col style={{ width: 171 }} />}
+      </colgroup>
       <thead>
         <tr>
           <th onClick={() => handleSort('player_name')}>Name {sortBy === 'player_name' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
