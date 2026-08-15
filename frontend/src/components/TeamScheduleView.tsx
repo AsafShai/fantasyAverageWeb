@@ -53,7 +53,7 @@ export default function TeamScheduleView({ teamId }: TeamScheduleViewProps) {
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">{team.team_name} schedule</h2>
+          <h2 id="nba-team-schedule-heading" className="text-xl font-bold text-gray-900">{team.team_name} schedule</h2>
         </div>
         {team.total_games < 82 && (
           <div className="max-w-md rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
@@ -62,27 +62,26 @@ export default function TeamScheduleView({ teamId }: TeamScheduleViewProps) {
         )}
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-3 gap-2">
         <Kpi label="Total games" value={team.total_games} metric="scheduleTotal" />
         <Kpi label="Back-to-backs" value={team.b2b_count} metric="scheduleB2B" />
         <Kpi label="High-volume" value={team.high_volume_games} metric="scheduleHighVolume" />
-        <Kpi label="Average rest" value={team.avg_rest_days === null ? '—' : `${team.avg_rest_days.toFixed(2)}d`} metric="scheduleRest" />
       </div>
 
-      <div className="max-h-[34rem] overflow-auto rounded-lg border border-gray-200 lg:max-w-4xl">
+      <div className="max-h-[34rem] overflow-auto rounded-lg border border-gray-200">
         <table className="min-w-[650px] w-full table-fixed border-collapse text-sm">
           <colgroup>
-            <col className="w-40" />
-            <col />
-            <col className="w-36" />
-            <col className="w-32" />
+            <col className="w-40 sm:w-1/4" />
+            <col className="sm:w-1/4" />
+            <col className="w-36 sm:w-1/4" />
+            <col className="w-32 sm:w-1/4" />
           </colgroup>
           <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="border-b border-gray-200 px-3 py-3 text-left">Date</th>
-              <th className="border-b border-gray-200 px-3 py-3 text-left">Opponent</th>
-              <th className="border-b border-gray-200 px-3 py-3 text-right">Rest days</th>
-              <th className="border-b border-gray-200 px-3 py-3 text-right">Slate size</th>
+              <th className="border-b border-gray-200 px-3 py-3 text-left sm:text-center">Date</th>
+              <th className="border-b border-gray-200 px-3 py-3 text-center">Opponent</th>
+              <th className="border-b border-gray-200 px-3 py-3 text-right sm:text-center">Rest days</th>
+              <th className="border-b border-gray-200 px-3 py-3 text-right sm:text-center">Slate size</th>
             </tr>
           </thead>
           <tbody>
@@ -97,14 +96,14 @@ export default function TeamScheduleView({ teamId }: TeamScheduleViewProps) {
                     </tr>
                   )}
                   <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-3 py-3 text-gray-700">{formatDate(game.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                    <td className="px-3 py-3 font-medium text-gray-800">
+                    <td className="whitespace-nowrap px-3 py-3 text-left text-gray-700 sm:text-center">{formatDate(game.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                    <td className="px-3 py-3 text-center font-medium text-gray-800">
                       <span className="mr-2 text-xs font-bold text-gray-400">{game.is_home ? 'vs' : '@'}</span>{game.opponent}
                     </td>
-                    <td className={`px-3 py-3 text-right ${game.rest_days === 0 ? 'font-semibold text-rose-600' : 'text-gray-700'}`}>
+                    <td className={`px-3 py-3 text-right sm:text-center ${game.rest_days === 0 ? 'font-semibold text-rose-600' : 'text-gray-700'}`}>
                       {game.rest_days === null ? '—' : game.rest_days === 0 ? '0 · B2B' : `${game.rest_days}d`}
                     </td>
-                    <td className={`px-3 py-3 text-right font-medium ${slateClass(game)}`}>{game.slate_size}</td>
+                    <td className={`px-3 py-3 text-right sm:text-center font-medium ${slateClass(game)}`}>{game.slate_size}</td>
                   </tr>
                 </Fragment>
               )

@@ -189,7 +189,7 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: Slo
               <div className="hidden text-right text-xs text-gray-500 sm:block">cap {formatCap(slot)}</div>
               <div className="flex flex-wrap gap-1.5 py-0.5 sm:col-start-2">
                 <ValueChip label="played" value={formatSlotNumber(played)} dotClass="bg-blue-700" className="bg-blue-50 text-blue-800" />
-                <ValueChip label="est" value={formatSlotNumber(estimated)} dotClass="bg-blue-300" className="bg-blue-100 text-blue-800" />
+                <ValueChip label="estimated" value={formatSlotNumber(estimated)} dotClass="bg-blue-300" className="bg-blue-100 text-blue-800" />
                 <ValueChip label="max reachable" value={formatSlotNumber(max)} dotClass="bg-slate-300" className="bg-slate-100 text-slate-700" />
                 {gone > 0 && <ValueChip label="gone" value={formatSlotNumber(gone)} dotClass="bg-red-700" className="bg-red-500 text-white" />}
                 <span className={`inline-flex items-center rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white ${numericPace === null ? 'opacity-75' : ''}`}>

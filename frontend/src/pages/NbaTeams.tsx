@@ -203,7 +203,6 @@ export default function NbaTeams() {
               </section>
               {FF_SCHEDULE && (
                 <section aria-labelledby="nba-team-schedule-heading">
-                  <h2 id="nba-team-schedule-heading" className="mb-4 text-xl font-semibold text-gray-900">Schedule</h2>
                   <TeamScheduleView key={`schedule-${selectedTeamId}`} teamId={selectedTeamId} />
                 </section>
               )}

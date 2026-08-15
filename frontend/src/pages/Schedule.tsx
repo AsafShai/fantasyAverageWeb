@@ -61,7 +61,6 @@ export default function Schedule() {
         <span>·</span>
         <span>Blue cells show relative month density.</span>
         <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-100" /> higher month count</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-200" /> highest month count</span>
       </div>
 
       <div className="max-h-[70vh] overflow-auto rounded-lg border border-gray-200 bg-white shadow">
@@ -73,7 +72,6 @@ export default function Schedule() {
               <th className="border-b border-gray-200 px-3 py-3 text-right"><MetricHeader label="Total" metric="scheduleTotal" /></th>
               <th className="border-b border-gray-200 px-3 py-3 text-right"><MetricHeader label="B2B" metric="scheduleB2B" /></th>
               <th className="border-b border-gray-200 px-3 py-3 text-right"><MetricHeader label="High volume" metric="scheduleHighVolume" /></th>
-              <th className="border-b border-gray-200 px-3 py-3 text-right"><MetricHeader label="Avg rest" metric="scheduleRest" /></th>
             </tr>
           </thead>
           <tbody>
@@ -89,7 +87,6 @@ export default function Schedule() {
                 <td className="px-3 py-3 text-right font-semibold text-gray-800">{team.total_games}</td>
                 <td className="px-3 py-3 text-right text-gray-700">{team.b2b_count}</td>
                 <td className="px-3 py-3 text-right text-gray-700">{team.high_volume_games}</td>
-                <td className="px-3 py-3 text-right text-gray-700">{team.avg_rest_days === null ? '—' : `${team.avg_rest_days.toFixed(2)}d`}</td>
               </tr>
             ))}
           </tbody>
