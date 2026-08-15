@@ -14,7 +14,7 @@ type Grain = 'months' | 'weeks'
 
 function heatClass(value: number, min: number, max: number): string {
   if (value === 0) return 'bg-gray-50 text-gray-400'
-  if (max === min || value === max) return 'bg-blue-200 text-blue-950'
+  if (max === min) return 'bg-blue-50 text-blue-800'
   const ratio = (value - min) / (max - min)
   if (ratio >= 0.75) return 'bg-blue-100 text-blue-900'
   if (ratio >= 0.35) return 'bg-blue-50 text-blue-800'

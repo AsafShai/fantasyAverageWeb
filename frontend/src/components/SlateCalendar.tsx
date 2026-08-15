@@ -284,8 +284,7 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
           <b className="text-gray-600">Next</b> = first game from today.
         </p>
         <p className="mt-2 text-xs text-gray-500">
-          Nights are <b className="text-gray-600">US Eastern game dates</b>, the same dates ESPN scores against — so a night
-          shown here tips overnight Israel time.
+          Nights are <b className="text-gray-600">US Eastern game dates</b>, the same dates ESPN scores against.
         </p>
       </div>
     </div>
