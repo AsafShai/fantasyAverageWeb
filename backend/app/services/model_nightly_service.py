@@ -225,15 +225,18 @@ class ModelNightlyService:
             return "store_already_ingested"
 
         night = await asyncio.to_thread(nightly.fetch_night, game_date)
-        if night.expected_games == 0:
-            await db.upsert_model_nightly_run(game_date, "no_games", 0, 0)
-            return "no_games"
         if not night.complete:
+            # Checked before the expected_games==0 branch below: a zero-events
+            # scoreboard that ESPN's whitelist says should have games comes back
+            # as expected_games=0, complete=False too, and must retry, not seal.
             logger.info(
                 f"Night {game_date} not complete yet "
                 f"(expected {night.expected_games} games); will retry next slot"
             )
             return "incomplete_data"
+        if night.expected_games == 0:
+            await db.upsert_model_nightly_run(game_date, "no_games", 0, 0)
+            return "no_games"
 
         players, team_games = await db.get_fs_rows_before(game_date)
         if players.empty or team_games.empty:

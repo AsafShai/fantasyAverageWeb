@@ -13,8 +13,10 @@ mean "come back later".
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -26,6 +28,38 @@ from .inference import LiveInference, PredictionRequest
 from .eval_row import EvalRow, _actual_line
 
 season_for = espn.season_for
+
+logger = logging.getLogger(__name__)
+
+_WHITELIST_TTL = timedelta(hours=24)
+_whitelist_cache: dict = {'dates': None, 'ts': None}
+
+
+def _whitelist_has(game_date: date) -> bool:
+    """True if ESPN's own whitelist calendar lists ``game_date`` as a game day.
+
+    The whitelist includes preseason/playoffs/All-Star too, so it can only
+    answer "did ESPN schedule *something* this day", not countability — the
+    caller only uses this to tell a real scoreboard gap from a genuine
+    off-night when the day-scoreboard fetch itself came back empty.
+    """
+    now = datetime.now()
+    if _whitelist_cache['ts'] is None or now - _whitelist_cache['ts'] >= _WHITELIST_TTL:
+        try:
+            raw = espn.client.calendar_whitelist()
+        except Exception as e:
+            # A second independent ESPN failure must not stall the pipeline —
+            # fall back to today's behavior (seal the night as a genuine no-games).
+            logger.warning(f"calendar_whitelist fetch failed, treating {game_date} as no-games: {e}")
+            return False
+        _whitelist_cache['dates'] = {
+            datetime.fromisoformat(s.replace('Z', '+00:00'))
+            .astimezone(ZoneInfo('America/New_York'))
+            .date()
+            for s in raw
+        }
+        _whitelist_cache['ts'] = now
+    return game_date in _whitelist_cache['dates']
 
 
 @dataclass
@@ -42,6 +76,10 @@ def fetch_night(game_date: date) -> NightFetch:
     day = espn.fetch_day(game_date)
     if day.expected_games == 0:
         empty = pd.DataFrame()
+        if day.total_events == 0 and _whitelist_has(game_date):
+            # ESPN's own whitelist says this is a game day, but the scoreboard
+            # returned nothing — treat as incomplete data, not a sealed off-night.
+            return NightFetch(game_date, empty, empty, 0, complete=False)
         return NightFetch(game_date, empty, empty, 0, complete=True)
 
     player_games = rdata._to_datetime(day.players)

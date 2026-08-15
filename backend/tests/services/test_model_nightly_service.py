@@ -175,6 +175,16 @@ async def test_incomplete_data_left_unmarked_for_retry(service, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_empty_scoreboard_incomplete_is_retried_not_sealed(service, monkeypatch):
+    """expected_games=0 with complete=False (the whitelist-ambiguity guard in
+    nightly.fetch_night) must be retried, not sealed as 'no_games' — the
+    incomplete check has to run before the expected_games==0 check."""
+    _allow_fetch(monkeypatch, _night(expected_games=0, complete=False))
+    assert await service.run_for_date(GAME_DATE) == "incomplete_data"
+    assert service._db.marked == []
+
+
+@pytest.mark.asyncio
 async def test_empty_store_requires_bootstrap(service, monkeypatch):
     _allow_fetch(monkeypatch, _night())
     service._db.player_recs = pd.DataFrame()

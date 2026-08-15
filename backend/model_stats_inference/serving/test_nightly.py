@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
+import pytest
 
+from model_stats_inference.espn import EspnUnavailableError
 from model_stats_inference.serving import nightly
 from model_stats_inference.serving.inference import LiveInference, PredictionRequest
 
@@ -16,6 +18,15 @@ NIGHT_GID = "0021409900"
 UNKNOWN_GID = "0021409901"
 UNKNOWN_TEAM_A, UNKNOWN_TEAM_B = 30, 999
 UNKNOWN_PID = 999
+
+
+@pytest.fixture(autouse=True)
+def _reset_whitelist_cache():
+    nightly._whitelist_cache['dates'] = None
+    nightly._whitelist_cache['ts'] = None
+    yield
+    nightly._whitelist_cache['dates'] = None
+    nightly._whitelist_cache['ts'] = None
 
 
 def test_season_for_boundaries():
@@ -57,6 +68,99 @@ def test_fetch_night_keeps_any_played_minute(monkeypatch):
 
     assert set(night.player_games["PLAYER_ID"]) == {3, 4}
     assert night.complete
+
+
+def _zero_games_day(game_date: date, total_events: int) -> "nightly.espn.DayFetch":
+    empty = pd.DataFrame()
+    return nightly.espn.DayFetch(
+        game_date=game_date, players=empty, teams=empty,
+        expected_games=0, all_final=True, total_events=total_events,
+    )
+
+
+def test_fetch_night_no_countable_events_seals_complete(monkeypatch):
+    """Preseason/playoffs/All-Star: events exist but none are countable — this
+    must stay a sealed no-games night and never touch the whitelist."""
+    game_date = date(2025, 10, 3)
+    monkeypatch.setattr(nightly.espn, "fetch_day", lambda d: _zero_games_day(game_date, total_events=3))
+    calls = []
+    monkeypatch.setattr(nightly.espn.client, "calendar_whitelist", lambda: calls.append(1) or [])
+
+    night = nightly.fetch_night(game_date)
+
+    assert night.expected_games == 0
+    assert night.complete is True
+    assert calls == []
+
+
+def test_fetch_night_empty_scoreboard_in_whitelist_is_incomplete(monkeypatch):
+    """Scoreboard came back with zero events on a day ESPN's own whitelist lists
+    as a game day — treat as a transient gap, not a sealed off-night."""
+    game_date = date(2025, 12, 25)
+    monkeypatch.setattr(nightly.espn, "fetch_day", lambda d: _zero_games_day(game_date, total_events=0))
+    monkeypatch.setattr(
+        nightly.espn.client, "calendar_whitelist",
+        lambda: [f"{game_date.isoformat()}T17:00Z"],
+    )
+
+    night = nightly.fetch_night(game_date)
+
+    assert night.expected_games == 0
+    assert night.complete is False
+
+
+def test_fetch_night_empty_scoreboard_not_in_whitelist_seals_complete(monkeypatch):
+    """Genuine off-season/off-night: zero events and the day isn't in the
+    whitelist either — unchanged from today's behavior."""
+    game_date = date(2025, 7, 4)
+    monkeypatch.setattr(nightly.espn, "fetch_day", lambda d: _zero_games_day(game_date, total_events=0))
+    monkeypatch.setattr(
+        nightly.espn.client, "calendar_whitelist",
+        lambda: ["2025-10-21T23:00Z"],
+    )
+
+    night = nightly.fetch_night(game_date)
+
+    assert night.expected_games == 0
+    assert night.complete is True
+
+
+def test_fetch_night_whitelist_fetch_failure_falls_back_to_sealed(monkeypatch):
+    """A second ESPN failure (the whitelist call itself) must not stall the
+    pipeline — fall back to today's behavior of sealing the night."""
+    game_date = date(2025, 12, 25)
+    monkeypatch.setattr(nightly.espn, "fetch_day", lambda d: _zero_games_day(game_date, total_events=0))
+
+    def _raise():
+        raise EspnUnavailableError("boom")
+
+    monkeypatch.setattr(nightly.espn.client, "calendar_whitelist", _raise)
+
+    night = nightly.fetch_night(game_date)
+
+    assert night.expected_games == 0
+    assert night.complete is True
+
+
+def test_fetch_night_whitelist_cached_across_calls(monkeypatch):
+    """Two zero-event nights within the TTL window must only hit ESPN once."""
+    d1, d2 = date(2025, 12, 25), date(2025, 12, 26)
+    days = {d1: _zero_games_day(d1, total_events=0), d2: _zero_games_day(d2, total_events=0)}
+    monkeypatch.setattr(nightly.espn, "fetch_day", lambda d: days[d])
+    calls = []
+
+    def _fake_whitelist():
+        calls.append(1)
+        return [f"{d1.isoformat()}T17:00Z", f"{d2.isoformat()}T17:00Z"]
+
+    monkeypatch.setattr(nightly.espn.client, "calendar_whitelist", _fake_whitelist)
+
+    night1 = nightly.fetch_night(d1)
+    night2 = nightly.fetch_night(d2)
+
+    assert night1.complete is False
+    assert night2.complete is False
+    assert len(calls) == 1
 
 
 def test_bootstrap_frames_keeps_any_played_minute(monkeypatch):
