@@ -4,6 +4,7 @@ import type { Player, ScheduleCalendarDay } from '../types/api'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
+import { firstScheduleDay, formatSlateDate } from '../utils/slateWindow'
 
 interface RosterCoverageProps {
   players: Player[]
@@ -19,15 +20,6 @@ function slateTone(day: ScheduleCalendarDay): string {
   if (day.high_volume) return 'bg-blue-50 text-blue-800'
   if (day.slate_size > 0) return 'bg-gray-100 text-gray-700'
   return 'bg-gray-100 text-gray-500'
-}
-
-function formatDay(date: string, options: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat('en-US', options).format(new Date(`${date}T12:00:00`))
-}
-
-function firstScheduleDay(days: ScheduleCalendarDay[]): string {
-  const today = new Date().toISOString().slice(0, 10)
-  return days.find(day => day.date >= today)?.date ?? days[0]?.date ?? ''
 }
 
 export default function RosterCoverage({ players, teamId }: RosterCoverageProps) {
@@ -90,10 +82,10 @@ export default function RosterCoverage({ players, teamId }: RosterCoverageProps)
             onClick={() => setSelectedDate(day.date)}
             className={`w-16 min-w-16 shrink-0 rounded-lg px-1.5 py-2 text-center leading-none transition-shadow ${daySurface(day)} ${activeDate === day.date ? 'border-[3px] border-blue-700 shadow-sm' : 'border-2 border-gray-200'}`}
             aria-pressed={activeDate === day.date}
-            aria-label={`${formatDay(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${roster.length} rostered players have an NBA game; ${day.slate_size} NBA games on the slate`}
+            aria-label={`${formatSlateDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${roster.length} rostered players have an NBA game; ${day.slate_size} NBA games on the slate`}
           >
-            <div className="text-[10px] font-semibold uppercase leading-none">{formatDay(day.date, { weekday: 'short' })}</div>
-            <div className="text-xs leading-none">{formatDay(day.date, { month: 'short', day: 'numeric' })}</div>
+            <div className="text-[10px] font-semibold uppercase leading-none">{formatSlateDate(day.date, { weekday: 'short' })}</div>
+            <div className="text-xs leading-none">{formatSlateDate(day.date, { month: 'short', day: 'numeric' })}</div>
             <div className="mt-2 flex h-24 items-end justify-center" aria-hidden="true">
               <div className="relative h-full w-6 overflow-hidden rounded-t bg-blue-100">
                 <div
