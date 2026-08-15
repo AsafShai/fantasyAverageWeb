@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
@@ -79,6 +79,10 @@ export const fantasyApi = createApi({
     }),
     getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
       query: (teamId) => `/nba-teams/${teamId}/depthchart`,
+    }),
+    getSchedule: builder.query<ScheduleResponse, void>({
+      query: () => '/nba/schedule',
+      keepUnusedDataFor: 86400,
     }),
     getNbaPlayer: builder.query<NbaPlayerBio, string>({
       query: (playerId) => `/nba-players/${playerId}`,
@@ -197,6 +201,7 @@ export const {
   useGetEstimatorResultsQuery,
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
+  useGetScheduleQuery,
   useGetNbaPlayerQuery,
   useGetNbaPlayerStatsQuery,
   useGetMatchupsTodayQuery,

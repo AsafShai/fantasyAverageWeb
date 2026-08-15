@@ -41,6 +41,6 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
         { label: 'Now You See Me', path: '/minigames/now-you-see-me', icon: '👁️', group: 'Minigames' },
       ]
     : []),
-  { label: 'NBA Depth Charts', path: '/nba-teams', icon: '🏀', group: 'NBA' },
+  { label: 'NBA Teams', path: '/nba-teams', icon: '🏀', group: 'NBA' },
   { label: 'Injuries', path: '/injuries', icon: '🩺', group: 'NBA' },
 ]

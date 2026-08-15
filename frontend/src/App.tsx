@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES } from './config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE } from './config/featureFlags'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Rankings = lazy(() => import('./pages/Rankings'))
@@ -16,6 +16,7 @@ const Trade = lazy(() => import('./pages/Trade').then(m => ({ default: m.Trade }
 const Players = lazy(() => import('./pages/Players'))
 const Injuries = lazy(() => import('./pages/Injuries'))
 const NbaTeams = lazy(() => import('./pages/NbaTeams'))
+const Schedule = lazy(() => import('./pages/Schedule'))
 const FeatureStore = lazy(() => import('./pages/FeatureStore'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const PlayerRankings = lazy(() => import('./pages/PlayerRankings'))
@@ -51,6 +52,7 @@ function App() {
             <Route path="players" element={<Players />} />
             <Route path="injuries" element={<Injuries />} />
             <Route path="nba-teams" element={<NbaTeams />} />
+            {FF_SCHEDULE && <Route path="schedule" element={<Schedule />} />}
             <Route path="player/:playerId" element={<PlayerProfile />} />
             {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}
             {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
