@@ -111,12 +111,12 @@ class TestRankingServiceResponseBuilding:
     """Response building tests for RankingService with mocked data provider but real response building"""
 
     @pytest.fixture
-    def response_building_ranking_service(self, sample_rankings_df, sample_totals_df):
+    def response_building_ranking_service(self, sample_rankings_df, sample_totals_df, sample_averages_df):
         """Create RankingService with mocked DataProvider but real ResponseBuilder"""
         with patch('app.services.ranking_service.DataProvider') as mock_data_provider:
             service = RankingService()
             service.data_provider = AsyncMock()
-            service.data_provider.get_all_dataframes.return_value = (sample_totals_df, None, sample_rankings_df)
+            service.data_provider.get_all_dataframes.return_value = (sample_totals_df, sample_averages_df, sample_rankings_df)
             service.data_provider.get_data_date = MagicMock(return_value=None)
             return service
 
@@ -146,9 +146,9 @@ class TestRankingServiceResponseBuilding:
         """Integration test: Verify sorting by specific category works correctly"""
         league_rankings = await response_building_ranking_service.get_league_rankings(sort_by='FG%', order='desc')
 
-        expected_fg_values = [3, 2, 1]
-        actual_fg_values = [ranking.fg_percentage for ranking in league_rankings.averages_rankings]
-        assert actual_fg_values == expected_fg_values, f"Expected {expected_fg_values}, got {actual_fg_values}"
+        expected_fg_ranks = [3, 2, 1]
+        actual_fg_ranks = [ranking.category_ranks['FG%'] for ranking in league_rankings.averages_rankings]
+        assert actual_fg_ranks == expected_fg_ranks, f"Expected {expected_fg_ranks}, got {actual_fg_ranks}"
 
         expected_team_names = ['Team Beta', 'Team Alpha', 'Team Gamma']
         actual_team_names = [ranking.team.team_name for ranking in league_rankings.averages_rankings]
@@ -227,16 +227,16 @@ class TestRankingServiceIntegration:
         assert isinstance(league_rankings, LeagueRankings)
         rankings = league_rankings.averages_rankings
 
-        pts_values = [ranking.pts for ranking in rankings]
-        assert pts_values == sorted(pts_values, reverse=True), "PTS should be in descending order"
+        pts_ranks = [ranking.category_ranks['PTS'] for ranking in rankings]
+        assert pts_ranks == sorted(pts_ranks, reverse=True), "PTS rank-in-category should be in descending order"
 
         league_rankings_asc = await integration_ranking_service.get_league_rankings(
             sort_by='AST', order='asc'
         )
 
         rankings_asc = league_rankings_asc.averages_rankings
-        ast_values = [ranking.ast for ranking in rankings_asc]
-        assert ast_values == sorted(ast_values), "AST should be in ascending order"
+        ast_ranks = [ranking.category_ranks['AST'] for ranking in rankings_asc]
+        assert ast_ranks == sorted(ast_ranks), "AST rank-in-category should be in ascending order"
 
     @pytest.mark.asyncio
     async def test_integration_error_handling(self, integration_ranking_service):

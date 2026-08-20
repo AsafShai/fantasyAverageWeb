@@ -19,6 +19,7 @@ function team(overrides: Partial<RankingStats> = {}): RankingStats {
     gp: 50,
     total_points: 8,
     rank: 1,
+    category_ranks: { 'FG%': 2, 'FT%': 2, '3PM': 2, AST: 2, REB: 2, STL: 2, BLK: 2, PTS: 2 },
     ...overrides,
   };
 }
@@ -45,12 +46,36 @@ describe('Rankings page', () => {
         if (url.includes('/rankings')) {
           return jsonResponse({
             averages_rankings: [
-              team({ team: { team_id: 1, team_name: 'Alpha Squad' }, rank: 1, total_points: 8 }),
-              team({ team: { team_id: 2, team_name: 'Beta Ballers' }, rank: 2, total_points: 4, pts: 500 }),
+              team({
+                team: { team_id: 1, team_name: 'Alpha Squad' },
+                rank: 1,
+                total_points: 8,
+                pts: 115.3,
+                category_ranks: { 'FG%': 3, 'FT%': 1, '3PM': 2, AST: 2, REB: 2, STL: 2, BLK: 2, PTS: 2 },
+              }),
+              team({
+                team: { team_id: 2, team_name: 'Beta Ballers' },
+                rank: 2,
+                total_points: 4,
+                pts: 121.0,
+                category_ranks: { 'FG%': 1, 'FT%': 3, '3PM': 3, AST: 1, REB: 1, STL: 1, BLK: 3, PTS: 3 },
+              }),
             ],
             totals_rankings: [
-              team({ team: { team_id: 1, team_name: 'Alpha Squad' }, rank: 2, total_points: 4, pts: 4000 }),
-              team({ team: { team_id: 2, team_name: 'Beta Ballers' }, rank: 1, total_points: 8, pts: 9000 }),
+              team({
+                team: { team_id: 1, team_name: 'Alpha Squad' },
+                rank: 2,
+                total_points: 4,
+                pts: 4000,
+                category_ranks: { 'FG%': 2, 'FT%': 2, '3PM': 2, AST: 2, REB: 2, STL: 2, BLK: 2, PTS: 1 },
+              }),
+              team({
+                team: { team_id: 2, team_name: 'Beta Ballers' },
+                rank: 1,
+                total_points: 8,
+                pts: 9000,
+                category_ranks: { 'FG%': 1, 'FT%': 1, '3PM': 1, AST: 1, REB: 1, STL: 1, BLK: 1, PTS: 2 },
+              }),
             ],
             categories: ['pts', 'reb', 'ast'],
             last_updated: '2026-08-19',
@@ -68,37 +93,41 @@ describe('Rankings page', () => {
     vi.unstubAllGlobals();
   });
 
-  it('defaults to Rankings (Averages) with rank and total columns', async () => {
+  it('defaults to Rankings (Averages) with actual values, rank and total always visible', async () => {
     renderWithProviders(<Rankings />);
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
-    expect(screen.getByText('Team Rankings (Averages)')).toBeInTheDocument();
+    expect(screen.getByText('Team Standings (Averages)')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /rank/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /^total/i })).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const alphaRow = within(table).getByText('Alpha Squad').closest('tr')!;
+    expect(within(alphaRow).getByText('115.3')).toBeInTheDocument();
   });
 
-  it('switching Display to Raw drops rank/total columns and retitles to Standings', async () => {
+  it('switching to Category Rank shows rank-in-category cells and retitles to Rankings, keeping Rank/Total columns', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /^raw$/i }));
+    await user.click(screen.getByRole('button', { name: /^category rank$/i }));
 
-    expect(screen.getByText('Team Standings (Averages)')).toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /rank/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /^total$/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Team Rankings (Averages)')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /rank/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^total/i })).toBeInTheDocument();
+
     const table = screen.getByRole('table');
-    const dataRows = within(table).getAllByRole('row').slice(1);
-    expect(dataRows[0]).toHaveTextContent('Alpha Squad');
-    expect(within(dataRows[0]).queryByText(/^#/)).not.toBeInTheDocument();
+    const alphaRow = within(table).getByText('Alpha Squad').closest('tr')!;
+    // FG% category rank for Alpha is 3, not the actual .5 value
+    expect(within(alphaRow).queryByText('115.3')).not.toBeInTheDocument();
   });
 
-  it('Totals x Raw shows Team Standings (Totals) using raw totals values', async () => {
+  it('Totals x Actual Values shows Team Standings (Totals) using raw totals values', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /^totals$/i }));
-    await user.click(screen.getByRole('button', { name: /^raw$/i }));
 
     expect(screen.getByText('Team Standings (Totals)')).toBeInTheDocument();
     const table = screen.getByRole('table');
@@ -106,26 +135,17 @@ describe('Rankings page', () => {
     expect(within(alphaRow).getByText('4000')).toBeInTheDocument();
   });
 
-  it('Ranked x Totals shows Team Rankings (Totals)', async () => {
+  it('switching back to Actual Values restores real values', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /^totals$/i }));
+    await user.click(screen.getByRole('button', { name: /^category rank$/i }));
+    await user.click(screen.getByRole('button', { name: /^actual values$/i }));
 
-    expect(screen.getByText('Team Rankings (Totals)')).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: /rank/i })).toBeInTheDocument();
-  });
-
-  it('switching back to Ranked restores rank and total columns', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<Rankings />);
-    await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
-
-    await user.click(screen.getByRole('button', { name: /^raw$/i }));
-    await user.click(screen.getByRole('button', { name: /^ranked$/i }));
-
-    expect(screen.getByText('Team Rankings (Averages)')).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: /rank/i })).toBeInTheDocument();
+    expect(screen.getByText('Team Standings (Averages)')).toBeInTheDocument();
+    const table = screen.getByRole('table');
+    const alphaRow = within(table).getByText('Alpha Squad').closest('tr')!;
+    expect(within(alphaRow).getByText('115.3')).toBeInTheDocument();
   });
 });

@@ -11,11 +11,22 @@ import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
+const CATEGORY_KEY_MAP: Record<string, string> = {
+  fg_percentage: 'FG%',
+  ft_percentage: 'FT%',
+  three_pm: '3PM',
+  ast: 'AST',
+  reb: 'REB',
+  stl: 'STL',
+  blk: 'BLK',
+  pts: 'PTS',
+}
+
 const Rankings = () => {
   const [sortBy, setSortBy] = useState<string>('total_points')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [mode, setMode] = useState<'averages' | 'totals'>('averages')
-  const [display, setDisplay] = useState<'ranked' | 'raw'>('ranked')
+  const [cellValues, setCellValues] = useState<'actual' | 'category_rank'>('actual')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [dateError, setDateError] = useState<string>('')
@@ -60,17 +71,6 @@ const Rankings = () => {
     setAppliedDates({})
   }
 
-  const handleDisplayChange = (next: 'ranked' | 'raw') => {
-    setDisplay(next)
-    if (next === 'raw' && (sortBy === 'rank' || sortBy === 'total_points')) {
-      setSortBy('team')
-      setSortOrder('asc')
-    } else if (next === 'ranked' && sortBy === 'team') {
-      setSortBy('total_points')
-      setSortOrder('desc')
-    }
-  }
-
   const handleSort = (column: string) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -92,9 +92,17 @@ const Rankings = () => {
     ? (data?.averages_rankings || [])
     : (data?.totals_rankings || [])
 
+  const getSortValue = (team: RankingStats) => {
+    const categoryKey = CATEGORY_KEY_MAP[sortBy]
+    if (categoryKey && cellValues === 'category_rank') {
+      return team.category_ranks?.[categoryKey]
+    }
+    return team[sortBy as keyof RankingStats]
+  }
+
   const rankings = [...rawRankings].sort((a, b) => {
-    const aValue = a[sortBy as keyof RankingStats]
-    const bValue = b[sortBy as keyof RankingStats]
+    const aValue = getSortValue(a)
+    const bValue = getSortValue(b)
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
     }
@@ -105,10 +113,10 @@ const Rankings = () => {
     return 0
   })
 
-  const isRanked = display === 'ranked'
+  const isActualValues = cellValues === 'actual'
 
   const columns = [
-    ...(isRanked ? [{ key: 'rank', label: 'Rank', sortable: true }] : []),
+    { key: 'rank', label: 'Rank', sortable: true },
     { key: 'team', label: 'Team', sortable: true },
     { key: 'fg_percentage', label: 'FG%', sortable: true },
     { key: 'ft_percentage', label: 'FT%', sortable: true },
@@ -118,11 +126,11 @@ const Rankings = () => {
     { key: 'stl', label: 'STL', sortable: true },
     { key: 'blk', label: 'BLK', sortable: true },
     { key: 'pts', label: 'PTS', sortable: true },
-    ...(isRanked ? [{ key: 'total_points', label: 'Total', sortable: true }] : []),
+    { key: 'total_points', label: 'Total', sortable: true },
     { key: 'gp', label: 'GP', sortable: true },
   ]
 
-  const titleWord = isRanked ? 'Rankings' : 'Standings'
+  const titleWord = isActualValues ? 'Standings' : 'Rankings'
   const modeLabel = mode === 'averages' ? 'Averages' : 'Totals'
 
   const hasDateMismatch = data && isDateRangeActive && (
@@ -173,13 +181,9 @@ const Rankings = () => {
                 )}
               </h2>
               <p className="text-blue-100 mt-1">
-                {isRanked
-                  ? (mode === 'averages'
-                      ? 'Click column headers to sort. Total points calculated from category rankings.'
-                      : 'Totals mode: raw accumulated stats, ranked by total roto score.')
-                  : (mode === 'averages'
-                      ? 'Per-game averages, exactly as tracked — no roto scoring applied.'
-                      : 'Season-to-date category totals, exactly as ESPN reports them — no roto scoring, no computed rank.')}
+                {isActualValues
+                  ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
+                  : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
               </p>
             </div>
             <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
@@ -209,27 +213,27 @@ const Rankings = () => {
                 </div>
               </div>
               <div className="flex flex-col gap-1 items-start sm:items-end">
-                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Display</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Category Cells</span>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleDisplayChange('ranked')}
+                    onClick={() => setCellValues('actual')}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      isRanked
+                      isActualValues
                         ? 'bg-white text-blue-700'
                         : 'bg-blue-500 text-white hover:bg-blue-400'
                     }`}
                   >
-                    Ranked
+                    Actual Values
                   </button>
                   <button
-                    onClick={() => handleDisplayChange('raw')}
+                    onClick={() => setCellValues('category_rank')}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      !isRanked
+                      !isActualValues
                         ? 'bg-white text-blue-700'
                         : 'bg-blue-500 text-white hover:bg-blue-400'
                     }`}
                   >
-                    Raw
+                    Category Rank
                   </button>
                 </div>
               </div>
@@ -343,11 +347,9 @@ const Rankings = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {rankings.map((team: RankingStats, index: number) => (
                 <tr key={team.team.team_id} className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
-                  {isRanked && (
-                    <td className="table-cell font-bold text-blue-600">
-                      #{team.rank || index + 1}
-                    </td>
-                  )}
+                  <td className="table-cell font-bold text-blue-600">
+                    #{team.rank || index + 1}
+                  </td>
                   <td className="table-cell">
                     <Link
                       to={`/team/${team.team.team_id}`}
@@ -356,10 +358,13 @@ const Rankings = () => {
                       {team.team.team_name}
                     </Link>
                   </td>
-                  {columns.slice(isRanked ? 2 : 1).map((column) => {
-                    const value = team[column.key as keyof RankingStats] as number
+                  {columns.slice(2).map((column) => {
+                    const categoryKey = CATEGORY_KEY_MAP[column.key]
+                    const value = (categoryKey && !isActualValues)
+                      ? team.category_ranks?.[categoryKey]
+                      : (team[column.key as keyof RankingStats] as number)
                     const formatValue = (val: number) => {
-                      if (column.key === 'gp') return val
+                      if (column.key === 'gp' || (categoryKey && !isActualValues)) return val
                       return val % 1 === 0 ? val.toString() : val.toFixed(1)
                     }
                     return (
