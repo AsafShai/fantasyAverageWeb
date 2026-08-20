@@ -16,6 +16,7 @@ export interface RankingStats {
   gp: number;
   total_points: number;
   rank?: number;
+  category_ranks?: Record<string, number>;
 }
 
 export interface LeagueRankings {

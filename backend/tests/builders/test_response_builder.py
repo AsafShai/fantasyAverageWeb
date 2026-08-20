@@ -40,9 +40,9 @@ def response_builder_players_df():
 class TestResponseBuilder:
     """Test suite for ResponseBuilder class"""
     
-    def test_build_rankings_response_default_sorting(self, response_builder, sample_rankings_df):
+    def test_build_rankings_response_default_sorting(self, response_builder, sample_averages_df, sample_rankings_df):
         """Test build_rankings_response with default sorting (by RANK, asc)"""
-        result = response_builder.build_rankings_response(sample_rankings_df, sample_rankings_df)
+        result = response_builder.build_rankings_response(sample_averages_df, sample_averages_df, sample_rankings_df, sample_rankings_df)
 
         assert isinstance(result, LeagueRankings), "Should return LeagueRankings object"
         assert len(result.averages_rankings) == 3, "Should have 3 rankings"
@@ -57,30 +57,32 @@ class TestResponseBuilder:
         assert first_ranking.team.team_id == 1, "First ranking should be Team Alpha"
         assert first_ranking.team.team_name == 'Team Alpha', "First ranking should be Team Alpha"
         assert first_ranking.rank == 1, "First ranking should have rank 1"
+        assert first_ranking.pts == 115.3, "Cell values should be the actual stat, not the category rank"
+        assert first_ranking.category_ranks['FG%'] == 2, "category_ranks should carry the rank-in-category"
 
-    def test_build_rankings_response_custom_sorting(self, response_builder, sample_rankings_df):
+    def test_build_rankings_response_custom_sorting(self, response_builder, sample_averages_df, sample_rankings_df):
         """Test build_rankings_response with custom sorting by PTS descending"""
-        result = response_builder.build_rankings_response(sample_rankings_df, sample_rankings_df, sort_by='PTS', order='desc')
+        result = response_builder.build_rankings_response(sample_averages_df, sample_averages_df, sample_rankings_df, sample_rankings_df, sort_by='PTS', order='desc')
 
-        pts_values = [ranking.pts for ranking in result.averages_rankings]
+        pts_ranks = [ranking.category_ranks['PTS'] for ranking in result.averages_rankings]
         team_names = [ranking.team.team_name for ranking in result.averages_rankings]
 
-        assert pts_values == [3, 2, 1], "Should be sorted by PTS descending"
+        assert pts_ranks == [3, 2, 1], "Should be sorted by PTS rank descending"
         assert team_names == ['Team Gamma', 'Team Alpha', 'Team Beta'], "Should be in correct PTS order"
 
-    def test_build_rankings_response_ascending_order(self, response_builder, sample_rankings_df):
+    def test_build_rankings_response_ascending_order(self, response_builder, sample_averages_df, sample_rankings_df):
         """Test build_rankings_response with FG% ascending order"""
-        result = response_builder.build_rankings_response(sample_rankings_df, sample_rankings_df, sort_by='FG%', order='asc')
+        result = response_builder.build_rankings_response(sample_averages_df, sample_averages_df, sample_rankings_df, sample_rankings_df, sort_by='FG%', order='asc')
 
-        fg_values = [ranking.fg_percentage for ranking in result.averages_rankings]
+        fg_ranks = [ranking.category_ranks['FG%'] for ranking in result.averages_rankings]
         team_names = [ranking.team.team_name for ranking in result.averages_rankings]
 
-        assert fg_values == [1, 2, 3], "Should be sorted by FG% ascending"
+        assert fg_ranks == [1, 2, 3], "Should be sorted by FG% rank ascending"
         assert team_names == ['Team Gamma', 'Team Alpha', 'Team Beta'], "Should be in correct FG% order"
 
-    def test_build_rankings_response_total_points_sorting(self, response_builder, sample_rankings_df):
+    def test_build_rankings_response_total_points_sorting(self, response_builder, sample_averages_df, sample_rankings_df):
         """Test build_rankings_response with TOTAL_POINTS sorting"""
-        result = response_builder.build_rankings_response(sample_rankings_df, sample_rankings_df, sort_by='TOTAL_POINTS', order='desc')
+        result = response_builder.build_rankings_response(sample_averages_df, sample_averages_df, sample_rankings_df, sample_rankings_df, sort_by='TOTAL_POINTS', order='desc')
 
         total_points = [ranking.total_points for ranking in result.averages_rankings]
         team_names = [ranking.team.team_name for ranking in result.averages_rankings]

@@ -6,18 +6,16 @@ import pytest
 client = TestClient(app)
 
 
-sort_by_to_attribute = {
-    "PTS": "pts",
-    "REB": "reb",
-    "AST": "ast",
-    "FG%": "fg_percentage",
-    "FT%": "ft_percentage",
-    "3PM": "three_pm",
-    "STL": "stl",
-    "BLK": "blk",
-    "TOTAL_POINTS": "total_points",
-    "RANK": "rank",
-}   
+CATEGORY_SORT_KEYS = {"PTS", "REB", "AST", "FG%", "FT%", "3PM", "STL", "BLK"}
+
+
+def _sort_key(ranking, sort_by: str):
+    """Server sorts category columns by rank-in-category, not the raw stat value
+    (which is what ranking.pts/fg_percentage/etc. now hold), so mirror that here."""
+    upper = sort_by.upper()
+    if upper in CATEGORY_SORT_KEYS:
+        return ranking.category_ranks[upper]
+    return getattr(ranking, "total_points" if upper == "TOTAL_POINTS" else "rank")
 
 def _build_rankings_url(sort_by=None, order=None):
     """Build rankings URL with query parameters"""
@@ -56,7 +54,7 @@ def test_get_rankings_default():
 def test_get_rankings_with_sort_by(sort_by):
     """Test that the rankings are sorted by the sort_by column, order default is asc"""
     league_rankings = _get_valid_rankings(sort_by=sort_by)
-    expected_sorted = sorted(league_rankings.averages_rankings, key=lambda x: getattr(x, sort_by_to_attribute[sort_by.upper()]), reverse=False)
+    expected_sorted = sorted(league_rankings.averages_rankings, key=lambda x: _sort_key(x, sort_by), reverse=False)
     assert league_rankings.averages_rankings == expected_sorted
 
 @pytest.mark.parametrize("order", ["asc", "desc"])
@@ -71,7 +69,7 @@ def test_get_rankings_with_order_without_sort_by(order):
 def test_get_rankings_with_order_and_sort_by(sort_by, order):
     """Test that the rankings are sorted by the sort_by column, order default is asc"""
     league_rankings = _get_valid_rankings(sort_by=sort_by, order=order)
-    expected_sorted = sorted(league_rankings.averages_rankings, key=lambda x: getattr(x, sort_by_to_attribute[sort_by.upper()]), reverse=order == "desc")
+    expected_sorted = sorted(league_rankings.averages_rankings, key=lambda x: _sort_key(x, sort_by), reverse=order == "desc")
     assert league_rankings.averages_rankings == expected_sorted
 
 def test_get_rankings_with_invalid_sort_by():

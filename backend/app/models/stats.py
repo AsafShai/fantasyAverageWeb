@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Dict, Optional
 from .base import Team
 
 
@@ -45,6 +45,7 @@ class RankingStats(BaseModel):
     gp: int
     total_points: float
     rank: Optional[int] = None
+    category_ranks: Optional[Dict[str, int]] = None
 
 class TeamShotStats(BaseModel):
     team: Team
