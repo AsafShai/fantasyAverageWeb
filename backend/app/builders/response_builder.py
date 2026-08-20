@@ -14,7 +14,9 @@ from app.config import settings
 class ResponseBuilder:
     """Transforms data into API response objects (pure data transformation)"""
     
-    def build_rankings_response(self, averages_rankings_df: pd.DataFrame,
+    def build_rankings_response(self, averages_df: pd.DataFrame,
+                              totals_df: pd.DataFrame,
+                              averages_rankings_df: pd.DataFrame,
                               totals_rankings_df: pd.DataFrame,
                               sort_by: Optional[str] = None,
                               order: str = "asc",
@@ -23,15 +25,25 @@ class ResponseBuilder:
                               date_range_end=None,
                               actual_start_date=None,
                               actual_end_date=None) -> LeagueRankings:
-        """Build LeagueRankings response from averages and totals rankings DataFrames"""
+        """Build LeagueRankings response from averages/totals rankings DataFrames (rank + total
+        points per team) paired with their raw counterparts (actual per-category stat values)"""
         sort_col = "RANK" if sort_by is None else sort_by.upper()
         ascending = order == "asc"
 
         averages_rankings_df = averages_rankings_df.sort_values(sort_col, ascending=ascending)
         totals_rankings_df = totals_rankings_df.sort_values(sort_col, ascending=ascending)
 
-        averages_rankings = [self._create_ranking_stats(row) for _, row in averages_rankings_df.iterrows()]
-        totals_rankings = [self._create_ranking_stats(row) for _, row in totals_rankings_df.iterrows()]
+        averages_by_team = averages_df.set_index('team_id')
+        totals_by_team = totals_df.set_index('team_id')
+
+        averages_rankings = [
+            self._create_ranking_stats(row, averages_by_team.loc[int(row['team_id'])])
+            for _, row in averages_rankings_df.iterrows()
+        ]
+        totals_rankings = [
+            self._create_ranking_stats(row, totals_by_team.loc[int(row['team_id'])])
+            for _, row in totals_rankings_df.iterrows()
+        ]
 
         return LeagueRankings(
             averages_rankings=averages_rankings,
@@ -66,7 +78,7 @@ class ResponseBuilder:
         team = Team(team_id=team_id, team_name=totals_data['team_name'])
         shot_chart = self._create_shot_chart_stats(totals_data)
         raw_averages = self._create_raw_average_stats(avg_data)
-        ranking_stats = self._create_ranking_stats(rank_data)
+        ranking_stats = self._create_ranking_stats(rank_data, avg_data)
 
         slot_usage: Dict[str, SlotUsage] = {}
         for slot_name, cap in SLOT_CAPS.items():
@@ -234,21 +246,24 @@ class ResponseBuilder:
             gp=float(league_avg_data['GP'])
         )
     
-    def _create_ranking_stats(self, row: pd.Series) -> RankingStats:
-        """Create RankingStats object from dataframe row"""
+    def _create_ranking_stats(self, ranked_row: pd.Series, raw_row: pd.Series) -> RankingStats:
+        """Create RankingStats object from a ranked dataframe row (rank + total points, plus each
+        category's rank-in-category via RANKING_CATEGORIES) paired with the raw row holding the
+        team's actual per-category stat values"""
         return RankingStats(
-            team=Team(team_id=int(row['team_id']), team_name=str(row['team_name'])),
-            fg_percentage=float(row['FG%']),
-            ft_percentage=float(row['FT%']),
-            three_pm=float(row['3PM']),
-            ast=float(row['AST']),
-            reb=float(row['REB']),
-            stl=float(row['STL']),
-            blk=float(row['BLK']),
-            pts=float(row['PTS']),
-            gp=int(row['GP']),
-            total_points=float(row['TOTAL_POINTS']),
-            rank=int(row['RANK'])
+            team=Team(team_id=int(ranked_row['team_id']), team_name=str(ranked_row['team_name'])),
+            fg_percentage=float(raw_row['FG%']),
+            ft_percentage=float(raw_row['FT%']),
+            three_pm=float(raw_row['3PM']),
+            ast=float(raw_row['AST']),
+            reb=float(raw_row['REB']),
+            stl=float(raw_row['STL']),
+            blk=float(raw_row['BLK']),
+            pts=float(raw_row['PTS']),
+            gp=int(ranked_row['GP']),
+            total_points=float(ranked_row['TOTAL_POINTS']),
+            rank=int(ranked_row['RANK']),
+            category_ranks={col: int(ranked_row[col]) for col in RANKING_CATEGORIES},
         )
     
     def _create_shot_chart_stats(self, totals_data: pd.Series) -> ShotChartStats:

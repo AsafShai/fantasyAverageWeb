@@ -24,11 +24,11 @@ class RankingService:
         if start_date is not None and end_date is not None:
             return await self._get_rankings_for_range(start_date, end_date, sort_by, order)
 
-        totals_df, _, averages_rankings_df = await self.data_provider.get_all_dataframes()
+        totals_df, averages_df, averages_rankings_df = await self.data_provider.get_all_dataframes()
         if totals_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 
-        totals_rankings_df = self._build_totals_rankings_df(totals_df)
+        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df(totals_df)
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):
             raise InvalidParameterError(f"Invalid sort column: {sort_by}")
@@ -36,6 +36,8 @@ class RankingService:
             raise InvalidParameterError("Order must be 'asc' or 'desc'")
 
         return self.response_builder.build_rankings_response(
+            averages_df=averages_df,
+            totals_df=totals_raw_df,
             averages_rankings_df=averages_rankings_df,
             totals_rankings_df=totals_rankings_df,
             sort_by=sort_by,
@@ -58,8 +60,8 @@ class RankingService:
 
         delta_df = self._compute_delta(end_df, start_df)
 
-        averages_rankings_df = self._build_averages_rankings_df(delta_df)
-        totals_rankings_df = self._build_totals_rankings_df_from_delta(delta_df)
+        averages_df, averages_rankings_df = self._build_averages_rankings_df(delta_df)
+        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df_from_delta(delta_df)
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):
             raise InvalidParameterError(f"Invalid sort column: {sort_by}")
@@ -67,6 +69,8 @@ class RankingService:
             raise InvalidParameterError("Order must be 'asc' or 'desc'")
 
         return self.response_builder.build_rankings_response(
+            averages_df=averages_df,
+            totals_df=totals_raw_df,
             averages_rankings_df=averages_rankings_df,
             totals_rankings_df=totals_rankings_df,
             sort_by=sort_by,
@@ -95,8 +99,8 @@ class RankingService:
         delta['ft_pct'] = (delta['ftm'] / delta['fta'].replace(0, float('nan'))).fillna(0)
         return delta
 
-    def _build_averages_rankings_df(self, delta_df: pd.DataFrame) -> pd.DataFrame:
-        """Build averages rankings DataFrame from delta (divide counting stats by GP)."""
+    def _build_averages_rankings_df(self, delta_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Build (raw averages, rankings) DataFrames from delta (divide counting stats by GP)."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
 
@@ -118,10 +122,10 @@ class RankingService:
         df['PTS'] = delta_df['pts']
 
         averages_df = transformer.totals_to_averages_df(df)
-        return transformer.averages_to_rankings_df(averages_df)
+        return averages_df, transformer.averages_to_rankings_df(averages_df)
 
-    def _build_totals_rankings_df_from_delta(self, delta_df: pd.DataFrame) -> pd.DataFrame:
-        """Build totals rankings DataFrame directly from delta counting stats."""
+    def _build_totals_rankings_df_from_delta(self, delta_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Build (raw totals, rankings) DataFrames directly from delta counting stats."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
 
@@ -138,16 +142,16 @@ class RankingService:
         df['BLK'] = delta_df['blk']
         df['PTS'] = delta_df['pts']
 
-        return transformer.averages_to_rankings_df(df)
+        return df, transformer.averages_to_rankings_df(df)
 
-    def _build_totals_rankings_df(self, totals_df: pd.DataFrame) -> pd.DataFrame:
-        """Build totals rankings DataFrame from season totals (no per-game division)."""
+    def _build_totals_rankings_df(self, totals_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Build (raw totals, rankings) DataFrames from season totals (no per-game division)."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
 
         cols_to_keep = ['team_id', 'team_name', 'GP'] + [c for c in RANKING_CATEGORIES if c in totals_df.columns]
         df = totals_df[[c for c in cols_to_keep if c in totals_df.columns]].copy()
-        return transformer.averages_to_rankings_df(df)
+        return df, transformer.averages_to_rankings_df(df)
 
     def _is_valid_sort_column(self, sort_by: str, rankings_df) -> bool:
         return sort_by.upper() in rankings_df.columns

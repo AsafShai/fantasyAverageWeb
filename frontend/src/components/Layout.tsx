@@ -100,7 +100,7 @@ const Layout = () => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: '📊' },
     { path: '/teams', label: 'Teams', icon: '👥' },
-    { path: '/rankings', label: 'Rankings', icon: '🏆' },
+    { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
     { path: '/shots', label: 'Shots', icon: '🎯' },
     { path: '/analytics', label: 'Analytics', icon: '📈' },
     { path: '/estimator', label: 'Estimator', icon: '🔮' },
@@ -490,7 +490,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
       label: 'League',
       icon: '👥',
       items: [
-        { path: '/rankings', label: 'League Rankings', icon: '🏆' },
+        { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
         { path: '/teams', label: 'Teams', icon: '👥' },
         ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
       ],

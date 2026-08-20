@@ -11,10 +11,22 @@ import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
+const CATEGORY_KEY_MAP: Record<string, string> = {
+  fg_percentage: 'FG%',
+  ft_percentage: 'FT%',
+  three_pm: '3PM',
+  ast: 'AST',
+  reb: 'REB',
+  stl: 'STL',
+  blk: 'BLK',
+  pts: 'PTS',
+}
+
 const Rankings = () => {
   const [sortBy, setSortBy] = useState<string>('total_points')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [mode, setMode] = useState<'averages' | 'totals'>('averages')
+  const [cellValues, setCellValues] = useState<'actual' | 'category_rank'>('actual')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [dateError, setDateError] = useState<string>('')
@@ -80,9 +92,17 @@ const Rankings = () => {
     ? (data?.averages_rankings || [])
     : (data?.totals_rankings || [])
 
+  const getSortValue = (team: RankingStats) => {
+    const categoryKey = CATEGORY_KEY_MAP[sortBy]
+    if (categoryKey && cellValues === 'category_rank') {
+      return team.category_ranks?.[categoryKey]
+    }
+    return team[sortBy as keyof RankingStats]
+  }
+
   const rankings = [...rawRankings].sort((a, b) => {
-    const aValue = a[sortBy as keyof RankingStats]
-    const bValue = b[sortBy as keyof RankingStats]
+    const aValue = getSortValue(a)
+    const bValue = getSortValue(b)
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortOrder === 'asc' ? aValue - bValue : bValue - aValue
     }
@@ -92,6 +112,8 @@ const Rankings = () => {
     if (aTeamName > bTeamName) return sortOrder === 'asc' ? 1 : -1
     return 0
   })
+
+  const isActualValues = cellValues === 'actual'
 
   const columns = [
     { key: 'rank', label: 'Rank', sortable: true },
@@ -107,6 +129,9 @@ const Rankings = () => {
     { key: 'total_points', label: 'Total', sortable: true },
     { key: 'gp', label: 'GP', sortable: true },
   ]
+
+  const titleWord = isActualValues ? 'Standings' : 'Rankings'
+  const modeLabel = mode === 'averages' ? 'Averages' : 'Totals'
 
   const hasDateMismatch = data && isDateRangeActive && (
     (data.actual_start_date && data.actual_start_date !== data.date_range_start) ||
@@ -148,7 +173,7 @@ const Rankings = () => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h2 className="text-2xl font-bold text-white">
-                Team Rankings ({mode === 'averages' ? 'Averages' : 'Totals'})
+                Team {titleWord} ({modeLabel})
                 {isDateRangeActive && (
                   <span className="ml-2 text-lg font-normal text-blue-100">
                     – {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}
@@ -156,32 +181,62 @@ const Rankings = () => {
                 )}
               </h2>
               <p className="text-blue-100 mt-1">
-                {mode === 'averages'
-                  ? 'Click column headers to sort. Total points calculated from category rankings.'
-                  : 'Totals mode: raw accumulated stats for the period.'}
+                {isActualValues
+                  ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
+                  : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={() => setMode('averages')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  mode === 'averages'
-                    ? 'bg-white text-blue-700'
-                    : 'bg-blue-500 text-white hover:bg-blue-400'
-                }`}
-              >
-                Averages
-              </button>
-              <button
-                onClick={() => setMode('totals')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  mode === 'totals'
-                    ? 'bg-white text-blue-700'
-                    : 'bg-blue-500 text-white hover:bg-blue-400'
-                }`}
-              >
-                Totals
-              </button>
+            <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+              <div className="flex flex-col gap-1 items-start sm:items-end">
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Values</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setMode('averages')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      mode === 'averages'
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Averages
+                  </button>
+                  <button
+                    onClick={() => setMode('totals')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      mode === 'totals'
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Totals
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 items-start sm:items-end">
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Category Cells</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCellValues('actual')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      isActualValues
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Actual Values
+                  </button>
+                  <button
+                    onClick={() => setCellValues('category_rank')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      !isActualValues
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Category Rank
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -304,9 +359,12 @@ const Rankings = () => {
                     </Link>
                   </td>
                   {columns.slice(2).map((column) => {
-                    const value = team[column.key as keyof RankingStats] as number
+                    const categoryKey = CATEGORY_KEY_MAP[column.key]
+                    const value = (categoryKey && !isActualValues)
+                      ? team.category_ranks?.[categoryKey]
+                      : (team[column.key as keyof RankingStats] as number)
                     const formatValue = (val: number) => {
-                      if (column.key === 'gp') return val
+                      if (column.key === 'gp' || (categoryKey && !isActualValues)) return val
                       return val % 1 === 0 ? val.toString() : val.toFixed(1)
                     }
                     return (

@@ -21,7 +21,7 @@ export interface SearchablePage {
  */
 export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Dashboard', path: '/', icon: '📊', group: 'League' },
-  { label: 'League Rankings', path: '/rankings', icon: '🏆', group: 'League' },
+  { label: 'Standings & Rankings', path: '/rankings', icon: '🏆', group: 'League' },
   { label: 'Teams', path: '/teams', icon: '👥', group: 'League' },
   ...(FF_DRAFT_REPORT ? [{ label: 'Draft Report', path: '/draft-report', icon: '📝', group: 'League' }] : []),
   { label: 'Players', path: '/players', icon: '⛹️', group: 'Players' },
