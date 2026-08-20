@@ -22,11 +22,18 @@ const CATEGORY_KEY_MAP: Record<string, string> = {
   pts: 'PTS',
 }
 
+const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
+
+// Matches the heatmap's category-cell formatting (Analytics.tsx) so the same
+// stat reads identically in both places: 4 decimal places, percentages scaled to 0-100.
+const formatAverageValue = (categoryKey: string, val: number) =>
+  PERCENTAGE_CATEGORIES.has(categoryKey) ? (val * 100).toFixed(4) + '%' : val.toFixed(4)
+
 const Rankings = () => {
   const [sortBy, setSortBy] = useState<string>('total_points')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [mode, setMode] = useState<'averages' | 'totals'>('averages')
-  const [cellValues, setCellValues] = useState<'actual' | 'category_rank'>('actual')
+  const [viewMode, setViewMode] = useState<'standings' | 'rankings'>('rankings')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [dateError, setDateError] = useState<string>('')
@@ -94,7 +101,7 @@ const Rankings = () => {
 
   const getSortValue = (team: RankingStats) => {
     const categoryKey = CATEGORY_KEY_MAP[sortBy]
-    if (categoryKey && cellValues === 'category_rank') {
+    if (categoryKey && viewMode === 'rankings') {
       return team.category_ranks?.[categoryKey]
     }
     return team[sortBy as keyof RankingStats]
@@ -113,7 +120,7 @@ const Rankings = () => {
     return 0
   })
 
-  const isActualValues = cellValues === 'actual'
+  const isStandings = viewMode === 'standings'
 
   const columns = [
     { key: 'rank', label: 'Rank', sortable: true },
@@ -130,7 +137,7 @@ const Rankings = () => {
     { key: 'gp', label: 'GP', sortable: true },
   ]
 
-  const titleWord = isActualValues ? 'Standings' : 'Rankings'
+  const titleWord = isStandings ? 'Standings' : 'Rankings'
   const modeLabel = mode === 'averages' ? 'Averages' : 'Totals'
 
   const hasDateMismatch = data && isDateRangeActive && (
@@ -181,12 +188,37 @@ const Rankings = () => {
                 )}
               </h2>
               <p className="text-blue-100 mt-1">
-                {isActualValues
+                {isStandings
                   ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
                   : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
               </p>
             </div>
             <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+              <div className="flex flex-col gap-1 items-start sm:items-end">
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">View Mode</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setViewMode('standings')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      isStandings
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Standings
+                  </button>
+                  <button
+                    onClick={() => setViewMode('rankings')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      !isStandings
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Rankings
+                  </button>
+                </div>
+              </div>
               <div className="flex flex-col gap-1 items-start sm:items-end">
                 <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Values</span>
                 <div className="flex gap-2">
@@ -209,31 +241,6 @@ const Rankings = () => {
                     }`}
                   >
                     Totals
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-col gap-1 items-start sm:items-end">
-                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Category Cells</span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCellValues('actual')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      isActualValues
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Actual Values
-                  </button>
-                  <button
-                    onClick={() => setCellValues('category_rank')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      !isActualValues
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Category Rank
                   </button>
                 </div>
               </div>
@@ -360,16 +367,27 @@ const Rankings = () => {
                   </td>
                   {columns.slice(2).map((column) => {
                     const categoryKey = CATEGORY_KEY_MAP[column.key]
-                    const value = (categoryKey && !isActualValues)
+                    const isCategoryColumn = !!categoryKey
+                    const value = (isCategoryColumn && !isStandings)
                       ? team.category_ranks?.[categoryKey]
                       : (team[column.key as keyof RankingStats] as number)
-                    const formatValue = (val: number) => {
-                      if (column.key === 'gp' || (categoryKey && !isActualValues)) return val
-                      return val % 1 === 0 ? val.toString() : val.toFixed(1)
+
+                    let display: string | number | undefined = value
+                    if (typeof value === 'number') {
+                      if (isCategoryColumn && !isStandings) {
+                        display = value
+                      } else if (isCategoryColumn && isStandings && mode === 'averages') {
+                        display = formatAverageValue(categoryKey, value)
+                      } else if (column.key === 'gp') {
+                        display = value
+                      } else {
+                        display = value % 1 === 0 ? value.toString() : value.toFixed(1)
+                      }
                     }
+
                     return (
                       <td key={column.key} className={`table-cell font-medium ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''}`}>
-                        {typeof value === 'number' ? formatValue(value) : value}
+                        {display}
                       </td>
                     )
                   })}
