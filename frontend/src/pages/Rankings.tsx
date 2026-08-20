@@ -336,7 +336,9 @@ const Rankings = () => {
                     key={column.key}
                     className={`table-header ${
                       column.sortable ? 'cursor-pointer hover:bg-gray-100 transition-colors duration-150' : ''
-                    } ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''}`}
+                    } ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''} ${
+                      column.key === 'team' ? 'sticky left-0 z-20 bg-gray-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]' : ''
+                    }`}
                     onClick={() => column.sortable && handleSort(column.key)}
                   >
                     <div className="flex items-center">
@@ -353,11 +355,11 @@ const Rankings = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {rankings.map((team: RankingStats, index: number) => (
-                <tr key={team.team.team_id} className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
+                <tr key={team.team.team_id} className="group hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
                   <td className="table-cell font-bold text-blue-600">
                     #{team.rank || index + 1}
                   </td>
-                  <td className="table-cell">
+                  <td className="table-cell sticky left-0 z-10 bg-white group-hover:bg-blue-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
                     <Link
                       to={`/team/${team.team.team_id}`}
                       className="text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-150 hover:underline"
