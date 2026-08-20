@@ -15,6 +15,7 @@ const Rankings = () => {
   const [sortBy, setSortBy] = useState<string>('total_points')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [mode, setMode] = useState<'averages' | 'totals'>('averages')
+  const [display, setDisplay] = useState<'ranked' | 'raw'>('ranked')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [dateError, setDateError] = useState<string>('')
@@ -59,6 +60,17 @@ const Rankings = () => {
     setAppliedDates({})
   }
 
+  const handleDisplayChange = (next: 'ranked' | 'raw') => {
+    setDisplay(next)
+    if (next === 'raw' && (sortBy === 'rank' || sortBy === 'total_points')) {
+      setSortBy('team')
+      setSortOrder('asc')
+    } else if (next === 'ranked' && sortBy === 'team') {
+      setSortBy('total_points')
+      setSortOrder('desc')
+    }
+  }
+
   const handleSort = (column: string) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -93,8 +105,10 @@ const Rankings = () => {
     return 0
   })
 
+  const isRanked = display === 'ranked'
+
   const columns = [
-    { key: 'rank', label: 'Rank', sortable: true },
+    ...(isRanked ? [{ key: 'rank', label: 'Rank', sortable: true }] : []),
     { key: 'team', label: 'Team', sortable: true },
     { key: 'fg_percentage', label: 'FG%', sortable: true },
     { key: 'ft_percentage', label: 'FT%', sortable: true },
@@ -104,9 +118,12 @@ const Rankings = () => {
     { key: 'stl', label: 'STL', sortable: true },
     { key: 'blk', label: 'BLK', sortable: true },
     { key: 'pts', label: 'PTS', sortable: true },
-    { key: 'total_points', label: 'Total', sortable: true },
+    ...(isRanked ? [{ key: 'total_points', label: 'Total', sortable: true }] : []),
     { key: 'gp', label: 'GP', sortable: true },
   ]
+
+  const titleWord = isRanked ? 'Rankings' : 'Standings'
+  const modeLabel = mode === 'averages' ? 'Averages' : 'Totals'
 
   const hasDateMismatch = data && isDateRangeActive && (
     (data.actual_start_date && data.actual_start_date !== data.date_range_start) ||
@@ -148,7 +165,7 @@ const Rankings = () => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h2 className="text-2xl font-bold text-white">
-                Team Rankings ({mode === 'averages' ? 'Averages' : 'Totals'})
+                Team {titleWord} ({modeLabel})
                 {isDateRangeActive && (
                   <span className="ml-2 text-lg font-normal text-blue-100">
                     – {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}
@@ -156,32 +173,66 @@ const Rankings = () => {
                 )}
               </h2>
               <p className="text-blue-100 mt-1">
-                {mode === 'averages'
-                  ? 'Click column headers to sort. Total points calculated from category rankings.'
-                  : 'Totals mode: raw accumulated stats for the period.'}
+                {isRanked
+                  ? (mode === 'averages'
+                      ? 'Click column headers to sort. Total points calculated from category rankings.'
+                      : 'Totals mode: raw accumulated stats, ranked by total roto score.')
+                  : (mode === 'averages'
+                      ? 'Per-game averages, exactly as tracked — no roto scoring applied.'
+                      : 'Season-to-date category totals, exactly as ESPN reports them — no roto scoring, no computed rank.')}
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={() => setMode('averages')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  mode === 'averages'
-                    ? 'bg-white text-blue-700'
-                    : 'bg-blue-500 text-white hover:bg-blue-400'
-                }`}
-              >
-                Averages
-              </button>
-              <button
-                onClick={() => setMode('totals')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  mode === 'totals'
-                    ? 'bg-white text-blue-700'
-                    : 'bg-blue-500 text-white hover:bg-blue-400'
-                }`}
-              >
-                Totals
-              </button>
+            <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+              <div className="flex flex-col gap-1 items-start sm:items-end">
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Values</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setMode('averages')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      mode === 'averages'
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Averages
+                  </button>
+                  <button
+                    onClick={() => setMode('totals')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      mode === 'totals'
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Totals
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 items-start sm:items-end">
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Display</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDisplayChange('ranked')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      isRanked
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Ranked
+                  </button>
+                  <button
+                    onClick={() => handleDisplayChange('raw')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      !isRanked
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Raw
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -292,9 +343,11 @@ const Rankings = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {rankings.map((team: RankingStats, index: number) => (
                 <tr key={team.team.team_id} className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
-                  <td className="table-cell font-bold text-blue-600">
-                    #{team.rank || index + 1}
-                  </td>
+                  {isRanked && (
+                    <td className="table-cell font-bold text-blue-600">
+                      #{team.rank || index + 1}
+                    </td>
+                  )}
                   <td className="table-cell">
                     <Link
                       to={`/team/${team.team.team_id}`}
@@ -303,7 +356,7 @@ const Rankings = () => {
                       {team.team.team_name}
                     </Link>
                   </td>
-                  {columns.slice(2).map((column) => {
+                  {columns.slice(isRanked ? 2 : 1).map((column) => {
                     const value = team[column.key as keyof RankingStats] as number
                     const formatValue = (val: number) => {
                       if (column.key === 'gp') return val
