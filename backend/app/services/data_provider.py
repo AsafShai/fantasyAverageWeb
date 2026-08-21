@@ -66,7 +66,8 @@ class DataProvider:
                 # get_team_names_df() still needs team identity from this same fetch.
                 self.cache_manager.totals_cache['raw'] = api_data
 
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
+                categories = self.data_transformer.resolve_ranking_categories(api_data)
+                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
 
                 scoring_period_id = api_data.get('scoringPeriodId', 0)
                 self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
@@ -307,8 +308,9 @@ class DataProvider:
     async def get_ranking_categories(self) -> list:
         """Get this league's actual scoring categories, resolved from ESPN's
         settings (falls back to the historical fixed default if unavailable).
-        Relies on the raw standings payload already cached by get_totals_df."""
-        await self.get_totals_df()
+        Reads the raw standings payload from cache rather than fetching —
+        callers are expected to have already called get_totals_df() in the
+        same request, so this never issues its own ESPN request."""
         raw = self.cache_manager.totals_cache.get('raw')
         if not raw:
             return list(RANKING_CATEGORIES)
@@ -317,19 +319,21 @@ class DataProvider:
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
         totals_df = await self.get_totals_df()
-        return self.data_transformer.totals_to_averages_df(totals_df)
-    
+        categories = await self.get_ranking_categories()
+        return self.data_transformer.totals_to_averages_df(totals_df, categories)
+
     async def get_rankings_df(self) -> pd.DataFrame:
         """Get rankings DataFrame with caching"""
         averages_df = await self.get_averages_df()
         return self.data_transformer.averages_to_rankings_df(averages_df)
-    
+
     async def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Get all three main DataFrames at once (optimized for endpoints that need multiple)"""
         totals_df = await self.get_totals_df()
-        averages_df = self.data_transformer.totals_to_averages_df(totals_df)
+        categories = await self.get_ranking_categories()
+        averages_df = self.data_transformer.totals_to_averages_df(totals_df, categories)
         rankings_df = self.data_transformer.averages_to_rankings_df(averages_df)
-        
+
         return totals_df, averages_df, rankings_df
     
     async def _sync_db_if_needed(self, scoring_period_id: int, totals_df: pd.DataFrame) -> None:

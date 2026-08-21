@@ -118,6 +118,8 @@ class TestRankingServiceResponseBuilding:
             service.data_provider = AsyncMock()
             service.data_provider.get_all_dataframes.return_value = (sample_totals_df, sample_averages_df, sample_rankings_df)
             service.data_provider.get_data_date = MagicMock(return_value=None)
+            from app.utils.constants import RANKING_CATEGORIES
+            service.data_provider.get_ranking_categories.return_value = list(RANKING_CATEGORIES)
             return service
 
     @pytest.mark.asyncio
@@ -248,3 +250,64 @@ class TestRankingServiceIntegration:
 
         with pytest.raises(InvalidParameterError, match="Order must be 'asc' or 'desc'"):
             await integration_ranking_service.get_league_rankings(order='invalid_order')
+
+
+@pytest.mark.real_dataprovider
+class TestDynamicCategoriesEndToEnd:
+    """Full pipeline test: a real (unmocked) DataProvider + DataTransformer +
+    StatsCalculator + ResponseBuilder, with only the ESPN HTTP call stubbed,
+    proving a league that scores turnovers on top of the default 8 categories
+    actually surfaces TO through RankingService.get_league_rankings()."""
+
+    @staticmethod
+    def _turnovers_league_payload():
+        def team(team_id, name, pts, to):
+            return {
+                "id": team_id,
+                "name": name,
+                "valuesByStat": {
+                    "0": pts, "1": 20, "2": 50, "3": 200, "6": 400,
+                    "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                    "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": to,
+                },
+            }
+        return {
+            "scoringPeriodId": 5,
+            "teams": [team(1, "Alpha", 1000, 120), team(2, "Beta", 1100, 90)],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0, 11)
+            ]}},
+        }
+
+    @pytest_asyncio.fixture
+    async def real_ranking_service(self):
+        from app.services.data_provider import DataProvider
+        from unittest.mock import AsyncMock, MagicMock
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        service = RankingService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = AsyncMock()
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"ETag": "e1"}
+        resp.json.return_value = self._turnovers_league_payload()
+        resp.raise_for_status = MagicMock()
+        service.data_provider._client.get = AsyncMock(return_value=resp)
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+
+    @pytest.mark.asyncio
+    async def test_turnovers_category_flows_through_to_response(self, real_ranking_service):
+        result = await real_ranking_service.get_league_rankings()
+
+        assert 'TO' in result.categories
+        beta = next(r for r in result.averages_rankings if r.team.team_name == 'Beta')
+        assert beta.stats['TO'] == pytest.approx(90 / 82)
+        assert 'TO' in beta.category_ranks
+        # Beta has fewer turnovers (better) than Alpha -> should rank 1st in TO
+        assert beta.category_ranks['TO'] == 1

@@ -26,8 +26,9 @@ class LeagueService:
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
 
-        category_leaders = self._calculate_category_leaders(averages_df)
-        league_averages = self._calculate_league_averages(averages_df)
+        categories = await self.data_provider.get_ranking_categories()
+        category_leaders = self._calculate_category_leaders(averages_df, categories)
+        league_averages = self._calculate_league_averages(averages_df, categories)
 
         nba_avg_pace = None
         nba_game_days_left = None
@@ -150,21 +151,21 @@ class LeagueService:
             shots_data, data_date=self.data_provider.get_data_date()
         )
     
-    def _calculate_category_leaders(self, averages_df) -> Dict[str, RankingStats]:
-        """Calculate category leaders (business logic)"""
-        leaders_data = self.stats_calculator.find_category_leaders(averages_df)
+    def _calculate_category_leaders(self, averages_df, categories: Optional[List[str]] = None) -> Dict[str, RankingStats]:
+        """Calculate category leaders (business logic). categories defaults to RANKING_CATEGORIES."""
+        leaders_data = self.stats_calculator.find_category_leaders(averages_df, categories)
         category_leaders = {}
-        
+
         for category, data in leaders_data.items():
             team_row = averages_df[averages_df['team_id'] == data['team_id']].iloc[0]
-            category_leaders[category] = self.response_builder.create_ranking_stats_from_averages(team_row)
-        
+            category_leaders[category] = self.response_builder.create_ranking_stats_from_averages(team_row, categories)
+
         return category_leaders
-    
-    def _calculate_league_averages(self, averages_df) -> AverageStats:
-        """Calculate league averages (business logic)"""
-        league_avg_data = self.stats_calculator.calculate_league_averages(averages_df)
-        return self.response_builder.create_average_stats(league_avg_data)
+
+    def _calculate_league_averages(self, averages_df, categories: Optional[List[str]] = None) -> AverageStats:
+        """Calculate league averages (business logic). categories defaults to RANKING_CATEGORIES."""
+        league_avg_data = self.stats_calculator.calculate_league_averages(averages_df, categories)
+        return self.response_builder.create_average_stats(league_avg_data, categories)
     
     def _extract_teams_data(self, averages_df) -> List:
         """Extract teams data for heatmap"""

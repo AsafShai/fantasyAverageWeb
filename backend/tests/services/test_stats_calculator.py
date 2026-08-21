@@ -183,3 +183,60 @@ class TestStatsCalculator:
         
         with pytest.raises(ValueError, match="Cannot calculate averages for empty DataFrame"):
             stats_calculator.calculate_per_game_averages(empty_df)
+
+class TestDynamicCategories:
+    """Category-parameter behavior for leagues scoring something other than the default 8."""
+
+    def test_calculate_per_game_averages_default_matches_explicit_ranking_categories(self, stats_calculator):
+        totals = pd.DataFrame({
+            "team_id": [1], "team_name": ["A"], "GP": [10],
+            "FGM": [40], "FGA": [80], "FTM": [15], "FTA": [20],
+            "FG%": [50.0], "FT%": [75.0], "3PM": [20], "AST": [30],
+            "REB": [40], "STL": [10], "BLK": [5], "PTS": [100],
+        })
+        default_result = stats_calculator.calculate_per_game_averages(totals)
+        from app.utils.constants import RANKING_CATEGORIES
+        explicit_result = stats_calculator.calculate_per_game_averages(totals, RANKING_CATEGORIES)
+        pd.testing.assert_frame_equal(default_result, explicit_result)
+
+    def test_calculate_per_game_averages_extra_category_divided_by_gp(self, stats_calculator):
+        totals = pd.DataFrame({
+            "team_id": [1], "team_name": ["A"], "GP": [10],
+            "PTS": [100], "TO": [50],
+        })
+        result = stats_calculator.calculate_per_game_averages(totals, ["PTS", "TO"])
+        assert result.iloc[0]["TO"] == 5.0
+        assert result.iloc[0]["PTS"] == 10.0
+
+    def test_calculate_per_game_averages_percentage_category_left_untouched(self, stats_calculator):
+        totals = pd.DataFrame({
+            "team_id": [1], "team_name": ["A"], "GP": [10], "FG%": [47.5],
+        })
+        result = stats_calculator.calculate_per_game_averages(totals, ["FG%"])
+        assert result.iloc[0]["FG%"] == 47.5
+
+    def test_find_category_leaders_respects_custom_categories(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "PTS": [100.0, 90.0], "TO": [5.0, 8.0],
+        })
+        leaders = stats_calculator.find_category_leaders(averages, ["TO"])
+        assert set(leaders.keys()) == {"TO_leader"}
+        assert leaders["TO_leader"]["team_id"] == 2
+
+    def test_calculate_league_averages_respects_custom_categories(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "GP": [10, 20], "TO": [4.0, 6.0], "PTS": [100.0, 80.0],
+        })
+        result = stats_calculator.calculate_league_averages(averages, ["TO"])
+        assert result == {"TO": 5.0, "GP": 15.0}
+
+    def test_normalize_for_heatmap_respects_custom_categories(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "GP": [10, 20], "TO": [4.0, 6.0],
+        })
+        result = stats_calculator.normalize_for_heatmap(averages, ["TO"])
+        assert len(result) == 2
+        assert len(result[0]) == 2  # TO + GP columns

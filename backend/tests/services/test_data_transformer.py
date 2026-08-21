@@ -310,3 +310,26 @@ class TestResolveRankingCategories:
             {"statId": 6}, {"statId": 0}, {"statId": 2},
         ]}}}
         assert transformer.resolve_ranking_categories(payload) == ["REB", "PTS", "STL"]
+
+
+class TestRawStandingsToTotalsDynamicCategories:
+    def test_extra_category_kept_when_present_and_requested(self, transformer):
+        payload = {"teams": [{
+            "id": 1, "name": "A",
+            "valuesByStat": {**_minimal_stat_row(), "11": 12},
+        }]}
+        df = transformer.raw_standings_to_totals_df(payload, ["PTS", "TO"])
+        assert "TO" in df.columns
+        assert df.iloc[0]["TO"] == 12
+
+    def test_extra_category_absent_from_espn_payload_is_not_added(self, transformer):
+        df = transformer.raw_standings_to_totals_df(_standings_payload(), ["PTS", "TO"])
+        assert "TO" not in df.columns
+
+    def test_no_categories_arg_keeps_default_fixed_columns_only(self, transformer):
+        payload = {"teams": [{
+            "id": 1, "name": "A",
+            "valuesByStat": {**_minimal_stat_row(), "11": 12},
+        }]}
+        df = transformer.raw_standings_to_totals_df(payload)
+        assert "TO" not in df.columns

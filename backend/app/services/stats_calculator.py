@@ -1,6 +1,6 @@
 import pandas as pd
-from typing import Dict, List
-from app.utils.constants import RANKING_CATEGORIES
+from typing import Dict, List, Optional
+from app.utils.constants import RANKING_CATEGORIES, PERCENTAGE_CATEGORIES
 
 
 class StatsCalculator:
@@ -46,20 +46,21 @@ class StatsCalculator:
 
         return final_ranked
     
-    def find_category_leaders(self, averages_df: pd.DataFrame) -> Dict:
+    def find_category_leaders(self, averages_df: pd.DataFrame, categories: Optional[List[str]] = None) -> Dict:
         """
         Find the leader in each statistical category
         Args:
             averages_df: DataFrame with per-game averages
+            categories: category codes to report leaders for (defaults to RANKING_CATEGORIES)
         Returns:
             Dictionary with category leaders
         """
         if averages_df.empty:
             return {}
-        
+
         leaders = {}
-        
-        for category in RANKING_CATEGORIES:
+
+        for category in (categories or RANKING_CATEGORIES):
             if category in averages_df.columns:
                 if averages_df[category].isnull().all():
                     continue
@@ -77,31 +78,33 @@ class StatsCalculator:
         
         return leaders
     
-    def calculate_league_averages(self, averages_df: pd.DataFrame) -> Dict:
+    def calculate_league_averages(self, averages_df: pd.DataFrame, categories: Optional[List[str]] = None) -> Dict:
         """
         Calculate league-wide averages for all statistical categories
         Args:
             averages_df: DataFrame with per-game averages
+            categories: category codes to average (defaults to RANKING_CATEGORIES)
         Returns:
             Dictionary with league averages
         """
         if averages_df.empty:
             return {}
-        
+
         league_stats = {}
-        
-        for category in RANKING_CATEGORIES + ['GP']:
+
+        for category in (categories or RANKING_CATEGORIES) + ['GP']:
             if category in averages_df.columns:
                 league_stats[category] = float(averages_df[category].mean())
-        
+
         return league_stats
-    
-    def normalize_for_heatmap(self, averages_df: pd.DataFrame) -> List[List[float]]:
+
+    def normalize_for_heatmap(self, averages_df: pd.DataFrame, categories: Optional[List[str]] = None) -> List[List[float]]:
         """
         Normalize data for heatmap visualization using diverging scale
         centered on the league average (average = 0.5 = white)
         Args:
             averages_df: DataFrame with per-game averages
+            categories: category codes to include (defaults to RANKING_CATEGORIES)
         Returns:
             Normalized data matrix for heatmap
         """
@@ -109,7 +112,7 @@ class StatsCalculator:
             return []
 
         normalized_data = []
-        categories_with_gp = RANKING_CATEGORIES + ['GP']
+        categories_with_gp = (categories or RANKING_CATEGORIES) + ['GP']
 
         for category in categories_with_gp:
             if category in averages_df.columns:
@@ -138,21 +141,28 @@ class StatsCalculator:
 
         return list(map(list, zip(*normalized_data)))
     
-    def calculate_per_game_averages(self, totals_df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_per_game_averages(self, totals_df: pd.DataFrame, categories: Optional[List[str]] = None) -> pd.DataFrame:
         """
         Calculate per-game averages from totals DataFrame
         Args:
             totals_df: DataFrame with total stats
+            categories: category codes to average (defaults to RANKING_CATEGORIES).
+                        Percentage categories (FG%, FT%) are left as-is; every
+                        other category present is divided by GP.
         Returns:
             DataFrame with per-game averages
         """
         if totals_df.empty:
             raise ValueError("Cannot calculate averages for empty DataFrame")
-        
-        from app.utils.constants import PER_GAME_CATEGORIES
-        
+
+        per_game_categories = [
+            c for c in (categories or RANKING_CATEGORIES)
+            if c not in PERCENTAGE_CATEGORIES
+        ]
+
         # Create copy without raw counting stats (keep percentages)
-        averages = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
+        averages = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1, errors='ignore').copy()
+        per_game_categories = [c for c in per_game_categories if c in averages.columns]
         # Calculate per-game averages for counting stats
-        averages[PER_GAME_CATEGORIES] = averages[PER_GAME_CATEGORIES].div(averages['GP'], axis=0).fillna(0)
+        averages[per_game_categories] = averages[per_game_categories].div(averages['GP'], axis=0).fillna(0)
         return averages

@@ -28,7 +28,8 @@ class RankingService:
         if totals_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 
-        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df(totals_df)
+        categories = await self.data_provider.get_ranking_categories()
+        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df(totals_df, categories)
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):
             raise InvalidParameterError(f"Invalid sort column: {sort_by}")
@@ -43,6 +44,7 @@ class RankingService:
             sort_by=sort_by,
             order=order,
             data_date=self.data_provider.get_data_date(),
+            categories=categories,
         )
 
     async def _get_rankings_for_range(self, start_date: date, end_date: date,
@@ -144,12 +146,15 @@ class RankingService:
 
         return df, transformer.averages_to_rankings_df(df)
 
-    def _build_totals_rankings_df(self, totals_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Build (raw totals, rankings) DataFrames from season totals (no per-game division)."""
+    def _build_totals_rankings_df(self, totals_df: pd.DataFrame,
+                                   categories: Optional[list[str]] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Build (raw totals, rankings) DataFrames from season totals (no per-game division).
+        categories defaults to RANKING_CATEGORIES."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
 
-        cols_to_keep = ['team_id', 'team_name', 'GP'] + [c for c in RANKING_CATEGORIES if c in totals_df.columns]
+        categories = categories or RANKING_CATEGORIES
+        cols_to_keep = ['team_id', 'team_name', 'GP'] + [c for c in categories if c in totals_df.columns]
         df = totals_df[[c for c in cols_to_keep if c in totals_df.columns]].copy()
         return df, transformer.averages_to_rankings_df(df)
 

@@ -24,9 +24,14 @@ class ResponseBuilder:
                               date_range_start=None,
                               date_range_end=None,
                               actual_start_date=None,
-                              actual_end_date=None) -> LeagueRankings:
+                              actual_end_date=None,
+                              categories: Optional[List[str]] = None) -> LeagueRankings:
         """Build LeagueRankings response from averages/totals rankings DataFrames (rank + total
-        points per team) paired with their raw counterparts (actual per-category stat values)"""
+        points per team) paired with their raw counterparts (actual per-category stat values).
+
+        categories: this league's actual scoring categories (defaults to RANKING_CATEGORIES,
+        the historical fixed 8-category set)."""
+        categories = categories or RANKING_CATEGORIES
         sort_col = "RANK" if sort_by is None else sort_by.upper()
         ascending = order == "asc"
 
@@ -37,18 +42,18 @@ class ResponseBuilder:
         totals_by_team = totals_df.set_index('team_id')
 
         averages_rankings = [
-            self._create_ranking_stats(row, averages_by_team.loc[int(row['team_id'])])
+            self._create_ranking_stats(row, averages_by_team.loc[int(row['team_id'])], categories)
             for _, row in averages_rankings_df.iterrows()
         ]
         totals_rankings = [
-            self._create_ranking_stats(row, totals_by_team.loc[int(row['team_id'])])
+            self._create_ranking_stats(row, totals_by_team.loc[int(row['team_id'])], categories)
             for _, row in totals_rankings_df.iterrows()
         ]
 
         return LeagueRankings(
             averages_rankings=averages_rankings,
             totals_rankings=totals_rankings,
-            categories=RANKING_CATEGORIES + ['TOTAL_POINTS'],
+            categories=categories + ['TOTAL_POINTS'],
             last_updated=datetime.now(),
             data_date=data_date,
             date_range_start=date_range_start,
@@ -216,8 +221,10 @@ class ResponseBuilder:
         )
     
     # Helper methods for data transformation
-    def create_ranking_stats_from_averages(self, team_data: pd.Series) -> RankingStats:
-        """Create RankingStats object from averages data"""
+    def create_ranking_stats_from_averages(self, team_data: pd.Series,
+                                         categories: Optional[List[str]] = None) -> RankingStats:
+        """Create RankingStats object from averages data. categories defaults to RANKING_CATEGORIES."""
+        categories = categories or RANKING_CATEGORIES
         return RankingStats(
             team=Team(team_id=int(team_data['team_id']), team_name=str(team_data['team_name'])),
             fg_percentage=float(team_data['FG%']),
@@ -229,11 +236,14 @@ class ResponseBuilder:
             blk=float(team_data['BLK']),
             pts=float(team_data['PTS']),
             gp=int(team_data['GP']),
-            total_points=0.0
+            total_points=0.0,
+            stats={col: float(team_data[col]) for col in categories if col in team_data},
         )
-    
-    def create_average_stats(self, league_avg_data: Dict) -> AverageStats:
-        """Create AverageStats object from calculated data"""
+
+    def create_average_stats(self, league_avg_data: Dict,
+                           categories: Optional[List[str]] = None) -> AverageStats:
+        """Create AverageStats object from calculated data. categories defaults to RANKING_CATEGORIES."""
+        categories = categories or RANKING_CATEGORIES
         return AverageStats(
             fg_percentage=league_avg_data['FG%'],
             ft_percentage=league_avg_data['FT%'],
@@ -243,13 +253,16 @@ class ResponseBuilder:
             stl=league_avg_data['STL'],
             blk=league_avg_data['BLK'],
             pts=league_avg_data['PTS'],
-            gp=float(league_avg_data['GP'])
+            gp=float(league_avg_data['GP']),
+            stats={col: float(league_avg_data[col]) for col in categories if col in league_avg_data},
         )
     
-    def _create_ranking_stats(self, ranked_row: pd.Series, raw_row: pd.Series) -> RankingStats:
+    def _create_ranking_stats(self, ranked_row: pd.Series, raw_row: pd.Series,
+                            categories: Optional[List[str]] = None) -> RankingStats:
         """Create RankingStats object from a ranked dataframe row (rank + total points, plus each
-        category's rank-in-category via RANKING_CATEGORIES) paired with the raw row holding the
-        team's actual per-category stat values"""
+        category's rank-in-category) paired with the raw row holding the team's actual
+        per-category stat values. categories defaults to RANKING_CATEGORIES."""
+        categories = categories or RANKING_CATEGORIES
         return RankingStats(
             team=Team(team_id=int(ranked_row['team_id']), team_name=str(ranked_row['team_name'])),
             fg_percentage=float(raw_row['FG%']),
@@ -263,7 +276,8 @@ class ResponseBuilder:
             gp=int(ranked_row['GP']),
             total_points=float(ranked_row['TOTAL_POINTS']),
             rank=int(ranked_row['RANK']),
-            category_ranks={col: int(ranked_row[col]) for col in RANKING_CATEGORIES},
+            category_ranks={col: int(ranked_row[col]) for col in categories if col in ranked_row},
+            stats={col: float(raw_row[col]) for col in categories if col in raw_row},
         )
     
     def _create_shot_chart_stats(self, totals_data: pd.Series) -> ShotChartStats:

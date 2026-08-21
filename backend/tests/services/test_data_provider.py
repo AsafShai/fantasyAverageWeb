@@ -245,6 +245,44 @@ async def test_get_all_dataframes_tuple(provider):
 
 
 @pytest.mark.asyncio
+async def test_get_all_dataframes_issues_single_espn_request(provider):
+    """Resolving ranking categories must reuse the payload already fetched
+    for totals, not issue its own ESPN request."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e"}
+    mock_resp.json.return_value = _api_teams_payload()
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
+    provider.data_transformer.raw_standings_to_totals_df.return_value = totals
+    provider.data_transformer.resolve_ranking_categories.return_value = ["PTS"]
+    provider.data_transformer.totals_to_averages_df.return_value = pd.DataFrame({"team_id": [1]})
+    provider.data_transformer.averages_to_rankings_df.return_value = pd.DataFrame({"team_id": [1], "RANK": [1]})
+
+    await provider.get_all_dataframes()
+
+    assert provider._client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_averages_df_passes_resolved_categories(provider):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e"}
+    mock_resp.json.return_value = _api_teams_payload()
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
+    provider.data_transformer.raw_standings_to_totals_df.return_value = totals
+    provider.data_transformer.resolve_ranking_categories.return_value = ["PTS", "TO"]
+
+    await provider.get_averages_df()
+
+    provider.data_transformer.totals_to_averages_df.assert_called_once_with(totals, ["PTS", "TO"])
+
+
+@pytest.mark.asyncio
 async def test_fallback_from_db_raises_when_no_rows(provider):
     """No DB fallback data for this league/season is a real 'nothing to
     serve' state, not a generic crash — the route layer maps DataSourceError
@@ -329,26 +367,26 @@ async def test_get_team_names_raises_data_source_error_on_fetch_failure(provider
 
 @pytest.mark.asyncio
 async def test_get_ranking_categories_delegates_to_transformer(provider):
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.headers = {"ETag": "e1"}
-    mock_resp.json.return_value = _api_teams_payload()
-    provider._client.get = AsyncMock(return_value=mock_resp)
+    """get_ranking_categories reads the raw payload already cached by a prior
+    get_totals_df() call rather than fetching itself, so callers within the
+    same request never trigger a second ESPN round trip."""
+    provider.cache_manager.totals_cache = {"etag": "e1", "data": None, "raw": _api_teams_payload()}
     provider.data_transformer.resolve_ranking_categories.return_value = ["PTS", "TO"]
 
     categories = await provider.get_ranking_categories()
 
     assert categories == ["PTS", "TO"]
     provider.data_transformer.resolve_ranking_categories.assert_called_once_with(_api_teams_payload())
+    provider._client.get.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_get_ranking_categories_falls_back_when_no_raw_cached(provider):
     from app.utils.constants import RANKING_CATEGORIES
 
-    provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
     provider.cache_manager.totals_cache = {"etag": None, "data": pd.DataFrame({"team_id": [1]})}
 
     categories = await provider.get_ranking_categories()
 
     assert categories == list(RANKING_CATEGORIES)
+    provider._client.get.assert_not_called()

@@ -200,11 +200,14 @@ class DataTransformer:
             if 'id' in team and team.get('name')
         ]
 
-    def raw_standings_to_totals_df(self, espn_standings_data: Dict) -> pd.DataFrame:
+    def raw_standings_to_totals_df(self, espn_standings_data: Dict, categories: list[str] = None) -> pd.DataFrame:
         """
         Convert raw ESPN API standings data to totals DataFrame
         Args:
             espn_standings_data: Raw ESPN API response
+            categories: league's active ranking categories (defaults to RANKING_CATEGORIES).
+                        Any category here beyond the fixed default set (e.g. TO) is kept
+                        as an extra column if ESPN's payload carries a value for it.
         Returns:
             Clean totals DataFrame with proper columns and types
         """
@@ -231,21 +234,22 @@ class DataTransformer:
                 raise ValueError("No valid team data found")
                 
             df = pd.DataFrame(teams_data)
-            return self._transform_standings_dataframe(df)
+            return self._transform_standings_dataframe(df, categories)
             
         except Exception as e:
             self.logger.error(f"Error transforming ESPN standings data to totals DataFrame: {e}")
             raise Exception("Error transforming ESPN standings data to totals DataFrame")
     
-    def totals_to_averages_df(self, totals_df: pd.DataFrame) -> pd.DataFrame:
+    def totals_to_averages_df(self, totals_df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
         """
         Calculate per-game averages from totals DataFrame
         Args:
             totals_df: DataFrame with total stats
+            categories: league's active ranking categories (defaults to RANKING_CATEGORIES)
         Returns:
             DataFrame with per-game averages
         """
-        return self.stats_calculator.calculate_per_game_averages(totals_df)
+        return self.stats_calculator.calculate_per_game_averages(totals_df, categories)
     
     def averages_to_rankings_df(self, averages_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -313,19 +317,24 @@ class DataTransformer:
         available_info_cols = [col for col in info_cols if col in df.columns]
         return df.reindex(columns=available_info_cols + stat_cols)
     
-    def _transform_standings_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _transform_standings_dataframe(self, df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
         """
         Transform raw DataFrame with proper column names and types
         Args:
             df: Raw DataFrame from ESPN API
+            categories: league's active ranking categories; any beyond the fixed
+                        ALL_CATEGORIES default (e.g. TO) are kept as extra columns
+                        when present, on top of the always-kept default set.
         Returns:
             Clean DataFrame with proper structure
         """
         # Apply column mapping
         df = df.rename(columns=ESPN_COLUMN_MAP)
-        
-        # Select only required columns
-        available_cols = ['team_id', 'team_name'] + [col for col in ALL_CATEGORIES if col in df.columns]
+
+        # Select only required columns (always the fixed default set, plus any
+        # extra resolved categories beyond it)
+        extra_cols = [c for c in (categories or []) if c not in ALL_CATEGORIES]
+        available_cols = ['team_id', 'team_name'] + [col for col in ALL_CATEGORIES + extra_cols if col in df.columns]
         df = df[available_cols]
         
         # Convert integer columns
