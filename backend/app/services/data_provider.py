@@ -41,7 +41,7 @@ class DataProvider:
             DataProvider._initialized = True
             if not settings.season_id or not settings.league_id:
                 raise ValueError("Season ID and league ID are not configured")
-            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam&view=mMatchupScore'
+            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam&view=mMatchupScore&view=mSettings'
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
             self.espn_draft_detail_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mDraftDetail'
             self.espn_players_directory_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/players?view=players_wl'
@@ -303,6 +303,16 @@ class DataProvider:
         if not raw:
             return {}
         return self.data_transformer.parse_slot_usage(raw)
+
+    async def get_ranking_categories(self) -> list:
+        """Get this league's actual scoring categories, resolved from ESPN's
+        settings (falls back to the historical fixed default if unavailable).
+        Relies on the raw standings payload already cached by get_totals_df."""
+        await self.get_totals_df()
+        raw = self.cache_manager.totals_cache.get('raw')
+        if not raw:
+            return list(RANKING_CATEGORIES)
+        return self.data_transformer.resolve_ranking_categories(raw)
 
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""

@@ -325,3 +325,30 @@ async def test_get_team_names_raises_data_source_error_on_fetch_failure(provider
 
     with pytest.raises(DataSourceError, match="Error fetching team names"):
         await provider.get_team_names()
+
+
+@pytest.mark.asyncio
+async def test_get_ranking_categories_delegates_to_transformer(provider):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e1"}
+    mock_resp.json.return_value = _api_teams_payload()
+    provider._client.get = AsyncMock(return_value=mock_resp)
+    provider.data_transformer.resolve_ranking_categories.return_value = ["PTS", "TO"]
+
+    categories = await provider.get_ranking_categories()
+
+    assert categories == ["PTS", "TO"]
+    provider.data_transformer.resolve_ranking_categories.assert_called_once_with(_api_teams_payload())
+
+
+@pytest.mark.asyncio
+async def test_get_ranking_categories_falls_back_when_no_raw_cached(provider):
+    from app.utils.constants import RANKING_CATEGORIES
+
+    provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
+    provider.cache_manager.totals_cache = {"etag": None, "data": pd.DataFrame({"team_id": [1]})}
+
+    categories = await provider.get_ranking_categories()
+
+    assert categories == list(RANKING_CATEGORIES)

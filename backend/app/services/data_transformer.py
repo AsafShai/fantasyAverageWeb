@@ -2,11 +2,13 @@ import pandas as pd
 import logging
 from typing import Dict
 from app.utils.constants import (
-    ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP
+    ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP,
+    RANKING_CATEGORIES
 )
 from app.services.stats_calculator import StatsCalculator
 from app.config import settings
 from app.utils.roster_slots import SLOT_CAPS
+from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY, NON_RANKING_STAT_KEYS
 
 
 SLOT_MAP = {0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C', 5: 'G', 6: 'F', 11: 'UTIL'}
@@ -18,7 +20,32 @@ class DataTransformer:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.stats_calculator = StatsCalculator()
-    
+
+    def resolve_ranking_categories(self, espn_data: Dict) -> list[str]:
+        """Determine this league's actual scoring categories from ESPN's
+        settings.scoringSettings.scoringItems (present when the standings
+        request includes the mSettings view). Falls back to the historical
+        fixed 8-category default (RANKING_CATEGORIES) whenever the settings
+        are missing, unparseable, or don't map to any known category — this
+        keeps behavior unchanged for the current league and for the DB
+        fallback path, which is fixed to that same default schema."""
+        try:
+            scoring_items = espn_data.get('settings', {}).get('scoringSettings', {}).get('scoringItems', [])
+            if not scoring_items:
+                return list(RANKING_CATEGORIES)
+
+            categories: list[str] = []
+            for item in scoring_items:
+                stat_id = item.get('statId')
+                category = STAT_ID_TO_CATEGORY.get(stat_id)
+                if category and category not in NON_RANKING_STAT_KEYS and category not in categories:
+                    categories.append(category)
+
+            return categories if categories else list(RANKING_CATEGORIES)
+        except Exception as e:
+            self.logger.warning(f"Error resolving ranking categories from ESPN settings, using default: {e}")
+            return list(RANKING_CATEGORIES)
+
     def parse_slot_usage(self, espn_data: Dict) -> Dict[int, Dict[str, int]]:
         """Parse slot usage from mMatchupScore data. Returns {team_id: {slot_name: games_used}}"""
         result: Dict[int, Dict[str, int]] = {}

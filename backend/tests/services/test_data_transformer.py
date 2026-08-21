@@ -244,3 +244,69 @@ class TestRawAllPlayersToDf:
         assert len(df) == 2
         rookie_row = df[df["Name"] == "Rookie R"].iloc[0]
         assert rookie_row["GP"] == 0
+
+
+class TestResolveRankingCategories:
+    def test_no_settings_falls_back_to_default(self, transformer):
+        from app.utils.constants import RANKING_CATEGORIES
+        assert transformer.resolve_ranking_categories({}) == list(RANKING_CATEGORIES)
+
+    def test_empty_scoring_items_falls_back_to_default(self, transformer):
+        from app.utils.constants import RANKING_CATEGORIES
+        payload = {"settings": {"scoringSettings": {"scoringItems": []}}}
+        assert transformer.resolve_ranking_categories(payload) == list(RANKING_CATEGORIES)
+
+    def test_standard_8_category_league_matches_default(self, transformer):
+        from app.utils.constants import RANKING_CATEGORIES
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0)
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == list(RANKING_CATEGORIES)
+
+    def test_excludes_non_ranking_stats_like_gp_and_min(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0}, {"statId": 42}, {"statId": 40}, {"statId": 13}, {"statId": 14},
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == ["PTS"]
+
+    def test_extra_category_like_turnovers_is_included(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0}, {"statId": 11},
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == ["PTS", "TO"]
+
+    def test_unknown_stat_id_is_skipped(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0}, {"statId": 9999},
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == ["PTS"]
+
+    def test_duplicate_stat_ids_deduplicated(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0}, {"statId": 0},
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == ["PTS"]
+
+    def test_only_non_ranking_stats_falls_back_to_default(self, transformer):
+        from app.utils.constants import RANKING_CATEGORIES
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 42}, {"statId": 40},
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == list(RANKING_CATEGORIES)
+
+    def test_malformed_settings_falls_back_to_default(self, transformer):
+        from app.utils.constants import RANKING_CATEGORIES
+        payload = {"settings": "not-a-dict"}
+        assert transformer.resolve_ranking_categories(payload) == list(RANKING_CATEGORIES)
+
+    def test_scoring_item_missing_stat_id_is_skipped(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0}, {"notStatId": 1},
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == ["PTS"]
+
+    def test_preserves_espn_scoring_items_order(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 6}, {"statId": 0}, {"statId": 2},
+        ]}}}
+        assert transformer.resolve_ranking_categories(payload) == ["REB", "PTS", "STL"]
