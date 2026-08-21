@@ -1,21 +1,47 @@
-import type { Player } from '../types/api'
+import type { Player, PlayerStats } from '../types/api'
 
-export type RankingCategory = 'fg_pct' | 'ft_pct' | 'three_pm' | 'reb' | 'ast' | 'stl' | 'blk' | 'pts'
+// A category code as used across the app (e.g. "FG%", "PTS", "TO") — this
+// league's actual scoring categories, not a fixed set. Falls back to
+// DEFAULT_CATEGORIES (the historical 8) wherever a definitive list from the
+// API isn't available yet (e.g. before the first response lands).
+export type RankingCategory = string
 
-export const CATEGORIES: RankingCategory[] = ['fg_pct', 'ft_pct', 'three_pm', 'reb', 'ast', 'stl', 'blk', 'pts']
+export const DEFAULT_CATEGORIES: RankingCategory[] = ['FG%', 'FT%', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS']
 
-export const CATEGORY_LABELS: Record<RankingCategory, string> = {
-  fg_pct: 'FG%',
-  ft_pct: 'FT%',
-  three_pm: '3PM',
-  reb: 'REB',
-  ast: 'AST',
-  stl: 'STL',
-  blk: 'BLK',
-  pts: 'PTS',
+export const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
+
+// Percentage categories need a paired "attempts" quantity to compute a
+// makes-weighted z-score (see pctImpactArray) — FG%/FT% are the only two
+// ESPN scores this way, so this pairing is inherent to the stat, not a
+// hardcoded category set.
+const ATTEMPT_KEY: Record<string, 'fga' | 'fta'> = { 'FG%': 'fga', 'FT%': 'fta' }
+
+// Category codes that still have a dedicated PlayerStats field, used as a
+// fallback when a player's generic `stats.stats` dict doesn't carry a given
+// category (e.g. an older cached response, or a test fixture that only sets
+// the fixed fields).
+const FIXED_FIELD_KEY: Partial<Record<string, keyof PlayerStats>> = {
+  'FG%': 'fg_percentage',
+  'FT%': 'ft_percentage',
+  '3PM': 'three_pm',
+  AST: 'ast',
+  REB: 'reb',
+  STL: 'stl',
+  BLK: 'blk',
+  PTS: 'pts',
 }
 
-const COUNTING_CATS = new Set<RankingCategory>(['three_pm', 'reb', 'ast', 'stl', 'blk', 'pts'])
+export const CATEGORY_LABELS: Record<string, string> = {
+  'FG%': 'FG%',
+  'FT%': 'FT%',
+  '3PM': '3PM',
+  AST: 'AST',
+  REB: 'REB',
+  STL: 'STL',
+  BLK: 'BLK',
+  PTS: 'PTS',
+  TO: 'TO',
+}
 
 export interface RankingsConfig {
   calcMode: 'totals' | 'per_game'
@@ -31,28 +57,26 @@ export interface RankedPlayer {
   totalZ: number
 }
 
-function getCatValue(player: Player, cat: RankingCategory, calcMode: 'totals' | 'per_game'): number {
-  const s = player.stats
-  const gp = Math.max(s.gp, 1)
-  const raw: Record<RankingCategory, number> = {
-    fg_pct: s.fg_percentage,
-    ft_pct: s.ft_percentage,
-    three_pm: s.three_pm,
-    reb: s.reb,
-    ast: s.ast,
-    stl: s.stl,
-    blk: s.blk,
-    pts: s.pts,
-  }
-  return calcMode === 'per_game' && COUNTING_CATS.has(cat) ? raw[cat] / gp : raw[cat]
+function rawCatValue(player: Player, cat: RankingCategory): number {
+  const fromGeneric = player.stats.stats?.[cat]
+  if (fromGeneric !== undefined) return fromGeneric
+  const fixedKey = FIXED_FIELD_KEY[cat]
+  return fixedKey ? (player.stats[fixedKey] as number) : 0
 }
 
-function pctImpactArray(pool: Player[], pctKey: 'fg_percentage' | 'ft_percentage', attemptKey: 'fga' | 'fta', calcMode: 'totals' | 'per_game'): number[] {
-  const poolMean = pool.reduce((s, p) => s + p.stats[pctKey], 0) / pool.length
+function getCatValue(player: Player, cat: RankingCategory, calcMode: 'totals' | 'per_game'): number {
+  const gp = Math.max(player.stats.gp, 1)
+  const raw = rawCatValue(player, cat)
+  return calcMode === 'per_game' && !PERCENTAGE_CATEGORIES.has(cat) ? raw / gp : raw
+}
+
+function pctImpactArray(pool: Player[], cat: RankingCategory, calcMode: 'totals' | 'per_game'): number[] {
+  const attemptKey = ATTEMPT_KEY[cat] ?? 'fga'
+  const poolMean = pool.reduce((s, p) => s + rawCatValue(p, cat), 0) / pool.length
   return pool.map(p => {
     const gp = Math.max(p.stats.gp, 1)
     const attempts = calcMode === 'per_game' ? p.stats[attemptKey] / gp : p.stats[attemptKey]
-    return (p.stats[pctKey] - poolMean) * attempts
+    return (rawCatValue(p, cat) - poolMean) * attempts
   })
 }
 
@@ -68,16 +92,15 @@ function zScoreArray(values: number[]): number[] {
   return values.map(v => (stdev === 0 ? 0 : (v - mean) / stdev))
 }
 
-function totalZArray(pool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>): number[] {
-  const catZs = CATEGORIES.map(cat => {
-    if (cat === 'fg_pct') return zScoreArray(pctImpactArray(pool, 'fg_percentage', 'fga', calcMode))
-    if (cat === 'ft_pct') return zScoreArray(pctImpactArray(pool, 'ft_percentage', 'fta', calcMode))
-    return zScoreArray(pool.map(p => getCatValue(p, cat, calcMode)))
-  })
-  return pool.map((_, i) => CATEGORIES.reduce((sum, cat, ci) => sum + catZs[ci][i] * weights[cat], 0) / CATEGORIES.length)
+function categoryZArrays(pool: Player[], categories: RankingCategory[], calcMode: 'totals' | 'per_game'): number[][] {
+  return categories.map(cat =>
+    PERCENTAGE_CATEGORIES.has(cat)
+      ? zScoreArray(pctImpactArray(pool, cat, calcMode))
+      : zScoreArray(pool.map(p => getCatValue(p, cat, calcMode)))
+  )
 }
 
-export function computePlayerRankings(players: Player[], config: RankingsConfig): RankedPlayer[] {
+export function computePlayerRankings(players: Player[], config: RankingsConfig, categories: RankingCategory[] = DEFAULT_CATEGORIES): RankedPlayer[] {
   const { calcMode, minGp, minMin, position, weights } = config
 
   const filtered = players.filter(p =>
@@ -90,7 +113,8 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
 
   let referencePool: Player[]
   if (filtered.length >= 300) {
-    const pass1Z = totalZArray(filtered, calcMode, weights)
+    const pass1CatZs = categoryZArrays(filtered, categories, calcMode)
+    const pass1Z = filtered.map((_, i) => categories.reduce((sum, cat, ci) => sum + pass1CatZs[ci][i] * weights[cat], 0) / categories.length)
     referencePool = filtered
       .map((p, i) => ({ p, z: pass1Z[i] }))
       .sort((a, b) => b.z - a.z)
@@ -100,18 +124,14 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig)
     referencePool = filtered
   }
 
-  const catZs = CATEGORIES.map(cat => {
-    if (cat === 'fg_pct') return zScoreArray(pctImpactArray(referencePool, 'fg_percentage', 'fga', calcMode))
-    if (cat === 'ft_pct') return zScoreArray(pctImpactArray(referencePool, 'ft_percentage', 'fta', calcMode))
-    return zScoreArray(referencePool.map(p => getCatValue(p, cat, calcMode)))
-  })
+  const catZs = categoryZArrays(referencePool, categories, calcMode)
 
   return referencePool
     .map((p, i) => {
       const zScores = Object.fromEntries(
-        CATEGORIES.map((cat, ci) => [cat, catZs[ci][i]])
+        categories.map((cat, ci) => [cat, catZs[ci][i]])
       ) as Record<RankingCategory, number>
-      const totalZ = CATEGORIES.reduce((sum, cat) => sum + zScores[cat] * weights[cat], 0) / CATEGORIES.length
+      const totalZ = categories.reduce((sum, cat) => sum + zScores[cat] * weights[cat], 0) / categories.length
       return { player: p, zScores, totalZ }
     })
     .sort((a, b) => b.totalZ - a.totalZ)
@@ -124,23 +144,22 @@ export function getRawValue(player: Player, cat: RankingCategory, displayMode: '
 // Scores a player outside a ranking's referencePool (e.g. below the minGp
 // cutoff) against that same pool's mean/stdev, so the number is directly
 // comparable to the totalZ values computePlayerRankings produced for it.
-export function scoreAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>): number {
-  const catZs = CATEGORIES.map(cat => {
-    if (cat === 'fg_pct' || cat === 'ft_pct') {
-      const pctKey = cat === 'fg_pct' ? 'fg_percentage' : 'ft_percentage'
-      const attemptKey = cat === 'fg_pct' ? 'fga' : 'fta'
-      const poolMean = referencePool.reduce((s, p) => s + p.stats[pctKey], 0) / referencePool.length
-      const { mean, stdev } = meanStdev(pctImpactArray(referencePool, pctKey, attemptKey, calcMode))
+export function scoreAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>, categories: RankingCategory[] = DEFAULT_CATEGORIES): number {
+  const catZs = categories.map(cat => {
+    if (PERCENTAGE_CATEGORIES.has(cat)) {
+      const poolMean = referencePool.reduce((s, p) => s + rawCatValue(p, cat), 0) / referencePool.length
+      const { mean, stdev } = meanStdev(pctImpactArray(referencePool, cat, calcMode))
+      const attemptKey = ATTEMPT_KEY[cat] ?? 'fga'
       const gp = Math.max(player.stats.gp, 1)
       const attempts = calcMode === 'per_game' ? player.stats[attemptKey] / gp : player.stats[attemptKey]
-      const playerImpact = (player.stats[pctKey] - poolMean) * attempts
+      const playerImpact = (rawCatValue(player, cat) - poolMean) * attempts
       return stdev === 0 ? 0 : (playerImpact - mean) / stdev
     }
     const { mean, stdev } = meanStdev(referencePool.map(p => getCatValue(p, cat, calcMode)))
     const playerValue = getCatValue(player, cat, calcMode)
     return stdev === 0 ? 0 : (playerValue - mean) / stdev
   })
-  return CATEGORIES.reduce((sum, cat, ci) => sum + catZs[ci] * weights[cat], 0) / CATEGORIES.length
+  return categories.reduce((sum, cat, ci) => sum + catZs[ci] * weights[cat], 0) / categories.length
 }
 
 export interface DataAvailabilityPartition {

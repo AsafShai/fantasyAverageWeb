@@ -141,7 +141,14 @@ export interface PlayerStats {
   three_pm: number;
   minutes: number;
   gp: number;
+  /** See RankingStats.stats */
+  stats?: Record<string, number>;
 }
+
+/** Fixed, numeric PlayerStats fields — excludes the generic `stats` dict,
+ * for call sites that index PlayerStats dynamically by key (sort columns,
+ * comparison tables) where only a plain number makes sense. */
+export type PlayerStatKey = Exclude<keyof PlayerStats, 'stats'>
 
 export interface Player {
   player_name: string;
@@ -169,6 +176,8 @@ export interface PaginatedPlayers {
   has_more: boolean;
   actual_start?: string;
   actual_end?: string;
+  /** This league's actual scoring categories (see PlayerStats.stats). */
+  categories?: string[];
 }
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
@@ -181,7 +190,7 @@ export interface CustomDateRange {
 }
 
 export interface StatFilter {
-  stat: keyof PlayerStats;
+  stat: PlayerStatKey;
   operator: ComparisonOperator;
   value: number;
 }

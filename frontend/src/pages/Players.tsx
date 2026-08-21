@@ -3,7 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState';
 import { useDebounce } from '../hooks/useDebounce';
 import { useGetAllPlayersQuery, useGetScheduleQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
-import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStats, CustomDateRange } from '../types/api';
+import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStatKey, CustomDateRange } from '../types/api';
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
 import { CoverageNotice } from '../components/DateRangePicker';
@@ -362,7 +362,7 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
             const v = e.target.value
             setStatFilter({
               ...statFilter,
-              stat: v === '' ? undefined : (v as keyof PlayerStats),
+              stat: v === '' ? undefined : (v as PlayerStatKey),
             })
           }}
         >
@@ -488,8 +488,8 @@ const PlayerTable = ({
         aVal = getTeamDisplay(a)
         bVal = getTeamDisplay(b)
       } else if (sortColumn in a.stats) {
-        const aStat = a.stats[sortColumn as keyof typeof a.stats]
-        const bStat = b.stats[sortColumn as keyof typeof b.stats]
+        const aStat = a.stats[sortColumn as PlayerStatKey]
+        const bStat = b.stats[sortColumn as PlayerStatKey]
         const isPercentage = sortColumn === 'fg_percentage' || sortColumn === 'ft_percentage'
 
         aVal = (showAverages && sortColumn !== 'gp' && !isPercentage)

@@ -15,7 +15,8 @@ import {
   computePlayerRankings,
   getRawValue,
   partitionByDataAvailability,
-  CATEGORIES,
+  DEFAULT_CATEGORIES,
+  PERCENTAGE_CATEGORIES,
   CATEGORY_LABELS,
   type RankingCategory,
   type RankedPlayer,
@@ -24,7 +25,7 @@ import {
 
 type SortCol = 'totalZ' | 'gp' | 'mpg' | RankingCategory | `${RankingCategory}_raw`
 
-const DEFAULT_WEIGHTS = Object.fromEntries(CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
+const DEFAULT_WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
 
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
@@ -49,6 +50,9 @@ export default function PlayerRankings() {
     () => partitionByDataAvailability(allPlayers),
     [allPlayers]
   )
+  // This league's actual scoring categories, from the API response — falls
+  // back to the historical default 8 until the first response lands.
+  const categories = playersData?.categories?.length ? playersData.categories : DEFAULT_CATEGORIES
 
   const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.calcMode', 'per_game')
   const [displayMode, setDisplayMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.displayMode', 'per_game')
@@ -56,6 +60,17 @@ export default function PlayerRankings() {
   const [minMin, setMinMin] = usePersistedState('playerRankings.minMin', 0)
   const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
   const [weights, setWeights] = usePersistedState<Record<RankingCategory, number>>('playerRankings.weights', { ...DEFAULT_WEIGHTS })
+  // A persisted weights object from a previous session (or the default 8)
+  // may be missing an entry for a category this league scores (e.g. TO) —
+  // default any missing category to weight 1 rather than treating it as punted.
+  const effectiveWeights = useMemo(() => {
+    const merged = { ...weights }
+    let changed = false
+    for (const cat of categories) {
+      if (!(cat in merged)) { merged[cat] = 1; changed = true }
+    }
+    return changed ? merged : weights
+  }, [weights, categories])
   const [displayLimit, setDisplayLimit] = useState<number | null>(null)
   const [sliderResetKey, setSliderResetKey] = useState(0)
   const [sortCol, setSortCol] = useState<SortCol>('totalZ')
@@ -85,11 +100,11 @@ export default function PlayerRankings() {
     setSliderResetKey(k => k + 1)
   }
 
-  const isPunted = (cat: RankingCategory) => weights[cat] === 0
+  const isPunted = (cat: RankingCategory) => effectiveWeights[cat] === 0
 
   const recompute = () => {
-    const config: RankingsConfig = { calcMode, minGp, minMin, position, weights }
-    const next = computePlayerRankings(players, config)
+    const config: RankingsConfig = { calcMode, minGp, minMin, position, weights: effectiveWeights }
+    const next = computePlayerRankings(players, config, categories)
     // Low-priority: if another slider tick (or anything urgent) comes in
     // while this 500-row re-render is in flight, React interrupts/discards
     // it instead of finishing it first — keeps the slider itself responsive.
@@ -149,7 +164,7 @@ export default function PlayerRankings() {
 
   const rawDisplay = (ranked: RankedPlayer, cat: RankingCategory) => {
     const val = getRawValue(ranked.player, cat, displayMode)
-    return cat === 'fg_pct' || cat === 'ft_pct' ? fmtPct(val) : fmt(val, 1)
+    return PERCENTAGE_CATEGORIES.has(cat) ? fmtPct(val) : fmt(val, 1)
   }
 
   if (isLoading) return <LoadingSpinner />
@@ -247,7 +262,7 @@ export default function PlayerRankings() {
             </p>
           )}
 
-          <WeightSliders key={sliderResetKey} initialWeights={weights} onCommit={setWeights} />
+          <WeightSliders key={sliderResetKey} categories={categories} initialWeights={effectiveWeights} onCommit={setWeights} />
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -295,11 +310,11 @@ export default function PlayerRankings() {
                   <th className="hidden sm:table-cell px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Pos</th>
                   <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
-                  {CATEGORIES.map(cat => (
-                    <Th key={`raw-${cat}`} col={`${cat}_raw` as SortCol} label={CATEGORY_LABELS[cat]} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
+                  {categories.map(cat => (
+                    <Th key={`raw-${cat}`} col={`${cat}_raw` as SortCol} label={CATEGORY_LABELS[cat] ?? cat} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
-                  {CATEGORIES.map(cat => (
-                    <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat]}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
+                  {categories.map(cat => (
+                    <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat] ?? cat}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
                 </tr>
               </thead>
@@ -313,12 +328,12 @@ export default function PlayerRankings() {
                     <td className="hidden sm:table-cell px-2 py-2 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{ranked.player.positions.join(', ')}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{ranked.player.stats.gp}</td>
                     <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>
-                    {CATEGORIES.map(cat => (
+                    {categories.map(cat => (
                       <td key={`raw-${cat}`} className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                         {rawDisplay(ranked, cat)}
                       </td>
                     ))}
-                    {CATEGORIES.map(cat => (
+                    {categories.map(cat => (
                       <td key={`z-${cat}`} className={`px-1.5 sm:px-3 py-1.5 sm:py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                         {fmt(ranked.zScores[cat])}
                       </td>
@@ -337,7 +352,8 @@ export default function PlayerRankings() {
 // Owns slider drag state locally so ticking a slider only re-renders this
 // small subtree, not the parent (and its 500-row table). Only pushes a
 // debounced "settled" value up via onCommit, once per drag/toggle.
-function WeightSliders({ initialWeights, onCommit }: {
+function WeightSliders({ categories, initialWeights, onCommit }: {
+  categories: RankingCategory[]
   initialWeights: Record<RankingCategory, number>
   onCommit: (weights: Record<RankingCategory, number>) => void
 }) {
@@ -374,9 +390,9 @@ function WeightSliders({ initialWeights, onCommit }: {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-      {CATEGORIES.map(cat => (
+      {categories.map(cat => (
         <div key={cat} className={`flex items-center gap-2 p-2 rounded-lg border ${isPunted(cat) ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600'}`}>
-          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8">{CATEGORY_LABELS[cat]}</span>
+          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8">{CATEGORY_LABELS[cat] ?? cat}</span>
           <input
             type="range" min={0} max={2} step={0.1}
             value={isPunted(cat) ? 0 : weights[cat]}

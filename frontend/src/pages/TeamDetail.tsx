@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery } from '../store/api/fantasyApi'
-import type { TimePeriod, PlayerMatchup, CustomDateRange } from '../types/api'
+import type { TimePeriod, PlayerMatchup, CustomDateRange, PlayerStatKey } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -175,8 +175,8 @@ const TeamDetail = () => {
           aVal = a.pro_team
           bVal = b.pro_team
         } else {
-          const aStat = a.stats[sortBy as keyof typeof a.stats] ?? -1
-          const bStat = b.stats[sortBy as keyof typeof b.stats] ?? -1
+          const aStat = a.stats[sortBy as PlayerStatKey] ?? -1
+          const bStat = b.stats[sortBy as PlayerStatKey] ?? -1
           const isPercentage = sortBy === 'fg_percentage' || sortBy === 'ft_percentage'
 
           aVal = (showAverages && sortBy !== 'gp' && !isPercentage)
