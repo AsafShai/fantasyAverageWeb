@@ -17,6 +17,10 @@ export interface RankingStats {
   total_points: number;
   rank?: number;
   category_ranks?: Record<string, number>;
+  /** Generic per-category values keyed by category code (e.g. "PTS", "TO") for
+   * this league's actual scoring categories. Superset of the fixed fields above
+   * for leagues scoring beyond the historical default 8. */
+  stats?: Record<string, number>;
 }
 
 export interface LeagueRankings {
@@ -52,6 +56,8 @@ export interface AverageStats {
   blk: number;
   pts: number;
   gp: number;
+  /** See RankingStats.stats */
+  stats?: Record<string, number>;
 }
 
 export interface TeamAverageStats extends AverageStats {
