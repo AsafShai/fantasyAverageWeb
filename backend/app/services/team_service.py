@@ -66,11 +66,12 @@ class TeamService:
 
         espn_url = f"https://fantasy.espn.com/basketball/team?leagueId={settings.league_id}&teamId={team_id}"
         team_slot_usage = slot_usage_map.get(team_id, {})
+        categories = await self.data_provider.get_ranking_categories()
 
         return self.response_builder.build_team_detail_response(
             team_id, totals_df, averages_df, rankings_df, players_list, espn_url,
             team_slot_usage, data_date=self.data_provider.get_data_date(),
-            actual_start=actual_start, actual_end=actual_end,
+            actual_start=actual_start, actual_end=actual_end, categories=categories,
         )
     
     async def get_teams_list(self) -> List[Team]:

@@ -304,3 +304,25 @@ class TestGenericStatsField:
         result = response_builder.create_ranking_stats_from_averages(team_data)
         assert result.stats['PTS'] == result.pts
         assert result.stats['FG%'] == result.fg_percentage
+
+
+class TestTeamDetailGenericStats:
+    def test_build_team_detail_response_default_stats_matches_fixed_fields(
+        self, response_builder, sample_totals_df, sample_averages_df, sample_rankings_df
+    ):
+        result = response_builder.build_team_detail_response(
+            1, sample_totals_df, sample_averages_df, sample_rankings_df, [], "https://espn.example"
+        )
+        assert result.raw_averages.stats['PTS'] == result.raw_averages.pts
+        assert result.raw_averages.stats['FG%'] == result.raw_averages.fg_percentage
+        assert result.ranking_stats.stats['PTS'] == result.ranking_stats.pts
+
+    def test_build_team_detail_response_custom_categories(
+        self, response_builder, sample_totals_df, sample_averages_df, sample_rankings_df
+    ):
+        result = response_builder.build_team_detail_response(
+            1, sample_totals_df, sample_averages_df, sample_rankings_df, [], "https://espn.example",
+            categories=['PTS'],
+        )
+        assert set(result.category_ranks.keys()) == {'PTS'}
+        assert set(result.raw_averages.stats.keys()) == {'PTS'}

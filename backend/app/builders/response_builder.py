@@ -66,8 +66,10 @@ class ResponseBuilder:
                                  averages_df: pd.DataFrame, rankings_df: pd.DataFrame,
                                  players: Optional[List[Player]], espn_url: str,
                                  slot_usage_raw: Dict[str, int] = None,
-                                 data_date=None, actual_start=None, actual_end=None) -> TeamDetail:
-        """Build TeamDetail response for a specific team"""
+                                 data_date=None, actual_start=None, actual_end=None,
+                                 categories: Optional[List[str]] = None) -> TeamDetail:
+        """Build TeamDetail response for a specific team. categories defaults to RANKING_CATEGORIES."""
+        categories = categories or RANKING_CATEGORIES
         team_row = totals_df[totals_df['team_id'] == team_id]
         if team_row.empty:
             raise ValueError(f"Team '{team_id}' not found")
@@ -82,8 +84,8 @@ class ResponseBuilder:
 
         team = Team(team_id=team_id, team_name=totals_data['team_name'])
         shot_chart = self._create_shot_chart_stats(totals_data)
-        raw_averages = self._create_raw_average_stats(avg_data)
-        ranking_stats = self._create_ranking_stats(rank_data, avg_data)
+        raw_averages = self._create_raw_average_stats(avg_data, categories)
+        ranking_stats = self._create_ranking_stats(rank_data, avg_data, categories)
 
         slot_usage: Dict[str, SlotUsage] = {}
         for slot_name, cap in SLOT_CAPS.items():
@@ -101,7 +103,7 @@ class ResponseBuilder:
             shot_chart=shot_chart,
             raw_averages=raw_averages,
             ranking_stats=ranking_stats,
-            category_ranks={col: int(rank_data[col]) for col in RANKING_CATEGORIES},
+            category_ranks={col: int(rank_data[col]) for col in categories if col in rank_data},
             slot_usage=slot_usage,
             data_date=data_date,
             actual_start=actual_start,
@@ -293,8 +295,10 @@ class ResponseBuilder:
             gp=int(totals_data['GP'])
         )
     
-    def _create_raw_average_stats(self, avg_data: pd.Series) -> TeamAverageStats:
-        """Create TeamAverageStats object from averages data"""
+    def _create_raw_average_stats(self, avg_data: pd.Series,
+                                categories: Optional[List[str]] = None) -> TeamAverageStats:
+        """Create TeamAverageStats object from averages data. categories defaults to RANKING_CATEGORIES."""
+        categories = categories or RANKING_CATEGORIES
         return TeamAverageStats(
             team=Team(team_id=int(avg_data['team_id']), team_name=str(avg_data['team_name'])),
             fg_percentage=float(avg_data['FG%']),
@@ -305,7 +309,8 @@ class ResponseBuilder:
             stl=float(avg_data['STL']),
             blk=float(avg_data['BLK']),
             pts=float(avg_data['PTS']),
-            gp=int(avg_data['GP'])
+            gp=int(avg_data['GP']),
+            stats={col: float(avg_data[col]) for col in categories if col in avg_data},
         )
 
     def build_all_players_response(self, players_df: pd.DataFrame) -> List[Player]:
