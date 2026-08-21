@@ -185,30 +185,38 @@ class ResponseBuilder:
             return None
         return value if value > 0 else None
 
-    def build_players_list(self, team_players: pd.DataFrame) -> List[Player]:
-        """Build list of Player objects from players DataFrame"""
+    def _build_player_stats(self, row: pd.Series, categories: Optional[List[str]] = None) -> PlayerStats:
+        """Create PlayerStats from a player row, with the generic `stats` dict
+        populated for the league's actual scoring categories (e.g. TO) on top
+        of the fixed default fields. categories defaults to RANKING_CATEGORIES."""
+        categories = categories or RANKING_CATEGORIES
+        return PlayerStats(
+            pts=float(row['PTS']),
+            reb=float(row['REB']),
+            ast=float(row['AST']),
+            stl=float(row['STL']),
+            blk=float(row['BLK']),
+            fgm=float(row['FGM']),
+            fga=float(row['FGA']),
+            ftm=float(row['FTM']),
+            fta=float(row['FTA']),
+            fg_percentage=float(row['FG%']),
+            ft_percentage=float(row['FT%']),
+            three_pm=float(row['3PM']),
+            minutes=float(row['MIN']),
+            gp=int(row['GP']),
+            stats={col: float(row[col]) for col in categories if col in row},
+        )
+
+    def build_players_list(self, team_players: pd.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
+        """Build list of Player objects from players DataFrame. categories defaults to RANKING_CATEGORIES."""
         players = []
         for _, row in team_players.iterrows():
             players.append(Player(
                 player_name=str(row['Name']),
                 pro_team=str(row['Pro Team']),
                 positions=str(row['Positions']).split(', '),
-                stats=PlayerStats(
-                    pts=float(row['PTS']),
-                    reb=float(row['REB']),
-                    ast=float(row['AST']),
-                    stl=float(row['STL']),
-                    blk=float(row['BLK']),
-                    fgm=float(row['FGM']),
-                    fga=float(row['FGA']),
-                    ftm=float(row['FTM']),
-                    fta=float(row['FTA']),
-                    fg_percentage=float(row['FG%']),
-                    ft_percentage=float(row['FT%']),
-                    three_pm=float(row['3PM']),
-                    minutes=float(row['MIN']),
-                    gp=int(row['GP'])
-                ),
+                stats=self._build_player_stats(row, categories),
                 team_id=int(row['team_id']),
                 status=str(row.get('status', 'ONTEAM')),
                 player_id=self._player_id_from_row(row),
@@ -316,30 +324,15 @@ class ResponseBuilder:
             stats={col: float(avg_data[col]) for col in categories if col in avg_data},
         )
 
-    def build_all_players_response(self, players_df: pd.DataFrame) -> List[Player]:
-        """Build list of all players from players DataFrame"""
+    def build_all_players_response(self, players_df: pd.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
+        """Build list of all players from players DataFrame. categories defaults to RANKING_CATEGORIES."""
         players = []
         for _, row in players_df.iterrows():
             players.append(Player(
                 player_name=str(row['Name']),
                 pro_team=str(row['Pro Team']),
                 positions=str(row['Positions']).split(', '),
-                stats=PlayerStats(
-                    pts=float(row['PTS']),
-                    reb=float(row['REB']),
-                    ast=float(row['AST']),
-                    stl=float(row['STL']),
-                    blk=float(row['BLK']),
-                    fgm=float(row['FGM']),
-                    fga=float(row['FGA']),
-                    ftm=float(row['FTM']),
-                    fta=float(row['FTA']),
-                    fg_percentage=float(row['FG%']),
-                    ft_percentage=float(row['FT%']),
-                    three_pm=float(row['3PM']),
-                    minutes=float(row['MIN']),
-                    gp=int(row['GP'])
-                ),
+                stats=self._build_player_stats(row, categories),
                 team_id=int(row['team_id']),
                 status=str(row.get('status', 'ONTEAM')),
                 player_id=self._player_id_from_row(row),

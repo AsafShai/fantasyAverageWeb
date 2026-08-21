@@ -2,6 +2,7 @@ from datetime import date
 
 import pandas as pd
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from app.exceptions import ResourceNotFoundError
@@ -49,6 +50,8 @@ def player_service():
     svc.data_provider.db_service.aggregate_player_games = AsyncMock(
         return_value=(pd.DataFrame(), None, None)
     )
+    from app.utils.constants import RANKING_CATEGORIES
+    svc.data_provider.get_ranking_categories = AsyncMock(return_value=list(RANKING_CATEGORIES))
     svc.response_builder = MagicMock()
     svc.logger = MagicMock()
     return svc
@@ -107,12 +110,14 @@ class TestGetAllPlayers:
         assert result.has_more is False
         assert result.actual_start is None
         assert result.actual_end is None
+        from app.utils.constants import RANKING_CATEGORIES
+        assert result.categories == list(RANKING_CATEGORIES)
 
     @pytest.mark.asyncio
     async def test_has_more_second_page(self, player_service, sample_window_players_df):
         player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
         player_service.response_builder.build_all_players_response.side_effect = (
-            lambda df: [_sample_player(f"P{i}") for i in range(len(df))]
+            lambda df, categories=None: [_sample_player(f"P{i}") for i in range(len(df))]
         )
 
         result = await player_service.get_all_players(page=1, limit=2, time_period=StatTimePeriod.SEASON)
@@ -360,3 +365,97 @@ class TestGetSeasonAnchorDate:
 
         result = await player_service_module.get_season_anchor_date("2025-26", db)
         assert result == date(2026, 4, 12)
+
+
+@pytest.mark.real_dataprovider
+class TestDynamicCategoriesPlayers:
+    """Full pipeline: real DataProvider + DataTransformer + ResponseBuilder,
+    only the ESPN HTTP call stubbed, proving a turnovers-scoring league
+    surfaces TO on individual player rows via get_all_players()."""
+
+    @staticmethod
+    def _turnovers_league_standings_payload():
+        return {
+            "scoringPeriodId": 5,
+            "teams": [{"id": 1, "name": "Alpha", "valuesByStat": {
+                "0": 1000, "1": 20, "2": 50, "3": 200, "6": 400,
+                "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": 120,
+            }}],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0, 11)
+            ]}},
+        }
+
+    @staticmethod
+    def _players_payload():
+        return {"players": [{
+            "id": 501, "onTeamId": 1, "status": "ONTEAM",
+            "player": {
+                "id": 501, "fullName": "TO Guy", "proTeamId": 1, "injured": False,
+                "eligibleSlots": [0],
+                "stats": [{
+                    "scoringPeriodId": 0, "statSplitTypeId": 0, "seasonId": 2026,
+                    "stats": {
+                        "0": 500, "1": 10, "2": 25, "3": 100, "6": 200,
+                        "13": 200, "14": 425, "15": 75, "16": 100, "17": 50,
+                        "19": 47.1, "20": 75.0, "42": 41, "40": 1000, "11": 60,
+                    },
+                }],
+            },
+        }]}
+
+    @pytest_asyncio.fixture
+    async def real_player_service(self, monkeypatch):
+        from datetime import date as date_cls
+        from unittest.mock import AsyncMock as AM
+        from app.services.data_provider import DataProvider
+
+        monkeypatch.setattr(
+            player_service_module, "get_season_anchor_date", AM(return_value=date_cls(2026, 7, 10))
+        )
+
+        from app.services.cache_manager import CacheManager
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        # CacheManager is its own singleton, independent of DataProvider's —
+        # resetting DataProvider alone leaves a stale players_0 cache entry
+        # (5-minute TTL) that could otherwise leak in from any other test.
+        CacheManager._instance = None
+        service = PlayerService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = MagicMock()
+        service.data_provider.db_service.aggregate_player_games = AsyncMock(
+            return_value=(pd.DataFrame(), None, None)
+        )
+
+        standings_resp = MagicMock()
+        standings_resp.status_code = 200
+        standings_resp.headers = {"ETag": "e1"}
+        standings_resp.json.return_value = self._turnovers_league_standings_payload()
+        standings_resp.raise_for_status = MagicMock()
+
+        players_resp = MagicMock()
+        players_resp.status_code = 200
+        players_resp.headers = {}
+        players_resp.json.return_value = self._players_payload()
+        players_resp.raise_for_status = MagicMock()
+
+        async def routed_get(url, **kwargs):
+            return players_resp if 'kona_player_info' in url else standings_resp
+        service.data_provider._client.get = AsyncMock(side_effect=routed_get)
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        CacheManager._instance = None
+
+    @pytest.mark.asyncio
+    async def test_player_row_includes_turnovers_stat(self, real_player_service):
+        result = await real_player_service.get_all_players(page=1, limit=10)
+
+        player = next(p for p in result.players if p.player_name == "TO Guy")
+        assert player.stats.stats is not None
+        assert player.stats.stats['TO'] == 60.0
+        assert player.stats.stats['PTS'] == player.stats.pts

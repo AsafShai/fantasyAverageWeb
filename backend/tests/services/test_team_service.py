@@ -120,7 +120,7 @@ class TestTeamService:
         )
 
         captured = {}
-        def _capture_players_list(df):
+        def _capture_players_list(df, categories=None):
             captured['df'] = df
             return []
         team_service.response_builder.build_players_list.side_effect = _capture_players_list

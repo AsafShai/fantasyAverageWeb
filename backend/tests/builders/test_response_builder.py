@@ -326,3 +326,28 @@ class TestTeamDetailGenericStats:
         )
         assert set(result.category_ranks.keys()) == {'PTS'}
         assert set(result.raw_averages.stats.keys()) == {'PTS'}
+
+
+class TestPlayerStatsGenericField:
+    def test_build_players_list_default_stats_matches_fixed_fields(
+        self, response_builder, response_builder_players_df
+    ):
+        result = response_builder.build_players_list(response_builder_players_df)
+        first = result[0]
+        assert first.stats.stats['PTS'] == first.stats.pts
+        assert first.stats.stats['FG%'] == first.stats.fg_percentage
+
+    def test_build_players_list_extra_category_included_when_present(
+        self, response_builder, response_builder_players_df
+    ):
+        df = response_builder_players_df.copy()
+        df['TO'] = [12.0, 8.0]
+        result = response_builder.build_players_list(df, categories=['PTS', 'TO'])
+        assert result[0].stats.stats == {'PTS': result[0].stats.pts, 'TO': 12.0}
+
+    def test_build_all_players_response_default_stats_matches_fixed_fields(
+        self, response_builder, response_builder_players_df
+    ):
+        result = response_builder.build_all_players_response(response_builder_players_df)
+        first = result[0]
+        assert first.stats.stats['PTS'] == first.stats.pts

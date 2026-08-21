@@ -203,7 +203,8 @@ class PlayerService:
         end_idx = start_idx + limit
 
         page_df = players_df.iloc[start_idx:end_idx]
-        players = self.response_builder.build_all_players_response(page_df)
+        categories = await self.data_provider.get_ranking_categories()
+        players = self.response_builder.build_all_players_response(page_df, categories)
 
         return PaginatedPlayers(
             players=players,
@@ -213,4 +214,5 @@ class PlayerService:
             has_more=end_idx < total_count,
             actual_start=actual_start,
             actual_end=actual_end,
+            categories=categories,
         )
