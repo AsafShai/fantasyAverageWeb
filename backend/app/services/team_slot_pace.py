@@ -5,12 +5,11 @@ import pandas as pd
 from app.config import settings
 from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
+from app.utils.roster_slots import SLOT_NAMES as _SLOT_NAMES
 
 logger = logging.getLogger(__name__)
 
 _NBA_AVG_PACE_FALLBACK = 65.9
-
-_SLOT_NAMES = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL']
 
 
 async def get_team_slot_pace_df() -> pd.DataFrame:

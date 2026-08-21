@@ -6,11 +6,10 @@ from app.utils.constants import (
 )
 from app.services.stats_calculator import StatsCalculator
 from app.config import settings
+from app.utils.roster_slots import SLOT_CAPS
 
 
 SLOT_MAP = {0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C', 5: 'G', 6: 'F', 11: 'UTIL'}
-# UTIL is three roster slots plus two spare games (3 * 82 + 2).
-SLOT_CAPS = {'PG': 82, 'SG': 82, 'SF': 82, 'PF': 82, 'C': 82, 'G': 82, 'F': 82, 'UTIL': 248}
 
 
 class DataTransformer:
