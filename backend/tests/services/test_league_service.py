@@ -297,3 +297,67 @@ class TestDynamicCategoriesLeagueSummary:
         # pre-existing, category-agnostic behavior, not something this PR changes.
         assert summary.category_leaders['TO_leader'].team.team_name == 'Alpha'
         assert summary.league_averages.stats['TO'] == pytest.approx((120 / 82 + 90 / 82) / 2)
+
+
+@pytest.mark.real_dataprovider
+class TestDynamicCategoriesHeatmap:
+    """Full pipeline: real DataProvider + DataTransformer + StatsCalculator +
+    ResponseBuilder, only the ESPN HTTP call stubbed, for a turnovers-scoring
+    league via get_heatmap_data()."""
+
+    @staticmethod
+    def _turnovers_league_payload():
+        def team(team_id, name, pts, to):
+            return {
+                "id": team_id,
+                "name": name,
+                "valuesByStat": {
+                    "0": pts, "1": 20, "2": 50, "3": 200, "6": 400,
+                    "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                    "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": to,
+                },
+            }
+        return {
+            "scoringPeriodId": 5,
+            "teams": [team(1, "Alpha", 1000, 120), team(2, "Beta", 1100, 90)],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0, 11)
+            ]}},
+        }
+
+    @pytest_asyncio.fixture
+    async def real_league_service(self):
+        from app.services.data_provider import DataProvider
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        service = LeagueService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = AsyncMock()
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"ETag": "e1"}
+        resp.json.return_value = self._turnovers_league_payload()
+        resp.raise_for_status = MagicMock()
+        service.data_provider._client.get = AsyncMock(return_value=resp)
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+
+    @pytest.mark.asyncio
+    async def test_heatmap_includes_turnovers_column(self, real_league_service):
+        heatmap = await real_league_service.get_heatmap_data()
+
+        assert 'TO' in heatmap.categories
+        to_index = heatmap.categories.index('TO')
+        # data/normalized_data/ranks_data are positional matrices aligned to categories
+        for row in heatmap.data:
+            assert len(row) == len(heatmap.categories)
+        assert heatmap.ranks_data is not None
+        for row in heatmap.ranks_data:
+            assert len(row) == len(heatmap.categories)
+        # sanity: the TO column values are the actual per-game TO averages
+        to_values = sorted(row[to_index] for row in heatmap.data)
+        assert to_values == sorted([120 / 82, 90 / 82])

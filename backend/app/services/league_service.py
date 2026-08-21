@@ -69,10 +69,11 @@ class LeagueService:
 
         sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
 
+        categories = await self.data_provider.get_ranking_categories()
         teams_data = self._extract_teams_data(sorted_averages_df)
-        categories_data = self._extract_categories_data(sorted_averages_df)
-        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df)
-        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df)
+        categories_data = self._extract_categories_data(sorted_averages_df, categories)
+        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df, categories)
+        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df, categories)
 
         return self.response_builder.build_heatmap_response(
             teams=teams_data,
@@ -80,6 +81,7 @@ class LeagueService:
             normalized_data=normalized_data,
             ranks_data=ranks_data,
             data_date=self.data_provider.get_data_date(),
+            category_labels=categories + ['GP'],
         )
 
     async def _get_heatmap_for_range(self, start_date: date, end_date: date) -> HeatmapData:
@@ -172,27 +174,29 @@ class LeagueService:
         return [{'team_id': int(row['team_id']), 'team_name': str(row['team_name'])} 
                 for _, row in averages_df.iterrows()]
     
-    def _extract_categories_data(self, averages_df) -> List:
-        """Extract categories data for heatmap"""
+    def _extract_categories_data(self, averages_df, categories: Optional[List[str]] = None) -> List:
+        """Extract categories data for heatmap. categories defaults to RANKING_CATEGORIES."""
         from app.utils.constants import RANKING_CATEGORIES
-        categories_with_gp = RANKING_CATEGORIES + ['GP']
+        categories_with_gp = (categories or RANKING_CATEGORIES) + ['GP']
         return averages_df[categories_with_gp].values.tolist()
 
-    def _extract_ranks_data(self, rankings_df, averages_df) -> List[List[int]]:
-        """Extract rank data for each team and category"""
+    def _extract_ranks_data(self, rankings_df, averages_df, categories: Optional[List[str]] = None) -> List[List[int]]:
+        """Extract rank data for each team and category. categories defaults to RANKING_CATEGORIES."""
         from app.utils.constants import RANKING_CATEGORIES
+        categories = categories or RANKING_CATEGORIES
 
         team_id_to_ranks = {}
         for _, row in rankings_df.iterrows():
             team_id = int(row['team_id'])
-            ranks = [int(row[cat]) for cat in RANKING_CATEGORIES]
+            ranks = [int(row[cat]) for cat in categories]
             ranks.append(0)
             team_id_to_ranks[team_id] = ranks
 
+        default_ranks = [0] * (len(categories) + 1)
         ranks_data = []
         for _, team_row in averages_df.iterrows():
             team_id = int(team_row['team_id'])
-            ranks_data.append(team_id_to_ranks.get(team_id, [0] * 9))
+            ranks_data.append(team_id_to_ranks.get(team_id, default_ranks))
 
         return ranks_data
 

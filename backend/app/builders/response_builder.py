@@ -132,11 +132,14 @@ class ResponseBuilder:
     def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],
                              normalized_data: List[List[float]], ranks_data: List[List[int]],
                              data_date=None, date_range_start=None, date_range_end=None,
-                             actual_start_date=None, actual_end_date=None) -> HeatmapData:
-        """Build HeatmapData response from prepared data"""
+                             actual_start_date=None, actual_end_date=None,
+                             category_labels: Optional[List[str]] = None) -> HeatmapData:
+        """Build HeatmapData response from prepared data. category_labels defaults
+        to RANKING_CATEGORIES + ['GP'] (note: the `categories` param here is the
+        data matrix, not labels — category_labels names each column/row)."""
         team_objects = [Team(team_id=team['team_id'], team_name=team['team_name'])
                        for team in teams]
-        categories_with_gp = RANKING_CATEGORIES + ['GP']
+        categories_with_gp = category_labels or (RANKING_CATEGORIES + ['GP'])
 
         return HeatmapData(
             teams=team_objects,
