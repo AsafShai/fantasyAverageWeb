@@ -291,12 +291,78 @@ class TestDynamicCategoriesLeagueSummary:
         summary = await real_league_service.get_league_summary()
 
         assert 'TO_leader' in summary.category_leaders
-        # find_category_leaders always takes the highest value in a category
-        # (no "lower is better" handling for reverse-scored stats like TO) —
-        # Alpha has more turnovers, so Alpha is the (raw) "leader" here. That's
-        # pre-existing, category-agnostic behavior, not something this PR changes.
+        # This payload's scoringItems don't set isReverseItem, so TO is treated
+        # as a normal (higher-is-better) category here: Alpha has more
+        # turnovers, so Alpha is the (raw) "leader". See
+        # TestReverseScoredCategories below for the isReverseItem=True case,
+        # where the lowest-TO team correctly leads instead.
         assert summary.category_leaders['TO_leader'].team.team_name == 'Alpha'
         assert summary.league_averages.stats['TO'] == pytest.approx((120 / 82 + 90 / 82) / 2)
+
+
+@pytest.mark.real_dataprovider
+class TestReverseScoredCategories:
+    """Full pipeline test for a league where ESPN flags TO as isReverseItem —
+    the lowest raw value should be the category leader and score highest,
+    not the highest raw value."""
+
+    @staticmethod
+    def _reverse_turnovers_league_payload():
+        def team(team_id, name, pts, to):
+            return {
+                "id": team_id,
+                "name": name,
+                "valuesByStat": {
+                    "0": pts, "1": 20, "2": 50, "3": 200, "6": 400,
+                    "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                    "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": to,
+                },
+            }
+        return {
+            "scoringPeriodId": 5,
+            "teams": [team(1, "Alpha", 1000, 120), team(2, "Beta", 1100, 90)],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid, "isReverseItem": sid == 11}
+                for sid in (19, 20, 17, 3, 6, 2, 1, 0, 11)
+            ]}},
+        }
+
+    @pytest_asyncio.fixture
+    async def real_league_service(self):
+        from app.services.data_provider import DataProvider
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        service = LeagueService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = AsyncMock()
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"ETag": "e1"}
+        resp.json.return_value = self._reverse_turnovers_league_payload()
+        resp.raise_for_status = MagicMock()
+        service.data_provider._client.get = AsyncMock(return_value=resp)
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+
+    @pytest.mark.asyncio
+    async def test_league_summary_leader_is_lowest_turnovers_team(self, real_league_service):
+        summary = await real_league_service.get_league_summary()
+        # Beta has fewer turnovers (90 vs 120) -> Beta correctly leads TO
+        assert summary.category_leaders['TO_leader'].team.team_name == 'Beta'
+
+    @pytest.mark.asyncio
+    async def test_heatmap_color_favors_lowest_turnovers_team(self, real_league_service):
+        heatmap = await real_league_service.get_heatmap_data()
+        to_index = heatmap.categories.index('TO')
+        team_order = [t.team_name for t in heatmap.teams]
+        alpha_color = heatmap.normalized_data[team_order.index('Alpha')][to_index]
+        beta_color = heatmap.normalized_data[team_order.index('Beta')][to_index]
+        # Beta (fewer TO, better) should read as the "good" end of the scale
+        assert beta_color > alpha_color
 
 
 @pytest.mark.real_dataprovider

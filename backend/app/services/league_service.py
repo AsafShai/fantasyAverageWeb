@@ -27,7 +27,8 @@ class LeagueService:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
 
         categories = await self.data_provider.get_ranking_categories()
-        category_leaders = self._calculate_category_leaders(averages_df, categories)
+        reverse_categories = await self.data_provider.get_reverse_categories()
+        category_leaders = self._calculate_category_leaders(averages_df, categories, reverse_categories)
         league_averages = self._calculate_league_averages(averages_df, categories)
 
         nba_avg_pace = None
@@ -70,9 +71,10 @@ class LeagueService:
         sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
 
         categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
         teams_data = self._extract_teams_data(sorted_averages_df)
         categories_data = self._extract_categories_data(sorted_averages_df, categories)
-        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df, categories)
+        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df, categories, reverse_categories)
         ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df, categories)
 
         return self.response_builder.build_heatmap_response(
@@ -153,9 +155,10 @@ class LeagueService:
             shots_data, data_date=self.data_provider.get_data_date()
         )
     
-    def _calculate_category_leaders(self, averages_df, categories: Optional[List[str]] = None) -> Dict[str, RankingStats]:
+    def _calculate_category_leaders(self, averages_df, categories: Optional[List[str]] = None,
+                                  reverse_categories: Optional[set] = None) -> Dict[str, RankingStats]:
         """Calculate category leaders (business logic). categories defaults to RANKING_CATEGORIES."""
-        leaders_data = self.stats_calculator.find_category_leaders(averages_df, categories)
+        leaders_data = self.stats_calculator.find_category_leaders(averages_df, categories, reverse_categories)
         category_leaders = {}
 
         for category, data in leaders_data.items():

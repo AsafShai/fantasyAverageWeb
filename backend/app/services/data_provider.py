@@ -316,6 +316,17 @@ class DataProvider:
             return list(RANKING_CATEGORIES)
         return self.data_transformer.resolve_ranking_categories(raw)
 
+    async def get_reverse_categories(self) -> set:
+        """Get this league's reverse-scored categories (lower raw value = better,
+        e.g. turnovers), resolved from ESPN's settings via each scoringItem's
+        isReverseItem flag. Falls back to an empty set (no known reverse
+        categories) if settings are unavailable — same caching contract as
+        get_ranking_categories."""
+        raw = self.cache_manager.totals_cache.get('raw')
+        if not raw:
+            return set()
+        return self.data_transformer.resolve_reverse_categories(raw)
+
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
         totals_df = await self.get_totals_df()
@@ -325,14 +336,16 @@ class DataProvider:
     async def get_rankings_df(self) -> pd.DataFrame:
         """Get rankings DataFrame with caching"""
         averages_df = await self.get_averages_df()
-        return self.data_transformer.averages_to_rankings_df(averages_df)
+        reverse_categories = await self.get_reverse_categories()
+        return self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories)
 
     async def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Get all three main DataFrames at once (optimized for endpoints that need multiple)"""
         totals_df = await self.get_totals_df()
         categories = await self.get_ranking_categories()
+        reverse_categories = await self.get_reverse_categories()
         averages_df = self.data_transformer.totals_to_averages_df(totals_df, categories)
-        rankings_df = self.data_transformer.averages_to_rankings_df(averages_df)
+        rankings_df = self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories)
 
         return totals_df, averages_df, rankings_df
     

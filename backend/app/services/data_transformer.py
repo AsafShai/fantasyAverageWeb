@@ -46,6 +46,26 @@ class DataTransformer:
             self.logger.warning(f"Error resolving ranking categories from ESPN settings, using default: {e}")
             return list(RANKING_CATEGORIES)
 
+    def resolve_reverse_categories(self, espn_data: Dict) -> set:
+        """Determine which of this league's categories are reverse-scored
+        (lower raw value = better, e.g. turnovers) from ESPN's
+        settings.scoringSettings.scoringItems[].isReverseItem flag. Falls back
+        to an empty set (no known reverse categories) on missing/unparseable
+        settings — same fixed-default posture as resolve_ranking_categories."""
+        try:
+            scoring_items = espn_data.get('settings', {}).get('scoringSettings', {}).get('scoringItems', [])
+            reverse: set = set()
+            for item in scoring_items:
+                if not item.get('isReverseItem'):
+                    continue
+                category = STAT_ID_TO_CATEGORY.get(item.get('statId'))
+                if category and category not in NON_RANKING_STAT_KEYS:
+                    reverse.add(category)
+            return reverse
+        except Exception as e:
+            self.logger.warning(f"Error resolving reverse categories from ESPN settings, using none: {e}")
+            return set()
+
     def parse_slot_usage(self, espn_data: Dict) -> Dict[int, Dict[str, int]]:
         """Parse slot usage from mMatchupScore data. Returns {team_id: {slot_name: games_used}}"""
         result: Dict[int, Dict[str, int]] = {}
@@ -251,15 +271,17 @@ class DataTransformer:
         """
         return self.stats_calculator.calculate_per_game_averages(totals_df, categories)
     
-    def averages_to_rankings_df(self, averages_df: pd.DataFrame) -> pd.DataFrame:
+    def averages_to_rankings_df(self, averages_df: pd.DataFrame, reverse_categories: set = None) -> pd.DataFrame:
         """
         Calculate rankings from averages DataFrame
         Args:
             averages_df: DataFrame with per-game averages
+            reverse_categories: category codes where a lower raw value is better
+                                 (e.g. turnovers) — see resolve_reverse_categories
         Returns:
             DataFrame with rankings and total points
         """
-        return self.stats_calculator.calculate_rankings(averages_df)
+        return self.stats_calculator.calculate_rankings(averages_df, reverse_categories)
     
     def _extract_player_stats(self, entry: Dict, team_id: int, stat_split_type_id: int = 0) -> Dict:
         """Extract player stats from ESPN API data"""

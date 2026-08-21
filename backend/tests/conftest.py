@@ -140,6 +140,9 @@ class MockDataProvider:
         from app.utils.constants import RANKING_CATEGORIES
         return list(RANKING_CATEGORIES)
 
+    async def get_reverse_categories(self):
+        return set()
+
     async def get_slot_usage(self):
         return {}
 

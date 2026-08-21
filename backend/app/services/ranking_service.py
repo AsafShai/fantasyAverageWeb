@@ -29,7 +29,8 @@ class RankingService:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 
         categories = await self.data_provider.get_ranking_categories()
-        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df(totals_df, categories)
+        reverse_categories = await self.data_provider.get_reverse_categories()
+        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df(totals_df, categories, reverse_categories)
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):
             raise InvalidParameterError(f"Invalid sort column: {sort_by}")
@@ -147,7 +148,8 @@ class RankingService:
         return df, transformer.averages_to_rankings_df(df)
 
     def _build_totals_rankings_df(self, totals_df: pd.DataFrame,
-                                   categories: Optional[list[str]] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                   categories: Optional[list[str]] = None,
+                                   reverse_categories: Optional[set] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Build (raw totals, rankings) DataFrames from season totals (no per-game division).
         categories defaults to RANKING_CATEGORIES."""
         from app.services.data_transformer import DataTransformer
@@ -156,7 +158,7 @@ class RankingService:
         categories = categories or RANKING_CATEGORIES
         cols_to_keep = ['team_id', 'team_name', 'GP'] + [c for c in categories if c in totals_df.columns]
         df = totals_df[[c for c in cols_to_keep if c in totals_df.columns]].copy()
-        return df, transformer.averages_to_rankings_df(df)
+        return df, transformer.averages_to_rankings_df(df, reverse_categories)
 
     def _is_valid_sort_column(self, sort_by: str, rankings_df) -> bool:
         return sort_by.upper() in rankings_df.columns

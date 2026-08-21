@@ -333,3 +333,37 @@ class TestRawStandingsToTotalsDynamicCategories:
         }]}
         df = transformer.raw_standings_to_totals_df(payload)
         assert "TO" not in df.columns
+
+
+class TestResolveReverseCategories:
+    def test_no_settings_returns_empty_set(self, transformer):
+        assert transformer.resolve_reverse_categories({}) == set()
+
+    def test_reverse_item_flagged_true_included(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0, "isReverseItem": False},
+            {"statId": 11, "isReverseItem": True},
+        ]}}}
+        assert transformer.resolve_reverse_categories(payload) == {"TO"}
+
+    def test_no_reverse_items_returns_empty_set(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0, "isReverseItem": False},
+            {"statId": 6, "isReverseItem": False},
+        ]}}}
+        assert transformer.resolve_reverse_categories(payload) == set()
+
+    def test_missing_is_reverse_item_key_treated_as_false(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 0},
+        ]}}}
+        assert transformer.resolve_reverse_categories(payload) == set()
+
+    def test_reverse_non_ranking_stat_excluded(self, transformer):
+        payload = {"settings": {"scoringSettings": {"scoringItems": [
+            {"statId": 42, "isReverseItem": True},
+        ]}}}
+        assert transformer.resolve_reverse_categories(payload) == set()
+
+    def test_malformed_settings_returns_empty_set(self, transformer):
+        assert transformer.resolve_reverse_categories({"settings": "not-a-dict"}) == set()

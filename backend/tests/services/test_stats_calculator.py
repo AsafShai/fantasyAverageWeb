@@ -240,3 +240,65 @@ class TestDynamicCategories:
         result = stats_calculator.normalize_for_heatmap(averages, ["TO"])
         assert len(result) == 2
         assert len(result[0]) == 2  # TO + GP columns
+
+
+class TestReverseCategories:
+    """Reverse-scored categories (e.g. turnovers): lower raw value = better."""
+
+    def test_calculate_rankings_reverse_category_lowest_value_scores_highest(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2, 3], "team_name": ["A", "B", "C"], "GP": [82, 82, 82],
+            "TO": [10.0, 5.0, 15.0],
+        })
+        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"})
+        by_team = result.set_index("team_id")
+        # Team B has fewest TO (best) -> should score highest (3), Team C worst -> lowest (1)
+        assert by_team.loc[2, "TO"] == 3
+        assert by_team.loc[1, "TO"] == 2
+        assert by_team.loc[3, "TO"] == 1
+
+    def test_calculate_rankings_normal_category_unaffected_by_reverse_set(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
+            "PTS": [100.0, 90.0], "TO": [10.0, 5.0],
+        })
+        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"})
+        by_team = result.set_index("team_id")
+        # PTS is not reverse: higher value (team 1) scores highest
+        assert by_team.loc[1, "PTS"] == 2
+        assert by_team.loc[2, "PTS"] == 1
+
+    def test_find_category_leaders_reverse_category_picks_lowest(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "TO": [12.0, 8.0],
+        })
+        leaders = stats_calculator.find_category_leaders(averages, ["TO"], reverse_categories={"TO"})
+        assert leaders["TO_leader"]["team_id"] == 2
+        assert leaders["TO_leader"]["value"] == 8.0
+
+    def test_find_category_leaders_non_reverse_still_picks_highest(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "PTS": [90.0, 110.0],
+        })
+        leaders = stats_calculator.find_category_leaders(averages, ["PTS"], reverse_categories={"TO"})
+        assert leaders["PTS_leader"]["team_id"] == 2
+
+    def test_normalize_for_heatmap_reverse_category_inverts_color_direction(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
+            "TO": [5.0, 15.0],
+        })
+        result = stats_calculator.normalize_for_heatmap(averages, ["TO"], reverse_categories={"TO"})
+        # Team 1 has fewer TO (better) -> should get the "green" (high) end after inversion
+        assert result[0][0] > result[1][0]
+
+    def test_normalize_for_heatmap_non_reverse_unaffected(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
+            "PTS": [120.0, 100.0],
+        })
+        with_reverse = stats_calculator.normalize_for_heatmap(averages, ["PTS"], reverse_categories={"TO"})
+        without_reverse = stats_calculator.normalize_for_heatmap(averages, ["PTS"])
+        assert with_reverse == without_reverse

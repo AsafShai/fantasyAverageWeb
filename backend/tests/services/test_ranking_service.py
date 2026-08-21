@@ -120,6 +120,7 @@ class TestRankingServiceResponseBuilding:
             service.data_provider.get_data_date = MagicMock(return_value=None)
             from app.utils.constants import RANKING_CATEGORIES
             service.data_provider.get_ranking_categories.return_value = list(RANKING_CATEGORIES)
+            service.data_provider.get_reverse_categories.return_value = set()
             return service
 
     @pytest.mark.asyncio
@@ -309,5 +310,73 @@ class TestDynamicCategoriesEndToEnd:
         beta = next(r for r in result.averages_rankings if r.team.team_name == 'Beta')
         assert beta.stats['TO'] == pytest.approx(90 / 82)
         assert 'TO' in beta.category_ranks
-        # Beta has fewer turnovers (better) than Alpha -> should rank 1st in TO
+        # This payload's scoringItems don't set isReverseItem, so TO is scored
+        # as a normal (higher-is-better) category: Beta has fewer turnovers,
+        # so it scores lowest (1) here. See TestReverseScoredRankings below
+        # for the isReverseItem=True case.
         assert beta.category_ranks['TO'] == 1
+
+
+@pytest.mark.real_dataprovider
+class TestReverseScoredRankings:
+    """Full pipeline test for a league where ESPN flags TO as isReverseItem —
+    the team with fewer turnovers should score highest, not lowest."""
+
+    @staticmethod
+    def _reverse_turnovers_league_payload():
+        def team(team_id, name, pts, to):
+            return {
+                "id": team_id,
+                "name": name,
+                "valuesByStat": {
+                    "0": pts, "1": 20, "2": 50, "3": 200, "6": 400,
+                    "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                    "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": to,
+                },
+            }
+        return {
+            "scoringPeriodId": 5,
+            "teams": [team(1, "Alpha", 1000, 120), team(2, "Beta", 1100, 90)],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid, "isReverseItem": sid == 11}
+                for sid in (19, 20, 17, 3, 6, 2, 1, 0, 11)
+            ]}},
+        }
+
+    @pytest_asyncio.fixture
+    async def real_ranking_service(self):
+        from app.services.data_provider import DataProvider
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        service = RankingService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = AsyncMock()
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"ETag": "e1"}
+        resp.json.return_value = self._reverse_turnovers_league_payload()
+        resp.raise_for_status = MagicMock()
+        service.data_provider._client.get = AsyncMock(return_value=resp)
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+
+    @pytest.mark.asyncio
+    async def test_fewer_turnovers_scores_higher_in_averages_view(self, real_ranking_service):
+        result = await real_ranking_service.get_league_rankings()
+        beta = next(r for r in result.averages_rankings if r.team.team_name == 'Beta')
+        alpha = next(r for r in result.averages_rankings if r.team.team_name == 'Alpha')
+        # Beta has fewer turnovers (90 vs 120) -> should score highest (2)
+        assert beta.category_ranks['TO'] == 2
+        assert alpha.category_ranks['TO'] == 1
+
+    @pytest.mark.asyncio
+    async def test_fewer_turnovers_scores_higher_in_totals_view(self, real_ranking_service):
+        result = await real_ranking_service.get_league_rankings()
+        beta = next(r for r in result.totals_rankings if r.team.team_name == 'Beta')
+        alpha = next(r for r in result.totals_rankings if r.team.team_name == 'Alpha')
+        assert beta.category_ranks['TO'] == 2
+        assert alpha.category_ranks['TO'] == 1
