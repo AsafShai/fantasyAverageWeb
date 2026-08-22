@@ -2,7 +2,9 @@
 
 ## Status
 
-Not started. This is a plan document only — no code or schema changes yet.
+Steps 1–3 done for the non-estimator readers. Step 4 (backfill) is only needed
+once a category is actually added to the league; step 5 remains optional and
+probably not worth doing. The estimator is untouched — see out of scope below.
 Written after the "dynamic categories" PR stack (#203–#214), which made the
 **live-ESPN** path (current rankings, league summary, team detail, heatmap,
 player rankings) read the league's actual scoring categories instead of a
@@ -137,11 +139,17 @@ document-shaped app. This is not that.
    non-null and falling back to the fixed columns. The fallback means there is
    no ordering constraint between these, and no reader is ever broken by a row
    written before step 2:
-   - `get_latest_snapshot` (DB fallback when ESPN is down)
+   - `get_latest_snapshot` (DB fallback when ESPN is down) — **done**
    - `get_snapshots_for_date_range` (`_get_rankings_for_range`,
-     `_get_heatmap_for_range`)
-   - `get_rankings_over_time` (Standings Race)
+     `_get_heatmap_for_range`) — **done**
+   - `get_rankings_over_time` (Standings Race) — **done**
    - `fantsy_estimator/` (see below — larger, separate effort)
+
+   The two snapshot readers return rows keyed by category code rather than by
+   column name (`_snapshot_row_to_categories`), so nothing downstream of the DB
+   layer knows which categories happen to have a dedicated column. That is what
+   let the hardcoded `['gp','fgm',...]` lists in `ranking_service` and
+   `league_service` go away rather than grow a second branch.
    Each gets the same "real end-to-end test against a turnovers-scoring
    league" bar used throughout the #203–#214 stack.
 4. **Backfill.** Two independent cases:
@@ -202,6 +210,30 @@ changes once the DB layer hands them the shape it does today.
   width (~10 bytes for `0.469` vs a flat 8) and slower arithmetic — irrelevant
   here, since all math happens in pandas, not SQL. Noted so a later benchmark
   against the old wide table doesn't read as a regression.
+
+## Category coverage (added with step 3)
+
+`STAT_ID_TO_CATEGORY` now maps ESPN's full statId space rather than the subset
+this app had needed, so resolving a new category is data, not a code change.
+Mapping an id is only part of supporting it, so three further facts are declared
+alongside:
+
+- `NON_RANKING_STAT_KEYS` — raw quantities that only exist to build a derived
+  category (FGA, 3PA) or describe participation (GP, MIN).
+- `RATIO_CATEGORIES` — every category that is a quotient, with the pair it
+  divides. Percentages (FG%, 3P%), true ratios (A/TO, FTR, PPM) and the per-game
+  rates (PPG, RPG, ...) are all the same thing: values that must be rebuilt over
+  whatever window is being computed instead of summed, averaged by GP, or
+  differenced between cumulative snapshots. `_compute_delta` and
+  `calculate_per_game_averages` both read this rather than naming FG%/FT%.
+- `UNSUPPORTED_CATEGORIES` — AFG% (a weighted formula, not a quotient of two
+  stored quantities) and STR. Resolving one logs a warning, as does an unmapped
+  statId, so a category this app cannot compute is visible instead of silently
+  absent from rankings.
+
+`ESPN_COLUMN_MAP` is derived from the same id map instead of restating it, so a
+category cannot be resolvable from league settings but unparseable from the stat
+line carrying its value.
 
 ## What's explicitly out of scope here
 

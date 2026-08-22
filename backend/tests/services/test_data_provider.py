@@ -296,26 +296,22 @@ async def test_fallback_from_db_raises_when_no_rows(provider):
 
 
 @pytest.mark.asyncio
-async def test_fallback_from_db_casts_decimal_columns_to_float(provider):
-    """asyncpg returns Decimal for NUMERIC columns; the DB-fallback totals
-    DataFrame must be uniformly float (like the ESPN path) so downstream
-    consumers (e.g. the heatmap) don't crash mixing Decimal and float."""
-    from decimal import Decimal
-
+async def test_fallback_from_db_carries_categories_beyond_the_fixed_columns(provider):
+    """get_latest_snapshot hands back category-code rows, so a league scoring
+    more than the fixed 8 gets those categories in the fallback frame too."""
     rows = [{
-        "team_id": 1, "team_name": "T", "date": "2025-01-01",
-        "fg_pct": Decimal("46.7"), "ft_pct": Decimal("74.9"),
-        "three_pm": Decimal("15"), "reb": Decimal("43"), "ast": Decimal("28"),
-        "stl": Decimal("9"), "blk": Decimal("4"), "pts": Decimal("112"),
-        "gp": Decimal("10"), "fgm": Decimal("40"), "fga": Decimal("85"),
-        "ftm": Decimal("20"), "fta": Decimal("27"),
+        "team_id": 1, "team_name": "T",
+        "FG%": 46.7, "FT%": 74.9, "3PM": 15.0, "REB": 43.0, "AST": 28.0,
+        "STL": 9.0, "BLK": 4.0, "PTS": 112.0, "GP": 10.0,
+        "FGM": 40.0, "FGA": 85.0, "FTM": 20.0, "FTA": 27.0, "TO": 18.0,
     }]
     provider.db_service.get_latest_snapshot = AsyncMock(return_value=("2025-01-01", rows))
 
     df = await provider._fallback_from_db()
 
-    for col in ["FG%", "FT%", "3PM", "REB", "AST", "STL", "BLK", "PTS", "GP"]:
-        assert df[col].dtype == float, f"{col} should be cast to float, got {df[col].dtype}"
+    assert df["TO"].iloc[0] == 18.0
+    for col in ["FG%", "FT%", "3PM", "REB", "AST", "STL", "BLK", "PTS", "GP", "TO"]:
+        assert df[col].dtype == float, f"{col} should be float, got {df[col].dtype}"
 
 
 @pytest.mark.asyncio
@@ -383,15 +379,42 @@ async def test_get_ranking_categories_delegates_to_transformer(provider):
 
 
 @pytest.mark.asyncio
-async def test_get_ranking_categories_falls_back_when_no_raw_cached(provider):
+async def test_get_ranking_categories_falls_back_when_settings_unreachable(provider):
+    """No cached payload and ESPN down: fall back to the fixed categories rather
+    than propagating the failure, since a date-range request can still be served
+    from the DB."""
     from app.utils.constants import RANKING_CATEGORIES
 
-    provider.cache_manager.totals_cache = {"etag": None, "data": pd.DataFrame({"team_id": [1]})}
+    provider.cache_manager.totals_cache = {"etag": None, "data": None}
+    provider._client.get = AsyncMock(side_effect=httpx.ConnectError("down"))
+    provider.db_service.get_latest_snapshot = AsyncMock(return_value=(None, []))
 
     categories = await provider.get_ranking_categories()
 
     assert categories == list(RANKING_CATEGORIES)
-    provider._client.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_ranking_categories_loads_settings_when_cache_is_cold(provider):
+    """The DB-backed date-range paths never fetch totals, so resolving from a
+    cache nobody warmed silently returned the fixed 8 for a league scoring more."""
+    payload = _api_teams_payload()
+    payload["settings"] = {"scoringSettings": {"scoringItems": [
+        {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0, 11)
+    ]}}
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.headers = {"ETag": "e1"}
+    resp.json.return_value = payload
+    resp.raise_for_status = MagicMock()
+
+    provider.cache_manager.totals_cache = {"etag": None, "data": None}
+    provider._client.get = AsyncMock(return_value=resp)
+
+    await provider.get_ranking_categories()
+
+    provider._client.get.assert_awaited()
+    provider.data_transformer.resolve_ranking_categories.assert_called_with(payload)
 
 
 @pytest.mark.real_dataprovider

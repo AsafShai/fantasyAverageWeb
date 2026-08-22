@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import Dict, List, Optional
-from app.utils.constants import RANKING_CATEGORIES, PERCENTAGE_CATEGORIES
+from app.utils.constants import RANKING_CATEGORIES, DERIVED_CATEGORIES
+from app.utils.espn_stat_map import NON_RANKING_STAT_KEYS
 
 
 class StatsCalculator:
@@ -174,8 +175,9 @@ class StatsCalculator:
         Args:
             totals_df: DataFrame with total stats
             categories: category codes to average (defaults to RANKING_CATEGORIES).
-                        Percentage categories (FG%, FT%) are left as-is; every
-                        other category present is divided by GP.
+                        Derived categories (FG%, PPG, A/TO, ...) are already
+                        rates and are left as-is; every other category present
+                        is divided by GP.
         Returns:
             DataFrame with per-game averages
         """
@@ -184,11 +186,13 @@ class StatsCalculator:
 
         per_game_categories = [
             c for c in (categories or RANKING_CATEGORIES)
-            if c not in PERCENTAGE_CATEGORIES
+            if c not in DERIVED_CATEGORIES
         ]
 
-        # Create copy without raw counting stats (keep percentages)
-        averages = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1, errors='ignore').copy()
+        # Drop the raw quantities that only exist to build derived categories.
+        # GP is exempt: it is the divisor below and callers read it downstream.
+        feeder_cols = [c for c in NON_RANKING_STAT_KEYS if c != 'GP']
+        averages = totals_df.drop(feeder_cols, axis=1, errors='ignore').copy()
         per_game_categories = [c for c in per_game_categories if c in averages.columns]
         # Calculate per-game averages for counting stats
         averages[per_game_categories] = averages[per_game_categories].div(averages['GP'], axis=0).fillna(0)

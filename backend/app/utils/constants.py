@@ -1,23 +1,11 @@
 # ESPN API Constants and Mappings
+from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY
 
-# ESPN API column mapping
-ESPN_COLUMN_MAP = {
-    '0': 'PTS',
-    '1': 'BLK',
-    '2': 'STL',
-    '3': 'AST',
-    '6': 'REB',
-    '13': 'FGM',
-    '14': 'FGA',
-    '15': 'FTM',
-    '16': 'FTA',
-    '17': '3PM',
-    '19': 'FG%',
-    '20': 'FT%',
-    '42': 'GP',
-    '40': 'MIN',
-    '11': 'TO',
-}
+# ESPN stat lines (valuesByStat, player stats) key stats by the same numeric id
+# as the scoring settings, as strings. Derived from the one id map rather than
+# restated, so a category cannot be resolvable from league settings but
+# unparseable from the stat line that carries its value.
+ESPN_COLUMN_MAP = {str(stat_id): category for stat_id, category in STAT_ID_TO_CATEGORY.items()}
 
 PRO_TEAM_MAP: dict[int, str] = {
     0: 'FA',
@@ -67,5 +55,32 @@ PER_GAME_CATEGORIES = ['3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS']
 # Integer columns for type conversion
 INTEGER_COLUMNS = ['FGM', 'FGA', 'FTM', 'FTA', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS', 'GP']
 
-# Categories that are percentages rather than per-game counting stats
-PERCENTAGE_CATEGORIES = frozenset({'FG%', 'FT%'})
+# Categories that are a quotient of two other stats, and the (numerator,
+# denominator) pair each is built from. A quotient cannot be summed, divided by
+# games played, or differenced between two cumulative snapshots -- doing any of
+# those to a rate gives a number that means nothing -- so it is always rebuilt
+# from its sources over whatever window is being computed.
+#
+# Per-game categories (PPG, RPG, ...) are quotients too, over GP, and are listed
+# here for exactly that reason: a league scoring PPG must not have it divided by
+# GP a second time.
+RATIO_CATEGORIES: dict[str, tuple[str, str]] = {
+    'FG%': ('FGM', 'FGA'),
+    'FT%': ('FTM', 'FTA'),
+    '3P%': ('3PM', '3PA'),
+    'A/TO': ('AST', 'TO'),
+    'FTR': ('FTA', 'FGA'),
+    'PPM': ('PTS', 'MIN'),
+    'PPG': ('PTS', 'GP'),
+    'RPG': ('REB', 'GP'),
+    'APG': ('AST', 'GP'),
+    'BPG': ('BLK', 'GP'),
+    'SPG': ('STL', 'GP'),
+    'TOPG': ('TO', 'GP'),
+    '3PG': ('3PM', 'GP'),
+    'MPG': ('MIN', 'GP'),
+}
+
+# Categories that are derived rather than counted, and so are never divided by
+# games played. Named PERCENTAGE_CATEGORIES when FG% and FT% were the only two.
+DERIVED_CATEGORIES = frozenset(RATIO_CATEGORIES)

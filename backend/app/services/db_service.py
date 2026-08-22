@@ -24,6 +24,41 @@ _RANKINGS_COL_MAP = {
     'PTS': 'rk_pts',
 }
 
+_SNAPSHOT_COL_MAP = {
+    'GP': 'gp',
+    'FGM': 'fgm',
+    'FGA': 'fga',
+    'FG%': 'fg_pct',
+    'FTM': 'ftm',
+    'FTA': 'fta',
+    'FT%': 'ft_pct',
+    '3PM': 'three_pm',
+    'REB': 'reb',
+    'AST': 'ast',
+    'STL': 'stl',
+    'BLK': 'blk',
+    'PTS': 'pts',
+}
+
+
+def _snapshot_row_to_categories(row: dict) -> dict:
+    """A snapshot row as `team_id`/`team_name` plus one key per category code.
+
+    The same wide shape the live-ESPN path builds from ESPN's own payload, so
+    everything downstream of here works off category codes alone and never has
+    to know which of them happen to have a dedicated column.
+
+    NUMERIC columns arrive as Decimal; cast so a frame built from these rows is
+    uniformly float rather than object dtype.
+    """
+    fixed = {cat: row.get(col) for cat, col in _SNAPSHOT_COL_MAP.items()}
+    merged = category_storage.merge_categories(fixed, row.get('stats'))
+    return {
+        'team_id': row['team_id'],
+        'team_name': row['team_name'],
+        **{cat: float(value) for cat, value in merged.items()},
+    }
+
 
 def fs_records_to_frame(records) -> pd.DataFrame:
     """asyncpg rows -> pipeline frame (uppercase columns, Timestamp GAME_DATE).
@@ -291,7 +326,8 @@ class DBService:
 
     async def get_latest_snapshot(self, league_id: int, season_id: int):
         """
-        Returns (date, rows) where rows is a list of dicts with team totals.
+        Returns (date, rows) where rows is a list of dicts with team totals keyed
+        by category code -- see _snapshot_row_to_categories.
         Returns (None, []) if DB unavailable or empty.
         """
         pool = await self._get_pool()
@@ -307,10 +343,12 @@ class DBService:
                 max_period = max_row['max_period']
                 if max_period == 0:
                     return None, []
+                dynamic = await self._supports_dynamic_categories(conn)
                 rows = await conn.fetch(
-                    """
+                    f"""
                     SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                            three_pm, reb, ast, stl, blk, pts, date
+                           {', stats' if dynamic else ''}
                     FROM team_daily_snapshot
                     WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3
                     """,
@@ -319,7 +357,7 @@ class DBService:
                 if not rows:
                     return None, []
                 snap_date = rows[0]['date']
-                return snap_date, [dict(r) for r in rows]
+                return snap_date, [_snapshot_row_to_categories(dict(r)) for r in rows]
         except Exception as e:
             logger.error(f"Failed to fetch latest snapshot: {e}")
             return None, []
@@ -474,6 +512,9 @@ class DBService:
         - actual_start_date: closest date >= start_date in DB (None if no data at or after start)
         - rows_start is empty list if no snapshot >= start_date exists (treat as zeros)
         - Returns (None, None, [], []) if no end snapshot found
+
+        Rows are keyed by category code, not column name, and carry whatever
+        categories the league scores -- see _snapshot_row_to_categories.
         """
         pool = await self._get_pool()
         if pool is None:
@@ -496,29 +537,26 @@ class DBService:
                 )
                 actual_start_date = start_row['d'] if start_row else None
 
-                rows_end = await conn.fetch(
-                    """
+                dynamic = await self._supports_dynamic_categories(conn)
+                query = f"""
                     SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                            three_pm, reb, ast, stl, blk, pts
+                           {', stats' if dynamic else ''}
                     FROM team_daily_snapshot
                     WHERE league_id = $1 AND season_id = $2 AND date = $3
-                    """,
-                    league_id, season_id, actual_end_date
-                )
+                """
+                rows_end = await conn.fetch(query, league_id, season_id, actual_end_date)
 
                 rows_start = []
                 if actual_start_date is not None:
-                    rows_start = await conn.fetch(
-                        """
-                        SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
-                               three_pm, reb, ast, stl, blk, pts
-                        FROM team_daily_snapshot
-                        WHERE league_id = $1 AND season_id = $2 AND date = $3
-                        """,
-                        league_id, season_id, actual_start_date
-                    )
+                    rows_start = await conn.fetch(query, league_id, season_id, actual_start_date)
 
-                return actual_end_date, actual_start_date, [dict(r) for r in rows_end], [dict(r) for r in rows_start]
+                return (
+                    actual_end_date,
+                    actual_start_date,
+                    [_snapshot_row_to_categories(dict(r)) for r in rows_end],
+                    [_snapshot_row_to_categories(dict(r)) for r in rows_start],
+                )
         except Exception as e:
             logger.error(f"Failed to fetch snapshots for date range: {e}")
             return None, None, [], []

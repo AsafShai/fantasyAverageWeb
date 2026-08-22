@@ -367,3 +367,47 @@ class TestResolveReverseCategories:
 
     def test_malformed_settings_returns_empty_set(self, transformer):
         assert transformer.resolve_reverse_categories({"settings": "not-a-dict"}) == set()
+
+
+class TestStatColumnsToKeep:
+    """ESPN's stat lines carry every stat it tracks and the id map can now name
+    all of them, so what gets materialized has to be chosen deliberately."""
+
+    def test_keeps_the_fixed_set_for_a_default_league(self, transformer):
+        keep = transformer.stat_columns_to_keep()
+
+        assert 'PTS' in keep and 'FG%' in keep and 'GP' in keep
+
+    def test_keeps_min_even_though_it_is_not_a_ranking_category(self, transformer):
+        """Player responses report minutes directly (response_builder reads
+        row['MIN']), so dropping it as 'not a category' breaks them."""
+        assert 'MIN' in transformer.stat_columns_to_keep()
+
+    def test_drops_stats_the_league_does_not_score(self, transformer):
+        keep = transformer.stat_columns_to_keep()
+
+        for unscored in ('PPG', 'STR', 'DD', 'A/TO', 'OREB', 'AFG%'):
+            assert unscored not in keep
+
+    def test_keeps_a_scored_category_beyond_the_fixed_set(self, transformer):
+        keep = transformer.stat_columns_to_keep(['PTS', 'REB', 'TO'])
+
+        assert 'TO' in keep
+
+    def test_keeps_the_sources_a_scored_ratio_is_rebuilt_from(self, transformer):
+        """3P% over a date range is (3PM delta)/(3PA delta), so 3PA has to
+        survive even though nothing scores it on its own."""
+        keep = transformer.stat_columns_to_keep(['3P%'])
+
+        assert '3PA' in keep and '3PM' in keep
+
+    def test_leaves_non_stat_columns_untouched(self, transformer):
+        import pandas as pd
+        df = pd.DataFrame([{
+            'Name': 'A', 'player_id': 1, 'status': 'ACTIVE',
+            'PTS': 10.0, 'MIN': 30.0, 'PPG': 9.9, 'STR': 'W2',
+        }])
+
+        out = transformer._keep_stat_columns(df)
+
+        assert list(out.columns) == ['Name', 'player_id', 'status', 'PTS', 'MIN']

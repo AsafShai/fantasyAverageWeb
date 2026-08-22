@@ -274,6 +274,9 @@ class TestDynamicCategoriesLeagueSummary:
         service = LeagueService()
         service.data_provider = DataProvider()
         service.data_provider.db_service = AsyncMock()
+        # The cache is a singleton that outlives the DataProvider reset above,
+        # so a payload another test warmed would answer this league's settings.
+        service.data_provider.cache_manager.invalidate_cache()
 
         resp = MagicMock()
         resp.status_code = 200
@@ -336,6 +339,9 @@ class TestReverseScoredCategories:
         service = LeagueService()
         service.data_provider = DataProvider()
         service.data_provider.db_service = AsyncMock()
+        # The cache is a singleton that outlives the DataProvider reset above,
+        # so a payload another test warmed would answer this league's settings.
+        service.data_provider.cache_manager.invalidate_cache()
 
         resp = MagicMock()
         resp.status_code = 200
@@ -400,6 +406,9 @@ class TestDynamicCategoriesHeatmap:
         service = LeagueService()
         service.data_provider = DataProvider()
         service.data_provider.db_service = AsyncMock()
+        # The cache is a singleton that outlives the DataProvider reset above,
+        # so a payload another test warmed would answer this league's settings.
+        service.data_provider.cache_manager.invalidate_cache()
 
         resp = MagicMock()
         resp.status_code = 200
@@ -450,3 +459,91 @@ class TestDynamicCategoriesHeatmap:
             assert len(row) == len(heatmap.categories)
         for row in heatmap.ranks_data:
             assert len(row) == len(heatmap.categories)
+
+
+@pytest.mark.real_dataprovider
+class TestDynamicCategoriesRangeHeatmap:
+    """The date-range heatmap reads DB snapshots rather than ESPN totals, so it
+    is the one path where a category can exist in league settings but only in
+    the JSONB extras of a stored row."""
+
+    @staticmethod
+    def _snapshot(team_id, name, pts, to, gp):
+        return {
+            "team_id": team_id, "team_name": name,
+            "GP": float(gp), "FGM": 400.0, "FGA": 850.0, "FG%": 400 / 850,
+            "FTM": 100.0, "FTA": 125.0, "FT%": 0.8,
+            "3PM": 100.0, "REB": 400.0, "AST": 200.0, "STL": 50.0,
+            "BLK": 20.0, "PTS": float(pts), "TO": float(to),
+        }
+
+    @pytest_asyncio.fixture
+    async def real_league_service(self):
+        from app.services.data_provider import DataProvider
+        from datetime import date as _date
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        service = LeagueService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = AsyncMock()
+        # The cache is a singleton that outlives the DataProvider reset above,
+        # so a payload another test warmed would answer this league's settings.
+        service.data_provider.cache_manager.invalidate_cache()
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"ETag": "e1"}
+        resp.json.return_value = {
+            "scoringPeriodId": 5,
+            "teams": [{"id": 1, "name": "Alpha", "valuesByStat": {
+                "0": 1000, "1": 20, "2": 50, "3": 200, "6": 400,
+                "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": 120,
+            }}],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0)
+            ] + [{"statId": 11, "isReverseItem": True}]}},
+        }
+        resp.raise_for_status = MagicMock()
+        service.data_provider._client.get = AsyncMock(return_value=resp)
+        service.data_provider.db_service.get_snapshots_for_date_range = AsyncMock(
+            return_value=(
+                _date(2026, 1, 31), _date(2026, 1, 1),
+                [self._snapshot(1, "Alpha", 1000, 120, 40),
+                 self._snapshot(2, "Beta", 900, 60, 40)],
+                [self._snapshot(1, "Alpha", 400, 60, 20),
+                 self._snapshot(2, "Beta", 300, 20, 20)],
+            )
+        )
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+
+    @pytest.mark.asyncio
+    async def test_range_heatmap_includes_turnovers_and_stays_aligned(self, real_league_service):
+        from datetime import date as _date
+        heatmap = await real_league_service.get_heatmap_data(
+            start_date=_date(2026, 1, 1), end_date=_date(2026, 1, 31)
+        )
+
+        assert 'TO' in heatmap.categories
+        for row in heatmap.data:
+            assert len(row) == len(heatmap.categories)
+        for row in heatmap.ranks_data:
+            assert len(row) == len(heatmap.categories)
+
+    @pytest.mark.asyncio
+    async def test_range_heatmap_colors_fewest_turnovers_as_best(self, real_league_service):
+        """Alpha commits 60 over the window, Beta 40, so Beta reads as the good
+        end of the TO scale -- the reverse-scoring the range path never applied."""
+        from datetime import date as _date
+        heatmap = await real_league_service.get_heatmap_data(
+            start_date=_date(2026, 1, 1), end_date=_date(2026, 1, 31)
+        )
+
+        to_index = heatmap.categories.index('TO')
+        order = [t.team_name for t in heatmap.teams]
+        assert (heatmap.normalized_data[order.index('Beta')][to_index]
+                > heatmap.normalized_data[order.index('Alpha')][to_index])
