@@ -3,7 +3,7 @@ import logging
 import httpx
 import json
 from datetime import datetime, timedelta
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
@@ -11,6 +11,8 @@ from app.services.db_service import DBService
 from app.config import settings
 from app.exceptions import DataSourceError
 from app.utils.constants import RANKING_CATEGORIES
+from app.utils import category_storage
+from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
 
 class DataProvider:
     """Centralized data provider with caching for all ESPN data operations"""
@@ -350,25 +352,54 @@ class DataProvider:
 
         return totals_df, averages_df, rankings_df
     
+    def _extra_rank_payloads(self, df: pd.DataFrame, categories: list, reverse_categories: set) -> Optional[dict]:
+        """{team_id: {category: rank, ..., TOTAL: all-category total}} for the
+        categories with no rk_* column, or None when the league scores only the
+        fixed ones — which is what keeps the JSONB column NULL and free."""
+        extra_cats = [c for c in categories if c not in RANKINGS_FIXED_CATEGORIES and c in df.columns]
+        if not extra_cats:
+            return None
+
+        cols = ['team_id', 'team_name'] + [c for c in categories if c in df.columns] + ['GP']
+        full = self.data_transformer.averages_to_rankings_df(
+            df[[c for c in cols if c in df.columns]], reverse_categories
+        )
+        return {
+            int(row['team_id']): {
+                **{cat: category_storage.json_safe(row[cat]) for cat in extra_cats},
+                TOTAL_KEY: category_storage.json_safe(row['TOTAL_POINTS']),
+            }
+            for _, row in full.iterrows()
+        }
+
     async def _sync_db_if_needed(self, scoring_period_id: int, totals_df: pd.DataFrame) -> None:
         completed_period = scoring_period_id - 1
         async with self._db_sync_lock:
             if self._last_synced_period >= completed_period:
                 return
             try:
-                averages_df = self.data_transformer.totals_to_averages_df(totals_df)
-                # The rankings tables have one column per category fixed at the
-                # historical 8, so rank only those — otherwise an extra resolved
-                # category (e.g. TO) would be summed into TOTAL_POINTS and stored
-                # as rk_total while its own rank column has nowhere to go.
+                categories = await self.get_ranking_categories()
+                reverse_categories = await self.get_reverse_categories()
+
+                averages_df = self.data_transformer.totals_to_averages_df(totals_df, categories)
+                # The rk_* columns are fixed at the historical 8, so rank only
+                # those for them: rk_total keeps meaning "total over the fixed
+                # categories" for every row ever written. Extra categories are
+                # ranked separately below and stored as JSONB.
                 avg_cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in averages_df.columns] + ['GP']
                 averages_for_ranking = averages_df[[c for c in avg_cols_to_keep if c in averages_df.columns]]
-                rankings_avg_df = self.data_transformer.averages_to_rankings_df(averages_for_ranking)
+                rankings_avg_df = self.data_transformer.averages_to_rankings_df(averages_for_ranking, reverse_categories)
 
                 totals_for_ranking = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
                 cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in totals_for_ranking.columns] + ['GP']
                 totals_for_ranking = totals_for_ranking[[c for c in cols_to_keep if c in totals_for_ranking.columns]]
-                rankings_totals_df = self.data_transformer.averages_to_rankings_df(totals_for_ranking)
+                rankings_totals_df = self.data_transformer.averages_to_rankings_df(totals_for_ranking, reverse_categories)
+
+                avg_extras = self._extra_rank_payloads(averages_df, categories, reverse_categories)
+                totals_extras = self._extra_rank_payloads(
+                    totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1, errors='ignore'),
+                    categories, reverse_categories,
+                )
 
                 league_id, season_id = settings.league_id, settings.season_id
                 max_avg, max_tot, max_snap = await asyncio.gather(
@@ -379,9 +410,9 @@ class DataProvider:
 
                 tasks = []
                 if max_avg < completed_period:
-                    tasks.append(self.db_service.upsert_rankings_averages(completed_period, rankings_avg_df, league_id, season_id))
+                    tasks.append(self.db_service.upsert_rankings_averages(completed_period, rankings_avg_df, league_id, season_id, avg_extras))
                 if max_tot < completed_period:
-                    tasks.append(self.db_service.upsert_rankings_totals(completed_period, rankings_totals_df, league_id, season_id))
+                    tasks.append(self.db_service.upsert_rankings_totals(completed_period, rankings_totals_df, league_id, season_id, totals_extras))
                 if max_snap < completed_period:
                     tasks.append(self.db_service.upsert_daily_snapshot(completed_period, totals_df, league_id, season_id))
 

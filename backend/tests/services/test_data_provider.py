@@ -1,4 +1,5 @@
 import asyncio
+import json
 import pytest
 import httpx
 from datetime import datetime
@@ -10,6 +11,7 @@ from app.services.data_provider import DataProvider
 
 pytestmark = pytest.mark.real_dataprovider
 from app.exceptions import DataSourceError
+from app.utils.constants import RANKING_CATEGORIES
 
 
 def _api_teams_payload():
@@ -390,3 +392,76 @@ async def test_get_ranking_categories_falls_back_when_no_raw_cached(provider):
 
     assert categories == list(RANKING_CATEGORIES)
     provider._client.get.assert_not_called()
+
+
+@pytest.mark.real_dataprovider
+class TestExtraRankPayloads:
+    """What actually reaches the JSONB column on the write path."""
+
+    @staticmethod
+    def _provider():
+        from app.services.data_provider import DataProvider
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        provider = DataProvider()
+        provider.db_service = AsyncMock()
+        return provider
+
+    @staticmethod
+    def _averages(with_turnovers: bool):
+        row_a = {'team_id': 1, 'team_name': 'Alpha', 'FG%': 0.47, 'FT%': 0.75,
+                 '3PM': 12.0, 'AST': 25.0, 'REB': 44.0, 'STL': 8.0, 'BLK': 5.0,
+                 'PTS': 112.0, 'GP': 47}
+        row_b = {**row_a, 'team_id': 2, 'team_name': 'Beta', 'PTS': 118.0}
+        if with_turnovers:
+            row_a['TO'] = 16.0
+            row_b['TO'] = 11.0
+        return pd.DataFrame([row_a, row_b])
+
+    def test_none_when_league_scores_only_fixed_categories(self):
+        """No extras means the column stays NULL — the whole cost argument."""
+        provider = self._provider()
+        try:
+            payload = provider._extra_rank_payloads(
+                self._averages(with_turnovers=False), list(RANKING_CATEGORIES), set()
+            )
+            assert payload is None
+        finally:
+            from app.services.data_provider import DataProvider
+            DataProvider._instance = None
+            DataProvider._initialized = False
+
+    def test_extra_category_is_ranked_and_totalled(self):
+        provider = self._provider()
+        try:
+            payload = provider._extra_rank_payloads(
+                self._averages(with_turnovers=True),
+                list(RANKING_CATEGORIES) + ['TO'],
+                {'TO'},
+            )
+
+            assert set(payload) == {1, 2}
+            # TO is reverse-scored: Beta turns it over less, so it ranks higher.
+            assert payload[2]['TO'] > payload[1]['TO']
+            # TOTAL spans all 9 categories, which rk_total cannot represent.
+            assert payload[1]['TOTAL'] > 0
+            assert set(payload[1]) == {'TO', 'TOTAL'}
+        finally:
+            from app.services.data_provider import DataProvider
+            DataProvider._instance = None
+            DataProvider._initialized = False
+
+    def test_payload_is_json_serializable(self):
+        """numpy scalars off a DataFrame would otherwise blow up json.dumps."""
+        provider = self._provider()
+        try:
+            payload = provider._extra_rank_payloads(
+                self._averages(with_turnovers=True),
+                list(RANKING_CATEGORIES) + ['TO'],
+                set(),
+            )
+            json.dumps(payload[1])
+        finally:
+            from app.services.data_provider import DataProvider
+            DataProvider._instance = None
+            DataProvider._initialized = False

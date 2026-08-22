@@ -56,6 +56,10 @@ class TeamTimeSeriesPoint(BaseModel):
     rk_blk: Optional[float] = None
     rk_pts: Optional[float] = None
     rk_total: Optional[float] = None
+    # Generic category -> rank mapping, present only when this league scores
+    # categories with no rk_* column (see category_storage). Null otherwise, so
+    # a fixed-category league's payload is unchanged.
+    ranks: Optional[Dict[str, float]] = None
     gp: Optional[int] = None
     fg_pct: Optional[float] = None
     ft_pct: Optional[float] = None
