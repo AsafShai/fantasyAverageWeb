@@ -238,6 +238,9 @@ export interface TeamTimeSeriesPoint {
   rk_blk?: number;
   rk_pts?: number;
   rk_total?: number;
+  /** Category -> rank, present only when the league scores categories with no
+   *  rk_* field of their own. Null for a fixed-category league. */
+  ranks?: Record<string, number> | null;
   gp?: number;
   fg_pct?: number;
   ft_pct?: number;
