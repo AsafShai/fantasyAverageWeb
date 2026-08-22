@@ -207,7 +207,12 @@ class DataProvider:
                 if totals_data is not None:
                     fantasy_team_map = dict(zip(totals_data['team_id'], totals_data['team_name']))
 
-                players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id, fantasy_team_map)
+                # get_totals_df above already warmed the standings payload the
+                # categories are resolved from, so this costs no extra request.
+                categories = await self.get_ranking_categories()
+                players_df = self.data_transformer.raw_all_players_to_df(
+                    api_data, stat_split_type_id, fantasy_team_map, categories
+                )
 
                 cache['etag'] = response.headers.get('ETag')
                 cache['timestamp'] = datetime.now()
