@@ -3,12 +3,12 @@
 ## Status
 
 Not started. This is a plan document only — no code or schema changes yet.
-Written after the "dynamic categories" PR stack (#203–#213), which made the
+Written after the "dynamic categories" PR stack (#203–#214), which made the
 **live-ESPN** path (current rankings, league summary, team detail, heatmap,
 player rankings) read the league's actual scoring categories instead of a
 hardcoded 8. This document covers the piece that stack deliberately left out:
-the **DB-backed path** (date-range history, and the Estimator, which is built
-on the same tables).
+the **DB-backed path** (date-range history, Standings Race, and the Estimator,
+which is built on the same tables).
 
 ## Why this is a separate, harder problem
 
@@ -27,87 +27,135 @@ rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb, rk_ast, rk_stl, rk_blk, rk_pts, rk_to
 ```
 
 A league that scores turnovers has nowhere to put a TO value in these tables
-today. Anything reading from them (`_get_rankings_for_range`,
-`_get_heatmap_for_range` in `ranking_service.py`/`league_service.py`, and all
-of `fantasy_estimator/`) is permanently stuck on the fixed 8 until this is
-fixed, regardless of what's done on the live-ESPN side.
+today. Anything reading from them is permanently stuck on the fixed 8 until
+this is fixed, regardless of what's done on the live-ESPN side:
 
-## Chosen approach: EAV-style category table
+- `_get_rankings_for_range` (`ranking_service.py`) — date-range rankings
+- `_get_heatmap_for_range` (`league_service.py`) — date-range heatmap
+- `get_rankings_over_time` (`db_service.py`) — **Standings Race**, which
+  selects `rk_fg_pct … rk_pts, rk_total` by name
+- all of `fantsy_estimator/`
 
-Reject a "keep adding nullable columns per category" approach — it doesn't
-scale (every new category across every league needs a migration) and every
-query has to know the fixed column list anyway, which is the exact problem
-we're trying to leave behind.
+Standings Race is the one users would notice first: it would plot an
+8-category `rk_total` while the live Rankings page beside it shows a
+9-category total. Two different numbers for "total points", disagreeing, with
+nothing on screen explaining why.
 
-Instead, add one generic table that stores one row per
-(team, scoring_period, category):
+## The constraints that pick the design
+
+Two limits drive this, and they point in different directions than they
+first appear:
+
+- **Storage** — Neon free tier. Worth measuring rather than fearing: one
+  league is 12 teams × ~174 scoring periods = **2,088 team-period rows per
+  season**. Every option below is small in absolute terms.
+- **Latency** — Render free tier with cold starts. This is the binding
+  constraint. Standings Race pulls a full season's time series (every team,
+  every date) on one request.
+
+| approach | rows/season | storage/season | Standings Race rows fetched |
+|---|---|---|---|
+| today (fixed columns) | 2,088 | ~0.35 MB | 2,088 |
+| EAV (row per category) | 27,144 | ~4.9 MB | 27,144 |
+| **JSONB column** | 2,088 | ~0.95 MB | 2,088 |
+
+EAV's ~5 MB/season is ~1% of a 0.5 GB tier — storage is not what rules it
+out. The 13× read amplification on every date-range and time-series query is,
+plus a pivot back to wide in Python on each request.
+
+## Chosen approach: a JSONB column on the existing tables
+
+Do not create a new table. Add a column.
 
 ```sql
-CREATE TABLE team_category_snapshot (
-    league_id BIGINT NOT NULL,
-    season_id INT NOT NULL,
-    scoring_period_id INT NOT NULL,
-    date DATE NOT NULL,
-    team_id INT NOT NULL,
-    team_name TEXT NOT NULL,
-    category TEXT NOT NULL,       -- 'PTS', 'FG%', 'TO', ...
-    value DOUBLE PRECISION NOT NULL,
-    rank INT,                     -- team's rank-in-category for this period (nullable: totals snapshot doesn't need it)
-    PRIMARY KEY (league_id, season_id, scoring_period_id, team_id, category)
-);
-
-CREATE INDEX idx_team_category_snapshot_lookup
-    ON team_category_snapshot (league_id, season_id, team_id, date);
+ALTER TABLE team_daily_snapshot    ADD COLUMN stats JSONB;
+ALTER TABLE team_rankings_averages ADD COLUMN ranks JSONB;
+ALTER TABLE team_rankings_totals   ADD COLUMN ranks JSONB;
 ```
 
-This single table replaces the per-category columns in all three existing
-tables. `gp` stops being special-cased — it's stored as just another
-`category = 'GP'` row (already true conceptually: `RANKING_CATEGORIES + ['GP']`
-is a pattern used throughout the live-ESPN work).
+`stats` holds one object per team-period, keyed by category code:
 
-`fgm`/`fga`/`ftm`/`fta` (raw counting stats behind FG%/FT%) still need
-storage for the totals-snapshot use case (`upsert_daily_snapshot` currently
-stores these alongside `fg_pct`/`ft_pct` so `raw_standings_to_totals_df`-style
-consumers can recompute). Store them the same way, as their own category rows
-(`category IN ('FGM','FGA','FTM','FTA')`), not specially. Frontend/backend
-code already treats FGM/FGA/FTM/FTA as excluded from `RANKING_CATEGORIES` (see
-`PERCENTAGE_CATEGORIES`/`NON_RANKING_STAT_KEYS` in the live-ESPN work) so no
-new exclusion concept needed.
+```json
+{"GP": 47, "PTS": 1120, "REB": 400, "TO": 120, "FGM": 380, "FGA": 810, "FG%": 0.469}
+```
+
+`gp` stops being special-cased — it is just another key, as
+`RANKING_CATEGORIES + ['GP']` already treats it throughout the live-ESPN work.
+`FGM`/`FGA`/`FTM`/`FTA` are stored the same way, as ordinary keys; the
+existing `PERCENTAGE_CATEGORIES` / `NON_RANKING_STAT_KEYS` constants already
+express which keys are not ranking categories, so no new exclusion concept is
+needed.
+
+### Why this over EAV
+
+- **Row count is unchanged.** Every query fetches exactly as many rows as it
+  does today. No read amplification anywhere.
+- **No pivot.** The row already carries every category, so
+  `{**base, **row['stats']}` yields the wide DataFrame shape
+  `data_transformer.py` already expects. EAV needs a pivot per request; this
+  needs nothing.
+- **Index is unchanged.** Same btree on `(league_id, season_id, team_id, date)`.
+  No new primary key, no `category = ANY($2)` predicate to plan around.
+- **No flag day.** Readers prefer the JSONB when non-null and fall back to the
+  fixed columns otherwise, so old rows keep working untouched and each reader
+  migrates on its own schedule.
+- **`team_name` stays where it is.** EAV would duplicate it 13× per period or
+  force a separate `team_snapshot_meta` table.
+- **Precedent in this repo.** `fs_player_vectors.features JSONB` already
+  stores a variable set of named numeric features, written with `$8::jsonb`
+  and introspected with `jsonb_object_keys` (`db_service.py`). Same problem
+  shape, already in production here.
+
+### Why not MongoDB
+
+Considered and rejected. The schemaless part of this problem is **one field** —
+the category map. Everything around it (league/season/period/team identity,
+the `LEFT JOIN team_daily_snapshot` that supplies `gp` to the rankings
+time-series query) is fixed-schema relational data that Postgres is already
+serving. Mongo would mean a second datastore, a second connection pool, a
+second free tier to watch, and app-side joins, in exchange for flexibility
+Postgres already provides in `jsonb`. Atlas's free tier (512 MB) is not a
+storage win either. Migrating `db_service.py` — plus the estimator tables,
+feature store, and injury tables — would dwarf the change being contemplated.
+A document store would be the right call for a greenfield, join-free,
+document-shaped app. This is not that.
 
 ## Migration steps
 
-1. **Add the new table** (`migrations/add_team_category_snapshot.sql`),
-   additive only — do not touch the existing three tables yet. Deploy this
-   alone first; nothing reads from the new table, so this step is a pure
-   no-op in production.
-2. **Dual-write**: update `db_service.upsert_daily_snapshot`,
-   `upsert_rankings_averages`, `upsert_rankings_totals` to also insert into
-   `team_category_snapshot`, using whatever category list `DataProvider`
-   resolved for that snapshot (the same `get_ranking_categories()` /
-   `get_reverse_categories()` already built by #204/#210). Keep the old
-   writes too, unchanged. Ship this, let it run for at least one full
-   in-season data-collection cycle so `team_category_snapshot` has real
-   history before anything depends on it. Verify parity: for the existing 8
-   categories, values in the new table must exactly match the old columns
-   for the same team/period.
-3. **Migrate reads**, one call site at a time, each as its own PR, each with
-   the same "real end-to-end test against a turnovers-scoring league" bar
-   used throughout the #203–#213 stack:
-   - `db_service.get_latest_snapshot` (DB fallback when ESPN is down)
-   - `db_service.get_snapshots_for_date_range` (`_get_rankings_for_range`,
+1. **Add the columns** (`migrations/add_dynamic_category_columns.sql`).
+   A nullable `ADD COLUMN` is metadata-only on PG 11+ — no table rewrite,
+   instant, safe on a live table. Nothing reads it yet, so this deploys as a
+   pure no-op.
+2. **Dual-write.** Update `upsert_daily_snapshot`, `upsert_rankings_averages`,
+   `upsert_rankings_totals` to write the JSONB alongside the existing fixed
+   columns, using whatever category list `DataProvider` resolved for that
+   snapshot (`get_ranking_categories()` / `get_reverse_categories()`, already
+   built by #204/#210). Keep the old writes unchanged. Verify parity: for the
+   existing 8 categories, JSONB values must match the old columns exactly for
+   the same team/period.
+3. **Migrate reads**, one call site per PR, each preferring the JSONB when
+   non-null and falling back to the fixed columns. The fallback means there is
+   no ordering constraint between these, and no reader is ever broken by a row
+   written before step 2:
+   - `get_latest_snapshot` (DB fallback when ESPN is down)
+   - `get_snapshots_for_date_range` (`_get_rankings_for_range`,
      `_get_heatmap_for_range`)
-   - `fantasy_estimator/` (see the note below — larger, separate effort)
-4. **Backfill historical data** for leagues/seasons where the old tables have
-   rows but `team_category_snapshot` doesn't (anything written before step 2
-   shipped). A one-off script reading the three old tables and writing
-   equivalent `team_category_snapshot` rows, run once per environment.
-5. **Drop the old columns**, only after every reader has been migrated and a
-   full season's worth of dual-written data confirms parity. Keep the three
-   old tables' `(league_id, season_id, scoring_period_id, team_id)` identity
-   columns (still useful for e.g. team names); drop only the per-category
-   columns, or drop the tables entirely if `team_category_snapshot` fully
-   replaces them (team_name would need to move into the new table, or a
-   small `team_snapshot_meta` table keyed the same way).
+   - `get_rankings_over_time` (Standings Race)
+   - `fantsy_estimator/` (see below — larger, separate effort)
+   Each gets the same "real end-to-end test against a turnovers-scoring
+   league" bar used throughout the #203–#214 stack.
+4. **Backfill.** Two independent cases:
+   - *Existing categories, old rows*: one `UPDATE ... SET stats =
+     jsonb_build_object('PTS', pts, 'REB', reb, ...)`. Pure SQL, no external
+     calls, run once per environment.
+   - *A category added to the league mid-season*: fetch per scoring period
+     from ESPN and merge into the existing rows with
+     `stats = stats || jsonb_build_object('TO', …)`. Merging into existing
+     rows is why no new rows are needed for a late-added category.
+5. **Drop the fixed columns** — optional, and probably never worth doing.
+   They cost ~0.25 MB/season and keep every existing query valid, including
+   the hand-written SQL in `get_rankings_over_time`. Revisit only if the
+   duplication becomes a correctness hazard.
 
 ## Query shape after migration
 
@@ -120,31 +168,72 @@ SELECT pts FROM team_daily_snapshot WHERE ... AND team_id = $1
 to:
 
 ```sql
-SELECT category, value FROM team_category_snapshot
-WHERE ... AND team_id = $1 AND category = ANY($2)  -- $2 = resolved categories list
+SELECT stats FROM team_daily_snapshot WHERE ... AND team_id = $1
 ```
 
-then pivoted back into a wide DataFrame in Python (one `pivot` call), which is
-exactly the DataFrame shape `data_transformer.py`'s functions already expect
-— so `calculate_rankings`, `normalize_for_heatmap`, etc. need no changes once
-the DB layer hands them a DataFrame in the same shape it does today.
+— same row, same index, same plan. Widening in Python is a dict merge, not a
+pivot, so `calculate_rankings`, `normalize_for_heatmap` and friends need no
+changes once the DB layer hands them the shape it does today.
+
+## Implementation gotchas
+
+- **asyncpg returns JSONB as `str`, not `dict`.** No codec is registered
+  anywhere in `db_service.py` today, and nothing currently reads `features`
+  back into Python, so this is untested ground in this repo. Register it once
+  at pool creation via `create_pool(init=...)` calling
+  `set_type_codec('jsonb', encoder=json.dumps, decoder=json.loads,
+  schema='pg_catalog')`, rather than scattering `json.loads` across call sites.
+- **`NaN` is not valid JSON.** `json.dumps(float('nan'))` emits bare `NaN` and
+  Postgres rejects it with `invalid input syntax for type json`. The estimator
+  produces `np.nan` (`ratio_mean` on zero attempts) and the transformers
+  `.fillna(0)` on some paths but not all. Convert `NaN`/`inf` to `None` before
+  serializing.
+- **numpy scalars are not JSON-serializable.** Every value off a DataFrame is
+  an `np.float64`/`np.int64`, and `json.dumps` raises `TypeError` on them.
+  Cast with `float(...)`/`int(...)` when building the dict, as the response
+  builders already do.
+- **Do not add a GIN index on the JSONB.** It is the reflexive move with
+  `jsonb` and it is wrong here: GIN serves searching *inside* the document,
+  which this access pattern never does. Every read is by the existing btree
+  key. The index would cost more than the column it indexes.
+- **JSONB numbers are stored as `numeric`**, exact base-10 decimal rather than
+  IEEE-754 `float8`. Precision is better than a `DOUBLE PRECISION` column, not
+  worse, and `json.loads` hands Python a normal `float`. The cost is variable
+  width (~10 bytes for `0.469` vs a flat 8) and slower arithmetic — irrelevant
+  here, since all math happens in pandas, not SQL. Noted so a later benchmark
+  against the old wide table doesn't read as a regression.
 
 ## What's explicitly out of scope here
 
-- **The Estimator's Monte Carlo simulation** (`fantasy_estimator/`). Even
-  after this migration gives it a place to store/read an arbitrary category,
-  the simulation math itself (`_run_monte_carlo_ranking`'s fixed `(n_teams, 8)`
-  array, the hardcoded FG%/FT% "impact" treatment, `STAT_NAMES` in
-  `column_names.py`) needs its own follow-up work to generalize. This
-  migration is a prerequisite for that work, not a replacement for it.
-- **H2H / points-league scoring formats.** Nothing here touches how a score
-  is computed from category values — only how per-category values are
-  stored. Out of scope, as with the rest of the #203–#213 stack.
+- **The Estimator's Monte Carlo simulation** (`fantsy_estimator/`). This
+  migration is a prerequisite for generalizing it, not a replacement. Two
+  further pieces of work remain after it:
+  - Its own three output tables (`team_prediction`, `team_ranking`,
+    `team_rank_probability`) have the same one-column-per-stat shape and need
+    the same JSONB treatment.
+  - The simulation math is welded to two coupled constants:
+    `pts_accum = np.zeros((n_teams, 8))` for derived ranking stats and
+    `samples_10 = np.zeros((n_teams, 10))` for the raw sampled quantities the
+    covariance is built at, related by FG%/FT% collapsing four raw columns
+    into two. Adding a category shifts both plus every positional index
+    between them. The `(fgm/fga, ftm/fta)` special-casing needs to become a
+    declared "this category is a ratio of these two raw quantities" mapping —
+    the same concept `ATTEMPT_KEY` (frontend) and `PERCENTAGE_CATEGORIES`
+    (backend) already encode, so there is a shared abstraction to lift rather
+    than a third copy to write.
+  - `_run_monte_carlo_ranking` also ranks with an unconditional
+    `rank(ascending=False)` — the same defect #210 fixed in
+    `calculate_rankings`. Harmless until a reverse-scored category can reach
+    the estimator, and not meaningfully fixable before then.
+- **H2H / points-league scoring formats.** Nothing here touches how a score is
+  computed from category values — only how per-category values are stored. Out
+  of scope, as with the rest of the #203–#214 stack.
 
 ## Effort estimate
 
-Medium: the schema change and dual-write are mechanical and low-risk (steps
-1–2). The real cost is migrating readers one at a time with real testing
-(step 3) plus the backfill (step 4) — comparable in size to two or three of
-the PRs in the #203–#213 stack. Budget the Estimator's own generalization
-separately; it's the larger, harder piece.
+Small-to-medium, and materially smaller than the EAV design this replaces.
+Steps 1–2 are mechanical and low-risk. Step 3 is the real cost, but the
+fixed-column fallback means each reader is an independent, individually
+shippable PR with no flag day and no backfill dependency. Step 4 is one SQL
+statement for the common case. Budget the Estimator's own generalization
+separately; it remains the larger, harder piece.
