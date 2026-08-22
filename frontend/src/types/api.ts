@@ -17,6 +17,10 @@ export interface RankingStats {
   total_points: number;
   rank?: number;
   category_ranks?: Record<string, number>;
+  /** Generic per-category values keyed by category code (e.g. "PTS", "TO") for
+   * this league's actual scoring categories. Superset of the fixed fields above
+   * for leagues scoring beyond the historical default 8. */
+  stats?: Record<string, number>;
 }
 
 export interface LeagueRankings {
@@ -52,6 +56,8 @@ export interface AverageStats {
   blk: number;
   pts: number;
   gp: number;
+  /** See RankingStats.stats */
+  stats?: Record<string, number>;
 }
 
 export interface TeamAverageStats extends AverageStats {
@@ -135,7 +141,14 @@ export interface PlayerStats {
   three_pm: number;
   minutes: number;
   gp: number;
+  /** See RankingStats.stats */
+  stats?: Record<string, number>;
 }
+
+/** Fixed, numeric PlayerStats fields — excludes the generic `stats` dict,
+ * for call sites that index PlayerStats dynamically by key (sort columns,
+ * comparison tables) where only a plain number makes sense. */
+export type PlayerStatKey = Exclude<keyof PlayerStats, 'stats'>
 
 export interface Player {
   player_name: string;
@@ -163,6 +176,10 @@ export interface PaginatedPlayers {
   has_more: boolean;
   actual_start?: string;
   actual_end?: string;
+  /** This league's actual scoring categories (see PlayerStats.stats). */
+  categories?: string[];
+  /** Subset of `categories` where a lower raw value scores better (e.g. "TO"). */
+  reverse_categories?: string[];
 }
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
@@ -175,7 +192,7 @@ export interface CustomDateRange {
 }
 
 export interface StatFilter {
-  stat: keyof PlayerStats;
+  stat: PlayerStatKey;
   operator: ComparisonOperator;
   value: number;
 }

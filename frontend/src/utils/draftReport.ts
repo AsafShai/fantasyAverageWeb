@@ -3,7 +3,7 @@ import {
   computePlayerRankings,
   scoreAgainstPool,
   partitionByDataAvailability,
-  CATEGORIES,
+  DEFAULT_CATEGORIES,
   type RankingCategory,
 } from './playerRankings'
 
@@ -46,7 +46,7 @@ export interface TeamDiff {
 export const MIN_GP_FOR_RANK = 15
 export const LOW_GP_MIN = 1
 const STEAL_MIN_GP = 50
-const WEIGHTS = Object.fromEntries(CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
+const WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
 
 function badgeFor(diff: number): DraftBadge {
   if (diff >= 25) return 'Steal'

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import pytest
 import httpx
 from datetime import datetime
@@ -10,6 +11,7 @@ from app.services.data_provider import DataProvider
 
 pytestmark = pytest.mark.real_dataprovider
 from app.exceptions import DataSourceError
+from app.utils.constants import RANKING_CATEGORIES
 
 
 def _api_teams_payload():
@@ -245,6 +247,44 @@ async def test_get_all_dataframes_tuple(provider):
 
 
 @pytest.mark.asyncio
+async def test_get_all_dataframes_issues_single_espn_request(provider):
+    """Resolving ranking categories must reuse the payload already fetched
+    for totals, not issue its own ESPN request."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e"}
+    mock_resp.json.return_value = _api_teams_payload()
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
+    provider.data_transformer.raw_standings_to_totals_df.return_value = totals
+    provider.data_transformer.resolve_ranking_categories.return_value = ["PTS"]
+    provider.data_transformer.totals_to_averages_df.return_value = pd.DataFrame({"team_id": [1]})
+    provider.data_transformer.averages_to_rankings_df.return_value = pd.DataFrame({"team_id": [1], "RANK": [1]})
+
+    await provider.get_all_dataframes()
+
+    assert provider._client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_averages_df_passes_resolved_categories(provider):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e"}
+    mock_resp.json.return_value = _api_teams_payload()
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
+    provider.data_transformer.raw_standings_to_totals_df.return_value = totals
+    provider.data_transformer.resolve_ranking_categories.return_value = ["PTS", "TO"]
+
+    await provider.get_averages_df()
+
+    provider.data_transformer.totals_to_averages_df.assert_called_once_with(totals, ["PTS", "TO"])
+
+
+@pytest.mark.asyncio
 async def test_fallback_from_db_raises_when_no_rows(provider):
     """No DB fallback data for this league/season is a real 'nothing to
     serve' state, not a generic crash — the route layer maps DataSourceError
@@ -325,3 +365,103 @@ async def test_get_team_names_raises_data_source_error_on_fetch_failure(provider
 
     with pytest.raises(DataSourceError, match="Error fetching team names"):
         await provider.get_team_names()
+
+
+@pytest.mark.asyncio
+async def test_get_ranking_categories_delegates_to_transformer(provider):
+    """get_ranking_categories reads the raw payload already cached by a prior
+    get_totals_df() call rather than fetching itself, so callers within the
+    same request never trigger a second ESPN round trip."""
+    provider.cache_manager.totals_cache = {"etag": "e1", "data": None, "raw": _api_teams_payload()}
+    provider.data_transformer.resolve_ranking_categories.return_value = ["PTS", "TO"]
+
+    categories = await provider.get_ranking_categories()
+
+    assert categories == ["PTS", "TO"]
+    provider.data_transformer.resolve_ranking_categories.assert_called_once_with(_api_teams_payload())
+    provider._client.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_ranking_categories_falls_back_when_no_raw_cached(provider):
+    from app.utils.constants import RANKING_CATEGORIES
+
+    provider.cache_manager.totals_cache = {"etag": None, "data": pd.DataFrame({"team_id": [1]})}
+
+    categories = await provider.get_ranking_categories()
+
+    assert categories == list(RANKING_CATEGORIES)
+    provider._client.get.assert_not_called()
+
+
+@pytest.mark.real_dataprovider
+class TestExtraRankPayloads:
+    """What actually reaches the JSONB column on the write path."""
+
+    @staticmethod
+    def _provider():
+        from app.services.data_provider import DataProvider
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        provider = DataProvider()
+        provider.db_service = AsyncMock()
+        return provider
+
+    @staticmethod
+    def _averages(with_turnovers: bool):
+        row_a = {'team_id': 1, 'team_name': 'Alpha', 'FG%': 0.47, 'FT%': 0.75,
+                 '3PM': 12.0, 'AST': 25.0, 'REB': 44.0, 'STL': 8.0, 'BLK': 5.0,
+                 'PTS': 112.0, 'GP': 47}
+        row_b = {**row_a, 'team_id': 2, 'team_name': 'Beta', 'PTS': 118.0}
+        if with_turnovers:
+            row_a['TO'] = 16.0
+            row_b['TO'] = 11.0
+        return pd.DataFrame([row_a, row_b])
+
+    def test_none_when_league_scores_only_fixed_categories(self):
+        """No extras means the column stays NULL — the whole cost argument."""
+        provider = self._provider()
+        try:
+            payload = provider._extra_rank_payloads(
+                self._averages(with_turnovers=False), list(RANKING_CATEGORIES), set()
+            )
+            assert payload is None
+        finally:
+            from app.services.data_provider import DataProvider
+            DataProvider._instance = None
+            DataProvider._initialized = False
+
+    def test_extra_category_is_ranked_and_totalled(self):
+        provider = self._provider()
+        try:
+            payload = provider._extra_rank_payloads(
+                self._averages(with_turnovers=True),
+                list(RANKING_CATEGORIES) + ['TO'],
+                {'TO'},
+            )
+
+            assert set(payload) == {1, 2}
+            # TO is reverse-scored: Beta turns it over less, so it ranks higher.
+            assert payload[2]['TO'] > payload[1]['TO']
+            # TOTAL spans all 9 categories, which rk_total cannot represent.
+            assert payload[1]['TOTAL'] > 0
+            assert set(payload[1]) == {'TO', 'TOTAL'}
+        finally:
+            from app.services.data_provider import DataProvider
+            DataProvider._instance = None
+            DataProvider._initialized = False
+
+    def test_payload_is_json_serializable(self):
+        """numpy scalars off a DataFrame would otherwise blow up json.dumps."""
+        provider = self._provider()
+        try:
+            payload = provider._extra_rank_payloads(
+                self._averages(with_turnovers=True),
+                list(RANKING_CATEGORIES) + ['TO'],
+                set(),
+            )
+            json.dumps(payload[1])
+        finally:
+            from app.services.data_provider import DataProvider
+            DataProvider._instance = None
+            DataProvider._initialized = False

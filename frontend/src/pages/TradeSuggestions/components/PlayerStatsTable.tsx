@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Player } from '../../../types/api';
+import type { Player, PlayerStatKey } from '../../../types/api';
 import { CollapsibleTable } from '../../../components/CollapsibleTable';
 import { formatStatValue } from '../utils/tradeHelpers';
 import type { PlayerGroup } from '../utils/tradeHelpers';
@@ -34,7 +34,7 @@ export const PlayerStatsTable: React.FC<PlayerStatsTableProps> = ({
   ];
 
   const formatPlayerStat = (player: Player, statKey: string, isPercentage: boolean = false, isGamesPlayed: boolean = false) => {
-    const value = player.stats?.[statKey as keyof typeof player.stats] || 0;
+    const value = player.stats?.[statKey as PlayerStatKey] || 0;
     const gamesPlayed = player.stats?.gp || 1;
     return formatStatValue(value, gamesPlayed, viewMode, isPercentage, isGamesPlayed);
   };

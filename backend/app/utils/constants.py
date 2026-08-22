@@ -15,7 +15,8 @@ ESPN_COLUMN_MAP = {
     '19': 'FG%',
     '20': 'FT%',
     '42': 'GP',
-    '40': 'MIN'
+    '40': 'MIN',
+    '11': 'TO',
 }
 
 PRO_TEAM_MAP: dict[int, str] = {
@@ -64,4 +65,7 @@ RANKING_CATEGORIES = ['FG%', 'FT%', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS']
 PER_GAME_CATEGORIES = ['3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS']
 
 # Integer columns for type conversion
-INTEGER_COLUMNS = ['FGM', 'FGA', 'FTM', 'FTA', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS', 'GP'] 
+INTEGER_COLUMNS = ['FGM', 'FGA', 'FTM', 'FTA', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS', 'GP']
+
+# Categories that are percentages rather than per-game counting stats
+PERCENTAGE_CATEGORIES = frozenset({'FG%', 'FT%'})

@@ -1,10 +1,6 @@
 import pandas as pd
 
-SLOT_CAPS = {
-    'PG': 82, 'SG': 82, 'SF': 82, 'PF': 82,
-    'C': 82, 'G': 82, 'F': 82, 'UTIL': 248,
-}
-SLOTS = list(SLOT_CAPS.keys())
+from app.utils.roster_slots import SLOT_CAPS, SLOT_NAMES as SLOTS
 
 
 class SlotGamesEstimator:

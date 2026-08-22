@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery } from '../store/api/fantasyApi'
-import type { TimePeriod, PlayerMatchup, CustomDateRange } from '../types/api'
+import type { TimePeriod, PlayerMatchup, CustomDateRange, PlayerStatKey } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -17,6 +17,20 @@ import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_SCHEDULE } from '../config/featureFlags'
+
+// FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
+// stats, unrelated to the league's configured scoring categories).
+const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
+
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  PTS: 'Points',
+  REB: 'Rebounds',
+  AST: 'Assists',
+  STL: 'Steals',
+  BLK: 'Blocks',
+  '3PM': '3-Pointers',
+  TO: 'Turnovers',
+}
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -112,6 +126,12 @@ const TeamDetail = () => {
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load team details')} />
   if (!team_detail) return <ErrorMessage message="Team not found" />
 
+  // This league's actual scoring categories, in order, excluding percentages
+  // (shown separately in Shot Chart Stats) — sourced from the API response
+  // rather than a hardcoded list.
+  const perGameCategories = Object.keys(team_detail.category_ranks)
+    .filter(key => !PERCENTAGE_CATEGORIES.has(key))
+
   const columns = [
     { key: 'include', label: 'Include', align: 'center', sortable: false },
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
@@ -155,8 +175,8 @@ const TeamDetail = () => {
           aVal = a.pro_team
           bVal = b.pro_team
         } else {
-          const aStat = a.stats[sortBy as keyof typeof a.stats] ?? -1
-          const bStat = b.stats[sortBy as keyof typeof b.stats] ?? -1
+          const aStat = a.stats[sortBy as PlayerStatKey] ?? -1
+          const bStat = b.stats[sortBy as PlayerStatKey] ?? -1
           const isPercentage = sortBy === 'fg_percentage' || sortBy === 'ft_percentage'
 
           aVal = (showAverages && sortBy !== 'gp' && !isPercentage)
@@ -329,30 +349,12 @@ const TeamDetail = () => {
           <div>
             <h2 className="text-xl font-semibold mb-4">Per-Game Averages</h2>
             <div className="space-y-3">
-              <div className="flex justify-between">
-                <span>Points:</span>
-                <span>{team_detail.raw_averages.pts.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Rebounds:</span>
-                <span>{team_detail.raw_averages.reb.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Assists:</span>
-                <span>{team_detail.raw_averages.ast.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Steals:</span>
-                <span>{team_detail.raw_averages.stl.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Blocks:</span>
-                <span>{team_detail.raw_averages.blk.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>3-Pointers:</span>
-                <span>{team_detail.raw_averages.three_pm.toFixed(2)}</span>
-              </div>
+              {perGameCategories.map(key => (
+                <div className="flex justify-between" key={key}>
+                  <span>{CATEGORY_DISPLAY_NAMES[key] ?? key}:</span>
+                  <span>{(team_detail.raw_averages.stats?.[key] ?? 0).toFixed(2)}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

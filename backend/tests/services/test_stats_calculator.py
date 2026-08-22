@@ -183,3 +183,122 @@ class TestStatsCalculator:
         
         with pytest.raises(ValueError, match="Cannot calculate averages for empty DataFrame"):
             stats_calculator.calculate_per_game_averages(empty_df)
+
+class TestDynamicCategories:
+    """Category-parameter behavior for leagues scoring something other than the default 8."""
+
+    def test_calculate_per_game_averages_default_matches_explicit_ranking_categories(self, stats_calculator):
+        totals = pd.DataFrame({
+            "team_id": [1], "team_name": ["A"], "GP": [10],
+            "FGM": [40], "FGA": [80], "FTM": [15], "FTA": [20],
+            "FG%": [50.0], "FT%": [75.0], "3PM": [20], "AST": [30],
+            "REB": [40], "STL": [10], "BLK": [5], "PTS": [100],
+        })
+        default_result = stats_calculator.calculate_per_game_averages(totals)
+        from app.utils.constants import RANKING_CATEGORIES
+        explicit_result = stats_calculator.calculate_per_game_averages(totals, RANKING_CATEGORIES)
+        pd.testing.assert_frame_equal(default_result, explicit_result)
+
+    def test_calculate_per_game_averages_extra_category_divided_by_gp(self, stats_calculator):
+        totals = pd.DataFrame({
+            "team_id": [1], "team_name": ["A"], "GP": [10],
+            "PTS": [100], "TO": [50],
+        })
+        result = stats_calculator.calculate_per_game_averages(totals, ["PTS", "TO"])
+        assert result.iloc[0]["TO"] == 5.0
+        assert result.iloc[0]["PTS"] == 10.0
+
+    def test_calculate_per_game_averages_percentage_category_left_untouched(self, stats_calculator):
+        totals = pd.DataFrame({
+            "team_id": [1], "team_name": ["A"], "GP": [10], "FG%": [47.5],
+        })
+        result = stats_calculator.calculate_per_game_averages(totals, ["FG%"])
+        assert result.iloc[0]["FG%"] == 47.5
+
+    def test_find_category_leaders_respects_custom_categories(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "PTS": [100.0, 90.0], "TO": [5.0, 8.0],
+        })
+        leaders = stats_calculator.find_category_leaders(averages, ["TO"])
+        assert set(leaders.keys()) == {"TO_leader"}
+        assert leaders["TO_leader"]["team_id"] == 2
+
+    def test_calculate_league_averages_respects_custom_categories(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "GP": [10, 20], "TO": [4.0, 6.0], "PTS": [100.0, 80.0],
+        })
+        result = stats_calculator.calculate_league_averages(averages, ["TO"])
+        assert result == {"TO": 5.0, "GP": 15.0}
+
+    def test_normalize_for_heatmap_respects_custom_categories(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "GP": [10, 20], "TO": [4.0, 6.0],
+        })
+        result = stats_calculator.normalize_for_heatmap(averages, ["TO"])
+        assert len(result) == 2
+        assert len(result[0]) == 2  # TO + GP columns
+
+
+class TestReverseCategories:
+    """Reverse-scored categories (e.g. turnovers): lower raw value = better."""
+
+    def test_calculate_rankings_reverse_category_lowest_value_scores_highest(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2, 3], "team_name": ["A", "B", "C"], "GP": [82, 82, 82],
+            "TO": [10.0, 5.0, 15.0],
+        })
+        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"})
+        by_team = result.set_index("team_id")
+        # Team B has fewest TO (best) -> should score highest (3), Team C worst -> lowest (1)
+        assert by_team.loc[2, "TO"] == 3
+        assert by_team.loc[1, "TO"] == 2
+        assert by_team.loc[3, "TO"] == 1
+
+    def test_calculate_rankings_normal_category_unaffected_by_reverse_set(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
+            "PTS": [100.0, 90.0], "TO": [10.0, 5.0],
+        })
+        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"})
+        by_team = result.set_index("team_id")
+        # PTS is not reverse: higher value (team 1) scores highest
+        assert by_team.loc[1, "PTS"] == 2
+        assert by_team.loc[2, "PTS"] == 1
+
+    def test_find_category_leaders_reverse_category_picks_lowest(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "TO": [12.0, 8.0],
+        })
+        leaders = stats_calculator.find_category_leaders(averages, ["TO"], reverse_categories={"TO"})
+        assert leaders["TO_leader"]["team_id"] == 2
+        assert leaders["TO_leader"]["value"] == 8.0
+
+    def test_find_category_leaders_non_reverse_still_picks_highest(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"],
+            "PTS": [90.0, 110.0],
+        })
+        leaders = stats_calculator.find_category_leaders(averages, ["PTS"], reverse_categories={"TO"})
+        assert leaders["PTS_leader"]["team_id"] == 2
+
+    def test_normalize_for_heatmap_reverse_category_inverts_color_direction(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
+            "TO": [5.0, 15.0],
+        })
+        result = stats_calculator.normalize_for_heatmap(averages, ["TO"], reverse_categories={"TO"})
+        # Team 1 has fewer TO (better) -> should get the "green" (high) end after inversion
+        assert result[0][0] > result[1][0]
+
+    def test_normalize_for_heatmap_non_reverse_unaffected(self, stats_calculator):
+        averages = pd.DataFrame({
+            "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
+            "PTS": [120.0, 100.0],
+        })
+        with_reverse = stats_calculator.normalize_for_heatmap(averages, ["PTS"], reverse_categories={"TO"})
+        without_reverse = stats_calculator.normalize_for_heatmap(averages, ["PTS"])
+        assert with_reverse == without_reverse
