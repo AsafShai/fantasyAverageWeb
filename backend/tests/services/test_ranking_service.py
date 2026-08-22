@@ -290,6 +290,9 @@ class TestDynamicCategoriesEndToEnd:
         service = RankingService()
         service.data_provider = DataProvider()
         service.data_provider.db_service = AsyncMock()
+        # The cache is a singleton that outlives the DataProvider reset above,
+        # so a payload another test warmed would answer this league's settings.
+        service.data_provider.cache_manager.invalidate_cache()
 
         resp = MagicMock()
         resp.status_code = 200
@@ -352,6 +355,9 @@ class TestReverseScoredRankings:
         service = RankingService()
         service.data_provider = DataProvider()
         service.data_provider.db_service = AsyncMock()
+        # The cache is a singleton that outlives the DataProvider reset above,
+        # so a payload another test warmed would answer this league's settings.
+        service.data_provider.cache_manager.invalidate_cache()
 
         resp = MagicMock()
         resp.status_code = 200
@@ -380,3 +386,128 @@ class TestReverseScoredRankings:
         alpha = next(r for r in result.totals_rankings if r.team.team_name == 'Alpha')
         assert beta.category_ranks['TO'] == 2
         assert alpha.category_ranks['TO'] == 1
+
+
+@pytest.mark.real_dataprovider
+class TestDynamicCategoriesDateRange:
+    """Full pipeline for the DB-backed date-range path: real DataProvider,
+    DataTransformer and StatsCalculator, only the ESPN HTTP call and the
+    snapshot rows stubbed, for a turnovers-scoring league."""
+
+    @staticmethod
+    def _turnovers_league_payload():
+        return {
+            "scoringPeriodId": 5,
+            "teams": [
+                {"id": 1, "name": "Alpha", "valuesByStat": {
+                    "0": 1000, "1": 20, "2": 50, "3": 200, "6": 400,
+                    "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                    "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": 120,
+                }},
+            ],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0)
+            ] + [{"statId": 11, "isReverseItem": True}]}},
+        }
+
+    @staticmethod
+    def _snapshot(team_id, name, pts, to, gp, fgm, fga):
+        return {
+            "team_id": team_id, "team_name": name,
+            "GP": float(gp), "FGM": float(fgm), "FGA": float(fga),
+            "FG%": fgm / fga, "FTM": 100.0, "FTA": 125.0, "FT%": 0.8,
+            "3PM": 100.0, "REB": 400.0, "AST": 200.0, "STL": 50.0,
+            "BLK": 20.0, "PTS": float(pts), "TO": float(to),
+        }
+
+    @pytest_asyncio.fixture
+    async def real_ranking_service(self):
+        from app.services.data_provider import DataProvider
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        service = RankingService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = AsyncMock()
+        # The cache is a singleton that outlives the DataProvider reset above,
+        # so a payload another test warmed would answer this league's settings.
+        service.data_provider.cache_manager.invalidate_cache()
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"ETag": "e1"}
+        resp.json.return_value = self._turnovers_league_payload()
+        resp.raise_for_status = MagicMock()
+        service.data_provider._client.get = AsyncMock(return_value=resp)
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+
+    def _stub_range(self, service, rows_end, rows_start):
+        from datetime import date as _date
+        service.data_provider.db_service.get_snapshots_for_date_range = AsyncMock(
+            return_value=(_date(2026, 1, 31), _date(2026, 1, 1), rows_end, rows_start)
+        )
+
+    @pytest.mark.asyncio
+    async def test_range_rankings_include_turnovers(self, real_ranking_service):
+        from datetime import date as _date
+        self._stub_range(
+            real_ranking_service,
+            [self._snapshot(1, "Alpha", 1000, 120, 40, 400, 850),
+             self._snapshot(2, "Beta", 900, 60, 40, 380, 800)],
+            [self._snapshot(1, "Alpha", 400, 60, 20, 160, 340),
+             self._snapshot(2, "Beta", 300, 20, 20, 150, 320)],
+        )
+
+        result = await real_ranking_service.get_league_rankings(
+            start_date=_date(2026, 1, 1), end_date=_date(2026, 1, 31)
+        )
+
+        assert 'TO' in result.categories
+
+    @pytest.mark.asyncio
+    async def test_turnovers_are_differenced_and_reverse_ranked(self, real_ranking_service):
+        """Alpha commits 60 turnovers over the window and Beta 40, so Beta --
+        the lower raw value -- must score higher in TO, not lower."""
+        from datetime import date as _date
+        self._stub_range(
+            real_ranking_service,
+            [self._snapshot(1, "Alpha", 1000, 120, 40, 400, 850),
+             self._snapshot(2, "Beta", 900, 60, 40, 380, 800)],
+            [self._snapshot(1, "Alpha", 400, 60, 20, 160, 340),
+             self._snapshot(2, "Beta", 300, 20, 20, 150, 320)],
+        )
+
+        result = await real_ranking_service.get_league_rankings(
+            start_date=_date(2026, 1, 1), end_date=_date(2026, 1, 31)
+        )
+
+        to_rank = {row.team.team_name: row.category_ranks['TO']
+                   for row in result.averages_rankings}
+        assert to_rank['Beta'] > to_rank['Alpha']
+
+    @pytest.mark.asyncio
+    async def test_percentage_is_rebuilt_over_the_window_not_differenced(self, real_ranking_service):
+        """FG% over the window is (FGM end-start)/(FGA end-start), not the
+        difference of two cumulative percentages."""
+        from datetime import date as _date
+        rows_end = [self._snapshot(1, "Alpha", 1000, 120, 40, 400, 850),
+                    self._snapshot(2, "Beta", 900, 60, 40, 380, 800)]
+        rows_start = [self._snapshot(1, "Alpha", 400, 60, 20, 160, 340),
+                      self._snapshot(2, "Beta", 300, 20, 20, 150, 320)]
+        delta = real_ranking_service._compute_delta(
+            pd.DataFrame(rows_end), pd.DataFrame(rows_start)
+        )
+
+        alpha = delta.set_index('team_id').loc[1]
+        assert alpha['FG%'] == pytest.approx((400 - 160) / (850 - 340))
+        assert alpha['TO'] == 60.0
+
+    @pytest.mark.asyncio
+    async def test_missing_start_snapshot_treats_window_as_everything_so_far(self, real_ranking_service):
+        rows_end = [self._snapshot(1, "Alpha", 1000, 120, 40, 400, 850)]
+        delta = real_ranking_service._compute_delta(pd.DataFrame(rows_end), None)
+
+        assert delta.set_index('team_id').loc[1]['TO'] == 120.0

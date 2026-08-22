@@ -124,17 +124,6 @@ class DataProvider:
         if not rows:
             raise DataSourceError("ESPN unavailable and no DB fallback data found for this league/season")
         df = pd.DataFrame(rows)
-        df = df.rename(columns={
-            'fg_pct': 'FG%', 'ft_pct': 'FT%', 'three_pm': '3PM',
-            'reb': 'REB', 'ast': 'AST', 'stl': 'STL', 'blk': 'BLK',
-            'pts': 'PTS', 'gp': 'GP', 'fgm': 'FGM', 'fga': 'FGA',
-            'ftm': 'FTM', 'fta': 'FTA',
-        })
-        df = df.drop(columns=['date'], errors='ignore')
-        # asyncpg returns Decimal for NUMERIC columns; cast to float here so every
-        # totals DataFrame (ESPN or DB fallback) is uniformly float downstream.
-        numeric_cols = [c for c in RANKING_CATEGORIES + ['GP'] if c in df.columns]
-        df[numeric_cols] = df[numeric_cols].astype(float)
         self.cache_manager.totals_cache['data'] = df
         self.cache_manager.totals_cache['data_date'] = snap_date
         self.cache_manager.totals_cache['etag'] = None
@@ -308,13 +297,28 @@ class DataProvider:
             return {}
         return self.data_transformer.parse_slot_usage(raw)
 
+    async def _settings_payload(self) -> Optional[Dict]:
+        """The raw standings payload, which carries the league's scoring settings.
+
+        Warms the cache if a caller hasn't already fetched totals this request:
+        the DB-backed date-range paths never do, and reading an unwarmed cache
+        silently resolved the historical fixed categories for them. Returns None
+        rather than raising when ESPN is unavailable — callers fall back to the
+        fixed default, which is the same shape the DB rows are in anyway."""
+        raw = self.cache_manager.totals_cache.get('raw')
+        if raw:
+            return raw
+        try:
+            await self.get_totals_df()
+        except Exception as e:
+            self.logger.warning(f"Could not load league settings, using default categories: {e}")
+            return None
+        return self.cache_manager.totals_cache.get('raw')
+
     async def get_ranking_categories(self) -> list:
         """Get this league's actual scoring categories, resolved from ESPN's
-        settings (falls back to the historical fixed default if unavailable).
-        Reads the raw standings payload from cache rather than fetching —
-        callers are expected to have already called get_totals_df() in the
-        same request, so this never issues its own ESPN request."""
-        raw = self.cache_manager.totals_cache.get('raw')
+        settings (falls back to the historical fixed default if unavailable)."""
+        raw = await self._settings_payload()
         if not raw:
             return list(RANKING_CATEGORIES)
         return self.data_transformer.resolve_ranking_categories(raw)
@@ -323,9 +327,8 @@ class DataProvider:
         """Get this league's reverse-scored categories (lower raw value = better,
         e.g. turnovers), resolved from ESPN's settings via each scoringItem's
         isReverseItem flag. Falls back to an empty set (no known reverse
-        categories) if settings are unavailable — same caching contract as
-        get_ranking_categories."""
-        raw = self.cache_manager.totals_cache.get('raw')
+        categories) if settings are unavailable."""
+        raw = await self._settings_payload()
         if not raw:
             return set()
         return self.data_transformer.resolve_reverse_categories(raw)

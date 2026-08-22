@@ -450,6 +450,57 @@ class TestRankingsRowToPoint:
         assert out['rk_total'] == 23.0
 
 
+class TestSnapshotRowToCategories:
+    """The date-range and ESPN-down read paths: a snapshot row becomes one
+    mapping keyed by category code, whichever side each value came from."""
+
+    @staticmethod
+    def _row(**overrides):
+        from decimal import Decimal
+        row = {
+            'team_id': 1, 'team_name': 'Alpha', 'date': None,
+            'gp': 10, 'fgm': 40, 'fga': 85, 'fg_pct': Decimal('0.4706'),
+            'ftm': 20, 'fta': 27, 'ft_pct': Decimal('0.7407'),
+            'three_pm': 15, 'reb': 43, 'ast': 28, 'stl': 9, 'blk': 4, 'pts': 112,
+            'stats': None,
+        }
+        row.update(overrides)
+        return row
+
+    def test_fixed_columns_become_category_codes(self):
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row())
+
+        assert out['PTS'] == 112.0
+        assert out['3PM'] == 15.0
+        assert out['team_name'] == 'Alpha'
+        assert 'pts' not in out
+        assert 'date' not in out
+
+    def test_numeric_columns_are_float_not_decimal(self):
+        """asyncpg returns Decimal for NUMERIC; a frame of these rows has to be
+        float throughout or downstream arithmetic mixes the two and blows up."""
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row())
+
+        assert isinstance(out['FG%'], float)
+        assert isinstance(out['PTS'], float)
+
+    def test_extras_appear_alongside_the_fixed_categories(self):
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row(stats={'TO': 18.0, '3PA': 40.0}))
+
+        assert out['TO'] == 18.0
+        assert out['3PA'] == 40.0
+        assert out['PTS'] == 112.0
+
+    def test_tolerates_a_json_string_when_no_codec_is_registered(self):
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row(stats='{"TO": 18.0}'))
+
+        assert out['TO'] == 18.0
+
+
 @pytest.mark.asyncio
 async def test_upsert_omits_extras_column_when_migration_not_applied(db_service, monkeypatch):
     """Without add_dynamic_category_columns.sql the write must still succeed:

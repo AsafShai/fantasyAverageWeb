@@ -3,12 +3,12 @@ import logging
 from typing import Dict
 from app.utils.constants import (
     ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP,
-    RANKING_CATEGORIES
+    RANKING_CATEGORIES, RATIO_CATEGORIES
 )
 from app.services.stats_calculator import StatsCalculator
 from app.config import settings
 from app.utils.roster_slots import SLOT_CAPS
-from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY, NON_RANKING_STAT_KEYS
+from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY, NON_RANKING_STAT_KEYS, UNSUPPORTED_CATEGORIES
 
 
 SLOT_MAP = {0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C', 5: 'G', 6: 'F', 11: 'UTIL'}
@@ -38,7 +38,19 @@ class DataTransformer:
             for item in scoring_items:
                 stat_id = item.get('statId')
                 category = STAT_ID_TO_CATEGORY.get(stat_id)
-                if category and category not in NON_RANKING_STAT_KEYS and category not in categories:
+                if category is None:
+                    self.logger.warning(
+                        f"League scores unknown ESPN statId {stat_id}; it will be missing from "
+                        "rankings. Add it to STAT_ID_TO_CATEGORY."
+                    )
+                    continue
+                if category in UNSUPPORTED_CATEGORIES:
+                    self.logger.warning(
+                        f"League scores {category}, which this app cannot compute; it will be "
+                        "missing from rankings."
+                    )
+                    continue
+                if category not in NON_RANKING_STAT_KEYS and category not in categories:
                     categories.append(category)
 
             return categories if categories else list(RANKING_CATEGORIES)
@@ -355,7 +367,12 @@ class DataTransformer:
 
         # Select only required columns (always the fixed default set, plus any
         # extra resolved categories beyond it)
-        extra_cols = [c for c in (categories or []) if c not in ALL_CATEGORIES]
+        # A derived category is useless without the quantities it is built from:
+        # the date-range path rebuilds it over the window rather than trusting a
+        # cumulative rate, so its sources have to survive column selection too.
+        resolved = list(categories or [])
+        sources = [src for c in resolved for src in RATIO_CATEGORIES.get(c, ())]
+        extra_cols = [c for c in dict.fromkeys(resolved + sources) if c not in ALL_CATEGORIES]
         available_cols = ['team_id', 'team_name'] + [col for col in ALL_CATEGORIES + extra_cols if col in df.columns]
         df = df[available_cols]
         
