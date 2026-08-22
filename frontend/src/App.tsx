@@ -29,6 +29,9 @@ const WhoHePlayForGame = lazy(() => import('./pages/minigames/WhoHePlayForGame')
 const WhoAmIGame = lazy(() => import('./pages/minigames/WhoAmIGame'))
 const NowYouSeeMeGame = lazy(() => import('./pages/minigames/NowYouSeeMeGame'))
 const PlayerProfile = lazy(() => import('./pages/PlayerProfile'))
+const AdpPage = lazy(() => import('./pages/draft/AdpPage'))
+const DraftBoardPage = lazy(() => import('./pages/draft/DraftBoardPage'))
+const PreDraftRankingsPage = lazy(() => import('./pages/draft/PreDraftRankingsPage'))
 
 function App() {
   return (
@@ -59,6 +62,9 @@ function App() {
             {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
             {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
             {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
+            <Route path="draft/adp" element={<AdpPage />} />
+            <Route path="draft/board" element={<DraftBoardPage />} />
+            <Route path="draft/rankings" element={<PreDraftRankingsPage />} />
             {FF_TRENDS && <Route path="trends" element={<Trends />} />}
             {FF_MINIGAMES && <Route path="minigames" element={<Minigames />} />}
             {FF_MINIGAMES && <Route path="minigames/hangman" element={<HangmanGame />} />}
