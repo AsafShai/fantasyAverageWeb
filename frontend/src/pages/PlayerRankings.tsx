@@ -53,6 +53,10 @@ export default function PlayerRankings() {
   // This league's actual scoring categories, from the API response — falls
   // back to the historical default 8 until the first response lands.
   const categories = playersData?.categories?.length ? playersData.categories : DEFAULT_CATEGORIES
+  const reverseCategories = useMemo(
+    () => new Set(playersData?.reverse_categories ?? []),
+    [playersData?.reverse_categories]
+  )
 
   const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.calcMode', 'per_game')
   const [displayMode, setDisplayMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.displayMode', 'per_game')
@@ -104,7 +108,7 @@ export default function PlayerRankings() {
 
   const recompute = () => {
     const config: RankingsConfig = { calcMode, minGp, minMin, position, weights: effectiveWeights }
-    const next = computePlayerRankings(players, config, categories)
+    const next = computePlayerRankings(players, config, categories, reverseCategories)
     // Low-priority: if another slider tick (or anything urgent) comes in
     // while this 500-row re-render is in flight, React interrupts/discards
     // it instead of finishing it first — keeps the slider itself responsive.

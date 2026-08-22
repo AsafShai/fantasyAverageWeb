@@ -52,6 +52,7 @@ def player_service():
     )
     from app.utils.constants import RANKING_CATEGORIES
     svc.data_provider.get_ranking_categories = AsyncMock(return_value=list(RANKING_CATEGORIES))
+    svc.data_provider.get_reverse_categories = AsyncMock(return_value=set())
     svc.response_builder = MagicMock()
     svc.logger = MagicMock()
     return svc

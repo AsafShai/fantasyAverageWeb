@@ -10,6 +10,8 @@ export const DEFAULT_CATEGORIES: RankingCategory[] = ['FG%', 'FT%', '3PM', 'AST'
 
 export const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
 
+const EMPTY_REVERSE: Set<RankingCategory> = new Set()
+
 // Percentage categories need a paired "attempts" quantity to compute a
 // makes-weighted z-score (see pctImpactArray) — FG%/FT% are the only two
 // ESPN scores this way, so this pairing is inherent to the stat, not a
@@ -92,15 +94,22 @@ function zScoreArray(values: number[]): number[] {
   return values.map(v => (stdev === 0 ? 0 : (v - mean) / stdev))
 }
 
-function categoryZArrays(pool: Player[], categories: RankingCategory[], calcMode: 'totals' | 'per_game'): number[][] {
-  return categories.map(cat =>
-    PERCENTAGE_CATEGORIES.has(cat)
+// A reverse-scored category (e.g. TO) is better when the raw value is lower,
+// so its z-scores are negated: the sign convention everywhere downstream
+// (green/positive = good, and totalZ as a plain weighted sum) then holds for
+// every category without each call site knowing which is which.
+function categoryZArrays(pool: Player[], categories: RankingCategory[], calcMode: 'totals' | 'per_game',
+                         reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): number[][] {
+  return categories.map(cat => {
+    const z = PERCENTAGE_CATEGORIES.has(cat)
       ? zScoreArray(pctImpactArray(pool, cat, calcMode))
       : zScoreArray(pool.map(p => getCatValue(p, cat, calcMode)))
-  )
+    return reverseCategories.has(cat) ? z.map(v => -v) : z
+  })
 }
 
-export function computePlayerRankings(players: Player[], config: RankingsConfig, categories: RankingCategory[] = DEFAULT_CATEGORIES): RankedPlayer[] {
+export function computePlayerRankings(players: Player[], config: RankingsConfig, categories: RankingCategory[] = DEFAULT_CATEGORIES,
+                                      reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): RankedPlayer[] {
   const { calcMode, minGp, minMin, position, weights } = config
 
   const filtered = players.filter(p =>
@@ -113,7 +122,7 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig,
 
   let referencePool: Player[]
   if (filtered.length >= 300) {
-    const pass1CatZs = categoryZArrays(filtered, categories, calcMode)
+    const pass1CatZs = categoryZArrays(filtered, categories, calcMode, reverseCategories)
     const pass1Z = filtered.map((_, i) => categories.reduce((sum, cat, ci) => sum + pass1CatZs[ci][i] * weights[cat], 0) / categories.length)
     referencePool = filtered
       .map((p, i) => ({ p, z: pass1Z[i] }))
@@ -124,7 +133,7 @@ export function computePlayerRankings(players: Player[], config: RankingsConfig,
     referencePool = filtered
   }
 
-  const catZs = categoryZArrays(referencePool, categories, calcMode)
+  const catZs = categoryZArrays(referencePool, categories, calcMode, reverseCategories)
 
   return referencePool
     .map((p, i) => {
@@ -144,8 +153,10 @@ export function getRawValue(player: Player, cat: RankingCategory, displayMode: '
 // Scores a player outside a ranking's referencePool (e.g. below the minGp
 // cutoff) against that same pool's mean/stdev, so the number is directly
 // comparable to the totalZ values computePlayerRankings produced for it.
-export function scoreAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>, categories: RankingCategory[] = DEFAULT_CATEGORIES): number {
+export function scoreAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>, categories: RankingCategory[] = DEFAULT_CATEGORIES,
+                                 reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): number {
   const catZs = categories.map(cat => {
+    const sign = reverseCategories.has(cat) ? -1 : 1
     if (PERCENTAGE_CATEGORIES.has(cat)) {
       const poolMean = referencePool.reduce((s, p) => s + rawCatValue(p, cat), 0) / referencePool.length
       const { mean, stdev } = meanStdev(pctImpactArray(referencePool, cat, calcMode))
@@ -153,11 +164,11 @@ export function scoreAgainstPool(player: Player, referencePool: Player[], calcMo
       const gp = Math.max(player.stats.gp, 1)
       const attempts = calcMode === 'per_game' ? player.stats[attemptKey] / gp : player.stats[attemptKey]
       const playerImpact = (rawCatValue(player, cat) - poolMean) * attempts
-      return stdev === 0 ? 0 : (playerImpact - mean) / stdev
+      return stdev === 0 ? 0 : sign * (playerImpact - mean) / stdev
     }
     const { mean, stdev } = meanStdev(referencePool.map(p => getCatValue(p, cat, calcMode)))
     const playerValue = getCatValue(player, cat, calcMode)
-    return stdev === 0 ? 0 : (playerValue - mean) / stdev
+    return stdev === 0 ? 0 : sign * (playerValue - mean) / stdev
   })
   return categories.reduce((sum, cat, ci) => sum + catZs[ci] * weights[cat], 0) / categories.length
 }

@@ -242,3 +242,37 @@ describe('computePlayerRankings — dynamic categories', () => {
     expect(result[0].zScores.PTS).toBeDefined()
   })
 })
+
+describe('reverse-scored categories', () => {
+  const TO_CATEGORIES = [...CATEGORIES, 'TO']
+  const toWeights = Object.fromEntries(TO_CATEGORIES.map(c => [c, 1])) as Record<string, number>
+
+  function withTurnovers(name: string, to: number): Player {
+    const p = makePlayer({ name })
+    p.stats.stats = { TO: to }
+    return p
+  }
+
+  it('scores fewer turnovers higher, not lower', () => {
+    const players = [withTurnovers('Careless', 300), withTurnovers('Careful', 60)]
+    const config: RankingsConfig = { ...defaultConfig, weights: toWeights }
+
+    const ranked = computePlayerRankings(players, config, TO_CATEGORIES, new Set(['TO']))
+    const careful = ranked.find(r => r.player.player_name === 'Careful')!
+    const careless = ranked.find(r => r.player.player_name === 'Careless')!
+
+    expect(careful.zScores['TO']).toBeGreaterThan(0)
+    expect(careless.zScores['TO']).toBeLessThan(0)
+    expect(careful.totalZ).toBeGreaterThan(careless.totalZ)
+  })
+
+  it('leaves non-reverse categories untouched', () => {
+    const players = [withTurnovers('Careless', 300), withTurnovers('Careful', 60)]
+    const config: RankingsConfig = { ...defaultConfig, weights: toWeights }
+
+    const ranked = computePlayerRankings(players, config, TO_CATEGORIES, new Set())
+    const careful = ranked.find(r => r.player.player_name === 'Careful')!
+
+    expect(careful.zScores['TO']).toBeLessThan(0)
+  })
+})

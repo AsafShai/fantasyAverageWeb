@@ -107,3 +107,6 @@ class PaginatedPlayers(BaseModel):
     # This league's actual scoring categories (see PlayerStats.stats),
     # in display order.
     categories: List[str] = []
+    # Subset of `categories` where a lower raw value scores better (e.g. TO).
+    # The client z-scores players itself, so it needs the sign of each category.
+    reverse_categories: List[str] = []

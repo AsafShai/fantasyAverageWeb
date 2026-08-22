@@ -178,6 +178,8 @@ export interface PaginatedPlayers {
   actual_end?: string;
   /** This league's actual scoring categories (see PlayerStats.stats). */
   categories?: string[];
+  /** Subset of `categories` where a lower raw value scores better (e.g. "TO"). */
+  reverse_categories?: string[];
 }
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";

@@ -204,6 +204,7 @@ class PlayerService:
 
         page_df = players_df.iloc[start_idx:end_idx]
         categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
         players = self.response_builder.build_all_players_response(page_df, categories)
 
         return PaginatedPlayers(
@@ -215,4 +216,5 @@ class PlayerService:
             actual_start=actual_start,
             actual_end=actual_end,
             categories=categories,
+            reverse_categories=[c for c in categories if c in reverse_categories],
         )

@@ -72,6 +72,13 @@ class LeagueService:
 
         categories = await self.data_provider.get_ranking_categories()
         reverse_categories = await self.data_provider.get_reverse_categories()
+        # A resolved category can be absent from the frame (DB fallback data is
+        # fixed to the historical 8 columns even when ESPN settings resolve
+        # more). Narrow to what's actually present so the labels, the value
+        # matrix, the normalized matrix and the ranks all describe the same
+        # columns instead of silently shifting against each other.
+        categories = [c for c in categories
+                      if c in sorted_averages_df.columns and c in rankings_df.columns]
         teams_data = self._extract_teams_data(sorted_averages_df)
         categories_data = self._extract_categories_data(sorted_averages_df, categories)
         normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df, categories, reverse_categories)
@@ -103,7 +110,7 @@ class LeagueService:
         start_df = pd.DataFrame(rows_start) if rows_start else None
         delta_df = ranking_service._compute_delta(end_df, start_df)
 
-        averages_rankings_df = ranking_service._build_averages_rankings_df(delta_df)
+        _, averages_rankings_df = ranking_service._build_averages_rankings_df(delta_df)
         rankings_df = averages_rankings_df.sort_values(by='TOTAL_POINTS', ascending=False)
 
         transformer = DataTransformer()

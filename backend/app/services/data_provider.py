@@ -93,7 +93,8 @@ class DataProvider:
                 response = await self._client.get(self.espn_standings_url)
                 response.raise_for_status()
                 api_data = response.json()
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
+                categories = self.data_transformer.resolve_ranking_categories(api_data)
+                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
                 scoring_period_id = api_data.get('scoringPeriodId', 0)
                 self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
                 self.cache_manager.totals_cache['data'] = totals_df
@@ -356,7 +357,13 @@ class DataProvider:
                 return
             try:
                 averages_df = self.data_transformer.totals_to_averages_df(totals_df)
-                rankings_avg_df = self.data_transformer.averages_to_rankings_df(averages_df)
+                # The rankings tables have one column per category fixed at the
+                # historical 8, so rank only those — otherwise an extra resolved
+                # category (e.g. TO) would be summed into TOTAL_POINTS and stored
+                # as rk_total while its own rank column has nowhere to go.
+                avg_cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in averages_df.columns] + ['GP']
+                averages_for_ranking = averages_df[[c for c in avg_cols_to_keep if c in averages_df.columns]]
+                rankings_avg_df = self.data_transformer.averages_to_rankings_df(averages_for_ranking)
 
                 totals_for_ranking = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
                 cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in totals_for_ranking.columns] + ['GP']

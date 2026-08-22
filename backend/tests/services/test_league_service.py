@@ -427,3 +427,26 @@ class TestDynamicCategoriesHeatmap:
         # sanity: the TO column values are the actual per-game TO averages
         to_values = sorted(row[to_index] for row in heatmap.data)
         assert to_values == sorted([120 / 82, 90 / 82])
+
+    @pytest.mark.asyncio
+    async def test_heatmap_survives_frame_without_a_resolved_category(self, real_league_service):
+        """The raw ESPN payload can resolve more categories than the totals frame
+        actually carries — the DB fallback frame is fixed to the historical 8
+        columns. The heatmap must narrow to what's present rather than raising,
+        and every positional matrix must stay the same width as the labels."""
+        provider = real_league_service.data_provider
+        await provider.get_totals_df()
+
+        cache = provider.cache_manager.totals_cache
+        cache['data'] = cache['data'].drop(columns=['TO'])
+        provider._client.get = AsyncMock(side_effect=Exception("ESPN down"))
+
+        heatmap = await real_league_service.get_heatmap_data()
+
+        assert 'TO' not in heatmap.categories
+        for row in heatmap.data:
+            assert len(row) == len(heatmap.categories)
+        for row in heatmap.normalized_data:
+            assert len(row) == len(heatmap.categories)
+        for row in heatmap.ranks_data:
+            assert len(row) == len(heatmap.categories)
