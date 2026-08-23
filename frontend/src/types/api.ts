@@ -324,6 +324,89 @@ export interface DepthChartPlayer {
   injury?: NbaInjury | null;
 }
 
+export interface SiteAdp {
+  adp: number | null;
+  rank: number | null;
+}
+
+export interface LastYearStats {
+  gp: number;
+  fg_pct: number;
+  ft_pct: number;
+  ppg: number;
+  rpg: number;
+  apg: number;
+  spg: number;
+  bpg: number;
+  three_pm: number;
+}
+
+export interface AdpPlayer {
+  id: string;
+  espn_id: number | null;
+  name: string;
+  team: string | null;
+  team_abbr: string | null;
+  photo_url: string | null;
+  positions: string[];
+  espn: SiteAdp;
+  fantrax: SiteAdp;
+  sleeper: SiteAdp;
+  blend: number | null;
+  blend_rank: number | null;
+  spread: number | null;
+  last_year?: LastYearStats | null;
+  projection?: LastYearStats | null;
+}
+
+export interface AdpIndexPlayer {
+  id: string;
+  espn_id: number | null;
+  name: string;
+  team_abbr: string | null;
+  positions: string[];
+  blend: number | null;
+  blend_rank: number | null;
+}
+
+export interface AdpIndexResponse {
+  season_label: string;
+  updated_at: string;
+  teams: string[];
+  players: AdpIndexPlayer[];
+  total: number;
+}
+
+export interface AdpResponse {
+  season_label: string;
+  updated_at: string;
+  last_year_season?: string | null;
+  projection_season?: string | null;
+  sources: Record<string, string>;
+  players: AdpPlayer[];
+  teams?: string[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  offset?: number;
+}
+
+export type AdpSite = "espn" | "fantrax" | "sleeper";
+
+export interface AdpQueryArgs {
+  page?: number;
+  page_size?: number;
+  sort?: string;
+  sort_dir?: "asc" | "desc";
+  q?: string;
+  team?: string;
+  pos?: string;
+  ids?: string;
+  ranked_only?: boolean;
+  sites?: string;
+}
+
 export interface NbaPlayerBio {
   id: string;
   display_name: string;
