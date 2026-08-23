@@ -1,5 +1,5 @@
 from app.models.adp import AdpPlayer, SiteAdp
-from app.services.adp_query import paginate_players, sort_players, three_rr_rounds
+from app.services.adp_query import paginate_players, sort_players
 
 
 def _p(name: str, *, blend=None, espn=None, team=None, positions=None, pid=None) -> AdpPlayer:
@@ -53,49 +53,3 @@ def test_ids_preserves_request_order():
     page, total, *_ = paginate_players(players, ids=["c", "a", "missing"])
     assert [p.id for p in page] == ["c", "a"]
     assert total == 2
-
-
-def test_snake_board_pages_by_rounds():
-    players = [_p(f"P{i}", blend=float(i), pid=str(i)) for i in range(1, 25)]
-    page1, total, page_n, pages, offset = paginate_players(
-        players, page=1, page_size=12, board=12, sort="blend"
-    )
-    assert total == 24
-    assert page_n == 1
-    assert pages == 2
-    assert offset == 0
-    assert [p.id for p in page1] == [str(i) for i in range(1, 13)]
-
-    page2, total2, page_n2, pages2, offset2 = paginate_players(
-        players, page=2, page_size=12, board=12
-    )
-    assert total2 == 24
-    assert page_n2 == 2
-    assert pages2 == 2
-    assert offset2 == 12
-    assert [p.id for p in page2] == [str(i) for i in range(24, 12, -1)]
-
-    players36 = [_p(f"P{i}", blend=float(i), pid=str(i)) for i in range(1, 37)]
-    page3, *_ = paginate_players(players36, page=3, page_size=12, board=12)
-    assert [p.id for p in page3] == [str(i) for i in range(36, 24, -1)]
-
-
-def test_board_stops_after_fifteen_rounds():
-    players = [_p(f"P{i}", blend=float(i), pid=str(i)) for i in range(1, 201)]
-    page, total, _page_n, pages, _offset = paginate_players(
-        players, page=1, page_size=12, board=12
-    )
-    assert total == 180
-    assert pages == 15
-    assert [p.id for p in page] == [str(i) for i in range(1, 13)]
-    last, *_ = paginate_players(players, page=15, page_size=12, board=12)
-    assert [p.id for p in last] == [str(i) for i in range(180, 168, -1)]
-
-
-def test_three_rr_rounds_repeats_reverse_on_round_three():
-    players = [_p(f"P{i}", blend=float(i), pid=str(i)) for i in range(1, 13)]
-    rounds = three_rr_rounds(players, 3)
-    assert [p.id for p in rounds[0]] == ["1", "2", "3"]
-    assert [p.id for p in rounds[1]] == ["6", "5", "4"]
-    assert [p.id for p in rounds[2]] == ["9", "8", "7"]
-    assert [p.id for p in rounds[3]] == ["10", "11", "12"]

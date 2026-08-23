@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { moveId, previewMove } from '../draftRankings'
+import { moveId, orderedPlayers, previewMove, stablePlayerIds } from '../draftRankings'
 
 describe('previewMove', () => {
   const order = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -32,5 +32,19 @@ describe('previewMove', () => {
 
   it('uses the same order as moveId', () => {
     expect(previewMove(order, 'd', 2).order).toEqual(moveId(order, 'd', 1))
+  })
+})
+
+describe('stablePlayerIds', () => {
+  it('dedupes and sorts so the same set always serializes the same way', () => {
+    expect(stablePlayerIds(['c', 'a', 'b', 'a'])).toEqual(['a', 'b', 'c'])
+    expect(stablePlayerIds(['b', 'a', 'c']).join(',')).toBe(stablePlayerIds(['c', 'b', 'a']).join(','))
+  })
+})
+
+describe('orderedPlayers', () => {
+  it('follows saved order and appends anyone missing from it', () => {
+    const players = [{ id: 'c' }, { id: 'a' }, { id: 'b' }, { id: 'd' }]
+    expect(orderedPlayers(players, ['b', 'a']).map((p) => p.id)).toEqual(['b', 'a', 'c', 'd'])
   })
 })

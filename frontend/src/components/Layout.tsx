@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
 
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/trends': () => import('../pages/Trends'),
@@ -163,7 +163,7 @@ const Layout = () => {
                     <span className="text-xl xl:text-sm">{item.icon}</span>
                     <span className="hidden xl:inline">{item.label}</span>
                   </Link>
-                  {item.path === '/players' && (
+                  {item.path === '/players' && FF_DRAFT_PAGES && (
                     <DesktopNavGroup
                       group={DRAFT_NAV_GROUP}
                       openKey={openGroup}
@@ -231,7 +231,7 @@ const Layout = () => {
                       <span className="mr-3 text-xl">{item.icon}</span>
                       {item.label}
                     </Link>
-                    {item.path === '/players' && (
+                    {item.path === '/players' && FF_DRAFT_PAGES && (
                       <MobileNavGroup
                         group={DRAFT_NAV_GROUP}
                         openKey={mobileOpenGroup}
@@ -542,7 +542,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
         ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
       ],
     },
-    DRAFT_NAV_GROUP,
+    ...(FF_DRAFT_PAGES ? [DRAFT_NAV_GROUP] : []),
     {
       key: 'insights',
       label: 'Insights',

@@ -1,3 +1,7 @@
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from app.models.adp import AdpPlayer, LastYearStats, SiteAdp
 from app.models.nba_player_models import NbaPlayerBio
 from app.services.adp_service import (
@@ -9,8 +13,10 @@ from app.services.adp_service import (
     compute_blend,
     compute_spread,
     last_year_from_agg_row,
+    load_espn_projections,
     normalize_player_name,
     parse_sites,
+    reset_adp_cache,
 )
 
 
@@ -317,4 +323,42 @@ def test_apply_projection_stats_joins_by_espn_id():
     assert by_name["Played"].projection is not None
     assert by_name["Played"].projection.ppg == 29.0
     assert by_name["Rookie"].projection is None
+
+
+_PROJ_ROW = {
+    99: {
+        "gp": 82,
+        "fg_pct": 0.5,
+        "ft_pct": 0.8,
+        "ppg": 20.0,
+        "rpg": 5.0,
+        "apg": 4.0,
+        "spg": 1.0,
+        "bpg": 1.0,
+        "three_pm": 2.0,
+    }
+}
+
+
+@pytest.mark.asyncio
+async def test_projection_cache_does_not_store_empty_failure():
+    reset_adp_cache()
+    fetch = AsyncMock(side_effect=[{}, {}, _PROJ_ROW])
+    with patch("app.services.adp_service.fetch_espn_projection_map", fetch):
+        empty = await load_espn_projections()
+        filled = await load_espn_projections()
+    assert empty[1] == {}
+    assert 99 in filled[1]
+    assert fetch.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_projection_cache_retries_after_exception():
+    reset_adp_cache()
+    fetch = AsyncMock(side_effect=[RuntimeError("down"), _PROJ_ROW])
+    with patch("app.services.adp_service.fetch_espn_projection_map", fetch):
+        empty = await load_espn_projections()
+        filled = await load_espn_projections()
+    assert empty[1] == {}
+    assert 99 in filled[1]
 

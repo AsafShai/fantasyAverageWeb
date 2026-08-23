@@ -41,7 +41,6 @@ async def get_adp(
     q: Optional[str] = Query(None),
     team: Optional[str] = Query(None),
     pos: Optional[str] = Query(None),
-    board: int = Query(0, ge=0, le=12),
     ids: Optional[str] = Query(None),
     ranked_only: bool = Query(True),
     sites: Optional[str] = Query(None),
@@ -56,7 +55,6 @@ async def get_adp(
             team=team or "",
             positions=_positions(pos),
             ranked_only=ranked_only,
-            board=board,
             ids=_ids(ids),
             sites=sites,
         )

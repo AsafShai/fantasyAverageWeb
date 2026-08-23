@@ -10,6 +10,7 @@ export default function MoveToModal({
   playersById,
   onConfirm,
   onClose,
+  onNeedIds,
 }: {
   player: AdpPlayer
   currentRank: number
@@ -17,6 +18,7 @@ export default function MoveToModal({
   playersById: Map<string, AdpPlayer>
   onConfirm: (rank: number) => void
   onClose: () => void
+  onNeedIds: (ids: string[]) => void
 }) {
   const [rankText, setRankText] = useState(String(currentRank))
   const inputRef = useRef<HTMLInputElement>(null)
@@ -46,6 +48,10 @@ export default function MoveToModal({
     () => (rank == null ? null : previewMove(order, player.id, rank)),
     [order, player.id, rank],
   )
+
+  useEffect(() => {
+    onNeedIds(preview ? [...preview.above, player.id, ...preview.below] : [player.id])
+  }, [preview, player.id, onNeedIds])
 
   const rows = preview
     ? [

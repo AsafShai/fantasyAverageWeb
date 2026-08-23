@@ -148,7 +148,6 @@ export const fantasyApi = createApi({
                   ...(a.q ? { q: a.q } : {}),
                   ...(a.team ? { team: a.team } : {}),
                   ...(a.pos ? { pos: a.pos } : {}),
-                  ...(a.board ? { board: a.board } : {}),
                   ...(a.sites ? { sites: a.sites } : {}),
                 }),
             ranked_only: a.ranked_only ?? true,
@@ -156,7 +155,6 @@ export const fantasyApi = createApi({
         }
       },
       keepUnusedDataFor: 600,
-      placeholderData: (previousData) => previousData,
     }),
     getAdpIndex: builder.query<AdpIndexResponse, void>({
       query: () => '/adp/index',

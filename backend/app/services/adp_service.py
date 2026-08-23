@@ -44,7 +44,18 @@ _cached: Optional[AdpResponse] = None
 _cached_at: Optional[datetime] = None
 _refresh_lock = asyncio.Lock()
 _last_year_cache: Optional[tuple[str, dict[int, LastYearStats]]] = None
+_last_year_cached_at: Optional[datetime] = None
+_last_year_lock = asyncio.Lock()
 _projection_cache: Optional[tuple[str, dict[int, LastYearStats]]] = None
+_projection_cached_at: Optional[datetime] = None
+_projection_lock = asyncio.Lock()
+
+
+def _cache_fresh(cached_at: Optional[datetime], now: Optional[datetime] = None) -> bool:
+    if cached_at is None:
+        return False
+    stamp = now or datetime.now(timezone.utc)
+    return stamp - cached_at < _CACHE_TTL
 
 
 def normalize_player_name(name: str) -> str:
@@ -377,11 +388,14 @@ def build_adp_response(
 
 
 def reset_adp_cache() -> None:
-    global _cached, _cached_at, _last_year_cache, _projection_cache
+    global _cached, _cached_at, _last_year_cache, _last_year_cached_at
+    global _projection_cache, _projection_cached_at
     _cached = None
     _cached_at = None
     _last_year_cache = None
+    _last_year_cached_at = None
     _projection_cache = None
+    _projection_cached_at = None
 
 
 def _num(value, default: float = 0.0) -> float:
@@ -442,57 +456,89 @@ def apply_projection_stats(
 
 async def load_last_year_stats() -> tuple[str, dict[int, LastYearStats]]:
     """Per-game averages from the current app season (same window as the Players table)."""
-    global _last_year_cache
+    global _last_year_cache, _last_year_cached_at
     season = espn_season_string(settings.season_id)
-    if _last_year_cache is not None and _last_year_cache[0] == season:
+    now = datetime.now(timezone.utc)
+    cached = _last_year_cache
+    if cached is not None and cached[0] == season and _cache_fresh(_last_year_cached_at, now):
+        return cached
+    async with _last_year_lock:
+        now = datetime.now(timezone.utc)
+        cached = _last_year_cache
+        if cached is not None and cached[0] == season and _cache_fresh(_last_year_cached_at, now):
+            return cached
+        try:
+            db = DBService()
+            anchor = await get_season_anchor_date(season, db)
+            start, end = StatTimePeriod.resolve_window(
+                StatTimePeriod.SEASON, None, None, settings.season_start, today=anchor
+            )
+            df, _, _ = await db.aggregate_player_games(start, end, season)
+        except Exception:
+            logger.exception("Last-year stats load failed")
+            if cached is not None and cached[0] == season:
+                return cached
+            return (season, {})
+        if df is None:
+            logger.warning("Last-year aggregate returned no frame; not caching empty result")
+            if cached is not None and cached[0] == season:
+                return cached
+            return (season, {})
+        by_id: dict[int, LastYearStats] = {}
+        if not df.empty:
+            for _, row in df.iterrows():
+                try:
+                    espn_id = int(row["player_id"])
+                except (TypeError, ValueError, KeyError):
+                    continue
+                stats = last_year_from_agg_row(row)
+                if stats is not None:
+                    by_id[espn_id] = stats
+        _last_year_cache = (season, by_id)
+        _last_year_cached_at = now
+        logger.info("Loaded last-year stats for %d players (%s)", len(by_id), season)
         return _last_year_cache
-    db = DBService()
-    anchor = await get_season_anchor_date(season, db)
-    start, end = StatTimePeriod.resolve_window(
-        StatTimePeriod.SEASON, None, None, settings.season_start, today=anchor
-    )
-    df, _, _ = await db.aggregate_player_games(start, end, season)
-    by_id: dict[int, LastYearStats] = {}
-    if df is not None and not df.empty:
-        for _, row in df.iterrows():
-            try:
-                espn_id = int(row["player_id"])
-            except (TypeError, ValueError, KeyError):
-                continue
-            stats = last_year_from_agg_row(row)
-            if stats is not None:
-                by_id[espn_id] = stats
-    _last_year_cache = (season, by_id)
-    logger.info("Loaded last-year stats for %d players (%s)", len(by_id), season)
-    return _last_year_cache
 
 
 async def load_espn_projections() -> tuple[str, dict[int, LastYearStats]]:
     """Next-season ESPN projections; falls back to this season's projection split if needed."""
-    global _projection_cache
+    global _projection_cache, _projection_cached_at
     next_id = settings.season_id + 1
     next_label = espn_season_string(next_id)
-    if _projection_cache is not None:
+    now = datetime.now(timezone.utc)
+    if _projection_cache is not None and _cache_fresh(_projection_cached_at, now):
         return _projection_cache
 
     async def _fetch(season_id: int) -> dict[int, LastYearStats]:
         raw = await fetch_espn_projection_map(season_id)
         return {espn_id: LastYearStats(**row) for espn_id, row in raw.items()}
 
-    by_id: dict[int, LastYearStats] = {}
-    label = next_label
-    try:
-        by_id = await _fetch(next_id)
+    async with _projection_lock:
+        now = datetime.now(timezone.utc)
+        if _projection_cache is not None and _cache_fresh(_projection_cached_at, now):
+            return _projection_cache
+        by_id: dict[int, LastYearStats] = {}
+        label = next_label
+        try:
+            by_id = await _fetch(next_id)
+            if not by_id:
+                by_id = await _fetch(settings.season_id)
+                if by_id:
+                    label = espn_season_string(settings.season_id)
+        except Exception:
+            logger.exception("ESPN projection fetch failed")
+            if _projection_cache is not None:
+                return _projection_cache
+            return (next_label, {})
         if not by_id:
-            by_id = await _fetch(settings.season_id)
-            if by_id:
-                label = espn_season_string(settings.season_id)
-    except Exception:
-        logger.exception("ESPN projection fetch failed")
-        by_id = {}
-    _projection_cache = (label, by_id)
-    logger.info("Loaded ESPN projections for %d players (%s)", len(by_id), label)
-    return _projection_cache
+            logger.warning("ESPN projection fetch returned empty; not caching")
+            if _projection_cache is not None:
+                return _projection_cache
+            return (label, {})
+        _projection_cache = (label, by_id)
+        _projection_cached_at = now
+        logger.info("Loaded ESPN projections for %d players (%s)", len(by_id), label)
+        return _projection_cache
 
 
 async def get_adp_response_enriched(
@@ -505,7 +551,6 @@ async def get_adp_response_enriched(
     team: str = "",
     positions: Optional[list[str]] = None,
     ranked_only: bool = True,
-    board: int = 0,
     ids: Optional[list[str]] = None,
     sites: Optional[str] = None,
 ) -> AdpResponse:
@@ -525,11 +570,12 @@ async def get_adp_response_enriched(
         team=team,
         positions=positions,
         ranked_only=ranked_only,
-        board=board,
         ids=ids,
     )
-    last_season, last_by_id = await load_last_year_stats()
-    proj_season, proj_by_id = await load_espn_projections()
+    (last_season, last_by_id), (proj_season, proj_by_id) = await asyncio.gather(
+        load_last_year_stats(),
+        load_espn_projections(),
+    )
     out = sliced.model_copy(update={"last_year_season": last_season, "projection_season": proj_season})
     if last_by_id:
         out = apply_last_year_stats(out, last_by_id, last_season)

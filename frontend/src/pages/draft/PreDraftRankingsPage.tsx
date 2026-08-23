@@ -39,6 +39,7 @@ import {
   moveId,
   orderedPlayers,
   rankingsEqual,
+  stablePlayerIds,
   type DraftRankingsState,
 } from '../../utils/draftRankings'
 import type { AdpPlayer, LastYearStats } from '../../types/api'
@@ -243,6 +244,9 @@ export default function PreDraftRankingsPage() {
   const [teamFilter, setTeamFilter] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [movePlayerId, setMovePlayerId] = useState<string | null>(null)
+  const [movePreviewIds, setMovePreviewIds] = useState<string[]>([])
+  const [detailsById, setDetailsById] = useState<Map<string, AdpPlayer>>(() => new Map())
+  const [detailsSeason, setDetailsSeason] = useState<{ last?: string; proj?: string }>({})
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -342,21 +346,51 @@ export default function PreDraftRankingsPage() {
     setPage(1)
   }, [debouncedSearch, teamFilter, posKey, resolvedPageSize])
 
-  const detailIds = useMemo(() => {
+  const neededDetailIds = useMemo(() => {
     const ids = paged.map((p) => p.id)
-    if (movePlayerId) {
-      const i = board.order.indexOf(movePlayerId)
-      if (i >= 0) ids.push(...board.order.slice(Math.max(0, i - 2), i + 3))
-    }
+    ids.push(...movePreviewIds)
+    if (movePlayerId) ids.push(movePlayerId)
     if (activeId) ids.push(activeId)
     if (selectedId) ids.push(selectedId)
-    return [...new Set(ids)]
-  }, [paged, movePlayerId, activeId, selectedId, board.order])
-  const { data: details } = useGetAdpQuery({ ids: detailIds.join(',') }, { skip: detailIds.length === 0 })
-  const detailsById = useMemo(
-    () => new Map((details?.players ?? []).map((p) => [p.id, p])),
-    [details],
+    return stablePlayerIds(ids)
+  }, [paged, movePreviewIds, movePlayerId, activeId, selectedId])
+  const missingDetailIds = useMemo(
+    () => neededDetailIds.filter((id) => !detailsById.has(id)),
+    [neededDetailIds, detailsById],
   )
+  const { data: details } = useGetAdpQuery(
+    { ids: missingDetailIds.join(',') },
+    { skip: missingDetailIds.length === 0 },
+  )
+  useEffect(() => {
+    if (!details) return
+    if (details.last_year_season || details.projection_season) {
+      setDetailsSeason({ last: details.last_year_season ?? undefined, proj: details.projection_season ?? undefined })
+    }
+    if (!details.players.length) return
+    setDetailsById((prev) => {
+      let changed = false
+      const next = new Map(prev)
+      for (const p of details.players) {
+        if (next.get(p.id) !== p) {
+          next.set(p.id, p)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [details])
+  const onMoveNeedIds = useCallback((ids: string[]) => {
+    setMovePreviewIds((prev) => {
+      const next = stablePlayerIds(ids)
+      if (prev.length === next.length && prev.every((id, i) => id === next[i])) return prev
+      return next
+    })
+  }, [])
+  const closeMoveTo = useCallback(() => {
+    setMovePlayerId(null)
+    setMovePreviewIds([])
+  }, [])
   const playersById = useMemo(() => {
     const next = new Map<string, AdpPlayer>()
     for (const p of ordered) next.set(p.id, hydrateAdpPlayer(p, detailsById.get(p.id)))
@@ -367,12 +401,12 @@ export default function PreDraftRankingsPage() {
     [paged, detailsById],
   )
   const resolvedStatsFrom: StatsFrom = statsFrom === 'projection' ? 'projection' : 'actual'
-  const actualSeasonShort = shortSeasonLabel(details?.last_year_season) || '25/26'
-  const projectionSeasonShort = nextShortSeasonLabel(details?.last_year_season)
+  const actualSeasonShort = shortSeasonLabel(details?.last_year_season || detailsSeason.last) || '25/26'
+  const projectionSeasonShort = nextShortSeasonLabel(details?.last_year_season || detailsSeason.last)
   const statsTitle =
     resolvedStatsFrom === 'projection'
-      ? `ESPN per-game projections for ${details?.projection_season || projectionSeasonShort}`
-      : `Per-game averages from ${details?.last_year_season || 'last season'}. Blank if they did not play.`
+      ? `ESPN per-game projections for ${details?.projection_season || detailsSeason.proj || projectionSeasonShort}`
+      : `Per-game averages from ${details?.last_year_season || detailsSeason.last || 'last season'}. Blank if they did not play.`
   const playerStats = (p: AdpPlayer) => (resolvedStatsFrom === 'projection' ? p.projection : p.last_year)
 
   const selectedPlayer = selectedId ? playersById.get(selectedId) ?? null : null
@@ -451,7 +485,7 @@ export default function PreDraftRankingsPage() {
     const nextOrder = moveId(board.order, id, rank - 1)
     const same = nextOrder.length === board.order.length && nextOrder.every((x, i) => x === board.order[i])
     if (!same) commit({ ...board, order: nextOrder })
-    setMovePlayerId(null)
+    closeMoveTo()
     setSelectedId(id)
     revealRank(rank - 1)
   }
@@ -702,14 +736,16 @@ export default function PreDraftRankingsPage() {
             <button type="button" className={btnGhost} onClick={redo}>
               Redo
             </button>
-            {/* CSV UI hidden until a later phase
-            <button type="button" className={btnGhost} onClick={exportCsv}>
-              Export CSV
-            </button>
-            <button type="button" className={btnGhost} onClick={() => fileRef.current?.click()}>
-              Import CSV
-            </button>
-            */}
+            {false && (
+              <>
+                <button type="button" className={btnGhost} onClick={exportCsv}>
+                  Export CSV
+                </button>
+                <button type="button" className={btnGhost} onClick={() => fileRef.current?.click()}>
+                  Import CSV
+                </button>
+              </>
+            )}
           </div>
           <div ref={moreMenuRef} className="relative sm:hidden ml-auto">
             <button
@@ -774,30 +810,32 @@ export default function PreDraftRankingsPage() {
                 >
                   Redo
                 </button>
-                {/* CSV UI hidden until a later phase
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    exportCsv()
-                    setMoreOpen(false)
-                  }}
-                  className={menuItem}
-                >
-                  Export CSV
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    fileRef.current?.click()
-                    setMoreOpen(false)
-                  }}
-                  className={menuItem}
-                >
-                  Import CSV
-                </button>
-                */}
+                {false && (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        exportCsv()
+                        setMoreOpen(false)
+                      }}
+                      className={menuItem}
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        fileRef.current?.click()
+                        setMoreOpen(false)
+                      }}
+                      className={menuItem}
+                    >
+                      Import CSV
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1005,7 +1043,8 @@ export default function PreDraftRankingsPage() {
           order={board.order}
           playersById={playersById}
           onConfirm={(rank) => confirmMoveTo(movePlayer.id, rank)}
-          onClose={() => setMovePlayerId(null)}
+          onClose={closeMoveTo}
+          onNeedIds={onMoveNeedIds}
         />
       ) : null}
       {dirty && !selectedId ? (

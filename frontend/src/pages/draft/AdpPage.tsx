@@ -16,6 +16,7 @@ import {
   type AdpSiteKey,
 } from '../../utils/adp'
 import { downloadCsv, toCsv } from '../../utils/draftCsv'
+import type { AdpResponse } from '../../types/api'
 
 type SortKey = 'blend' | 'spread' | 'name' | 'team' | AdpSiteKey
 
@@ -189,13 +190,16 @@ export default function AdpPage() {
   )
   const { data, isLoading, isFetching, error } = useGetAdpQuery(queryArgs)
   const [fetchAll] = useLazyGetAdpQuery()
+  const lastGood = useRef<AdpResponse | undefined>(undefined)
+  if (data) lastGood.current = data
+  const view = data ?? lastGood.current
 
-  const players = data?.players ?? []
-  const teams = data?.teams ?? []
-  const totalCount = data?.total ?? 0
-  const totalPages = Math.max(1, data?.total_pages ?? 1)
-  const safePage = data?.page ?? page
-  const offset = data?.offset ?? 0
+  const players = view?.players ?? []
+  const teams = view?.teams ?? []
+  const totalCount = view?.total ?? 0
+  const totalPages = Math.max(1, view?.total_pages ?? 1)
+  const safePage = view?.page ?? page
+  const offset = view?.offset ?? 0
   const from = totalCount === 0 ? 0 : offset + 1
   const to = offset + players.length
   const goToPage = (next: number) => {
@@ -251,8 +255,8 @@ export default function AdpPage() {
     downloadCsv('fantasy-adp.csv', toCsv([header, ...rows]))
   }
 
-  if (isLoading && !data) return <LoadingSpinner />
-  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load ADP')} />
+  if (isLoading && !view) return <LoadingSpinner />
+  if (error && !view) return <ErrorMessage message={getErrorMessage(error, 'Failed to load ADP')} />
 
   return (
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6">
@@ -270,8 +274,8 @@ export default function AdpPage() {
             <span className="text-rose-600 dark:text-rose-400 font-medium">red</span> means later. Stronger color
             is a bigger gap (4+ picks).
           </p>
-          {data?.updated_at ? (
-            <p className="text-xs text-gray-400 mt-1">Updated {formatUpdatedAt(data.updated_at)}</p>
+          {view?.updated_at ? (
+            <p className="text-xs text-gray-400 mt-1">Updated {formatUpdatedAt(view.updated_at)}</p>
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1">
@@ -341,11 +345,11 @@ export default function AdpPage() {
               {pos}
             </button>
           ))}
-          {/* CSV UI hidden until a later phase
-          <button type="button" onClick={exportCsv} className="btn-primary text-xs py-1.5 px-3 ml-auto">
-            Export CSV
-          </button>
-          */}
+          {false && (
+            <button type="button" onClick={exportCsv} className="btn-primary text-xs py-1.5 px-3 ml-auto">
+              Export CSV
+            </button>
+          )}
         </div>
       </div>
 

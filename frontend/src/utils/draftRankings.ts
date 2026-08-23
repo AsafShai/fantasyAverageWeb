@@ -1,5 +1,3 @@
-import type { AdpPlayer } from '../types/api'
-
 export type DraftRankingsState = {
   version: 1
   season: string
@@ -81,6 +79,10 @@ export function previewMove(
   }
 }
 
+export function stablePlayerIds(ids: Iterable<string>): string[] {
+  return [...new Set(ids)].sort()
+}
+
 export function orderedPlayers<T extends { id: string }>(players: T[], order: string[]): T[] {
   const byId = new Map(players.map((p) => [p.id, p]))
   const out: T[] = []
@@ -88,8 +90,9 @@ export function orderedPlayers<T extends { id: string }>(players: T[], order: st
     const p = byId.get(id)
     if (p) out.push(p)
   }
+  const inOrder = new Set(order)
   for (const p of players) {
-    if (!order.includes(p.id)) out.push(p)
+    if (!inOrder.has(p.id)) out.push(p)
   }
   return out
 }

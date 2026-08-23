@@ -1,3 +1,5 @@
+import logging
+
 from app.utils.name_matching import (
     clean_fantasy_scraped_name,
     fantasy_name_keys,
@@ -40,3 +42,12 @@ def test_lookup_catalog_espn_id_uses_aliases_and_prefix():
     assert lookup_catalog_espn_id("carlton carrington", names) == 4845374
     assert lookup_catalog_espn_id("anthony edwards", names) == 4594268
     assert lookup_catalog_espn_id("pf", names) is None
+
+
+def test_lookup_catalog_prefix_match_logs_hit(caplog):
+    names = {"cameron thomas": 4432174}
+    with caplog.at_level(logging.INFO):
+        assert lookup_catalog_espn_id("cam thomas", names) == 4432174
+    assert "cam thomas" in caplog.text
+    assert "cameron thomas" in caplog.text
+    assert "4432174" in caplog.text

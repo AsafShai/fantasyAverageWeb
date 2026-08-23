@@ -8,8 +8,6 @@ from typing import Optional
 from app.models.adp import AdpIndexPlayer, AdpPlayer, AdpResponse
 
 SORT_KEYS = ("blend", "spread", "name", "team", "espn", "fantrax", "sleeper")
-BOARD_SIZES = {12}
-BOARD_ROUNDS = 15
 _IDS_CAP = 120
 
 
@@ -90,23 +88,6 @@ def sort_players(players: list[AdpPlayer], sort: str, sort_dir: str) -> list[Adp
     return sorted(players, key=cmp_to_key(cmp))
 
 
-def is_three_rr_reverse(round_index: int) -> bool:
-    """3RR: R2 and R3 are reverse; from R3 onward the board snakes."""
-    if round_index <= 0:
-        return False
-    if round_index == 1:
-        return True
-    return round_index % 2 == 0
-
-
-def three_rr_rounds(players: list[AdpPlayer], teams: int) -> list[list[AdpPlayer]]:
-    rounds: list[list[AdpPlayer]] = []
-    for i in range(0, len(players), teams):
-        chunk = players[i : i + teams]
-        rounds.append(list(reversed(chunk)) if is_three_rr_reverse(len(rounds)) else list(chunk))
-    return rounds
-
-
 def _page_slice(items: list, page: int, page_size: int) -> tuple[list, int, int, int, int]:
     total = len(items)
     size = max(1, page_size)
@@ -127,7 +108,6 @@ def paginate_players(
     team: str = "",
     positions: Optional[list[str]] = None,
     ranked_only: bool = True,
-    board: int = 0,
     ids: Optional[list[str]] = None,
 ) -> tuple[list[AdpPlayer], int, int, int, int]:
     if ids is not None:
@@ -139,18 +119,6 @@ def paginate_players(
     filtered = filter_players(
         players, q=q, team=team, positions=positions, ranked_only=ranked_only
     )
-    if board in BOARD_SIZES:
-        draftable = [p for p in filtered if p.blend is not None]
-        ordered = sort_players(draftable, "blend", "asc")[: board * BOARD_ROUNDS]
-        rounds = three_rr_rounds(ordered, board)
-        rounds_per_page = max(1, round(page_size / board))
-        paged_rounds, _round_total, safe_page, total_pages, start_round = _page_slice(
-            rounds, page, rounds_per_page
-        )
-        flat = [p for rnd in paged_rounds for p in rnd]
-        offset = sum(len(rnd) for rnd in rounds[:start_round])
-        return flat, len(ordered), safe_page, total_pages, offset
-
     ordered = sort_players(filtered, sort, sort_dir)
     return _page_slice(ordered, page, page_size)
 
@@ -166,7 +134,6 @@ def paginated_response(
     team: str = "",
     positions: Optional[list[str]] = None,
     ranked_only: bool = True,
-    board: int = 0,
     ids: Optional[list[str]] = None,
 ) -> AdpResponse:
     page_players, total, safe_page, total_pages, offset = paginate_players(
@@ -179,7 +146,6 @@ def paginated_response(
         team=team,
         positions=positions,
         ranked_only=ranked_only,
-        board=board,
         ids=ids,
     )
     return base.model_copy(

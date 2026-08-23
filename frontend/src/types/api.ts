@@ -399,7 +399,6 @@ export interface AdpQueryArgs {
   q?: string;
   team?: string;
   pos?: string;
-  board?: number;
   ids?: string;
   ranked_only?: boolean;
   sites?: string;

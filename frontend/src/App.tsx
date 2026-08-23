@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE } from './config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE } from './config/featureFlags'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Rankings = lazy(() => import('./pages/Rankings'))
@@ -62,9 +62,9 @@ function App() {
             {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
             {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
             {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
-            <Route path="draft/adp" element={<AdpPage />} />
-            <Route path="draft/board" element={<DraftBoardPage />} />
-            <Route path="draft/rankings" element={<PreDraftRankingsPage />} />
+            {FF_DRAFT_PAGES && <Route path="draft/adp" element={<AdpPage />} />}
+            {FF_DRAFT_PAGES && <Route path="draft/board" element={<DraftBoardPage />} />}
+            {FF_DRAFT_PAGES && <Route path="draft/rankings" element={<PreDraftRankingsPage />} />}
             {FF_TRENDS && <Route path="trends" element={<Trends />} />}
             {FF_MINIGAMES && <Route path="minigames" element={<Minigames />} />}
             {FF_MINIGAMES && <Route path="minigames/hangman" element={<HangmanGame />} />}

@@ -4,9 +4,12 @@ punctuation (e.g. 'Nikola Jokic' vs 'Nikola Jokić')."""
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 _NORMALIZE_RE = re.compile(r"[^a-z0-9]")
 _POS_TOKEN = r"(?:PG|SG|SF|PF|C|G|F)"
@@ -124,9 +127,12 @@ def _unique_first_prefix_match(key: str, names: dict[str, int]) -> Optional[int]
         if first.startswith(ofirst) or ofirst.startswith(first):
             matches.append(espn_id)
     unique = set(matches)
-    if len(unique) == 1:
-        return unique.pop()
-    return None
+    if len(unique) != 1:
+        return None
+    espn_id = unique.pop()
+    resolved = next((name for name, catalog_id in names.items() if catalog_id == espn_id), None)
+    logger.info("Catalog prefix match: %r -> %r (espn_id=%s)", key, resolved, espn_id)
+    return espn_id
 
 
 # Known cross-source name mismatches that normalize_player_name alone can't
