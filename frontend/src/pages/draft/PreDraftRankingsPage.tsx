@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
   DndContext,
@@ -31,11 +31,10 @@ import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
 import PlayerDetailSheet from '../../components/draft/PlayerDetailSheet'
 import MoveToModal from '../../components/draft/MoveToModal'
 import { formatAdp, formatLastYearStat, hydrateAdpPlayer, nextShortSeasonLabel, shortSeasonLabel } from '../../utils/adp'
-import { downloadCsv, headerIndex, parseCsv, toCsv } from '../../utils/draftCsv'
+import { downloadCsv, parseRankingsCsvImport, RANKINGS_CSV_HEADERS, rankingsCsvFileError, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
 import {
   EMPTY_RANKINGS,
   mergeIdsIntoRankings,
-  mergeOrder,
   moveId,
   orderedPlayers,
   rankingsEqual,
@@ -112,6 +111,55 @@ function LastYearCells({ stats }: { stats?: LastYearStats | null }) {
   )
 }
 
+function FooterStat({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <div className="min-w-0 text-center">
+      <div className="text-[10px] uppercase tracking-wide text-gray-400 leading-none">{label}</div>
+      <div className="mt-0.5 tabular-nums text-xs text-gray-700 dark:text-gray-200 leading-tight">{children}</div>
+    </div>
+  )
+}
+
+function RankRowFooter({
+  player,
+  rank,
+  lastRank,
+  stats,
+}: {
+  player: AdpPlayer
+  rank: number
+  lastRank: number | null
+  stats?: LastYearStats | null
+}) {
+  return (
+    <div className="lg:hidden mt-2 w-full space-y-1.5">
+      <div className="grid grid-cols-4 gap-x-1 rounded-md bg-blue-50 dark:bg-blue-950/50 ring-1 ring-inset ring-blue-200/80 dark:ring-blue-800 py-1.5 px-0.5">
+        <FooterStat label="Blend rank">{player.blend_rank ?? '—'}</FooterStat>
+        <FooterStat label="Blend ADP">{formatAdp(player.blend)}</FooterStat>
+        <FooterStat label="Δ Blend">
+          <DeltaBadge rank={rank} compareRank={player.blend_rank} />
+        </FooterStat>
+        <FooterStat label="Δ Last">
+          <DeltaBadge rank={rank} compareRank={lastRank} />
+        </FooterStat>
+      </div>
+      <div className="grid grid-cols-4 gap-x-1 gap-y-1.5">
+        {LAST_YEAR_COLS.map((col) => (
+          <FooterStat key={col.key} label={col.label}>
+            {stats ? formatLastYearStat(stats[col.key], col.pct) : '—'}
+          </FooterStat>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function RankRowBody({
   player,
   rank,
@@ -124,40 +172,40 @@ function RankRowBody({
   stats?: LastYearStats | null
 }) {
   return (
-    <>
-      <div className="w-10 shrink-0 text-right tabular-nums text-sm font-semibold text-gray-700 dark:text-gray-200">
-        {rank}
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="w-6 lg:w-10 shrink-0 text-right tabular-nums text-sm font-semibold text-gray-700 dark:text-gray-200">
+          {rank}
+        </div>
+        <div className="min-w-0 flex-1">
+          <PlayerIdentityCell
+            name={player.name}
+            playerId={player.espn_id}
+            photoUrl={player.photo_url}
+            teamAbbr={player.team_abbr}
+            positions={player.positions}
+            rowSelectOnMobile
+            splitMetaOnMobile
+          />
+        </div>
+        <LastYearCells stats={stats} />
+        <div
+          className="hidden lg:block w-24 shrink-0 text-right text-sm tabular-nums text-gray-500"
+          title="Pick order if the board were sorted by Blend ADP"
+        >
+          {player.blend_rank ?? '—'}
+        </div>
+        <div className="hidden lg:block w-16 shrink-0 text-right text-sm tabular-nums text-gray-500">
+          {formatAdp(player.blend)}
+        </div>
+        <div className="hidden lg:block w-14 shrink-0 text-right text-sm">
+          <DeltaBadge rank={rank} compareRank={player.blend_rank} />
+        </div>
+        <div className="hidden lg:block w-24 shrink-0 text-right text-sm">
+          <DeltaBadge rank={rank} compareRank={lastRank} />
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <PlayerIdentityCell
-          name={player.name}
-          playerId={player.espn_id}
-          photoUrl={player.photo_url}
-          teamAbbr={player.team_abbr}
-          positions={player.positions}
-          rowSelectOnMobile
-        />
-      </div>
-      <LastYearCells stats={stats} />
-      <div
-        className="hidden sm:block w-24 shrink-0 text-right text-sm tabular-nums text-gray-500"
-        title="Pick order if the board were sorted by Blend ADP"
-      >
-        {player.blend_rank ?? '—'}
-      </div>
-      <div className="hidden sm:block w-16 shrink-0 text-right text-sm tabular-nums text-gray-500">
-        {formatAdp(player.blend)}
-      </div>
-      <div className="hidden sm:block w-14 shrink-0 text-right text-sm">
-        <DeltaBadge rank={rank} compareRank={player.blend_rank} />
-      </div>
-      <div className="hidden sm:block w-24 shrink-0 text-right text-sm">
-        <DeltaBadge rank={rank} compareRank={lastRank} />
-      </div>
-      <div className="sm:hidden w-10 shrink-0 text-right text-sm">
-        <DeltaBadge rank={rank} compareRank={player.blend_rank} />
-      </div>
-    </>
+    </div>
   )
 }
 
@@ -190,42 +238,45 @@ function SortableRankRow({
       ref={setNodeRef}
       style={style}
       onClick={onSelect}
-      className={`flex items-center gap-2 sm:gap-3 px-3 py-2.5 sm:py-2 border-b border-gray-100 dark:border-gray-800 select-none ${
+      className={`flex flex-col gap-0 px-3 py-2.5 sm:py-2 border-b border-gray-100 dark:border-gray-800 select-none ${
         isDragging ? 'opacity-30' : ''
       } ${
         selected ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/70'
       }`}
     >
-      <button
-        type="button"
-        className="shrink-0 w-10 h-11 sm:w-8 sm:h-10 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-grab active:cursor-grabbing touch-none touch-manipulation"
-        aria-label={`Drag ${player.name} to reorder`}
-        title="Drag to reorder"
-        onClick={(e) => e.stopPropagation()}
-        {...attributes}
-        {...listeners}
-      >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <circle cx="5" cy="3" r="1.4" />
-          <circle cx="11" cy="3" r="1.4" />
-          <circle cx="5" cy="8" r="1.4" />
-          <circle cx="11" cy="8" r="1.4" />
-          <circle cx="5" cy="13" r="1.4" />
-          <circle cx="11" cy="13" r="1.4" />
-        </svg>
-      </button>
-      <RankRowBody player={player} rank={rank} lastRank={lastRank} stats={stats} />
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onMoveTo()
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        className="hidden sm:inline-flex shrink-0 w-[4.5rem] px-2 py-1 rounded-md text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-      >
-        Move to
-      </button>
+      <div className="flex items-center gap-1.5 sm:gap-3">
+        <button
+          type="button"
+          className="shrink-0 w-7 h-10 lg:w-8 lg:h-10 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-grab active:cursor-grabbing touch-none touch-manipulation"
+          aria-label={`Drag ${player.name} to reorder`}
+          title="Drag to reorder"
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="3" r="1.4" />
+            <circle cx="11" cy="3" r="1.4" />
+            <circle cx="5" cy="8" r="1.4" />
+            <circle cx="11" cy="8" r="1.4" />
+            <circle cx="5" cy="13" r="1.4" />
+            <circle cx="11" cy="13" r="1.4" />
+          </svg>
+        </button>
+        <RankRowBody player={player} rank={rank} lastRank={lastRank} stats={stats} />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onMoveTo()
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="hidden sm:inline-flex shrink-0 w-[4.5rem] px-2 py-1 rounded-md text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+        >
+          Move to
+        </button>
+      </div>
+      <RankRowFooter player={player} rank={rank} lastRank={lastRank} stats={stats} />
     </div>
   )
 }
@@ -248,6 +299,7 @@ export default function PreDraftRankingsPage() {
   const [detailsById, setDetailsById] = useState<Map<string, AdpPlayer>>(() => new Map())
   const [detailsSeason, setDetailsSeason] = useState<{ last?: string; proj?: string }>({})
   const [importMsg, setImportMsg] = useState<string | null>(null)
+  const [pendingImport, setPendingImport] = useState<Extract<RankingsCsvImportResult, { ok: true }> | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [statsFrom, setStatsFrom] = usePersistedState<StatsFrom>('draft.rankings.statsFrom', 'actual')
@@ -500,7 +552,7 @@ export default function PreDraftRankingsPage() {
         return
       }
       if (typing) return
-      if (movePlayerId) return
+      if (movePlayerId || pendingImport) return
       if (e.key === 'Escape') {
         setSelectedId(null)
         return
@@ -530,10 +582,10 @@ export default function PreDraftRankingsPage() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [board, dirty, movePlayerId, moveSelected, saveRankings])
+  }, [board, dirty, movePlayerId, pendingImport, moveSelected, saveRankings])
 
   const exportCsv = () => {
-    const header = ['rank', 'id', 'name', 'team', 'positions']
+    const header = [...RANKINGS_CSV_HEADERS]
     const rows = ordered.map((p, i) => [
       String(i + 1),
       p.id,
@@ -545,40 +597,49 @@ export default function PreDraftRankingsPage() {
   }
 
   const importCsv = (file: File) => {
+    const fileError = rankingsCsvFileError(file)
+    if (fileError) {
+      setImportMsg(fileError)
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
-      const text = String(reader.result || '')
-      const rows = parseCsv(text)
-      if (rows.length < 2) {
-        setImportMsg('CSV had no data rows.')
+      const result = parseRankingsCsvImport(
+        String(reader.result || ''),
+        players.map((p) => ({ id: p.id, name: p.name })),
+      )
+      if (!result.ok) {
+        setImportMsg(result.error)
         return
       }
-      const header = rows[0]
-      const idIdx = headerIndex(header, 'id', 'espn_id', 'player_id')
-      const nameIdx = headerIndex(header, 'name', 'player', 'player_name')
-      const byId = new Map(players.map((p) => [p.id, p]))
-      const byName = new Map(players.map((p) => [p.name.toLowerCase(), p]))
-      const nextOrder: string[] = []
-      const unknown: string[] = []
-      for (const row of rows.slice(1)) {
-        const id = idIdx >= 0 ? row[idIdx]?.trim() : ''
-        const name = nameIdx >= 0 ? row[nameIdx]?.trim() : ''
-        const player = (id && byId.get(id)) || (name && byName.get(name.toLowerCase()))
-        if (!player) {
-          if (name || id) unknown.push(name || id)
-          continue
-        }
-        if (!nextOrder.includes(player.id)) nextOrder.push(player.id)
-      }
-      const merged = mergeOrder(nextOrder, players.map((p) => p.id))
-      commit({ ...board, order: merged })
-      setImportMsg(
-        unknown.length
-          ? `Imported ${nextOrder.length} players. Unmatched: ${unknown.slice(0, 8).join(', ')}${unknown.length > 8 ? '…' : ''}`
-          : `Imported ${nextOrder.length} players.`,
-      )
+      setPendingImport(result)
     }
     reader.readAsText(file)
+  }
+
+  useEffect(() => {
+    if (!pendingImport) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPendingImport(null)
+    }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [pendingImport])
+
+  const confirmPendingImport = () => {
+    if (!pendingImport) return
+    commit({ ...board, order: pendingImport.order })
+    setImportMsg(
+      pendingImport.unknown.length
+        ? `Imported ${pendingImport.matched} players. Unmatched: ${pendingImport.unknown.slice(0, 8).join(', ')}${pendingImport.unknown.length > 8 ? '…' : ''}`
+        : `Imported ${pendingImport.matched} players.`,
+    )
+    setPendingImport(null)
   }
 
   const goToPage = (next: number) => {
@@ -736,16 +797,12 @@ export default function PreDraftRankingsPage() {
             <button type="button" className={btnGhost} onClick={redo}>
               Redo
             </button>
-            {false && (
-              <>
-                <button type="button" className={btnGhost} onClick={exportCsv}>
-                  Export CSV
-                </button>
-                <button type="button" className={btnGhost} onClick={() => fileRef.current?.click()}>
-                  Import CSV
-                </button>
-              </>
-            )}
+            <button type="button" className={btnGhost} onClick={exportCsv}>
+              Export CSV
+            </button>
+            <button type="button" className={btnGhost} onClick={() => fileRef.current?.click()}>
+              Import CSV
+            </button>
           </div>
           <div ref={moreMenuRef} className="relative sm:hidden ml-auto">
             <button
@@ -810,32 +867,28 @@ export default function PreDraftRankingsPage() {
                 >
                   Redo
                 </button>
-                {false && (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        exportCsv()
-                        setMoreOpen(false)
-                      }}
-                      className={menuItem}
-                    >
-                      Export CSV
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        fileRef.current?.click()
-                        setMoreOpen(false)
-                      }}
-                      className={menuItem}
-                    >
-                      Import CSV
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    exportCsv()
+                    setMoreOpen(false)
+                  }}
+                  className={menuItem}
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    fileRef.current?.click()
+                    setMoreOpen(false)
+                  }}
+                  className={menuItem}
+                >
+                  Import CSV
+                </button>
               </div>
             )}
           </div>
@@ -869,21 +922,30 @@ export default function PreDraftRankingsPage() {
         ) : (
           <p className="hidden lg:block text-xs text-gray-400">Click a player to select, then use ↑/↓ or drag the handle.</p>
         )}
-        {importMsg ? <p className="text-sm text-gray-600 dark:text-gray-300">{importMsg}</p> : null}
+        {importMsg ? (
+          <p
+            className={`text-sm ${
+              importMsg.startsWith('Imported ')
+                ? 'text-gray-600 dark:text-gray-300'
+                : 'text-rose-600 dark:text-rose-400'
+            }`}
+          >
+            {importMsg}
+          </p>
+        ) : null}
       </div>
 
-      <div ref={listRef} className="card overflow-x-auto">
-        <div className="sm:hidden flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-          <div className="w-10 shrink-0" />
-          <div className="w-10 shrink-0 text-right">Rank</div>
+      <div ref={listRef} className="card overflow-x-hidden">
+        <div className="lg:hidden flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          <div className="w-7 shrink-0" />
+          <div className="w-6 shrink-0 text-right">Rank</div>
           <div className="min-w-0 flex-1">Player</div>
-          <div className="w-10 shrink-0 text-right">Δ Blend</div>
         </div>
-        <div className="hidden sm:flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+        <div className="hidden lg:flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
           <div className="w-8 shrink-0" />
           <div className="w-10 shrink-0 text-right">Rank</div>
           <div className="min-w-0 flex-1">Player</div>
-          <div className="hidden lg:flex items-center shrink-0" title={statsTitle}>
+          <div className="flex items-center shrink-0" title={statsTitle}>
             {LAST_YEAR_COLS.map((col) => (
               <div key={col.key} className="w-11 text-right">
                 {col.label}
@@ -938,18 +1000,26 @@ export default function PreDraftRankingsPage() {
           </SortableContext>
           <DragOverlay dropAnimation={{ duration: 180, easing: 'ease-out' }}>
             {activePlayer ? (
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-900 shadow-xl max-w-[calc(100vw-1.5rem)]">
-                <div className="w-8 shrink-0 flex items-center justify-center text-gray-400">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <circle cx="5" cy="3" r="1.4" />
-                    <circle cx="11" cy="3" r="1.4" />
-                    <circle cx="5" cy="8" r="1.4" />
-                    <circle cx="11" cy="8" r="1.4" />
-                    <circle cx="5" cy="13" r="1.4" />
-                    <circle cx="11" cy="13" r="1.4" />
-                  </svg>
+              <div className="flex flex-col px-3 py-2 rounded-lg border border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-900 shadow-xl w-[calc(100vw-1.5rem)] max-w-lg">
+                <div className="flex items-start lg:items-center gap-3">
+                  <div className="w-8 shrink-0 flex items-center justify-center text-gray-400">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                      <circle cx="5" cy="3" r="1.4" />
+                      <circle cx="11" cy="3" r="1.4" />
+                      <circle cx="5" cy="8" r="1.4" />
+                      <circle cx="11" cy="8" r="1.4" />
+                      <circle cx="5" cy="13" r="1.4" />
+                      <circle cx="11" cy="13" r="1.4" />
+                    </svg>
+                  </div>
+                  <RankRowBody
+                    player={activePlayer}
+                    rank={activeRank > 0 ? activeRank : 0}
+                    lastRank={savedRankById?.get(activePlayer.id) ?? null}
+                    stats={playerStats(activePlayer)}
+                  />
                 </div>
-                <RankRowBody
+                <RankRowFooter
                   player={activePlayer}
                   rank={activeRank > 0 ? activeRank : 0}
                   lastRank={savedRankById?.get(activePlayer.id) ?? null}
@@ -1046,6 +1116,43 @@ export default function PreDraftRankingsPage() {
           onClose={closeMoveTo}
           onNeedIds={onMoveNeedIds}
         />
+      ) : null}
+      {pendingImport ? (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 px-0 sm:px-4" onClick={() => setPendingImport(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-confirm-title"
+            className="w-full sm:max-w-md rounded-t-2xl sm:rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="import-confirm-title" className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              Replace current order?
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+              This will replace your current order with {pendingImport.matched} players from this CSV. The change
+              stays unsaved until you click Save.
+            </p>
+            {pendingImport.unknown.length ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">
+                {pendingImport.unknown.length} id{pendingImport.unknown.length === 1 ? '' : 's'} in the file are not on
+                the current board and will be skipped.
+              </p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingImport(null)}
+                className="flex-1 sm:flex-none px-3 py-2.5 sm:py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"
+              >
+                Cancel
+              </button>
+              <button type="button" onClick={confirmPendingImport} className="btn-primary flex-1 sm:flex-none text-sm py-2.5 sm:py-1.5 px-4">
+                Replace order
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
       {dirty && !selectedId ? (
         <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">

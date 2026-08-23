@@ -345,11 +345,9 @@ export default function AdpPage() {
               {pos}
             </button>
           ))}
-          {false && (
-            <button type="button" onClick={exportCsv} className="btn-primary text-xs py-1.5 px-3 ml-auto">
-              Export CSV
-            </button>
-          )}
+          <button type="button" onClick={exportCsv} className="btn-primary text-xs py-1.5 px-3 ml-auto">
+            Export CSV
+          </button>
         </div>
       </div>
 
