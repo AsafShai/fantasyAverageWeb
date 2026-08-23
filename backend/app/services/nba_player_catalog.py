@@ -68,3 +68,13 @@ def get_player_bio(player_id: str | int) -> Optional[NbaPlayerBio]:
     except (ValueError, TypeError):
         return None
     return _load_catalog().get(espn_id)
+
+
+def list_all_bios() -> dict[int, NbaPlayerBio]:
+    """Return a copy of the ESPN-id → bio map."""
+    return dict(_load_catalog())
+
+
+def reset_catalog_cache() -> None:
+    global _by_id
+    _by_id = None

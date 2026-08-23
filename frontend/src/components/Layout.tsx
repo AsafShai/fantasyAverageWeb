@@ -1,8 +1,8 @@
 import { Outlet, Link, useLocation } from 'react-router'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
 
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/trends': () => import('../pages/Trends'),
@@ -11,6 +11,9 @@ const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/analytics': () => import('../pages/Analytics'),
   '/players': () => import('../pages/Players'),
   '/estimator': () => import('../pages/Estimator'),
+  '/draft/adp': () => import('../pages/draft/AdpPage'),
+  '/draft/board': () => import('../pages/draft/DraftBoardPage'),
+  '/draft/rankings': () => import('../pages/draft/PreDraftRankingsPage'),
 }
 
 const prefetchRoute = (path: string) => {
@@ -81,6 +84,8 @@ const Layout = () => {
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const [mobileOpenGroup, setMobileOpenGroup] = useState<string | null>(null)
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark'
   })
@@ -116,7 +121,10 @@ const Layout = () => {
     ...(FF_TRENDS ? [{ path: '/trends', label: 'Trends', icon: '📈' }] : []),
   ]
 
-  const closeMobileMenu = () => setMobileMenuOpen(false)
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false)
+    setMobileOpenGroup(null)
+  }
 
   if (FF_NAV_REORG) {
     return (
@@ -140,21 +148,30 @@ const Layout = () => {
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-0.5 overflow-x-auto">
               {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onMouseEnter={() => prefetchRoute(item.path)}
-                  onTouchStart={() => prefetchRoute(item.path)}
-                  className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-200 ${
-                    location.pathname === item.path
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
-                  }`}
-                  title={item.label}
-                >
-                  <span className="text-xl xl:text-sm">{item.icon}</span>
-                  <span className="hidden xl:inline">{item.label}</span>
-                </Link>
+                <Fragment key={item.path}>
+                  <Link
+                    to={item.path}
+                    onMouseEnter={() => prefetchRoute(item.path)}
+                    onTouchStart={() => prefetchRoute(item.path)}
+                    className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-200 ${
+                      location.pathname === item.path
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
+                    }`}
+                    title={item.label}
+                  >
+                    <span className="text-xl xl:text-sm">{item.icon}</span>
+                    <span className="hidden xl:inline">{item.label}</span>
+                  </Link>
+                  {item.path === '/players' && FF_DRAFT_PAGES && (
+                    <DesktopNavGroup
+                      group={DRAFT_NAV_GROUP}
+                      openKey={openGroup}
+                      setOpenKey={setOpenGroup}
+                      isActive={DRAFT_NAV_GROUP.items.some((d) => d.path === location.pathname)}
+                    />
+                  )}
+                </Fragment>
               ))}
               <div className="mx-3 h-6 w-0.5 bg-gray-300 dark:bg-gray-500 shrink-0 rounded-full" />
               <SearchButton onClick={() => setSearchOpen(true)} />
@@ -200,20 +217,30 @@ const Layout = () => {
             <div className="md:hidden pb-4">
               <div className="flex flex-col space-y-1">
                 {navItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={closeMobileMenu}
-                    onTouchStart={() => prefetchRoute(item.path)}
-                    className={`inline-flex items-center px-4 py-3 rounded-md text-base font-medium transition-all duration-200 ${
-                      location.pathname === item.path
-                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
-                    }`}
-                  >
-                    <span className="mr-3 text-xl">{item.icon}</span>
-                    {item.label}
-                  </Link>
+                  <Fragment key={item.path}>
+                    <Link
+                      to={item.path}
+                      onClick={closeMobileMenu}
+                      onTouchStart={() => prefetchRoute(item.path)}
+                      className={`inline-flex items-center px-4 py-3 rounded-md text-base font-medium transition-all duration-200 ${
+                        location.pathname === item.path
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <span className="mr-3 text-xl">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                    {item.path === '/players' && FF_DRAFT_PAGES && (
+                      <MobileNavGroup
+                        group={DRAFT_NAV_GROUP}
+                        openKey={mobileOpenGroup}
+                        setOpenKey={setMobileOpenGroup}
+                        isActive={DRAFT_NAV_GROUP.items.some((d) => d.path === location.pathname)}
+                        onNavigate={closeMobileMenu}
+                      />
+                    )}
+                  </Fragment>
                 ))}
               </div>
             </div>
@@ -247,6 +274,17 @@ interface NavGroupDef {
   label: string
   icon: string
   items: NavLeaf[]
+}
+
+const DRAFT_NAV_GROUP: NavGroupDef = {
+  key: 'draft',
+  label: 'Draft',
+  icon: '📝',
+  items: [
+    { path: '/draft/adp', label: 'ADP', icon: '📊' },
+    { path: '/draft/board', label: 'Draft Board', icon: '🗂️' },
+    { path: '/draft/rankings', label: 'Pre-Draft Rankings', icon: '📋' },
+  ],
 }
 
 const desktopItemClass = (active: boolean) =>
@@ -504,6 +542,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
         ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
       ],
     },
+    ...(FF_DRAFT_PAGES ? [DRAFT_NAV_GROUP] : []),
     {
       key: 'insights',
       label: 'Insights',
