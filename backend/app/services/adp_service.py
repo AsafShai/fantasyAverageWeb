@@ -12,11 +12,10 @@ from typing import Optional
 from app.models.adp import AdpIndexResponse, AdpPlayer, AdpResponse, LastYearStats, SiteAdp
 from app.models.nba_player_models import NbaPlayerBio
 from app.config import settings
-from app.services import nba_player_catalog
-from app.services.adp_fetch import fetch_espn_projection_map, fetch_live_adp_payload
+from app.services import adp_cache, nba_player_catalog
+from app.services.adp_fetch import fetch_espn_stat_splits_map, fetch_live_adp_payload
 from app.services.adp_query import filter_players, paginated_response, team_abbrs, to_index_player
-from app.services.db_service import DBService
-from app.services.player_service import espn_season_string, get_season_anchor_date
+from app.services.player_service import espn_season_string
 from app.utils.name_matching import (
     clean_fantasy_scraped_name,
     fantasy_name_keys,
@@ -42,12 +41,11 @@ _CATALOG_POS = {
 _cached: Optional[AdpResponse] = None
 _cached_at: Optional[datetime] = None
 _refresh_lock = asyncio.Lock()
-_last_year_cache: Optional[tuple[str, dict[int, LastYearStats]]] = None
-_last_year_cached_at: Optional[datetime] = None
-_last_year_lock = asyncio.Lock()
-_projection_cache: Optional[tuple[str, dict[int, LastYearStats]]] = None
-_projection_cached_at: Optional[datetime] = None
-_projection_lock = asyncio.Lock()
+# (actual_label, actual_by_espn_id, projection_label, projection_by_espn_id) -- both splits
+# come from one ESPN request (see fetch_espn_stat_splits), so one cache entry covers both.
+_espn_stats_cache: Optional[tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]] = None
+_espn_stats_cached_at: Optional[datetime] = None
+_espn_stats_lock = asyncio.Lock()
 
 
 def _cache_fresh(cached_at: Optional[datetime], now: Optional[datetime] = None) -> bool:
@@ -387,47 +385,13 @@ def build_adp_response(
 
 
 def reset_adp_cache() -> None:
-    global _cached, _cached_at, _last_year_cache, _last_year_cached_at
-    global _projection_cache, _projection_cached_at
+    global _cached, _cached_at, _espn_stats_cache, _espn_stats_cached_at
     _cached = None
     _cached_at = None
-    _last_year_cache = None
-    _last_year_cached_at = None
-    _projection_cache = None
-    _projection_cached_at = None
+    _espn_stats_cache = None
+    _espn_stats_cached_at = None
+    adp_cache.reset_provider_cache()
 
-
-
-def _num(value, default: float = 0.0) -> float:
-    try:
-        x = float(value)
-    except (TypeError, ValueError):
-        return default
-    if x != x:
-        return default
-    return x
-
-
-def last_year_from_agg_row(row) -> Optional[LastYearStats]:
-    data = dict(row) if not isinstance(row, dict) else row
-    gp = int(_num(data.get("gp")))
-    if gp <= 0:
-        return None
-
-    def per(key: str) -> float:
-        return round(_num(data.get(key)) / gp, 1)
-
-    return LastYearStats(
-        gp=gp,
-        fg_pct=round(_num(data.get("fg_pct")), 4),
-        ft_pct=round(_num(data.get("ft_pct")), 4),
-        ppg=per("pts"),
-        rpg=per("reb"),
-        apg=per("ast"),
-        spg=per("stl"),
-        bpg=per("blk"),
-        three_pm=per("three_pm"),
-    )
 
 
 def apply_last_year_stats(
@@ -454,92 +418,79 @@ def apply_projection_stats(
     return response.model_copy(update={"players": players, "projection_season": projection_season})
 
 
-def resolve_adp_seasons() -> tuple[str, int]:
-    """(actual stats season, ESPN season_id to project).
+def resolve_adp_seasons() -> tuple[str, int, int]:
+    """(actual stats season label, actual season's ESPN id, ESPN season_id to project).
 
     Before the app season tips off there are no games to average, so the draft board
     shows the previous season's actuals. Projections always track the season being
     played or drafted: ESPN only publishes a season once it opens, so season_id + 1
     would leave the toggle blank all year.
     """
-    current_id = settings.season_id
+    proj_id = settings.season_id
     started = date.today() >= settings.season_start
-    return (espn_season_string(current_id if started else current_id - 1), current_id)
+    actual_id = proj_id if started else proj_id - 1
+    return (espn_season_string(actual_id), actual_id, proj_id)
 
 
-async def load_last_year_stats() -> tuple[str, dict[int, LastYearStats]]:
-    """Per-game averages from the most recent season that actually has games."""
-    global _last_year_cache, _last_year_cached_at
-    season, _ = resolve_adp_seasons()
+async def load_espn_stat_splits() -> tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]:
+    """(actual season label, actual per-game stats, projection season label, projections).
+
+    Both splits come from a single ESPN request (see fetch_espn_stat_splits) -- there is no
+    separate DB read for actuals. Projections stay empty until ESPN publishes them; that
+    alone does not block caching the actuals half.
+    """
+    global _espn_stats_cache, _espn_stats_cached_at
+    actual_label, actual_id, proj_id = resolve_adp_seasons()
+    proj_label = espn_season_string(proj_id)
     now = datetime.now(timezone.utc)
-    cached = _last_year_cache
-    if cached is not None and cached[0] == season and _cache_fresh(_last_year_cached_at, now):
+
+    def _fresh(entry):
+        return (
+            entry is not None
+            and entry[0] == actual_label
+            and entry[2] == proj_label
+            and _cache_fresh(_espn_stats_cached_at, now)
+        )
+
+    cached = _espn_stats_cache
+    if _fresh(cached):
+        assert cached is not None
         return cached
-    async with _last_year_lock:
+    async with _espn_stats_lock:
         now = datetime.now(timezone.utc)
-        cached = _last_year_cache
-        if cached is not None and cached[0] == season and _cache_fresh(_last_year_cached_at, now):
+        cached = _espn_stats_cache
+        if _fresh(cached):
+            assert cached is not None
             return cached
         try:
-            db = DBService()
-            anchor = await get_season_anchor_date(season, db)
-            # settings.season_start tracks the upcoming season, which sits after a past
-            # season's anchor and would invert the window; the season filter does the work.
-            start, end = date(int(season[:4]), 7, 1), anchor
-            df, _, _ = await db.aggregate_player_games(start, end, season)
+            raw_actual, raw_proj = await fetch_espn_stat_splits_map(
+                actual_season_id=actual_id, proj_season_id=proj_id
+            )
         except Exception:
-            logger.exception("Last-year stats load failed")
-            if cached is not None and cached[0] == season:
+            logger.exception("ESPN stat split fetch failed")
+            if cached is not None:
                 return cached
-            return (season, {})
-        if df is None:
-            logger.warning("Last-year aggregate returned no frame; not caching empty result")
-            if cached is not None and cached[0] == season:
+            return (actual_label, {}, proj_label, {})
+        actual_by_id = {espn_id: LastYearStats(**row) for espn_id, row in raw_actual.items()}
+        proj_by_id = {espn_id: LastYearStats(**row) for espn_id, row in raw_proj.items()}
+        if not actual_by_id and not proj_by_id:
+            logger.warning(
+                "ESPN stat splits empty for actual=%s proj=%s; not caching", actual_label, proj_label
+            )
+            if cached is not None:
                 return cached
-            return (season, {})
-        by_id: dict[int, LastYearStats] = {}
-        if not df.empty:
-            for _, row in df.iterrows():
-                try:
-                    espn_id = int(row["player_id"])
-                except (TypeError, ValueError, KeyError):
-                    continue
-                stats = last_year_from_agg_row(row)
-                if stats is not None:
-                    by_id[espn_id] = stats
-        _last_year_cache = (season, by_id)
-        _last_year_cached_at = now
-        logger.info("Loaded last-year stats for %d players (%s)", len(by_id), season)
-        return _last_year_cache
-
-
-async def load_espn_projections() -> tuple[str, dict[int, LastYearStats]]:
-    """Projections for the season being drafted. Empty until ESPN publishes them."""
-    global _projection_cache, _projection_cached_at
-    _, proj_id = resolve_adp_seasons()
-    label = espn_season_string(proj_id)
-    now = datetime.now(timezone.utc)
-    if _projection_cache is not None and _projection_cache[0] == label and _cache_fresh(_projection_cached_at, now):
-        return _projection_cache
-
-    async with _projection_lock:
-        now = datetime.now(timezone.utc)
-        if _projection_cache is not None and _projection_cache[0] == label and _cache_fresh(_projection_cached_at, now):
-            return _projection_cache
-        try:
-            raw = await fetch_espn_projection_map(proj_id)
-        except Exception:
-            # ESPN 404s a season until it opens; report no projections rather than an older season's.
-            logger.info("ESPN projections unavailable for %s", label)
-            return (label, {})
-        by_id = {espn_id: LastYearStats(**row) for espn_id, row in raw.items()}
-        if not by_id:
-            logger.warning("ESPN projections empty for %s; not caching", label)
-            return (label, {})
-        _projection_cache = (label, by_id)
-        _projection_cached_at = now
-        logger.info("Loaded ESPN projections for %d players (%s)", len(by_id), label)
-        return _projection_cache
+            return (actual_label, {}, proj_label, {})
+        fresh_entry = (actual_label, actual_by_id, proj_label, proj_by_id)
+        _espn_stats_cache = fresh_entry
+        _espn_stats_cached_at = now
+        logger.info(
+            "Loaded ESPN stat splits: %d actuals (%s), %d projections (%s)",
+            len(actual_by_id),
+            actual_label,
+            len(proj_by_id),
+            proj_label,
+        )
+        return fresh_entry
 
 
 async def get_adp_response_enriched(
@@ -573,10 +524,7 @@ async def get_adp_response_enriched(
         ranked_only=ranked_only,
         ids=ids,
     )
-    (last_season, last_by_id), (proj_season, proj_by_id) = await asyncio.gather(
-        load_last_year_stats(),
-        load_espn_projections(),
-    )
+    last_season, last_by_id, proj_season, proj_by_id = await load_espn_stat_splits()
     out = sliced.model_copy(update={"last_year_season": last_season, "projection_season": proj_season})
     if last_by_id:
         out = apply_last_year_stats(out, last_by_id, last_season)

@@ -13,8 +13,7 @@ from app.services.adp_service import (
     build_adp_response,
     compute_blend,
     compute_spread,
-    last_year_from_agg_row,
-    load_espn_projections,
+    load_espn_stat_splits,
     normalize_player_name,
     parse_sites,
     reset_adp_cache,
@@ -258,33 +257,6 @@ def test_build_adp_response_merges_scraped_name_duplicates():
     assert holland.espn.adp == 255
 
 
-def test_last_year_from_agg_row_averages_and_skips_zero_gp():
-    assert last_year_from_agg_row({"gp": 0, "pts": 10}) is None
-    stats = last_year_from_agg_row(
-        {
-            "gp": 2,
-            "pts": 50,
-            "reb": 20,
-            "ast": 10,
-            "stl": 3,
-            "blk": 1,
-            "three_pm": 4,
-            "fg_pct": 0.5,
-            "ft_pct": 0.8,
-        }
-    )
-    assert stats is not None
-    assert stats.gp == 2
-    assert stats.ppg == 25.0
-    assert stats.rpg == 10.0
-    assert stats.apg == 5.0
-    assert stats.spg == 1.5
-    assert stats.bpg == 0.5
-    assert stats.three_pm == 2.0
-    assert stats.fg_pct == 0.5
-    assert stats.ft_pct == 0.8
-
-
 def test_apply_last_year_stats_joins_by_espn_id():
     payload = {
         "seasonLabel": "2025-26",
@@ -327,6 +299,19 @@ def test_apply_projection_stats_joins_by_espn_id():
     assert by_name["Rookie"].projection is None
 
 
+_ACTUAL_ROW = {
+    99: {
+        "gp": 70,
+        "fg_pct": 0.5,
+        "ft_pct": 0.8,
+        "ppg": 18.0,
+        "rpg": 4.0,
+        "apg": 3.0,
+        "spg": 1.0,
+        "bpg": 0.5,
+        "three_pm": 1.5,
+    }
+}
 _PROJ_ROW = {
     99: {
         "gp": 82,
@@ -343,26 +328,42 @@ _PROJ_ROW = {
 
 
 @pytest.mark.asyncio
-async def test_projection_cache_does_not_store_empty_failure():
+async def test_stat_splits_cache_does_not_store_empty_failure():
     reset_adp_cache()
-    fetch = AsyncMock(side_effect=[{}, _PROJ_ROW])
-    with patch("app.services.adp_service.fetch_espn_projection_map", fetch):
-        empty = await load_espn_projections()
-        filled = await load_espn_projections()
-    assert empty[1] == {}
-    assert 99 in filled[1]
+    fetch = AsyncMock(side_effect=[({}, {}), (_ACTUAL_ROW, _PROJ_ROW)])
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        empty = await load_espn_stat_splits()
+        filled = await load_espn_stat_splits()
+    assert empty[1] == {} and empty[3] == {}
+    assert 99 in filled[1] and 99 in filled[3]
     assert fetch.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_projection_cache_retries_after_exception():
+async def test_stat_splits_cache_retries_after_exception():
     reset_adp_cache()
-    fetch = AsyncMock(side_effect=[RuntimeError("down"), _PROJ_ROW])
-    with patch("app.services.adp_service.fetch_espn_projection_map", fetch):
-        empty = await load_espn_projections()
-        filled = await load_espn_projections()
-    assert empty[1] == {}
-    assert 99 in filled[1]
+    fetch = AsyncMock(side_effect=[RuntimeError("down"), (_ACTUAL_ROW, _PROJ_ROW)])
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        empty = await load_espn_stat_splits()
+        filled = await load_espn_stat_splits()
+    assert empty[1] == {} and empty[3] == {}
+    assert 99 in filled[1] and 99 in filled[3]
+
+
+@pytest.mark.asyncio
+async def test_stat_splits_caches_actuals_even_when_projections_unpublished():
+    """ESPN 404s next season's projections until it opens; the actuals half is real and
+    useful long before that, so actuals + empty projections must still be cached rather
+    than treated as a total failure."""
+    reset_adp_cache()
+    fetch = AsyncMock(return_value=(_ACTUAL_ROW, {}))
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        first = await load_espn_stat_splits()
+        second = await load_espn_stat_splits()
+    assert 99 in first[1]
+    assert first[3] == {}
+    assert second == first
+    fetch.assert_awaited_once()  # second call served from cache, not refetched
 
 
 def test_resolve_seasons_before_tipoff_uses_previous_actuals():
@@ -371,7 +372,7 @@ def test_resolve_seasons_before_tipoff_uses_previous_actuals():
         cfg.season_start = date(2026, 10, 20)
         with patch("app.services.adp_service.date") as fake_date:
             fake_date.today.return_value = date(2026, 8, 24)
-            assert resolve_adp_seasons() == ("2025-26", 2027)
+            assert resolve_adp_seasons() == ("2025-26", 2026, 2027)
 
 
 def test_resolve_seasons_in_season_uses_current_actuals():
@@ -380,4 +381,4 @@ def test_resolve_seasons_in_season_uses_current_actuals():
         cfg.season_start = date(2026, 10, 20)
         with patch("app.services.adp_service.date") as fake_date:
             fake_date.today.return_value = date(2027, 1, 15)
-            assert resolve_adp_seasons() == ("2026-27", 2027)
+            assert resolve_adp_seasons() == ("2026-27", 2027, 2027)

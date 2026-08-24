@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.services import adp_cache
 from app.services.adp_fetch import (
     assemble_adp_payload,
     coerce_adp,
@@ -14,6 +15,16 @@ from app.services.adp_fetch import (
 )
 
 
+@pytest.fixture(autouse=True)
+def no_real_adp_provider_db():
+    """fetch_live_adp_payload now persists through adp_cache, which talks to Neon by
+    default. Keep these tests off the real database -- adp_cache's own DB behavior is
+    covered separately in test_adp_cache.py."""
+    with patch("app.services.adp_cache.DBService") as mock_db:
+        mock_db.return_value._get_pool = AsyncMock(return_value=None)
+        yield
+
+
 def test_coerce_adp_rejects_blank_and_non_positive():
     assert coerce_adp(None) is None
     assert coerce_adp("-") is None
@@ -22,7 +33,7 @@ def test_coerce_adp_rejects_blank_and_non_positive():
     assert coerce_adp("1,234.5") == 1234.5
 
 
-def test_parse_espn_payload_uses_standard_rank():
+def test_parse_espn_payload_uses_roto_rank():
     data = {
         "players": [
             {
@@ -31,7 +42,10 @@ def test_parse_espn_payload_uses_standard_rank():
                     "id": 3112335,
                     "fullName": "Nikola Jokic",
                     "eligibleSlots": [4],
-                    "draftRanksByRankType": {"STANDARD": {"rank": 1, "averageRank": 1.4}},
+                    "draftRanksByRankType": {
+                        "STANDARD": {"rank": 1, "averageRank": None},
+                        "ROTO": {"rank": 2, "averageRank": 1.4},
+                    },
                 },
             },
             {
@@ -45,6 +59,22 @@ def test_parse_espn_payload_uses_standard_rank():
     }
     rows = parse_espn_payload(data)
     assert rows == [(3112335, "Nikola Jokic", 1.4, ["C"])]
+
+
+def test_parse_espn_payload_ignores_standard_only_ranks():
+    data = {
+        "players": [
+            {
+                "player": {
+                    "id": 3112335,
+                    "fullName": "Nikola Jokic",
+                    "eligibleSlots": [4],
+                    "draftRanksByRankType": {"STANDARD": {"rank": 1, "averageRank": 1.4}},
+                },
+            },
+        ]
+    }
+    assert parse_espn_payload(data) == []
 
 
 def test_projection_from_stat_block_prefers_average_stats():
@@ -151,6 +181,8 @@ def test_assemble_adp_payload_keeps_per_site_rows():
 
 @pytest.mark.asyncio
 async def test_fetch_live_adp_payload_omits_failed_site():
+    adp_cache.reset_provider_cache()
+
     async def espn(_client):
         return [(1, "A", 1.0, ["C"])], "espn"
 
@@ -176,6 +208,8 @@ async def test_fetch_live_adp_payload_omits_failed_site():
 
 @pytest.mark.asyncio
 async def test_fetch_live_adp_payload_raises_when_all_fail():
+    adp_cache.reset_provider_cache()
+
     async def boom(_client):
         raise RuntimeError("down")
 

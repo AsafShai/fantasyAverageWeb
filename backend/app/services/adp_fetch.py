@@ -11,6 +11,7 @@ from typing import Optional
 import httpx
 
 from app.config import settings
+from app.services import adp_cache
 from app.services.player_service import espn_season_string
 
 logger = logging.getLogger(__name__)
@@ -80,9 +81,11 @@ def parse_espn_payload(data) -> list[AdpRow]:
         except (TypeError, ValueError):
             continue
         ranks = player.get("draftRanksByRankType") or {}
-        std = ranks.get("STANDARD") or ranks.get("standard") or {}
-        avg = std.get("averageRank")
-        adp = coerce_adp(avg if avg not in (None, 0) else std.get("rank"))
+        # ROTO, not STANDARD: this league is 8-cat roto and the two lists disagree materially
+        # (e.g. Camara: STANDARD 115 vs ROTO 61).
+        roto = ranks.get("ROTO") or ranks.get("roto") or {}
+        avg = roto.get("averageRank")
+        adp = coerce_adp(avg if avg not in (None, 0) else roto.get("rank"))
         if adp is None:
             continue
         slots = player.get("eligibleSlots") or []
@@ -142,19 +145,22 @@ def projection_from_stat_block(block: dict) -> Optional[dict]:
     }
 
 
-def _is_season_projection(stat: dict, season_id: int) -> bool:
+def _matches_season_stat(stat: dict, season_id: int, id_prefix: str, source_id: int) -> bool:
+    """ESPN tags each split with an id like "002026" (actual) or "102026" (projection) --
+    prefix "00"/"10" -- and, when that id is absent, the same split can be found by
+    statSourceId (0 actual, 1 projection) + seasonId + scoringPeriodId==0 (season total)."""
     if not isinstance(stat, dict):
         return False
-    if str(stat.get("id") or "") == f"10{season_id}":
+    if str(stat.get("id") or "") == f"{id_prefix}{season_id}":
         return True
     return (
-        stat.get("statSourceId") == 1
+        stat.get("statSourceId") == source_id
         and stat.get("seasonId") == season_id
         and stat.get("scoringPeriodId") == 0
     )
 
 
-def parse_espn_projections(data, season_id: int) -> dict[int, dict]:
+def _parse_espn_stat_split(data, season_id: int, *, id_prefix: str, source_id: int) -> dict[int, dict]:
     entries = data if isinstance(data, list) else (data.get("players") or [])
     out: dict[int, dict] = {}
     if not isinstance(entries, list):
@@ -172,13 +178,23 @@ def parse_espn_projections(data, season_id: int) -> dict[int, dict]:
             continue
         chosen = None
         for stat in player.get("stats") or []:
-            if _is_season_projection(stat, season_id):
+            if _matches_season_stat(stat, season_id, id_prefix, source_id):
                 chosen = stat
                 break
         parsed = projection_from_stat_block(chosen) if chosen else None
         if parsed:
             out[espn_id] = parsed
     return out
+
+
+def parse_espn_projections(data, season_id: int) -> dict[int, dict]:
+    return _parse_espn_stat_split(data, season_id, id_prefix="10", source_id=1)
+
+
+def parse_espn_actuals(data, season_id: int) -> dict[int, dict]:
+    """Season-to-date per-game actuals -- same shape as parse_espn_projections, just the
+    "00" (statSourceId 0) split instead of the "10" (statSourceId 1) projection split."""
+    return _parse_espn_stat_split(data, season_id, id_prefix="00", source_id=0)
 
 
 def parse_sleeper_payload(data) -> list[AdpRow]:
@@ -295,7 +311,7 @@ async def fetch_espn(client: httpx.AsyncClient, season_id: Optional[int] = None)
                     "value": 1,
                     "additionalValue": [f"00{season_id}", f"10{season_id}"],
                 },
-                "sortDraftRanks": {"sortPriority": 1, "sortAsc": True, "value": "STANDARD"},
+                "sortDraftRanks": {"sortPriority": 1, "sortAsc": True, "value": "ROTO"},
                 "limit": 1200,
             }
         }
@@ -317,25 +333,35 @@ async def fetch_espn(client: httpx.AsyncClient, season_id: Optional[int] = None)
             data = await _get_json(client, url, headers=extra)
             rows = parse_espn_payload(data)
             if rows:
-                return rows, f"ESPN Fantasy STANDARD draft ranks ({url})"
+                return rows, f"ESPN Fantasy ROTO draft ranks ({url})"
         except (httpx.HTTPError, json.JSONDecodeError, ValueError) as e:
             last_err = e
     raise RuntimeError(f"ESPN ADP fetch failed: {last_err}")
 
 
-async def fetch_espn_projections(
+async def fetch_espn_stat_splits(
     client: httpx.AsyncClient,
-    season_id: int,
-) -> dict[int, dict]:
-    """Season projection per-game lines from ESPN kona_player_info."""
+    *,
+    actual_season_id: int,
+    proj_season_id: int,
+) -> tuple[dict[int, dict], dict[int, dict]]:
+    """Actual and projected per-game lines from ESPN kona_player_info, in one request.
+
+    ESPN nests every stat split a player has (this season's actuals, next season's
+    projections, prior seasons, ...) in the same `stats` array regardless of which
+    season's URL is queried, as long as the split id is listed in the filter. So one call
+    against `proj_season_id` returns `actual_season_id`'s actuals (the season already
+    played, before `proj_season_id` tips off) alongside `proj_season_id`'s own
+    projections -- no separate DB read and no second ESPN request needed.
+    """
     filter_payload = json.dumps(
         {
             "players": {
                 "filterStatsForTopScoringPeriodIds": {
                     "value": 1,
-                    "additionalValue": [f"00{season_id}", f"10{season_id}"],
+                    "additionalValue": [f"00{actual_season_id}", f"10{proj_season_id}"],
                 },
-                "sortDraftRanks": {"sortPriority": 1, "sortAsc": True, "value": "STANDARD"},
+                "sortDraftRanks": {"sortPriority": 1, "sortAsc": True, "value": "ROTO"},
                 "limit": 1200,
             }
         }
@@ -343,11 +369,11 @@ async def fetch_espn_projections(
     urls = [
         (
             f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/"
-            f"{season_id}/segments/0/leaguedefaults/1?view=kona_player_info"
+            f"{proj_season_id}/segments/0/leaguedefaults/1?view=kona_player_info"
         ),
         (
             f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/"
-            f"{season_id}/players?scoringPeriodId=0&view=kona_player_info"
+            f"{proj_season_id}/players?scoringPeriodId=0&view=kona_player_info"
         ),
     ]
     extra = {"X-Fantasy-Filter": filter_payload}
@@ -355,25 +381,33 @@ async def fetch_espn_projections(
     for url in urls:
         try:
             data = await _get_json(client, url, headers=extra)
-            parsed = parse_espn_projections(data, season_id)
-            if parsed:
-                return parsed
+            actuals = parse_espn_actuals(data, actual_season_id)
+            projections = parse_espn_projections(data, proj_season_id)
+            if actuals or projections:
+                return actuals, projections
         except (httpx.HTTPError, json.JSONDecodeError, ValueError) as e:
             last_err = e
     if last_err:
-        raise RuntimeError(f"ESPN projection fetch failed: {last_err}")
-    return {}
+        raise RuntimeError(f"ESPN stat split fetch failed: {last_err}")
+    return {}, {}
 
 
-async def fetch_espn_projection_map(season_id: int) -> dict[int, dict]:
+async def fetch_espn_stat_splits_map(
+    *, actual_season_id: int, proj_season_id: int
+) -> tuple[dict[int, dict], dict[int, dict]]:
     async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
-        return await fetch_espn_projections(client, season_id)
+        return await fetch_espn_stat_splits(
+            client, actual_season_id=actual_season_id, proj_season_id=proj_season_id
+        )
 
 
 async def fetch_sleeper(client: httpx.AsyncClient) -> tuple[list[AdpRow], str]:
-    data = await _get_json(client, "https://api.sleeper.app/v1/players/nba")
+    # active=true is Sleeper's own documented filter: drops retired/inactive players
+    # (~14% smaller payload) and costs nothing we use -- the only usable ranks it excludes
+    # belong to retired players (Lowry, Howard, C. Paul).
+    data = await _get_json(client, "https://api.sleeper.app/v1/players/nba?active=true")
     rows = parse_sleeper_payload(data)
-    return rows, "Sleeper search_rank (api.sleeper.app/v1/players/nba)"
+    return rows, "Sleeper search_rank (api.sleeper.app/v1/players/nba?active=true)"
 
 
 async def fetch_fantrax(client: httpx.AsyncClient) -> tuple[list[AdpRow], str]:
@@ -394,23 +428,38 @@ async def fetch_fantrax(client: httpx.AsyncClient) -> tuple[list[AdpRow], str]:
 
 
 async def fetch_live_adp_payload() -> dict:
-    """Hit ESPN, Fantrax, and Sleeper in parallel. Failed sites are omitted."""
+    """Hit ESPN, Fantrax, and Sleeper through the persisted per-provider cache.
+
+    Each provider only makes a network call when its own cache entry is due for refresh
+    (24h normally, 15min after a failed attempt -- see adp_cache.py); a provider still
+    inside its TTL is served from memory/Neon with no request at all. Failed sites with
+    no cached payload anywhere are omitted.
+    """
     async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
+        fetchers = {
+            "espn": lambda: fetch_espn(client),
+            "fantrax": lambda: fetch_fantrax(client),
+            "sleeper": lambda: fetch_sleeper(client),
+        }
         results = await asyncio.gather(
-            fetch_espn(client),
-            fetch_fantrax(client),
-            fetch_sleeper(client),
+            *(adp_cache.get_or_refresh(site, fetchers[site]) for site in SITES),
             return_exceptions=True,
         )
 
     fetched: dict[str, tuple[list[AdpRow], str]] = {}
     for site, result in zip(SITES, results):
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             logger.warning("ADP source %s failed: %s: %s", site, type(result).__name__, result)
             continue
-        rows, label = result
-        logger.info("ADP source %s: %d players", site, len(rows))
-        fetched[site] = (rows, label)
+        entry: adp_cache.ProviderCacheEntry = result
+        logger.info(
+            "ADP source %s: %d players (fetched_at=%s%s)",
+            site,
+            len(entry.payload),
+            entry.fetched_at.isoformat(),
+            "" if entry.ok else ", stale after failed refresh",
+        )
+        fetched[site] = (entry.payload, entry.source)
 
     if not fetched:
         raise RuntimeError("All ADP sources failed")
