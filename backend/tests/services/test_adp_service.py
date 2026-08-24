@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -17,6 +18,7 @@ from app.services.adp_service import (
     normalize_player_name,
     parse_sites,
     reset_adp_cache,
+    resolve_adp_seasons,
 )
 
 
@@ -343,13 +345,13 @@ _PROJ_ROW = {
 @pytest.mark.asyncio
 async def test_projection_cache_does_not_store_empty_failure():
     reset_adp_cache()
-    fetch = AsyncMock(side_effect=[{}, {}, _PROJ_ROW])
+    fetch = AsyncMock(side_effect=[{}, _PROJ_ROW])
     with patch("app.services.adp_service.fetch_espn_projection_map", fetch):
         empty = await load_espn_projections()
         filled = await load_espn_projections()
     assert empty[1] == {}
     assert 99 in filled[1]
-    assert fetch.await_count == 3
+    assert fetch.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -362,3 +364,20 @@ async def test_projection_cache_retries_after_exception():
     assert empty[1] == {}
     assert 99 in filled[1]
 
+
+def test_resolve_seasons_before_tipoff_uses_previous_actuals():
+    with patch("app.services.adp_service.settings") as cfg:
+        cfg.season_id = 2027
+        cfg.season_start = date(2026, 10, 20)
+        with patch("app.services.adp_service.date") as fake_date:
+            fake_date.today.return_value = date(2026, 8, 24)
+            assert resolve_adp_seasons() == ("2025-26", 2027)
+
+
+def test_resolve_seasons_in_season_uses_current_actuals():
+    with patch("app.services.adp_service.settings") as cfg:
+        cfg.season_id = 2027
+        cfg.season_start = date(2026, 10, 20)
+        with patch("app.services.adp_service.date") as fake_date:
+            fake_date.today.return_value = date(2027, 1, 15)
+            assert resolve_adp_seasons() == ("2026-27", 2027)

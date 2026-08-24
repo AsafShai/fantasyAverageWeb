@@ -472,10 +472,12 @@ export default function PreDraftRankingsPage() {
   )
   const resolvedStatsFrom: StatsFrom = statsFrom === 'projection' ? 'projection' : 'actual'
   const actualSeasonShort = shortSeasonLabel(details?.last_year_season || detailsSeason.last) || '25/26'
-  const projectionSeasonShort = nextShortSeasonLabel(details?.last_year_season || detailsSeason.last)
+  const projectionSeason = details?.projection_season || detailsSeason.proj
+  const projectionSeasonShort =
+    shortSeasonLabel(projectionSeason) || nextShortSeasonLabel(details?.last_year_season || detailsSeason.last)
   const statsTitle =
     resolvedStatsFrom === 'projection'
-      ? `ESPN per-game projections for ${details?.projection_season || detailsSeason.proj || projectionSeasonShort}`
+      ? `ESPN per-game projections for ${projectionSeason || projectionSeasonShort}`
       : `Per-game averages from ${details?.last_year_season || detailsSeason.last || 'last season'}. Blank if they did not play.`
   const playerStats = (p: AdpPlayer) => (resolvedStatsFrom === 'projection' ? p.projection : p.last_year)
 
