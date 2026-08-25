@@ -96,4 +96,12 @@ describe('rankings CSV import', () => {
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.order.at(-1)).toBe('99')
   })
+
+  it('still imports when an extra espn_id column is present', () => {
+    const header = [...RANKINGS_CSV_HEADERS, 'espn_id']
+    const rows = players.map((p, i) => [String(i + 1), p.id, p.name, 'DEN', 'PG', p.id])
+    const result = parseRankingsCsvImport(toCsv([header, ...rows]), players)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.order).toEqual(players.map((p) => p.id))
+  })
 })
