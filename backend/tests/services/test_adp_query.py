@@ -1,5 +1,5 @@
 from app.models.adp import AdpPlayer, SiteAdp
-from app.services.adp_query import paginate_players, sort_players, to_index_player
+from app.services.adp_query import filter_players, paginate_players, sort_players, to_index_player
 
 
 def _p(name: str, *, blend=None, espn=None, team=None, positions=None, pid=None) -> AdpPlayer:
@@ -99,3 +99,44 @@ def test_index_player_carries_both_blends():
     assert row.blend_rank == 1
     assert row.ranking_blend == 11.0
     assert row.ranking_blend_rank == 4
+
+
+def _pool_player(name: str, *, blend=None, ranking_blend=None, fringe=False) -> AdpPlayer:
+    return AdpPlayer(
+        id=name,
+        name=name,
+        positions=["PG"],
+        blend=blend,
+        ranking_blend=ranking_blend,
+        fringe=fringe,
+    )
+
+
+def test_fringe_players_are_excluded_unless_asked_for():
+    players = [
+        _pool_player("Real", blend=10.0, ranking_blend=10.0),
+        _pool_player("Out Of League", ranking_blend=400.0, fringe=True),
+    ]
+    assert [p.id for p in filter_players(players, metric="any")] == ["Real"]
+    assert len(filter_players(players, metric="any", include_fringe=True)) == 2
+
+
+def test_any_metric_keeps_players_the_other_blend_covers():
+    """The board pool must not change when the user flips the order."""
+    players = [
+        _pool_player("Adp Only", blend=30.0),
+        _pool_player("Rank Only", ranking_blend=120.0),
+    ]
+    assert len(filter_players(players, metric="adp")) == 1
+    assert len(filter_players(players, metric="rank")) == 1
+    assert len(filter_players(players, metric="any")) == 2
+
+
+def test_unblended_tail_falls_back_to_the_other_metric_not_the_alphabet():
+    players = [
+        _pool_player("Aaron Alphabetical", ranking_blend=500.0),
+        _pool_player("Zeke Highly Ranked", ranking_blend=210.0),
+        _pool_player("Drafted Guy", blend=44.0, ranking_blend=300.0),
+    ]
+    ordered = sort_players(players, "blend", "asc", "adp")
+    assert [p.id for p in ordered] == ["Drafted Guy", "Zeke Highly Ranked", "Aaron Alphabetical"]

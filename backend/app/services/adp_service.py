@@ -461,6 +461,36 @@ async def refresh_adp_sources(provider: Optional[str] = None) -> list[ProviderMe
     return (await get_adp_response()).providers
 
 
+CURATED_RANK_SITES = ("espn", "yahoo")
+
+
+def mark_fringe(
+    response: AdpResponse, actuals_by_espn_id: dict[int, LastYearStats]
+) -> AdpResponse:
+    """Flag players who are out of the league rather than merely undrafted.
+
+    Three signals have to agree before a player is called fringe, because each one alone
+    has a false positive: rookies have no games, free agents have no team mid-summer, and
+    the deepest source (Sleeper, 829 players) lists G-League and overseas players a curated
+    list would not. Anyone with last-season games, a current NBA team, a real ADP, or a spot
+    on ESPN's or Yahoo's own list is kept.
+
+    Measured 2026-08-25: 264 of 942 ranked players match, none shallower than Sleeper #201,
+    and none of them played a game last season.
+    """
+    players = []
+    for p in response.players:
+        played = p.espn_id in actuals_by_espn_id and actuals_by_espn_id[p.espn_id].gp > 0
+        curated = any(getattr(p, site).ranking is not None for site in CURATED_RANK_SITES)
+        drafted = any(getattr(p, site).adp is not None for site in SITES)
+        players.append(
+            p.model_copy(
+                update={"fringe": not (played or curated or drafted or bool(p.team_abbr))}
+            )
+        )
+    return response.model_copy(update={"players": players})
+
+
 def reset_adp_cache() -> None:
     global _cached, _cached_at, _espn_stats_cache, _espn_stats_cached_at
     _cached = None
@@ -584,6 +614,7 @@ async def get_adp_response_enriched(
     sites: Optional[str] = None,
     rank_sites: Optional[str] = None,
     metric: str = "adp",
+    include_fringe: bool = False,
 ) -> AdpResponse:
     base = await get_adp_response()
     metric = parse_metric(metric)
@@ -604,6 +635,7 @@ async def get_adp_response_enriched(
         ranked_only=ranked_only,
         ids=ids,
         metric=metric,
+        include_fringe=include_fringe,
     )
     last_season, last_by_id, proj_season, proj_by_id = await load_espn_stat_splits()
     out = sliced.model_copy(update={"last_year_season": last_season, "projection_season": proj_season})
@@ -636,13 +668,17 @@ async def get_adp_index_response(
     sites: Optional[str] = None,
     rank_sites: Optional[str] = None,
     metric: str = "adp",
+    include_fringe: bool = False,
 ) -> AdpIndexResponse:
     base = await get_adp_response()
     resolved = parse_metric(metric)
     players = apply_blend_sites(base.players, sites=sites, rank_sites=rank_sites)
-    players = filter_players(players, ranked_only=ranked_only, metric=resolved)
-    # The board is seeded straight from this list order, so it must follow the metric the
-    # caller asked for -- build order is always the ADP blend.
+    # Board membership is the union of both metrics: switching the order must not drop
+    # players off a saved board, so a player ranked by either blend stays in the pool and
+    # the sort puts whoever the active blend does not cover at the end.
+    players = filter_players(
+        players, ranked_only=ranked_only, metric="any", include_fringe=include_fringe
+    )
     players = sort_players(players, "blend", "asc", resolved)
     return AdpIndexResponse(
         season_label=base.season_label,
@@ -673,6 +709,8 @@ async def get_adp_response() -> AdpResponse:
         try:
             payload = await fetch_live_adp_payload()
             response = build_adp_response(payload)
+            _actual_label, actuals, _proj_label, _proj = await load_espn_stat_splits()
+            response = mark_fringe(response, actuals)
             _cached = response
             _cached_at = now
             return response

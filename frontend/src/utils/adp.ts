@@ -1,4 +1,4 @@
-import type { AdpIndexPlayer, AdpMetric, AdpPlayer, ProviderMeta } from '../types/api'
+import type { AdpIndexPlayer, AdpMetric, AdpPlayer, LastYearStats, ProviderMeta } from '../types/api'
 
 export const ADP_SITES = ['espn', 'fantrax', 'sleeper', 'yahoo'] as const
 export type AdpSiteKey = (typeof ADP_SITES)[number]
@@ -67,11 +67,27 @@ export function formatAdp(value: number | null | undefined): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
-export function formatLastYearStat(value: number | null | undefined, pct = false): string {
+export function formatLastYearStat(value: number | null | undefined, pct = false, whole = false): string {
   if (value == null) return '—'
   if (pct) return (value * 100).toFixed(1)
+  if (whole) return String(Math.round(value))
   return value.toFixed(1)
 }
+
+export type StatCol = { key: keyof LastYearStats; label: string; pct?: boolean; whole?: boolean }
+
+/** Per-game line shown on the draft pages, games played first for context. */
+export const LAST_YEAR_COLS: StatCol[] = [
+  { key: 'gp', label: 'GP', whole: true },
+  { key: 'fg_pct', label: 'FG%', pct: true },
+  { key: 'ft_pct', label: 'FT%', pct: true },
+  { key: 'ppg', label: 'PPG' },
+  { key: 'rpg', label: 'RPG' },
+  { key: 'apg', label: 'APG' },
+  { key: 'spg', label: 'SPG' },
+  { key: 'bpg', label: 'BPG' },
+  { key: 'three_pm', label: '3PM' },
+]
 
 export function adpDeltaClass(adp: number | null | undefined, blend: number | null | undefined): string {
   if (adp == null || blend == null) return 'text-gray-400'

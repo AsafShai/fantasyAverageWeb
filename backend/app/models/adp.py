@@ -67,6 +67,9 @@ class AdpPlayer(BaseModel):
     ranking_blend: Optional[float] = None
     ranking_blend_rank: Optional[int] = None
     ranking_spread: Optional[float] = None
+    # No NBA games last season, no current NBA team, and ranked only by the deepest source:
+    # out of the league rather than merely undrafted. Excluded unless include_fringe is set.
+    fringe: bool = False
     last_year: Optional[LastYearStats] = None
     projection: Optional[LastYearStats] = None
 
@@ -85,6 +88,7 @@ class AdpIndexPlayer(BaseModel):
     blend_rank: Optional[int] = None
     ranking_blend: Optional[float] = None
     ranking_blend_rank: Optional[int] = None
+    fringe: bool = False
 
 
 class AdpIndexResponse(BaseModel):

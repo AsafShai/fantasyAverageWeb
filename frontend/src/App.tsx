@@ -62,7 +62,9 @@ function App() {
             {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
             {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
             {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
-            {FF_DRAFT_PAGES && <Route path="draft/adp" element={<AdpPage />} />}
+            {FF_DRAFT_PAGES && <Route path="draft/consensus" element={<AdpPage />} />}
+            {/* Old path: bookmarks and links shared in the league chat predate the rename. */}
+            {FF_DRAFT_PAGES && <Route path="draft/adp" element={<Navigate to="/draft/consensus" replace />} />}
             {FF_DRAFT_PAGES && <Route path="draft/board" element={<DraftBoardPage />} />}
             {FF_DRAFT_PAGES && <Route path="draft/rankings" element={<PreDraftRankingsPage />} />}
             {FF_TRENDS && <Route path="trends" element={<Trends />} />}

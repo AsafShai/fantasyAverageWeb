@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
@@ -96,8 +96,8 @@ export default function DraftBoardPage() {
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1">
-          <Link to="/draft/adp" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
-            ADP table
+          <Link to="/draft/consensus" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
+            ADP &amp; Rankings
           </Link>
           <Link to="/draft/rankings" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
             Open pre-draft rankings

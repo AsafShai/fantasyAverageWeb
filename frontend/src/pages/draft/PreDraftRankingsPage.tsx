@@ -29,10 +29,13 @@ import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
+import PaginationBar from '../../components/draft/PaginationBar'
+import { resolvePageSize, type PageSize } from '../../utils/pagination'
 import PlayerDetailSheet from '../../components/draft/PlayerDetailSheet'
 import MoveToModal from '../../components/draft/MoveToModal'
 import {
   BLEND_LABEL,
+  LAST_YEAR_COLS,
   SITE_LABEL,
   blendRankValue,
   blendValue,
@@ -56,18 +59,6 @@ import {
 import type { AdpMetric, AdpPlayer, LastYearStats, ProviderMeta } from '../../types/api'
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
-const LAST_YEAR_COLS: { key: keyof LastYearStats; label: string; pct?: boolean }[] = [
-  { key: 'fg_pct', label: 'FG%', pct: true },
-  { key: 'ft_pct', label: 'FT%', pct: true },
-  { key: 'ppg', label: 'PPG' },
-  { key: 'rpg', label: 'RPG' },
-  { key: 'apg', label: 'APG' },
-  { key: 'spg', label: 'SPG' },
-  { key: 'bpg', label: 'BPG' },
-  { key: 'three_pm', label: '3PM' },
-]
-const PAGE_SIZES = [25, 50, 100] as const
-type PageSize = (typeof PAGE_SIZES)[number]
 type StatsFrom = 'actual' | 'projection'
 
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 })
@@ -84,19 +75,6 @@ function useIsBelowLg() {
     return () => mq.removeEventListener('change', sync)
   }, [])
   return below
-}
-
-function pageItems(current: number, total: number): (number | 'ellipsis')[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const wanted = new Set([1, total, current - 1, current, current + 1, current - 2, current + 2])
-  const nums = [...wanted].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b)
-  const out: (number | 'ellipsis')[] = []
-  for (const n of nums) {
-    const prev = out[out.length - 1]
-    if (typeof prev === 'number' && n - prev > 1) out.push('ellipsis')
-    out.push(n)
-  }
-  return out
 }
 
 function DeltaBadge({ rank, compareRank }: { rank: number; compareRank: number | null }) {
@@ -116,7 +94,7 @@ function LastYearCells({ stats }: { stats?: LastYearStats | null }) {
     <div className="hidden lg:flex items-center shrink-0">
       {LAST_YEAR_COLS.map((col) => (
         <div key={col.key} className="w-11 text-right tabular-nums text-xs text-gray-600 dark:text-gray-300">
-          {stats ? formatLastYearStat(stats[col.key], col.pct) : '—'}
+          {stats ? formatLastYearStat(stats[col.key], col.pct, col.whole) : '—'}
         </div>
       ))}
     </div>
@@ -170,7 +148,7 @@ function RankRowFooter({
       <div className="grid grid-cols-4 gap-x-1 gap-y-1.5">
         {LAST_YEAR_COLS.map((col) => (
           <FooterStat key={col.key} label={col.label}>
-            {stats ? formatLastYearStat(stats[col.key], col.pct) : '—'}
+            {stats ? formatLastYearStat(stats[col.key], col.pct, col.whole) : '—'}
           </FooterStat>
         ))}
       </div>
@@ -451,7 +429,7 @@ export default function PreDraftRankingsPage() {
     })
   }, [ordered, debouncedSearch, teamFilter, posFilter])
 
-  const resolvedPageSize: PageSize = PAGE_SIZES.includes(pageSize) ? pageSize : 50
+  const resolvedPageSize: PageSize = resolvePageSize(pageSize)
   const totalPages = Math.max(1, Math.ceil(visible.length / resolvedPageSize))
   const safePage = Math.min(page, totalPages)
   const paged = useMemo(() => {
@@ -740,11 +718,6 @@ export default function PreDraftRankingsPage() {
 
   const btnGhost =
     'px-3 py-1.5 text-xs rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
-  const pagerBtn = (active: boolean, disabled?: boolean) => {
-    if (disabled) return 'px-2 py-1 rounded text-xs border border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-    if (active) return 'px-2 py-1 rounded text-xs font-semibold border bg-blue-600 text-white border-blue-600'
-    return 'px-2 py-1 rounded text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-  }
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load ADP')} />
@@ -785,8 +758,8 @@ export default function PreDraftRankingsPage() {
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1">
-          <Link to="/draft/adp" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
-            ADP table
+          <Link to="/draft/consensus" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
+            ADP &amp; Rankings
           </Link>
           <Link to="/draft/board" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
             Open draft board
@@ -1079,6 +1052,21 @@ export default function PreDraftRankingsPage() {
       </div>
 
       <div ref={listRef} className="card overflow-x-hidden">
+        {/* Changing page scrolls the list top into view, so the pager has to exist up here
+            too -- otherwise every click leaves the controls off-screen below the fold. */}
+        {visible.length > 0 ? (
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            total={visible.length}
+            pageSize={resolvedPageSize}
+            from={from}
+            to={to}
+            onPage={goToPage}
+            onPageSize={setPageSize}
+            className="border-b border-gray-200 dark:border-gray-700"
+          />
+        ) : null}
         <div className="lg:hidden flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
           <div className="w-7 shrink-0" />
           <div className="w-6 shrink-0 text-right">Rank</div>
@@ -1190,59 +1178,17 @@ export default function PreDraftRankingsPage() {
         {visible.length === 0 ? (
           <p className="text-center text-sm text-gray-500 py-8">No players match these filters.</p>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              <span className="sm:hidden">
-                {from}–{to} of {visible.length}
-              </span>
-              <span className="hidden sm:inline">
-                Showing {from}–{to} of {visible.length}
-              </span>
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                Per page
-                <select
-                  value={resolvedPageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value) as PageSize)}
-                  className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5 sm:py-1 text-sm"
-                >
-                  {PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button type="button" className={pagerBtn(false, safePage <= 1)} disabled={safePage <= 1} onClick={() => goToPage(safePage - 1)}>
-                Prev
-              </button>
-              <span className="sm:hidden text-xs tabular-nums text-gray-500">
-                {safePage}/{totalPages}
-              </span>
-              <div className="hidden sm:flex flex-wrap items-center gap-2">
-                {pageItems(safePage, totalPages).map((item, i) =>
-                  item === 'ellipsis' ? (
-                    <span key={`e${i}`} className="px-1 text-xs text-gray-400">
-                      …
-                    </span>
-                  ) : (
-                    <button key={item} type="button" className={pagerBtn(item === safePage)} onClick={() => goToPage(item)}>
-                      {item}
-                    </button>
-                  ),
-                )}
-              </div>
-              <button
-                type="button"
-                className={pagerBtn(false, safePage >= totalPages)}
-                disabled={safePage >= totalPages}
-                onClick={() => goToPage(safePage + 1)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            total={visible.length}
+            pageSize={resolvedPageSize}
+            from={from}
+            to={to}
+            onPage={goToPage}
+            onPageSize={setPageSize}
+            className="border-t border-gray-200 dark:border-gray-700"
+          />
         )}
       </div>
       {isBelowLg && selectedPlayer && !movePlayer && !activeId ? (

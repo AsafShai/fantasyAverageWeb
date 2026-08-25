@@ -32,10 +32,15 @@ async def get_adp_index(
     sites: Optional[str] = Query(None),
     rank_sites: Optional[str] = Query(None),
     metric: str = Query("adp"),
+    include_fringe: bool = Query(False),
 ):
     try:
         return await get_adp_index_response(
-            ranked_only=ranked_only, sites=sites, rank_sites=rank_sites, metric=metric
+            ranked_only=ranked_only,
+            sites=sites,
+            rank_sites=rank_sites,
+            metric=metric,
+            include_fringe=include_fringe,
         )
     except Exception as e:
         logger.error("Error building ADP index: %s", e)
@@ -69,6 +74,7 @@ async def get_adp(
     sites: Optional[str] = Query(None),
     rank_sites: Optional[str] = Query(None),
     metric: str = Query("adp"),
+    include_fringe: bool = Query(False),
 ):
     try:
         return await get_adp_response_enriched(
@@ -84,6 +90,7 @@ async def get_adp(
             sites=sites,
             rank_sites=rank_sites,
             metric=metric,
+            include_fringe=include_fringe,
         )
     except Exception as e:
         logger.error("Error building ADP response: %s", e)

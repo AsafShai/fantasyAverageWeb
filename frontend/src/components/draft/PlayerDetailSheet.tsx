@@ -1,18 +1,7 @@
 import { useEffect } from 'react'
 import PlayerIdentityCell from './PlayerIdentityCell'
-import { formatAdp, formatLastYearStat } from '../../utils/adp'
+import { LAST_YEAR_COLS, formatAdp, formatLastYearStat } from '../../utils/adp'
 import type { AdpPlayer, LastYearStats } from '../../types/api'
-
-const LAST_YEAR_COLS: { key: keyof LastYearStats; label: string; pct?: boolean }[] = [
-  { key: 'fg_pct', label: 'FG%', pct: true },
-  { key: 'ft_pct', label: 'FT%', pct: true },
-  { key: 'ppg', label: 'PPG' },
-  { key: 'rpg', label: 'RPG' },
-  { key: 'apg', label: 'APG' },
-  { key: 'spg', label: 'SPG' },
-  { key: 'bpg', label: 'BPG' },
-  { key: 'three_pm', label: '3PM' },
-]
 
 function signedDelta(rank: number, compareRank: number | null): { text: string; className: string } {
   if (compareRank == null) return { text: '—', className: 'text-gray-400' }
@@ -121,7 +110,7 @@ export default function PlayerDetailSheet({
               <StatTile
                 key={col.key}
                 label={col.label}
-                value={stats ? formatLastYearStat(stats[col.key], col.pct) : '—'}
+                value={stats ? formatLastYearStat(stats[col.key], col.pct, col.whole) : '—'}
               />
             ))}
           </div>

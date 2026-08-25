@@ -8,6 +8,8 @@ import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
+import PaginationBar from '../../components/draft/PaginationBar'
+import { resolvePageSize, type PageSize } from '../../utils/pagination'
 import {
   BLEND_LABEL,
   SITE_LABEL,
@@ -15,6 +17,7 @@ import {
   blendValue,
   formatAdp,
   formatUpdatedAt,
+  isAdpSite,
   siteValue,
   spreadValue,
   type AdpSiteKey,
@@ -25,21 +28,6 @@ import type { AdpMetric, AdpResponse, ProviderMeta } from '../../types/api'
 type SortKey = 'blend' | 'spread' | 'name' | 'team' | AdpSiteKey
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
-const PAGE_SIZES = [25, 50, 100] as const
-type PageSize = (typeof PAGE_SIZES)[number]
-
-function pageItems(current: number, total: number): (number | 'ellipsis')[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const wanted = new Set([1, total, current - 1, current, current + 1, current - 2, current + 2])
-  const nums = [...wanted].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b)
-  const out: (number | 'ellipsis')[] = []
-  for (const n of nums) {
-    const prev = out[out.length - 1]
-    if (typeof prev === 'number' && n - prev > 1) out.push('ellipsis')
-    out.push(n)
-  }
-  return out
-}
 
 function SortHeader({
   label,
@@ -69,89 +57,12 @@ function SortHeader({
   )
 }
 
-function pagerButtonClass(active: boolean, disabled?: boolean) {
-  if (disabled) return 'px-2 py-1 rounded text-xs border border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-  if (active) return 'px-2 py-1 rounded text-xs font-semibold border bg-blue-600 text-white border-blue-600'
-  return 'px-2 py-1 rounded text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-}
-
-function PaginationBar({
-  page,
-  totalPages,
-  total,
-  pageSize,
-  from,
-  to,
-  onPage,
-  onPageSize,
-  className = '',
-}: {
-  page: number
-  totalPages: number
-  total: number
-  pageSize: number
-  from: number
-  to: number
-  onPage: (page: number) => void
-  onPageSize: (size: PageSize) => void
-  className?: string
-}) {
-  if (total === 0) return null
-  return (
-    <div className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${className}`}>
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Showing {from}–{to} of {total}
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-          Per page
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSize(Number(e.target.value) as PageSize)}
-            className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-sm"
-          >
-            {PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className={pagerButtonClass(false, page <= 1)} disabled={page <= 1} onClick={() => onPage(page - 1)}>
-          Prev
-        </button>
-        {pageItems(page, totalPages).map((item, i) =>
-          item === 'ellipsis' ? (
-            <span key={`e${i}`} className="px-1 text-xs text-gray-400">
-              …
-            </span>
-          ) : (
-            <button
-              key={item}
-              type="button"
-              className={pagerButtonClass(item === page)}
-              onClick={() => onPage(item)}
-            >
-              {item}
-            </button>
-          ),
-        )}
-        <button
-          type="button"
-          className={pagerButtonClass(false, page >= totalPages)}
-          disabled={page >= totalPages}
-          onClick={() => onPage(page + 1)}
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  )
-}
 
 export default function AdpPage() {
   const [metric, setMetric] = usePersistedState<AdpMetric>('draft.adp.metric', 'adp')
-  const lastGood = useRef<AdpResponse | undefined>(undefined)
+  // Last successful response, kept so a refetch or a failed request leaves the table on
+  // screen instead of blanking it.
+  const [lastGood, setLastGood] = useState<AdpResponse | undefined>(undefined)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
   const { sites: visibleSites, available, toggle: toggleSite, sitesParam, rankSitesParam } =
     useBlendSites(metric, providers)
@@ -165,9 +76,14 @@ export default function AdpPage() {
   const debouncedSearch = useDebounce(search, 200)
   const listRef = useRef<HTMLDivElement>(null)
   const posKey = posFilter.join(',')
-  const resolvedPageSize: PageSize = PAGE_SIZES.includes(pageSize) ? pageSize : 50
+  const resolvedPageSize: PageSize = resolvePageSize(pageSize)
 
   const sitesKey = visibleSites.join(',')
+
+  // A sort column can vanish under the current view: sorting by Fantrax and switching to
+  // Rankings leaves every row's sort value null, which silently degrades to a name sort on
+  // a column that is not even rendered. Fall back to Blend instead.
+  if (isAdpSite(sortBy) && !available.includes(sortBy)) setSortBy('blend')
 
   useEffect(() => {
     setPage(1)
@@ -202,8 +118,8 @@ export default function AdpPage() {
   const { data, isLoading, isFetching, error } = useGetAdpQuery(queryArgs)
   const [fetchAll] = useLazyGetAdpQuery()
   if (data?.providers?.length && data.providers !== providers) setProviders(data.providers)
-  if (data) lastGood.current = data
-  const view = data ?? lastGood.current
+  if (data && data !== lastGood) setLastGood(data)
+  const view = data ?? lastGood
 
   const players = view?.players ?? []
   const teams = view?.teams ?? []
@@ -213,6 +129,11 @@ export default function AdpPage() {
   const offset = view?.offset ?? 0
   const from = totalCount === 0 ? 0 : offset + 1
   const to = offset + players.length
+  // The server clamps the page when the result set shrinks (fewer players on the Rankings
+  // view, a site unchecked). Adopt that clamp, or `page` stays above it and Prev steps a
+  // page number nothing is rendering. Only while settled and only downward: mid-fetch the
+  // hook still reports the previous page, and reacting to that would undo the user's click.
+  if (data && !isFetching && safePage < page) setPage(safePage)
   const goToPage = (next: number) => {
     setPage(Math.min(Math.max(1, next), totalPages))
     listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -412,6 +333,19 @@ export default function AdpPage() {
 
       <div ref={listRef} className={isFetching ? 'opacity-70' : undefined}>
         <div className="card overflow-x-auto">
+          {/* Changing page scrolls the list top into view, so the pager has to exist up here
+              too -- otherwise every click leaves the controls off-screen below the fold. */}
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            total={totalCount}
+            pageSize={resolvedPageSize}
+            from={from}
+            to={to}
+            onPage={goToPage}
+            onPageSize={setPageSize}
+            className="border-b border-gray-200 dark:border-gray-700"
+          />
             <table className="min-w-full">
               <thead>
                 <tr>

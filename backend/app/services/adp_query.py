@@ -34,6 +34,7 @@ def to_index_player(p: AdpPlayer) -> AdpIndexPlayer:
         name=p.name,
         team_abbr=p.team_abbr,
         positions=list(p.positions),
+        fringe=p.fringe,
         blend=p.blend,
         blend_rank=p.blend_rank,
         ranking_blend=p.ranking_blend,
@@ -49,14 +50,21 @@ def filter_players(
     positions: Optional[list[str]] = None,
     ranked_only: bool = True,
     metric: str = "adp",
+    include_fringe: bool = False,
 ) -> list[AdpPlayer]:
     needle = q.strip().lower()
     team_key = team.strip().upper()
     pos = [p.strip().upper() for p in (positions or []) if p.strip()]
     out: list[AdpPlayer] = []
-    blend_attr = "blend" if metric == "adp" else "ranking_blend"
+    # metric="any" keeps a player the other blend covers -- the pre-draft board's pool must
+    # not change when the user flips the order.
+    blend_attrs = ("blend", "ranking_blend") if metric == "any" else (
+        ("blend",) if metric == "adp" else ("ranking_blend",)
+    )
     for p in players:
-        if ranked_only and getattr(p, blend_attr) is None:
+        if ranked_only and all(getattr(p, attr) is None for attr in blend_attrs):
+            continue
+        if p.fringe and not include_fringe:
             continue
         if needle and needle not in p.name.lower() and needle not in (p.team_abbr or "").lower():
             continue
@@ -94,12 +102,30 @@ def sort_players(
 ) -> list[AdpPlayer]:
     key = sort if sort in SORT_KEYS else "blend"
     direction = -1 if sort_dir == "desc" else 1
+    # Ties on a value-bearing column fall back to the other metric before the name: the tail
+    # of an ADP-ordered board is full of players no site drafts, and ordering those
+    # alphabetically buries the ones every ranking list rates highly.
+    other = "ranking_blend" if metric == "adp" else "blend"
+    fallback = other if key not in ("name", "team") else None
+
+    def tiebreak(a: AdpPlayer, b: AdpPlayer) -> int:
+        if fallback is not None:
+            av = getattr(a, fallback)
+            bv = getattr(b, fallback)
+            if av is not None or bv is not None:
+                if av is None:
+                    return 1
+                if bv is None:
+                    return -1
+                if av != bv:
+                    return -1 if av < bv else 1
+        return (a.name.lower() > b.name.lower()) - (a.name.lower() < b.name.lower())
 
     def cmp(a: AdpPlayer, b: AdpPlayer) -> int:
         av = _sort_value(a, key, metric)
         bv = _sort_value(b, key, metric)
         if av is None and bv is None:
-            return (a.name.lower() > b.name.lower()) - (a.name.lower() < b.name.lower())
+            return tiebreak(a, b)
         if av is None:
             return 1
         if bv is None:
@@ -135,6 +161,7 @@ def paginate_players(
     ranked_only: bool = True,
     ids: Optional[list[str]] = None,
     metric: str = "adp",
+    include_fringe: bool = False,
 ) -> tuple[list[AdpPlayer], int, int, int, int]:
     if ids is not None:
         wanted = [i.strip() for i in ids if i and i.strip()][:_IDS_CAP]
@@ -143,7 +170,13 @@ def paginate_players(
         return page_players, len(page_players), 1, 1, 0
 
     filtered = filter_players(
-        players, q=q, team=team, positions=positions, ranked_only=ranked_only, metric=metric
+        players,
+        q=q,
+        team=team,
+        positions=positions,
+        ranked_only=ranked_only,
+        metric=metric,
+        include_fringe=include_fringe,
     )
     ordered = sort_players(filtered, sort, sort_dir, metric)
     return _page_slice(ordered, page, page_size)
@@ -162,6 +195,7 @@ def paginated_response(
     ranked_only: bool = True,
     ids: Optional[list[str]] = None,
     metric: str = "adp",
+    include_fringe: bool = False,
 ) -> AdpResponse:
     page_players, total, safe_page, total_pages, offset = paginate_players(
         base.players,
@@ -175,6 +209,7 @@ def paginated_response(
         ranked_only=ranked_only,
         ids=ids,
         metric=metric,
+        include_fringe=include_fringe,
     )
     return base.model_copy(
         update={

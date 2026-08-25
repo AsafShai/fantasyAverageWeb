@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models.adp import AdpPlayer, LastYearStats, SiteAdp
+from app.models.adp import AdpPlayer, AdpResponse, LastYearStats, SiteAdp
 from app.models.nba_player_models import NbaPlayerBio
 from app.services.adp_service import (
     apply_last_year_stats,
@@ -14,6 +14,7 @@ from app.services.adp_service import (
     compute_blend,
     compute_spread,
     load_espn_stat_splits,
+    mark_fringe,
     normalize_player_name,
     parse_sites,
     reset_adp_cache,
@@ -460,3 +461,39 @@ def test_build_adp_response_computes_a_separate_rankings_blend():
         ("sleeper", False, True),
         ("fantrax", True, False),
     ]
+
+
+def _fringe_player(name: str, **kwargs) -> AdpPlayer:
+    return AdpPlayer(id=name, name=name, **kwargs)
+
+
+def test_mark_fringe_needs_all_three_signals_absent():
+    """Out of the league, not merely undrafted: no games, no team, nothing but Sleeper."""
+    out_of_league = _fringe_player("Out Of League", sleeper=SiteAdp(ranking=402))
+    played = _fringe_player("Played Last Year", sleeper=SiteAdp(ranking=380))
+    rookie = _fringe_player("Rookie", team_abbr="OKC", yahoo=SiteAdp(ranking=140), espn_id=2)
+    injured = _fringe_player("Missed The Season", espn=SiteAdp(ranking=113), espn_id=3)
+    drafted = _fringe_player("Drafted Somewhere", fantrax=SiteAdp(adp=210.0), espn_id=4)
+    played = played.model_copy(update={"espn_id": 1})
+
+    stats = LastYearStats(gp=40, fg_pct=0.4, ft_pct=0.7, ppg=7.5, rpg=3.9, apg=4.2, spg=0.7, bpg=0.4, three_pm=1.4)
+    response = AdpResponse(
+        season_label="2026-27",
+        updated_at="",
+        players=[out_of_league, played, rookie, injured, drafted],
+    )
+    marked = {p.name: p.fringe for p in mark_fringe(response, {1: stats}).players}
+
+    assert marked["Out Of League"] is True
+    assert marked["Played Last Year"] is False  # games last season
+    assert marked["Rookie"] is False  # current team + a curated list
+    assert marked["Missed The Season"] is False  # ESPN still ranks him
+    assert marked["Drafted Somewhere"] is False  # a real ADP anywhere
+
+
+def test_mark_fringe_ignores_a_zero_game_stat_line():
+    """A player carried in the stats map with 0 GP has not played, so he cannot be kept by it."""
+    p = _fringe_player("Zero Games", espn_id=9, sleeper=SiteAdp(ranking=500))
+    zero = LastYearStats(gp=0, fg_pct=0, ft_pct=0, ppg=0, rpg=0, apg=0, spg=0, bpg=0, three_pm=0)
+    response = AdpResponse(season_label="2026-27", updated_at="", players=[p])
+    assert mark_fringe(response, {9: zero}).players[0].fringe is True

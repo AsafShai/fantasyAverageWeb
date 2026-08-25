@@ -63,6 +63,42 @@ def test_parse_espn_payload_splits_adp_from_roto_ranking():
     assert parse_espn_payload(data) == [AdpRow(3112335, "Nikola Jokic", 1.8, ["C"], 2)]
 
 
+def test_parse_espn_payload_drops_the_undrafted_adp_default():
+    """ESPN parks undrafted players just under 140; that is a default, not a pick number."""
+    data = {
+        "players": [
+            {
+                "player": {
+                    "id": 1,
+                    "fullName": "Undrafted Everywhere",
+                    "ownership": {"averageDraftPosition": 140.0},
+                    "draftRanksByRankType": {"ROTO": {"rank": 500}},
+                }
+            },
+            {
+                "player": {
+                    "id": 2,
+                    "fullName": "Barely Drafted",
+                    "ownership": {"averageDraftPosition": 139.4},
+                    "draftRanksByRankType": {"ROTO": {"rank": 300}},
+                }
+            },
+            {
+                "player": {
+                    "id": 3,
+                    "fullName": "Really Drafted",
+                    "ownership": {"averageDraftPosition": 130.2},
+                    "draftRanksByRankType": {"ROTO": {"rank": 150}},
+                }
+            },
+        ]
+    }
+    rows = {row.espn_id: row for row in parse_espn_payload(data)}
+    assert rows[1].adp is None and rows[1].ranking == 500  # still ranked, just not drafted
+    assert rows[2].adp is None
+    assert rows[3].adp == 130.2
+
+
 def test_parse_espn_payload_keeps_a_ranked_player_with_no_adp():
     data = {
         "players": [
