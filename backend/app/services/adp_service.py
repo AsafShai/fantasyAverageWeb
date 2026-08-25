@@ -6,18 +6,29 @@ import asyncio
 import logging
 import re
 import unicodedata
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from app.models.adp import AdpIndexResponse, AdpPlayer, AdpResponse, LastYearStats, SiteAdp
+from app.models.adp import (
+    AdpIndexResponse,
+    AdpPlayer,
+    AdpResponse,
+    LastYearStats,
+    ProviderMeta,
+    SiteAdp,
+)
 from app.models.nba_player_models import NbaPlayerBio
-from app.models.player import StatTimePeriod
 from app.config import settings
-from app.services import nba_player_catalog
-from app.services.adp_fetch import fetch_espn_projection_map, fetch_live_adp_payload
-from app.services.adp_query import filter_players, paginated_response, team_abbrs, to_index_player
-from app.services.db_service import DBService
-from app.services.player_service import espn_season_string, get_season_anchor_date
+from app.services import adp_cache, nba_player_catalog
+from app.services.adp_fetch import fetch_espn_stat_splits_map, fetch_live_adp_payload
+from app.services.adp_query import (
+    filter_players,
+    paginated_response,
+    sort_players,
+    team_abbrs,
+    to_index_player,
+)
+from app.services.player_service import espn_season_string
 from app.utils.name_matching import (
     clean_fantasy_scraped_name,
     fantasy_name_keys,
@@ -26,7 +37,15 @@ from app.utils.name_matching import (
 
 logger = logging.getLogger(__name__)
 
-SITES = ("espn", "fantrax", "sleeper")
+SITES = ("espn", "fantrax", "sleeper", "yahoo")
+METRICS = ("adp", "rank")
+# Which AdpPlayer fields each metric owns. ADP and rankings live on different scales
+# (picks 1-130 vs list positions 1-832), so their blends are computed separately and
+# never averaged together.
+_METRIC_FIELDS = {
+    "adp": ("blend", "blend_rank", "spread"),
+    "rank": ("ranking_blend", "ranking_blend_rank", "ranking_spread"),
+}
 _CACHE_TTL = timedelta(minutes=30)
 
 _SUFFIX_RE = re.compile(r"\b(jr|sr|ii|iii|iv|v)\.?$", re.IGNORECASE)
@@ -43,12 +62,11 @@ _CATALOG_POS = {
 _cached: Optional[AdpResponse] = None
 _cached_at: Optional[datetime] = None
 _refresh_lock = asyncio.Lock()
-_last_year_cache: Optional[tuple[str, dict[int, LastYearStats]]] = None
-_last_year_cached_at: Optional[datetime] = None
-_last_year_lock = asyncio.Lock()
-_projection_cache: Optional[tuple[str, dict[int, LastYearStats]]] = None
-_projection_cached_at: Optional[datetime] = None
-_projection_lock = asyncio.Lock()
+# (actual_label, actual_by_espn_id, projection_label, projection_by_espn_id) -- both splits
+# come from one ESPN request (see fetch_espn_stat_splits), so one cache entry covers both.
+_espn_stats_cache: Optional[tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]] = None
+_espn_stats_cached_at: Optional[datetime] = None
+_espn_stats_lock = asyncio.Lock()
 
 
 def _cache_fresh(cached_at: Optional[datetime], now: Optional[datetime] = None) -> bool:
@@ -74,6 +92,11 @@ def normalize_player_name(name: str) -> str:
     return s
 
 
+def parse_metric(raw: Optional[str]) -> str:
+    """`adp` unless the caller explicitly asks for `rank`."""
+    return "rank" if (raw or "").strip().lower() in {"rank", "ranking", "rankings"} else "adp"
+
+
 def parse_sites(raw: Optional[str]) -> Optional[tuple[str, ...]]:
     """Known site keys from a comma list. Empty or unknown-only → None (all sites)."""
     if not raw:
@@ -89,41 +112,55 @@ def parse_sites(raw: Optional[str]) -> Optional[tuple[str, ...]]:
 
 
 def compute_blend(
-    adp: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
+    values: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
 ) -> Optional[float]:
-    """Mean of non-null ADPs among `sites` (defaults to every site)."""
+    """Mean of the non-null values among `sites` (defaults to every site).
+
+    A single listing site is still a Blend of one -- Spread is what signals that it is
+    unaveraged.
+    """
     keys = sites or SITES
-    vals = [adp[site] for site in keys if adp.get(site) is not None]
+    vals = [values[site] for site in keys if values.get(site) is not None]
     if not vals:
         return None
     return round(sum(vals) / len(vals), 2)
 
 
 def compute_spread(
-    adp: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
+    values: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
 ) -> Optional[float]:
     keys = sites or SITES
-    vals = [adp[site] for site in keys if adp.get(site) is not None]
+    vals = [values[site] for site in keys if values.get(site) is not None]
     if len(vals) < 2:
         return None
     return round(max(vals) - min(vals), 2)
 
 
+def _metric_values(player: AdpPlayer, metric: str) -> dict[str, Optional[float]]:
+    attr = "adp" if metric == "adp" else "ranking"
+    return {site: getattr(getattr(player, site), attr) for site in SITES}
+
+
 def apply_visible_sites(
-    players: list[AdpPlayer], sites: Optional[tuple[str, ...]]
+    players: list[AdpPlayer], sites: Optional[tuple[str, ...]], metric: str = "adp"
 ) -> list[AdpPlayer]:
-    """Recompute blend / spread / blend_rank from a site subset. Cached rows stay intact."""
+    """Recompute one metric's blend / spread / blend rank from a site subset.
+
+    The other metric's fields are left exactly as built, so a caller can narrow the ADP
+    blend without disturbing the rankings blend the same row carries.
+    """
     if not sites or set(sites) == set(SITES):
         return players
+    blend_field, rank_field, spread_field = _METRIC_FIELDS[metric]
     blends: list[Optional[float]] = []
     spreads: list[Optional[float]] = []
     for p in players:
-        adp = {site: getattr(p, site).adp for site in SITES}
-        blends.append(compute_blend(adp, sites))
-        spreads.append(compute_spread(adp, sites))
+        values = _metric_values(p, metric)
+        blends.append(compute_blend(values, sites))
+        spreads.append(compute_spread(values, sites))
     ranks = assign_ranks(blends)
     return [
-        p.model_copy(update={"blend": blend, "spread": spread, "blend_rank": rank})
+        p.model_copy(update={blend_field: blend, spread_field: spread, rank_field: rank})
         for p, blend, spread, rank in zip(players, blends, spreads, ranks)
     ]
 
@@ -142,6 +179,11 @@ def _positions_from_catalog(bio: Optional[NbaPlayerBio]) -> list[str]:
     if bio is None or not bio.position:
         return []
     return list(_CATALOG_POS.get(bio.position.strip().lower(), []))
+
+
+def _coerce_ranking(raw) -> Optional[int]:
+    val = _coerce_adp(raw)
+    return int(round(val)) if val is not None else None
 
 
 def _coerce_adp(raw) -> Optional[float]:
@@ -207,6 +249,8 @@ def _merge_adp_into(dest: dict, incoming: dict) -> None:
     for site in SITES:
         if dest["adp"][site] is None and incoming["adp"][site] is not None:
             dest["adp"][site] = incoming["adp"][site]
+        if dest["ranking"][site] is None and incoming["ranking"][site] is not None:
+            dest["ranking"][site] = incoming["ranking"][site]
     if not dest["positions"] and incoming["positions"]:
         dest["positions"] = list(incoming["positions"])
     incoming_has_bio = incoming["bio"] is not None
@@ -303,6 +347,8 @@ def build_adp_response(
 
         adp_raw = raw.get("adp") if isinstance(raw.get("adp"), dict) else {}
         adp = {site: _coerce_adp(adp_raw.get(site)) for site in SITES}
+        ranking_raw = raw.get("ranking") if isinstance(raw.get("ranking"), dict) else {}
+        ranking = {site: _coerce_ranking(ranking_raw.get(site)) for site in SITES}
 
         stored_pos = raw.get("positions")
         positions: list[str] = []
@@ -323,6 +369,7 @@ def build_adp_response(
                 "bio": bio,
                 "positions": positions,
                 "adp": adp,
+                "ranking": ranking,
             },
         )
 
@@ -340,12 +387,16 @@ def build_adp_response(
                 "bio": bio,
                 "positions": _positions_from_catalog(bio),
                 "adp": {site: None for site in SITES},
+                "ranking": {site: None for site in SITES},
             }
         )
 
     blends = [compute_blend(r["adp"]) for r in rows]
     spreads = [compute_spread(r["adp"]) for r in rows]
     blend_ranks = assign_ranks(blends)
+    ranking_blends = [compute_blend(r["ranking"]) for r in rows]
+    ranking_spreads = [compute_spread(r["ranking"]) for r in rows]
+    ranking_blend_ranks = assign_ranks(ranking_blends)
     site_ranks = {site: assign_ranks([r["adp"][site] for r in rows]) for site in SITES}
 
     players: list[AdpPlayer] = []
@@ -361,12 +412,20 @@ def build_adp_response(
                 team_abbr=bio.team_abbr if bio else None,
                 photo_url=bio.photo_url if bio else None,
                 positions=row["positions"],
-                espn=SiteAdp(adp=row["adp"]["espn"], rank=site_ranks["espn"][i]),
-                fantrax=SiteAdp(adp=row["adp"]["fantrax"], rank=site_ranks["fantrax"][i]),
-                sleeper=SiteAdp(adp=row["adp"]["sleeper"], rank=site_ranks["sleeper"][i]),
+                **{
+                    site: SiteAdp(
+                        adp=row["adp"][site],
+                        rank=site_ranks[site][i],
+                        ranking=row["ranking"][site],
+                    )
+                    for site in SITES
+                },
                 blend=blends[i],
                 blend_rank=blend_ranks[i],
                 spread=spreads[i],
+                ranking_blend=ranking_blends[i],
+                ranking_blend_rank=ranking_blend_ranks[i],
+                ranking_spread=ranking_spreads[i],
             )
         )
 
@@ -379,55 +438,67 @@ def build_adp_response(
     )
 
     sources = payload.get("sources") if isinstance(payload.get("sources"), dict) else {}
+    raw_providers = payload.get("providers") if isinstance(payload.get("providers"), list) else []
+    providers = [ProviderMeta(**meta) for meta in raw_providers if isinstance(meta, dict)]
     return AdpResponse(
         season_label=str(payload.get("seasonLabel") or payload.get("season_label") or "2025-26"),
         updated_at=str(payload.get("updatedAt") or payload.get("updated_at") or ""),
         sources={str(k): str(v) for k, v in sources.items()},
+        providers=providers,
         players=players,
     )
 
 
+async def refresh_adp_sources(provider: Optional[str] = None) -> list[ProviderMeta]:
+    """Drop cached source payloads and rebuild, returning the refreshed provider metas."""
+    if provider is not None and provider not in SITES:
+        raise ValueError(f"Unknown provider '{provider}'")
+    global _cached, _cached_at
+    await adp_cache.invalidate(provider)
+    async with _refresh_lock:
+        _cached = None
+        _cached_at = None
+    return (await get_adp_response()).providers
+
+
+CURATED_RANK_SITES = ("espn", "yahoo")
+
+
+def mark_fringe(
+    response: AdpResponse, actuals_by_espn_id: dict[int, LastYearStats]
+) -> AdpResponse:
+    """Flag players who are out of the league rather than merely undrafted.
+
+    Three signals have to agree before a player is called fringe, because each one alone
+    has a false positive: rookies have no games, free agents have no team mid-summer, and
+    the deepest source (Sleeper, 829 players) lists G-League and overseas players a curated
+    list would not. Anyone with last-season games, a current NBA team, a real ADP, or a spot
+    on ESPN's or Yahoo's own list is kept.
+
+    Measured 2026-08-25: 264 of 942 ranked players match, none shallower than Sleeper #201,
+    and none of them played a game last season.
+    """
+    players = []
+    for p in response.players:
+        played = p.espn_id in actuals_by_espn_id and actuals_by_espn_id[p.espn_id].gp > 0
+        curated = any(getattr(p, site).ranking is not None for site in CURATED_RANK_SITES)
+        drafted = any(getattr(p, site).adp is not None for site in SITES)
+        players.append(
+            p.model_copy(
+                update={"fringe": not (played or curated or drafted or bool(p.team_abbr))}
+            )
+        )
+    return response.model_copy(update={"players": players})
+
+
 def reset_adp_cache() -> None:
-    global _cached, _cached_at, _last_year_cache, _last_year_cached_at
-    global _projection_cache, _projection_cached_at
+    global _cached, _cached_at, _espn_stats_cache, _espn_stats_cached_at
     _cached = None
     _cached_at = None
-    _last_year_cache = None
-    _last_year_cached_at = None
-    _projection_cache = None
-    _projection_cached_at = None
+    _espn_stats_cache = None
+    _espn_stats_cached_at = None
+    adp_cache.reset_provider_cache()
 
-
-def _num(value, default: float = 0.0) -> float:
-    try:
-        x = float(value)
-    except (TypeError, ValueError):
-        return default
-    if x != x:
-        return default
-    return x
-
-
-def last_year_from_agg_row(row) -> Optional[LastYearStats]:
-    data = dict(row) if not isinstance(row, dict) else row
-    gp = int(_num(data.get("gp")))
-    if gp <= 0:
-        return None
-
-    def per(key: str) -> float:
-        return round(_num(data.get(key)) / gp, 1)
-
-    return LastYearStats(
-        gp=gp,
-        fg_pct=round(_num(data.get("fg_pct")), 4),
-        ft_pct=round(_num(data.get("ft_pct")), 4),
-        ppg=per("pts"),
-        rpg=per("reb"),
-        apg=per("ast"),
-        spg=per("stl"),
-        bpg=per("blk"),
-        three_pm=per("three_pm"),
-    )
 
 
 def apply_last_year_stats(
@@ -454,91 +525,79 @@ def apply_projection_stats(
     return response.model_copy(update={"players": players, "projection_season": projection_season})
 
 
-async def load_last_year_stats() -> tuple[str, dict[int, LastYearStats]]:
-    """Per-game averages from the current app season (same window as the Players table)."""
-    global _last_year_cache, _last_year_cached_at
-    season = espn_season_string(settings.season_id)
+def resolve_adp_seasons() -> tuple[str, int, int]:
+    """(actual stats season label, actual season's ESPN id, ESPN season_id to project).
+
+    Before the app season tips off there are no games to average, so the draft board
+    shows the previous season's actuals. Projections always track the season being
+    played or drafted: ESPN only publishes a season once it opens, so season_id + 1
+    would leave the toggle blank all year.
+    """
+    proj_id = settings.season_id
+    started = date.today() >= settings.season_start
+    actual_id = proj_id if started else proj_id - 1
+    return (espn_season_string(actual_id), actual_id, proj_id)
+
+
+async def load_espn_stat_splits() -> tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]:
+    """(actual season label, actual per-game stats, projection season label, projections).
+
+    Both splits come from a single ESPN request (see fetch_espn_stat_splits) -- there is no
+    separate DB read for actuals. Projections stay empty until ESPN publishes them; that
+    alone does not block caching the actuals half.
+    """
+    global _espn_stats_cache, _espn_stats_cached_at
+    actual_label, actual_id, proj_id = resolve_adp_seasons()
+    proj_label = espn_season_string(proj_id)
     now = datetime.now(timezone.utc)
-    cached = _last_year_cache
-    if cached is not None and cached[0] == season and _cache_fresh(_last_year_cached_at, now):
+
+    def _fresh(entry):
+        return (
+            entry is not None
+            and entry[0] == actual_label
+            and entry[2] == proj_label
+            and _cache_fresh(_espn_stats_cached_at, now)
+        )
+
+    cached = _espn_stats_cache
+    if _fresh(cached):
+        assert cached is not None
         return cached
-    async with _last_year_lock:
+    async with _espn_stats_lock:
         now = datetime.now(timezone.utc)
-        cached = _last_year_cache
-        if cached is not None and cached[0] == season and _cache_fresh(_last_year_cached_at, now):
+        cached = _espn_stats_cache
+        if _fresh(cached):
+            assert cached is not None
             return cached
         try:
-            db = DBService()
-            anchor = await get_season_anchor_date(season, db)
-            start, end = StatTimePeriod.resolve_window(
-                StatTimePeriod.SEASON, None, None, settings.season_start, today=anchor
+            raw_actual, raw_proj = await fetch_espn_stat_splits_map(
+                actual_season_id=actual_id, proj_season_id=proj_id
             )
-            df, _, _ = await db.aggregate_player_games(start, end, season)
         except Exception:
-            logger.exception("Last-year stats load failed")
-            if cached is not None and cached[0] == season:
+            logger.exception("ESPN stat split fetch failed")
+            if cached is not None:
                 return cached
-            return (season, {})
-        if df is None:
-            logger.warning("Last-year aggregate returned no frame; not caching empty result")
-            if cached is not None and cached[0] == season:
+            return (actual_label, {}, proj_label, {})
+        actual_by_id = {espn_id: LastYearStats(**row) for espn_id, row in raw_actual.items()}
+        proj_by_id = {espn_id: LastYearStats(**row) for espn_id, row in raw_proj.items()}
+        if not actual_by_id and not proj_by_id:
+            logger.warning(
+                "ESPN stat splits empty for actual=%s proj=%s; not caching", actual_label, proj_label
+            )
+            if cached is not None:
                 return cached
-            return (season, {})
-        by_id: dict[int, LastYearStats] = {}
-        if not df.empty:
-            for _, row in df.iterrows():
-                try:
-                    espn_id = int(row["player_id"])
-                except (TypeError, ValueError, KeyError):
-                    continue
-                stats = last_year_from_agg_row(row)
-                if stats is not None:
-                    by_id[espn_id] = stats
-        _last_year_cache = (season, by_id)
-        _last_year_cached_at = now
-        logger.info("Loaded last-year stats for %d players (%s)", len(by_id), season)
-        return _last_year_cache
-
-
-async def load_espn_projections() -> tuple[str, dict[int, LastYearStats]]:
-    """Next-season ESPN projections; falls back to this season's projection split if needed."""
-    global _projection_cache, _projection_cached_at
-    next_id = settings.season_id + 1
-    next_label = espn_season_string(next_id)
-    now = datetime.now(timezone.utc)
-    if _projection_cache is not None and _cache_fresh(_projection_cached_at, now):
-        return _projection_cache
-
-    async def _fetch(season_id: int) -> dict[int, LastYearStats]:
-        raw = await fetch_espn_projection_map(season_id)
-        return {espn_id: LastYearStats(**row) for espn_id, row in raw.items()}
-
-    async with _projection_lock:
-        now = datetime.now(timezone.utc)
-        if _projection_cache is not None and _cache_fresh(_projection_cached_at, now):
-            return _projection_cache
-        by_id: dict[int, LastYearStats] = {}
-        label = next_label
-        try:
-            by_id = await _fetch(next_id)
-            if not by_id:
-                by_id = await _fetch(settings.season_id)
-                if by_id:
-                    label = espn_season_string(settings.season_id)
-        except Exception:
-            logger.exception("ESPN projection fetch failed")
-            if _projection_cache is not None:
-                return _projection_cache
-            return (next_label, {})
-        if not by_id:
-            logger.warning("ESPN projection fetch returned empty; not caching")
-            if _projection_cache is not None:
-                return _projection_cache
-            return (label, {})
-        _projection_cache = (label, by_id)
-        _projection_cached_at = now
-        logger.info("Loaded ESPN projections for %d players (%s)", len(by_id), label)
-        return _projection_cache
+            return (actual_label, {}, proj_label, {})
+        fresh_entry = (actual_label, actual_by_id, proj_label, proj_by_id)
+        _espn_stats_cache = fresh_entry
+        _espn_stats_cached_at = now
+        logger.info(
+            "Loaded ESPN stat splits: %d actuals (%s), %d projections (%s)",
+            len(actual_by_id),
+            actual_label,
+            len(proj_by_id),
+            proj_label,
+        )
+        return fresh_entry
 
 
 async def get_adp_response_enriched(
@@ -553,13 +612,17 @@ async def get_adp_response_enriched(
     ranked_only: bool = True,
     ids: Optional[list[str]] = None,
     sites: Optional[str] = None,
+    rank_sites: Optional[str] = None,
+    metric: str = "adp",
+    include_fringe: bool = False,
 ) -> AdpResponse:
     base = await get_adp_response()
+    metric = parse_metric(metric)
     # ids fetches (rankings hydrate) always keep the all-sites Blend.
     if ids is None:
-        subset = apply_visible_sites(base.players, parse_sites(sites))
-        if subset is not base.players:
-            base = base.model_copy(update={"players": subset})
+        players = apply_blend_sites(base.players, sites=sites, rank_sites=rank_sites)
+        if players is not base.players:
+            base = base.model_copy(update={"players": players})
     sliced = paginated_response(
         base,
         page=page,
@@ -571,11 +634,10 @@ async def get_adp_response_enriched(
         positions=positions,
         ranked_only=ranked_only,
         ids=ids,
+        metric=metric,
+        include_fringe=include_fringe,
     )
-    (last_season, last_by_id), (proj_season, proj_by_id) = await asyncio.gather(
-        load_last_year_stats(),
-        load_espn_projections(),
-    )
+    last_season, last_by_id, proj_season, proj_by_id = await load_espn_stat_splits()
     out = sliced.model_copy(update={"last_year_season": last_season, "projection_season": proj_season})
     if last_by_id:
         out = apply_last_year_stats(out, last_by_id, last_season)
@@ -584,9 +646,40 @@ async def get_adp_response_enriched(
     return out
 
 
-async def get_adp_index_response(*, ranked_only: bool = True) -> AdpIndexResponse:
+def apply_blend_sites(
+    players: list[AdpPlayer],
+    *,
+    sites: Optional[str] = None,
+    rank_sites: Optional[str] = None,
+) -> list[AdpPlayer]:
+    """Narrow each metric's blend to its own selected sites.
+
+    The two selections are independent: the ADP view's checkboxes must never change the
+    rankings blend the same rows carry, since the pre-draft board reads both at once to
+    show a cross-metric delta.
+    """
+    out = apply_visible_sites(players, parse_sites(sites), "adp")
+    return apply_visible_sites(out, parse_sites(rank_sites), "rank")
+
+
+async def get_adp_index_response(
+    *,
+    ranked_only: bool = True,
+    sites: Optional[str] = None,
+    rank_sites: Optional[str] = None,
+    metric: str = "adp",
+    include_fringe: bool = False,
+) -> AdpIndexResponse:
     base = await get_adp_response()
-    players = filter_players(base.players, ranked_only=ranked_only)
+    resolved = parse_metric(metric)
+    players = apply_blend_sites(base.players, sites=sites, rank_sites=rank_sites)
+    # Board membership is the union of both metrics: switching the order must not drop
+    # players off a saved board, so a player ranked by either blend stays in the pool and
+    # the sort puts whoever the active blend does not cover at the end.
+    players = filter_players(
+        players, ranked_only=ranked_only, metric="any", include_fringe=include_fringe
+    )
+    players = sort_players(players, "blend", "asc", resolved)
     return AdpIndexResponse(
         season_label=base.season_label,
         updated_at=base.updated_at,
@@ -616,6 +709,8 @@ async def get_adp_response() -> AdpResponse:
         try:
             payload = await fetch_live_adp_payload()
             response = build_adp_response(payload)
+            _actual_label, actuals, _proj_label, _proj = await load_espn_stat_splits()
+            response = mark_fringe(response, actuals)
             _cached = response
             _cached_at = now
             return response

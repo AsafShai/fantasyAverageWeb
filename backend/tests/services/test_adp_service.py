@@ -1,8 +1,9 @@
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models.adp import AdpPlayer, LastYearStats, SiteAdp
+from app.models.adp import AdpPlayer, AdpResponse, LastYearStats, SiteAdp
 from app.models.nba_player_models import NbaPlayerBio
 from app.services.adp_service import (
     apply_last_year_stats,
@@ -12,11 +13,12 @@ from app.services.adp_service import (
     build_adp_response,
     compute_blend,
     compute_spread,
-    last_year_from_agg_row,
-    load_espn_projections,
+    load_espn_stat_splits,
+    mark_fringe,
     normalize_player_name,
     parse_sites,
     reset_adp_cache,
+    resolve_adp_seasons,
 )
 
 
@@ -57,8 +59,9 @@ def test_compute_blend_and_spread_honor_site_subset():
 def test_parse_sites_keeps_known_keys():
     assert parse_sites(None) is None
     assert parse_sites("") is None
-    assert parse_sites("yahoo,unknown") is None
+    assert parse_sites("nonsense,unknown") is None
     assert parse_sites("espn,sleeper,espn") == ("espn", "sleeper")
+    assert parse_sites("yahoo") == ("yahoo",)
 
 
 def test_apply_visible_sites_recomputes_blend_and_ranks():
@@ -82,7 +85,7 @@ def test_apply_visible_sites_recomputes_blend_and_ranks():
         blend_rank=2,
         spread=17.0,
     )
-    out = apply_visible_sites([a, b], ("fantrax", "sleeper"))
+    out = apply_visible_sites([a, b], ("fantrax", "sleeper"), "adp")
     assert [p.id for p in out] == ["a", "b"]
     assert out[0].blend == 16.0
     assert out[1].blend == 3.5
@@ -90,10 +93,48 @@ def test_apply_visible_sites_recomputes_blend_and_ranks():
     assert out[0].blend_rank == 2
     assert out[0].spread == 28.0
     assert a.blend == 11.0
-    assert apply_visible_sites([a], ("espn", "fantrax", "sleeper")) is not None
-    same = apply_visible_sites([a, b], ("espn", "fantrax", "sleeper"))
+    same = apply_visible_sites([a, b], ("espn", "fantrax", "sleeper", "yahoo"), "adp")
     assert same is not out
     assert same[0] is a
+
+
+def test_apply_visible_sites_keeps_the_two_blends_independent():
+    """The ADP checkboxes must not disturb the rankings blend on the same row -- the
+    pre-draft board reads both at once for its cross-metric delta."""
+    p = AdpPlayer(
+        id="p",
+        name="P",
+        espn=SiteAdp(adp=10.0, ranking=8),
+        fantrax=SiteAdp(adp=20.0),
+        sleeper=SiteAdp(ranking=40),
+        yahoo=SiteAdp(adp=30.0, ranking=60),
+        blend=20.0,
+        spread=20.0,
+        ranking_blend=36.0,
+        ranking_spread=52.0,
+    )
+    adp_only = apply_visible_sites([p], ("espn", "fantrax"), "adp")[0]
+    assert adp_only.blend == 15.0
+    assert adp_only.ranking_blend == 36.0
+
+    rank_only = apply_visible_sites([p], ("espn", "sleeper"), "rank")[0]
+    assert rank_only.ranking_blend == 24.0
+    assert rank_only.ranking_spread == 32.0
+    assert rank_only.blend == 20.0
+
+
+def test_blend_never_mixes_adp_and_ranking_scales():
+    """A ranking of 400 must never be averaged into a pick-number blend."""
+    p = AdpPlayer(
+        id="p",
+        name="P",
+        espn=SiteAdp(adp=5.0, ranking=400),
+        sleeper=SiteAdp(ranking=420),
+    )
+    out = apply_visible_sites([p], ("espn", "sleeper"), "adp")[0]
+    assert out.blend == 5.0
+    out_rank = apply_visible_sites([p], ("espn", "sleeper"), "rank")[0]
+    assert out_rank.ranking_blend == 410.0
 
 
 def test_compute_spread_requires_two_sites():
@@ -136,14 +177,15 @@ def test_build_adp_response_joins_bios_and_appends_catalog_only():
     assert jokic.photo_url.endswith("3112335.png")
     assert jokic.team_abbr == "DEN"
     assert jokic.positions == ["C"]
-    assert jokic.blend == 1.43  # (1.7+1.6+1)/3 — Yahoo is not a source
+    assert jokic.blend == 1.48  # (1.7+1.6+1.6+1)/4
     assert jokic.blend_rank == 1
     assert jokic.espn.rank == 1
     assert jokic.spread == 0.7
+    assert jokic.ranking_blend is None  # this payload carries ADP only
 
     shai = by_id[4278073]
     assert shai.positions == ["PG"]  # from catalog, name-matched
-    assert shai.blend == 2.55  # (3.1+2)/2
+    assert shai.blend == 2.97  # (3.1+3.8+2)/3
     assert shai.blend_rank == 2
     assert shai.fantrax.adp is None
     assert shai.fantrax.rank is None
@@ -256,33 +298,6 @@ def test_build_adp_response_merges_scraped_name_duplicates():
     assert holland.espn.adp == 255
 
 
-def test_last_year_from_agg_row_averages_and_skips_zero_gp():
-    assert last_year_from_agg_row({"gp": 0, "pts": 10}) is None
-    stats = last_year_from_agg_row(
-        {
-            "gp": 2,
-            "pts": 50,
-            "reb": 20,
-            "ast": 10,
-            "stl": 3,
-            "blk": 1,
-            "three_pm": 4,
-            "fg_pct": 0.5,
-            "ft_pct": 0.8,
-        }
-    )
-    assert stats is not None
-    assert stats.gp == 2
-    assert stats.ppg == 25.0
-    assert stats.rpg == 10.0
-    assert stats.apg == 5.0
-    assert stats.spg == 1.5
-    assert stats.bpg == 0.5
-    assert stats.three_pm == 2.0
-    assert stats.fg_pct == 0.5
-    assert stats.ft_pct == 0.8
-
-
 def test_apply_last_year_stats_joins_by_espn_id():
     payload = {
         "seasonLabel": "2025-26",
@@ -325,6 +340,19 @@ def test_apply_projection_stats_joins_by_espn_id():
     assert by_name["Rookie"].projection is None
 
 
+_ACTUAL_ROW = {
+    99: {
+        "gp": 70,
+        "fg_pct": 0.5,
+        "ft_pct": 0.8,
+        "ppg": 18.0,
+        "rpg": 4.0,
+        "apg": 3.0,
+        "spg": 1.0,
+        "bpg": 0.5,
+        "three_pm": 1.5,
+    }
+}
 _PROJ_ROW = {
     99: {
         "gp": 82,
@@ -341,24 +369,131 @@ _PROJ_ROW = {
 
 
 @pytest.mark.asyncio
-async def test_projection_cache_does_not_store_empty_failure():
+async def test_stat_splits_cache_does_not_store_empty_failure():
     reset_adp_cache()
-    fetch = AsyncMock(side_effect=[{}, {}, _PROJ_ROW])
-    with patch("app.services.adp_service.fetch_espn_projection_map", fetch):
-        empty = await load_espn_projections()
-        filled = await load_espn_projections()
-    assert empty[1] == {}
-    assert 99 in filled[1]
-    assert fetch.await_count == 3
+    fetch = AsyncMock(side_effect=[({}, {}), (_ACTUAL_ROW, _PROJ_ROW)])
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        empty = await load_espn_stat_splits()
+        filled = await load_espn_stat_splits()
+    assert empty[1] == {} and empty[3] == {}
+    assert 99 in filled[1] and 99 in filled[3]
+    assert fetch.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_projection_cache_retries_after_exception():
+async def test_stat_splits_cache_retries_after_exception():
     reset_adp_cache()
-    fetch = AsyncMock(side_effect=[RuntimeError("down"), _PROJ_ROW])
-    with patch("app.services.adp_service.fetch_espn_projection_map", fetch):
-        empty = await load_espn_projections()
-        filled = await load_espn_projections()
-    assert empty[1] == {}
-    assert 99 in filled[1]
+    fetch = AsyncMock(side_effect=[RuntimeError("down"), (_ACTUAL_ROW, _PROJ_ROW)])
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        empty = await load_espn_stat_splits()
+        filled = await load_espn_stat_splits()
+    assert empty[1] == {} and empty[3] == {}
+    assert 99 in filled[1] and 99 in filled[3]
 
+
+@pytest.mark.asyncio
+async def test_stat_splits_caches_actuals_even_when_projections_unpublished():
+    """ESPN 404s next season's projections until it opens; the actuals half is real and
+    useful long before that, so actuals + empty projections must still be cached rather
+    than treated as a total failure."""
+    reset_adp_cache()
+    fetch = AsyncMock(return_value=(_ACTUAL_ROW, {}))
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        first = await load_espn_stat_splits()
+        second = await load_espn_stat_splits()
+    assert 99 in first[1]
+    assert first[3] == {}
+    assert second == first
+    fetch.assert_awaited_once()  # second call served from cache, not refetched
+
+
+def test_resolve_seasons_before_tipoff_uses_previous_actuals():
+    with patch("app.services.adp_service.settings") as cfg:
+        cfg.season_id = 2027
+        cfg.season_start = date(2026, 10, 20)
+        with patch("app.services.adp_service.date") as fake_date:
+            fake_date.today.return_value = date(2026, 8, 24)
+            assert resolve_adp_seasons() == ("2025-26", 2026, 2027)
+
+
+def test_resolve_seasons_in_season_uses_current_actuals():
+    with patch("app.services.adp_service.settings") as cfg:
+        cfg.season_id = 2027
+        cfg.season_start = date(2026, 10, 20)
+        with patch("app.services.adp_service.date") as fake_date:
+            fake_date.today.return_value = date(2027, 1, 15)
+            assert resolve_adp_seasons() == ("2026-27", 2027, 2027)
+
+
+def test_build_adp_response_computes_a_separate_rankings_blend():
+    payload = {
+        "seasonLabel": "2026-27",
+        "updatedAt": "",
+        "sources": {"espn": "test"},
+        "providers": [
+            {"key": "sleeper", "label": "Sleeper", "has_adp": False, "has_rankings": True},
+            {"key": "fantrax", "label": "Fantrax", "has_adp": True, "has_rankings": False},
+        ],
+        "players": [
+            {"name": "Ranked And Drafted", "adp": {"espn": 12.0}, "ranking": {"espn": 9, "sleeper": 15}},
+            {"name": "Rankings Only", "adp": {}, "ranking": {"sleeper": 300}},
+            {"name": "Adp Only", "adp": {"fantrax": 44.0}, "ranking": {}},
+        ],
+    }
+    resp = build_adp_response(payload, bios_by_id={})
+    by_name = {p.name: p for p in resp.players}
+
+    both = by_name["Ranked And Drafted"]
+    assert both.blend == 12.0
+    assert both.ranking_blend == 12.0  # (9+15)/2, on the rankings scale only
+    assert both.ranking_spread == 6.0
+
+    rank_only = by_name["Rankings Only"]
+    assert rank_only.blend is None
+    assert rank_only.ranking_blend == 300.0
+    assert rank_only.ranking_spread is None  # single source: unaveraged, by design
+
+    adp_only = by_name["Adp Only"]
+    assert adp_only.ranking_blend is None
+    assert adp_only.blend == 44.0
+
+    assert [(m.key, m.has_adp, m.has_rankings) for m in resp.providers] == [
+        ("sleeper", False, True),
+        ("fantrax", True, False),
+    ]
+
+
+def _fringe_player(name: str, **kwargs) -> AdpPlayer:
+    return AdpPlayer(id=name, name=name, **kwargs)
+
+
+def test_mark_fringe_needs_all_three_signals_absent():
+    """Out of the league, not merely undrafted: no games, no team, nothing but Sleeper."""
+    out_of_league = _fringe_player("Out Of League", sleeper=SiteAdp(ranking=402))
+    played = _fringe_player("Played Last Year", sleeper=SiteAdp(ranking=380))
+    rookie = _fringe_player("Rookie", team_abbr="OKC", yahoo=SiteAdp(ranking=140), espn_id=2)
+    injured = _fringe_player("Missed The Season", espn=SiteAdp(ranking=113), espn_id=3)
+    drafted = _fringe_player("Drafted Somewhere", fantrax=SiteAdp(adp=210.0), espn_id=4)
+    played = played.model_copy(update={"espn_id": 1})
+
+    stats = LastYearStats(gp=40, fg_pct=0.4, ft_pct=0.7, ppg=7.5, rpg=3.9, apg=4.2, spg=0.7, bpg=0.4, three_pm=1.4)
+    response = AdpResponse(
+        season_label="2026-27",
+        updated_at="",
+        players=[out_of_league, played, rookie, injured, drafted],
+    )
+    marked = {p.name: p.fringe for p in mark_fringe(response, {1: stats}).players}
+
+    assert marked["Out Of League"] is True
+    assert marked["Played Last Year"] is False  # games last season
+    assert marked["Rookie"] is False  # current team + a curated list
+    assert marked["Missed The Season"] is False  # ESPN still ranks him
+    assert marked["Drafted Somewhere"] is False  # a real ADP anywhere
+
+
+def test_mark_fringe_ignores_a_zero_game_stat_line():
+    """A player carried in the stats map with 0 GP has not played, so he cannot be kept by it."""
+    p = _fringe_player("Zero Games", espn_id=9, sleeper=SiteAdp(ranking=500))
+    zero = LastYearStats(gp=0, fg_pct=0, ft_pct=0, ppg=0, rpg=0, apg=0, spg=0, bpg=0, three_pm=0)
+    response = AdpResponse(season_label="2026-27", updated_at="", players=[p])
+    assert mark_fringe(response, {9: zero}).players[0].fringe is True

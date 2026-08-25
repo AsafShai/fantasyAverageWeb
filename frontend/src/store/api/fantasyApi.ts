@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
@@ -149,6 +149,8 @@ export const fantasyApi = createApi({
                   ...(a.team ? { team: a.team } : {}),
                   ...(a.pos ? { pos: a.pos } : {}),
                   ...(a.sites ? { sites: a.sites } : {}),
+                  ...(a.rank_sites ? { rank_sites: a.rank_sites } : {}),
+                  ...(a.metric ? { metric: a.metric } : {}),
                 }),
             ranked_only: a.ranked_only ?? true,
           },
@@ -156,8 +158,18 @@ export const fantasyApi = createApi({
       },
       keepUnusedDataFor: 600,
     }),
-    getAdpIndex: builder.query<AdpIndexResponse, void>({
-      query: () => '/adp/index',
+    getAdpIndex: builder.query<AdpIndexResponse, AdpIndexQueryArgs | void>({
+      query: (args) => {
+        const a = args ?? {}
+        return {
+          url: '/adp/index',
+          params: {
+            ...(a.sites ? { sites: a.sites } : {}),
+            ...(a.rank_sites ? { rank_sites: a.rank_sites } : {}),
+            ...(a.metric ? { metric: a.metric } : {}),
+          },
+        }
+      },
       keepUnusedDataFor: 600,
     }),
     getTrendsMinutes: builder.query<MinutesResponse, { windowDays?: number }>({

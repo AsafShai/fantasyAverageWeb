@@ -3,8 +3,12 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models.adp import AdpIndexResponse, AdpResponse
-from app.services.adp_service import get_adp_index_response, get_adp_response_enriched
+from app.models.adp import AdpIndexResponse, AdpResponse, ProviderMeta
+from app.services.adp_service import (
+    get_adp_index_response,
+    get_adp_response_enriched,
+    refresh_adp_sources,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,12 +27,36 @@ def _ids(ids: Optional[str]) -> Optional[list[str]]:
 
 
 @router.get("/index", response_model=AdpIndexResponse)
-async def get_adp_index(ranked_only: bool = Query(True)):
+async def get_adp_index(
+    ranked_only: bool = Query(True),
+    sites: Optional[str] = Query(None),
+    rank_sites: Optional[str] = Query(None),
+    metric: str = Query("adp"),
+    include_fringe: bool = Query(False),
+):
     try:
-        return await get_adp_index_response(ranked_only=ranked_only)
+        return await get_adp_index_response(
+            ranked_only=ranked_only,
+            sites=sites,
+            rank_sites=rank_sites,
+            metric=metric,
+            include_fringe=include_fringe,
+        )
     except Exception as e:
         logger.error("Error building ADP index: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve ADP data")
+
+
+@router.post("/refresh", response_model=list[ProviderMeta])
+async def refresh_adp(provider: Optional[str] = Query(None)):
+    """Re-fetch one provider (or all of them) now, ignoring the 24h TTL."""
+    try:
+        return await refresh_adp_sources(provider)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error refreshing ADP sources: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to refresh ADP data")
 
 
 @router.get("", response_model=AdpResponse)
@@ -44,6 +72,9 @@ async def get_adp(
     ids: Optional[str] = Query(None),
     ranked_only: bool = Query(True),
     sites: Optional[str] = Query(None),
+    rank_sites: Optional[str] = Query(None),
+    metric: str = Query("adp"),
+    include_fringe: bool = Query(False),
 ):
     try:
         return await get_adp_response_enriched(
@@ -57,6 +88,9 @@ async def get_adp(
             ranked_only=ranked_only,
             ids=_ids(ids),
             sites=sites,
+            rank_sites=rank_sites,
+            metric=metric,
+            include_fringe=include_fringe,
         )
     except Exception as e:
         logger.error("Error building ADP response: %s", e)

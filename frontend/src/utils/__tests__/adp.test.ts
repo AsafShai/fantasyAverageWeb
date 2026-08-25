@@ -1,14 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
   annotateDraftPicks,
+  blendRankValue,
+  blendValue,
   clampLeagueSettings,
   draftTeamForPick,
   groupDraftPicksByTeam,
   isThreeRrReverse,
   nextShortSeasonLabel,
   shortSeasonLabel,
+  siteValue,
+  sitesForMetric,
+  spreadValue,
   threeRrDisplayRounds,
 } from '../adp'
+import type { AdpPlayer, ProviderMeta } from '../../types/api'
 
 describe('3RR draft board', () => {
   it('reverses rounds 2 and 3, then snakes from there', () => {
@@ -69,5 +75,50 @@ describe('season labels', () => {
   it('shortens 2025-26 to 25/26', () => {
     expect(shortSeasonLabel('2025-26')).toBe('25/26')
     expect(nextShortSeasonLabel('2025-26')).toBe('26/27')
+  })
+})
+
+describe('provider capabilities', () => {
+  const providers: ProviderMeta[] = [
+    { key: 'espn', label: 'ESPN', has_adp: true, has_rankings: true, fetched_at: null, source_url: null, player_count: 0, stale: false },
+    { key: 'fantrax', label: 'Fantrax', has_adp: true, has_rankings: false, fetched_at: null, source_url: null, player_count: 0, stale: false },
+    { key: 'sleeper', label: 'Sleeper', has_adp: false, has_rankings: true, fetched_at: null, source_url: null, player_count: 0, stale: false },
+  ]
+
+  it('shows a site only on the view it has data for', () => {
+    expect(sitesForMetric('adp', providers)).toEqual(['espn', 'fantrax'])
+    expect(sitesForMetric('rank', providers)).toEqual(['espn', 'sleeper'])
+  })
+
+  it('drops a provider the server stopped returning', () => {
+    expect(sitesForMetric('adp', [providers[1]])).toEqual(['fantrax'])
+  })
+
+  it('falls back to the static matrix before the first response', () => {
+    expect(sitesForMetric('adp')).toEqual(['espn', 'fantrax', 'yahoo'])
+    expect(sitesForMetric('rank')).toEqual(['espn', 'sleeper', 'yahoo'])
+  })
+})
+
+describe('metric-aware player values', () => {
+  const player = {
+    espn: { adp: 12.5, rank: 9, ranking: 4 },
+    blend: 12.5,
+    blend_rank: 11,
+    spread: 3,
+    ranking_blend: 4,
+    ranking_blend_rank: 5,
+    ranking_spread: 1,
+  } as AdpPlayer
+
+  it('reads ADP and rankings from separate fields', () => {
+    expect(siteValue(player, 'espn', 'adp')).toBe(12.5)
+    expect(siteValue(player, 'espn', 'rank')).toBe(4)
+    expect(blendValue(player, 'adp')).toBe(12.5)
+    expect(blendValue(player, 'rank')).toBe(4)
+    expect(blendRankValue(player, 'adp')).toBe(11)
+    expect(blendRankValue(player, 'rank')).toBe(5)
+    expect(spreadValue(player, 'adp')).toBe(3)
+    expect(spreadValue(player, 'rank')).toBe(1)
   })
 })

@@ -185,3 +185,77 @@ async def test_get_adp_response_keeps_stale_on_refresh_failure():
         second = await get_adp_response()
     assert second is first
     assert fetch.await_count == 2
+
+
+def test_adp_route_rankings_view_uses_the_rankings_blend(test_client):
+    reset_adp_cache()
+    payload = {
+        "seasonLabel": "2026-27",
+        "updatedAt": "2026-08-25T00:00:00Z",
+        "sources": {"espn": "espn-src", "sleeper": "sleeper-src"},
+        "providers": [
+            {"key": "espn", "label": "ESPN", "has_adp": True, "has_rankings": True},
+            {"key": "sleeper", "label": "Sleeper", "has_adp": False, "has_rankings": True},
+        ],
+        "players": [
+            {
+                "espn_id": 3112335,
+                "name": "Nikola Jokic",
+                "positions": ["C"],
+                "adp": {"espn": 1.0},
+                "ranking": {"espn": 2, "sleeper": 4},
+            },
+            {
+                "espn_id": 4433134,
+                "name": "Rankings Only Guy",
+                "positions": ["SF"],
+                "adp": {},
+                "ranking": {"sleeper": 120},
+            },
+        ],
+    }
+    with patch("app.services.adp_service.fetch_live_adp_payload", new_callable=AsyncMock, return_value=payload):
+        adp_view = test_client.get("/api/adp?metric=adp")
+        rank_view = test_client.get("/api/adp?metric=rank&rank_sites=sleeper")
+
+    assert adp_view.status_code == 200
+    assert [p["espn_id"] for p in adp_view.json()["players"]] == [3112335]  # ADP view drops it
+
+    body = rank_view.json()
+    assert [m["key"] for m in body["providers"]] == ["espn", "sleeper"]
+    jokic = next(p for p in body["players"] if p["name"] == "Nikola Jokic")
+    assert jokic["ranking_blend"] == 4.0  # sleeper alone, per rank_sites
+    assert jokic["blend"] == 1.0  # ADP blend untouched by the rankings selection
+    assert jokic["sleeper"]["ranking"] == 4
+    rank_only = next(p for p in body["players"] if p["espn_id"] == 4433134)
+    assert rank_only["blend"] is None  # rankings-only players are visible on this view
+    assert rank_only["ranking_blend"] == 120.0
+
+
+def test_adp_index_route_exposes_both_blends(test_client):
+    reset_adp_cache()
+    payload = {
+        "seasonLabel": "2026-27",
+        "updatedAt": "",
+        "sources": {"espn": "espn-src"},
+        "players": [
+            {
+                "espn_id": 3112335,
+                "name": "Nikola Jokic",
+                "positions": ["C"],
+                "adp": {"espn": 1.0},
+                "ranking": {"espn": 2},
+            }
+        ],
+    }
+    with patch("app.services.adp_service.fetch_live_adp_payload", new_callable=AsyncMock, return_value=payload):
+        response = test_client.get("/api/adp/index")
+    assert response.status_code == 200
+    row = response.json()["players"][0]
+    assert row["blend"] == 1.0
+    assert row["ranking_blend"] == 2.0
+
+
+def test_adp_refresh_route_rejects_an_unknown_provider(test_client):
+    response = test_client.post("/api/adp/refresh?provider=nonsense")
+    assert response.status_code == 400

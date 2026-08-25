@@ -2,40 +2,32 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetAdpQuery, useLazyGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
+import { useBlendSites } from '../../hooks/useBlendSites'
 import { useDebounce } from '../../hooks/useDebounce'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
+import PaginationBar from '../../components/draft/PaginationBar'
+import { resolvePageSize, type PageSize } from '../../utils/pagination'
 import {
-  ADP_SITES,
+  BLEND_LABEL,
   SITE_LABEL,
   adpDeltaClass,
+  blendValue,
   formatAdp,
   formatUpdatedAt,
+  isAdpSite,
+  siteValue,
+  spreadValue,
   type AdpSiteKey,
 } from '../../utils/adp'
 import { downloadCsv, toCsv } from '../../utils/draftCsv'
-import type { AdpResponse } from '../../types/api'
+import type { AdpMetric, AdpResponse, ProviderMeta } from '../../types/api'
 
 type SortKey = 'blend' | 'spread' | 'name' | 'team' | AdpSiteKey
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
-const PAGE_SIZES = [25, 50, 100] as const
-type PageSize = (typeof PAGE_SIZES)[number]
-
-function pageItems(current: number, total: number): (number | 'ellipsis')[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const wanted = new Set([1, total, current - 1, current, current + 1, current - 2, current + 2])
-  const nums = [...wanted].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b)
-  const out: (number | 'ellipsis')[] = []
-  for (const n of nums) {
-    const prev = out[out.length - 1]
-    if (typeof prev === 'number' && n - prev > 1) out.push('ellipsis')
-    out.push(n)
-  }
-  return out
-}
 
 function SortHeader({
   label,
@@ -65,98 +57,15 @@ function SortHeader({
   )
 }
 
-function pagerButtonClass(active: boolean, disabled?: boolean) {
-  if (disabled) return 'px-2 py-1 rounded text-xs border border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-  if (active) return 'px-2 py-1 rounded text-xs font-semibold border bg-blue-600 text-white border-blue-600'
-  return 'px-2 py-1 rounded text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-}
-
-function PaginationBar({
-  page,
-  totalPages,
-  total,
-  pageSize,
-  from,
-  to,
-  onPage,
-  onPageSize,
-  className = '',
-}: {
-  page: number
-  totalPages: number
-  total: number
-  pageSize: number
-  from: number
-  to: number
-  onPage: (page: number) => void
-  onPageSize: (size: PageSize) => void
-  className?: string
-}) {
-  if (total === 0) return null
-  return (
-    <div className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${className}`}>
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Showing {from}–{to} of {total}
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-          Per page
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSize(Number(e.target.value) as PageSize)}
-            className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-sm"
-          >
-            {PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className={pagerButtonClass(false, page <= 1)} disabled={page <= 1} onClick={() => onPage(page - 1)}>
-          Prev
-        </button>
-        {pageItems(page, totalPages).map((item, i) =>
-          item === 'ellipsis' ? (
-            <span key={`e${i}`} className="px-1 text-xs text-gray-400">
-              …
-            </span>
-          ) : (
-            <button
-              key={item}
-              type="button"
-              className={pagerButtonClass(item === page)}
-              onClick={() => onPage(item)}
-            >
-              {item}
-            </button>
-          ),
-        )}
-        <button
-          type="button"
-          className={pagerButtonClass(false, page >= totalPages)}
-          disabled={page >= totalPages}
-          onClick={() => onPage(page + 1)}
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  )
-}
 
 export default function AdpPage() {
-  const [visibleSitesRaw, setVisibleSites] = usePersistedState<AdpSiteKey[]>(
-    'draft.adp.visibleSites',
-    [...ADP_SITES],
-  )
-  const visibleSites = useMemo(() => {
-    const known = new Set(
-      visibleSitesRaw.filter((s): s is AdpSiteKey => (ADP_SITES as readonly string[]).includes(s)),
-    )
-    const ordered = ADP_SITES.filter((s) => known.has(s))
-    return ordered.length ? ordered : [...ADP_SITES]
-  }, [visibleSitesRaw])
+  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.adp.metric', 'adp')
+  // Last successful response, kept so a refetch or a failed request leaves the table on
+  // screen instead of blanking it.
+  const [lastGood, setLastGood] = useState<AdpResponse | undefined>(undefined)
+  const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
+  const { sites: visibleSites, available, toggle: toggleSite, sitesParam, rankSitesParam } =
+    useBlendSites(metric, providers)
   const [sortBy, setSortBy] = usePersistedState<SortKey>('draft.adp.sortBy', 'blend')
   const [sortDir, setSortDir] = usePersistedState<'asc' | 'desc'>('draft.adp.sortDir', 'asc')
   const [pageSize, setPageSize] = usePersistedState<PageSize>('draft.adp.pageSize', 50)
@@ -167,13 +76,18 @@ export default function AdpPage() {
   const debouncedSearch = useDebounce(search, 200)
   const listRef = useRef<HTMLDivElement>(null)
   const posKey = posFilter.join(',')
-  const resolvedPageSize: PageSize = PAGE_SIZES.includes(pageSize) ? pageSize : 50
+  const resolvedPageSize: PageSize = resolvePageSize(pageSize)
 
   const sitesKey = visibleSites.join(',')
 
+  // A sort column can vanish under the current view: sorting by Fantrax and switching to
+  // Rankings leaves every row's sort value null, which silently degrades to a name sort on
+  // a column that is not even rendered. Fall back to Blend instead.
+  if (isAdpSite(sortBy) && !available.includes(sortBy)) setSortBy('blend')
+
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, teamFilter, posKey, sortBy, sortDir, resolvedPageSize, sitesKey])
+  }, [debouncedSearch, teamFilter, posKey, sortBy, sortDir, resolvedPageSize, sitesKey, metric])
 
   const queryArgs = useMemo(
     () => ({
@@ -184,15 +98,28 @@ export default function AdpPage() {
       q: debouncedSearch.trim() || undefined,
       team: teamFilter || undefined,
       pos: posFilter.length ? posFilter.join(',') : undefined,
-      sites: sitesKey,
+      sites: sitesParam,
+      rank_sites: rankSitesParam,
+      metric,
     }),
-    [page, resolvedPageSize, sortBy, sortDir, debouncedSearch, teamFilter, posFilter, sitesKey],
+    [
+      page,
+      resolvedPageSize,
+      sortBy,
+      sortDir,
+      debouncedSearch,
+      teamFilter,
+      posFilter,
+      sitesParam,
+      rankSitesParam,
+      metric,
+    ],
   )
   const { data, isLoading, isFetching, error } = useGetAdpQuery(queryArgs)
   const [fetchAll] = useLazyGetAdpQuery()
-  const lastGood = useRef<AdpResponse | undefined>(undefined)
-  if (data) lastGood.current = data
-  const view = data ?? lastGood.current
+  if (data?.providers?.length && data.providers !== providers) setProviders(data.providers)
+  if (data && data !== lastGood) setLastGood(data)
+  const view = data ?? lastGood
 
   const players = view?.players ?? []
   const teams = view?.teams ?? []
@@ -202,6 +129,11 @@ export default function AdpPage() {
   const offset = view?.offset ?? 0
   const from = totalCount === 0 ? 0 : offset + 1
   const to = offset + players.length
+  // The server clamps the page when the result set shrinks (fewer players on the Rankings
+  // view, a site unchecked). Adopt that clamp, or `page` stays above it and Prev steps a
+  // page number nothing is rendering. Only while settled and only downward: mid-fetch the
+  // hook still reports the previous page, and reacting to that would undo the user's click.
+  if (data && !isFetching && safePage < page) setPage(safePage)
   const goToPage = (next: number) => {
     setPage(Math.min(Math.max(1, next), totalPages))
     listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -213,10 +145,6 @@ export default function AdpPage() {
       setSortBy(col)
       setSortDir('asc')
     }
-  }
-
-  const toggleSite = (site: AdpSiteKey) => {
-    setVisibleSites((prev) => (prev.includes(site) ? prev.filter((s) => s !== site) : [...prev, site]))
   }
 
   const togglePos = (pos: string) => {
@@ -232,27 +160,57 @@ export default function AdpPage() {
       q: debouncedSearch.trim() || undefined,
       team: teamFilter || undefined,
       pos: posFilter.length ? posFilter.join(',') : undefined,
-      sites: sitesKey,
+      sites: sitesParam,
+      rank_sites: rankSitesParam,
+      metric,
     }).unwrap()
-    const header = [
-      'blend_rank',
-      'name',
-      'team',
-      'positions',
-      ...visibleSites.flatMap((s) => [`${s}_adp`, `${s}_rank`]),
-      'blend',
-      'spread',
-    ]
-    const rows = result.players.map((p) => [
-      String(p.blend_rank ?? ''),
-      p.name,
-      p.team_abbr ?? '',
-      p.positions.join('/'),
-      ...visibleSites.flatMap((s) => [p[s].adp == null ? '' : String(p[s].adp), p[s].rank == null ? '' : String(p[s].rank)]),
-      p.blend == null ? '' : String(p.blend),
-      p.spread == null ? '' : String(p.spread),
-    ])
-    downloadCsv('fantasy-adp.csv', toCsv([header, ...rows]))
+    // ADP-view headers are unchanged: the Chrome extension and any saved sheet parse these
+    // exact column names. The Rankings view is a new export with its own header set.
+    const header =
+      metric === 'adp'
+        ? [
+            'blend_rank',
+            'name',
+            'team',
+            'positions',
+            ...visibleSites.flatMap((s) => [`${s}_adp`, `${s}_rank`]),
+            'blend',
+            'spread',
+          ]
+        : [
+            'ranking_blend_rank',
+            'name',
+            'team',
+            'positions',
+            ...visibleSites.map((s) => `${s}_ranking`),
+            'ranking_blend',
+            'ranking_spread',
+          ]
+    const rows = result.players.map((p) =>
+      metric === 'adp'
+        ? [
+            String(p.blend_rank ?? ''),
+            p.name,
+            p.team_abbr ?? '',
+            p.positions.join('/'),
+            ...visibleSites.flatMap((s) => [
+              p[s].adp == null ? '' : String(p[s].adp),
+              p[s].rank == null ? '' : String(p[s].rank),
+            ]),
+            p.blend == null ? '' : String(p.blend),
+            p.spread == null ? '' : String(p.spread),
+          ]
+        : [
+            String(p.ranking_blend_rank ?? ''),
+            p.name,
+            p.team_abbr ?? '',
+            p.positions.join('/'),
+            ...visibleSites.map((s) => (p[s].ranking == null ? '' : String(p[s].ranking))),
+            p.ranking_blend == null ? '' : String(p.ranking_blend),
+            p.ranking_spread == null ? '' : String(p.ranking_spread),
+          ],
+    )
+    downloadCsv(metric === 'adp' ? 'fantasy-adp.csv' : 'fantasy-rankings.csv', toCsv([header, ...rows]))
   }
 
   if (isLoading && !view) return <LoadingSpinner />
@@ -262,17 +220,20 @@ export default function AdpPage() {
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Fantasy Basketball ADP</h1>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+            {metric === 'adp' ? 'Fantasy Basketball ADP' : 'Fantasy Basketball Rankings'}
+          </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Average draft position from ESPN, Fantrax, and Sleeper (fetched live), plus a Blend of the checked
-            sites that list the player. Unchecking a site hides its column and recalculates Blend from the rest.
+            {metric === 'adp'
+              ? 'Average draft position from the sites below (fetched live), plus a Blend of the checked sites that list the player. Unchecking a site hides its column and recalculates Blend from the rest.'
+              : 'Each site’s own published ranking, plus a Blend of the checked sites that rank the player. Rankings are a different scale from ADP, so the two Blends are computed separately and never mixed.'}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            Site ADP colors compare that site to Blend.{' '}
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Green</span> means the site drafts
-            the player earlier than Blend;{' '}
-            <span className="text-rose-600 dark:text-rose-400 font-medium">red</span> means later. Stronger color
-            is a bigger gap (4+ picks).
+            Site colors compare that site to Blend.{' '}
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Green</span> means the site is
+            higher on the player than Blend;{' '}
+            <span className="text-rose-600 dark:text-rose-400 font-medium">red</span> means lower. Stronger color
+            is a bigger gap (4+ places).
           </p>
           {view?.updated_at ? (
             <p className="text-xs text-gray-400 mt-1">Updated {formatUpdatedAt(view.updated_at)}</p>
@@ -294,7 +255,7 @@ export default function AdpPage() {
       <div className="card p-4 mb-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sites</span>
-          {ADP_SITES.map((site) => (
+          {available.map((site) => (
             <label key={site} className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
               <input
                 type="checkbox"
@@ -307,10 +268,29 @@ export default function AdpPage() {
           ))}
           <span
             className="text-xs text-gray-400"
-            title="Average ADP across the checked sites that list this player."
+            title={`${BLEND_LABEL[metric]} averages the checked sites that list this player.`}
           >
             Blend uses checked sites
           </span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">View</span>
+            <div className="inline-flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
+              {(['adp', 'rank'] as AdpMetric[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setMetric(key)}
+                  className={`px-3 py-1 text-xs font-semibold ${
+                    metric === key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {key === 'adp' ? 'ADP' : 'Rankings'}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -353,6 +333,19 @@ export default function AdpPage() {
 
       <div ref={listRef} className={isFetching ? 'opacity-70' : undefined}>
         <div className="card overflow-x-auto">
+          {/* Changing page scrolls the list top into view, so the pager has to exist up here
+              too -- otherwise every click leaves the controls off-screen below the fold. */}
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            total={totalCount}
+            pageSize={resolvedPageSize}
+            from={from}
+            to={to}
+            onPage={goToPage}
+            onPageSize={setPageSize}
+            className="border-b border-gray-200 dark:border-gray-700"
+          />
             <table className="min-w-full">
               <thead>
                 <tr>
@@ -366,7 +359,7 @@ export default function AdpPage() {
                       sortBy={sortBy}
                       sortDir={sortDir}
                       onSort={handleSort}
-                      title={`${SITE_LABEL[site]} ADP`}
+                      title={`${SITE_LABEL[site]} ${metric === 'adp' ? 'ADP' : 'ranking'}`}
                     />
                   ))}
                   <SortHeader
@@ -375,7 +368,7 @@ export default function AdpPage() {
                     sortBy={sortBy}
                     sortDir={sortDir}
                     onSort={handleSort}
-                    title="Average ADP across the checked sites that list this player"
+                    title={`Average ${metric === 'adp' ? 'ADP' : 'ranking'} across the checked sites that list this player`}
                   />
                   <SortHeader
                     label="Spread"
@@ -383,14 +376,16 @@ export default function AdpPage() {
                     sortBy={sortBy}
                     sortDir={sortDir}
                     onSort={handleSort}
-                    title="Highest checked-site ADP minus lowest"
+                    title={`Highest checked-site ${metric === 'adp' ? 'ADP' : 'ranking'} minus lowest`}
                   />
                 </tr>
               </thead>
               <tbody>
                 {players.map((p) => (
                   <tr key={p.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                    <td className="table-cell text-right text-gray-500">{p.blend_rank ?? '—'}</td>
+                    <td className="table-cell text-right text-gray-500">
+                      {(metric === 'adp' ? p.blend_rank : p.ranking_blend_rank) ?? '—'}
+                    </td>
                     <td className="table-cell sticky left-0 z-10 bg-white dark:bg-gray-900">
                       <PlayerIdentityCell
                         name={p.name}
@@ -400,21 +395,31 @@ export default function AdpPage() {
                         positions={p.positions}
                       />
                     </td>
-                    {visibleSites.map((site) => (
-                      <td key={site} className={`table-cell text-right ${adpDeltaClass(p[site].adp, p.blend)}`}>
-                        <div>{formatAdp(p[site].adp)}</div>
-                        {p[site].rank != null ? (
-                          <div className="text-[10px] text-gray-400 font-normal">#{p[site].rank}</div>
-                        ) : null}
-                      </td>
-                    ))}
+                    {visibleSites.map((site) => {
+                      const value = siteValue(p, site, metric)
+                      return (
+                        <td
+                          key={site}
+                          className={`table-cell text-right ${adpDeltaClass(value, blendValue(p, metric))}`}
+                        >
+                          <div>{formatAdp(value)}</div>
+                          {metric === 'adp' && p[site].rank != null ? (
+                            <div className="text-[10px] text-gray-400 font-normal">#{p[site].rank}</div>
+                          ) : null}
+                        </td>
+                      )
+                    })}
                     <td className="table-cell text-right font-semibold">
-                      {formatAdp(p.blend)}
-                      {p.blend_rank != null ? (
-                        <div className="text-[10px] text-gray-400 font-normal">#{p.blend_rank}</div>
+                      {formatAdp(blendValue(p, metric))}
+                      {(metric === 'adp' ? p.blend_rank : p.ranking_blend_rank) != null ? (
+                        <div className="text-[10px] text-gray-400 font-normal">
+                          #{metric === 'adp' ? p.blend_rank : p.ranking_blend_rank}
+                        </div>
                       ) : null}
                     </td>
-                    <td className="table-cell text-right text-gray-500">{formatAdp(p.spread)}</td>
+                    <td className="table-cell text-right text-gray-500">
+                      {formatAdp(spreadValue(p, metric))}
+                    </td>
                   </tr>
                 ))}
               </tbody>
