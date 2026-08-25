@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ESPN Rankings Helper</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>ESPN rankings helper</h1>
+    <p class="warn">
+      Unofficial. This only reorders ESPN’s unsaved list. Click <strong>Save Rankings</strong> yourself.
+      ESPN’s terms disallow automated access — use at your own risk.
+    </p>
+    <p id="status" class="status">No rankings loaded yet.</p>
+    <label class="file">
+      Load Pre-Draft Rankings CSV
+      <input id="csv" type="file" accept=".csv,text/csv" />
+    </label>
+    <a
+      class="link"
+      href="https://fantasy.espn.com/basketball/editdraftstrategy"
+      target="_blank"
+      rel="noreferrer"
+    >
+      Open ESPN Edit Draft Strategy
+    </a>
+    <p class="hint">On that page, click <strong>Apply order</strong> in the helper panel, then Save Rankings.</p>
+    <script src="popup.js"></script>
+  </body>
+</html>

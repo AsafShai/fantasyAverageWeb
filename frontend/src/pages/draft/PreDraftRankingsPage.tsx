@@ -32,6 +32,7 @@ import PlayerDetailSheet from '../../components/draft/PlayerDetailSheet'
 import MoveToModal from '../../components/draft/MoveToModal'
 import { formatAdp, formatLastYearStat, hydrateAdpPlayer, nextShortSeasonLabel, shortSeasonLabel } from '../../utils/adp'
 import { downloadCsv, parseRankingsCsvImport, RANKINGS_CSV_HEADERS, rankingsCsvFileError, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
+import { pingEspnHelper, sendEspnRankings, toEspnRankingsPayload } from '../../utils/espnRankingsBridge'
 import {
   EMPTY_RANKINGS,
   mergeIdsIntoRankings,
@@ -299,6 +300,8 @@ export default function PreDraftRankingsPage() {
   const [detailsById, setDetailsById] = useState<Map<string, AdpPlayer>>(() => new Map())
   const [detailsSeason, setDetailsSeason] = useState<{ last?: string; proj?: string }>({})
   const [importMsg, setImportMsg] = useState<string | null>(null)
+  const [espnMsg, setEspnMsg] = useState<string | null>(null)
+  const [espnHelper, setEspnHelper] = useState(false)
   const [pendingImport, setPendingImport] = useState<Extract<RankingsCsvImportResult, { ok: true }> | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -333,6 +336,21 @@ export default function PreDraftRankingsPage() {
     window.addEventListener('beforeunload', onLeave)
     return () => window.removeEventListener('beforeunload', onLeave)
   }, [dirty])
+
+  useEffect(() => {
+    let cancelled = false
+    const tick = () => {
+      void pingEspnHelper().then((ok) => {
+        if (!cancelled) setEspnHelper(ok)
+      })
+    }
+    tick()
+    const id = window.setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [])
 
   useEffect(() => {
     if (!resetOpen && !moreOpen) return
@@ -585,15 +603,36 @@ export default function PreDraftRankingsPage() {
   }, [board, dirty, movePlayerId, pendingImport, moveSelected, saveRankings])
 
   const exportCsv = () => {
-    const header = [...RANKINGS_CSV_HEADERS]
+    const header = [...RANKINGS_CSV_HEADERS, 'espn_id']
     const rows = ordered.map((p, i) => [
       String(i + 1),
       p.id,
       p.name,
       p.team_abbr ?? '',
       p.positions.join('/'),
+      p.espn_id != null ? String(p.espn_id) : '',
     ])
     downloadCsv('pre-draft-rankings.csv', toCsv([header, ...rows]))
+  }
+
+  const applyOnEspn = async () => {
+    setMoreOpen(false)
+    const helper = await pingEspnHelper()
+    setEspnHelper(helper)
+    if (!helper) {
+      setEspnMsg(
+        'Install the Chrome helper first: extension/README.md, then reload this page. The helper reorders ESPN’s unsaved list only — you click Save Rankings on ESPN.',
+      )
+      return
+    }
+    const stored = await sendEspnRankings(toEspnRankingsPayload(ordered))
+    if (!stored) {
+      setEspnMsg('Could not reach the helper. Reload this page after loading the extension.')
+      return
+    }
+    setEspnMsg(
+      `Sent ${ordered.length} players. Open ESPN Edit Draft Strategy, click Apply order in the helper, then click Save Rankings yourself.`,
+    )
   }
 
   const importCsv = (file: File) => {
@@ -803,6 +842,14 @@ export default function PreDraftRankingsPage() {
             <button type="button" className={btnGhost} onClick={() => fileRef.current?.click()}>
               Import CSV
             </button>
+            <button
+              type="button"
+              className={btnGhost}
+              onClick={() => void applyOnEspn()}
+              title={espnHelper ? 'Helper connected' : 'Requires the Chrome helper'}
+            >
+              Apply on ESPN
+            </button>
           </div>
           <div ref={moreMenuRef} className="relative sm:hidden ml-auto">
             <button
@@ -889,6 +936,9 @@ export default function PreDraftRankingsPage() {
                 >
                   Import CSV
                 </button>
+                <button type="button" role="menuitem" onClick={() => void applyOnEspn()} className={menuItem}>
+                  Apply on ESPN
+                </button>
               </div>
             )}
           </div>
@@ -922,6 +972,9 @@ export default function PreDraftRankingsPage() {
         ) : (
           <p className="hidden lg:block text-xs text-gray-400">Click a player to select, then use ↑/↓ or drag the handle.</p>
         )}
+        {espnMsg ? (
+          <p className="text-sm text-gray-600 dark:text-gray-300">{espnMsg}</p>
+        ) : null}
         {importMsg ? (
           <p
             className={`text-sm ${

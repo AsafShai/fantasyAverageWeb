@@ -1,0 +1,106 @@
+#ff-espn-helper {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 2147483646;
+  width: 300px;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  background: #111827;
+  color: #f3f4f6;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+#ff-espn-helper.ff-min {
+  width: auto;
+  max-height: none;
+  overflow: hidden;
+}
+#ff-espn-helper.ff-min .ff-body {
+  display: none;
+}
+#ff-espn-helper .ff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #1f2937;
+  border-bottom: 1px solid #374151;
+  font-weight: 650;
+}
+#ff-espn-helper .ff-toggle {
+  border: 0;
+  background: transparent;
+  color: #d1d5db;
+  cursor: pointer;
+  font-size: 16px;
+}
+#ff-espn-helper .ff-body {
+  padding: 10px;
+}
+#ff-espn-helper p {
+  margin: 0 0 8px;
+}
+#ff-espn-helper .ff-warn {
+  color: #fbbf24;
+  font-size: 12px;
+}
+#ff-espn-helper .ff-status {
+  color: #d1d5db;
+  font-size: 12px;
+}
+#ff-espn-helper .ff-error {
+  color: #fca5a5;
+}
+#ff-espn-helper button.ff-apply,
+#ff-espn-helper label.ff-file {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #4b5563;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: center;
+}
+#ff-espn-helper button.ff-apply:disabled,
+#ff-espn-helper button.ff-stop:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#ff-espn-helper button.ff-stop {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #7f1d1d;
+  background: #991b1b;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: center;
+}
+#ff-espn-helper label.ff-file {
+  background: #374151;
+  font-weight: 500;
+}
+#ff-espn-helper label.ff-file input {
+  display: none;
+}
+#ff-espn-helper .ff-list {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  max-height: 140px;
+  overflow: auto;
+  color: #e5e7eb;
+  font-size: 12px;
+}
