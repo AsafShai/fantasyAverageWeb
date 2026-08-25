@@ -17,6 +17,10 @@ export interface RankingStats {
   total_points: number;
   rank?: number;
   category_ranks?: Record<string, number>;
+  /** Generic per-category values keyed by category code (e.g. "PTS", "TO") for
+   * this league's actual scoring categories. Superset of the fixed fields above
+   * for leagues scoring beyond the historical default 8. */
+  stats?: Record<string, number>;
 }
 
 export interface LeagueRankings {
@@ -52,6 +56,8 @@ export interface AverageStats {
   blk: number;
   pts: number;
   gp: number;
+  /** See RankingStats.stats */
+  stats?: Record<string, number>;
 }
 
 export interface TeamAverageStats extends AverageStats {
@@ -135,7 +141,14 @@ export interface PlayerStats {
   three_pm: number;
   minutes: number;
   gp: number;
+  /** See RankingStats.stats */
+  stats?: Record<string, number>;
 }
+
+/** Fixed, numeric PlayerStats fields — excludes the generic `stats` dict,
+ * for call sites that index PlayerStats dynamically by key (sort columns,
+ * comparison tables) where only a plain number makes sense. */
+export type PlayerStatKey = Exclude<keyof PlayerStats, 'stats'>
 
 export interface Player {
   player_name: string;
@@ -163,6 +176,10 @@ export interface PaginatedPlayers {
   has_more: boolean;
   actual_start?: string;
   actual_end?: string;
+  /** This league's actual scoring categories (see PlayerStats.stats). */
+  categories?: string[];
+  /** Subset of `categories` where a lower raw value scores better (e.g. "TO"). */
+  reverse_categories?: string[];
 }
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
@@ -175,7 +192,7 @@ export interface CustomDateRange {
 }
 
 export interface StatFilter {
-  stat: keyof PlayerStats;
+  stat: PlayerStatKey;
   operator: ComparisonOperator;
   value: number;
 }
@@ -221,6 +238,9 @@ export interface TeamTimeSeriesPoint {
   rk_blk?: number;
   rk_pts?: number;
   rk_total?: number;
+  /** Category -> rank, present only when the league scores categories with no
+   *  rk_* field of their own. Null for a fixed-category league. */
+  ranks?: Record<string, number> | null;
   gp?: number;
   fg_pct?: number;
   ft_pct?: number;
@@ -302,6 +322,119 @@ export interface DepthChartPlayer {
   display_name: string;
   short_name: string;
   injury?: NbaInjury | null;
+}
+
+export interface SiteAdp {
+  adp: number | null;
+  rank: number | null;
+  ranking: number | null;
+}
+
+export interface ProviderMeta {
+  key: string;
+  label: string;
+  has_adp: boolean;
+  has_rankings: boolean;
+  fetched_at: string | null;
+  source_url: string | null;
+  player_count: number;
+  stale: boolean;
+}
+
+export interface LastYearStats {
+  gp: number;
+  fg_pct: number;
+  ft_pct: number;
+  ppg: number;
+  rpg: number;
+  apg: number;
+  spg: number;
+  bpg: number;
+  three_pm: number;
+}
+
+export interface AdpPlayer {
+  id: string;
+  espn_id: number | null;
+  name: string;
+  team: string | null;
+  team_abbr: string | null;
+  photo_url: string | null;
+  positions: string[];
+  espn: SiteAdp;
+  fantrax: SiteAdp;
+  sleeper: SiteAdp;
+  yahoo: SiteAdp;
+  blend: number | null;
+  blend_rank: number | null;
+  spread: number | null;
+  ranking_blend: number | null;
+  ranking_blend_rank: number | null;
+  ranking_spread: number | null;
+  last_year?: LastYearStats | null;
+  projection?: LastYearStats | null;
+}
+
+export interface AdpIndexPlayer {
+  id: string;
+  espn_id: number | null;
+  name: string;
+  team_abbr: string | null;
+  positions: string[];
+  blend: number | null;
+  blend_rank: number | null;
+  ranking_blend: number | null;
+  ranking_blend_rank: number | null;
+}
+
+export interface AdpIndexResponse {
+  season_label: string;
+  updated_at: string;
+  teams: string[];
+  players: AdpIndexPlayer[];
+  total: number;
+}
+
+export interface AdpResponse {
+  season_label: string;
+  updated_at: string;
+  last_year_season?: string | null;
+  projection_season?: string | null;
+  sources: Record<string, string>;
+  providers?: ProviderMeta[];
+  players: AdpPlayer[];
+  teams?: string[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  offset?: number;
+}
+
+export type AdpSite = "espn" | "fantrax" | "sleeper" | "yahoo";
+
+/** Which of the two parallel data types a draft view is showing. */
+export type AdpMetric = "adp" | "rank";
+
+export interface AdpQueryArgs {
+  page?: number;
+  page_size?: number;
+  sort?: string;
+  sort_dir?: "asc" | "desc";
+  q?: string;
+  team?: string;
+  pos?: string;
+  ids?: string;
+  ranked_only?: boolean;
+  sites?: string;
+  rank_sites?: string;
+  metric?: AdpMetric;
+}
+
+export interface AdpIndexQueryArgs {
+  sites?: string;
+  rank_sites?: string;
+  metric?: AdpMetric;
 }
 
 export interface NbaPlayerBio {

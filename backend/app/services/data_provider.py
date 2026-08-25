@@ -3,7 +3,7 @@ import logging
 import httpx
 import json
 from datetime import datetime, timedelta
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
@@ -11,6 +11,8 @@ from app.services.db_service import DBService
 from app.config import settings
 from app.exceptions import DataSourceError
 from app.utils.constants import RANKING_CATEGORIES
+from app.utils import category_storage
+from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
 
 class DataProvider:
     """Centralized data provider with caching for all ESPN data operations"""
@@ -41,7 +43,7 @@ class DataProvider:
             DataProvider._initialized = True
             if not settings.season_id or not settings.league_id:
                 raise ValueError("Season ID and league ID are not configured")
-            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam&view=mMatchupScore'
+            self.espn_standings_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?&view=mLiveScoring&view=mTeam&view=mMatchupScore&view=mSettings'
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
             self.espn_draft_detail_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mDraftDetail'
             self.espn_players_directory_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/players?view=players_wl'
@@ -66,7 +68,8 @@ class DataProvider:
                 # get_team_names_df() still needs team identity from this same fetch.
                 self.cache_manager.totals_cache['raw'] = api_data
 
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
+                categories = self.data_transformer.resolve_ranking_categories(api_data)
+                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
 
                 scoring_period_id = api_data.get('scoringPeriodId', 0)
                 self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
@@ -92,7 +95,8 @@ class DataProvider:
                 response = await self._client.get(self.espn_standings_url)
                 response.raise_for_status()
                 api_data = response.json()
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data)
+                categories = self.data_transformer.resolve_ranking_categories(api_data)
+                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
                 scoring_period_id = api_data.get('scoringPeriodId', 0)
                 self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
                 self.cache_manager.totals_cache['data'] = totals_df
@@ -120,17 +124,6 @@ class DataProvider:
         if not rows:
             raise DataSourceError("ESPN unavailable and no DB fallback data found for this league/season")
         df = pd.DataFrame(rows)
-        df = df.rename(columns={
-            'fg_pct': 'FG%', 'ft_pct': 'FT%', 'three_pm': '3PM',
-            'reb': 'REB', 'ast': 'AST', 'stl': 'STL', 'blk': 'BLK',
-            'pts': 'PTS', 'gp': 'GP', 'fgm': 'FGM', 'fga': 'FGA',
-            'ftm': 'FTM', 'fta': 'FTA',
-        })
-        df = df.drop(columns=['date'], errors='ignore')
-        # asyncpg returns Decimal for NUMERIC columns; cast to float here so every
-        # totals DataFrame (ESPN or DB fallback) is uniformly float downstream.
-        numeric_cols = [c for c in RANKING_CATEGORIES + ['GP'] if c in df.columns]
-        df[numeric_cols] = df[numeric_cols].astype(float)
         self.cache_manager.totals_cache['data'] = df
         self.cache_manager.totals_cache['data_date'] = snap_date
         self.cache_manager.totals_cache['etag'] = None
@@ -214,7 +207,12 @@ class DataProvider:
                 if totals_data is not None:
                     fantasy_team_map = dict(zip(totals_data['team_id'], totals_data['team_name']))
 
-                players_df = self.data_transformer.raw_all_players_to_df(api_data, stat_split_type_id, fantasy_team_map)
+                # get_totals_df above already warmed the standings payload the
+                # categories are resolved from, so this costs no extra request.
+                categories = await self.get_ranking_categories()
+                players_df = self.data_transformer.raw_all_players_to_df(
+                    api_data, stat_split_type_id, fantasy_team_map, categories
+                )
 
                 cache['etag'] = response.headers.get('ETag')
                 cache['timestamp'] = datetime.now()
@@ -304,37 +302,112 @@ class DataProvider:
             return {}
         return self.data_transformer.parse_slot_usage(raw)
 
+    async def _settings_payload(self) -> Optional[Dict]:
+        """The raw standings payload, which carries the league's scoring settings.
+
+        Warms the cache if a caller hasn't already fetched totals this request:
+        the DB-backed date-range paths never do, and reading an unwarmed cache
+        silently resolved the historical fixed categories for them. Returns None
+        rather than raising when ESPN is unavailable — callers fall back to the
+        fixed default, which is the same shape the DB rows are in anyway."""
+        raw = self.cache_manager.totals_cache.get('raw')
+        if raw:
+            return raw
+        try:
+            await self.get_totals_df()
+        except Exception as e:
+            self.logger.warning(f"Could not load league settings, using default categories: {e}")
+            return None
+        return self.cache_manager.totals_cache.get('raw')
+
+    async def get_ranking_categories(self) -> list:
+        """Get this league's actual scoring categories, resolved from ESPN's
+        settings (falls back to the historical fixed default if unavailable)."""
+        raw = await self._settings_payload()
+        if not raw:
+            return list(RANKING_CATEGORIES)
+        return self.data_transformer.resolve_ranking_categories(raw)
+
+    async def get_reverse_categories(self) -> set:
+        """Get this league's reverse-scored categories (lower raw value = better,
+        e.g. turnovers), resolved from ESPN's settings via each scoringItem's
+        isReverseItem flag. Falls back to an empty set (no known reverse
+        categories) if settings are unavailable."""
+        raw = await self._settings_payload()
+        if not raw:
+            return set()
+        return self.data_transformer.resolve_reverse_categories(raw)
+
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
         totals_df = await self.get_totals_df()
-        return self.data_transformer.totals_to_averages_df(totals_df)
-    
+        categories = await self.get_ranking_categories()
+        return self.data_transformer.totals_to_averages_df(totals_df, categories)
+
     async def get_rankings_df(self) -> pd.DataFrame:
         """Get rankings DataFrame with caching"""
         averages_df = await self.get_averages_df()
-        return self.data_transformer.averages_to_rankings_df(averages_df)
-    
+        reverse_categories = await self.get_reverse_categories()
+        return self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories)
+
     async def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Get all three main DataFrames at once (optimized for endpoints that need multiple)"""
         totals_df = await self.get_totals_df()
-        averages_df = self.data_transformer.totals_to_averages_df(totals_df)
-        rankings_df = self.data_transformer.averages_to_rankings_df(averages_df)
-        
+        categories = await self.get_ranking_categories()
+        reverse_categories = await self.get_reverse_categories()
+        averages_df = self.data_transformer.totals_to_averages_df(totals_df, categories)
+        rankings_df = self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories)
+
         return totals_df, averages_df, rankings_df
     
+    def _extra_rank_payloads(self, df: pd.DataFrame, categories: list, reverse_categories: set) -> Optional[dict]:
+        """{team_id: {category: rank, ..., TOTAL: all-category total}} for the
+        categories with no rk_* column, or None when the league scores only the
+        fixed ones — which is what keeps the JSONB column NULL and free."""
+        extra_cats = [c for c in categories if c not in RANKINGS_FIXED_CATEGORIES and c in df.columns]
+        if not extra_cats:
+            return None
+
+        cols = ['team_id', 'team_name'] + [c for c in categories if c in df.columns] + ['GP']
+        full = self.data_transformer.averages_to_rankings_df(
+            df[[c for c in cols if c in df.columns]], reverse_categories
+        )
+        return {
+            int(row['team_id']): {
+                **{cat: category_storage.json_safe(row[cat]) for cat in extra_cats},
+                TOTAL_KEY: category_storage.json_safe(row['TOTAL_POINTS']),
+            }
+            for _, row in full.iterrows()
+        }
+
     async def _sync_db_if_needed(self, scoring_period_id: int, totals_df: pd.DataFrame) -> None:
         completed_period = scoring_period_id - 1
         async with self._db_sync_lock:
             if self._last_synced_period >= completed_period:
                 return
             try:
-                averages_df = self.data_transformer.totals_to_averages_df(totals_df)
-                rankings_avg_df = self.data_transformer.averages_to_rankings_df(averages_df)
+                categories = await self.get_ranking_categories()
+                reverse_categories = await self.get_reverse_categories()
+
+                averages_df = self.data_transformer.totals_to_averages_df(totals_df, categories)
+                # The rk_* columns are fixed at the historical 8, so rank only
+                # those for them: rk_total keeps meaning "total over the fixed
+                # categories" for every row ever written. Extra categories are
+                # ranked separately below and stored as JSONB.
+                avg_cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in averages_df.columns] + ['GP']
+                averages_for_ranking = averages_df[[c for c in avg_cols_to_keep if c in averages_df.columns]]
+                rankings_avg_df = self.data_transformer.averages_to_rankings_df(averages_for_ranking, reverse_categories)
 
                 totals_for_ranking = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
                 cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in totals_for_ranking.columns] + ['GP']
                 totals_for_ranking = totals_for_ranking[[c for c in cols_to_keep if c in totals_for_ranking.columns]]
-                rankings_totals_df = self.data_transformer.averages_to_rankings_df(totals_for_ranking)
+                rankings_totals_df = self.data_transformer.averages_to_rankings_df(totals_for_ranking, reverse_categories)
+
+                avg_extras = self._extra_rank_payloads(averages_df, categories, reverse_categories)
+                totals_extras = self._extra_rank_payloads(
+                    totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1, errors='ignore'),
+                    categories, reverse_categories,
+                )
 
                 league_id, season_id = settings.league_id, settings.season_id
                 max_avg, max_tot, max_snap = await asyncio.gather(
@@ -345,9 +418,9 @@ class DataProvider:
 
                 tasks = []
                 if max_avg < completed_period:
-                    tasks.append(self.db_service.upsert_rankings_averages(completed_period, rankings_avg_df, league_id, season_id))
+                    tasks.append(self.db_service.upsert_rankings_averages(completed_period, rankings_avg_df, league_id, season_id, avg_extras))
                 if max_tot < completed_period:
-                    tasks.append(self.db_service.upsert_rankings_totals(completed_period, rankings_totals_df, league_id, season_id))
+                    tasks.append(self.db_service.upsert_rankings_totals(completed_period, rankings_totals_df, league_id, season_id, totals_extras))
                 if max_snap < completed_period:
                     tasks.append(self.db_service.upsert_daily_snapshot(completed_period, totals_df, league_id, season_id))
 

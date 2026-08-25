@@ -18,6 +18,11 @@ class AverageStats(BaseModel):
     blk: float  # Blocks
     pts: float  # Points
     gp: float  # Games Played
+    # Generic per-category values for this league's actual scoring categories,
+    # keyed by category code (e.g. "PTS", "TO"). Superset of the fixed fields
+    # above for leagues that score categories beyond the historical default 8;
+    # the fixed fields above stay populated as before for backward compatibility.
+    stats: Optional[Dict[str, float]] = None
 
 class TeamAverageStats(AverageStats):
     team: Team
@@ -46,6 +51,8 @@ class RankingStats(BaseModel):
     total_points: float
     rank: Optional[int] = None
     category_ranks: Optional[Dict[str, int]] = None
+    # See AverageStats.stats
+    stats: Optional[Dict[str, float]] = None
 
 class TeamShotStats(BaseModel):
     team: Team

@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
@@ -132,6 +132,46 @@ export const fantasyApi = createApi({
       query: () => '/league/draft-report',
       keepUnusedDataFor: 3600,
     }),
+    getAdp: builder.query<AdpResponse, AdpQueryArgs | void>({
+      query: (args) => {
+        const a = args ?? {}
+        return {
+          url: '/adp',
+          params: {
+            ...(a.ids
+              ? { ids: a.ids }
+              : {
+                  page: a.page ?? 1,
+                  page_size: a.page_size ?? 50,
+                  sort: a.sort ?? 'blend',
+                  sort_dir: a.sort_dir ?? 'asc',
+                  ...(a.q ? { q: a.q } : {}),
+                  ...(a.team ? { team: a.team } : {}),
+                  ...(a.pos ? { pos: a.pos } : {}),
+                  ...(a.sites ? { sites: a.sites } : {}),
+                  ...(a.rank_sites ? { rank_sites: a.rank_sites } : {}),
+                  ...(a.metric ? { metric: a.metric } : {}),
+                }),
+            ranked_only: a.ranked_only ?? true,
+          },
+        }
+      },
+      keepUnusedDataFor: 600,
+    }),
+    getAdpIndex: builder.query<AdpIndexResponse, AdpIndexQueryArgs | void>({
+      query: (args) => {
+        const a = args ?? {}
+        return {
+          url: '/adp/index',
+          params: {
+            ...(a.sites ? { sites: a.sites } : {}),
+            ...(a.rank_sites ? { rank_sites: a.rank_sites } : {}),
+            ...(a.metric ? { metric: a.metric } : {}),
+          },
+        }
+      },
+      keepUnusedDataFor: 600,
+    }),
     getTrendsMinutes: builder.query<MinutesResponse, { windowDays?: number }>({
       query: ({ windowDays = 15 } = {}) => ({ url: '/trends/minutes', params: { window_days: windowDays } }),
       keepUnusedDataFor: 600,
@@ -215,6 +255,9 @@ export const {
   useGetFeatureStoreTeamsQuery,
   useGetFeatureStoreTeamStateQuery,
   useGetDraftReportQuery,
+  useGetAdpQuery,
+  useLazyGetAdpQuery,
+  useGetAdpIndexQuery,
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
   useGetTrendsRegressionQuery,

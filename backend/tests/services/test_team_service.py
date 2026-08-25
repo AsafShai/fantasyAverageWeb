@@ -78,13 +78,15 @@ class TestTeamService:
         team_service.data_provider.get_slot_usage.return_value = {}
         team_service.response_builder.build_players_list.return_value = []
         team_service.response_builder.build_team_detail_response.return_value = expected_team_detail
+        from app.utils.constants import RANKING_CATEGORIES
+        team_service.data_provider.get_ranking_categories.return_value = list(RANKING_CATEGORIES)
 
         result = await team_service.get_team_detail(team_id)
         assert result == expected_team_detail
         team_service.data_provider.get_all_dataframes.assert_called_once()
         team_service.response_builder.build_team_detail_response.assert_called_once_with(
             team_id, sample_totals_df, sample_averages_df, sample_rankings_df, [], ANY, {},
-            data_date=None, actual_start=None, actual_end=None,
+            data_date=None, actual_start=None, actual_end=None, categories=list(RANKING_CATEGORIES),
         )
     
     @pytest.mark.asyncio
@@ -118,7 +120,7 @@ class TestTeamService:
         )
 
         captured = {}
-        def _capture_players_list(df):
+        def _capture_players_list(df, categories=None):
             captured['df'] = df
             return []
         team_service.response_builder.build_players_list.side_effect = _capture_players_list
@@ -355,3 +357,72 @@ class TestTeamServiceIntegration:
         assert team_detail.shot_chart.gp > 0
         assert team_detail.ranking_stats.rank is not None
     
+
+@pytest.mark.real_dataprovider
+class TestDynamicCategoriesTeamDetail:
+    """Full pipeline: real DataProvider + DataTransformer + StatsCalculator +
+    ResponseBuilder, only the ESPN HTTP call stubbed, for a turnovers-scoring
+    league via get_team_detail()."""
+
+    @staticmethod
+    def _turnovers_league_payload():
+        def team(team_id, name, pts, to):
+            return {
+                "id": team_id,
+                "name": name,
+                "valuesByStat": {
+                    "0": pts, "1": 20, "2": 50, "3": 200, "6": 400,
+                    "13": 400, "14": 850, "15": 150, "16": 200, "17": 100,
+                    "19": 47.1, "20": 75.0, "42": 82, "40": 2000, "11": to,
+                },
+            }
+        return {
+            "scoringPeriodId": 5,
+            "teams": [team(1, "Alpha", 1000, 120), team(2, "Beta", 1100, 90)],
+            "settings": {"scoringSettings": {"scoringItems": [
+                {"statId": sid} for sid in (19, 20, 17, 3, 6, 2, 1, 0, 11)
+            ]}},
+        }
+
+    @pytest_asyncio.fixture
+    async def real_team_service(self, fixed_anchor_date):
+        from app.services.data_provider import DataProvider
+
+        DataProvider._instance = None
+        DataProvider._initialized = False
+        service = TeamService()
+        service.data_provider = DataProvider()
+        service.data_provider.db_service = AsyncMock()
+        service.data_provider.db_service.aggregate_player_games = AsyncMock(return_value=(pd.DataFrame(), None, None))
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"ETag": "e1"}
+        resp.json.return_value = self._turnovers_league_payload()
+        resp.raise_for_status = MagicMock()
+        service.data_provider._client.get = AsyncMock(return_value=resp)
+
+        players_resp = MagicMock()
+        players_resp.status_code = 200
+        players_resp.headers = {}
+        players_resp.json.return_value = {"players": []}
+        players_resp.raise_for_status = MagicMock()
+
+        async def routed_get(url, **kwargs):
+            if 'kona_player_info' in url:
+                return players_resp
+            return resp
+        service.data_provider._client.get = AsyncMock(side_effect=routed_get)
+
+        yield service
+        DataProvider._instance = None
+        DataProvider._initialized = False
+
+    @pytest.mark.asyncio
+    async def test_team_detail_includes_turnovers_category(self, real_team_service):
+        team_detail = await real_team_service.get_team_detail(1)
+
+        assert 'TO' in team_detail.category_ranks
+        assert 'TO' in team_detail.raw_averages.stats
+        assert 'TO' in team_detail.ranking_stats.stats
+        assert team_detail.raw_averages.stats['TO'] == pytest.approx(120 / 82)

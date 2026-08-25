@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetNbaPlayerStatsQuery } from '../store/api/fantasyApi'
-import type { CustomDateRange, PlayerStats, TimePeriod } from '../types/api'
+import type { CustomDateRange, PlayerStatKey, TimePeriod } from '../types/api'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -19,7 +19,7 @@ function backLabel(from: string | undefined): string {
   return '← Back'
 }
 
-const STAT_ROWS: { key: keyof PlayerStats; label: string; isPct?: boolean }[] = [
+const STAT_ROWS: { key: PlayerStatKey; label: string; isPct?: boolean }[] = [
   { key: 'gp', label: 'GP' },
   { key: 'minutes', label: 'MIN' },
   { key: 'pts', label: 'PTS' },

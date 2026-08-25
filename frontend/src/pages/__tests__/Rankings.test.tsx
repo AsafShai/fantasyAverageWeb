@@ -5,8 +5,10 @@ import type { RankingStats } from '../../types/api';
 import { renderWithProviders } from '../../test/helpers';
 import Rankings from '../Rankings';
 
+const ALL_CATEGORIES = ['FG%', 'FT%', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS'];
+
 function team(overrides: Partial<RankingStats> = {}): RankingStats {
-  return {
+  const base = {
     team: { team_id: 1, team_name: 'Alpha Squad' },
     fg_percentage: 0.467,
     ft_percentage: 0.8,
@@ -22,6 +24,19 @@ function team(overrides: Partial<RankingStats> = {}): RankingStats {
     category_ranks: { 'FG%': 2, 'FT%': 2, '3PM': 2, AST: 2, REB: 2, STL: 2, BLK: 2, PTS: 2 },
     ...overrides,
   };
+  // `stats` mirrors the fixed fields above by default (as the real API does),
+  // unless the caller supplies its own `stats` override.
+  const stats = overrides.stats ?? {
+    'FG%': base.fg_percentage,
+    'FT%': base.ft_percentage,
+    '3PM': base.three_pm,
+    AST: base.ast,
+    REB: base.reb,
+    STL: base.stl,
+    BLK: base.blk,
+    PTS: base.pts,
+  };
+  return { ...base, stats };
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -79,7 +94,7 @@ describe('Rankings page', () => {
                 category_ranks: { 'FG%': 1, 'FT%': 1, '3PM': 1, AST: 1, REB: 1, STL: 1, BLK: 1, PTS: 2 },
               }),
             ],
-            categories: ['pts', 'reb', 'ast'],
+            categories: [...ALL_CATEGORIES, 'TOTAL_POINTS'],
             last_updated: '2026-08-19',
           });
         }
@@ -159,5 +174,54 @@ describe('Rankings page', () => {
     const table = screen.getByRole('table');
     const alphaRow = within(table).getByText('Alpha Squad').closest('tr')!;
     expect(within(alphaRow).queryByText('115.3000')).not.toBeInTheDocument();
+  });
+});
+
+describe('Rankings page — dynamic categories', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('/rankings')) {
+          return jsonResponse({
+            averages_rankings: [
+              team({
+                team: { team_id: 1, team_name: 'Turnover Titans' },
+                rank: 1,
+                total_points: 9,
+                category_ranks: { ...team().category_ranks, TO: 1 },
+                stats: { ...team().stats, TO: 12.5 },
+              }),
+            ],
+            totals_rankings: [],
+            categories: [...ALL_CATEGORIES, 'TO', 'TOTAL_POINTS'],
+            last_updated: '2026-08-19',
+          });
+        }
+        if (url.includes('/league/summary')) {
+          return jsonResponse({ nba_avg_pace: 100, nba_game_days_left: 30, season_start: '2025-10-01' });
+        }
+        return new Response('not found', { status: 404 });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders an extra league category (TO) as its own column, driven by the API categories list', async () => {
+    renderWithProviders(<Rankings />);
+    await waitFor(() => expect(screen.getByText('Turnover Titans')).toBeInTheDocument());
+
+    expect(screen.getByRole('columnheader', { name: 'TO' })).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const row = within(table).getByText('Turnover Titans').closest('tr')!;
+    // Rankings view shows the category *rank* (1), not the raw stat value
+    const toIndex = within(table).getAllByRole('columnheader').findIndex(h => h.textContent?.includes('TO'));
+    const cells = within(row).getAllByRole('cell');
+    expect(cells[toIndex].textContent).toBe('1');
   });
 });

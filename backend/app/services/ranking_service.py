@@ -6,7 +6,7 @@ from app.models import LeagueRankings
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
-from app.utils.constants import RANKING_CATEGORIES, PER_GAME_CATEGORIES
+from app.utils.constants import RANKING_CATEGORIES, PER_GAME_CATEGORIES, DERIVED_CATEGORIES, RATIO_CATEGORIES
 from app.config import settings
 
 class RankingService:
@@ -28,7 +28,9 @@ class RankingService:
         if totals_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 
-        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df(totals_df)
+        categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
+        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df(totals_df, categories, reverse_categories)
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):
             raise InvalidParameterError(f"Invalid sort column: {sort_by}")
@@ -43,6 +45,7 @@ class RankingService:
             sort_by=sort_by,
             order=order,
             data_date=self.data_provider.get_data_date(),
+            categories=categories,
         )
 
     async def _get_rankings_for_range(self, start_date: date, end_date: date,
@@ -58,10 +61,17 @@ class RankingService:
         end_df = pd.DataFrame(rows_end)
         start_df = pd.DataFrame(rows_start) if rows_start else None
 
+        categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
+
         delta_df = self._compute_delta(end_df, start_df)
 
-        averages_df, averages_rankings_df = self._build_averages_rankings_df(delta_df)
-        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df_from_delta(delta_df)
+        averages_df, averages_rankings_df = self._build_averages_rankings_df(
+            delta_df, categories, reverse_categories
+        )
+        totals_raw_df, totals_rankings_df = self._build_totals_rankings_df_from_delta(
+            delta_df, categories, reverse_categories
+        )
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):
             raise InvalidParameterError(f"Invalid sort column: {sort_by}")
@@ -79,79 +89,86 @@ class RankingService:
             date_range_end=end_date,
             actual_start_date=actual_start_date,
             actual_end_date=actual_end_date,
+            categories=categories,
         )
 
     def _compute_delta(self, end_df: pd.DataFrame, start_df: Optional[pd.DataFrame]) -> pd.DataFrame:
-        """Compute per-team delta between end and start snapshots."""
-        counting_cols = ['gp', 'fgm', 'fga', 'ftm', 'fta', 'three_pm', 'reb', 'ast', 'stl', 'blk', 'pts']
+        """Compute per-team delta between end and start snapshots.
+
+        Both frames are keyed by category code and carry whatever categories the
+        league scores, so the counting columns are read off the frame rather than
+        listed here. A ratio category cannot be differenced -- the delta of two
+        cumulative percentages is meaningless -- so it is rebuilt from its
+        made/attempted sources after they have been differenced."""
+        id_cols = ['team_id', 'team_name']
+        counting_cols = [c for c in end_df.columns
+                         if c not in id_cols and c not in DERIVED_CATEGORIES]
 
         if start_df is None or start_df.empty:
-            delta = end_df[['team_id', 'team_name'] + counting_cols].copy()
+            delta = end_df[id_cols + counting_cols].copy()
         else:
-            merged = end_df.merge(start_df[['team_id'] + counting_cols], on='team_id', suffixes=('_end', '_start'))
+            shared = [c for c in counting_cols if c in start_df.columns]
+            merged = end_df.merge(start_df[['team_id'] + shared], on='team_id', suffixes=('_end', '_start'))
             delta = pd.DataFrame()
             delta['team_id'] = merged['team_id']
             delta['team_name'] = end_df.set_index('team_id').loc[merged['team_id'].values, 'team_name'].values
             for col in counting_cols:
-                delta[col] = merged[f'{col}_end'] - merged[f'{col}_start']
+                if col in shared:
+                    delta[col] = merged[f'{col}_end'] - merged[f'{col}_start']
+                else:
+                    delta[col] = merged[col]
 
-        delta['fg_pct'] = (delta['fgm'] / delta['fga'].replace(0, float('nan'))).fillna(0)
-        delta['ft_pct'] = (delta['ftm'] / delta['fta'].replace(0, float('nan'))).fillna(0)
+        for category, (numerator, denominator) in RATIO_CATEGORIES.items():
+            if category not in end_df.columns:
+                continue
+            if numerator in delta.columns and denominator in delta.columns:
+                delta[category] = (delta[numerator] / delta[denominator].replace(0, float('nan'))).fillna(0)
         return delta
 
-    def _build_averages_rankings_df(self, delta_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def _delta_categories_df(self, delta_df: pd.DataFrame, categories: list[str]) -> pd.DataFrame:
+        """delta_df narrowed to the league's scoring categories plus team info.
+
+        Drops the made/attempted feeders and anything else the delta carries that
+        is not itself scored, so nothing unscored reaches calculate_rankings and
+        gets ranked as if it were a category."""
+        cols = ['team_id', 'team_name', 'GP'] + [c for c in categories if c in delta_df.columns]
+        return delta_df[[c for c in cols if c in delta_df.columns]].copy()
+
+    def _build_averages_rankings_df(self, delta_df: pd.DataFrame,
+                                     categories: Optional[list[str]] = None,
+                                     reverse_categories: Optional[set] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Build (raw averages, rankings) DataFrames from delta (divide counting stats by GP)."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
 
-        df = pd.DataFrame()
-        df['team_id'] = delta_df['team_id']
-        df['team_name'] = delta_df['team_name']
-        df['GP'] = delta_df['gp']
-        df['FGM'] = delta_df['fgm']
-        df['FGA'] = delta_df['fga']
-        df['FTM'] = delta_df['ftm']
-        df['FTA'] = delta_df['fta']
-        df['FG%'] = delta_df['fg_pct']
-        df['FT%'] = delta_df['ft_pct']
-        df['3PM'] = delta_df['three_pm']
-        df['REB'] = delta_df['reb']
-        df['AST'] = delta_df['ast']
-        df['STL'] = delta_df['stl']
-        df['BLK'] = delta_df['blk']
-        df['PTS'] = delta_df['pts']
+        categories = categories or RANKING_CATEGORIES
+        df = self._delta_categories_df(delta_df, categories)
+        averages_df = transformer.totals_to_averages_df(df, categories)
+        return averages_df, transformer.averages_to_rankings_df(averages_df, reverse_categories)
 
-        averages_df = transformer.totals_to_averages_df(df)
-        return averages_df, transformer.averages_to_rankings_df(averages_df)
-
-    def _build_totals_rankings_df_from_delta(self, delta_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def _build_totals_rankings_df_from_delta(self, delta_df: pd.DataFrame,
+                                              categories: Optional[list[str]] = None,
+                                              reverse_categories: Optional[set] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Build (raw totals, rankings) DataFrames directly from delta counting stats."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
 
-        df = pd.DataFrame()
-        df['team_id'] = delta_df['team_id']
-        df['team_name'] = delta_df['team_name']
-        df['GP'] = delta_df['gp']
-        df['FG%'] = delta_df['fg_pct']
-        df['FT%'] = delta_df['ft_pct']
-        df['3PM'] = delta_df['three_pm']
-        df['REB'] = delta_df['reb']
-        df['AST'] = delta_df['ast']
-        df['STL'] = delta_df['stl']
-        df['BLK'] = delta_df['blk']
-        df['PTS'] = delta_df['pts']
+        categories = categories or RANKING_CATEGORIES
+        df = self._delta_categories_df(delta_df, categories)
+        return df, transformer.averages_to_rankings_df(df, reverse_categories)
 
-        return df, transformer.averages_to_rankings_df(df)
-
-    def _build_totals_rankings_df(self, totals_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Build (raw totals, rankings) DataFrames from season totals (no per-game division)."""
+    def _build_totals_rankings_df(self, totals_df: pd.DataFrame,
+                                   categories: Optional[list[str]] = None,
+                                   reverse_categories: Optional[set] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Build (raw totals, rankings) DataFrames from season totals (no per-game division).
+        categories defaults to RANKING_CATEGORIES."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
 
-        cols_to_keep = ['team_id', 'team_name', 'GP'] + [c for c in RANKING_CATEGORIES if c in totals_df.columns]
+        categories = categories or RANKING_CATEGORIES
+        cols_to_keep = ['team_id', 'team_name', 'GP'] + [c for c in categories if c in totals_df.columns]
         df = totals_df[[c for c in cols_to_keep if c in totals_df.columns]].copy()
-        return df, transformer.averages_to_rankings_df(df)
+        return df, transformer.averages_to_rankings_df(df, reverse_categories)
 
     def _is_valid_sort_column(self, sort_by: str, rankings_df) -> bool:
         return sort_by.upper() in rankings_df.columns

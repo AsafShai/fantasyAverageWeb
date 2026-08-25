@@ -237,3 +237,117 @@ class TestResponseBuilder:
         assert result.pts == 115.3, "Should have correct PTS"
         assert result.total_points == 0.0, "Should have total_points as 0.0 for category leaders"
         assert result.rank is None, "Should have rank as None for category leaders"
+
+class TestGenericStatsField:
+    """The `stats` field on RankingStats/AverageStats is a generic, category-keyed
+    superset of the fixed named fields, driven by a `categories` argument that
+    defaults to RANKING_CATEGORIES for full backward compatibility."""
+
+    def test_build_rankings_response_default_stats_matches_fixed_fields(
+        self, response_builder, sample_averages_df, sample_rankings_df
+    ):
+        result = response_builder.build_rankings_response(
+            sample_averages_df, sample_averages_df, sample_rankings_df, sample_rankings_df
+        )
+        first = result.averages_rankings[0]
+        assert first.stats['PTS'] == first.pts
+        assert first.stats['FG%'] == first.fg_percentage
+        assert set(first.stats.keys()) == {'FG%', 'FT%', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS'}
+
+    def test_build_rankings_response_categories_field_reflects_argument(
+        self, response_builder, sample_averages_df, sample_rankings_df
+    ):
+        result = response_builder.build_rankings_response(
+            sample_averages_df, sample_averages_df, sample_rankings_df, sample_rankings_df,
+            categories=['PTS', 'TO'],
+        )
+        assert result.categories == ['PTS', 'TO', 'TOTAL_POINTS']
+
+    def test_build_rankings_response_custom_categories_stats_and_ranks(
+        self, response_builder, sample_averages_df, sample_rankings_df
+    ):
+        # sample_rankings_df/sample_averages_df don't carry a TO column, so a
+        # category not present in the data is simply omitted from stats/ranks
+        # rather than erroring — same defensive behavior as the fixed fields.
+        result = response_builder.build_rankings_response(
+            sample_averages_df, sample_averages_df, sample_rankings_df, sample_rankings_df,
+            categories=['PTS'],
+        )
+        first = result.averages_rankings[0]
+        assert set(first.stats.keys()) == {'PTS'}
+        assert set(first.category_ranks.keys()) == {'PTS'}
+
+    def test_create_average_stats_default_stats_matches_fixed_fields(self, response_builder):
+        league_avg_data = {
+            'FG%': 45.5, 'FT%': 75.0, '3PM': 12.5, 'AST': 25.0,
+            'REB': 45.0, 'STL': 8.0, 'BLK': 5.0, 'PTS': 112.0, 'GP': 82
+        }
+        result = response_builder.create_average_stats(league_avg_data)
+        assert result.stats['PTS'] == 112.0
+        assert result.stats['FG%'] == 45.5
+
+    def test_create_average_stats_custom_categories(self, response_builder):
+        # The live pipeline always keeps the fixed default columns (required by
+        # the back-compat named fields) and adds any extra resolved category
+        # (e.g. TO) alongside them, rather than replacing the set.
+        league_avg_data = {
+            'FG%': 45.5, 'FT%': 75.0, '3PM': 12.5, 'AST': 25.0,
+            'REB': 45.0, 'STL': 8.0, 'BLK': 5.0, 'PTS': 112.0, 'TO': 14.5, 'GP': 82
+        }
+        result = response_builder.create_average_stats(league_avg_data, categories=['PTS', 'TO'])
+        assert result.stats == {'PTS': 112.0, 'TO': 14.5}
+
+    def test_create_ranking_stats_from_averages_default_stats_matches_fixed_fields(
+        self, response_builder, sample_averages_df
+    ):
+        team_data = sample_averages_df.iloc[0]
+        result = response_builder.create_ranking_stats_from_averages(team_data)
+        assert result.stats['PTS'] == result.pts
+        assert result.stats['FG%'] == result.fg_percentage
+
+
+class TestTeamDetailGenericStats:
+    def test_build_team_detail_response_default_stats_matches_fixed_fields(
+        self, response_builder, sample_totals_df, sample_averages_df, sample_rankings_df
+    ):
+        result = response_builder.build_team_detail_response(
+            1, sample_totals_df, sample_averages_df, sample_rankings_df, [], "https://espn.example"
+        )
+        assert result.raw_averages.stats['PTS'] == result.raw_averages.pts
+        assert result.raw_averages.stats['FG%'] == result.raw_averages.fg_percentage
+        assert result.ranking_stats.stats['PTS'] == result.ranking_stats.pts
+
+    def test_build_team_detail_response_custom_categories(
+        self, response_builder, sample_totals_df, sample_averages_df, sample_rankings_df
+    ):
+        result = response_builder.build_team_detail_response(
+            1, sample_totals_df, sample_averages_df, sample_rankings_df, [], "https://espn.example",
+            categories=['PTS'],
+        )
+        assert set(result.category_ranks.keys()) == {'PTS'}
+        assert set(result.raw_averages.stats.keys()) == {'PTS'}
+
+
+class TestPlayerStatsGenericField:
+    def test_build_players_list_default_stats_matches_fixed_fields(
+        self, response_builder, response_builder_players_df
+    ):
+        result = response_builder.build_players_list(response_builder_players_df)
+        first = result[0]
+        assert first.stats.stats['PTS'] == first.stats.pts
+        assert first.stats.stats['FG%'] == first.stats.fg_percentage
+
+    def test_build_players_list_extra_category_included_when_present(
+        self, response_builder, response_builder_players_df
+    ):
+        df = response_builder_players_df.copy()
+        df['TO'] = [12.0, 8.0]
+        result = response_builder.build_players_list(df, categories=['PTS', 'TO'])
+        assert result[0].stats.stats == {'PTS': result[0].stats.pts, 'TO': 12.0}
+
+    def test_build_all_players_response_default_stats_matches_fixed_fields(
+        self, response_builder, response_builder_players_df
+    ):
+        result = response_builder.build_all_players_response(response_builder_players_df)
+        first = result[0]
+        assert first.stats.stats['PTS'] == first.stats.pts

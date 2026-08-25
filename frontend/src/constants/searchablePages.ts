@@ -3,6 +3,7 @@ import {
   FF_FEATURE_STORE,
   FF_PROJECTIONS,
   FF_DRAFT_REPORT,
+  FF_DRAFT_PAGES,
   FF_TRENDS,
   FF_MINIGAMES,
 } from '../config/featureFlags'
@@ -25,6 +26,13 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Teams', path: '/teams', icon: '👥', group: 'League' },
   ...(FF_DRAFT_REPORT ? [{ label: 'Draft Report', path: '/draft-report', icon: '📝', group: 'League' }] : []),
   { label: 'Players', path: '/players', icon: '⛹️', group: 'Players' },
+  ...(FF_DRAFT_PAGES
+    ? [
+        { label: 'Consensus (ADP & Rankings)', path: '/draft/consensus', icon: '📊', group: 'Draft' },
+        { label: 'Draft Board', path: '/draft/board', icon: '🗂️', group: 'Draft' },
+        { label: 'Pre-Draft Rankings', path: '/draft/rankings', icon: '📋', group: 'Draft' },
+      ]
+    : []),
   ...(FF_PLAYER_RANKINGS ? [{ label: 'Player Rankings', path: '/player-rankings', icon: '📋', group: 'Players' }] : []),
   { label: 'League Analytics', path: '/analytics', icon: '📈', group: 'Insights' },
   ...(FF_TRENDS ? [{ label: 'Player Trends', path: '/trends', icon: '📉', group: 'Insights' }] : []),

@@ -2,15 +2,16 @@ import pandas as pd
 import logging
 from typing import Dict
 from app.utils.constants import (
-    ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP
+    ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP,
+    RANKING_CATEGORIES, RATIO_CATEGORIES
 )
 from app.services.stats_calculator import StatsCalculator
 from app.config import settings
+from app.utils.roster_slots import SLOT_CAPS
+from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY, NON_RANKING_STAT_KEYS, UNSUPPORTED_CATEGORIES
 
 
 SLOT_MAP = {0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C', 5: 'G', 6: 'F', 11: 'UTIL'}
-# UTIL is three roster slots plus two spare games (3 * 82 + 2).
-SLOT_CAPS = {'PG': 82, 'SG': 82, 'SF': 82, 'PF': 82, 'C': 82, 'G': 82, 'F': 82, 'UTIL': 248}
 
 
 class DataTransformer:
@@ -19,7 +20,89 @@ class DataTransformer:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.stats_calculator = StatsCalculator()
-    
+
+    @staticmethod
+    def stat_columns_to_keep(categories: list[str] = None) -> list[str]:
+        """Stat columns worth materializing for a league scoring `categories`.
+
+        ESPN's stat lines carry every stat it tracks -- per-game rates, streaks,
+        double-doubles, missed shots -- and STAT_ID_TO_CATEGORY can now name all
+        of them. Naming a stat is not a reason to keep it: the ones worth
+        carrying are the fixed set every response is built from, plus whatever
+        this league actually scores, plus the raw quantities a scored ratio is
+        rebuilt from. Everything else is width nothing reads.
+
+        MIN is kept explicitly -- it is not a ranking category, but player
+        responses report it directly.
+        """
+        resolved = list(categories or [])
+        sources = [src for c in resolved for src in RATIO_CATEGORIES.get(c, ())]
+        return list(dict.fromkeys(ALL_CATEGORIES + ['MIN'] + resolved + sources))
+
+    def _keep_stat_columns(self, df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
+        """Drop stat columns outside `stat_columns_to_keep`, leaving non-stat
+        columns (player/team identity, ratings, status) untouched."""
+        keep = set(self.stat_columns_to_keep(categories))
+        known_stats = set(ESPN_COLUMN_MAP.values())
+        return df[[c for c in df.columns if c not in known_stats or c in keep]]
+
+    def resolve_ranking_categories(self, espn_data: Dict) -> list[str]:
+        """Determine this league's actual scoring categories from ESPN's
+        settings.scoringSettings.scoringItems (present when the standings
+        request includes the mSettings view). Falls back to the historical
+        fixed 8-category default (RANKING_CATEGORIES) whenever the settings
+        are missing, unparseable, or don't map to any known category — this
+        keeps behavior unchanged for the current league and for the DB
+        fallback path, which is fixed to that same default schema."""
+        try:
+            scoring_items = espn_data.get('settings', {}).get('scoringSettings', {}).get('scoringItems', [])
+            if not scoring_items:
+                return list(RANKING_CATEGORIES)
+
+            categories: list[str] = []
+            for item in scoring_items:
+                stat_id = item.get('statId')
+                category = STAT_ID_TO_CATEGORY.get(stat_id)
+                if category is None:
+                    self.logger.warning(
+                        f"League scores unknown ESPN statId {stat_id}; it will be missing from "
+                        "rankings. Add it to STAT_ID_TO_CATEGORY."
+                    )
+                    continue
+                if category in UNSUPPORTED_CATEGORIES:
+                    self.logger.warning(
+                        f"League scores {category}, which this app cannot compute; it will be "
+                        "missing from rankings."
+                    )
+                    continue
+                if category not in NON_RANKING_STAT_KEYS and category not in categories:
+                    categories.append(category)
+
+            return categories if categories else list(RANKING_CATEGORIES)
+        except Exception as e:
+            self.logger.warning(f"Error resolving ranking categories from ESPN settings, using default: {e}")
+            return list(RANKING_CATEGORIES)
+
+    def resolve_reverse_categories(self, espn_data: Dict) -> set:
+        """Determine which of this league's categories are reverse-scored
+        (lower raw value = better, e.g. turnovers) from ESPN's
+        settings.scoringSettings.scoringItems[].isReverseItem flag. Falls back
+        to an empty set (no known reverse categories) on missing/unparseable
+        settings — same fixed-default posture as resolve_ranking_categories."""
+        try:
+            scoring_items = espn_data.get('settings', {}).get('scoringSettings', {}).get('scoringItems', [])
+            reverse: set = set()
+            for item in scoring_items:
+                if not item.get('isReverseItem'):
+                    continue
+                category = STAT_ID_TO_CATEGORY.get(item.get('statId'))
+                if category and category not in NON_RANKING_STAT_KEYS:
+                    reverse.add(category)
+            return reverse
+        except Exception as e:
+            self.logger.warning(f"Error resolving reverse categories from ESPN settings, using none: {e}")
+            return set()
+
     def parse_slot_usage(self, espn_data: Dict) -> Dict[int, Dict[str, int]]:
         """Parse slot usage from mMatchupScore data. Returns {team_id: {slot_name: games_used}}"""
         result: Dict[int, Dict[str, int]] = {}
@@ -43,13 +126,16 @@ class DataTransformer:
             self.logger.warning(f"Error parsing slot usage data: {e}")
         return result
 
-    def raw_all_players_to_df(self, espn_data: Dict, stat_split_type_id: int = 0, fantasy_team_map: Dict[int, str] = None) -> pd.DataFrame:
+    def raw_all_players_to_df(self, espn_data: Dict, stat_split_type_id: int = 0, fantasy_team_map: Dict[int, str] = None,
+                              categories: list[str] = None) -> pd.DataFrame:
         """
         Convert ESPN kona_player_info API data to DataFrame (all 500 players including FA/waivers)
         Args:
             espn_data: Raw ESPN API response with 'players' array
             stat_split_type_id: ESPN stat split type (0=season, 1=last7, 2=last15, 3=last30)
             fantasy_team_map: Optional dict mapping fantasy team_id -> team_name
+            categories: league's active scoring categories; stat columns outside
+                        the fixed set and these are dropped (see stat_columns_to_keep)
         Returns:
             Clean DataFrame with proper columns and types, including status and injured fields
         """
@@ -121,18 +207,20 @@ class DataTransformer:
             # Keep player_id nulls intact (fillna(0) would create bogus /player/0 links).
             fill_cols = [c for c in df.columns if c != 'player_id']
             df[fill_cols] = df[fill_cols].fillna(0)
-            return self._organize_player_columns(df)
+            return self._organize_player_columns(self._keep_stat_columns(df, categories))
 
         except Exception as e:
             self.logger.error(f"Error transforming ESPN players data to DataFrame: {e}")
             raise Exception("Error transforming ESPN players data to DataFrame")
 
-    def raw_players_to_df(self, espn_players_data: Dict, stat_split_type_id: int = 0) -> pd.DataFrame:
+    def raw_players_to_df(self, espn_players_data: Dict, stat_split_type_id: int = 0,
+                          categories: list[str] = None) -> pd.DataFrame:
         """
         Convert raw ESPN API players data to DataFrame
         Args:
             espn_players_data: Raw ESPN API response
             stat_split_type_id: ESPN stat split type (0=season, 1=last7, 2=last15, 3=last30)
+            categories: league's active scoring categories (see stat_columns_to_keep)
         Returns:
             Clean DataFrame with proper columns and types
         """
@@ -154,7 +242,7 @@ class DataTransformer:
             df = pd.DataFrame(all_players)
             fill_cols = [c for c in df.columns if c != 'player_id']
             df[fill_cols] = df[fill_cols].fillna(0)
-            return self._organize_player_columns(df)
+            return self._organize_player_columns(self._keep_stat_columns(df, categories))
             
         except Exception as e:
             self.logger.error(f"Error transforming ESPN players data to DataFrame: {e}")
@@ -174,11 +262,14 @@ class DataTransformer:
             if 'id' in team and team.get('name')
         ]
 
-    def raw_standings_to_totals_df(self, espn_standings_data: Dict) -> pd.DataFrame:
+    def raw_standings_to_totals_df(self, espn_standings_data: Dict, categories: list[str] = None) -> pd.DataFrame:
         """
         Convert raw ESPN API standings data to totals DataFrame
         Args:
             espn_standings_data: Raw ESPN API response
+            categories: league's active ranking categories (defaults to RANKING_CATEGORIES).
+                        Any category here beyond the fixed default set (e.g. TO) is kept
+                        as an extra column if ESPN's payload carries a value for it.
         Returns:
             Clean totals DataFrame with proper columns and types
         """
@@ -205,31 +296,34 @@ class DataTransformer:
                 raise ValueError("No valid team data found")
                 
             df = pd.DataFrame(teams_data)
-            return self._transform_standings_dataframe(df)
+            return self._transform_standings_dataframe(df, categories)
             
         except Exception as e:
             self.logger.error(f"Error transforming ESPN standings data to totals DataFrame: {e}")
             raise Exception("Error transforming ESPN standings data to totals DataFrame")
     
-    def totals_to_averages_df(self, totals_df: pd.DataFrame) -> pd.DataFrame:
+    def totals_to_averages_df(self, totals_df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
         """
         Calculate per-game averages from totals DataFrame
         Args:
             totals_df: DataFrame with total stats
+            categories: league's active ranking categories (defaults to RANKING_CATEGORIES)
         Returns:
             DataFrame with per-game averages
         """
-        return self.stats_calculator.calculate_per_game_averages(totals_df)
+        return self.stats_calculator.calculate_per_game_averages(totals_df, categories)
     
-    def averages_to_rankings_df(self, averages_df: pd.DataFrame) -> pd.DataFrame:
+    def averages_to_rankings_df(self, averages_df: pd.DataFrame, reverse_categories: set = None) -> pd.DataFrame:
         """
         Calculate rankings from averages DataFrame
         Args:
             averages_df: DataFrame with per-game averages
+            reverse_categories: category codes where a lower raw value is better
+                                 (e.g. turnovers) — see resolve_reverse_categories
         Returns:
             DataFrame with rankings and total points
         """
-        return self.stats_calculator.calculate_rankings(averages_df)
+        return self.stats_calculator.calculate_rankings(averages_df, reverse_categories)
     
     def _extract_player_stats(self, entry: Dict, team_id: int, stat_split_type_id: int = 0) -> Dict:
         """Extract player stats from ESPN API data"""
@@ -287,19 +381,27 @@ class DataTransformer:
         available_info_cols = [col for col in info_cols if col in df.columns]
         return df.reindex(columns=available_info_cols + stat_cols)
     
-    def _transform_standings_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _transform_standings_dataframe(self, df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
         """
         Transform raw DataFrame with proper column names and types
         Args:
             df: Raw DataFrame from ESPN API
+            categories: league's active ranking categories; any beyond the fixed
+                        ALL_CATEGORIES default (e.g. TO) are kept as extra columns
+                        when present, on top of the always-kept default set.
         Returns:
             Clean DataFrame with proper structure
         """
         # Apply column mapping
         df = df.rename(columns=ESPN_COLUMN_MAP)
-        
-        # Select only required columns
-        available_cols = ['team_id', 'team_name'] + [col for col in ALL_CATEGORIES if col in df.columns]
+
+        # Select only required columns (always the fixed default set, plus any
+        # extra resolved categories beyond it)
+        # A derived category is useless without the quantities it is built from:
+        # the date-range path rebuilds it over the window rather than trusting a
+        # cumulative rate, so its sources have to survive column selection too.
+        wanted = [c for c in self.stat_columns_to_keep(categories) if c != 'MIN']
+        available_cols = ['team_id', 'team_name'] + [col for col in wanted if col in df.columns]
         df = df[available_cols]
         
         # Convert integer columns

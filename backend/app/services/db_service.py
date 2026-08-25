@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from datetime import date, timedelta
@@ -5,6 +6,8 @@ from typing import Optional
 import asyncpg
 import pandas as pd
 from app.config import settings
+from app.utils import category_storage
+from app.utils.category_storage import SNAPSHOT_FIXED_CATEGORIES, TOTAL_KEY
 from app.models.injury_models import InjuryRecord
 from model_stats_inference.research import config as rconfig
 
@@ -20,6 +23,41 @@ _RANKINGS_COL_MAP = {
     'BLK': 'rk_blk',
     'PTS': 'rk_pts',
 }
+
+_SNAPSHOT_COL_MAP = {
+    'GP': 'gp',
+    'FGM': 'fgm',
+    'FGA': 'fga',
+    'FG%': 'fg_pct',
+    'FTM': 'ftm',
+    'FTA': 'fta',
+    'FT%': 'ft_pct',
+    '3PM': 'three_pm',
+    'REB': 'reb',
+    'AST': 'ast',
+    'STL': 'stl',
+    'BLK': 'blk',
+    'PTS': 'pts',
+}
+
+
+def _snapshot_row_to_categories(row: dict) -> dict:
+    """A snapshot row as `team_id`/`team_name` plus one key per category code.
+
+    The same wide shape the live-ESPN path builds from ESPN's own payload, so
+    everything downstream of here works off category codes alone and never has
+    to know which of them happen to have a dedicated column.
+
+    NUMERIC columns arrive as Decimal; cast so a frame built from these rows is
+    uniformly float rather than object dtype.
+    """
+    fixed = {cat: row.get(col) for cat, col in _SNAPSHOT_COL_MAP.items()}
+    merged = category_storage.merge_categories(fixed, row.get('stats'))
+    return {
+        'team_id': row['team_id'],
+        'team_name': row['team_name'],
+        **{cat: float(value) for cat, value in merged.items()},
+    }
 
 
 def fs_records_to_frame(records) -> pd.DataFrame:
@@ -38,8 +76,21 @@ def fs_records_to_frame(records) -> pd.DataFrame:
     return df
 
 
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """asyncpg hands back jsonb as str without this, so every read site would
+    have to json.loads by hand."""
+    await conn.set_type_codec(
+        'jsonb', encoder=json.dumps, decoder=json.loads, schema='pg_catalog'
+    )
+
+
 class DBService:
     _instance = None
+    # None until probed once. Lets this code run against a database where
+    # add_dynamic_category_columns.sql has not been applied yet: without the
+    # probe every upsert would raise UndefinedColumnError into a log line and
+    # snapshots would quietly stop being written.
+    _dynamic_columns: Optional[bool] = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -56,11 +107,33 @@ class DBService:
                     settings.database_url,
                     min_size=1,
                     max_size=5,
+                    init=_init_connection,
                 )
             except Exception as e:
                 logger.error(f"Failed to create DB connection pool: {e}")
                 return None
         return self._pool
+
+    async def _supports_dynamic_categories(self, conn) -> bool:
+        if DBService._dynamic_columns is None:
+            try:
+                DBService._dynamic_columns = bool(await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'team_daily_snapshot' AND column_name = 'stats'
+                    )
+                    """
+                ))
+                if not DBService._dynamic_columns:
+                    logger.warning(
+                        "team_daily_snapshot.stats missing - per-category extras will not be "
+                        "stored. Apply migrations/add_dynamic_category_columns.sql."
+                    )
+            except Exception as e:
+                logger.error(f"Failed to probe for dynamic category columns: {e}")
+                DBService._dynamic_columns = False
+        return DBService._dynamic_columns
 
     async def get_db_max_scoring_period(self, table: str, league_id: int, season_id: int) -> int:
         pool = await self._get_pool()
@@ -79,21 +152,27 @@ class DBService:
             return 0
 
     async def upsert_rankings_averages(
-        self, scoring_period_id: int, rankings_df: pd.DataFrame, league_id: int, season_id: int
+        self, scoring_period_id: int, rankings_df: pd.DataFrame, league_id: int, season_id: int,
+        extras_by_team: Optional[dict] = None,
     ) -> None:
+        """extras_by_team: {team_id: {category: rank}} for categories with no
+        rk_* column, plus TOTAL. None (the default) writes NULL, which is what a
+        league on the fixed categories stores."""
         pool = await self._get_pool()
         if pool is None:
             return
         snap_date = settings.season_start + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
                 await conn.executemany(
-                    """
+                    f"""
                     INSERT INTO team_rankings_averages
                         (league_id, season_id, scoring_period_id, date, team_id, team_name,
                          rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
-                         rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                         rk_ast, rk_stl, rk_blk, rk_pts, rk_total
+                         {', ranks' if dynamic else ''})
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15{',$16::jsonb' if dynamic else ''})
                     ON CONFLICT (league_id, season_id, scoring_period_id, team_id) DO UPDATE SET
                         team_name   = EXCLUDED.team_name,
                         rk_fg_pct   = EXCLUDED.rk_fg_pct,
@@ -105,6 +184,7 @@ class DBService:
                         rk_blk      = EXCLUDED.rk_blk,
                         rk_pts      = EXCLUDED.rk_pts,
                         rk_total    = EXCLUDED.rk_total
+                        {', ranks = EXCLUDED.ranks' if dynamic else ''}
                     """,
                     [
                         (
@@ -113,7 +193,9 @@ class DBService:
                             float(row['FG%']), float(row['FT%']), float(row['3PM']),
                             float(row['REB']), float(row['AST']), float(row['STL']),
                             float(row['BLK']), float(row['PTS']), float(row['TOTAL_POINTS']),
-                        )
+                        ) + ((
+                            category_storage.dumps((extras_by_team or {}).get(int(row['team_id']))),
+                        ) if dynamic else ())
                         for _, row in rankings_df.iterrows()
                     ],
                 )
@@ -125,21 +207,27 @@ class DBService:
             logger.error(f"Failed to upsert team_rankings_averages: {e}")
 
     async def upsert_rankings_totals(
-        self, scoring_period_id: int, rankings_totals_df: pd.DataFrame, league_id: int, season_id: int
+        self, scoring_period_id: int, rankings_totals_df: pd.DataFrame, league_id: int, season_id: int,
+        extras_by_team: Optional[dict] = None,
     ) -> None:
+        """extras_by_team: {team_id: {category: rank}} for categories with no
+        rk_* column, plus TOTAL. None (the default) writes NULL, which is what a
+        league on the fixed categories stores."""
         pool = await self._get_pool()
         if pool is None:
             return
         snap_date = settings.season_start + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
                 await conn.executemany(
-                    """
+                    f"""
                     INSERT INTO team_rankings_totals
                         (league_id, season_id, scoring_period_id, date, team_id, team_name,
                          rk_fg_pct, rk_ft_pct, rk_three_pm, rk_reb,
-                         rk_ast, rk_stl, rk_blk, rk_pts, rk_total)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                         rk_ast, rk_stl, rk_blk, rk_pts, rk_total
+                         {', ranks' if dynamic else ''})
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15{',$16::jsonb' if dynamic else ''})
                     ON CONFLICT (league_id, season_id, scoring_period_id, team_id) DO UPDATE SET
                         team_name   = EXCLUDED.team_name,
                         rk_fg_pct   = EXCLUDED.rk_fg_pct,
@@ -151,6 +239,7 @@ class DBService:
                         rk_blk      = EXCLUDED.rk_blk,
                         rk_pts      = EXCLUDED.rk_pts,
                         rk_total    = EXCLUDED.rk_total
+                        {', ranks = EXCLUDED.ranks' if dynamic else ''}
                     """,
                     [
                         (
@@ -159,7 +248,9 @@ class DBService:
                             float(row['FG%']), float(row['FT%']), float(row['3PM']),
                             float(row['REB']), float(row['AST']), float(row['STL']),
                             float(row['BLK']), float(row['PTS']), float(row['TOTAL_POINTS']),
-                        )
+                        ) + ((
+                            category_storage.dumps((extras_by_team or {}).get(int(row['team_id']))),
+                        ) if dynamic else ())
                         for _, row in rankings_totals_df.iterrows()
                     ],
                 )
@@ -179,6 +270,7 @@ class DBService:
         snap_date = settings.season_start + timedelta(days=scoring_period_id - 1)
         try:
             async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
                 rows = []
                 for _, row in totals_df.iterrows():
                     fgm = int(row['FGM'])
@@ -193,14 +285,19 @@ class DBService:
                         ftm, fta, round(ftm / fta, 4) if fta > 0 else 0.0,
                         int(row['3PM']), int(row['REB']), int(row['AST']),
                         int(row['STL']), int(row['BLK']), int(row['PTS']),
-                    ))
+                    ) + ((
+                        category_storage.dumps(
+                            category_storage.extra_categories(row, SNAPSHOT_FIXED_CATEGORIES)
+                        ),
+                    ) if dynamic else ()))
                 await conn.executemany(
-                    """
+                    f"""
                     INSERT INTO team_daily_snapshot
                         (league_id, season_id, scoring_period_id, date, team_id, team_name,
                          gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
-                         three_pm, reb, ast, stl, blk, pts)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+                         three_pm, reb, ast, stl, blk, pts
+                         {', stats' if dynamic else ''})
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19{',$20::jsonb' if dynamic else ''})
                     ON CONFLICT (league_id, season_id, scoring_period_id, team_id) DO UPDATE SET
                         team_name = EXCLUDED.team_name,
                         gp        = EXCLUDED.gp,
@@ -216,6 +313,7 @@ class DBService:
                         stl       = EXCLUDED.stl,
                         blk       = EXCLUDED.blk,
                         pts       = EXCLUDED.pts
+                        {', stats = EXCLUDED.stats' if dynamic else ''}
                     """,
                     rows,
                 )
@@ -228,7 +326,8 @@ class DBService:
 
     async def get_latest_snapshot(self, league_id: int, season_id: int):
         """
-        Returns (date, rows) where rows is a list of dicts with team totals.
+        Returns (date, rows) where rows is a list of dicts with team totals keyed
+        by category code -- see _snapshot_row_to_categories.
         Returns (None, []) if DB unavailable or empty.
         """
         pool = await self._get_pool()
@@ -244,10 +343,12 @@ class DBService:
                 max_period = max_row['max_period']
                 if max_period == 0:
                     return None, []
+                dynamic = await self._supports_dynamic_categories(conn)
                 rows = await conn.fetch(
-                    """
+                    f"""
                     SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                            three_pm, reb, ast, stl, blk, pts, date
+                           {', stats' if dynamic else ''}
                     FROM team_daily_snapshot
                     WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3
                     """,
@@ -256,7 +357,7 @@ class DBService:
                 if not rows:
                     return None, []
                 snap_date = rows[0]['date']
-                return snap_date, [dict(r) for r in rows]
+                return snap_date, [_snapshot_row_to_categories(dict(r)) for r in rows]
         except Exception as e:
             logger.error(f"Failed to fetch latest snapshot: {e}")
             return None, []
@@ -269,12 +370,14 @@ class DBService:
             return []
         try:
             async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
                 if team_ids:
                     rows = await conn.fetch(
                         f"""
                         SELECT r.date, r.team_id, r.team_name,
                                r.rk_fg_pct, r.rk_ft_pct, r.rk_three_pm, r.rk_reb,
                                r.rk_ast, r.rk_stl, r.rk_blk, r.rk_pts, r.rk_total,
+                               {'r.ranks,' if dynamic else ''}
                                s.gp
                         FROM {table} r
                         LEFT JOIN team_daily_snapshot s
@@ -291,6 +394,7 @@ class DBService:
                         SELECT r.date, r.team_id, r.team_name,
                                r.rk_fg_pct, r.rk_ft_pct, r.rk_three_pm, r.rk_reb,
                                r.rk_ast, r.rk_stl, r.rk_blk, r.rk_pts, r.rk_total,
+                               {'r.ranks,' if dynamic else ''}
                                s.gp
                         FROM {table} r
                         LEFT JOIN team_daily_snapshot s
@@ -301,10 +405,30 @@ class DBService:
                         """,
                         league_id, season_id,
                     )
-                return [dict(r) for r in rows]
+                return [self._rankings_row_to_point(dict(r)) for r in rows]
         except Exception as e:
             logger.error(f"Failed to fetch rankings over time from {table}: {e}")
             return []
+
+    @staticmethod
+    def _rankings_row_to_point(row: dict) -> dict:
+        """Fold the JSONB extras into a generic `ranks` mapping alongside the
+        rk_* columns the response already carries.
+
+        `TOTAL` overrides rk_total when present: rk_total is the total over the
+        fixed categories only, so for a league scoring more than those it is the
+        wrong number to plot."""
+        stored = category_storage.loads(row.pop('ranks', None))
+        if not stored:
+            row['ranks'] = None
+            return row
+
+        total = stored.pop(TOTAL_KEY, None)
+        if total is not None:
+            row['rk_total'] = total
+        fixed = {cat: row.get(col) for cat, col in _RANKINGS_COL_MAP.items()}
+        row['ranks'] = category_storage.merge_categories(fixed, stored)
+        return row
 
     async def get_snapshot_over_time(
         self, team_ids: list[int] | None, league_id: int, season_id: int
@@ -388,6 +512,9 @@ class DBService:
         - actual_start_date: closest date >= start_date in DB (None if no data at or after start)
         - rows_start is empty list if no snapshot >= start_date exists (treat as zeros)
         - Returns (None, None, [], []) if no end snapshot found
+
+        Rows are keyed by category code, not column name, and carry whatever
+        categories the league scores -- see _snapshot_row_to_categories.
         """
         pool = await self._get_pool()
         if pool is None:
@@ -410,29 +537,26 @@ class DBService:
                 )
                 actual_start_date = start_row['d'] if start_row else None
 
-                rows_end = await conn.fetch(
-                    """
+                dynamic = await self._supports_dynamic_categories(conn)
+                query = f"""
                     SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
                            three_pm, reb, ast, stl, blk, pts
+                           {', stats' if dynamic else ''}
                     FROM team_daily_snapshot
                     WHERE league_id = $1 AND season_id = $2 AND date = $3
-                    """,
-                    league_id, season_id, actual_end_date
-                )
+                """
+                rows_end = await conn.fetch(query, league_id, season_id, actual_end_date)
 
                 rows_start = []
                 if actual_start_date is not None:
-                    rows_start = await conn.fetch(
-                        """
-                        SELECT team_id, team_name, gp, fgm, fga, fg_pct, ftm, fta, ft_pct,
-                               three_pm, reb, ast, stl, blk, pts
-                        FROM team_daily_snapshot
-                        WHERE league_id = $1 AND season_id = $2 AND date = $3
-                        """,
-                        league_id, season_id, actual_start_date
-                    )
+                    rows_start = await conn.fetch(query, league_id, season_id, actual_start_date)
 
-                return actual_end_date, actual_start_date, [dict(r) for r in rows_end], [dict(r) for r in rows_start]
+                return (
+                    actual_end_date,
+                    actual_start_date,
+                    [_snapshot_row_to_categories(dict(r)) for r in rows_end],
+                    [_snapshot_row_to_categories(dict(r)) for r in rows_start],
+                )
         except Exception as e:
             logger.error(f"Failed to fetch snapshots for date range: {e}")
             return None, None, [], []

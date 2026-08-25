@@ -16,6 +16,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import type { OverTimeSource, TeamTimeSeriesPoint } from '../types/api'
+import { TOTAL_METRIC, metricOptionsFor, rankValue } from './standingsRaceMetrics'
 
 const TEAM_COLORS = [
   '#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed',
@@ -30,19 +31,6 @@ type ViewMode = 'points' | 'rank'
 const SOURCES: { value: OverTimeSource; label: string }[] = [
   { value: 'rankings_totals', label: 'Rankings by Total' },
   { value: 'rankings_avg', label: 'Rankings by Avg' },
-]
-
-type MetricOption = { value: string; label: string }
-const METRICS: MetricOption[] = [
-  { value: 'rk_total', label: 'Total' },
-  { value: 'rk_pts', label: 'PTS' },
-  { value: 'rk_reb', label: 'REB' },
-  { value: 'rk_ast', label: 'AST' },
-  { value: 'rk_stl', label: 'STL' },
-  { value: 'rk_blk', label: 'BLK' },
-  { value: 'rk_three_pm', label: '3PM' },
-  { value: 'rk_fg_pct', label: 'FG%' },
-  { value: 'rk_ft_pct', label: 'FT%' },
 ]
 
 // Matches the app's Tailwind sans stack closely enough to measure label widths.
@@ -169,7 +157,7 @@ function EndLabels({
 const StandingsRace = () => {
   const [source, setSource] = useState<OverTimeSource>('rankings_totals')
   const [view, setView] = useState<ViewMode>('points')
-  const [metric, setMetric] = useState<string>('rk_total')
+  const [metric, setMetric] = useState<string>(TOTAL_METRIC)
   const [highlighted, setHighlighted] = useState<Set<number>>(new Set())
   const [brushEnd, setBrushEnd] = useState<number | null>(null)
 
@@ -199,6 +187,13 @@ const StandingsRace = () => {
 
   const teamIdByName = useMemo(() => new Map(teams.map(t => [t.team_name, t.team_id])), [teams])
 
+  const metricOptions = useMemo(() => metricOptionsFor(data?.data), [data])
+
+  // A selected category can vanish between payloads (source switch, a league
+  // that stops scoring it). Derived rather than corrected in an effect, so no
+  // render ever charts a metric the data doesn't carry.
+  const activeMetric = metricOptions.some(m => m.value === metric) ? metric : TOTAL_METRIC
+
   const gpByDateTeam = useMemo(() => {
     const m = new Map<string, number | undefined>()
     data?.data.forEach(p => m.set(`${p.date}|${p.team_id}`, p.gp))
@@ -211,8 +206,7 @@ const StandingsRace = () => {
     data.data.forEach((p: TeamTimeSeriesPoint) => {
       if (!byDate.has(p.date)) byDate.set(p.date, { date: p.date })
       const entry = byDate.get(p.date)!
-      const val = p[metric as keyof TeamTimeSeriesPoint]
-      entry[p.team_name] = val !== undefined && val !== null ? Number(val) : NaN
+      entry[p.team_name] = rankValue(p, activeMetric)
     })
     let rows = Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)))
 
@@ -231,16 +225,16 @@ const StandingsRace = () => {
       })
     }
     return rows
-  }, [data, metric, view, teams])
+  }, [data, activeMetric, view, teams])
 
   const handleViewChange = (next: ViewMode) => {
     setView(next)
-    if (next === 'rank') setMetric('rk_total')
+    if (next === 'rank') setMetric(TOTAL_METRIC)
   }
 
   const handleMetricChange = (next: string) => {
     setMetric(next)
-    if (next !== 'rk_total' && view === 'rank') setView('points')
+    if (next !== TOTAL_METRIC && view === 'rank') setView('points')
   }
 
   const toggleHighlight = (teamId: number) => {
@@ -320,12 +314,12 @@ const StandingsRace = () => {
             </div>
 
             <select
-              value={metric}
+              value={activeMetric}
               onChange={e => handleMetricChange(e.target.value)}
               className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
             >
-              {METRICS.map(m => (
-                <option key={m.value} value={m.value} disabled={view === 'rank' && m.value !== 'rk_total'}>
+              {metricOptions.map(m => (
+                <option key={m.value} value={m.value} disabled={view === 'rank' && m.value !== TOTAL_METRIC}>
                   {m.label}
                 </option>
               ))}

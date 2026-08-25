@@ -11,17 +11,6 @@ import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-const CATEGORY_KEY_MAP: Record<string, string> = {
-  fg_percentage: 'FG%',
-  ft_percentage: 'FT%',
-  three_pm: '3PM',
-  ast: 'AST',
-  reb: 'REB',
-  stl: 'STL',
-  blk: 'BLK',
-  pts: 'PTS',
-}
-
 const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
 
 // Matches the heatmap's category-cell formatting (Analytics.tsx) so the same
@@ -99,10 +88,15 @@ const Rankings = () => {
     ? (data?.averages_rankings || [])
     : (data?.totals_rankings || [])
 
+  // This league's actual scoring categories (e.g. FG%, FT%, 3PM, ... or
+  // whatever ESPN's league settings resolve to — see backend
+  // resolve_ranking_categories), in display order. TOTAL_POINTS is handled
+  // separately as the fixed "Total" column.
+  const categoryKeys = (data?.categories || []).filter(c => c !== 'TOTAL_POINTS')
+
   const getSortValue = (team: RankingStats) => {
-    const categoryKey = CATEGORY_KEY_MAP[sortBy]
-    if (categoryKey && viewMode === 'rankings') {
-      return team.category_ranks?.[categoryKey]
+    if (categoryKeys.includes(sortBy)) {
+      return viewMode === 'rankings' ? team.category_ranks?.[sortBy] : team.stats?.[sortBy]
     }
     return team[sortBy as keyof RankingStats]
   }
@@ -125,14 +119,7 @@ const Rankings = () => {
   const columns = [
     { key: 'rank', label: 'Rank', sortable: true },
     { key: 'team', label: 'Team', sortable: true },
-    { key: 'fg_percentage', label: 'FG%', sortable: true },
-    { key: 'ft_percentage', label: 'FT%', sortable: true },
-    { key: 'three_pm', label: '3PM', sortable: true },
-    { key: 'ast', label: 'AST', sortable: true },
-    { key: 'reb', label: 'REB', sortable: true },
-    { key: 'stl', label: 'STL', sortable: true },
-    { key: 'blk', label: 'BLK', sortable: true },
-    { key: 'pts', label: 'PTS', sortable: true },
+    ...categoryKeys.map(key => ({ key, label: key, sortable: true })),
     { key: 'total_points', label: 'Total', sortable: true },
     { key: 'gp', label: 'GP', sortable: true },
   ]
@@ -368,10 +355,9 @@ const Rankings = () => {
                     </Link>
                   </td>
                   {columns.slice(2).map((column) => {
-                    const categoryKey = CATEGORY_KEY_MAP[column.key]
-                    const isCategoryColumn = !!categoryKey
-                    const value = (isCategoryColumn && !isStandings)
-                      ? team.category_ranks?.[categoryKey]
+                    const isCategoryColumn = categoryKeys.includes(column.key)
+                    const value = isCategoryColumn
+                      ? (isStandings ? team.stats?.[column.key] : team.category_ranks?.[column.key])
                       : (team[column.key as keyof RankingStats] as number)
 
                     let display: string | number | undefined = value
@@ -379,7 +365,7 @@ const Rankings = () => {
                       if (isCategoryColumn && !isStandings) {
                         display = value
                       } else if (isCategoryColumn && isStandings && mode === 'averages') {
-                        display = formatAverageValue(categoryKey, value)
+                        display = formatAverageValue(column.key, value)
                       } else if (column.key === 'gp') {
                         display = value
                       } else {

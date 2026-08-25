@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Fantasy Pre-Draft Rankings for ESPN",
+  "version": "1.0.8",
+  "description": "Reorder ESPN Edit Draft Strategy from your Pre-Draft Rankings. Never clicks Save Rankings.",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ESPN Rankings Helper"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://fantasyleagueinfo.onrender.com/*",
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:5174/*",
+        "http://127.0.0.1:5174/*"
+      ],
+      "js": ["content-app.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://fantasy.espn.com/basketball/editdraftstrategy*"],
+      "js": ["content-espn.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://fantasy.espn.com/basketball/editdraftstrategy*"],
+      "js": ["content-espn-page.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ]
+}

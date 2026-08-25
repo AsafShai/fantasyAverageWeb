@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import date, timedelta
 from enum import Enum
 
@@ -73,6 +73,9 @@ class PlayerStats(BaseModel):
     three_pm: float
     minutes: float
     gp: int
+    # Generic per-category totals for this league's actual scoring categories
+    # (e.g. TO), keyed by category code. Superset of the fixed fields above.
+    stats: Optional[Dict[str, float]] = None
 
 class Player(BaseModel):
     player_name: str
@@ -101,3 +104,9 @@ class PaginatedPlayers(BaseModel):
     has_more: bool
     actual_start: Optional[date] = None
     actual_end: Optional[date] = None
+    # This league's actual scoring categories (see PlayerStats.stats),
+    # in display order.
+    categories: List[str] = []
+    # Subset of `categories` where a lower raw value scores better (e.g. TO).
+    # The client z-scores players itself, so it needs the sign of each category.
+    reverse_categories: List[str] = []

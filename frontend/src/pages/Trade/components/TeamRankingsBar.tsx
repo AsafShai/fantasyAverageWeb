@@ -5,20 +5,16 @@ interface TeamRankingsBarProps {
   categoryRanks: Record<string, number>;
 }
 
-const CATEGORIES = [
-  { key: 'FG%', label: 'FG%' },
-  { key: 'FT%', label: 'FT%' },
-  { key: '3PM', label: '3PM' },
-  { key: 'AST', label: 'AST' },
-  { key: 'REB', label: 'REB' },
-  { key: 'STL', label: 'STL' },
-  { key: 'BLK', label: 'BLK' },
-  { key: 'PTS', label: 'PTS' },
-];
-
 export const TeamRankingsBar: React.FC<TeamRankingsBarProps> = ({ categoryRanks }) => {
+  // Column order/set comes straight from the API response (this league's
+  // actual scoring categories), not a hardcoded 8-category list.
+  const categoryKeys = Object.keys(categoryRanks)
+  const teamCount = Object.keys(categoryRanks).length > 0
+    ? Math.max(...Object.values(categoryRanks))
+    : 1
+
   const normalizeRank = (rank: number): number => {
-    return (rank - 1) / 11;
+    return teamCount > 1 ? (rank - 1) / (teamCount - 1) : 0.5;
   };
 
   return (
@@ -26,27 +22,27 @@ export const TeamRankingsBar: React.FC<TeamRankingsBarProps> = ({ categoryRanks 
       <table className="w-full text-xs">
         <thead>
           <tr className="bg-gray-50">
-            {CATEGORIES.map((category) => (
+            {categoryKeys.map((key) => (
               <th
-                key={category.key}
+                key={key}
                 className="px-2 py-1 text-center font-semibold text-gray-700 border-r border-gray-200 last:border-r-0"
               >
-                {category.label}
+                {key}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           <tr>
-            {CATEGORIES.map((category) => {
-              const rank = categoryRanks[category.key] || 0;
+            {categoryKeys.map((key) => {
+              const rank = categoryRanks[key] || 0;
               const normalizedValue = normalizeRank(rank);
               const backgroundColor = getHeatmapColor(normalizedValue);
               const textColor = getTextColor(normalizedValue);
 
               return (
                 <td
-                  key={category.key}
+                  key={key}
                   className="px-2 py-1.5 text-center font-bold border-r border-gray-200 last:border-r-0"
                   style={{
                     backgroundColor,

@@ -26,8 +26,10 @@ class LeagueService:
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
 
-        category_leaders = self._calculate_category_leaders(averages_df)
-        league_averages = self._calculate_league_averages(averages_df)
+        categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
+        category_leaders = self._calculate_category_leaders(averages_df, categories, reverse_categories)
+        league_averages = self._calculate_league_averages(averages_df, categories)
 
         nba_avg_pace = None
         nba_game_days_left = None
@@ -68,10 +70,19 @@ class LeagueService:
 
         sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
 
+        categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
+        # A resolved category can be absent from the frame (DB fallback data is
+        # fixed to the historical 8 columns even when ESPN settings resolve
+        # more). Narrow to what's actually present so the labels, the value
+        # matrix, the normalized matrix and the ranks all describe the same
+        # columns instead of silently shifting against each other.
+        categories = [c for c in categories
+                      if c in sorted_averages_df.columns and c in rankings_df.columns]
         teams_data = self._extract_teams_data(sorted_averages_df)
-        categories_data = self._extract_categories_data(sorted_averages_df)
-        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df)
-        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df)
+        categories_data = self._extract_categories_data(sorted_averages_df, categories)
+        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df, categories, reverse_categories)
+        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df, categories)
 
         return self.response_builder.build_heatmap_response(
             teams=teams_data,
@@ -79,11 +90,11 @@ class LeagueService:
             normalized_data=normalized_data,
             ranks_data=ranks_data,
             data_date=self.data_provider.get_data_date(),
+            category_labels=categories + ['GP'],
         )
 
     async def _get_heatmap_for_range(self, start_date: date, end_date: date) -> HeatmapData:
         from app.services.ranking_service import RankingService
-        from app.services.data_transformer import DataTransformer
 
         actual_end_date, actual_start_date, rows_end, rows_start = \
             await self.data_provider.db_service.get_snapshots_for_date_range(
@@ -98,34 +109,28 @@ class LeagueService:
         start_df = pd.DataFrame(rows_start) if rows_start else None
         delta_df = ranking_service._compute_delta(end_df, start_df)
 
-        averages_rankings_df = ranking_service._build_averages_rankings_df(delta_df)
-        rankings_df = averages_rankings_df.sort_values(by='TOTAL_POINTS', ascending=False)
+        categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
 
-        transformer = DataTransformer()
-        averages_df = pd.DataFrame()
-        averages_df['team_id'] = delta_df['team_id']
-        averages_df['team_name'] = delta_df['team_name']
-        averages_df['GP'] = delta_df['gp']
-        averages_df['FGM'] = delta_df['fgm']
-        averages_df['FGA'] = delta_df['fga']
-        averages_df['FTM'] = delta_df['ftm']
-        averages_df['FTA'] = delta_df['fta']
-        averages_df['FG%'] = delta_df['fg_pct']
-        averages_df['FT%'] = delta_df['ft_pct']
-        averages_df['3PM'] = delta_df['three_pm']
-        averages_df['REB'] = delta_df['reb']
-        averages_df['AST'] = delta_df['ast']
-        averages_df['STL'] = delta_df['stl']
-        averages_df['BLK'] = delta_df['blk']
-        averages_df['PTS'] = delta_df['pts']
-        averages_df = transformer.totals_to_averages_df(averages_df)
+        averages_df, averages_rankings_df = ranking_service._build_averages_rankings_df(
+            delta_df, categories, reverse_categories
+        )
+        rankings_df = averages_rankings_df.sort_values(by='TOTAL_POINTS', ascending=False)
 
         sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
 
+        # Same narrowing as the live path: a resolved category can be missing
+        # from rows written before it was added to the league, and the labels,
+        # values, normalized matrix and ranks all have to describe the same
+        # columns.
+        categories = [c for c in categories
+                      if c in sorted_averages_df.columns and c in rankings_df.columns]
         teams_data = self._extract_teams_data(sorted_averages_df)
-        categories_data = self._extract_categories_data(sorted_averages_df)
-        normalized_data = self.stats_calculator.normalize_for_heatmap(sorted_averages_df)
-        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df)
+        categories_data = self._extract_categories_data(sorted_averages_df, categories)
+        normalized_data = self.stats_calculator.normalize_for_heatmap(
+            sorted_averages_df, categories, reverse_categories
+        )
+        ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df, categories)
 
         return self.response_builder.build_heatmap_response(
             teams=teams_data,
@@ -136,6 +141,7 @@ class LeagueService:
             date_range_end=end_date,
             actual_start_date=actual_start_date,
             actual_end_date=actual_end_date,
+            category_labels=categories + ['GP'],
         )
     
     async def get_league_shots_data(self) -> LeagueShotsData:
@@ -150,48 +156,51 @@ class LeagueService:
             shots_data, data_date=self.data_provider.get_data_date()
         )
     
-    def _calculate_category_leaders(self, averages_df) -> Dict[str, RankingStats]:
-        """Calculate category leaders (business logic)"""
-        leaders_data = self.stats_calculator.find_category_leaders(averages_df)
+    def _calculate_category_leaders(self, averages_df, categories: Optional[List[str]] = None,
+                                  reverse_categories: Optional[set] = None) -> Dict[str, RankingStats]:
+        """Calculate category leaders (business logic). categories defaults to RANKING_CATEGORIES."""
+        leaders_data = self.stats_calculator.find_category_leaders(averages_df, categories, reverse_categories)
         category_leaders = {}
-        
+
         for category, data in leaders_data.items():
             team_row = averages_df[averages_df['team_id'] == data['team_id']].iloc[0]
-            category_leaders[category] = self.response_builder.create_ranking_stats_from_averages(team_row)
-        
+            category_leaders[category] = self.response_builder.create_ranking_stats_from_averages(team_row, categories)
+
         return category_leaders
-    
-    def _calculate_league_averages(self, averages_df) -> AverageStats:
-        """Calculate league averages (business logic)"""
-        league_avg_data = self.stats_calculator.calculate_league_averages(averages_df)
-        return self.response_builder.create_average_stats(league_avg_data)
+
+    def _calculate_league_averages(self, averages_df, categories: Optional[List[str]] = None) -> AverageStats:
+        """Calculate league averages (business logic). categories defaults to RANKING_CATEGORIES."""
+        league_avg_data = self.stats_calculator.calculate_league_averages(averages_df, categories)
+        return self.response_builder.create_average_stats(league_avg_data, categories)
     
     def _extract_teams_data(self, averages_df) -> List:
         """Extract teams data for heatmap"""
         return [{'team_id': int(row['team_id']), 'team_name': str(row['team_name'])} 
                 for _, row in averages_df.iterrows()]
     
-    def _extract_categories_data(self, averages_df) -> List:
-        """Extract categories data for heatmap"""
+    def _extract_categories_data(self, averages_df, categories: Optional[List[str]] = None) -> List:
+        """Extract categories data for heatmap. categories defaults to RANKING_CATEGORIES."""
         from app.utils.constants import RANKING_CATEGORIES
-        categories_with_gp = RANKING_CATEGORIES + ['GP']
+        categories_with_gp = (categories or RANKING_CATEGORIES) + ['GP']
         return averages_df[categories_with_gp].values.tolist()
 
-    def _extract_ranks_data(self, rankings_df, averages_df) -> List[List[int]]:
-        """Extract rank data for each team and category"""
+    def _extract_ranks_data(self, rankings_df, averages_df, categories: Optional[List[str]] = None) -> List[List[int]]:
+        """Extract rank data for each team and category. categories defaults to RANKING_CATEGORIES."""
         from app.utils.constants import RANKING_CATEGORIES
+        categories = categories or RANKING_CATEGORIES
 
         team_id_to_ranks = {}
         for _, row in rankings_df.iterrows():
             team_id = int(row['team_id'])
-            ranks = [int(row[cat]) for cat in RANKING_CATEGORIES]
+            ranks = [int(row[cat]) for cat in categories]
             ranks.append(0)
             team_id_to_ranks[team_id] = ranks
 
+        default_ranks = [0] * (len(categories) + 1)
         ranks_data = []
         for _, team_row in averages_df.iterrows():
             team_id = int(team_row['team_id'])
-            ranks_data.append(team_id_to_ranks.get(team_id, [0] * 9))
+            ranks_data.append(team_id_to_ranks.get(team_id, default_ranks))
 
         return ranks_data
 

@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from unittest.mock import AsyncMock
 
@@ -8,13 +9,26 @@ from app.services.db_service import DBService
 
 
 class FakeConn:
-    def __init__(self, fetchrow_result=None, fetch_result=None, raise_on_fetch=False):
+    def __init__(self, fetchrow_result=None, fetch_result=None, raise_on_fetch=False,
+                 dynamic_columns=False):
         self.fetchrow = AsyncMock(return_value=fetchrow_result)
         if raise_on_fetch:
             self.fetch = AsyncMock(side_effect=RuntimeError("boom"))
         else:
             self.fetch = AsyncMock(return_value=fetch_result or [])
         self.executemany = AsyncMock(return_value=None)
+        # Answers the information_schema probe for the dynamic-category columns.
+        self.fetchval = AsyncMock(return_value=dynamic_columns)
+
+
+@pytest.fixture(autouse=True)
+def _reset_dynamic_column_probe():
+    """The probe result is cached on the class, so it would otherwise leak
+    between tests in whichever order they happen to run."""
+    from app.services.db_service import DBService
+    DBService._dynamic_columns = None
+    yield
+    DBService._dynamic_columns = None
 
 
 class FakeAcquireCtx:
@@ -313,7 +327,9 @@ async def test_get_rankings_over_time_joins_gp(db_service, monkeypatch):
 
     result = await db_service.get_rankings_over_time("team_rankings_totals", None, 1234567890, 2026)
 
-    assert result == rows
+    # `ranks` is added by the read path and is None for a fixed-category league,
+    # leaving every other field exactly as the row came out of the DB.
+    assert result == [{**rows[0], "ranks": None}]
     query = conn.fetch.call_args[0][0]
     assert "LEFT JOIN team_daily_snapshot" in query
     assert "s.gp" in query
@@ -385,3 +401,169 @@ def test_fs_records_to_frame_handles_no_rows():
     from app.services.db_service import fs_records_to_frame
 
     assert fs_records_to_frame([]).empty
+
+
+class TestRankingsRowToPoint:
+    """The Standings Race read path: fold JSONB extras into the row without
+    changing what a fixed-category league gets back."""
+
+    @staticmethod
+    def _row(**overrides):
+        row = {
+            'date': None, 'team_id': 1, 'team_name': 'Alpha',
+            'rk_fg_pct': 2.0, 'rk_ft_pct': 3.0, 'rk_three_pm': 2.0, 'rk_reb': 1.0,
+            'rk_ast': 2.0, 'rk_stl': 3.0, 'rk_blk': 1.0, 'rk_pts': 2.0,
+            'rk_total': 16.0, 'ranks': None, 'gp': 47,
+        }
+        row.update(overrides)
+        return row
+
+    def test_no_extras_leaves_the_payload_unchanged(self):
+        from app.services.db_service import DBService
+        out = DBService._rankings_row_to_point(self._row())
+
+        assert out['ranks'] is None
+        assert out['rk_total'] == 16.0
+        assert out['rk_pts'] == 2.0
+
+    def test_extras_are_merged_with_the_fixed_columns(self):
+        from app.services.db_service import DBService
+        out = DBService._rankings_row_to_point(self._row(ranks={'TO': 7.0, 'TOTAL': 23.0}))
+
+        assert out['ranks']['TO'] == 7.0
+        assert out['ranks']['PTS'] == 2.0
+        assert 'TOTAL' not in out['ranks']
+
+    def test_stored_total_overrides_the_fixed_category_total(self):
+        """rk_total only ever means 'total over the fixed categories', so a
+        league scoring more than those must not plot it."""
+        from app.services.db_service import DBService
+        out = DBService._rankings_row_to_point(self._row(ranks={'TO': 7.0, 'TOTAL': 23.0}))
+
+        assert out['rk_total'] == 23.0
+
+    def test_tolerates_a_json_string_when_no_codec_is_registered(self):
+        from app.services.db_service import DBService
+        out = DBService._rankings_row_to_point(self._row(ranks='{"TO": 7.0, "TOTAL": 23.0}'))
+
+        assert out['ranks']['TO'] == 7.0
+        assert out['rk_total'] == 23.0
+
+
+class TestSnapshotRowToCategories:
+    """The date-range and ESPN-down read paths: a snapshot row becomes one
+    mapping keyed by category code, whichever side each value came from."""
+
+    @staticmethod
+    def _row(**overrides):
+        from decimal import Decimal
+        row = {
+            'team_id': 1, 'team_name': 'Alpha', 'date': None,
+            'gp': 10, 'fgm': 40, 'fga': 85, 'fg_pct': Decimal('0.4706'),
+            'ftm': 20, 'fta': 27, 'ft_pct': Decimal('0.7407'),
+            'three_pm': 15, 'reb': 43, 'ast': 28, 'stl': 9, 'blk': 4, 'pts': 112,
+            'stats': None,
+        }
+        row.update(overrides)
+        return row
+
+    def test_fixed_columns_become_category_codes(self):
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row())
+
+        assert out['PTS'] == 112.0
+        assert out['3PM'] == 15.0
+        assert out['team_name'] == 'Alpha'
+        assert 'pts' not in out
+        assert 'date' not in out
+
+    def test_numeric_columns_are_float_not_decimal(self):
+        """asyncpg returns Decimal for NUMERIC; a frame of these rows has to be
+        float throughout or downstream arithmetic mixes the two and blows up."""
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row())
+
+        assert isinstance(out['FG%'], float)
+        assert isinstance(out['PTS'], float)
+
+    def test_extras_appear_alongside_the_fixed_categories(self):
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row(stats={'TO': 18.0, '3PA': 40.0}))
+
+        assert out['TO'] == 18.0
+        assert out['3PA'] == 40.0
+        assert out['PTS'] == 112.0
+
+    def test_tolerates_a_json_string_when_no_codec_is_registered(self):
+        from app.services.db_service import _snapshot_row_to_categories
+        out = _snapshot_row_to_categories(self._row(stats='{"TO": 18.0}'))
+
+        assert out['TO'] == 18.0
+
+
+@pytest.mark.asyncio
+async def test_upsert_omits_extras_column_when_migration_not_applied(db_service, monkeypatch):
+    """Without add_dynamic_category_columns.sql the write must still succeed:
+    inserting into a missing column would fail into a log line and silently
+    stop snapshots being written."""
+    conn = FakeConn(dynamic_columns=False)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+    df = pd.DataFrame([{
+        "team_id": 1, "team_name": "A",
+        "FG%": 1.0, "FT%": 2.0, "3PM": 3.0, "REB": 4.0,
+        "AST": 5.0, "STL": 6.0, "BLK": 7.0, "PTS": 8.0,
+        "TOTAL_POINTS": 36.0,
+    }])
+
+    await db_service.upsert_rankings_averages(5, df, 1234567890, 2026, {1: {"TO": 9.0}})
+
+    query = conn.executemany.call_args[0][0]
+    assert "ranks" not in query
+    assert len(conn.executemany.call_args[0][1][0]) == 15
+
+
+@pytest.mark.asyncio
+async def test_upsert_writes_extras_column_when_migration_applied(db_service, monkeypatch):
+    conn = FakeConn(dynamic_columns=True)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+    df = pd.DataFrame([{
+        "team_id": 1, "team_name": "A",
+        "FG%": 1.0, "FT%": 2.0, "3PM": 3.0, "REB": 4.0,
+        "AST": 5.0, "STL": 6.0, "BLK": 7.0, "PTS": 8.0,
+        "TOTAL_POINTS": 36.0,
+    }])
+
+    await db_service.upsert_rankings_averages(5, df, 1234567890, 2026, {1: {"TO": 9.0}})
+
+    query = conn.executemany.call_args[0][0]
+    params = conn.executemany.call_args[0][1][0]
+    assert "ranks" in query
+    assert len(params) == 16
+    assert json.loads(params[-1]) == {"TO": 9.0}
+
+
+@pytest.mark.asyncio
+async def test_upsert_writes_null_extras_for_a_fixed_category_league(db_service, monkeypatch):
+    """The cost argument: nothing is stored when there is nothing extra."""
+    conn = FakeConn(dynamic_columns=True)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+    df = pd.DataFrame([{
+        "team_id": 1, "team_name": "A",
+        "FG%": 1.0, "FT%": 2.0, "3PM": 3.0, "REB": 4.0,
+        "AST": 5.0, "STL": 6.0, "BLK": 7.0, "PTS": 8.0,
+        "TOTAL_POINTS": 36.0,
+    }])
+
+    await db_service.upsert_rankings_averages(5, df, 1234567890, 2026, None)
+
+    assert conn.executemany.call_args[0][1][0][-1] is None
+
+
+@pytest.mark.asyncio
+async def test_over_time_omits_extras_column_when_migration_not_applied(db_service, monkeypatch):
+    conn = FakeConn(fetch_result=[], dynamic_columns=False)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    await db_service.get_rankings_over_time("team_rankings_totals", None, 1234567890, 2026)
+
+    assert "r.ranks" not in conn.fetch.call_args[0][0]

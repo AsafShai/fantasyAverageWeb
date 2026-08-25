@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computePlayerRankings, partitionByDataAvailability, CATEGORIES } from '../playerRankings'
+import { computePlayerRankings, partitionByDataAvailability, DEFAULT_CATEGORIES as CATEGORIES } from '../playerRankings'
 import type { Player } from '../../types/api'
 import type { RankingsConfig } from '../playerRankings'
 
@@ -113,10 +113,10 @@ describe('computePlayerRankings', () => {
       makePlayer({ name: 'A', pts: 40, ast: 1 }),
       makePlayer({ name: 'B', pts: 5, ast: 20 }),
     ]
-    const puntPts = { ...defaultWeights, pts: 0 }
+    const puntPts = { ...defaultWeights, PTS: 0 }
     const result = computePlayerRankings(players, { ...defaultConfig, weights: puntPts })
     expect(result[0].player.player_name).toBe('B')
-    expect(result[0].zScores.pts).toBeDefined()
+    expect(result[0].zScores.PTS).toBeDefined()
   })
 
   it('per_game mode divides counting stats by GP', () => {
@@ -200,5 +200,79 @@ describe('partitionByDataAvailability', () => {
     const { available, excluded } = partitionByDataAvailability([])
     expect(available).toEqual([])
     expect(excluded).toEqual([])
+  })
+})
+
+describe('computePlayerRankings — dynamic categories', () => {
+  function makePlayerWithTO(name: string, to: number, pts: number): Player {
+    return {
+      player_name: name,
+      pro_team: 'LAL',
+      positions: ['PG'],
+      stats: {
+        pts, reb: 5, ast: 5, stl: 1, blk: 0.5, three_pm: 2,
+        fg_percentage: 0.47, ft_percentage: 0.85,
+        fgm: 8, fga: 17, ftm: 4, fta: 5,
+        minutes: 30, gp: 70,
+        stats: { 'FG%': 0.47, 'FT%': 0.85, '3PM': 2, AST: 5, REB: 5, STL: 1, BLK: 0.5, PTS: pts, TO: to },
+      },
+      team_id: 1,
+      status: 'ONTEAM',
+    }
+  }
+
+  it('ranks over an arbitrary extra category (TO) when passed explicitly', () => {
+    const categories = [...CATEGORIES, 'TO']
+    const players = [
+      makePlayerWithTO('LowTO', 20, 100),
+      makePlayerWithTO('HighTO', 200, 100),
+    ]
+    const weights = Object.fromEntries(categories.map(c => [c, c === 'TO' ? 1 : 0])) as Record<string, number>
+    const result = computePlayerRankings(players, { ...defaultConfig, weights }, categories)
+    // Only TO has weight -> whichever has the higher raw TO value scores
+    // higher here (this util doesn't know TO is "lower is better" — that's
+    // handled server-side via ESPN's isReverseItem, same as team rankings).
+    expect(result[0].player.player_name).toBe('HighTO')
+    expect(result[0].zScores.TO).toBeGreaterThan(result[1].zScores.TO)
+  })
+
+  it('falls back to the fixed field when stats.stats is missing a category', () => {
+    const legacyPlayer = makePlayer({ name: 'Legacy', pts: 30 })
+    const result = computePlayerRankings([legacyPlayer], defaultConfig)
+    expect(result[0].zScores.PTS).toBeDefined()
+  })
+})
+
+describe('reverse-scored categories', () => {
+  const TO_CATEGORIES = [...CATEGORIES, 'TO']
+  const toWeights = Object.fromEntries(TO_CATEGORIES.map(c => [c, 1])) as Record<string, number>
+
+  function withTurnovers(name: string, to: number): Player {
+    const p = makePlayer({ name })
+    p.stats.stats = { TO: to }
+    return p
+  }
+
+  it('scores fewer turnovers higher, not lower', () => {
+    const players = [withTurnovers('Careless', 300), withTurnovers('Careful', 60)]
+    const config: RankingsConfig = { ...defaultConfig, weights: toWeights }
+
+    const ranked = computePlayerRankings(players, config, TO_CATEGORIES, new Set(['TO']))
+    const careful = ranked.find(r => r.player.player_name === 'Careful')!
+    const careless = ranked.find(r => r.player.player_name === 'Careless')!
+
+    expect(careful.zScores['TO']).toBeGreaterThan(0)
+    expect(careless.zScores['TO']).toBeLessThan(0)
+    expect(careful.totalZ).toBeGreaterThan(careless.totalZ)
+  })
+
+  it('leaves non-reverse categories untouched', () => {
+    const players = [withTurnovers('Careless', 300), withTurnovers('Careful', 60)]
+    const config: RankingsConfig = { ...defaultConfig, weights: toWeights }
+
+    const ranked = computePlayerRankings(players, config, TO_CATEGORIES, new Set())
+    const careful = ranked.find(r => r.player.player_name === 'Careful')!
+
+    expect(careful.zScores['TO']).toBeLessThan(0)
   })
 })
