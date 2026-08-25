@@ -1,13 +1,66 @@
-import type { AdpIndexPlayer, AdpPlayer } from '../types/api'
+import type { AdpIndexPlayer, AdpMetric, AdpPlayer, ProviderMeta } from '../types/api'
 
-export const ADP_SITES = ['espn', 'fantrax', 'sleeper'] as const
+export const ADP_SITES = ['espn', 'fantrax', 'sleeper', 'yahoo'] as const
 export type AdpSiteKey = (typeof ADP_SITES)[number]
 
 export const SITE_LABEL: Record<AdpSiteKey, string> = {
   espn: 'ESPN',
   fantrax: 'Fantrax',
   sleeper: 'Sleeper',
+  yahoo: 'Yahoo',
 }
+
+/** Only used until the server's own capability matrix arrives with the first response. */
+const FALLBACK_CAPABILITIES: Record<AdpSiteKey, { adp: boolean; rankings: boolean }> = {
+  espn: { adp: true, rankings: true },
+  fantrax: { adp: true, rankings: false },
+  sleeper: { adp: false, rankings: true },
+  yahoo: { adp: true, rankings: true },
+}
+
+export function isAdpSite(key: string): key is AdpSiteKey {
+  return (ADP_SITES as readonly string[]).includes(key)
+}
+
+/** Sites that carry data for `metric`, in a stable order. Server-owned when available. */
+export function sitesForMetric(metric: AdpMetric, providers?: ProviderMeta[]): AdpSiteKey[] {
+  const capable = new Set<AdpSiteKey>()
+  if (providers?.length) {
+    for (const provider of providers) {
+      if (!isAdpSite(provider.key)) continue
+      if (metric === 'adp' ? provider.has_adp : provider.has_rankings) capable.add(provider.key)
+    }
+  } else {
+    for (const site of ADP_SITES) {
+      if (metric === 'adp' ? FALLBACK_CAPABILITIES[site].adp : FALLBACK_CAPABILITIES[site].rankings) {
+        capable.add(site)
+      }
+    }
+  }
+  return ADP_SITES.filter((site) => capable.has(site))
+}
+
+export function siteValue(player: AdpPlayer, site: AdpSiteKey, metric: AdpMetric): number | null {
+  return metric === 'adp' ? player[site].adp : player[site].ranking
+}
+
+export function blendValue(player: AdpPlayer, metric: AdpMetric): number | null {
+  return metric === 'adp' ? player.blend : player.ranking_blend
+}
+
+export function blendRankValue(
+  player: AdpPlayer | AdpIndexPlayer,
+  metric: AdpMetric,
+): number | null {
+  return metric === 'adp' ? player.blend_rank : player.ranking_blend_rank
+}
+
+export function spreadValue(player: AdpPlayer, metric: AdpMetric): number | null {
+  return metric === 'adp' ? player.spread : player.ranking_spread
+}
+
+export const METRIC_LABEL: Record<AdpMetric, string> = { adp: 'ADP', rank: 'Rankings' }
+export const BLEND_LABEL: Record<AdpMetric, string> = { adp: 'Blend ADP', rank: 'Blend Rank' }
 
 export function formatAdp(value: number | null | undefined): string {
   if (value == null) return '—'
@@ -159,7 +212,7 @@ export function chunkRows<T>(players: T[], size: number): T[][] {
   return rows
 }
 
-const EMPTY_SITE = { adp: null, rank: null }
+const EMPTY_SITE = { adp: null, rank: null, ranking: null }
 
 export function hydrateAdpPlayer(index: AdpIndexPlayer, full?: AdpPlayer): AdpPlayer {
   if (full) return full
@@ -174,9 +227,13 @@ export function hydrateAdpPlayer(index: AdpIndexPlayer, full?: AdpPlayer): AdpPl
     espn: EMPTY_SITE,
     fantrax: EMPTY_SITE,
     sleeper: EMPTY_SITE,
+    yahoo: EMPTY_SITE,
     blend: index.blend,
     blend_rank: index.blend_rank,
     spread: null,
+    ranking_blend: index.ranking_blend,
+    ranking_blend_rank: index.ranking_blend_rank,
+    ranking_spread: null,
     last_year: null,
     projection: null,
   }

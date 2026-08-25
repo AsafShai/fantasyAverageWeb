@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
+import { useBlendSites } from '../../hooks/useBlendSites'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
 import LeagueSettingsModal from '../../components/draft/LeagueSettingsModal'
 import {
+  BLEND_LABEL,
   DEFAULT_LEAGUE_SETTINGS,
+  SITE_LABEL,
   annotateDraftPicks,
   clampLeagueSettings,
   draftTeamColor,
@@ -18,7 +21,7 @@ import {
   type DraftBoardPick,
   type LeagueBoardSettings,
 } from '../../utils/adp'
-import type { AdpPlayer } from '../../types/api'
+import type { AdpMetric, AdpPlayer, ProviderMeta } from '../../types/api'
 
 type BoardShowBy = 'round' | 'team'
 
@@ -46,6 +49,9 @@ function BoardPlayerCard({ entry }: { entry: DraftBoardPick<AdpPlayer> }) {
 
 export default function DraftBoardPage() {
   const [showBy, setShowBy] = usePersistedState<BoardShowBy>('draft.adp.showBy', 'round')
+  // A board predicts where players actually go, which is what ADP measures -- so ADP is the
+  // default here even though rankings are available.
+  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.board.metric', 'adp')
   const [leagueRaw, setLeagueRaw] = usePersistedState<LeagueBoardSettings>(
     'draft.board.league',
     DEFAULT_LEAGUE_SETTINGS,
@@ -53,12 +59,18 @@ export default function DraftBoardPage() {
   const league = useMemo(() => clampLeagueSettings(leagueRaw), [leagueRaw])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const pickCount = league.teams * league.rounds
+  const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
+  const { sites, available, toggle, sitesParam, rankSitesParam } = useBlendSites(metric, providers)
   const { data, isLoading, isFetching, error } = useGetAdpQuery({
     page: 1,
     page_size: pickCount,
     sort: 'blend',
     sort_dir: 'asc',
+    sites: sitesParam,
+    rank_sites: rankSitesParam,
+    metric,
   })
+  if (data?.providers?.length && data.providers !== providers) setProviders(data.providers)
   const players = data?.players ?? []
   const boardPicks = useMemo(
     () => annotateDraftPicks(players.slice(0, pickCount), league.teams, league.threeRr),
@@ -77,7 +89,7 @@ export default function DraftBoardPage() {
           <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Draft Board</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {league.teams}-team{league.threeRr ? ', 3-round reverse' : ' snake'}, {league.rounds} rounds — top{' '}
-            {pickCount} by Blend ADP.
+            {pickCount} by {BLEND_LABEL[metric]}.
           </p>
           {data?.updated_at ? (
             <p className="text-xs text-gray-400 mt-1">Updated {formatUpdatedAt(data.updated_at)}</p>
@@ -93,7 +105,39 @@ export default function DraftBoardPage() {
         </div>
       </div>
 
-      <div className="card p-4 mb-4">
+      <div className="card p-4 mb-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Blend sites</span>
+          {available.map((site) => (
+            <label key={site} className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sites.includes(site)}
+                onChange={() => toggle(site)}
+                className="rounded border-gray-300"
+              />
+              {SITE_LABEL[site]}
+            </label>
+          ))}
+          <span className="hidden lg:inline text-xs text-gray-400">Shared with the ADP / Rankings page</span>
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Order by</span>
+            {(['adp', 'rank'] as AdpMetric[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMetric(key)}
+                className={`px-2 py-1 rounded text-xs font-semibold border ${
+                  metric === key
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300'
+                }`}
+              >
+                {BLEND_LABEL[key]}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Show by</span>
           {(['round', 'team'] as BoardShowBy[]).map((mode) => (

@@ -23,6 +23,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
+import { useBlendSites } from '../../hooks/useBlendSites'
 import { useDebounce } from '../../hooks/useDebounce'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -30,7 +31,17 @@ import ErrorMessage from '../../components/ErrorMessage'
 import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
 import PlayerDetailSheet from '../../components/draft/PlayerDetailSheet'
 import MoveToModal from '../../components/draft/MoveToModal'
-import { formatAdp, formatLastYearStat, hydrateAdpPlayer, nextShortSeasonLabel, shortSeasonLabel } from '../../utils/adp'
+import {
+  BLEND_LABEL,
+  SITE_LABEL,
+  blendRankValue,
+  blendValue,
+  formatAdp,
+  formatLastYearStat,
+  hydrateAdpPlayer,
+  nextShortSeasonLabel,
+  shortSeasonLabel,
+} from '../../utils/adp'
 import { downloadCsv, parseRankingsCsvImport, RANKINGS_CSV_HEADERS, rankingsCsvFileError, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
 import { pingEspnHelper, sendEspnRankings, toEspnRankingsPayload } from '../../utils/espnRankingsBridge'
 import {
@@ -42,7 +53,7 @@ import {
   stablePlayerIds,
   type DraftRankingsState,
 } from '../../utils/draftRankings'
-import type { AdpPlayer, LastYearStats } from '../../types/api'
+import type { AdpMetric, AdpPlayer, LastYearStats, ProviderMeta } from '../../types/api'
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
 const LAST_YEAR_COLS: { key: keyof LastYearStats; label: string; pct?: boolean }[] = [
@@ -132,19 +143,25 @@ function RankRowFooter({
   rank,
   lastRank,
   stats,
+  metric,
 }: {
   player: AdpPlayer
   rank: number
   lastRank: number | null
   stats?: LastYearStats | null
+  metric: AdpMetric
 }) {
+  const other: AdpMetric = metric === 'adp' ? 'rank' : 'adp'
   return (
     <div className="lg:hidden mt-2 w-full space-y-1.5">
-      <div className="grid grid-cols-4 gap-x-1 rounded-md bg-blue-50 dark:bg-blue-950/50 ring-1 ring-inset ring-blue-200/80 dark:ring-blue-800 py-1.5 px-0.5">
-        <FooterStat label="Blend rank">{player.blend_rank ?? '—'}</FooterStat>
-        <FooterStat label="Blend ADP">{formatAdp(player.blend)}</FooterStat>
+      <div className="grid grid-cols-4 gap-x-1 gap-y-1.5 rounded-md bg-blue-50 dark:bg-blue-950/50 ring-1 ring-inset ring-blue-200/80 dark:ring-blue-800 py-1.5 px-0.5">
+        <FooterStat label="Blend #">{blendRankValue(player, metric) ?? '—'}</FooterStat>
+        <FooterStat label={BLEND_LABEL[metric]}>{formatAdp(blendValue(player, metric))}</FooterStat>
         <FooterStat label="Δ Blend">
-          <DeltaBadge rank={rank} compareRank={player.blend_rank} />
+          <DeltaBadge rank={rank} compareRank={blendRankValue(player, metric)} />
+        </FooterStat>
+        <FooterStat label={`Δ ${BLEND_LABEL[other]}`}>
+          <DeltaBadge rank={rank} compareRank={blendRankValue(player, other)} />
         </FooterStat>
         <FooterStat label="Δ Last">
           <DeltaBadge rank={rank} compareRank={lastRank} />
@@ -166,12 +183,15 @@ function RankRowBody({
   rank,
   lastRank,
   stats,
+  metric,
 }: {
   player: AdpPlayer
   rank: number
   lastRank: number | null
   stats?: LastYearStats | null
+  metric: AdpMetric
 }) {
+  const other: AdpMetric = metric === 'adp' ? 'rank' : 'adp'
   return (
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2 sm:gap-3">
@@ -192,15 +212,18 @@ function RankRowBody({
         <LastYearCells stats={stats} />
         <div
           className="hidden lg:block w-24 shrink-0 text-right text-sm tabular-nums text-gray-500"
-          title="Pick order if the board were sorted by Blend ADP"
+          title={`Pick order if the board were sorted by ${BLEND_LABEL[metric]}`}
         >
-          {player.blend_rank ?? '—'}
+          {blendRankValue(player, metric) ?? '—'}
         </div>
         <div className="hidden lg:block w-16 shrink-0 text-right text-sm tabular-nums text-gray-500">
-          {formatAdp(player.blend)}
+          {formatAdp(blendValue(player, metric))}
         </div>
         <div className="hidden lg:block w-14 shrink-0 text-right text-sm">
-          <DeltaBadge rank={rank} compareRank={player.blend_rank} />
+          <DeltaBadge rank={rank} compareRank={blendRankValue(player, metric)} />
+        </div>
+        <div className="hidden lg:block w-16 shrink-0 text-right text-sm">
+          <DeltaBadge rank={rank} compareRank={blendRankValue(player, other)} />
         </div>
         <div className="hidden lg:block w-24 shrink-0 text-right text-sm">
           <DeltaBadge rank={rank} compareRank={lastRank} />
@@ -215,6 +238,7 @@ function SortableRankRow({
   rank,
   lastRank,
   stats,
+  metric,
   selected,
   onSelect,
   onMoveTo,
@@ -223,6 +247,7 @@ function SortableRankRow({
   rank: number
   lastRank: number | null
   stats?: LastYearStats | null
+  metric: AdpMetric
   selected: boolean
   onSelect: () => void
   onMoveTo: () => void
@@ -264,7 +289,7 @@ function SortableRankRow({
             <circle cx="11" cy="13" r="1.4" />
           </svg>
         </button>
-        <RankRowBody player={player} rank={rank} lastRank={lastRank} stats={stats} />
+        <RankRowBody player={player} rank={rank} lastRank={lastRank} stats={stats} metric={metric} />
         <button
           type="button"
           onClick={(e) => {
@@ -277,13 +302,23 @@ function SortableRankRow({
           Move to
         </button>
       </div>
-      <RankRowFooter player={player} rank={rank} lastRank={lastRank} stats={stats} />
+      <RankRowFooter player={player} rank={rank} lastRank={lastRank} stats={stats} metric={metric} />
     </div>
   )
 }
 
 export default function PreDraftRankingsPage() {
-  const { data: index, isLoading, error } = useGetAdpIndexQuery()
+  const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', 'adp')
+  const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
+  const { sites, available, toggle: toggleSite, sitesParam, rankSitesParam } = useBlendSites(
+    source,
+    providers,
+  )
+  const {
+    data: index,
+    isLoading,
+    error,
+  } = useGetAdpIndexQuery({ sites: sitesParam, rank_sites: rankSitesParam, metric: source })
   const [saved, setSaved] = usePersistedState<DraftRankingsState>('draft.rankings', EMPTY_RANKINGS())
   const [working, setWorking] = useState<DraftRankingsState>(saved)
   const undoRef = useRef<DraftRankingsState[]>([])
@@ -389,6 +424,20 @@ export default function PreDraftRankingsPage() {
     setResetOpen(false)
   }
 
+  // Switching source reorders the board, so it is an edit like any other: it goes through
+  // commit (undoable, marks the board dirty) and never silently rewrites a saved board.
+  const appliedSourceRef = useRef<AdpMetric | null>(null)
+  useEffect(() => {
+    if (!playerIds.length) return
+    if (appliedSourceRef.current === null) {
+      appliedSourceRef.current = source
+      return
+    }
+    if (appliedSourceRef.current === source) return
+    appliedSourceRef.current = source
+    commit({ ...board, order: playerIds })
+  }, [source, playerIds, board, commit])
+
   const ordered = useMemo(() => orderedPlayers(players, board.order), [players, board.order])
   const teams = index?.teams ?? []
 
@@ -432,6 +481,7 @@ export default function PreDraftRankingsPage() {
     { ids: missingDetailIds.join(',') },
     { skip: missingDetailIds.length === 0 },
   )
+  if (details?.providers?.length && details.providers !== providers) setProviders(details.providers)
   useEffect(() => {
     if (!details) return
     if (details.last_year_season || details.projection_season) {
@@ -724,7 +774,8 @@ export default function PreDraftRankingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Pre-Draft Rankings</h1>
           <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Drag the handle to reorder. Starts in Blend ADP order. Edits stay on this page until you save.
+            Drag the handle to reorder. Board is ordered from {BLEND_LABEL[source]} — switching that re-sorts
+            every player. Edits stay on this page until you save.
           </p>
           <p className="sm:hidden text-sm text-gray-500 dark:text-gray-400 mt-1">
             Drag to reorder. Tap a player for stats and actions.
@@ -800,6 +851,43 @@ export default function PreDraftRankingsPage() {
             ))}
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Blend sites</span>
+          {available.map((site) => (
+            <label key={site} className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sites.includes(site)}
+                onChange={() => toggleSite(site)}
+                className="rounded border-gray-300"
+              />
+              {SITE_LABEL[site]}
+            </label>
+          ))}
+          <span className="hidden lg:inline text-xs text-gray-400">Shared with the ADP / Rankings page</span>
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <span
+              className="text-xs font-semibold uppercase tracking-wide text-gray-500"
+              title="Re-sorts your whole board into this blend's order. Undoable, and stays unsaved until you press Save."
+            >
+              Order by
+            </span>
+            {(['adp', 'rank'] as AdpMetric[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSource(key)}
+                className={`px-2 py-1.5 sm:py-1 rounded text-xs font-semibold border ${
+                  source === key
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300'
+                }`}
+              >
+                {BLEND_LABEL[key]}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={saveRankings} disabled={!dirty} className={saveClass}>
             Save rankings
@@ -827,7 +915,7 @@ export default function PreDraftRankingsPage() {
                     Restore saved board
                   </button>
                   <button type="button" role="menuitem" onClick={resetToBlend} className={menuItem}>
-                    Reset to Blend ADP
+                    {`Reset to ${BLEND_LABEL[source]} order`}
                   </button>
                 </div>
               )}
@@ -892,7 +980,7 @@ export default function PreDraftRankingsPage() {
                   }}
                   className={menuItem}
                 >
-                  Reset to Blend ADP
+                  {`Reset to ${BLEND_LABEL[source]} order`}
                 </button>
                 <button
                   type="button"
@@ -1007,14 +1095,26 @@ export default function PreDraftRankingsPage() {
               </div>
             ))}
           </div>
-          <div className="w-24 shrink-0 text-right" title="Pick order if the board were sorted by Blend ADP.">
-            Blend ranking
+          <div
+            className="w-24 shrink-0 text-right"
+            title={`Pick order if the board were sorted by ${BLEND_LABEL[source]}.`}
+          >
+            Blend #
           </div>
-          <div className="w-16 shrink-0 text-right" title="Average ADP across all sites that list this player.">
-            Blend ADP
+          <div
+            className="w-16 shrink-0 text-right"
+            title={`Average ${source === 'adp' ? 'ADP' : 'ranking'} across the checked sites that list this player.`}
+          >
+            {BLEND_LABEL[source]}
           </div>
           <div className="w-14 shrink-0 text-right" title="Your rank minus Blend rank. Negative means you are higher on them.">
             Δ vs Blend
+          </div>
+          <div
+            className="w-16 shrink-0 text-right leading-tight"
+            title="Your rank minus the other blend's rank — reach or value against the metric the board is not ordered by."
+          >
+            Δ vs {BLEND_LABEL[source === 'adp' ? 'rank' : 'adp']}
           </div>
           <div
             className="w-24 shrink-0 text-right leading-tight"
@@ -1043,6 +1143,7 @@ export default function PreDraftRankingsPage() {
                   rank={rank > 0 ? rank : 0}
                   lastRank={savedRankById?.get(p.id) ?? null}
                   stats={playerStats(p)}
+                  metric={source}
                   selected={selectedId === p.id}
                   onSelect={() => setSelectedId((id) => (id === p.id ? null : p.id))}
                   onMoveTo={() => {
@@ -1072,6 +1173,7 @@ export default function PreDraftRankingsPage() {
                     rank={activeRank > 0 ? activeRank : 0}
                     lastRank={savedRankById?.get(activePlayer.id) ?? null}
                     stats={playerStats(activePlayer)}
+                    metric={source}
                   />
                 </div>
                 <RankRowFooter
@@ -1079,6 +1181,7 @@ export default function PreDraftRankingsPage() {
                   rank={activeRank > 0 ? activeRank : 0}
                   lastRank={savedRankById?.get(activePlayer.id) ?? null}
                   stats={playerStats(activePlayer)}
+                  metric={source}
                 />
               </div>
             ) : null}

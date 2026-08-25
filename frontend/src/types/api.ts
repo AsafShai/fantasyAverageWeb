@@ -327,6 +327,18 @@ export interface DepthChartPlayer {
 export interface SiteAdp {
   adp: number | null;
   rank: number | null;
+  ranking: number | null;
+}
+
+export interface ProviderMeta {
+  key: string;
+  label: string;
+  has_adp: boolean;
+  has_rankings: boolean;
+  fetched_at: string | null;
+  source_url: string | null;
+  player_count: number;
+  stale: boolean;
 }
 
 export interface LastYearStats {
@@ -352,9 +364,13 @@ export interface AdpPlayer {
   espn: SiteAdp;
   fantrax: SiteAdp;
   sleeper: SiteAdp;
+  yahoo: SiteAdp;
   blend: number | null;
   blend_rank: number | null;
   spread: number | null;
+  ranking_blend: number | null;
+  ranking_blend_rank: number | null;
+  ranking_spread: number | null;
   last_year?: LastYearStats | null;
   projection?: LastYearStats | null;
 }
@@ -367,6 +383,8 @@ export interface AdpIndexPlayer {
   positions: string[];
   blend: number | null;
   blend_rank: number | null;
+  ranking_blend: number | null;
+  ranking_blend_rank: number | null;
 }
 
 export interface AdpIndexResponse {
@@ -383,6 +401,7 @@ export interface AdpResponse {
   last_year_season?: string | null;
   projection_season?: string | null;
   sources: Record<string, string>;
+  providers?: ProviderMeta[];
   players: AdpPlayer[];
   teams?: string[];
   total?: number;
@@ -392,7 +411,10 @@ export interface AdpResponse {
   offset?: number;
 }
 
-export type AdpSite = "espn" | "fantrax" | "sleeper";
+export type AdpSite = "espn" | "fantrax" | "sleeper" | "yahoo";
+
+/** Which of the two parallel data types a draft view is showing. */
+export type AdpMetric = "adp" | "rank";
 
 export interface AdpQueryArgs {
   page?: number;
@@ -405,6 +427,14 @@ export interface AdpQueryArgs {
   ids?: string;
   ranked_only?: boolean;
   sites?: string;
+  rank_sites?: string;
+  metric?: AdpMetric;
+}
+
+export interface AdpIndexQueryArgs {
+  sites?: string;
+  rank_sites?: string;
+  metric?: AdpMetric;
 }
 
 export interface NbaPlayerBio {

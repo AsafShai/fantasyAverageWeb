@@ -9,12 +9,25 @@ import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from app.models.adp import AdpIndexResponse, AdpPlayer, AdpResponse, LastYearStats, SiteAdp
+from app.models.adp import (
+    AdpIndexResponse,
+    AdpPlayer,
+    AdpResponse,
+    LastYearStats,
+    ProviderMeta,
+    SiteAdp,
+)
 from app.models.nba_player_models import NbaPlayerBio
 from app.config import settings
 from app.services import adp_cache, nba_player_catalog
 from app.services.adp_fetch import fetch_espn_stat_splits_map, fetch_live_adp_payload
-from app.services.adp_query import filter_players, paginated_response, team_abbrs, to_index_player
+from app.services.adp_query import (
+    filter_players,
+    paginated_response,
+    sort_players,
+    team_abbrs,
+    to_index_player,
+)
 from app.services.player_service import espn_season_string
 from app.utils.name_matching import (
     clean_fantasy_scraped_name,
@@ -24,7 +37,15 @@ from app.utils.name_matching import (
 
 logger = logging.getLogger(__name__)
 
-SITES = ("espn", "fantrax", "sleeper")
+SITES = ("espn", "fantrax", "sleeper", "yahoo")
+METRICS = ("adp", "rank")
+# Which AdpPlayer fields each metric owns. ADP and rankings live on different scales
+# (picks 1-130 vs list positions 1-832), so their blends are computed separately and
+# never averaged together.
+_METRIC_FIELDS = {
+    "adp": ("blend", "blend_rank", "spread"),
+    "rank": ("ranking_blend", "ranking_blend_rank", "ranking_spread"),
+}
 _CACHE_TTL = timedelta(minutes=30)
 
 _SUFFIX_RE = re.compile(r"\b(jr|sr|ii|iii|iv|v)\.?$", re.IGNORECASE)
@@ -71,6 +92,11 @@ def normalize_player_name(name: str) -> str:
     return s
 
 
+def parse_metric(raw: Optional[str]) -> str:
+    """`adp` unless the caller explicitly asks for `rank`."""
+    return "rank" if (raw or "").strip().lower() in {"rank", "ranking", "rankings"} else "adp"
+
+
 def parse_sites(raw: Optional[str]) -> Optional[tuple[str, ...]]:
     """Known site keys from a comma list. Empty or unknown-only → None (all sites)."""
     if not raw:
@@ -86,41 +112,55 @@ def parse_sites(raw: Optional[str]) -> Optional[tuple[str, ...]]:
 
 
 def compute_blend(
-    adp: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
+    values: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
 ) -> Optional[float]:
-    """Mean of non-null ADPs among `sites` (defaults to every site)."""
+    """Mean of the non-null values among `sites` (defaults to every site).
+
+    A single listing site is still a Blend of one -- Spread is what signals that it is
+    unaveraged.
+    """
     keys = sites or SITES
-    vals = [adp[site] for site in keys if adp.get(site) is not None]
+    vals = [values[site] for site in keys if values.get(site) is not None]
     if not vals:
         return None
     return round(sum(vals) / len(vals), 2)
 
 
 def compute_spread(
-    adp: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
+    values: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
 ) -> Optional[float]:
     keys = sites or SITES
-    vals = [adp[site] for site in keys if adp.get(site) is not None]
+    vals = [values[site] for site in keys if values.get(site) is not None]
     if len(vals) < 2:
         return None
     return round(max(vals) - min(vals), 2)
 
 
+def _metric_values(player: AdpPlayer, metric: str) -> dict[str, Optional[float]]:
+    attr = "adp" if metric == "adp" else "ranking"
+    return {site: getattr(getattr(player, site), attr) for site in SITES}
+
+
 def apply_visible_sites(
-    players: list[AdpPlayer], sites: Optional[tuple[str, ...]]
+    players: list[AdpPlayer], sites: Optional[tuple[str, ...]], metric: str = "adp"
 ) -> list[AdpPlayer]:
-    """Recompute blend / spread / blend_rank from a site subset. Cached rows stay intact."""
+    """Recompute one metric's blend / spread / blend rank from a site subset.
+
+    The other metric's fields are left exactly as built, so a caller can narrow the ADP
+    blend without disturbing the rankings blend the same row carries.
+    """
     if not sites or set(sites) == set(SITES):
         return players
+    blend_field, rank_field, spread_field = _METRIC_FIELDS[metric]
     blends: list[Optional[float]] = []
     spreads: list[Optional[float]] = []
     for p in players:
-        adp = {site: getattr(p, site).adp for site in SITES}
-        blends.append(compute_blend(adp, sites))
-        spreads.append(compute_spread(adp, sites))
+        values = _metric_values(p, metric)
+        blends.append(compute_blend(values, sites))
+        spreads.append(compute_spread(values, sites))
     ranks = assign_ranks(blends)
     return [
-        p.model_copy(update={"blend": blend, "spread": spread, "blend_rank": rank})
+        p.model_copy(update={blend_field: blend, spread_field: spread, rank_field: rank})
         for p, blend, spread, rank in zip(players, blends, spreads, ranks)
     ]
 
@@ -139,6 +179,11 @@ def _positions_from_catalog(bio: Optional[NbaPlayerBio]) -> list[str]:
     if bio is None or not bio.position:
         return []
     return list(_CATALOG_POS.get(bio.position.strip().lower(), []))
+
+
+def _coerce_ranking(raw) -> Optional[int]:
+    val = _coerce_adp(raw)
+    return int(round(val)) if val is not None else None
 
 
 def _coerce_adp(raw) -> Optional[float]:
@@ -204,6 +249,8 @@ def _merge_adp_into(dest: dict, incoming: dict) -> None:
     for site in SITES:
         if dest["adp"][site] is None and incoming["adp"][site] is not None:
             dest["adp"][site] = incoming["adp"][site]
+        if dest["ranking"][site] is None and incoming["ranking"][site] is not None:
+            dest["ranking"][site] = incoming["ranking"][site]
     if not dest["positions"] and incoming["positions"]:
         dest["positions"] = list(incoming["positions"])
     incoming_has_bio = incoming["bio"] is not None
@@ -300,6 +347,8 @@ def build_adp_response(
 
         adp_raw = raw.get("adp") if isinstance(raw.get("adp"), dict) else {}
         adp = {site: _coerce_adp(adp_raw.get(site)) for site in SITES}
+        ranking_raw = raw.get("ranking") if isinstance(raw.get("ranking"), dict) else {}
+        ranking = {site: _coerce_ranking(ranking_raw.get(site)) for site in SITES}
 
         stored_pos = raw.get("positions")
         positions: list[str] = []
@@ -320,6 +369,7 @@ def build_adp_response(
                 "bio": bio,
                 "positions": positions,
                 "adp": adp,
+                "ranking": ranking,
             },
         )
 
@@ -337,12 +387,16 @@ def build_adp_response(
                 "bio": bio,
                 "positions": _positions_from_catalog(bio),
                 "adp": {site: None for site in SITES},
+                "ranking": {site: None for site in SITES},
             }
         )
 
     blends = [compute_blend(r["adp"]) for r in rows]
     spreads = [compute_spread(r["adp"]) for r in rows]
     blend_ranks = assign_ranks(blends)
+    ranking_blends = [compute_blend(r["ranking"]) for r in rows]
+    ranking_spreads = [compute_spread(r["ranking"]) for r in rows]
+    ranking_blend_ranks = assign_ranks(ranking_blends)
     site_ranks = {site: assign_ranks([r["adp"][site] for r in rows]) for site in SITES}
 
     players: list[AdpPlayer] = []
@@ -358,12 +412,20 @@ def build_adp_response(
                 team_abbr=bio.team_abbr if bio else None,
                 photo_url=bio.photo_url if bio else None,
                 positions=row["positions"],
-                espn=SiteAdp(adp=row["adp"]["espn"], rank=site_ranks["espn"][i]),
-                fantrax=SiteAdp(adp=row["adp"]["fantrax"], rank=site_ranks["fantrax"][i]),
-                sleeper=SiteAdp(adp=row["adp"]["sleeper"], rank=site_ranks["sleeper"][i]),
+                **{
+                    site: SiteAdp(
+                        adp=row["adp"][site],
+                        rank=site_ranks[site][i],
+                        ranking=row["ranking"][site],
+                    )
+                    for site in SITES
+                },
                 blend=blends[i],
                 blend_rank=blend_ranks[i],
                 spread=spreads[i],
+                ranking_blend=ranking_blends[i],
+                ranking_blend_rank=ranking_blend_ranks[i],
+                ranking_spread=ranking_spreads[i],
             )
         )
 
@@ -376,12 +438,27 @@ def build_adp_response(
     )
 
     sources = payload.get("sources") if isinstance(payload.get("sources"), dict) else {}
+    raw_providers = payload.get("providers") if isinstance(payload.get("providers"), list) else []
+    providers = [ProviderMeta(**meta) for meta in raw_providers if isinstance(meta, dict)]
     return AdpResponse(
         season_label=str(payload.get("seasonLabel") or payload.get("season_label") or "2025-26"),
         updated_at=str(payload.get("updatedAt") or payload.get("updated_at") or ""),
         sources={str(k): str(v) for k, v in sources.items()},
+        providers=providers,
         players=players,
     )
+
+
+async def refresh_adp_sources(provider: Optional[str] = None) -> list[ProviderMeta]:
+    """Drop cached source payloads and rebuild, returning the refreshed provider metas."""
+    if provider is not None and provider not in SITES:
+        raise ValueError(f"Unknown provider '{provider}'")
+    global _cached, _cached_at
+    await adp_cache.invalidate(provider)
+    async with _refresh_lock:
+        _cached = None
+        _cached_at = None
+    return (await get_adp_response()).providers
 
 
 def reset_adp_cache() -> None:
@@ -505,13 +582,16 @@ async def get_adp_response_enriched(
     ranked_only: bool = True,
     ids: Optional[list[str]] = None,
     sites: Optional[str] = None,
+    rank_sites: Optional[str] = None,
+    metric: str = "adp",
 ) -> AdpResponse:
     base = await get_adp_response()
+    metric = parse_metric(metric)
     # ids fetches (rankings hydrate) always keep the all-sites Blend.
     if ids is None:
-        subset = apply_visible_sites(base.players, parse_sites(sites))
-        if subset is not base.players:
-            base = base.model_copy(update={"players": subset})
+        players = apply_blend_sites(base.players, sites=sites, rank_sites=rank_sites)
+        if players is not base.players:
+            base = base.model_copy(update={"players": players})
     sliced = paginated_response(
         base,
         page=page,
@@ -523,6 +603,7 @@ async def get_adp_response_enriched(
         positions=positions,
         ranked_only=ranked_only,
         ids=ids,
+        metric=metric,
     )
     last_season, last_by_id, proj_season, proj_by_id = await load_espn_stat_splits()
     out = sliced.model_copy(update={"last_year_season": last_season, "projection_season": proj_season})
@@ -533,9 +614,36 @@ async def get_adp_response_enriched(
     return out
 
 
-async def get_adp_index_response(*, ranked_only: bool = True) -> AdpIndexResponse:
+def apply_blend_sites(
+    players: list[AdpPlayer],
+    *,
+    sites: Optional[str] = None,
+    rank_sites: Optional[str] = None,
+) -> list[AdpPlayer]:
+    """Narrow each metric's blend to its own selected sites.
+
+    The two selections are independent: the ADP view's checkboxes must never change the
+    rankings blend the same rows carry, since the pre-draft board reads both at once to
+    show a cross-metric delta.
+    """
+    out = apply_visible_sites(players, parse_sites(sites), "adp")
+    return apply_visible_sites(out, parse_sites(rank_sites), "rank")
+
+
+async def get_adp_index_response(
+    *,
+    ranked_only: bool = True,
+    sites: Optional[str] = None,
+    rank_sites: Optional[str] = None,
+    metric: str = "adp",
+) -> AdpIndexResponse:
     base = await get_adp_response()
-    players = filter_players(base.players, ranked_only=ranked_only)
+    resolved = parse_metric(metric)
+    players = apply_blend_sites(base.players, sites=sites, rank_sites=rank_sites)
+    players = filter_players(players, ranked_only=ranked_only, metric=resolved)
+    # The board is seeded straight from this list order, so it must follow the metric the
+    # caller asked for -- build order is always the ADP blend.
+    players = sort_players(players, "blend", "asc", resolved)
     return AdpIndexResponse(
         season_label=base.season_label,
         updated_at=base.updated_at,

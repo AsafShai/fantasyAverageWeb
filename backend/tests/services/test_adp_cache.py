@@ -115,7 +115,12 @@ async def test_reset_clears_memory_and_db_probe_state():
 async def test_loads_from_db_when_memory_is_cold():
     adp_cache.reset_provider_cache()
     fetched_at = datetime.now(timezone.utc) - timedelta(hours=1)
-    row = {"payload": [[1, "A", 1.0, ["C"]]], "source": "db-src", "fetched_at": fetched_at}
+    row = {
+        "payload": [[1, "A", 1.0, ["C"], 1]],
+        "source": "db-src",
+        "fetched_at": fetched_at,
+        "row_version": adp_cache.PAYLOAD_VERSION,
+    }
 
     mock_conn = AsyncMock()
     mock_conn.fetchrow = AsyncMock(return_value=row)
@@ -126,9 +131,32 @@ async def test_loads_from_db_when_memory_is_cold():
         mock_db.return_value._get_pool = AsyncMock(return_value=mock_pool)
         entry = await adp_cache.get_or_refresh("espn", fetch)
 
-    assert entry.payload == [[1, "A", 1.0, ["C"]]]
+    assert entry.payload == [[1, "A", 1.0, ["C"], 1]]
     assert entry.source == "db-src"
     fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ignores_db_row_written_under_an_older_row_shape():
+    adp_cache.reset_provider_cache()
+    row = {
+        "payload": [[1, "A", 1.0, ["C"]]],
+        "source": "db-src",
+        "fetched_at": datetime.now(timezone.utc),
+        "row_version": adp_cache.PAYLOAD_VERSION - 1,
+    }
+    mock_conn = AsyncMock()
+    mock_conn.fetchrow = AsyncMock(return_value=row)
+    mock_conn.execute = AsyncMock()
+    mock_pool = _mock_pool(mock_conn)
+
+    fetch = AsyncMock(return_value=([(1, "A", 1.0, ["C"], 5)], "fresh-src"))
+    with patch("app.services.adp_cache.DBService") as mock_db:
+        mock_db.return_value._get_pool = AsyncMock(return_value=mock_pool)
+        entry = await adp_cache.get_or_refresh("espn", fetch)
+
+    fetch.assert_awaited_once()
+    assert entry.source == "fresh-src"
 
 
 @pytest.mark.asyncio
@@ -148,3 +176,4 @@ async def test_successful_fetch_persists_to_db():
     args = mock_conn.execute.await_args.args
     assert "INSERT INTO adp_provider_cache" in args[0]
     assert args[1] == "espn"
+    assert args[5] == adp_cache.PAYLOAD_VERSION

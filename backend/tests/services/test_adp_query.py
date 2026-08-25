@@ -1,5 +1,5 @@
 from app.models.adp import AdpPlayer, SiteAdp
-from app.services.adp_query import paginate_players, sort_players
+from app.services.adp_query import paginate_players, sort_players, to_index_player
 
 
 def _p(name: str, *, blend=None, espn=None, team=None, positions=None, pid=None) -> AdpPlayer:
@@ -53,3 +53,49 @@ def test_ids_preserves_request_order():
     page, total, *_ = paginate_players(players, ids=["c", "a", "missing"])
     assert [p.id for p in page] == ["c", "a"]
     assert total == 2
+
+
+def _rank_p(name: str, *, blend, ranking_blend, espn_adp=None, espn_ranking=None) -> AdpPlayer:
+    return AdpPlayer(
+        id=name,
+        name=name,
+        positions=["PG"],
+        espn=SiteAdp(adp=espn_adp, ranking=espn_ranking),
+        blend=blend,
+        blend_rank=None,
+        ranking_blend=ranking_blend,
+        ranking_blend_rank=None,
+    )
+
+
+def test_metric_switches_which_blend_sorts_and_filters():
+    players = [
+        _rank_p("A", blend=1.0, ranking_blend=50.0),
+        _rank_p("B", blend=40.0, ranking_blend=2.0),
+        _rank_p("C", blend=None, ranking_blend=8.0),
+    ]
+    by_adp, total_adp, *_ = paginate_players(players, sort="blend", metric="adp")
+    assert [p.id for p in by_adp] == ["A", "B"]  # C has no ADP blend, so ranked_only drops it
+    assert total_adp == 2
+
+    by_rank, total_rank, *_ = paginate_players(players, sort="blend", metric="rank")
+    assert [p.id for p in by_rank] == ["B", "C", "A"]
+    assert total_rank == 3
+
+
+def test_site_columns_sort_by_ranking_on_the_rankings_view():
+    players = [
+        _rank_p("A", blend=1.0, ranking_blend=1.0, espn_adp=1.0, espn_ranking=90),
+        _rank_p("B", blend=2.0, ranking_blend=2.0, espn_adp=2.0, espn_ranking=4),
+    ]
+    assert [p.id for p in sort_players(players, "espn", "asc", "adp")] == ["A", "B"]
+    assert [p.id for p in sort_players(players, "espn", "asc", "rank")] == ["B", "A"]
+
+
+def test_index_player_carries_both_blends():
+    p = _rank_p("A", blend=3.0, ranking_blend=11.0)
+    row = to_index_player(p.model_copy(update={"blend_rank": 1, "ranking_blend_rank": 4}))
+    assert row.blend == 3.0
+    assert row.blend_rank == 1
+    assert row.ranking_blend == 11.0
+    assert row.ranking_blend_rank == 4

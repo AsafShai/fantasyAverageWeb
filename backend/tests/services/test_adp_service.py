@@ -58,8 +58,9 @@ def test_compute_blend_and_spread_honor_site_subset():
 def test_parse_sites_keeps_known_keys():
     assert parse_sites(None) is None
     assert parse_sites("") is None
-    assert parse_sites("yahoo,unknown") is None
+    assert parse_sites("nonsense,unknown") is None
     assert parse_sites("espn,sleeper,espn") == ("espn", "sleeper")
+    assert parse_sites("yahoo") == ("yahoo",)
 
 
 def test_apply_visible_sites_recomputes_blend_and_ranks():
@@ -83,7 +84,7 @@ def test_apply_visible_sites_recomputes_blend_and_ranks():
         blend_rank=2,
         spread=17.0,
     )
-    out = apply_visible_sites([a, b], ("fantrax", "sleeper"))
+    out = apply_visible_sites([a, b], ("fantrax", "sleeper"), "adp")
     assert [p.id for p in out] == ["a", "b"]
     assert out[0].blend == 16.0
     assert out[1].blend == 3.5
@@ -91,10 +92,48 @@ def test_apply_visible_sites_recomputes_blend_and_ranks():
     assert out[0].blend_rank == 2
     assert out[0].spread == 28.0
     assert a.blend == 11.0
-    assert apply_visible_sites([a], ("espn", "fantrax", "sleeper")) is not None
-    same = apply_visible_sites([a, b], ("espn", "fantrax", "sleeper"))
+    same = apply_visible_sites([a, b], ("espn", "fantrax", "sleeper", "yahoo"), "adp")
     assert same is not out
     assert same[0] is a
+
+
+def test_apply_visible_sites_keeps_the_two_blends_independent():
+    """The ADP checkboxes must not disturb the rankings blend on the same row -- the
+    pre-draft board reads both at once for its cross-metric delta."""
+    p = AdpPlayer(
+        id="p",
+        name="P",
+        espn=SiteAdp(adp=10.0, ranking=8),
+        fantrax=SiteAdp(adp=20.0),
+        sleeper=SiteAdp(ranking=40),
+        yahoo=SiteAdp(adp=30.0, ranking=60),
+        blend=20.0,
+        spread=20.0,
+        ranking_blend=36.0,
+        ranking_spread=52.0,
+    )
+    adp_only = apply_visible_sites([p], ("espn", "fantrax"), "adp")[0]
+    assert adp_only.blend == 15.0
+    assert adp_only.ranking_blend == 36.0
+
+    rank_only = apply_visible_sites([p], ("espn", "sleeper"), "rank")[0]
+    assert rank_only.ranking_blend == 24.0
+    assert rank_only.ranking_spread == 32.0
+    assert rank_only.blend == 20.0
+
+
+def test_blend_never_mixes_adp_and_ranking_scales():
+    """A ranking of 400 must never be averaged into a pick-number blend."""
+    p = AdpPlayer(
+        id="p",
+        name="P",
+        espn=SiteAdp(adp=5.0, ranking=400),
+        sleeper=SiteAdp(ranking=420),
+    )
+    out = apply_visible_sites([p], ("espn", "sleeper"), "adp")[0]
+    assert out.blend == 5.0
+    out_rank = apply_visible_sites([p], ("espn", "sleeper"), "rank")[0]
+    assert out_rank.ranking_blend == 410.0
 
 
 def test_compute_spread_requires_two_sites():
@@ -137,14 +176,15 @@ def test_build_adp_response_joins_bios_and_appends_catalog_only():
     assert jokic.photo_url.endswith("3112335.png")
     assert jokic.team_abbr == "DEN"
     assert jokic.positions == ["C"]
-    assert jokic.blend == 1.43  # (1.7+1.6+1)/3 — Yahoo is not a source
+    assert jokic.blend == 1.48  # (1.7+1.6+1.6+1)/4
     assert jokic.blend_rank == 1
     assert jokic.espn.rank == 1
     assert jokic.spread == 0.7
+    assert jokic.ranking_blend is None  # this payload carries ADP only
 
     shai = by_id[4278073]
     assert shai.positions == ["PG"]  # from catalog, name-matched
-    assert shai.blend == 2.55  # (3.1+2)/2
+    assert shai.blend == 2.97  # (3.1+3.8+2)/3
     assert shai.blend_rank == 2
     assert shai.fantrax.adp is None
     assert shai.fantrax.rank is None
@@ -382,3 +422,41 @@ def test_resolve_seasons_in_season_uses_current_actuals():
         with patch("app.services.adp_service.date") as fake_date:
             fake_date.today.return_value = date(2027, 1, 15)
             assert resolve_adp_seasons() == ("2026-27", 2027, 2027)
+
+
+def test_build_adp_response_computes_a_separate_rankings_blend():
+    payload = {
+        "seasonLabel": "2026-27",
+        "updatedAt": "",
+        "sources": {"espn": "test"},
+        "providers": [
+            {"key": "sleeper", "label": "Sleeper", "has_adp": False, "has_rankings": True},
+            {"key": "fantrax", "label": "Fantrax", "has_adp": True, "has_rankings": False},
+        ],
+        "players": [
+            {"name": "Ranked And Drafted", "adp": {"espn": 12.0}, "ranking": {"espn": 9, "sleeper": 15}},
+            {"name": "Rankings Only", "adp": {}, "ranking": {"sleeper": 300}},
+            {"name": "Adp Only", "adp": {"fantrax": 44.0}, "ranking": {}},
+        ],
+    }
+    resp = build_adp_response(payload, bios_by_id={})
+    by_name = {p.name: p for p in resp.players}
+
+    both = by_name["Ranked And Drafted"]
+    assert both.blend == 12.0
+    assert both.ranking_blend == 12.0  # (9+15)/2, on the rankings scale only
+    assert both.ranking_spread == 6.0
+
+    rank_only = by_name["Rankings Only"]
+    assert rank_only.blend is None
+    assert rank_only.ranking_blend == 300.0
+    assert rank_only.ranking_spread is None  # single source: unaveraged, by design
+
+    adp_only = by_name["Adp Only"]
+    assert adp_only.ranking_blend is None
+    assert adp_only.blend == 44.0
+
+    assert [(m.key, m.has_adp, m.has_rankings) for m in resp.providers] == [
+        ("sleeper", False, True),
+        ("fantrax", True, False),
+    ]

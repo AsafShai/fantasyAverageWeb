@@ -7,7 +7,19 @@ from typing import Optional
 
 from app.models.adp import AdpIndexPlayer, AdpPlayer, AdpResponse
 
-SORT_KEYS = ("blend", "spread", "name", "team", "espn", "fantrax", "sleeper")
+SORT_KEYS = (
+    "blend",
+    "spread",
+    "name",
+    "team",
+    "espn",
+    "fantrax",
+    "sleeper",
+    "yahoo",
+    "ranking_blend",
+    "ranking_spread",
+)
+_SITE_KEYS = ("espn", "fantrax", "sleeper", "yahoo")
 _IDS_CAP = 120
 
 
@@ -24,6 +36,8 @@ def to_index_player(p: AdpPlayer) -> AdpIndexPlayer:
         positions=list(p.positions),
         blend=p.blend,
         blend_rank=p.blend_rank,
+        ranking_blend=p.ranking_blend,
+        ranking_blend_rank=p.ranking_blend_rank,
     )
 
 
@@ -34,13 +48,15 @@ def filter_players(
     team: str = "",
     positions: Optional[list[str]] = None,
     ranked_only: bool = True,
+    metric: str = "adp",
 ) -> list[AdpPlayer]:
     needle = q.strip().lower()
     team_key = team.strip().upper()
     pos = [p.strip().upper() for p in (positions or []) if p.strip()]
     out: list[AdpPlayer] = []
+    blend_attr = "blend" if metric == "adp" else "ranking_blend"
     for p in players:
-        if ranked_only and p.blend is None:
+        if ranked_only and getattr(p, blend_attr) is None:
             continue
         if needle and needle not in p.name.lower() and needle not in (p.team_abbr or "").lower():
             continue
@@ -52,27 +68,36 @@ def filter_players(
     return out
 
 
-def _sort_value(p: AdpPlayer, key: str):
+def _sort_value(p: AdpPlayer, key: str, metric: str = "adp"):
+    """Value behind a sort key, resolved through the active metric.
+
+    `blend`, `spread`, and the per-site keys all mean the rankings flavour when the caller
+    is on the Rankings view -- the client keeps one set of column keys either way.
+    """
     if key == "name":
         return p.name.lower()
     if key == "team":
         abbr = (p.team_abbr or "").lower()
         return abbr or None
-    if key == "blend":
-        return p.blend
-    if key == "spread":
-        return p.spread
-    site = getattr(p, key, None)
-    return getattr(site, "adp", None) if site is not None else None
+    if key in ("blend", "ranking_blend"):
+        return p.ranking_blend if (metric == "rank" or key == "ranking_blend") else p.blend
+    if key in ("spread", "ranking_spread"):
+        return p.ranking_spread if (metric == "rank" or key == "ranking_spread") else p.spread
+    if key in _SITE_KEYS:
+        site = getattr(p, key)
+        return site.ranking if metric == "rank" else site.adp
+    return None
 
 
-def sort_players(players: list[AdpPlayer], sort: str, sort_dir: str) -> list[AdpPlayer]:
+def sort_players(
+    players: list[AdpPlayer], sort: str, sort_dir: str, metric: str = "adp"
+) -> list[AdpPlayer]:
     key = sort if sort in SORT_KEYS else "blend"
     direction = -1 if sort_dir == "desc" else 1
 
     def cmp(a: AdpPlayer, b: AdpPlayer) -> int:
-        av = _sort_value(a, key)
-        bv = _sort_value(b, key)
+        av = _sort_value(a, key, metric)
+        bv = _sort_value(b, key, metric)
         if av is None and bv is None:
             return (a.name.lower() > b.name.lower()) - (a.name.lower() < b.name.lower())
         if av is None:
@@ -109,6 +134,7 @@ def paginate_players(
     positions: Optional[list[str]] = None,
     ranked_only: bool = True,
     ids: Optional[list[str]] = None,
+    metric: str = "adp",
 ) -> tuple[list[AdpPlayer], int, int, int, int]:
     if ids is not None:
         wanted = [i.strip() for i in ids if i and i.strip()][:_IDS_CAP]
@@ -117,9 +143,9 @@ def paginate_players(
         return page_players, len(page_players), 1, 1, 0
 
     filtered = filter_players(
-        players, q=q, team=team, positions=positions, ranked_only=ranked_only
+        players, q=q, team=team, positions=positions, ranked_only=ranked_only, metric=metric
     )
-    ordered = sort_players(filtered, sort, sort_dir)
+    ordered = sort_players(filtered, sort, sort_dir, metric)
     return _page_slice(ordered, page, page_size)
 
 
@@ -135,6 +161,7 @@ def paginated_response(
     positions: Optional[list[str]] = None,
     ranked_only: bool = True,
     ids: Optional[list[str]] = None,
+    metric: str = "adp",
 ) -> AdpResponse:
     page_players, total, safe_page, total_pages, offset = paginate_players(
         base.players,
@@ -147,6 +174,7 @@ def paginated_response(
         positions=positions,
         ranked_only=ranked_only,
         ids=ids,
+        metric=metric,
     )
     return base.model_copy(
         update={
