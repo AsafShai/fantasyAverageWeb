@@ -75,13 +75,6 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-# ESPN reports an averageDraftPosition for anyone drafted even once, and parks everyone else
-# just under 140 -- measured 2026-08-25: 902 of 1095 values round to exactly 140 and only 141
-# fall below 135. Those are the league default, not a pick number, and averaging them into a
-# Blend buries the tail in identical values that then tie-break alphabetically.
-_ESPN_UNDRAFTED_ADP = 135.0
-
-
 def coerce_adp(raw) -> Optional[float]:
     if raw is None:
         return None
@@ -121,9 +114,11 @@ def parse_espn_payload(data) -> list[AdpRow]:
         roto = ranks.get("ROTO") or ranks.get("roto") or {}
         ranking = coerce_ranking(roto.get("rank"))
         ownership = player.get("ownership")
+        # Shown as published, no depth cutoff. ESPN's default league is ~130 picks, so the
+        # mass of values just under 140 (measured 2026-08-25: 589 of 1095 at 139.x-140.2)
+        # is mostly its undrafted default -- but there is no clean break to cut on, values
+        # run continuously from 125 into that band. Sorting handles the resulting ties.
         adp = coerce_adp(ownership.get("averageDraftPosition")) if isinstance(ownership, dict) else None
-        if adp is not None and adp >= _ESPN_UNDRAFTED_ADP:
-            adp = None
         if adp is None and ranking is None:
             continue
         slots = player.get("eligibleSlots") or []

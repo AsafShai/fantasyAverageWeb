@@ -102,9 +102,10 @@ def sort_players(
 ) -> list[AdpPlayer]:
     key = sort if sort in SORT_KEYS else "blend"
     direction = -1 if sort_dir == "desc" else 1
-    # Ties on a value-bearing column fall back to the other metric before the name: the tail
-    # of an ADP-ordered board is full of players no site drafts, and ordering those
-    # alphabetically buries the ones every ranking list rates highly.
+    # Ties fall back to the other metric before the name. Both kinds of tie are common: ESPN
+    # parks hundreds of undrafted players just under 140, and deeper still nobody reports an
+    # ADP at all. Ordering either group alphabetically buries the players every ranking list
+    # rates highly, so the other blend breaks the tie instead.
     other = "ranking_blend" if metric == "adp" else "blend"
     fallback = other if key not in ("name", "team") else None
 
@@ -134,7 +135,7 @@ def sort_players(
             return -direction
         if av > bv:
             return direction
-        return (a.name.lower() > b.name.lower()) - (a.name.lower() < b.name.lower())
+        return tiebreak(a, b)
 
     return sorted(players, key=cmp_to_key(cmp))
 

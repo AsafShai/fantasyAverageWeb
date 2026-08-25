@@ -63,8 +63,13 @@ def test_parse_espn_payload_splits_adp_from_roto_ranking():
     assert parse_espn_payload(data) == [AdpRow(3112335, "Nikola Jokic", 1.8, ["C"], 2)]
 
 
-def test_parse_espn_payload_drops_the_undrafted_adp_default():
-    """ESPN parks undrafted players just under 140; that is a default, not a pick number."""
+def test_parse_espn_payload_reports_espn_adp_without_a_depth_cutoff():
+    """ESPN's number is shown as published, however deep it runs.
+
+    Most values just under 140 are ESPN's undrafted default rather than a real average
+    pick, but they run continuously up from ~125 with no clean break to cut on, so nothing
+    is discarded here -- sorting breaks the resulting ties on the rankings blend instead.
+    """
     data = {
         "players": [
             {
@@ -94,8 +99,8 @@ def test_parse_espn_payload_drops_the_undrafted_adp_default():
         ]
     }
     rows = {row.espn_id: row for row in parse_espn_payload(data)}
-    assert rows[1].adp is None and rows[1].ranking == 500  # still ranked, just not drafted
-    assert rows[2].adp is None
+    assert rows[1].adp == 140.0 and rows[1].ranking == 500
+    assert rows[2].adp == 139.4
     assert rows[3].adp == 130.2
 
 

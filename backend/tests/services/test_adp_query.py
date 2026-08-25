@@ -132,6 +132,17 @@ def test_any_metric_keeps_players_the_other_blend_covers():
     assert len(filter_players(players, metric="any")) == 2
 
 
+def test_players_tied_on_adp_fall_back_to_the_other_metric():
+    """ESPN parks hundreds of undrafted players on the same value; the alphabet must not
+    decide who among them comes first."""
+    players = [
+        _pool_player("Aaron Undrafted", blend=140.0, ranking_blend=520.0),
+        _pool_player("Zeke Undrafted", blend=140.0, ranking_blend=260.0),
+    ]
+    ordered = sort_players(players, "blend", "asc", "adp")
+    assert [p.id for p in ordered] == ["Zeke Undrafted", "Aaron Undrafted"]
+
+
 def test_unblended_tail_falls_back_to_the_other_metric_not_the_alphabet():
     players = [
         _pool_player("Aaron Alphabetical", ranking_blend=500.0),
