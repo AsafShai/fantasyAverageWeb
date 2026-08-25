@@ -140,6 +140,9 @@ function RankRowFooter({
         </FooterStat>
         <FooterStat label={`Δ ${BLEND_LABEL[other]}`}>
           <DeltaBadge rank={rank} compareRank={blendRankValue(player, other)} />
+          {blendRankValue(player, other) != null ? (
+            <span className="ml-1 text-[10px] text-gray-400">#{blendRankValue(player, other)}</span>
+          ) : null}
         </FooterStat>
         <FooterStat label="Δ Last">
           <DeltaBadge rank={rank} compareRank={lastRank} />
@@ -202,6 +205,13 @@ function RankRowBody({
         </div>
         <div className="hidden lg:block w-16 shrink-0 text-right text-sm">
           <DeltaBadge rank={rank} compareRank={blendRankValue(player, other)} />
+          {/* The baseline this delta is measured against belongs on screen: it is the other
+              metric's ordinal, and no other column on this view shows it. */}
+          {blendRankValue(player, other) != null ? (
+            <div className="text-[10px] text-gray-400 font-normal leading-none">
+              #{blendRankValue(player, other)}
+            </div>
+          ) : null}
         </div>
         <div className="hidden lg:block w-24 shrink-0 text-right text-sm">
           <DeltaBadge rank={rank} compareRank={lastRank} />
@@ -1100,7 +1110,7 @@ export default function PreDraftRankingsPage() {
           </div>
           <div
             className="w-16 shrink-0 text-right leading-tight"
-            title="Your rank minus the other blend's rank — reach or value against the metric the board is not ordered by."
+            title={`Your board position minus that player's ${BLEND_LABEL[source === 'adp' ? 'rank' : 'adp']} position, shown under each delta. Positive means you have him lower than that consensus.`}
           >
             Δ vs {BLEND_LABEL[source === 'adp' ? 'rank' : 'adp']}
           </div>
