@@ -14,6 +14,7 @@ const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/draft/consensus': () => import('../pages/draft/AdpPage'),
   '/draft/board': () => import('../pages/draft/DraftBoardPage'),
   '/draft/rankings': () => import('../pages/draft/PreDraftRankingsPage'),
+  '/draft/mock': () => import('../pages/draft/MockDraftPage'),
 }
 
 const prefetchRoute = (path: string) => {
@@ -284,6 +285,7 @@ const DRAFT_NAV_GROUP: NavGroupDef = {
     { path: '/draft/consensus', label: 'Consensus', icon: '📊' },
     { path: '/draft/board', label: 'Draft Board', icon: '🗂️' },
     { path: '/draft/rankings', label: 'Pre-Draft Rankings', icon: '📋' },
+    { path: '/draft/mock', label: 'Mock Draft', icon: '🏟️' },
   ],
 }
 
