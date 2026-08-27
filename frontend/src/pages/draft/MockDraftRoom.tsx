@@ -37,6 +37,7 @@ type PickToast = {
   pick: number
   team: number
   playerName: string
+  fromQueue: boolean
 }
 type BoardShowBy = 'round' | 'team'
 
@@ -150,14 +151,22 @@ function formatClock(seconds: number): string {
 export default function MockDraftRoom({
   session,
   secondsLeft,
+  paused,
   onDraft,
   onMoveRoster,
+  onSimToPick,
+  onPause,
+  onResume,
   onLeave,
 }: {
   session: MockSession
   secondsLeft: number | null
+  paused: boolean
   onDraft: (playerId: string) => void
   onMoveRoster: (fromIndex: number, toIndex: number) => void
+  onSimToPick: () => void
+  onPause: () => void
+  onResume: () => void
   onLeave: () => void
 }) {
   const done = isMockComplete(session)
@@ -176,6 +185,9 @@ export default function MockDraftRoom({
   const [posFilter, setPosFilter] = useState<string | 'all'>('all')
   const [teamFilter, setTeamFilter] = useState('')
   const [statsFrom, setStatsFrom] = useState<StatsFrom>('projection')
+  const [queue, setQueue] = useState<string[]>([])
+  const queueRef = useRef<string[]>([])
+  queueRef.current = queue
   const [toasts, setToasts] = useState<PickToast[]>([])
   const seenPicks = useRef(0)
   const wasUserTurn = useRef(false)
@@ -203,12 +215,16 @@ export default function MockDraftRoom({
     const added = session.picks.slice(prev)
     seenPicks.current = session.picks.length
     if (!added.length) return
+    const queued = new Set(queueRef.current)
     const nextToasts = added.map((pk) => ({
       id: pk.pick,
       pick: pk.pick,
       team: pk.team,
       playerName: session.players[pk.playerId]?.name ?? 'a player',
+      fromQueue: pk.team !== session.userTeam && queued.has(pk.playerId),
     }))
+    const takenNow = new Set(added.map((pk) => pk.playerId))
+    setQueue((cur) => cur.filter((id) => !takenNow.has(id)))
     setToasts((cur) => [...cur, ...nextToasts])
     for (const toast of nextToasts) {
       const timer = window.setTimeout(() => {
@@ -239,20 +255,45 @@ export default function MockDraftRoom({
     return map
   }, [session.userOrder])
 
-  const available = useMemo(() => {
+  const adpRank = useMemo(() => {
+    const map = new Map<string, number>()
+    session.defaultOrder.forEach((id, i) => map.set(id, i + 1))
+    return map
+  }, [session.defaultOrder])
+
+  const pickByPlayer = useMemo(() => {
+    const map = new Map<string, (typeof session.picks)[number]>()
+    for (const pk of session.picks) map.set(pk.playerId, pk)
+    return map
+  }, [session.picks])
+
+  const queuedPlayers = useMemo(
+    () =>
+      queue
+        .map((id) => session.players[id])
+        .filter((p): p is MockSessionPlayer => Boolean(p) && !taken.has(p.id)),
+    [queue, session.players, taken],
+  )
+  const suggested = queuedPlayers[0]
+  const queuedSet = useMemo(() => new Set(queue), [queue])
+  const isSearching = debouncedSearch.trim().length > 0
+
+  const listed = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase()
-    return session.userOrder
+    const ids = q ? session.defaultOrder : session.userOrder
+    return ids
       .map((id) => session.players[id])
-      .filter((p): p is MockSessionPlayer => Boolean(p) && !taken.has(p.id))
+      .filter((p): p is MockSessionPlayer => Boolean(p))
       .filter((p) => {
-        if (q && !p.name.toLowerCase().includes(q) && !(p.team_abbr || '').toLowerCase().includes(q)) return false
+        if (!q && taken.has(p.id)) return false
+        if (q && !p.name.toLowerCase().includes(q)) return false
         if (teamFilter && p.team_abbr !== teamFilter) return false
         if (posFilter !== 'all' && !p.positions.includes(posFilter)) return false
         return true
       })
-  }, [session.userOrder, session.players, taken, debouncedSearch, teamFilter, posFilter])
+  }, [session.defaultOrder, session.userOrder, session.players, taken, debouncedSearch, teamFilter, posFilter])
 
-  const hydrateIds = available.slice(0, 80).map((p) => p.id)
+  const hydrateIds = listed.slice(0, 80).map((p) => p.id)
   const { data: details } = useGetAdpQuery({ ids: hydrateIds.join(',') }, { skip: hydrateIds.length === 0 })
   const draftedIds = useMemo(() => session.picks.map((pk) => pk.playerId), [session.picks])
   const draftedBatchA = draftedIds.slice(0, ADP_IDS_CAP).join(',')
@@ -288,19 +329,67 @@ export default function MockDraftRoom({
       : `Drafting: ${onClock != null ? teamLabel(onClock, session.userTeam) : '—'}`
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="relative flex flex-col gap-3">
+      {paused ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950/70 px-4">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="text-sm font-semibold uppercase tracking-widest text-white/70">Mock draft paused</div>
+            {!done && onClock != null ? (
+              <div className="text-white text-lg font-semibold">
+                Round {Math.floor((pickNow - 1) / session.teams) + 1} · Pick {pickNow}
+                <span className="block mt-1 text-base font-medium text-white/80">
+                  {userTurn ? 'You are on the clock' : `${teamLabel(onClock, session.userTeam)} is on the clock`}
+                </span>
+              </div>
+            ) : null}
+            {secondsLeft != null ? (
+              <div className="text-white tabular-nums text-xl font-bold">{formatClock(secondsLeft)} left on the clock</div>
+            ) : null}
+            <button
+              type="button"
+              onClick={onResume}
+              className="px-12 py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-3xl font-extrabold shadow-2xl"
+            >
+              Resume
+            </button>
+            <button type="button" onClick={onLeave} className="text-sm font-semibold text-white/70 hover:text-white">
+              Leave Draft Room
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-blue-700 text-white text-sm font-semibold">
           <span>
             Mock draft · {session.teams}-team{session.threeRr ? ', 3RR' : ' snake'} · {session.rounds} rounds
           </span>
-          <button
-            type="button"
-            onClick={onLeave}
-            className="px-2 py-1 rounded text-xs font-semibold bg-white/15 hover:bg-white/25"
-          >
-            Leave Draft Room
-          </button>
+          <div className="flex items-center gap-2">
+            {session.botDelaySec > 0 && !userTurn && !done && !paused ? (
+              <button
+                type="button"
+                onClick={onSimToPick}
+                className="px-2 py-1 rounded text-xs font-semibold bg-white text-blue-800 hover:bg-blue-50"
+              >
+                Sim to my pick
+              </button>
+            ) : null}
+            {!done ? (
+              <button
+                type="button"
+                onClick={onPause}
+                className="px-2 py-1 rounded text-xs font-semibold bg-white/15 hover:bg-white/25"
+              >
+                Pause
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onLeave}
+              className="px-2 py-1 rounded text-xs font-semibold bg-white/15 hover:bg-white/25"
+            >
+              Leave Draft Room
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-stretch gap-0 border-b border-gray-200 dark:border-gray-700">
           <div
@@ -384,6 +473,26 @@ export default function MockDraftRoom({
           <div className="text-sm font-medium text-blue-700 dark:text-blue-200">
             Round {Math.floor((pickNow - 1) / session.teams) + 1} · Pick {pickNow} — select a player and hit Draft
           </div>
+          {suggested ? (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-sm">
+              <span className="font-semibold text-blue-900 dark:text-blue-100">
+                Suggested from your queue: {suggested.name}
+                {queuedPlayers.length > 1 ? (
+                  <span className="font-medium text-blue-700 dark:text-blue-200">
+                    {' '}
+                    · {queuedPlayers.length - 1} more
+                  </span>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                onClick={() => onDraft(suggested.id)}
+                className="px-2.5 py-1 rounded text-xs font-bold bg-blue-600 text-white ring-2 ring-blue-300 shadow-md"
+              >
+                Draft {suggested.name.split(' ').slice(-1)[0]}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -533,6 +642,35 @@ export default function MockDraftRoom({
               </span>
             ) : null}
           </div>
+          {queuedPlayers.length > 0 ? (
+            <div className="px-4 py-2 border-b border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/30">
+              <div className="text-[10px] uppercase tracking-wide text-blue-700 dark:text-blue-300 font-semibold">
+                Queue · {queuedPlayers.length}
+              </div>
+              <ol className="mt-1.5 flex flex-wrap gap-1.5">
+                {queuedPlayers.map((player, i) => (
+                  <li
+                    key={player.id}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-900 px-2 py-1 text-xs"
+                  >
+                    <span className="tabular-nums font-extrabold text-blue-700 dark:text-blue-300">{i + 1}</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-100">{player.name}</span>
+                    {player.team_abbr ? (
+                      <span className="text-[10px] font-semibold text-gray-400">{player.team_abbr}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${player.name} from queue`}
+                      onClick={() => setQueue((cur) => cur.filter((id) => id !== player.id))}
+                      className="ml-0.5 w-4 h-4 rounded text-[11px] font-bold leading-none flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           {tab === 'history' ? (
             <ol className="max-h-[70vh] overflow-auto divide-y divide-gray-100 dark:divide-gray-800">
               {session.picks.length === 0 ? (
@@ -611,8 +749,8 @@ export default function MockDraftRoom({
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Player name"
-                  className="ml-auto text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 w-40"
+                  placeholder="Search players"
+                  className="ml-auto text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 w-48"
                 />
               </div>
               <div className="overflow-auto max-h-[70vh]">
@@ -630,13 +768,27 @@ export default function MockDraftRoom({
                     </tr>
                   </thead>
                   <tbody>
-                    {available.map((player) => {
+                    {listed.map((player) => {
                       const full = detailsById.get(player.id)
                       const stats: LastYearStats | null | undefined =
                         statsFrom === 'projection' ? full?.projection : full?.last_year
+                      const made = pickByPlayer.get(player.id)
+                      const inQueue = queuedSet.has(player.id)
+                      const isSuggested = suggested?.id === player.id
                       return (
-                        <tr key={player.id} className="border-t border-gray-100 dark:border-gray-800">
-                          <td className="px-2 py-2 tabular-nums text-xs text-gray-500">{userRank.get(player.id)}</td>
+                        <tr
+                          key={player.id}
+                          className={`border-t border-gray-100 dark:border-gray-800 ${
+                            made
+                              ? 'opacity-70'
+                              : inQueue
+                                ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
+                                : ''
+                          }`}
+                        >
+                          <td className="px-2 py-2 tabular-nums text-xs text-gray-500">
+                            {isSearching ? adpRank.get(player.id) : userRank.get(player.id)}
+                          </td>
                           <td className="px-2 py-2 min-w-[12rem]">
                             <PlayerIdentityCell
                               name={player.name}
@@ -647,16 +799,43 @@ export default function MockDraftRoom({
                             />
                           </td>
                           <td className="px-2 py-2">
-                            <button
-                              type="button"
-                              disabled={!userTurn}
-                              onClick={() => onDraft(player.id)}
-                              className={`px-2 py-1 rounded text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-                                userTurn ? 'ring-2 ring-blue-300 shadow-md' : ''
-                              }`}
-                            >
-                              Draft
-                            </button>
+                            {made ? (
+                              <span className="inline-block text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                                Drafted · {teamLabel(made.team, session.userTeam)} · #{made.pick}
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  disabled={!userTurn}
+                                  onClick={() => onDraft(player.id)}
+                                  className={`px-2 py-1 rounded text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
+                                    userTurn ? 'ring-2 ring-blue-300 shadow-md' : ''
+                                  }`}
+                                >
+                                  Draft
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={inQueue ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
+                                  aria-pressed={inQueue}
+                                  onClick={() =>
+                                    setQueue((cur) =>
+                                      cur.includes(player.id)
+                                        ? cur.filter((id) => id !== player.id)
+                                        : [...cur, player.id],
+                                    )
+                                  }
+                                  className={`w-7 h-7 rounded text-sm font-bold leading-none flex items-center justify-center ${
+                                    inQueue
+                                      ? 'bg-blue-600 text-white'
+                                      : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                  }`}
+                                >
+                                  {inQueue ? '−' : '+'}
+                                </button>
+                              </div>
+                            )}
                           </td>
                           {LAST_YEAR_COLS.map((col) => (
                             <td key={col.key} className="text-right px-2 py-2 tabular-nums text-xs hidden lg:table-cell">
@@ -668,8 +847,10 @@ export default function MockDraftRoom({
                     })}
                   </tbody>
                 </table>
-                {available.length === 0 ? (
-                  <p className="px-4 py-6 text-sm text-gray-400">No remaining players match those filters.</p>
+                {listed.length === 0 ? (
+                  <p className="px-4 py-6 text-sm text-gray-400">
+                    {isSearching ? 'No players match that name.' : 'No remaining players match those filters.'}
+                  </p>
                 ) : null}
               </div>
             </>
@@ -685,13 +866,20 @@ export default function MockDraftRoom({
               <div
                 key={toast.id}
                 className={`pointer-events-auto overflow-hidden rounded-lg shadow-xl max-w-xs w-72 ${
-                  yours ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white border border-gray-700'
+                  yours
+                    ? 'bg-blue-600 text-white'
+                    : toast.fromQueue
+                      ? 'bg-amber-900 text-white border border-amber-500'
+                      : 'bg-gray-900 text-white border border-gray-700'
                 }`}
               >
                 <div className="px-4 py-3 text-sm font-semibold">
                   {teamLabel(toast.team, session.userTeam)} picked {toast.playerName}
+                  {toast.fromQueue ? (
+                    <div className="mt-1 text-xs font-medium text-amber-200">Taken from your queue</div>
+                  ) : null}
                 </div>
-                <div className={`h-1 w-full ${yours ? 'bg-blue-800' : 'bg-black/40'}`}>
+                <div className={`h-1 w-full ${yours ? 'bg-blue-800' : toast.fromQueue ? 'bg-amber-950' : 'bg-black/40'}`}>
                   <div
                     className={`h-full origin-left ${yours ? 'bg-white' : 'bg-blue-400'}`}
                     style={{ animation: `toast-timer-shrink ${TOAST_MS}ms linear forwards` }}

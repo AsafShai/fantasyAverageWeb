@@ -61,6 +61,8 @@ export function spreadValue(player: AdpPlayer, metric: AdpMetric): number | null
 
 export const METRIC_LABEL: Record<AdpMetric, string> = { adp: 'ADP', rank: 'Rankings' }
 export const BLEND_LABEL: Record<AdpMetric, string> = { adp: 'Blend ADP', rank: 'Blend Rank' }
+/** Draft pages open on rankings blend, not ADP. */
+export const DEFAULT_DRAFT_METRIC: AdpMetric = 'rank'
 
 export function formatAdp(value: number | null | undefined): string {
   if (value == null) return '—'

@@ -8,6 +8,7 @@ import LeagueSettingsFields, { Stepper } from '../../components/draft/LeagueSett
 import MockDraftRoom from './MockDraftRoom'
 import { parseRankingsCsvImport, rankingsCsvFileError } from '../../utils/draftCsv'
 import { EMPTY_RANKINGS, type DraftRankingsState } from '../../utils/draftRankings'
+import { DEFAULT_DRAFT_METRIC } from '../../utils/adp'
 import {
   applyBotPick,
   applyDraftPick,
@@ -73,9 +74,11 @@ export default function MockDraftPage() {
   const [setupError, setSetupError] = useState<string | null>(null)
   const [session, setSession] = useState<MockSession | null>(null)
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
+  const [paused, setPaused] = useState(false)
+  const remainingRef = useRef<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const { data, isLoading, error } = useGetAdpIndexQuery()
+  const { data, isLoading, error } = useGetAdpIndexQuery({ metric: DEFAULT_DRAFT_METRIC })
   const indexPlayers = data?.players ?? []
   const defaultOrder = useMemo(() => indexPlayers.map((p) => p.id), [indexPlayers])
   const needed = pickCount(settings.teams, settings.rounds)
@@ -155,6 +158,9 @@ export default function MockDraftPage() {
       players: indexPlayers,
     })
     if (next.botDelaySec === 0) live = runBotsUntilUser(live)
+    setPaused(false)
+    remainingRef.current = null
+    setSecondsLeft(null)
     setSession(live)
   }
 
@@ -164,11 +170,13 @@ export default function MockDraftPage() {
     }
     setSession(null)
     setSecondsLeft(null)
+    setPaused(false)
+    remainingRef.current = null
   }
 
   const onDraft = (playerId: string) => {
     setSession((cur) => {
-      if (!cur || !isUserOnTheClock(cur)) return cur
+      if (paused || !cur || !isUserOnTheClock(cur)) return cur
       let next = applyDraftPick(cur, playerId)
       if (cur.botDelaySec === 0) next = runBotsUntilUser(next)
       return next
@@ -179,48 +187,57 @@ export default function MockDraftPage() {
     setSession((cur) => (cur ? moveUserRosterPlayer(cur, fromIndex, toIndex) : cur))
   }
 
-  useEffect(() => {
-    if (!session || isMockComplete(session)) return
-    if (isUserOnTheClock(session)) {
-      if (session.userClockSec === 0) return
-      const timer = window.setTimeout(() => {
-        setSession((cur) => {
-          if (!cur || isMockComplete(cur) || !isUserOnTheClock(cur)) return cur
-          let next = autoUserPick(cur)
-          if (cur.botDelaySec === 0) next = runBotsUntilUser(next)
-          return next
-        })
-      }, session.userClockSec * 1000)
-      return () => window.clearTimeout(timer)
-    }
-    if (session.botDelaySec === 0) return
-    const timer = window.setTimeout(() => {
-      setSession((cur) => {
-        if (!cur || isMockComplete(cur) || isUserOnTheClock(cur)) return cur
-        return applyBotPick(cur)
-      })
-    }, session.botDelaySec * 1000)
-    return () => window.clearTimeout(timer)
-  }, [session?.picks.length, session && isMockComplete(session), session && isUserOnTheClock(session)])
+  const onSimToPick = () => {
+    setSession((cur) => {
+      if (!cur || paused || isMockComplete(cur) || isUserOnTheClock(cur) || cur.botDelaySec === 0) return cur
+      return runBotsUntilUser(cur)
+    })
+  }
 
   useEffect(() => {
     if (!session || isMockComplete(session)) {
+      remainingRef.current = null
       setSecondsLeft(null)
       return
     }
     const user = isUserOnTheClock(session)
     const duration = user ? session.userClockSec : session.botDelaySec
-    if (duration === 0) {
-      setSecondsLeft(null)
-      return
-    }
-    const started = Date.now()
-    setSecondsLeft(duration)
-    const id = window.setInterval(() => {
-      setSecondsLeft(Math.max(0, duration - (Date.now() - started) / 1000))
-    }, 200)
-    return () => window.clearInterval(id)
+    remainingRef.current = duration === 0 ? null : duration
+    setSecondsLeft(remainingRef.current)
   }, [session?.picks.length, session && isUserOnTheClock(session), session && isMockComplete(session)])
+
+  useEffect(() => {
+    if (paused || !session || isMockComplete(session)) return
+    const user = isUserOnTheClock(session)
+    const duration = user ? session.userClockSec : session.botDelaySec
+    if (duration === 0) return
+    const remaining = remainingRef.current ?? duration
+    const started = Date.now()
+    setSecondsLeft(remaining)
+    const interval = window.setInterval(() => {
+      const left = Math.max(0, remaining - (Date.now() - started) / 1000)
+      remainingRef.current = left
+      setSecondsLeft(left)
+    }, 200)
+    const timer = window.setTimeout(() => {
+      setSession((cur) => {
+        if (!cur || isMockComplete(cur)) return cur
+        if (user) {
+          if (!isUserOnTheClock(cur)) return cur
+          let next = autoUserPick(cur)
+          if (cur.botDelaySec === 0) next = runBotsUntilUser(next)
+          return next
+        }
+        if (isUserOnTheClock(cur)) return cur
+        return applyBotPick(cur)
+      })
+    }, remaining * 1000)
+    return () => {
+      window.clearInterval(interval)
+      window.clearTimeout(timer)
+      remainingRef.current = Math.max(0, remaining - (Date.now() - started) / 1000)
+    }
+  }, [paused, session?.picks.length, session && isMockComplete(session), session && isUserOnTheClock(session)])
 
   if (isLoading && !data) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
@@ -231,8 +248,12 @@ export default function MockDraftPage() {
         <MockDraftRoom
           session={session}
           secondsLeft={secondsLeft}
+          paused={paused}
           onDraft={onDraft}
           onMoveRoster={onMoveRoster}
+          onSimToPick={onSimToPick}
+          onPause={() => setPaused(true)}
+          onResume={() => setPaused(false)}
           onLeave={leaveRoom}
         />
       </div>
@@ -245,7 +266,7 @@ export default function MockDraftPage() {
     <div className="max-w-xl mx-auto px-4 sm:px-6 pb-10">
       <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Mock Draft</h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-        Practice a snake or 3RR draft against bots. Bots always pick from default ADP order. Your board is only for
+        Practice a snake or 3RR draft against bots. Bots always pick from Blend Rank order. Your board is only for
         your list and auto-picks.
       </p>
 
@@ -309,7 +330,7 @@ export default function MockDraftPage() {
 
         <div>
           <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
-          <div className="text-xs text-gray-400 mt-0.5">Bots ignore this and use default ADP order.</div>
+          <div className="text-xs text-gray-400 mt-0.5">Bots ignore this and use Blend Rank order.</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
               <Choice

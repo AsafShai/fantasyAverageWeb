@@ -35,6 +35,7 @@ import PlayerDetailSheet from '../../components/draft/PlayerDetailSheet'
 import MoveToModal from '../../components/draft/MoveToModal'
 import {
   BLEND_LABEL,
+  DEFAULT_DRAFT_METRIC,
   LAST_YEAR_COLS,
   SITE_LABEL,
   blendRankValue,
@@ -296,7 +297,7 @@ function SortableRankRow({
 }
 
 export default function PreDraftRankingsPage() {
-  const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', 'adp')
+  const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', DEFAULT_DRAFT_METRIC)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
   const { sites, available, toggle: toggleSite, sitesParam, rankSitesParam } = useBlendSites(
     source,

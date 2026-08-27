@@ -10,6 +10,7 @@ import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
 import LeagueSettingsModal from '../../components/draft/LeagueSettingsModal'
 import {
   BLEND_LABEL,
+  DEFAULT_DRAFT_METRIC,
   DEFAULT_LEAGUE_SETTINGS,
   SITE_LABEL,
   annotateDraftPicks,
@@ -49,9 +50,7 @@ function BoardPlayerCard({ entry }: { entry: DraftBoardPick<AdpPlayer> }) {
 
 export default function DraftBoardPage() {
   const [showBy, setShowBy] = usePersistedState<BoardShowBy>('draft.adp.showBy', 'round')
-  // A board predicts where players actually go, which is what ADP measures -- so ADP is the
-  // default here even though rankings are available.
-  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.board.metric', 'adp')
+  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.board.metric', DEFAULT_DRAFT_METRIC)
   const [leagueRaw, setLeagueRaw] = usePersistedState<LeagueBoardSettings>(
     'draft.board.league',
     DEFAULT_LEAGUE_SETTINGS,
