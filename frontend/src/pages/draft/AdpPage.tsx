@@ -12,6 +12,7 @@ import PaginationBar from '../../components/draft/PaginationBar'
 import { resolvePageSize, type PageSize } from '../../utils/pagination'
 import {
   BLEND_LABEL,
+  DEFAULT_DRAFT_METRIC,
   SITE_LABEL,
   adpDeltaClass,
   blendValue,
@@ -59,7 +60,7 @@ function SortHeader({
 
 
 export default function AdpPage() {
-  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.adp.metric', 'adp')
+  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.adp.metric', DEFAULT_DRAFT_METRIC)
   // Last successful response, kept so a refetch or a failed request leaves the table on
   // screen instead of blanking it.
   const [lastGood, setLastGood] = useState<AdpResponse | undefined>(undefined)

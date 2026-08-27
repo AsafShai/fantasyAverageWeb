@@ -104,4 +104,27 @@ describe('rankings CSV import', () => {
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.order).toEqual(players.map((p) => p.id))
   })
+
+  it('accepts a long unknown tail when enough ids match a mock draft', () => {
+    const rows = [
+      ...players.map((p, i) => [String(i + 1), p.id, p.name, 'DEN', 'PG']),
+      ...Array.from({ length: 20 }, (_, i) => [String(11 + i), `ghost-${i}`, 'Ghost', 'FA', 'C']),
+    ]
+    const result = parseRankingsCsvImport(rankingsCsv(rows), players, { minMatched: 8 })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.matched).toBe(10)
+      expect(result.order.slice(0, 10)).toEqual(players.map((p) => p.id))
+    }
+  })
+
+  it('still rejects a mock import that does not cover the pick count', () => {
+    const rows = [
+      ...players.slice(0, 3).map((p, i) => [String(i + 1), p.id, p.name, 'DEN', 'PG']),
+      ...Array.from({ length: 20 }, (_, i) => [String(4 + i), `ghost-${i}`, 'Ghost', 'FA', 'C']),
+    ]
+    const result = parseRankingsCsvImport(rankingsCsv(rows), players, { minMatched: 8 })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/needs at least 8/)
+  })
 })

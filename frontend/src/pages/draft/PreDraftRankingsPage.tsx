@@ -25,6 +25,7 @@ import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
 import { useDebounce } from '../../hooks/useDebounce'
+import { useIsBelowLg } from '../../hooks/useIsBelowLg'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
@@ -35,6 +36,7 @@ import PlayerDetailSheet from '../../components/draft/PlayerDetailSheet'
 import MoveToModal from '../../components/draft/MoveToModal'
 import {
   BLEND_LABEL,
+  DEFAULT_DRAFT_METRIC,
   LAST_YEAR_COLS,
   SITE_LABEL,
   blendRankValue,
@@ -62,20 +64,6 @@ const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
 type StatsFrom = 'actual' | 'projection'
 
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 })
-
-function useIsBelowLg() {
-  const [below, setBelow] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)').matches : false,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 1023px)')
-    const sync = () => setBelow(mq.matches)
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-  return below
-}
 
 function DeltaBadge({ rank, compareRank }: { rank: number; compareRank: number | null }) {
   if (compareRank == null) return <span className="text-gray-400">—</span>
@@ -296,7 +284,7 @@ function SortableRankRow({
 }
 
 export default function PreDraftRankingsPage() {
-  const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', 'adp')
+  const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', DEFAULT_DRAFT_METRIC)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
   const { sites, available, toggle: toggleSite, sitesParam, rankSitesParam } = useBlendSites(
     source,
