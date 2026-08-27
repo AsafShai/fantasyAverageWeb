@@ -756,8 +756,8 @@ export default function PreDraftRankingsPage() {
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1">
-          <Link to="/draft/consensus" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
-            ADP &amp; Rankings
+          <Link to="/draft/rankings-adp" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
+            Rankings &amp; ADP
           </Link>
           <Link to="/draft/board" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
             Open draft board
