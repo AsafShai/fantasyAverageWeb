@@ -11,7 +11,7 @@ const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/analytics': () => import('../pages/Analytics'),
   '/players': () => import('../pages/Players'),
   '/estimator': () => import('../pages/Estimator'),
-  '/draft/consensus': () => import('../pages/draft/AdpPage'),
+  '/draft/rankings-adp': () => import('../pages/draft/AdpPage'),
   '/draft/board': () => import('../pages/draft/DraftBoardPage'),
   '/draft/rankings': () => import('../pages/draft/PreDraftRankingsPage'),
   '/draft/mock': () => import('../pages/draft/MockDraftPage'),
@@ -282,7 +282,7 @@ const DRAFT_NAV_GROUP: NavGroupDef = {
   label: 'Draft',
   icon: '📝',
   items: [
-    { path: '/draft/consensus', label: 'Consensus', icon: '📊' },
+    { path: '/draft/rankings-adp', label: 'Rankings & ADP', icon: '📊' },
     { path: '/draft/board', label: 'Draft Board', icon: '🗂️' },
     { path: '/draft/rankings', label: 'Pre-Draft Rankings', icon: '📋' },
     { path: '/draft/mock', label: 'Mock Draft', icon: '🏟️' },
