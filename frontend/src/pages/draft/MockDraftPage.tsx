@@ -52,7 +52,7 @@ function Choice<T extends string | number>({
       type="button"
       disabled={disabled}
       onClick={() => onClick(value)}
-      className={`px-3 py-1.5 text-xs font-semibold rounded-md border disabled:opacity-40 ${
+      className={`min-h-11 px-3 py-1.5 text-xs font-semibold rounded-md border disabled:opacity-40 ${
         selected
           ? 'bg-blue-600 text-white border-blue-600'
           : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300'
@@ -244,7 +244,7 @@ export default function MockDraftPage() {
 
   if (session) {
     return (
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 pb-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 pb-8 min-w-0 overflow-x-hidden">
         <MockDraftRoom
           session={session}
           secondsLeft={secondsLeft}
@@ -360,7 +360,7 @@ export default function MockDraftPage() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="px-3 py-1.5 text-xs font-semibold rounded-md border border-gray-300 dark:border-gray-600"
+                className="min-h-11 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 dark:border-gray-600"
               >
                 Choose CSV
               </button>
