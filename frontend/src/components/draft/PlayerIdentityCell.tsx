@@ -11,6 +11,7 @@ export default function PlayerIdentityCell({
   wrapName = false,
   rowSelectOnMobile = false,
   splitMetaOnMobile = false,
+  link = true,
 }: {
   name: string
   playerId?: number | string | null
@@ -20,6 +21,8 @@ export default function PlayerIdentityCell({
   wrapName?: boolean
   rowSelectOnMobile?: boolean
   splitMetaOnMobile?: boolean
+  /** When false, the name is plain text (e.g. mock draft, where leaving the page would lose the session). */
+  link?: boolean
 }) {
   const [broke, setBroke] = useState(false)
   return (
@@ -44,15 +47,19 @@ export default function PlayerIdentityCell({
         }
       >
         <div className={wrapName ? 'whitespace-normal break-words leading-tight' : 'truncate'}>
-          <PlayerNameLink
-            name={name}
-            playerId={playerId}
-            className={
-              rowSelectOnMobile
-                ? 'text-blue-700 dark:text-blue-300 hover:underline font-medium pointer-events-none lg:pointer-events-auto'
-                : undefined
-            }
-          />
+          {link ? (
+            <PlayerNameLink
+              name={name}
+              playerId={playerId}
+              className={
+                rowSelectOnMobile
+                  ? 'text-blue-700 dark:text-blue-300 hover:underline font-medium pointer-events-none lg:pointer-events-auto'
+                  : undefined
+              }
+            />
+          ) : (
+            <span className="font-medium text-gray-800 dark:text-gray-100">{name}</span>
+          )}
         </div>
         <div
           className={`flex items-center gap-1.5 ${
