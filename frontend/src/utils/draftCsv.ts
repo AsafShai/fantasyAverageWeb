@@ -93,6 +93,7 @@ export function rankingsCsvFileError(file: File): string | null {
 export function parseRankingsCsvImport(
   text: string,
   players: RankingsCsvPlayer[],
+  options?: { minMatched?: number },
 ): RankingsCsvImportResult {
   const rows = parseCsv(text)
   if (rows.length === 0) return { ok: false, error: 'That file is not a Pre-Draft Rankings CSV.' }
@@ -136,14 +137,18 @@ export function parseRankingsCsvImport(
   if (nextOrder.length === 0) {
     return { ok: false, error: 'None of the player ids in that CSV match the current ADP board.' }
   }
-  const minMatched = Math.min(10, players.length)
+  const minMatched = options?.minMatched ?? Math.min(10, players.length)
   if (nextOrder.length < minMatched) {
     return {
       ok: false,
-      error: `Too few player ids matched the current board (${nextOrder.length}). This does not look like a file exported from this page.`,
+      error:
+        options?.minMatched != null
+          ? `That CSV matched ${nextOrder.length} players; this mock needs at least ${minMatched} (league size × rounds).`
+          : `Too few player ids matched the current board (${nextOrder.length}). This does not look like a file exported from this page.`,
     }
   }
-  if (unknown.length / parsed.length > MAX_UNMATCHED_RATIO) {
+  const enoughForDraft = options?.minMatched != null && nextOrder.length >= options.minMatched
+  if (!enoughForDraft && unknown.length / parsed.length > MAX_UNMATCHED_RATIO) {
     return {
       ok: false,
       error: `Too many unknown player ids (${unknown.length} of ${parsed.length}). Import a CSV exported from this page.`,

@@ -75,6 +75,12 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+# ESPN fills players who have not been drafted (and, before any drafts run, everyone)
+# with 140. That is a sentinel, not an average pick -- treating it as ADP drags Blend
+# to ~50 for stars and boosts anyone ESPN has not listed.
+ESPN_UNDRAFTED_ADP = 140.0
+
+
 def coerce_adp(raw) -> Optional[float]:
     if raw is None:
         return None
@@ -89,6 +95,12 @@ def coerce_adp(raw) -> Optional[float]:
     if val != val or val <= 0:
         return None
     return round(val, 2)
+
+
+def sanitize_espn_adp(adp: Optional[float]) -> Optional[float]:
+    if adp is None or adp >= ESPN_UNDRAFTED_ADP:
+        return None
+    return adp
 
 
 def parse_espn_payload(data) -> list[AdpRow]:
@@ -114,11 +126,8 @@ def parse_espn_payload(data) -> list[AdpRow]:
         roto = ranks.get("ROTO") or ranks.get("roto") or {}
         ranking = coerce_ranking(roto.get("rank"))
         ownership = player.get("ownership")
-        # Shown as published, no depth cutoff. ESPN's default league is ~130 picks, so the
-        # mass of values just under 140 (measured 2026-08-25: 589 of 1095 at 139.x-140.2)
-        # is mostly its undrafted default -- but there is no clean break to cut on, values
-        # run continuously from 125 into that band. Sorting handles the resulting ties.
-        adp = coerce_adp(ownership.get("averageDraftPosition")) if isinstance(ownership, dict) else None
+        raw_adp = coerce_adp(ownership.get("averageDraftPosition")) if isinstance(ownership, dict) else None
+        adp = sanitize_espn_adp(raw_adp)
         if adp is None and ranking is None:
             continue
         slots = player.get("eligibleSlots") or []
@@ -347,14 +356,15 @@ def assemble_adp_payload(
         sources[site] = label
         for row in rows:
             row = AdpRow(*row) if not isinstance(row, AdpRow) else row
-            if not row.name or (row.adp is None and row.ranking is None):
+            adp = sanitize_espn_adp(row.adp) if site == "espn" else row.adp
+            if not row.name or (adp is None and row.ranking is None):
                 continue
             players.append(
                 {
                     "espn_id": row.espn_id,
                     "name": row.name,
                     "positions": list(row.positions or []),
-                    "adp": {site: row.adp} if row.adp is not None else {},
+                    "adp": {site: adp} if adp is not None else {},
                     "ranking": {site: row.ranking} if row.ranking is not None else {},
                 }
             )

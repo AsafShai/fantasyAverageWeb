@@ -4,6 +4,7 @@ import {
   blendRankValue,
   blendValue,
   clampLeagueSettings,
+  DEFAULT_DRAFT_METRIC,
   draftTeamForPick,
   groupDraftPicksByTeam,
   isThreeRrReverse,
@@ -101,6 +102,10 @@ describe('provider capabilities', () => {
 })
 
 describe('metric-aware player values', () => {
+  it('defaults draft pages to rankings blend, not ADP', () => {
+    expect(DEFAULT_DRAFT_METRIC).toBe('rank')
+  })
+
   const player = {
     espn: { adp: 12.5, rank: 9, ranking: 4 },
     blend: 12.5,

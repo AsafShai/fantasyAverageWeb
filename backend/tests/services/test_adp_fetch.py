@@ -9,6 +9,7 @@ from app.services.adp_fetch import (
     coerce_adp,
     fetch_live_adp_payload,
     parse_espn_payload,
+    sanitize_espn_adp,
     parse_espn_projections,
     parse_fantrax_payload,
     parse_sleeper_payload,
@@ -27,7 +28,31 @@ def no_real_adp_provider_db():
         yield
 
 
-def test_coerce_adp_rejects_blank_and_non_positive():
+def test_sanitize_espn_adp_drops_the_undrafted_sentinel():
+    assert sanitize_espn_adp(None) is None
+    assert sanitize_espn_adp(1.8) == 1.8
+    assert sanitize_espn_adp(139.4) == 139.4
+    assert sanitize_espn_adp(140.0) is None
+    assert sanitize_espn_adp(140.2) is None
+
+
+def test_assemble_adp_payload_strips_cached_espn_sentinel_adp():
+    payload = assemble_adp_payload(
+        {
+            "espn": (
+                [
+                    AdpRow(1, "Nikola Jokic", 140.0, ["C"], 2),
+                    AdpRow(2, "Real Adp", 12.5, ["PG"], 10),
+                ],
+                "espn-src",
+            )
+        },
+        season_label="2026-27",
+    )
+    by_name = {p["name"]: p for p in payload["players"]}
+    assert by_name["Nikola Jokic"]["adp"] == {}
+    assert by_name["Nikola Jokic"]["ranking"] == {"espn": 2}
+    assert by_name["Real Adp"]["adp"] == {"espn": 12.5}
     assert coerce_adp(None) is None
     assert coerce_adp("-") is None
     assert coerce_adp(0) is None
@@ -63,12 +88,11 @@ def test_parse_espn_payload_splits_adp_from_roto_ranking():
     assert parse_espn_payload(data) == [AdpRow(3112335, "Nikola Jokic", 1.8, ["C"], 2)]
 
 
-def test_parse_espn_payload_reports_espn_adp_without_a_depth_cutoff():
-    """ESPN's number is shown as published, however deep it runs.
+def test_parse_espn_payload_drops_the_undrafted_adp_sentinel():
+    """ESPN fills undrafted players with 140 -- and, before drafts start, everyone.
 
-    Most values just under 140 are ESPN's undrafted default rather than a real average
-    pick, but they run continuously up from ~125 with no clean break to cut on, so nothing
-    is discarded here -- sorting breaks the resulting ties on the rankings blend instead.
+    That value is not an average pick. Drop it so Blend ADP is Fantrax/Yahoo until ESPN
+    publishes real ADPs. Values just under 140 still come through as published.
     """
     data = {
         "players": [
@@ -96,12 +120,20 @@ def test_parse_espn_payload_reports_espn_adp_without_a_depth_cutoff():
                     "draftRanksByRankType": {"ROTO": {"rank": 150}},
                 }
             },
+            {
+                "player": {
+                    "id": 4,
+                    "fullName": "Sentinel Only",
+                    "ownership": {"averageDraftPosition": 140.0},
+                }
+            },
         ]
     }
     rows = {row.espn_id: row for row in parse_espn_payload(data)}
-    assert rows[1].adp == 140.0 and rows[1].ranking == 500
+    assert rows[1].adp is None and rows[1].ranking == 500
     assert rows[2].adp == 139.4
     assert rows[3].adp == 130.2
+    assert 4 not in rows
 
 
 def test_parse_espn_payload_keeps_a_ranked_player_with_no_adp():
