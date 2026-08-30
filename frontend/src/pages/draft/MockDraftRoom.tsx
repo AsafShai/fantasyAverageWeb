@@ -19,6 +19,7 @@ import {
 } from '../../utils/adp'
 import {
   groupedMoveDestinations,
+  hasOpenSlotFor,
   isMockComplete,
   isUserOnTheClock,
   nextPickNumber,
@@ -33,6 +34,7 @@ import type { AdpIndexPlayer, AdpPlayer, LastYearStats } from '../../types/api'
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
 const TOAST_MS = 5000
+const TOAST_MAX = 10
 type StatsFrom = 'actual' | 'projection'
 type RoomTab = 'players' | 'roster' | 'history' | 'board'
 type PickToast = {
@@ -521,6 +523,7 @@ function MockPlayerSheet({
   stats,
   statsLabel,
   userTurn,
+  canDraft,
   inQueue,
   draftedLabel,
   onClose,
@@ -533,6 +536,7 @@ function MockPlayerSheet({
   stats?: LastYearStats | null
   statsLabel: string
   userTurn: boolean
+  canDraft: boolean
   inQueue: boolean
   draftedLabel: string | null
   onClose: () => void
@@ -612,7 +616,8 @@ function MockPlayerSheet({
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
-              disabled={!userTurn}
+              disabled={!userTurn || !canDraft}
+              title={userTurn && !canDraft ? 'No open roster spot for this player' : undefined}
               onClick={onDraft}
               className="min-h-11 px-3 text-sm font-bold rounded-md bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -631,6 +636,9 @@ function MockPlayerSheet({
             </button>
           </div>
         )}
+        {userTurn && !canDraft && !draftedLabel ? (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">No open roster spot for this player.</p>
+        ) : null}
       </div>
     </div>
   )
@@ -712,7 +720,7 @@ function PickToasts({
   userTeam: number
   placement: 'desktop' | 'mobile'
 }) {
-  const shown = placement === 'mobile' ? toasts.slice(-2) : toasts
+  const shown = toasts.slice(placement === 'mobile' ? -2 : -TOAST_MAX)
   if (shown.length === 0) return null
   return (
     <div
@@ -852,7 +860,7 @@ export default function MockDraftRoom({
     }))
     const takenNow = new Set(added.map((pk) => pk.playerId))
     setQueue((cur) => cur.filter((id) => !takenNow.has(id)))
-    setToasts((cur) => [...cur, ...nextToasts])
+    setToasts((cur) => [...cur, ...nextToasts].slice(-TOAST_MAX))
     for (const toast of nextToasts) {
       const timer = window.setTimeout(() => {
         setToasts((cur) => cur.filter((t) => t.id !== toast.id))
@@ -910,7 +918,9 @@ export default function MockDraftRoom({
         .filter((p): p is MockSessionPlayer => Boolean(p) && !taken.has(p.id)),
     [queue, session.players, taken],
   )
-  const suggested = queuedPlayers[0]
+  const userRoster = session.rosters[session.userTeam] ?? []
+  const canRoster = (player: MockSessionPlayer) => hasOpenSlotFor(userRoster, player.positions)
+  const suggested = queuedPlayers.find(canRoster)
   const queuedSet = useMemo(() => new Set(queue), [queue])
   const isSearching = debouncedSearch.trim().length > 0
 
@@ -1147,10 +1157,11 @@ export default function MockDraftRoom({
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        disabled={!userTurn}
+                        disabled={!userTurn || !canRoster(player)}
+                        title={userTurn && !canRoster(player) ? 'No open roster spot for this player' : undefined}
                         onClick={() => onDraft(player.id)}
                         className={`px-2 py-1 rounded text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-                          userTurn ? 'ring-2 ring-blue-300 shadow-md' : ''
+                          userTurn && canRoster(player) ? 'ring-2 ring-blue-300 shadow-md' : ''
                         }`}
                       >
                         Draft
@@ -1246,10 +1257,11 @@ export default function MockDraftRoom({
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
-                    disabled={!userTurn}
+                    disabled={!userTurn || !canRoster(player)}
+                    title={userTurn && !canRoster(player) ? 'No open roster spot for this player' : undefined}
                     onClick={() => onDraft(player.id)}
                     className={`min-h-11 px-2.5 rounded-md text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-                      userTurn ? 'ring-2 ring-blue-300 shadow-md' : ''
+                      userTurn && canRoster(player) ? 'ring-2 ring-blue-300 shadow-md' : ''
                     }`}
                   >
                     Draft
@@ -1666,6 +1678,7 @@ export default function MockDraftRoom({
           stats={selectedStats}
           statsLabel={statsFrom === 'projection' ? 'Projected' : 'Last year'}
           userTurn={userTurn && !selectedMade}
+          canDraft={canRoster(selectedPlayer)}
           inQueue={queuedSet.has(selectedPlayer.id)}
           draftedLabel={
             selectedMade

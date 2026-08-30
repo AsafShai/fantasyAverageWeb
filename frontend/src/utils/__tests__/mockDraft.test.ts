@@ -12,6 +12,7 @@ import {
   emptyRoster,
   eligibleForPhase,
   groupedMoveDestinations,
+  hasOpenSlotFor,
   isUserOnTheClock,
   moveRosterPlayer,
   nextBotPick,
@@ -34,8 +35,8 @@ const p = (id: string, positions: string[]): MockSessionPlayer => ({
 describe('clampMockSettings', () => {
   it('uses the same league defaults as the draft board', () => {
     const s = clampMockSettings({})
-    expect(s.teams).toBe(12)
-    expect(s.rounds).toBe(15)
+    expect(s.teams).toBe(13)
+    expect(s.rounds).toBe(14)
     expect(s.threeRr).toBe(true)
     expect(s.userPick).toBe(1)
   })
@@ -69,6 +70,16 @@ describe('roster slots', () => {
     expect(roster[0]).toMatchObject({ slot: 'PG', player: { id: '1' } })
     roster = assignToRoster(roster, p('2', ['PG']))
     expect(roster[5]).toMatchObject({ slot: 'G', player: { id: '2' } })
+  })
+
+  it('blocks a PG when PG, G, UTIL, and bench are full', () => {
+    let roster = emptyRoster<MockSessionPlayer>(14)
+    for (const id of ['1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+      roster = assignToRoster(roster, p(id, ['PG']))
+    }
+    expect(hasOpenSlotFor(roster, ['PG'])).toBe(false)
+    expect(hasOpenSlotFor(roster, ['SG'])).toBe(true)
+    expect(hasOpenSlotFor(roster, ['C'])).toBe(true)
   })
 
   it('moves a multi-position player only into empty eligible slots', () => {
@@ -210,5 +221,44 @@ describe('session engine', () => {
     session = applyDraftPick(session, '1')
     const again = applyDraftPick(session, '1')
     expect(again.picks).toHaveLength(1)
+  })
+
+  it('rejects a user pick that has no open roster slot', () => {
+    const fillers = Array.from({ length: 9 }, (_, i) => p(`fill${i}`, ['PG']))
+    const leftover = p('c2', ['C'])
+    const blockedPg = p('pgx', ['PG'])
+    const all = [...players, ...fillers, leftover, blockedPg]
+    let session = createMockSession({
+      settings: clampMockSettings({ teams: 2, rounds: 14, userPick: 1 }),
+      defaultOrder: all.map((x) => x.id),
+      userOrder: all.map((x) => x.id),
+      players: all,
+    })
+    let roster = session.rosters[1]
+    for (const filler of fillers) roster = assignToRoster(roster, filler)
+    session = { ...session, rosters: { ...session.rosters, 1: roster } }
+    expect(hasOpenSlotFor(session.rosters[1], ['PG'])).toBe(false)
+    const blocked = applyDraftPick(session, blockedPg.id)
+    expect(blocked.picks).toHaveLength(0)
+    const allowed = applyDraftPick(session, leftover.id)
+    expect(allowed.picks[0]?.playerId).toBe(leftover.id)
+  })
+
+  it('auto-picks the next board player who still fits a roster hole', () => {
+    const fillers = Array.from({ length: 9 }, (_, i) => p(`fill${i}`, ['PG']))
+    const leftover = p('c2', ['C'])
+    const blockedPg = p('pgx', ['PG'])
+    const all = [...players, ...fillers, leftover, blockedPg]
+    let session = createMockSession({
+      settings: clampMockSettings({ teams: 2, rounds: 14, userPick: 1, userClockSec: 30 }),
+      defaultOrder: all.map((x) => x.id),
+      userOrder: [blockedPg.id, leftover.id, '2'],
+      players: all,
+    })
+    let roster = session.rosters[1]
+    for (const filler of fillers) roster = assignToRoster(roster, filler)
+    session = { ...session, rosters: { ...session.rosters, 1: roster } }
+    session = autoUserPick(session)
+    expect(session.picks[0]?.playerId).toBe(leftover.id)
   })
 })

@@ -81,6 +81,10 @@ export function playerFitsSlot(positions: string[], slot: MockDraftSlot): boolea
   return pos.has(slot)
 }
 
+export function hasOpenSlotFor<T>(roster: RosterSlotFill<T>[], positions: string[]): boolean {
+  return roster.some((s) => !s.player && playerFitsSlot(positions, s.slot))
+}
+
 export function rosterPhase(roster: RosterSlotFill<unknown>[]): RosterPhase {
   if (roster.some((s) => STARTER_SLOTS.includes(s.slot) && !s.player)) return 'starter'
   if (roster.some((s) => FLEX_SLOTS.includes(s.slot) && !s.player)) return 'flex'
@@ -289,6 +293,7 @@ export function applyDraftPick(session: MockSession, playerId: string): MockSess
   const pick = nextPickNumber(session)
   const team = draftTeamForPick(pick, session.teams, session.threeRr)
   const roster = session.rosters[team] ?? emptyRoster(session.rounds)
+  if (team === session.userTeam && !hasOpenSlotFor(roster, player.positions)) return session
   return {
     ...session,
     picks: [
@@ -338,7 +343,14 @@ export function runBotsUntilUser(session: MockSession, random: () => number = Ma
 
 export function autoUserPick(session: MockSession): MockSession {
   if (!isUserOnTheClock(session)) return session
-  const id = availableUserBoardIds(session)[0]
+  const roster = session.rosters[session.userTeam] ?? emptyRoster(session.rounds)
+  const fits = (id: string) => {
+    const player = session.players[id]
+    return Boolean(player && hasOpenSlotFor(roster, player.positions))
+  }
+  const id =
+    availableUserBoardIds(session).find(fits) ??
+    availableDefaultPlayers(session).find((player) => hasOpenSlotFor(roster, player.positions))?.id
   if (!id) return session
   return applyDraftPick(session, id)
 }
