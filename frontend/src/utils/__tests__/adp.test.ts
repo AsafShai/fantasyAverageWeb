@@ -14,6 +14,7 @@ import {
   sitesForMetric,
   spreadValue,
   threeRrDisplayRounds,
+  toListHeadshotUrl,
 } from '../adp'
 import type { AdpPlayer, ProviderMeta } from '../../types/api'
 
@@ -129,5 +130,15 @@ describe('metric-aware player values', () => {
     expect(blendRankValue(player, 'rank')).toBe(5)
     expect(spreadValue(player, 'adp')).toBe(3)
     expect(spreadValue(player, 'rank')).toBe(1)
+  })
+})
+
+describe('list headshots', () => {
+  it('shrinks ESPN full headshots for list avatars', () => {
+    expect(toListHeadshotUrl('https://a.espncdn.com/i/headshots/nba/players/full/3112335.png')).toBe(
+      'https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/3112335.png&w=96&h=70',
+    )
+    expect(toListHeadshotUrl(null)).toBeNull()
+    expect(toListHeadshotUrl('https://example.com/photo.png')).toBe('https://example.com/photo.png')
   })
 })

@@ -3,6 +3,9 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
 import CommandPalette from './CommandPalette'
 import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
+import { store } from '../store/store'
+import { fantasyApi } from '../store/api/fantasyApi'
+import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
 
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/trends': () => import('../pages/Trends'),
@@ -17,8 +20,30 @@ const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/draft/mock': () => import('../pages/draft/MockDraftPage'),
 }
 
+const prefetchDraftData = () => {
+  const indexArgs = defaultAdpIndexArgs()
+  store.dispatch(fantasyApi.util.prefetch('getAdpIndex', indexArgs, { force: false }))
+  store.dispatch(
+    fantasyApi.util.prefetch(
+      'getAdp',
+      {
+        page: 1,
+        page_size: 50,
+        sort: 'blend',
+        sort_dir: 'asc',
+        metric: DEFAULT_DRAFT_METRIC,
+        include_stats: false,
+        sites: indexArgs.sites,
+        rank_sites: indexArgs.rank_sites,
+      },
+      { force: false },
+    ),
+  )
+}
+
 const prefetchRoute = (path: string) => {
   prefetchMap[path]?.()
+  if (path.startsWith('/draft/')) prefetchDraftData()
 }
 
 function useGlobalSearchShortcut(setSearchOpen: (open: boolean) => void) {

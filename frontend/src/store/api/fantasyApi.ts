@@ -153,6 +153,7 @@ export const fantasyApi = createApi({
                   ...(a.metric ? { metric: a.metric } : {}),
                 }),
             ranked_only: a.ranked_only ?? true,
+            ...(a.include_stats === false ? { include_stats: false } : {}),
           },
         }
       },

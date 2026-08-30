@@ -21,6 +21,7 @@ import {
   rosterPhase,
   rosterSlots,
   runBotsUntilUser,
+  tickerPickNumbers,
   type MockSessionPlayer,
 } from '../mockDraft'
 
@@ -260,5 +261,23 @@ describe('session engine', () => {
     session = { ...session, rosters: { ...session.rosters, 1: roster } }
     session = autoUserPick(session)
     expect(session.picks[0]?.playerId).toBe(leftover.id)
+  })
+})
+
+describe('tickerPickNumbers', () => {
+  it('returns every pick when the ticker is not windowed', () => {
+    expect(tickerPickNumbers(182, 40, false, false)).toHaveLength(182)
+  })
+
+  it('keeps a short window around the current pick', () => {
+    expect(tickerPickNumbers(182, 40, false, true)).toEqual(
+      Array.from({ length: 21 }, (_, i) => 34 + i),
+    )
+  })
+
+  it('shows the last picks after the draft ends', () => {
+    expect(tickerPickNumbers(182, 182, true, true)).toEqual(
+      Array.from({ length: 16 }, (_, i) => 167 + i),
+    )
   })
 })

@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useGetAdpIndexQuery } from '../../store/api/fantasyApi'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
+import { useBlendSites } from '../../hooks/useBlendSites'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import LeagueSettingsFields, { Stepper } from '../../components/draft/LeagueSettingsFields'
-import MockDraftRoom from './MockDraftRoom'
 import { parseRankingsCsvImport, rankingsCsvFileError } from '../../utils/draftCsv'
-import { EMPTY_RANKINGS, type DraftRankingsState } from '../../utils/draftRankings'
+import { EMPTY_RANKINGS, stablePlayerIds, type DraftRankingsState } from '../../utils/draftRankings'
 import { DEFAULT_DRAFT_METRIC } from '../../utils/adp'
+
+const MockDraftRoom = lazy(() => import('./MockDraftRoom'))
 import {
   applyBotPick,
   applyDraftPick,
@@ -73,13 +75,28 @@ export default function MockDraftPage() {
   const [csvName, setCsvName] = useState<string | null>(null)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [session, setSession] = useState<MockSession | null>(null)
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
+  const [clockDeadlineMs, setClockDeadlineMs] = useState<number | null>(null)
+  const [clockFrozenSec, setClockFrozenSec] = useState<number | null>(null)
   const [paused, setPaused] = useState(false)
   const remainingRef = useRef<number | null>(null)
+  const deadlineRef = useRef<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const { data, isLoading, error } = useGetAdpIndexQuery({ metric: DEFAULT_DRAFT_METRIC })
+  const { sitesParam, rankSitesParam } = useBlendSites(DEFAULT_DRAFT_METRIC)
+  const { data, isLoading, error } = useGetAdpIndexQuery({
+    metric: DEFAULT_DRAFT_METRIC,
+    sites: sitesParam,
+    rank_sites: rankSitesParam,
+  })
   const indexPlayers = data?.players ?? []
+  const prefetchIds = useMemo(
+    () => stablePlayerIds(indexPlayers.slice(0, 25).map((p) => p.id)).join(','),
+    [indexPlayers],
+  )
+  useGetAdpQuery(
+    { ids: prefetchIds, include_stats: true, ranked_only: false },
+    { skip: prefetchIds.length === 0 },
+  )
   const defaultOrder = useMemo(() => indexPlayers.map((p) => p.id), [indexPlayers])
   const needed = pickCount(settings.teams, settings.rounds)
 
@@ -160,7 +177,9 @@ export default function MockDraftPage() {
     if (next.botDelaySec === 0) live = runBotsUntilUser(live)
     setPaused(false)
     remainingRef.current = null
-    setSecondsLeft(null)
+    deadlineRef.current = null
+    setClockDeadlineMs(null)
+    setClockFrozenSec(null)
     setSession(live)
   }
 
@@ -169,9 +188,20 @@ export default function MockDraftPage() {
       if (!window.confirm('Leave this mock draft? Picks will not be saved.')) return
     }
     setSession(null)
-    setSecondsLeft(null)
+    setClockDeadlineMs(null)
+    setClockFrozenSec(null)
     setPaused(false)
     remainingRef.current = null
+    deadlineRef.current = null
+  }
+
+  const freezeClock = () => {
+    const left =
+      deadlineRef.current != null ? Math.max(0, (deadlineRef.current - Date.now()) / 1000) : remainingRef.current
+    remainingRef.current = left
+    deadlineRef.current = null
+    setClockFrozenSec(left)
+    setClockDeadlineMs(null)
   }
 
   const onDraft = (playerId: string) => {
@@ -197,13 +227,23 @@ export default function MockDraftPage() {
   useEffect(() => {
     if (!session || isMockComplete(session)) {
       remainingRef.current = null
-      setSecondsLeft(null)
+      deadlineRef.current = null
+      setClockDeadlineMs(null)
+      setClockFrozenSec(null)
       return
     }
     const user = isUserOnTheClock(session)
     const duration = user ? session.userClockSec : session.botDelaySec
     remainingRef.current = duration === 0 ? null : duration
-    setSecondsLeft(remainingRef.current)
+    setClockFrozenSec(null)
+    if (duration === 0) {
+      deadlineRef.current = null
+      setClockDeadlineMs(null)
+      return
+    }
+    const deadline = Date.now() + duration * 1000
+    deadlineRef.current = deadline
+    setClockDeadlineMs(deadline)
   }, [session?.picks.length, session && isUserOnTheClock(session), session && isMockComplete(session)])
 
   useEffect(() => {
@@ -213,12 +253,10 @@ export default function MockDraftPage() {
     if (duration === 0) return
     const remaining = remainingRef.current ?? duration
     const started = Date.now()
-    setSecondsLeft(remaining)
-    const interval = window.setInterval(() => {
-      const left = Math.max(0, remaining - (Date.now() - started) / 1000)
-      remainingRef.current = left
-      setSecondsLeft(left)
-    }, 200)
+    const deadline = started + remaining * 1000
+    deadlineRef.current = deadline
+    setClockDeadlineMs(deadline)
+    setClockFrozenSec(null)
     const timer = window.setTimeout(() => {
       setSession((cur) => {
         if (!cur || isMockComplete(cur)) return cur
@@ -233,7 +271,6 @@ export default function MockDraftPage() {
       })
     }, remaining * 1000)
     return () => {
-      window.clearInterval(interval)
       window.clearTimeout(timer)
       remainingRef.current = Math.max(0, remaining - (Date.now() - started) / 1000)
     }
@@ -245,17 +282,23 @@ export default function MockDraftPage() {
   if (session) {
     return (
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 pb-8 min-w-0 overflow-x-hidden">
-        <MockDraftRoom
-          session={session}
-          secondsLeft={secondsLeft}
-          paused={paused}
-          onDraft={onDraft}
-          onMoveRoster={onMoveRoster}
-          onSimToPick={onSimToPick}
-          onPause={() => setPaused(true)}
-          onResume={() => setPaused(false)}
-          onLeave={leaveRoom}
-        />
+        <Suspense fallback={<LoadingSpinner />}>
+          <MockDraftRoom
+            session={session}
+            clockDeadlineMs={clockDeadlineMs}
+            clockFrozenSec={clockFrozenSec}
+            paused={paused}
+            onDraft={onDraft}
+            onMoveRoster={onMoveRoster}
+            onSimToPick={onSimToPick}
+            onPause={() => {
+              freezeClock()
+              setPaused(true)
+            }}
+            onResume={() => setPaused(false)}
+            onLeave={leaveRoom}
+          />
+        </Suspense>
       </div>
     )
   }
