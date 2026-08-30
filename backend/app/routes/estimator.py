@@ -9,6 +9,12 @@ from app.services.data_provider import DataProvider
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# The background refresh below is fired from a plain GET, so without a guard a
+# page with N concurrent viewers queues N full ESPN fetch + DB sync passes, all
+# serialized behind DataProvider's fetch lock. One at a time is enough: the
+# work is idempotent and the nightly scheduler owns the real refresh cadence.
+_sync_in_flight = False
+
 
 def _build_results(data: dict, elapsed_ms: float) -> EstimatorResults:
     predictions = [TeamPrediction(**r) for r in data.get("predictions", [])]
@@ -23,12 +29,20 @@ def _build_results(data: dict, elapsed_ms: float) -> EstimatorResults:
 
 
 async def _sync_and_run(service: EstimatorService, provider: DataProvider) -> None:
-    synced = await provider.sync_db_now()
-    if synced:
-        logger.info("Estimator background sync: new ESPN data found, running estimator")
-    else:
-        logger.info("Estimator background sync: snapshot already current, checking if estimator is behind snapshot")
-    await service.run_and_store()
+    global _sync_in_flight
+    if _sync_in_flight:
+        logger.debug("Estimator background sync already running, skipping this request's pass")
+        return
+    _sync_in_flight = True
+    try:
+        synced = await provider.sync_db_now()
+        if synced:
+            logger.info("Estimator background sync: new ESPN data found, running estimator")
+        else:
+            logger.info("Estimator background sync: snapshot already current, checking if estimator is behind snapshot")
+        await service.run_and_store()
+    finally:
+        _sync_in_flight = False
 
 
 @router.get("/results", response_model=EstimatorResults)

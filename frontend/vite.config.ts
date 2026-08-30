@@ -14,7 +14,6 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             { name: 'recharts', test: /node_modules[\\/]recharts/ },
-            { name: 'react-table', test: /node_modules[\\/]@tanstack[\\/]react-table/ },
           ],
         },
       },

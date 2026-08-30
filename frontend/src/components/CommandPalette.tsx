@@ -37,7 +37,13 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
-  const { groups } = useGlobalSearch(query)
+  // Layout mounts the palette on every route, so the search data must not be
+  // fetched until it is actually opened. Latched rather than tied to `isOpen`
+  // directly: once opened, keep the subscription so reopening is instant.
+  const [everOpened, setEverOpened] = useState(false)
+  if (isOpen && !everOpened) setEverOpened(true)
+
+  const { groups } = useGlobalSearch(query, everOpened)
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
   useEffect(() => {

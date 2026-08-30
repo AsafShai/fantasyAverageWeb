@@ -32,6 +32,8 @@ export default function PlayerIdentityCell({
           <img
             src={photoUrl}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover object-top"
             onError={() => setBroke(true)}
           />

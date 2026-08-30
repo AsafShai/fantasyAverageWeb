@@ -814,7 +814,11 @@ export default function MockDraftRoom({
   const [tickerOpen, setTickerOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState<PageSize>(25)
+  // Desktop fits far more rows per screen than a phone, so it starts at the
+  // largest page rather than the mobile default.
+  const [pageSize, setPageSize] = useState<PageSize>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches ? 100 : 25,
+  )
 
   useEffect(() => {
     currentRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
@@ -942,11 +946,14 @@ export default function MockDraftRoom({
   const resolvedPageSize = resolvePageSize(pageSize)
   const totalPages = Math.max(1, Math.ceil(listed.length / resolvedPageSize))
   const safePage = Math.min(page, totalPages)
+  // Both layouts page. `listed` is recomputed on every pick (it filters out
+  // taken players), so rendering it whole re-rendered ~780 desktop rows per
+  // pick. Stats are unaffected: detailsById covers the entire pool from one
+  // fetch, so any page reads from memory with no request.
   const paged = useMemo(() => {
-    if (!isBelowLg) return listed
     const start = (safePage - 1) * resolvedPageSize
     return listed.slice(start, start + resolvedPageSize)
-  }, [isBelowLg, listed, safePage, resolvedPageSize])
+  }, [listed, safePage, resolvedPageSize])
   const from = listed.length === 0 ? 0 : (safePage - 1) * resolvedPageSize + 1
   const to = Math.min(safePage * resolvedPageSize, listed.length)
 
@@ -1091,100 +1098,115 @@ export default function MockDraftRoom({
   )
 
   const playerTable = (
-    <div className="overflow-auto max-h-[70vh]">
-      <table className="min-w-full text-sm">
-        <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-500">
-          <tr>
-            <th className="text-left px-2 py-2">Rk</th>
-            <th className="text-left px-2 py-2">Player</th>
-            <th className="px-2 py-2" />
-            {LAST_YEAR_COLS.map((col) => (
-              <th key={col.key} className="text-right px-2 py-2 hidden lg:table-cell">
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {listed.map((player) => {
-            const full = detailsById.get(player.id)
-            const stats: LastYearStats | null | undefined =
-              statsFrom === 'projection' ? full?.projection : full?.last_year
-            const made = pickByPlayer.get(player.id)
-            const inQueue = queuedSet.has(player.id)
-            const isSuggested = suggested?.id === player.id
-            return (
-              <tr
-                key={player.id}
-                className={`border-t border-gray-100 dark:border-gray-800 ${
-                  made
-                    ? 'opacity-70'
-                    : inQueue
-                      ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
-                      : ''
-                }`}
-              >
-                <td className="px-2 py-2 tabular-nums text-xs text-gray-500">
-                  {isSearching ? adpRank.get(player.id) : userRank.get(player.id)}
-                </td>
-                <td className="px-2 py-2 min-w-[12rem]">
-                  <PlayerIdentityCell
-                    link={false}
-                    name={player.name}
-                    playerId={player.espn_id}
-                    photoUrl={full?.photo_url || espnHeadshotUrl(player.espn_id)}
-                    teamAbbr={player.team_abbr}
-                    positions={player.positions}
-                  />
-                </td>
-                <td className="px-2 py-2">
-                  {made ? (
-                    <span className="inline-block text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                      Drafted · {teamLabel(made.team, session.userTeam)} · #{made.pick}
-                    </span>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        disabled={!userTurn || !canRoster(player)}
-                        title={userTurn && !canRoster(player) ? 'No open roster spot for this player' : undefined}
-                        onClick={() => onDraft(player.id)}
-                        className={`px-2 py-1 rounded text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-                          userTurn && canRoster(player) ? 'ring-2 ring-blue-300 shadow-md' : ''
-                        }`}
-                      >
-                        Draft
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={inQueue ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
-                        aria-pressed={inQueue}
-                        onClick={() => toggleQueue(player.id)}
-                        className={`w-7 h-7 rounded text-sm font-bold leading-none flex items-center justify-center ${
-                          inQueue
-                            ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
-                        }`}
-                      >
-                        {inQueue ? '−' : '+'}
-                      </button>
-                    </div>
-                  )}
-                </td>
-                {LAST_YEAR_COLS.map((col) => (
-                  <td key={col.key} className="text-right px-2 py-2 tabular-nums text-xs hidden lg:table-cell">
-                    {formatLastYearStat(stats?.[col.key], col.pct, col.whole)}
+    <div>
+      <div className="overflow-auto max-h-[70vh]">
+        <table className="min-w-full text-sm">
+          <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-500">
+            <tr>
+              <th className="text-left px-2 py-2">Rk</th>
+              <th className="text-left px-2 py-2">Player</th>
+              <th className="px-2 py-2" />
+              {LAST_YEAR_COLS.map((col) => (
+                <th key={col.key} className="text-right px-2 py-2 hidden lg:table-cell">
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {paged.map((player) => {
+              const full = detailsById.get(player.id)
+              const stats: LastYearStats | null | undefined =
+                statsFrom === 'projection' ? full?.projection : full?.last_year
+              const made = pickByPlayer.get(player.id)
+              const inQueue = queuedSet.has(player.id)
+              const isSuggested = suggested?.id === player.id
+              return (
+                <tr
+                  key={player.id}
+                  className={`border-t border-gray-100 dark:border-gray-800 ${
+                    made
+                      ? 'opacity-70'
+                      : inQueue
+                        ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
+                        : ''
+                  }`}
+                >
+                  <td className="px-2 py-2 tabular-nums text-xs text-gray-500">
+                    {isSearching ? adpRank.get(player.id) : userRank.get(player.id)}
                   </td>
-                ))}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-      {listed.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-gray-400">
-          {isSearching ? 'No players match that name.' : 'No remaining players match those filters.'}
-        </p>
+                  <td className="px-2 py-2 min-w-[12rem]">
+                    <PlayerIdentityCell
+                      link={false}
+                      name={player.name}
+                      playerId={player.espn_id}
+                      photoUrl={full?.photo_url || espnHeadshotUrl(player.espn_id)}
+                      teamAbbr={player.team_abbr}
+                      positions={player.positions}
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    {made ? (
+                      <span className="inline-block text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                        Drafted · {teamLabel(made.team, session.userTeam)} · #{made.pick}
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          disabled={!userTurn || !canRoster(player)}
+                          title={userTurn && !canRoster(player) ? 'No open roster spot for this player' : undefined}
+                          onClick={() => onDraft(player.id)}
+                          className={`px-2 py-1 rounded text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
+                            userTurn && canRoster(player) ? 'ring-2 ring-blue-300 shadow-md' : ''
+                          }`}
+                        >
+                          Draft
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={inQueue ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
+                          aria-pressed={inQueue}
+                          onClick={() => toggleQueue(player.id)}
+                          className={`w-7 h-7 rounded text-sm font-bold leading-none flex items-center justify-center ${
+                            inQueue
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          {inQueue ? '−' : '+'}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  {LAST_YEAR_COLS.map((col) => (
+                    <td key={col.key} className="text-right px-2 py-2 tabular-nums text-xs hidden lg:table-cell">
+                      {formatLastYearStat(stats?.[col.key], col.pct, col.whole)}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {listed.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-gray-400">
+            {isSearching ? 'No players match that name.' : 'No remaining players match those filters.'}
+          </p>
+        ) : null}
+      </div>
+      {listed.length > 0 ? (
+        <PaginationBar
+          page={safePage}
+          totalPages={totalPages}
+          total={listed.length}
+          pageSize={resolvedPageSize}
+          from={from}
+          to={to}
+          onPage={setPage}
+          onPageSize={setPageSize}
+          className="border-t border-gray-200 dark:border-gray-700"
+        />
       ) : null}
     </div>
   )
