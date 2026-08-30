@@ -67,11 +67,13 @@ function AdpMobileCard({
   player,
   metric,
   sites,
+  listRank,
   onOpen,
 }: {
   player: AdpPlayer
   metric: AdpMetric
   sites: AdpSiteKey[]
+  listRank: number
   onOpen: () => void
 }) {
   const blend = blendValue(player, metric)
@@ -84,7 +86,7 @@ function AdpMobileCard({
     >
       <div className="flex items-center gap-2">
         <div className="w-6 shrink-0 text-right tabular-nums text-sm font-semibold text-gray-700 dark:text-gray-200">
-          {blendRank ?? '—'}
+          {listRank}
         </div>
         <div className="min-w-0 flex-1">
           <PlayerIdentityCell
@@ -129,6 +131,7 @@ function SortHeader({
   sortDir,
   onSort,
   title,
+  className = '',
 }: {
   label: string
   col: SortKey
@@ -136,11 +139,12 @@ function SortHeader({
   sortDir: 'asc' | 'desc'
   onSort: (col: SortKey) => void
   title?: string
+  className?: string
 }) {
   const active = sortBy === col
   return (
     <th
-      className="table-header text-right cursor-pointer select-none whitespace-nowrap"
+      className={`table-header text-right cursor-pointer select-none whitespace-nowrap ${className}`}
       title={title}
       onClick={() => onSort(col)}
     >
@@ -448,15 +452,23 @@ export default function AdpPage() {
         <div className="lg:hidden card overflow-x-hidden">
           {players.length > 0 ? listPager('border-b border-gray-200 dark:border-gray-700') : null}
           <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            <div className="w-6 shrink-0 text-right">#</div>
+            <button
+              type="button"
+              className="w-8 shrink-0 text-right"
+              title={sortDir === 'asc' ? 'Reverse current sort' : 'Restore current sort'}
+              onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
+            >
+              #{sortDir === 'asc' ? ' ↑' : ' ↓'}
+            </button>
             <div className="min-w-0 flex-1">Player</div>
           </div>
-          {players.map((p) => (
+          {players.map((p, i) => (
             <AdpMobileCard
               key={p.id}
               player={p}
               metric={metric}
               sites={visibleSites}
+              listRank={offset + i + 1}
               onOpen={() => setSelectedId(p.id)}
             />
           ))}
@@ -474,7 +486,13 @@ export default function AdpPage() {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th className="table-header text-right w-12">#</th>
+                <th
+                  className="table-header text-right w-12 cursor-pointer select-none whitespace-nowrap"
+                  title={sortDir === 'asc' ? 'Reverse current sort' : 'Restore current sort'}
+                  onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
+                >
+                  #{sortDir === 'asc' ? <span className="ml-1">↑</span> : <span className="ml-1">↓</span>}
+                </th>
                 <th className="table-header sticky left-0 z-10 bg-gray-50 dark:bg-gray-800">Player</th>
                 {visibleSites.map((site) => (
                   <SortHeader
@@ -506,10 +524,10 @@ export default function AdpPage() {
               </tr>
             </thead>
             <tbody>
-              {players.map((p) => (
+              {players.map((p, i) => (
                 <tr key={p.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60">
                   <td className="table-cell text-right text-gray-500">
-                    {(metric === 'adp' ? p.blend_rank : p.ranking_blend_rank) ?? '—'}
+                    {offset + i + 1}
                   </td>
                   <td className="table-cell sticky left-0 z-10 bg-white dark:bg-gray-900">
                     <PlayerIdentityCell
