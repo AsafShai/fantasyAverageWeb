@@ -3,6 +3,7 @@ import {
   parseRankingsCsvImport,
   rankingsCsvFileError,
   RANKINGS_CSV_HEADERS,
+  rankingsExportRows,
   toCsv,
 } from '../draftCsv'
 
@@ -95,6 +96,18 @@ describe('rankings CSV import', () => {
     const result = parseRankingsCsvImport(csv, extra)
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.order.at(-1)).toBe('99')
+  })
+
+  it('imports a Rankings & ADP export built with the shared row helper', () => {
+    const exported = players.map((p) => ({
+      ...p,
+      team_abbr: 'DEN',
+      positions: ['PG'],
+      espn_id: Number(p.id),
+    }))
+    const result = parseRankingsCsvImport(toCsv(rankingsExportRows(exported)), players)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.order).toEqual(players.map((p) => p.id))
   })
 
   it('still imports when an extra espn_id column is present', () => {

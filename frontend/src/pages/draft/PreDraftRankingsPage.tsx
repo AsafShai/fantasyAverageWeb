@@ -47,8 +47,9 @@ import {
   nextShortSeasonLabel,
   shortSeasonLabel,
 } from '../../utils/adp'
-import { downloadCsv, parseRankingsCsvImport, RANKINGS_CSV_HEADERS, rankingsCsvFileError, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
+import { downloadCsv, parseRankingsCsvImport, rankingsCsvFileError, rankingsExportRows, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
 import { pingEspnHelper, sendEspnRankings, toEspnRankingsPayload } from '../../utils/espnRankingsBridge'
+import EspnHelperInstallDialog from '../../components/draft/EspnHelperInstallDialog'
 import {
   EMPTY_RANKINGS,
   mergeIdsIntoRankings,
@@ -313,6 +314,7 @@ export default function PreDraftRankingsPage() {
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const [espnMsg, setEspnMsg] = useState<string | null>(null)
   const [espnHelper, setEspnHelper] = useState(false)
+  const [espnHelpOpen, setEspnHelpOpen] = useState(false)
   const [pendingImport, setPendingImport] = useState<Extract<RankingsCsvImportResult, { ok: true }> | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -598,7 +600,7 @@ export default function PreDraftRankingsPage() {
         return
       }
       if (typing) return
-      if (movePlayerId || pendingImport) return
+      if (movePlayerId || pendingImport || espnHelpOpen) return
       if (e.key === 'Escape') {
         setSelectedId(null)
         return
@@ -628,19 +630,10 @@ export default function PreDraftRankingsPage() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [board, dirty, movePlayerId, pendingImport, moveSelected, saveRankings])
+  }, [board, dirty, movePlayerId, pendingImport, espnHelpOpen, moveSelected, saveRankings])
 
   const exportCsv = () => {
-    const header = [...RANKINGS_CSV_HEADERS, 'espn_id']
-    const rows = ordered.map((p, i) => [
-      String(i + 1),
-      p.id,
-      p.name,
-      p.team_abbr ?? '',
-      p.positions.join('/'),
-      p.espn_id != null ? String(p.espn_id) : '',
-    ])
-    downloadCsv('pre-draft-rankings.csv', toCsv([header, ...rows]))
+    downloadCsv('pre-draft-rankings.csv', toCsv(rankingsExportRows(ordered)))
   }
 
   const applyOnEspn = async () => {
@@ -648,14 +641,13 @@ export default function PreDraftRankingsPage() {
     const helper = await pingEspnHelper()
     setEspnHelper(helper)
     if (!helper) {
-      setEspnMsg(
-        'Install the Chrome helper first: extension/README.md, then reload this page. The helper reorders ESPN’s unsaved list only — you click Save Rankings on ESPN.',
-      )
+      setEspnHelpOpen(true)
       return
     }
+    setEspnHelpOpen(false)
     const stored = await sendEspnRankings(toEspnRankingsPayload(ordered))
     if (!stored) {
-      setEspnMsg('Could not reach the helper. Reload this page after loading the extension.')
+      setEspnMsg('The helper is on, but this tab could not talk to it. Reload this page and click Apply on ESPN again.')
       return
     }
     setEspnMsg(
@@ -905,7 +897,7 @@ export default function PreDraftRankingsPage() {
             </button>
             <button
               type="button"
-              className={btnGhost}
+              className={`${btnGhost} hidden lg:inline-flex`}
               onClick={() => void applyOnEspn()}
               title={espnHelper ? 'Helper connected' : 'Requires the Chrome helper'}
             >
@@ -996,9 +988,6 @@ export default function PreDraftRankingsPage() {
                   className={menuItem}
                 >
                   Import CSV
-                </button>
-                <button type="button" role="menuitem" onClick={() => void applyOnEspn()} className={menuItem}>
-                  Apply on ESPN
                 </button>
               </div>
             )}
@@ -1218,6 +1207,9 @@ export default function PreDraftRankingsPage() {
           onClose={closeMoveTo}
           onNeedIds={onMoveNeedIds}
         />
+      ) : null}
+      {espnHelpOpen ? (
+        <EspnHelperInstallDialog onClose={() => setEspnHelpOpen(false)} onRetry={() => void applyOnEspn()} />
       ) : null}
       {pendingImport ? (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 px-0 sm:px-4" onClick={() => setPendingImport(null)}>

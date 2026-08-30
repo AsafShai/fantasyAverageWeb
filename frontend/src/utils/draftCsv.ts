@@ -7,6 +7,28 @@ const MAX_UNMATCHED_RATIO = 0.2
 
 export type RankingsCsvPlayer = { id: string; name: string }
 
+export type RankingsCsvExportPlayer = {
+  id: string
+  name: string
+  team_abbr?: string | null
+  positions: string[]
+  espn_id?: number | null
+}
+
+/** Same columns Pre-Draft Rankings and Mock Draft import (`rank,id,name,team,positions` plus espn_id). */
+export function rankingsExportRows(players: RankingsCsvExportPlayer[]): string[][] {
+  const header = [...RANKINGS_CSV_HEADERS, 'espn_id']
+  const rows = players.map((p, i) => [
+    String(i + 1),
+    p.id,
+    p.name,
+    p.team_abbr ?? '',
+    p.positions.join('/'),
+    p.espn_id != null ? String(p.espn_id) : '',
+  ])
+  return [header, ...rows]
+}
+
 export type RankingsCsvImportResult =
   | { ok: true; order: string[]; matched: number; unknown: string[] }
   | { ok: false; error: string }

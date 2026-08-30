@@ -149,8 +149,8 @@ export function draftTeamForPick(pick: number, teams: number, threeRr = true): n
   return isReverseRound(r, threeRr) ? teams - pos : pos + 1
 }
 
-export const DRAFT_TEAMS = 12
-export const DRAFT_ROUNDS = 15
+export const DRAFT_TEAMS = 13
+export const DRAFT_ROUNDS = 14
 export const DRAFT_PICKS = DRAFT_TEAMS * DRAFT_ROUNDS
 export const LEAGUE_SIZE_MIN = 8
 export const LEAGUE_SIZE_MAX = 16
