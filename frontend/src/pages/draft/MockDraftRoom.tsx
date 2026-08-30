@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { useGetAdpQuery } from '../../store/api/fantasyApi'
+import { stablePlayerIds } from '../../utils/draftRankings'
 import { useDebounce } from '../../hooks/useDebounce'
 import { useIsBelowLg } from '../../hooks/useIsBelowLg'
 import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
@@ -26,6 +27,7 @@ import {
   takenIds,
   teamLabel,
   teamOnTheClock,
+  tickerPickNumbers,
   totalPicks,
   type MockSession,
   type MockSessionPlayer,
@@ -54,6 +56,176 @@ function PencilIcon() {
   )
 }
 
+const MockPlayerTableRow = memo(function MockPlayerTableRow({
+  player,
+  rank,
+  photoUrl,
+  stats,
+  madeLabel,
+  inQueue,
+  isSuggested,
+  userTurn,
+  canDraft,
+  onDraft,
+  onToggleQueue,
+}: {
+  player: MockSessionPlayer
+  rank: number | undefined
+  photoUrl: string | null
+  stats: LastYearStats | null | undefined
+  madeLabel: string | null
+  inQueue: boolean
+  isSuggested: boolean
+  userTurn: boolean
+  canDraft: boolean
+  onDraft: (id: string) => void
+  onToggleQueue: (id: string) => void
+}) {
+  return (
+    <tr
+      className={`border-t border-gray-100 dark:border-gray-800 ${
+        madeLabel
+          ? 'opacity-70'
+          : inQueue
+            ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
+            : ''
+      }`}
+    >
+      <td className="px-2 py-2 tabular-nums text-xs text-gray-500">{rank}</td>
+      <td className="px-2 py-2 min-w-[12rem]">
+        <PlayerIdentityCell
+          link={false}
+          name={player.name}
+          playerId={player.espn_id}
+          photoUrl={photoUrl}
+          teamAbbr={player.team_abbr}
+          positions={player.positions}
+        />
+      </td>
+      <td className="px-2 py-2">
+        {madeLabel ? (
+          <span className="inline-block text-[11px] font-semibold text-gray-600 dark:text-gray-300">{madeLabel}</span>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={!userTurn || !canDraft}
+              title={userTurn && !canDraft ? 'No open roster spot for this player' : undefined}
+              onClick={() => onDraft(player.id)}
+              className={`px-2 py-1 rounded text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
+                userTurn && canDraft ? 'ring-2 ring-blue-300 shadow-md' : ''
+              }`}
+            >
+              Draft
+            </button>
+            <button
+              type="button"
+              aria-label={inQueue ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
+              aria-pressed={inQueue}
+              onClick={() => onToggleQueue(player.id)}
+              className={`w-7 h-7 rounded text-sm font-bold leading-none flex items-center justify-center ${
+                inQueue
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              {inQueue ? '−' : '+'}
+            </button>
+          </div>
+        )}
+      </td>
+      {LAST_YEAR_COLS.map((col) => (
+        <td key={col.key} className="text-right px-2 py-2 tabular-nums text-xs hidden lg:table-cell">
+          {formatLastYearStat(stats?.[col.key], col.pct, col.whole)}
+        </td>
+      ))}
+    </tr>
+  )
+})
+
+const MockPlayerCard = memo(function MockPlayerCard({
+  player,
+  rank,
+  photoUrl,
+  madePick,
+  inQueue,
+  isSuggested,
+  userTurn,
+  canDraft,
+  onOpen,
+  onDraft,
+  onToggleQueue,
+}: {
+  player: MockSessionPlayer
+  rank: number | undefined
+  photoUrl: string | null
+  madePick: number | null
+  inQueue: boolean
+  isSuggested: boolean
+  userTurn: boolean
+  canDraft: boolean
+  onOpen: (id: string) => void
+  onDraft: (id: string) => void
+  onToggleQueue: (id: string) => void
+}) {
+  return (
+    <div
+      className={`flex items-center gap-1.5 px-2 py-2 min-w-0 ${
+        madePick != null
+          ? 'opacity-70'
+          : inQueue
+            ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
+            : ''
+      }`}
+    >
+      <div className="w-6 shrink-0 text-right tabular-nums text-xs font-semibold text-gray-500">{rank}</div>
+      <button type="button" onClick={() => onOpen(player.id)} className="min-w-0 flex-1 text-left">
+        <PlayerIdentityCell
+          link={false}
+          name={player.name}
+          playerId={player.espn_id}
+          photoUrl={photoUrl}
+          teamAbbr={player.team_abbr}
+          positions={player.positions}
+          rowSelectOnMobile
+        />
+      </button>
+      {madePick != null ? (
+        <span className="shrink-0 max-w-[5.5rem] text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-right leading-tight">
+          #{madePick}
+        </span>
+      ) : (
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            disabled={!userTurn || !canDraft}
+            title={userTurn && !canDraft ? 'No open roster spot for this player' : undefined}
+            onClick={() => onDraft(player.id)}
+            className={`min-h-11 px-2.5 rounded-md text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
+              userTurn && canDraft ? 'ring-2 ring-blue-300 shadow-md' : ''
+            }`}
+          >
+            Draft
+          </button>
+          <button
+            type="button"
+            aria-label={inQueue ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
+            aria-pressed={inQueue}
+            onClick={() => onToggleQueue(player.id)}
+            className={`min-h-11 min-w-11 rounded-md text-lg font-bold leading-none flex items-center justify-center ${
+              inQueue
+                ? 'bg-blue-600 text-white'
+                : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
+            }`}
+          >
+            {inQueue ? '−' : '+'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+})
+
 function asIndex(player: MockSessionPlayer): AdpIndexPlayer {
   return {
     id: player.id,
@@ -67,8 +239,6 @@ function asIndex(player: MockSessionPlayer): AdpIndexPlayer {
     ranking_blend_rank: null,
   }
 }
-
-const ADP_POOL_PAGE_SIZE = 2000
 
 function espnHeadshotUrl(espnId: number | null | undefined): string | null {
   if (espnId == null || espnId <= 0) return null
@@ -158,6 +328,32 @@ function formatClock(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
 }
 
+function ClockFace({
+  deadlineMs,
+  frozenSec,
+  done,
+  unlimited,
+  className,
+}: {
+  deadlineMs: number | null
+  frozenSec: number | null
+  done: boolean
+  unlimited: boolean
+  className?: string
+}) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (deadlineMs == null || done) return
+    const id = window.setInterval(() => setNow(Date.now()), 200)
+    return () => window.clearInterval(id)
+  }, [deadlineMs, done])
+  if (done) return <span className={className}>—</span>
+  if (unlimited && deadlineMs == null && frozenSec == null) return <span className={className}>∞</span>
+  const seconds = deadlineMs != null ? Math.max(0, (deadlineMs - now) / 1000) : frozenSec
+  if (seconds == null) return <span className={className}>—</span>
+  return <span className={className}>{formatClock(seconds)}</span>
+}
+
 function TickerCell({
   pick,
   session,
@@ -165,7 +361,6 @@ function TickerCell({
   done,
   userTurn,
   currentRef,
-  compact,
 }: {
   pick: number
   session: MockSession
@@ -173,7 +368,6 @@ function TickerCell({
   done: boolean
   userTurn: boolean
   currentRef?: RefObject<HTMLDivElement | null>
-  compact?: boolean
 }) {
   const team = draftTeamForPick(pick, session.teams, session.threeRr)
   const made = session.picks[pick - 1]
@@ -181,14 +375,14 @@ function TickerCell({
   const roundStart = (pick - 1) % session.teams === 0
   return (
     <div className="flex">
-      {roundStart && !compact ? (
+      {roundStart ? (
         <div className="flex items-center justify-center w-14 shrink-0 text-[10px] font-bold uppercase text-gray-500 border-r border-gray-200 dark:border-gray-700">
           R{Math.floor((pick - 1) / session.teams) + 1}
         </div>
       ) : null}
       <div
         ref={current ? currentRef : undefined}
-        className={`${compact ? 'w-24' : 'w-28'} shrink-0 px-2 py-2 border-r border-gray-200 dark:border-gray-700 ${
+        className={`w-28 shrink-0 px-2 py-2 border-r border-gray-200 dark:border-gray-700 ${
           current && userTurn
             ? 'bg-blue-600 text-white'
             : current
@@ -199,7 +393,6 @@ function TickerCell({
         }`}
       >
         <div className={`text-[10px] font-semibold ${current && userTurn ? 'text-blue-100' : 'text-gray-500'}`}>
-          {compact ? `R${Math.floor((pick - 1) / session.teams) + 1} · ` : ''}
           PICK {pick}
         </div>
         <div className="text-xs font-semibold truncate">{teamLabel(team, session.userTeam)}</div>
@@ -224,6 +417,7 @@ function TickerTrack({
   done,
   userTurn,
   currentRef,
+  windowed = false,
 }: {
   session: MockSession
   pickNow: number
@@ -231,13 +425,18 @@ function TickerTrack({
   done: boolean
   userTurn: boolean
   currentRef: RefObject<HTMLDivElement | null>
+  windowed?: boolean
 }) {
+  const picks = useMemo(
+    () => tickerPickNumbers(total, pickNow, done, windowed),
+    [total, pickNow, done, windowed],
+  )
   return (
     <div className="flex min-w-max">
-      {Array.from({ length: total }, (_, i) => (
+      {picks.map((pick) => (
         <TickerCell
-          key={i + 1}
-          pick={i + 1}
+          key={pick}
+          pick={pick}
           session={session}
           pickNow={pickNow}
           done={done}
@@ -590,6 +789,7 @@ function MockPlayerSheet({
               teamAbbr={player.team_abbr}
               positions={player.positions}
               wrapName
+              photoSize="full"
             />
           </div>
           <div className="text-right shrink-0">
@@ -782,7 +982,8 @@ function PickToasts({
 
 export default function MockDraftRoom({
   session,
-  secondsLeft,
+  clockDeadlineMs,
+  clockFrozenSec,
   paused,
   onDraft,
   onMoveRoster,
@@ -792,7 +993,8 @@ export default function MockDraftRoom({
   onLeave,
 }: {
   session: MockSession
-  secondsLeft: number | null
+  clockDeadlineMs: number | null
+  clockFrozenSec: number | null
   paused: boolean
   onDraft: (playerId: string) => void
   onMoveRoster: (fromIndex: number, toIndex: number) => void
@@ -828,14 +1030,13 @@ export default function MockDraftRoom({
   const wasUserTurn = useRef(false)
   const toastTimers = useRef<number[]>([])
   const [moreOpen, setMoreOpen] = useState(false)
-  const [tickerOpen, setTickerOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<PageSize>(25)
 
   useEffect(() => {
     currentRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
-  }, [session.picks.length, tickerOpen])
+  }, [session.picks.length])
 
   useEffect(() => {
     const rail = historyRailRef.current
@@ -863,7 +1064,6 @@ export default function MockDraftRoom({
   useEffect(() => {
     if (!isBelowLg) {
       setMoreOpen(false)
-      setTickerOpen(false)
       setSelectedId(null)
     }
   }, [isBelowLg])
@@ -968,10 +1168,9 @@ export default function MockDraftRoom({
   const totalPages = Math.max(1, Math.ceil(listed.length / resolvedPageSize))
   const safePage = Math.min(page, totalPages)
   const paged = useMemo(() => {
-    if (!isBelowLg) return listed
     const start = (safePage - 1) * resolvedPageSize
     return listed.slice(start, start + resolvedPageSize)
-  }, [isBelowLg, listed, safePage, resolvedPageSize])
+  }, [listed, safePage, resolvedPageSize])
   const from = listed.length === 0 ? 0 : (safePage - 1) * resolvedPageSize + 1
   const to = Math.min(safePage * resolvedPageSize, listed.length)
 
@@ -979,13 +1178,35 @@ export default function MockDraftRoom({
     setPage(1)
   }, [debouncedSearch, teamFilter, posFilter, resolvedPageSize])
 
-  // One unfiltered fetch covers the whole pool: ?ids= is capped at 120 server-side, so
-  // per-page hydration silently left every row past the cap without stats.
-  const { data: details } = useGetAdpQuery({ page_size: ADP_POOL_PAGE_SIZE, ranked_only: false })
-  const detailsById = useMemo(() => {
-    const map = new Map<string, AdpPlayer>()
-    for (const player of details?.players ?? []) map.set(player.id, player)
-    return map
+  const [detailsById, setDetailsById] = useState<Map<string, AdpPlayer>>(() => new Map())
+  const neededDetailIds = useMemo(() => {
+    const ids = paged.map((p) => p.id)
+    ids.push(...queue)
+    if (selectedId) ids.push(selectedId)
+    for (const pk of session.picks) ids.push(pk.playerId)
+    return stablePlayerIds(ids)
+  }, [paged, queue, selectedId, session.picks])
+  const missingDetailIds = useMemo(
+    () => neededDetailIds.filter((id) => !detailsById.has(id)),
+    [neededDetailIds, detailsById],
+  )
+  const { data: details } = useGetAdpQuery(
+    { ids: missingDetailIds.join(','), include_stats: true, ranked_only: false },
+    { skip: missingDetailIds.length === 0 },
+  )
+  useEffect(() => {
+    if (!details?.players.length) return
+    setDetailsById((prev) => {
+      let changed = false
+      const next = new Map(prev)
+      for (const player of details.players) {
+        if (next.get(player.id) !== player) {
+          next.set(player.id, player)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
   }, [details])
 
   const boardPicks = useMemo(() => {
@@ -1004,8 +1225,15 @@ export default function MockDraftRoom({
       ? 'You’re on the clock'
       : `Drafting: ${onClock != null ? teamLabel(onClock, session.userTeam) : '—'}`
 
-  const clockValue =
-    secondsLeft != null && !done ? formatClock(secondsLeft) : done ? '—' : userTurn && session.userClockSec === 0 ? '∞' : '—'
+  const clockUnlimited = userTurn && session.userClockSec === 0
+  const clockValue = (
+    <ClockFace
+      deadlineMs={clockDeadlineMs}
+      frozenSec={clockFrozenSec}
+      done={done}
+      unlimited={clockUnlimited}
+    />
+  )
 
   const whoIsUp = done
     ? 'Draft complete'
@@ -1015,19 +1243,12 @@ export default function MockDraftRoom({
         ? `${teamLabel(onClock, session.userTeam)} is on the clock`
         : '—'
 
-  const compactPicks = useMemo(() => {
-    if (done) {
-      const start = Math.max(1, total - 3)
-      return Array.from({ length: total - start + 1 }, (_, i) => start + i)
-    }
-    const picks: number[] = []
-    for (let p = pickNow; p <= total && picks.length < 4; p++) picks.push(p)
-    return picks
-  }, [done, total, pickNow])
-
-  const toggleQueue = (id: string) => {
+  const toggleQueue = useCallback((id: string) => {
     setQueue((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
-  }
+  }, [])
+  const openPlayer = useCallback((id: string) => {
+    setSelectedId(id)
+  }, [])
 
   const selectedPlayer = selectedId ? session.players[selectedId] : undefined
   const selectedFull = selectedId ? detailsById.get(selectedId) : undefined
@@ -1115,7 +1336,24 @@ export default function MockDraftRoom({
     </div>
   )
 
+  const listPager = (className = '') =>
+    listed.length > 0 ? (
+      <PaginationBar
+        page={safePage}
+        totalPages={totalPages}
+        total={listed.length}
+        pageSize={resolvedPageSize}
+        from={from}
+        to={to}
+        onPage={setPage}
+        onPageSize={setPageSize}
+        className={className}
+      />
+    ) : null
+
   const playerTable = (
+    <div>
+      {listPager('border-b border-gray-200 dark:border-gray-700')}
     <div className="overflow-auto max-h-[70vh]">
       <table className="min-w-full text-sm">
         <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-500">
@@ -1131,77 +1369,28 @@ export default function MockDraftRoom({
           </tr>
         </thead>
         <tbody>
-          {listed.map((player) => {
+          {paged.map((player) => {
             const full = detailsById.get(player.id)
             const stats: LastYearStats | null | undefined =
               statsFrom === 'projection' ? full?.projection : full?.last_year
             const made = pickByPlayer.get(player.id)
-            const inQueue = queuedSet.has(player.id)
-            const isSuggested = suggested?.id === player.id
             return (
-              <tr
+              <MockPlayerTableRow
                 key={player.id}
-                className={`border-t border-gray-100 dark:border-gray-800 ${
-                  made
-                    ? 'opacity-70'
-                    : inQueue
-                      ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
-                      : ''
-                }`}
-              >
-                <td className="px-2 py-2 tabular-nums text-xs text-gray-500">
-                  {isSearching ? adpRank.get(player.id) : userRank.get(player.id)}
-                </td>
-                <td className="px-2 py-2 min-w-[12rem]">
-                  <PlayerIdentityCell
-                    link={false}
-                    name={player.name}
-                    playerId={player.espn_id}
-                    photoUrl={full?.photo_url || espnHeadshotUrl(player.espn_id)}
-                    teamAbbr={player.team_abbr}
-                    positions={player.positions}
-                  />
-                </td>
-                <td className="px-2 py-2">
-                  {made ? (
-                    <span className="inline-block text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                      Drafted · {teamLabel(made.team, session.userTeam)} · #{made.pick}
-                    </span>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        disabled={!userTurn || !canRoster(player)}
-                        title={userTurn && !canRoster(player) ? 'No open roster spot for this player' : undefined}
-                        onClick={() => onDraft(player.id)}
-                        className={`px-2 py-1 rounded text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-                          userTurn && canRoster(player) ? 'ring-2 ring-blue-300 shadow-md' : ''
-                        }`}
-                      >
-                        Draft
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={inQueue ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
-                        aria-pressed={inQueue}
-                        onClick={() => toggleQueue(player.id)}
-                        className={`w-7 h-7 rounded text-sm font-bold leading-none flex items-center justify-center ${
-                          inQueue
-                            ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
-                        }`}
-                      >
-                        {inQueue ? '−' : '+'}
-                      </button>
-                    </div>
-                  )}
-                </td>
-                {LAST_YEAR_COLS.map((col) => (
-                  <td key={col.key} className="text-right px-2 py-2 tabular-nums text-xs hidden lg:table-cell">
-                    {formatLastYearStat(stats?.[col.key], col.pct, col.whole)}
-                  </td>
-                ))}
-              </tr>
+                player={player}
+                rank={isSearching ? adpRank.get(player.id) : userRank.get(player.id)}
+                photoUrl={full?.photo_url || espnHeadshotUrl(player.espn_id)}
+                stats={stats}
+                madeLabel={
+                  made ? `Drafted · ${teamLabel(made.team, session.userTeam)} · #${made.pick}` : null
+                }
+                inQueue={queuedSet.has(player.id)}
+                isSuggested={suggested?.id === player.id}
+                userTurn={userTurn}
+                canDraft={canRoster(player)}
+                onDraft={onDraft}
+                onToggleQueue={toggleQueue}
+              />
             )
           })}
         </tbody>
@@ -1212,90 +1401,32 @@ export default function MockDraftRoom({
         </p>
       ) : null}
     </div>
+      {listPager('border-t border-gray-200 dark:border-gray-700')}
+    </div>
   )
 
   const playerCards = (
     <div>
-      {listed.length > 0 ? (
-        <PaginationBar
-          page={safePage}
-          totalPages={totalPages}
-          total={listed.length}
-          pageSize={resolvedPageSize}
-          from={from}
-          to={to}
-          onPage={setPage}
-          onPageSize={setPageSize}
-          className="border-b border-gray-200 dark:border-gray-700"
-        />
-      ) : null}
+      {listPager('border-b border-gray-200 dark:border-gray-700')}
       <div className="divide-y divide-gray-100 dark:divide-gray-800">
         {paged.map((player) => {
           const full = detailsById.get(player.id)
           const made = pickByPlayer.get(player.id)
-          const inQueue = queuedSet.has(player.id)
-          const isSuggested = suggested?.id === player.id
-          const rank = isSearching ? adpRank.get(player.id) : userRank.get(player.id)
           return (
-            <div
+            <MockPlayerCard
               key={player.id}
-              className={`flex items-center gap-1.5 px-2 py-2 min-w-0 ${
-                made
-                  ? 'opacity-70'
-                  : inQueue
-                    ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
-                    : ''
-              }`}
-            >
-              <div className="w-6 shrink-0 text-right tabular-nums text-xs font-semibold text-gray-500">{rank}</div>
-              <button
-                type="button"
-                onClick={() => setSelectedId(player.id)}
-                className="min-w-0 flex-1 text-left"
-              >
-                <PlayerIdentityCell
-                  link={false}
-                  name={player.name}
-                  playerId={player.espn_id}
-                  photoUrl={full?.photo_url || espnHeadshotUrl(player.espn_id)}
-                  teamAbbr={player.team_abbr}
-                  positions={player.positions}
-                  rowSelectOnMobile
-                />
-              </button>
-              {made ? (
-                <span className="shrink-0 max-w-[5.5rem] text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-right leading-tight">
-                  #{made.pick}
-                </span>
-              ) : (
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    disabled={!userTurn || !canRoster(player)}
-                    title={userTurn && !canRoster(player) ? 'No open roster spot for this player' : undefined}
-                    onClick={() => onDraft(player.id)}
-                    className={`min-h-11 px-2.5 rounded-md text-xs font-bold bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-                      userTurn && canRoster(player) ? 'ring-2 ring-blue-300 shadow-md' : ''
-                    }`}
-                  >
-                    Draft
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={inQueue ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
-                    aria-pressed={inQueue}
-                    onClick={() => toggleQueue(player.id)}
-                    className={`min-h-11 min-w-11 rounded-md text-lg font-bold leading-none flex items-center justify-center ${
-                      inQueue
-                        ? 'bg-blue-600 text-white'
-                        : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
-                    }`}
-                  >
-                    {inQueue ? '−' : '+'}
-                  </button>
-                </div>
-              )}
-            </div>
+              player={player}
+              rank={isSearching ? adpRank.get(player.id) : userRank.get(player.id)}
+              photoUrl={full?.photo_url || espnHeadshotUrl(player.espn_id)}
+              madePick={made?.pick ?? null}
+              inQueue={queuedSet.has(player.id)}
+              isSuggested={suggested?.id === player.id}
+              userTurn={userTurn}
+              canDraft={canRoster(player)}
+              onOpen={openPlayer}
+              onDraft={onDraft}
+              onToggleQueue={toggleQueue}
+            />
           )
         })}
       </div>
@@ -1303,19 +1434,9 @@ export default function MockDraftRoom({
         <p className="px-4 py-6 text-sm text-gray-400">
           {isSearching ? 'No players match that name.' : 'No remaining players match those filters.'}
         </p>
-      ) : listed.length > 0 ? (
-        <PaginationBar
-          page={safePage}
-          totalPages={totalPages}
-          total={listed.length}
-          pageSize={resolvedPageSize}
-          from={from}
-          to={to}
-          onPage={setPage}
-          onPageSize={setPageSize}
-          className="border-t border-gray-200 dark:border-gray-700"
-        />
-      ) : null}
+      ) : (
+        listPager('border-t border-gray-200 dark:border-gray-700')
+      )}
     </div>
   )
 
@@ -1340,8 +1461,16 @@ export default function MockDraftRoom({
                 </span>
               </div>
             ) : null}
-            {secondsLeft != null ? (
-              <div className="text-white tabular-nums text-xl font-bold">{formatClock(secondsLeft)} left on the clock</div>
+            {clockDeadlineMs != null || clockFrozenSec != null ? (
+              <div className="text-white tabular-nums text-xl font-bold">
+                <ClockFace
+                  deadlineMs={clockDeadlineMs}
+                  frozenSec={clockFrozenSec}
+                  done={done}
+                  unlimited={clockUnlimited}
+                />{' '}
+                left on the clock
+              </div>
             ) : null}
             <button
               type="button"
@@ -1419,38 +1548,16 @@ export default function MockDraftRoom({
         </div>
         <div className="flex items-stretch border-t border-gray-200 dark:border-gray-700">
           <div className="flex-1 overflow-x-auto">
-            {tickerOpen ? (
-              <TickerTrack
-                session={session}
-                pickNow={pickNow}
-                total={total}
-                done={done}
-                userTurn={userTurn}
-                currentRef={currentRef}
-              />
-            ) : (
-              <div className="flex min-w-max">
-                {compactPicks.map((pick) => (
-                  <TickerCell
-                    key={pick}
-                    pick={pick}
-                    session={session}
-                    pickNow={pickNow}
-                    done={done}
-                    userTurn={userTurn}
-                    compact
-                  />
-                ))}
-              </div>
-            )}
+            <TickerTrack
+              session={session}
+              pickNow={pickNow}
+              total={total}
+              done={done}
+              userTurn={userTurn}
+              currentRef={currentRef}
+              windowed
+            />
           </div>
-          <button
-            type="button"
-            onClick={() => setTickerOpen((cur) => !cur)}
-            className="shrink-0 min-h-11 px-2 text-[11px] font-bold text-blue-700 dark:text-blue-300 border-l border-gray-200 dark:border-gray-700"
-          >
-            {tickerOpen ? 'Hide' : 'Full ticker'}
-          </button>
         </div>
       </div>
       ) : (
@@ -1506,6 +1613,7 @@ export default function MockDraftRoom({
               done={done}
               userTurn={userTurn}
               currentRef={currentRef}
+              windowed
             />
           </div>
         </div>

@@ -20,7 +20,8 @@ SORT_KEYS = (
     "ranking_spread",
 )
 _SITE_KEYS = ("espn", "fantrax", "sleeper", "yahoo")
-_IDS_CAP = 120
+# Page + queue + history in one mock-room hydrate. Was 120, which forced a 2000-row dump.
+_IDS_CAP = 400
 
 
 def team_abbrs(players: list[AdpPlayer]) -> list[str]:

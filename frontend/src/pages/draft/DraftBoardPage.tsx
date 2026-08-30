@@ -68,6 +68,7 @@ export default function DraftBoardPage() {
     sites: sitesParam,
     rank_sites: rankSitesParam,
     metric,
+    include_stats: false,
   })
   if (data?.providers?.length && data.providers !== providers) setProviders(data.providers)
   const players = data?.players ?? []

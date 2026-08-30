@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetAdpQuery, useLazyGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
@@ -63,7 +63,7 @@ function FooterStat({
   )
 }
 
-function AdpMobileCard({
+const AdpMobileCard = memo(function AdpMobileCard({
   player,
   metric,
   sites,
@@ -74,14 +74,14 @@ function AdpMobileCard({
   metric: AdpMetric
   sites: AdpSiteKey[]
   listRank: number
-  onOpen: () => void
+  onOpen: (id: string) => void
 }) {
   const blend = blendValue(player, metric)
   const blendRank = metric === 'adp' ? player.blend_rank : player.ranking_blend_rank
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => onOpen(player.id)}
       className="w-full text-left px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/70"
     >
       <div className="flex items-center gap-2">
@@ -122,7 +122,55 @@ function AdpMobileCard({
       </div>
     </button>
   )
-}
+})
+
+const AdpTableRow = memo(function AdpTableRow({
+  player,
+  metric,
+  sites,
+  listRank,
+}: {
+  player: AdpPlayer
+  metric: AdpMetric
+  sites: AdpSiteKey[]
+  listRank: number
+}) {
+  const blend = blendValue(player, metric)
+  return (
+    <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60">
+      <td className="table-cell text-right text-gray-500">{listRank}</td>
+      <td className="table-cell sticky left-0 z-10 bg-white dark:bg-gray-900">
+        <PlayerIdentityCell
+          name={player.name}
+          playerId={player.espn_id}
+          photoUrl={player.photo_url}
+          teamAbbr={player.team_abbr}
+          positions={player.positions}
+        />
+      </td>
+      {sites.map((site) => {
+        const value = siteValue(player, site, metric)
+        return (
+          <td key={site} className={`table-cell text-right ${adpDeltaClass(value, blend)}`}>
+            <div>{formatAdp(value)}</div>
+            {metric === 'adp' && player[site].rank != null ? (
+              <div className="text-[10px] text-gray-400 font-normal">#{player[site].rank}</div>
+            ) : null}
+          </td>
+        )
+      })}
+      <td className="table-cell text-right font-semibold">
+        {formatAdp(blend)}
+        {(metric === 'adp' ? player.blend_rank : player.ranking_blend_rank) != null ? (
+          <div className="text-[10px] text-gray-400 font-normal">
+            #{metric === 'adp' ? player.blend_rank : player.ranking_blend_rank}
+          </div>
+        ) : null}
+      </td>
+      <td className="table-cell text-right text-gray-500">{formatAdp(spreadValue(player, metric))}</td>
+    </tr>
+  )
+})
 
 function SortHeader({
   label,
@@ -201,6 +249,7 @@ export default function AdpPage() {
       sites: sitesParam,
       rank_sites: rankSitesParam,
       metric,
+      include_stats: false,
     }),
     [
       page,
@@ -246,6 +295,9 @@ export default function AdpPage() {
       setSortDir('asc')
     }
   }
+  const openPlayer = useCallback((id: string) => {
+    setSelectedId(id)
+  }, [])
 
   const togglePos = (pos: string) => {
     setPosFilter((prev) => (prev.includes(pos) ? prev.filter((p) => p !== pos) : [...prev, pos]))
@@ -265,6 +317,7 @@ export default function AdpPage() {
         sites: sitesParam,
         rank_sites: rankSitesParam,
         metric,
+        include_stats: false,
       }).unwrap()
       downloadCsv('pre-draft-rankings.csv', toCsv(rankingsExportRows(result.players)))
     } finally {
@@ -449,7 +502,8 @@ export default function AdpPage() {
       </div>
 
       <div ref={listRef} className={isFetching ? 'opacity-70' : undefined}>
-        <div className="lg:hidden card overflow-x-hidden">
+        {isBelowLg ? (
+        <div className="card overflow-x-hidden">
           {players.length > 0 ? listPager('border-b border-gray-200 dark:border-gray-700') : null}
           <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
             <button
@@ -469,7 +523,7 @@ export default function AdpPage() {
               metric={metric}
               sites={visibleSites}
               listRank={offset + i + 1}
-              onOpen={() => setSelectedId(p.id)}
+              onOpen={openPlayer}
             />
           ))}
           {players.length === 0 ? (
@@ -478,8 +532,8 @@ export default function AdpPage() {
             listPager('border-t border-gray-200 dark:border-gray-700')
           )}
         </div>
-
-        <div className="hidden lg:block card overflow-x-auto">
+        ) : (
+        <div className="card overflow-x-auto">
           {/* Changing page scrolls the list top into view, so the pager has to exist up here
               too -- otherwise every click leaves the controls off-screen below the fold. */}
           {listPager('border-b border-gray-200 dark:border-gray-700')}
@@ -525,45 +579,13 @@ export default function AdpPage() {
             </thead>
             <tbody>
               {players.map((p, i) => (
-                <tr key={p.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                  <td className="table-cell text-right text-gray-500">
-                    {offset + i + 1}
-                  </td>
-                  <td className="table-cell sticky left-0 z-10 bg-white dark:bg-gray-900">
-                    <PlayerIdentityCell
-                      name={p.name}
-                      playerId={p.espn_id}
-                      photoUrl={p.photo_url}
-                      teamAbbr={p.team_abbr}
-                      positions={p.positions}
-                    />
-                  </td>
-                  {visibleSites.map((site) => {
-                    const value = siteValue(p, site, metric)
-                    return (
-                      <td
-                        key={site}
-                        className={`table-cell text-right ${adpDeltaClass(value, blendValue(p, metric))}`}
-                      >
-                        <div>{formatAdp(value)}</div>
-                        {metric === 'adp' && p[site].rank != null ? (
-                          <div className="text-[10px] text-gray-400 font-normal">#{p[site].rank}</div>
-                        ) : null}
-                      </td>
-                    )
-                  })}
-                  <td className="table-cell text-right font-semibold">
-                    {formatAdp(blendValue(p, metric))}
-                    {(metric === 'adp' ? p.blend_rank : p.ranking_blend_rank) != null ? (
-                      <div className="text-[10px] text-gray-400 font-normal">
-                        #{metric === 'adp' ? p.blend_rank : p.ranking_blend_rank}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="table-cell text-right text-gray-500">
-                    {formatAdp(spreadValue(p, metric))}
-                  </td>
-                </tr>
+                <AdpTableRow
+                  key={p.id}
+                  player={p}
+                  metric={metric}
+                  sites={visibleSites}
+                  listRank={offset + i + 1}
+                />
               ))}
             </tbody>
           </table>
@@ -573,6 +595,7 @@ export default function AdpPage() {
             listPager('border-t border-gray-200 dark:border-gray-700')
           )}
         </div>
+        )}
       </div>
 
       {isBelowLg && selectedPlayer ? (

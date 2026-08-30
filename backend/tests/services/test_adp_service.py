@@ -6,6 +6,7 @@ import pytest
 from app.models.adp import AdpPlayer, AdpResponse, LastYearStats, SiteAdp
 from app.models.nba_player_models import NbaPlayerBio
 from app.services.adp_service import (
+    apply_blend_sites,
     apply_last_year_stats,
     apply_projection_stats,
     apply_visible_sites,
@@ -96,6 +97,31 @@ def test_apply_visible_sites_recomputes_blend_and_ranks():
     same = apply_visible_sites([a, b], ("espn", "fantrax", "sleeper", "yahoo"), "adp")
     assert same is not out
     assert same[0] is a
+
+
+def test_apply_blend_sites_reuses_the_same_player_list():
+    reset_adp_cache()
+    players = [
+        AdpPlayer(
+            id="p",
+            name="P",
+            espn=SiteAdp(adp=10.0, ranking=8),
+            fantrax=SiteAdp(adp=20.0, ranking=12),
+            sleeper=SiteAdp(adp=30.0, ranking=40),
+            yahoo=SiteAdp(adp=40.0, ranking=60),
+            blend=25.0,
+            ranking_blend=30.0,
+        )
+    ]
+    first = apply_blend_sites(players, sites="espn,fantrax", rank_sites="espn")
+    second = apply_blend_sites(players, sites="espn,fantrax", rank_sites="espn")
+    assert first is second
+    assert first[0].blend == 15.0
+    other = apply_blend_sites(players, sites="espn", rank_sites="espn")
+    assert other is not first
+    reset_adp_cache()
+    third = apply_blend_sites(players, sites="espn,fantrax", rank_sites="espn")
+    assert third is not first
 
 
 def test_apply_visible_sites_keeps_the_two_blends_independent():
