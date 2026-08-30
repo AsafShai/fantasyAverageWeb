@@ -802,7 +802,7 @@ export default function MockDraftRoom({
   const debouncedSearch = useDebounce(search, 200)
   const [posFilter, setPosFilter] = useState<string | 'all'>('all')
   const [teamFilter, setTeamFilter] = useState('')
-  const [statsFrom, setStatsFrom] = useState<StatsFrom>('projection')
+  const [statsFrom, setStatsFrom] = useState<StatsFrom>('actual')
   const [queue, setQueue] = useState<string[]>([])
   const queueRef = useRef<string[]>([])
   queueRef.current = queue
