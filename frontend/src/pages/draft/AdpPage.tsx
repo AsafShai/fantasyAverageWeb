@@ -502,7 +502,8 @@ export default function AdpPage() {
       </div>
 
       <div ref={listRef} className={isFetching ? 'opacity-70' : undefined}>
-        <div className="lg:hidden card overflow-x-hidden">
+        {isBelowLg ? (
+        <div className="card overflow-x-hidden">
           {players.length > 0 ? listPager('border-b border-gray-200 dark:border-gray-700') : null}
           <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
             <button
@@ -531,8 +532,8 @@ export default function AdpPage() {
             listPager('border-t border-gray-200 dark:border-gray-700')
           )}
         </div>
-
-        <div className="hidden lg:block card overflow-x-auto">
+        ) : (
+        <div className="card overflow-x-auto">
           {/* Changing page scrolls the list top into view, so the pager has to exist up here
               too -- otherwise every click leaves the controls off-screen below the fold. */}
           {listPager('border-b border-gray-200 dark:border-gray-700')}
@@ -594,6 +595,7 @@ export default function AdpPage() {
             listPager('border-t border-gray-200 dark:border-gray-700')
           )}
         </div>
+        )}
       </div>
 
       {isBelowLg && selectedPlayer ? (
