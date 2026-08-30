@@ -68,7 +68,7 @@ function asIndex(player: MockSessionPlayer): AdpIndexPlayer {
   }
 }
 
-const ADP_IDS_CAP = 120
+const ADP_POOL_PAGE_SIZE = 2000
 
 function espnHeadshotUrl(espnId: number | null | undefined): string | null {
   if (espnId == null || espnId <= 0) return null
@@ -954,25 +954,14 @@ export default function MockDraftRoom({
     setPage(1)
   }, [debouncedSearch, teamFilter, posFilter, resolvedPageSize])
 
-  const hydrateIds = useMemo(() => {
-    const ids = (isBelowLg ? paged : listed.slice(0, 80)).map((p) => p.id)
-    for (const player of queuedPlayers) ids.push(player.id)
-    if (selectedId) ids.push(selectedId)
-    return [...new Set(ids)]
-  }, [isBelowLg, paged, listed, queuedPlayers, selectedId])
-  const { data: details } = useGetAdpQuery({ ids: hydrateIds.join(',') }, { skip: hydrateIds.length === 0 })
-  const draftedIds = useMemo(() => session.picks.map((pk) => pk.playerId), [session.picks])
-  const draftedBatchA = draftedIds.slice(0, ADP_IDS_CAP).join(',')
-  const draftedBatchB = draftedIds.slice(ADP_IDS_CAP, ADP_IDS_CAP * 2).join(',')
-  const { data: draftedA } = useGetAdpQuery({ ids: draftedBatchA }, { skip: !draftedBatchA })
-  const { data: draftedB } = useGetAdpQuery({ ids: draftedBatchB }, { skip: !draftedBatchB })
+  // One unfiltered fetch covers the whole pool: ?ids= is capped at 120 server-side, so
+  // per-page hydration silently left every row past the cap without stats.
+  const { data: details } = useGetAdpQuery({ page_size: ADP_POOL_PAGE_SIZE, ranked_only: false })
   const detailsById = useMemo(() => {
     const map = new Map<string, AdpPlayer>()
-    for (const player of [...(details?.players ?? []), ...(draftedA?.players ?? []), ...(draftedB?.players ?? [])]) {
-      map.set(player.id, player)
-    }
+    for (const player of details?.players ?? []) map.set(player.id, player)
     return map
-  }, [details, draftedA, draftedB])
+  }, [details])
 
   const boardPicks = useMemo(() => {
     const ordered = session.picks.map((pk) => hydrateAdpPlayer(asIndex(session.players[pk.playerId]), detailsById.get(pk.playerId)))
