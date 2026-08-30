@@ -436,26 +436,37 @@ function PickHistoryList({
   session,
   detailsById,
   stacked,
+  ascending = false,
+  className,
 }: {
   session: MockSession
   detailsById: Map<string, AdpPlayer>
   stacked: boolean
+  ascending?: boolean
+  className?: string
 }) {
+  const picks = ascending ? session.picks : [...session.picks].reverse()
+  const latestPick = session.picks[session.picks.length - 1]?.pick
   if (session.picks.length === 0) {
     return (
-      <ol className="max-h-[70vh] overflow-auto">
+      <ol className={className ?? 'max-h-[70vh] overflow-auto'}>
         <li className="px-4 py-6 text-sm text-gray-400">No picks yet.</li>
       </ol>
     )
   }
   return (
-    <ol className="max-h-[70vh] overflow-auto divide-y divide-gray-100 dark:divide-gray-800">
-      {[...session.picks].reverse().map((pk) => {
+    <ol className={className ?? 'max-h-[70vh] overflow-auto divide-y divide-gray-100 dark:divide-gray-800'}>
+      {picks.map((pk) => {
         const player = session.players[pk.playerId]
         const full = player ? detailsById.get(player.id) : undefined
         if (stacked) {
           return (
-            <li key={pk.pick} className="px-4 py-3 space-y-2">
+            <li
+              key={pk.pick}
+              className={`px-4 py-3 space-y-2 ${
+                ascending && pk.pick === latestPick ? 'bg-blue-50 dark:bg-blue-950/40' : ''
+              }`}
+            >
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-gray-500">
                 <span className="font-bold tabular-nums text-gray-700 dark:text-gray-200">#{pk.pick}</span>
                 <span>
@@ -720,23 +731,26 @@ function PickToasts({
   userTeam: number
   placement: 'desktop' | 'mobile'
 }) {
-  const shown = toasts.slice(placement === 'mobile' ? -2 : -TOAST_MAX)
+  const shown = (placement === 'desktop' ? toasts.filter((t) => t.fromQueue) : toasts).slice(
+    placement === 'mobile' ? -2 : -TOAST_MAX,
+  )
   if (shown.length === 0) return null
   return (
     <div
       className={
         placement === 'mobile'
-          ? 'flex flex-col gap-2 items-stretch mx-auto w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] py-2 pointer-events-auto'
+          ? 'fixed inset-x-6 z-50 flex flex-col gap-1 items-stretch pointer-events-none bottom-[calc(4.5rem+env(safe-area-inset-bottom)+0.5rem)]'
           : 'fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end max-h-[70vh] overflow-y-auto pointer-events-auto'
       }
     >
       {shown.map((toast) => {
         const yours = toast.team === userTeam
+        const compact = placement === 'mobile'
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto overflow-hidden rounded-lg shadow-xl w-full ${
-              placement === 'desktop' ? 'max-w-xs w-72' : ''
+            className={`pointer-events-auto overflow-hidden shadow-xl w-full ${
+              compact ? 'rounded-md max-w-[16rem] mx-auto' : 'rounded-lg max-w-xs w-72'
             } ${
               yours
                 ? 'bg-blue-600 text-white'
@@ -745,13 +759,15 @@ function PickToasts({
                   : 'bg-gray-900 text-white border border-gray-700'
             }`}
           >
-            <div className="px-4 py-3 text-sm font-semibold">
+            <div className={compact ? 'px-2.5 py-1.5 text-[11px] font-semibold leading-snug' : 'px-4 py-3 text-sm font-semibold'}>
               {teamLabel(toast.team, userTeam)} picked {toast.playerName}
               {toast.fromQueue ? (
-                <div className="mt-1 text-xs font-medium text-amber-200">Taken from your queue</div>
+                <div className={compact ? 'mt-0.5 text-[10px] font-medium text-amber-200' : 'mt-1 text-xs font-medium text-amber-200'}>
+                  Taken from your queue
+                </div>
               ) : null}
             </div>
-            <div className={`h-1 w-full ${yours ? 'bg-blue-800' : toast.fromQueue ? 'bg-amber-950' : 'bg-black/40'}`}>
+            <div className={`${compact ? 'h-0.5' : 'h-1'} w-full ${yours ? 'bg-blue-800' : toast.fromQueue ? 'bg-amber-950' : 'bg-black/40'}`}>
               <div
                 className={`h-full origin-left ${yours ? 'bg-white' : 'bg-blue-400'}`}
                 style={{ animation: `toast-timer-shrink ${TOAST_MS}ms linear forwards` }}
@@ -794,6 +810,7 @@ export default function MockDraftRoom({
   const taken = takenIds(session)
   const currentRef = useRef<HTMLDivElement | null>(null)
   const moreRef = useRef<HTMLDivElement | null>(null)
+  const historyRailRef = useRef<HTMLDivElement | null>(null)
   const [viewTeam, setViewTeam] = useState(session.userTeam)
   const [moveFrom, setMoveFrom] = useState<number | null>(null)
   const [tab, setTab] = useState<RoomTab>('players')
@@ -821,6 +838,12 @@ export default function MockDraftRoom({
   }, [session.picks.length, tickerOpen])
 
   useEffect(() => {
+    const rail = historyRailRef.current
+    if (!rail) return
+    rail.scrollTop = rail.scrollHeight
+  }, [session.picks.length])
+
+  useEffect(() => {
     if (done) setTab('board')
   }, [done])
 
@@ -834,7 +857,7 @@ export default function MockDraftRoom({
   }, [viewTeam])
 
   useEffect(() => {
-    if (!isBelowLg && tab === 'roster') setTab('players')
+    if (!isBelowLg && (tab === 'roster' || tab === 'history')) setTab('players')
   }, [isBelowLg, tab])
 
   useEffect(() => {
@@ -851,13 +874,15 @@ export default function MockDraftRoom({
     seenPicks.current = session.picks.length
     if (!added.length) return
     const queued = new Set(queueRef.current)
-    const nextToasts = added.map((pk) => ({
-      id: pk.pick,
-      pick: pk.pick,
-      team: pk.team,
-      playerName: session.players[pk.playerId]?.name ?? 'a player',
-      fromQueue: pk.team !== session.userTeam && queued.has(pk.playerId),
-    }))
+    const nextToasts = added
+      .map((pk) => ({
+        id: pk.pick,
+        pick: pk.pick,
+        team: pk.team,
+        playerName: session.players[pk.playerId]?.name ?? 'a player',
+        fromQueue: pk.team !== session.userTeam && queued.has(pk.playerId),
+      }))
+      .filter((t) => isBelowLg || t.fromQueue)
     const takenNow = new Set(added.map((pk) => pk.playerId))
     setQueue((cur) => cur.filter((id) => !takenNow.has(id)))
     setToasts((cur) => [...cur, ...nextToasts].slice(-TOAST_MAX))
@@ -867,7 +892,7 @@ export default function MockDraftRoom({
       }, TOAST_MS)
       toastTimers.current.push(timer)
     }
-  }, [session.picks, session.players, session.userTeam])
+  }, [session.picks, session.players, session.userTeam, isBelowLg])
 
   useEffect(
     () => () => {
@@ -1392,7 +1417,6 @@ export default function MockDraftRoom({
             ) : null}
           </div>
         </div>
-        <PickToasts toasts={toasts} userTeam={session.userTeam} placement="mobile" />
         <div className="flex items-stretch border-t border-gray-200 dark:border-gray-700">
           <div className="flex-1 overflow-x-auto">
             {tickerOpen ? (
@@ -1553,7 +1577,6 @@ export default function MockDraftRoom({
         <div className="flex-1 min-w-0 w-full card overflow-hidden">
           <div className="hidden lg:flex flex-wrap items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
             {tabBtn('players', 'Players', tab === 'players')}
-            {tabBtn('history', 'Pick history', tab === 'history')}
             {tabBtn('board', 'Draft board', tab === 'board')}
             {tab === 'board'
               ? (['round', 'team'] as BoardShowBy[]).map((mode) => (
@@ -1632,6 +1655,26 @@ export default function MockDraftRoom({
             </>
           )}
         </div>
+
+        {!isBelowLg ? (
+          <aside className="w-72 shrink-0 card overflow-hidden flex flex-col max-h-[70vh]">
+            <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-100">
+              Pick history
+              {session.picks.length > 0 ? (
+                <span className="ml-1.5 font-normal text-gray-400">{session.picks.length}</span>
+              ) : null}
+            </div>
+            <div ref={historyRailRef} className="min-h-0 flex-1 overflow-y-auto">
+              <PickHistoryList
+                session={session}
+                detailsById={detailsById}
+                stacked
+                ascending
+                className="divide-y divide-gray-100 dark:divide-gray-800"
+              />
+            </div>
+          </aside>
+        ) : null}
       </div>
 
       {isBelowLg ? (
@@ -1657,7 +1700,11 @@ export default function MockDraftRoom({
         </nav>
       ) : null}
 
-      {!isBelowLg ? <PickToasts toasts={toasts} userTeam={session.userTeam} placement="desktop" /> : null}
+      <PickToasts
+        toasts={toasts}
+        userTeam={session.userTeam}
+        placement={isBelowLg ? 'mobile' : 'desktop'}
+      />
 
       {isBelowLg && selectedPlayer ? (
         <MockPlayerSheet
