@@ -358,3 +358,15 @@ export function autoUserPick(session: MockSession): MockSession {
 export function teamLabel(team: number, userTeam: number): string {
   return team === userTeam ? 'You' : `Team ${team}`
 }
+
+/** Ticker window: a few completed picks plus the next ~14. */
+export function tickerPickNumbers(total: number, pickNow: number, done: boolean, windowed: boolean): number[] {
+  if (!windowed) return Array.from({ length: total }, (_, i) => i + 1)
+  if (done) {
+    const start = Math.max(1, total - 15)
+    return Array.from({ length: total - start + 1 }, (_, i) => start + i)
+  }
+  const start = Math.max(1, pickNow - 6)
+  const end = Math.min(total, Math.max(pickNow + 14, start + 20))
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}

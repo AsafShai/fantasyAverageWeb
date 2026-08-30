@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models.adp import AdpPlayer, AdpResponse, SiteAdp
+from app.models.adp import AdpIndexResponse, AdpPlayer, AdpResponse, SiteAdp
 from app.services.adp_service import get_adp_response, reset_adp_cache
 
 
@@ -145,6 +145,27 @@ def test_adp_route_blend_uses_checked_sites_only(test_client):
 
 
 @pytest.mark.asyncio
+async def test_get_adp_response_fetches_payload_and_stats_together():
+    reset_adp_cache()
+    payload = {
+        "seasonLabel": "2025-26",
+        "updatedAt": "2026-08-21T00:00:00Z",
+        "sources": {"espn": "espn-src"},
+        "players": [{"espn_id": 1, "name": "A", "adp": {"espn": 1.0}}],
+    }
+    fetch = AsyncMock(return_value=payload)
+    stats = AsyncMock(return_value=("2024-25", {}, "2025-26", {}))
+    with (
+        patch("app.services.adp_service.fetch_live_adp_payload", fetch),
+        patch("app.services.adp_service.load_espn_stat_splits", stats),
+        patch("app.services.adp_service.nba_player_catalog.list_all_bios", return_value={}),
+    ):
+        await get_adp_response()
+    fetch.assert_awaited_once()
+    stats.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_get_adp_response_caches_live_payload():
     reset_adp_cache()
     payload = {
@@ -259,3 +280,46 @@ def test_adp_index_route_exposes_both_blends(test_client):
 def test_adp_refresh_route_rejects_an_unknown_provider(test_client):
     response = test_client.post("/api/adp/refresh?provider=nonsense")
     assert response.status_code == 400
+
+
+def test_adp_routes_send_short_cache_headers(test_client):
+    fake = AdpResponse(
+        season_label="2025-26",
+        updated_at="2026-08-21T00:00:00Z",
+        players=[],
+    )
+    with patch("app.routes.adp.get_adp_response_enriched", new_callable=AsyncMock, return_value=fake):
+        adp = test_client.get("/api/adp")
+    with patch(
+        "app.routes.adp.get_adp_index_response",
+        new_callable=AsyncMock,
+        return_value=AdpIndexResponse(
+            season_label="2025-26",
+            updated_at="2026-08-21T00:00:00Z",
+            players=[],
+            total=0,
+        ),
+    ):
+        index = test_client.get("/api/adp/index")
+    assert "max-age=60" in adp.headers["cache-control"]
+    assert "stale-while-revalidate=600" in adp.headers["cache-control"]
+    assert "max-age=60" in index.headers["cache-control"]
+
+
+def test_adp_can_omit_season_stats(test_client):
+    reset_adp_cache()
+    payload = {
+        "seasonLabel": "2025-26",
+        "updatedAt": "2026-08-21T00:00:00Z",
+        "sources": {"espn": "espn-src"},
+        "players": [{"espn_id": 3112335, "name": "Nikola Jokic", "adp": {"espn": 1.0}}],
+    }
+    with patch("app.services.adp_service.fetch_live_adp_payload", new_callable=AsyncMock, return_value=payload):
+        test_client.get("/api/adp")
+    with patch("app.services.adp_service.load_espn_stat_splits", new_callable=AsyncMock) as splits:
+        response = test_client.get("/api/adp", params={"include_stats": False})
+    splits.assert_not_called()
+    assert response.status_code == 200
+    player = response.json()["players"][0]
+    assert player.get("last_year") is None
+    assert player.get("projection") is None

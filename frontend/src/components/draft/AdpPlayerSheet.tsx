@@ -80,6 +80,7 @@ export default function AdpPlayerSheet({
               teamAbbr={player.team_abbr}
               positions={player.positions}
               wrapName
+              photoSize="full"
             />
           </div>
           <div className="text-right shrink-0">

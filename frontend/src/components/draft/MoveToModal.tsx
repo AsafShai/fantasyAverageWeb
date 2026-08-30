@@ -44,6 +44,10 @@ export default function MoveToModal({
 
   const parsed = Number(rankText)
   const rank = Number.isFinite(parsed) ? Math.max(1, Math.min(Math.round(parsed), maxRank)) : null
+  const stepRank = (delta: number) => {
+    const next = Math.max(1, Math.min((rank ?? currentRank) + delta, maxRank))
+    setRankText(String(next))
+  }
   const preview = useMemo(
     () => (rank == null ? null : previewMove(order, player.id, rank)),
     [order, player.id, rank],
@@ -86,18 +90,40 @@ export default function MoveToModal({
         </p>
         <label className="mt-4 flex items-center gap-2 text-sm">
           <span className="text-gray-600 dark:text-gray-300 whitespace-nowrap">Move to rank</span>
-          <input
-            ref={inputRef}
-            type="number"
-            min={1}
-            max={maxRank}
-            value={rankText}
-            onChange={(e) => setRankText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && rank != null) onConfirm(rank)
-            }}
-            className="w-24 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-2 sm:py-1.5 text-base sm:text-sm tabular-nums"
-          />
+          <div className="inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden bg-white dark:bg-gray-800">
+            <button
+              type="button"
+              disabled={rank != null ? rank <= 1 : currentRank <= 1}
+              onClick={() => stepRank(-1)}
+              className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 text-lg leading-none text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+              aria-label="Decrease rank"
+            >
+              −
+            </button>
+            <input
+              ref={inputRef}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={maxRank}
+              value={rankText}
+              onChange={(e) => setRankText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && rank != null) onConfirm(rank)
+              }}
+              aria-label={`Move to rank of ${maxRank}`}
+              className="w-16 sm:w-20 border-x border-gray-300 dark:border-gray-600 bg-transparent px-2 py-2 sm:py-1.5 text-center text-base sm:text-sm tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <button
+              type="button"
+              disabled={rank != null ? rank >= maxRank : currentRank >= maxRank}
+              onClick={() => stepRank(1)}
+              className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 text-lg leading-none text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+              aria-label="Increase rank"
+            >
+              +
+            </button>
+          </div>
           <span className="text-xs text-gray-400">of {maxRank}</span>
         </label>
 
