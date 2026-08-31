@@ -138,18 +138,21 @@ export default function MockDraftPage() {
   }, [session])
 
   useEffect(() => {
+    if (!session || isMockComplete(session)) return
+    // ticked, not just written on the way out: a tab killed outright never gets
+    // pagehide, and the value is one number, so writing it often is free
     const save = () => {
-      if (!session || isMockComplete(session)) return
       const left =
         deadlineRef.current != null
           ? Math.max(0, (deadlineRef.current - Date.now()) / 1000)
           : remainingRef.current
       if (left != null && left > 0) writeMockClock(left)
-      else clearMockClock()
     }
+    const ticker = window.setInterval(save, 2000)
     window.addEventListener('pagehide', save)
     document.addEventListener('visibilitychange', save)
     return () => {
+      window.clearInterval(ticker)
       window.removeEventListener('pagehide', save)
       document.removeEventListener('visibilitychange', save)
     }
