@@ -11,12 +11,15 @@ import { EMPTY_RANKINGS, stablePlayerIds, type DraftRankingsState } from '../../
 import { DEFAULT_DRAFT_METRIC } from '../../utils/adp'
 import {
   clearMockClock,
+  clearMockPaused,
   clearMockQueue,
   clearMockSession,
   readMockClock,
+  readMockPaused,
   readMockSession,
   shouldRestorePaused,
   writeMockClock,
+  writeMockPaused,
   writeMockSession,
 } from '../../utils/mockDraftPersistence'
 
@@ -88,7 +91,9 @@ export default function MockDraftPage() {
   const [session, setSession] = useState<MockSession | null>(restored)
   const [clockDeadlineMs, setClockDeadlineMs] = useState<number | null>(null)
   const [clockFrozenSec, setClockFrozenSec] = useState<number | null>(null)
-  const [paused, setPaused] = useState(() => (restored ? shouldRestorePaused(restored) : false))
+  const [paused, setPaused] = useState(() =>
+    restored ? readMockPaused() || shouldRestorePaused(restored) : false,
+  )
   const [carriedClock] = useState(() => (restored ? readMockClock() : null))
   const carriedClockPicks = useRef(restored ? restored.picks.length : -1)
   const remainingRef = useRef<number | null>(null)
@@ -120,6 +125,10 @@ export default function MockDraftPage() {
   useEffect(() => {
     if (!hasSaved && settings.rankingSource === 'saved') patch({ rankingSource: 'default' })
   }, [hasSaved, settings.rankingSource])
+
+  useEffect(() => {
+    writeMockPaused(paused)
+  }, [paused])
 
   useEffect(() => {
     if (session) writeMockSession(session)
@@ -213,8 +222,10 @@ export default function MockDraftPage() {
       players: indexPlayers,
     })
     if (next.botDelaySec === 0) live = runBotsUntilUser(live)
+    carriedClockPicks.current = -1
     clearMockQueue()
     clearMockClock()
+    clearMockPaused()
     setPaused(false)
     remainingRef.current = null
     deadlineRef.current = null
@@ -227,8 +238,10 @@ export default function MockDraftPage() {
     if (session && !isMockComplete(session) && session.picks.length > 0) {
       if (!window.confirm('Leave this mock draft? Picks will not be saved.')) return
     }
+    carriedClockPicks.current = -1
     clearMockQueue()
     clearMockClock()
+    clearMockPaused()
     setSession(null)
     setClockDeadlineMs(null)
     setClockFrozenSec(null)
@@ -328,6 +341,9 @@ export default function MockDraftPage() {
     }
   }, [paused, session?.picks.length, session && isMockComplete(session), session && isUserOnTheClock(session)])
 
+  if (isLoading && !data) return <LoadingSpinner />
+  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
+
   if (session) {
     return (
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 pb-8 min-w-0 overflow-x-hidden">
@@ -351,9 +367,6 @@ export default function MockDraftPage() {
       </div>
     )
   }
-
-  if (isLoading && !data) return <LoadingSpinner />
-  if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
   const csvOk = csvOrder && csvHasEnoughPlayers(csvMatched, settings.teams, settings.rounds)
 

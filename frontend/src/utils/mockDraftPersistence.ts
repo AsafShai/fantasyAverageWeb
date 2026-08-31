@@ -3,6 +3,7 @@ import { isMockComplete, isUserOnTheClock, pickCount, type MockSession } from '.
 const SESSION_KEY = 'fw:draft.mock.session.v1'
 const QUEUE_KEY = 'fw:draft.mock.queue.v1'
 const CLOCK_KEY = 'fw:draft.mock.clock.v1'
+const PAUSED_KEY = 'fw:draft.mock.paused.v1'
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -149,6 +150,30 @@ export function writeMockClock(secondsLeft: number): void {
 export function clearMockClock(): void {
   try {
     localStorage.removeItem(CLOCK_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+export function readMockPaused(): boolean {
+  try {
+    return localStorage.getItem(PAUSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function writeMockPaused(paused: boolean): void {
+  try {
+    localStorage.setItem(PAUSED_KEY, paused ? 'true' : 'false')
+  } catch {
+    // ignore
+  }
+}
+
+export function clearMockPaused(): void {
+  try {
+    localStorage.removeItem(PAUSED_KEY)
   } catch {
     // ignore
   }
