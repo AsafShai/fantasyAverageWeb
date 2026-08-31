@@ -143,10 +143,20 @@ const MockPlayerTableRow = memo(function MockPlayerTableRow({
   )
 })
 
+function MockCardStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 text-center">
+      <div className="text-[9px] uppercase tracking-wide text-gray-400 leading-none">{label}</div>
+      <div className="mt-0.5 tabular-nums text-[11px] text-gray-700 dark:text-gray-200 leading-tight">{value}</div>
+    </div>
+  )
+}
+
 const MockPlayerCard = memo(function MockPlayerCard({
   player,
   rank,
   photoUrl,
+  stats,
   madePick,
   inQueue,
   isSuggested,
@@ -159,6 +169,7 @@ const MockPlayerCard = memo(function MockPlayerCard({
   player: MockSessionPlayer
   rank: number | undefined
   photoUrl: string | null
+  stats: LastYearStats | null | undefined
   madePick: number | null
   inQueue: boolean
   isSuggested: boolean
@@ -170,7 +181,7 @@ const MockPlayerCard = memo(function MockPlayerCard({
 }) {
   return (
     <div
-      className={`flex items-center gap-1.5 px-2 py-2 min-w-0 border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${
+      className={`px-2 py-2 min-w-0 border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${
         madePick != null
           ? 'opacity-70'
           : inQueue
@@ -178,6 +189,7 @@ const MockPlayerCard = memo(function MockPlayerCard({
             : ''
       }`}
     >
+      <div className="flex items-center gap-1.5 min-w-0">
       <div className="w-6 shrink-0 text-right tabular-nums text-xs font-semibold text-gray-500">{rank}</div>
       <button type="button" onClick={() => onOpen(player.id)} className="min-w-0 flex-1 text-left">
         <PlayerIdentityCell
@@ -222,6 +234,16 @@ const MockPlayerCard = memo(function MockPlayerCard({
           </button>
         </div>
       )}
+      </div>
+      <div className="mt-1.5 grid grid-cols-5 gap-x-1 gap-y-1">
+        {LAST_YEAR_COLS.map((col) => (
+          <MockCardStat
+            key={col.key}
+            label={col.label}
+            value={stats ? formatLastYearStat(stats[col.key], col.pct, col.whole) : '—'}
+          />
+        ))}
+      </div>
     </div>
   )
 })
@@ -1418,6 +1440,7 @@ export default function MockDraftRoom({
               player={player}
               rank={isSearching ? adpRank.get(player.id) : userRank.get(player.id)}
               photoUrl={full?.photo_url || espnHeadshotUrl(player.espn_id)}
+              stats={statsFrom === 'projection' ? full?.projection : full?.last_year}
               madePick={made?.pick ?? null}
               inQueue={queuedSet.has(player.id)}
               isSuggested={suggested?.id === player.id}
