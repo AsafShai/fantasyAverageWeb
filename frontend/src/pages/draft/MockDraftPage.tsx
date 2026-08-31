@@ -6,6 +6,7 @@ import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import LeagueSettingsFields, { Stepper } from '../../components/draft/LeagueSettingsFields'
+import ConfirmDialog from '../../components/draft/ConfirmDialog'
 import { parseRankingsCsvImport, rankingsCsvFileError } from '../../utils/draftCsv'
 import { EMPTY_RANKINGS, stablePlayerIds, type DraftRankingsState } from '../../utils/draftRankings'
 import { DEFAULT_DRAFT_METRIC } from '../../utils/adp'
@@ -87,6 +88,7 @@ export default function MockDraftPage() {
   const [csvMatched, setCsvMatched] = useState(0)
   const [csvName, setCsvName] = useState<string | null>(null)
   const [setupError, setSetupError] = useState<string | null>(null)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const [restored] = useState(readMockSession)
   const [session, setSession] = useState<MockSession | null>(restored)
   const [clockDeadlineMs, setClockDeadlineMs] = useState<number | null>(null)
@@ -238,9 +240,17 @@ export default function MockDraftPage() {
   }
 
   const leaveRoom = () => {
+    // an in-app dialog rather than window.confirm: a browser that suppresses
+    // native dialogs returns false, which silently trapped the user in the room
     if (session && !isMockComplete(session) && session.picks.length > 0) {
-      if (!window.confirm('Leave this mock draft? Picks will not be saved.')) return
+      setConfirmLeave(true)
+      return
     }
+    discardSession()
+  }
+
+  const discardSession = () => {
+    setConfirmLeave(false)
     carriedClockPicks.current = -1
     clearMockQueue()
     clearMockClock()
@@ -367,6 +377,15 @@ export default function MockDraftPage() {
             onLeave={leaveRoom}
           />
         </Suspense>
+        {confirmLeave ? (
+          <ConfirmDialog
+            title="Leave this mock draft?"
+            message="Your picks will not be saved."
+            confirmLabel="Leave draft"
+            onConfirm={discardSession}
+            onCancel={() => setConfirmLeave(false)}
+          />
+        ) : null}
       </div>
     )
   }
