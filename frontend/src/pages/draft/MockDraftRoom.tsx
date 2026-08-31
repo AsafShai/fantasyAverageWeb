@@ -32,6 +32,7 @@ import {
   type MockSession,
   type MockSessionPlayer,
 } from '../../utils/mockDraft'
+import { readMockQueue, writeMockQueue } from '../../utils/mockDraftPersistence'
 import type { AdpIndexPlayer, AdpPlayer, LastYearStats } from '../../types/api'
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
@@ -1044,17 +1045,24 @@ export default function MockDraftRoom({
   const [posFilter, setPosFilter] = useState<string | 'all'>('all')
   const [teamFilter, setTeamFilter] = useState('')
   const [statsFrom, setStatsFrom] = useState<StatsFrom>('actual')
-  const [queue, setQueue] = useState<string[]>([])
+  const [queue, setQueue] = useState<string[]>(() => {
+    const taken = takenIds(session)
+    return readMockQueue().filter((id) => session.players[id] && !taken.has(id))
+  })
   const queueRef = useRef<string[]>([])
   queueRef.current = queue
   const [toasts, setToasts] = useState<PickToast[]>([])
-  const seenPicks = useRef(0)
+  const seenPicks = useRef(session.picks.length)
   const wasUserTurn = useRef(false)
   const toastTimers = useRef<number[]>([])
   const [moreOpen, setMoreOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<PageSize>(25)
+
+  useEffect(() => {
+    writeMockQueue(queue)
+  }, [queue])
 
   useEffect(() => {
     currentRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })

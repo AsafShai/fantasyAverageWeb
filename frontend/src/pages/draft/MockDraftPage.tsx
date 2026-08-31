@@ -9,6 +9,19 @@ import LeagueSettingsFields, { Stepper } from '../../components/draft/LeagueSett
 import { parseRankingsCsvImport, rankingsCsvFileError } from '../../utils/draftCsv'
 import { EMPTY_RANKINGS, stablePlayerIds, type DraftRankingsState } from '../../utils/draftRankings'
 import { DEFAULT_DRAFT_METRIC } from '../../utils/adp'
+import {
+  clearMockClock,
+  clearMockPaused,
+  clearMockQueue,
+  clearMockSession,
+  readMockClock,
+  readMockPaused,
+  readMockSession,
+  shouldRestorePaused,
+  writeMockClock,
+  writeMockPaused,
+  writeMockSession,
+} from '../../utils/mockDraftPersistence'
 
 const MockDraftRoom = lazy(() => import('./MockDraftRoom'))
 import {
@@ -74,10 +87,15 @@ export default function MockDraftPage() {
   const [csvMatched, setCsvMatched] = useState(0)
   const [csvName, setCsvName] = useState<string | null>(null)
   const [setupError, setSetupError] = useState<string | null>(null)
-  const [session, setSession] = useState<MockSession | null>(null)
+  const [restored] = useState(readMockSession)
+  const [session, setSession] = useState<MockSession | null>(restored)
   const [clockDeadlineMs, setClockDeadlineMs] = useState<number | null>(null)
   const [clockFrozenSec, setClockFrozenSec] = useState<number | null>(null)
-  const [paused, setPaused] = useState(false)
+  const [paused, setPaused] = useState(() =>
+    restored ? readMockPaused() || shouldRestorePaused(restored) : false,
+  )
+  const [carriedClock] = useState(() => (restored ? readMockClock() : null))
+  const carriedClockPicks = useRef(restored ? restored.picks.length : -1)
   const remainingRef = useRef<number | null>(null)
   const deadlineRef = useRef<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -107,6 +125,38 @@ export default function MockDraftPage() {
   useEffect(() => {
     if (!hasSaved && settings.rankingSource === 'saved') patch({ rankingSource: 'default' })
   }, [hasSaved, settings.rankingSource])
+
+  useEffect(() => {
+    writeMockPaused(paused)
+  }, [paused])
+
+  useEffect(() => {
+    if (session) writeMockSession(session)
+    else clearMockSession()
+    // only a clock saved by the pagehide handler below is ever fresh enough to restore
+    clearMockClock()
+  }, [session])
+
+  useEffect(() => {
+    if (!session || isMockComplete(session)) return
+    // ticked, not just written on the way out: a tab killed outright never gets
+    // pagehide, and the value is one number, so writing it often is free
+    const save = () => {
+      const left =
+        deadlineRef.current != null
+          ? Math.max(0, (deadlineRef.current - Date.now()) / 1000)
+          : remainingRef.current
+      if (left != null && left > 0) writeMockClock(left)
+    }
+    const ticker = window.setInterval(save, 2000)
+    window.addEventListener('pagehide', save)
+    document.addEventListener('visibilitychange', save)
+    return () => {
+      window.clearInterval(ticker)
+      window.removeEventListener('pagehide', save)
+      document.removeEventListener('visibilitychange', save)
+    }
+  }, [session])
 
   const importCsv = (file: File) => {
     setSetupError(null)
@@ -175,6 +225,10 @@ export default function MockDraftPage() {
       players: indexPlayers,
     })
     if (next.botDelaySec === 0) live = runBotsUntilUser(live)
+    carriedClockPicks.current = -1
+    clearMockQueue()
+    clearMockClock()
+    clearMockPaused()
     setPaused(false)
     remainingRef.current = null
     deadlineRef.current = null
@@ -187,6 +241,10 @@ export default function MockDraftPage() {
     if (session && !isMockComplete(session) && session.picks.length > 0) {
       if (!window.confirm('Leave this mock draft? Picks will not be saved.')) return
     }
+    carriedClockPicks.current = -1
+    clearMockQueue()
+    clearMockClock()
+    clearMockPaused()
     setSession(null)
     setClockDeadlineMs(null)
     setClockFrozenSec(null)
@@ -234,14 +292,24 @@ export default function MockDraftPage() {
     }
     const user = isUserOnTheClock(session)
     const duration = user ? session.userClockSec : session.botDelaySec
-    remainingRef.current = duration === 0 ? null : duration
+    const carried = session.picks.length === carriedClockPicks.current ? carriedClock : null
+    remainingRef.current = duration === 0 ? null : (carried ?? duration)
     setClockFrozenSec(null)
     if (duration === 0) {
       deadlineRef.current = null
       setClockDeadlineMs(null)
       return
     }
-    const deadline = Date.now() + duration * 1000
+    // A restored draft holds its clock until the user resumes; re-running this
+    // effect must not start one, so the check is on paused rather than a one-shot.
+    if (paused) {
+      const left = remainingRef.current ?? duration
+      deadlineRef.current = null
+      setClockFrozenSec(left)
+      setClockDeadlineMs(null)
+      return
+    }
+    const deadline = Date.now() + (remainingRef.current ?? duration) * 1000
     deadlineRef.current = deadline
     setClockDeadlineMs(deadline)
   }, [session?.picks.length, session && isUserOnTheClock(session), session && isMockComplete(session)])
