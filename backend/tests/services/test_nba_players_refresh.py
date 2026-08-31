@@ -9,6 +9,7 @@ from app.services import nba_player_catalog
 from app.services.nba_players_refresh import (
     MIN_PLAYERS,
     _dedupe_and_preserve,
+    normalize_position,
     refresh_nba_players_json,
 )
 from app.services.nba_players_scheduler import compute_next_trigger
@@ -38,6 +39,18 @@ def _player(pid: str, name: str, height=None):
     }
 
 
+def test_normalize_position_buckets_specific_roles():
+    assert normalize_position("Power Forward") == "Forward"
+    assert normalize_position("Small Forward") == "Forward"
+    assert normalize_position("Point Guard") == "Guard"
+    assert normalize_position("Shooting Guard") == "Guard"
+    assert normalize_position("PF") == "Forward"
+    assert normalize_position("SG") == "Guard"
+    assert normalize_position("Center") == "Center"
+    assert normalize_position("Guard") == "Guard"
+    assert normalize_position("Wing") == "Wing"
+
+
 def test_dedupe_and_preserve_keeps_prior_non_null_fields(tmp_path):
     out = tmp_path / "nba-players-2025-26.json"
     out.write_text(
@@ -50,6 +63,20 @@ def test_dedupe_and_preserve_keeps_prior_non_null_fields(tmp_path):
     )
     assert len(unique) == 1
     assert unique[0]["height"] == "7'4\""
+
+
+def test_dedupe_and_preserve_takes_new_value_when_espn_fills_a_null(tmp_path):
+    out = tmp_path / "nba-players-2025-26.json"
+    old = _player("espn-1", "Victor Wembanyama")
+    old["jerseyNumber"] = None
+    old["photoUrl"] = None
+    out.write_text(json.dumps({"players": [old]}), encoding="utf-8")
+    incoming = _player("espn-1", "Victor Wembanyama")
+    incoming["jerseyNumber"] = "1"
+    incoming["photoUrl"] = "https://example.com/wemby.png"
+    unique = _dedupe_and_preserve([incoming], out)
+    assert unique[0]["jerseyNumber"] == "1"
+    assert unique[0]["photoUrl"] == "https://example.com/wemby.png"
 
 
 def test_compute_next_trigger_is_today_before_eight_and_tomorrow_after():
