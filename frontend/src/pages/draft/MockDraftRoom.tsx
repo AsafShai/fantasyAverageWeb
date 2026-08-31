@@ -604,10 +604,16 @@ function RosterPanel({
 function QueueBar({
   queuedPlayers,
   onRemove,
+  onDraft,
+  userTurn,
+  canDraft,
   snap,
 }: {
   queuedPlayers: MockSessionPlayer[]
   onRemove: (id: string) => void
+  onDraft: (id: string) => void
+  userTurn: boolean
+  canDraft: (player: MockSessionPlayer) => boolean
   snap: boolean
 }) {
   if (queuedPlayers.length === 0) return null
@@ -635,6 +641,18 @@ function QueueBar({
             {player.team_abbr ? (
               <span className="text-[10px] font-semibold text-gray-400 shrink-0">{player.team_abbr}</span>
             ) : null}
+            <button
+              type="button"
+              disabled={!userTurn || !canDraft(player)}
+              title={userTurn && !canDraft(player) ? 'No open roster spot for this player' : undefined}
+              aria-label={`Draft ${player.name}`}
+              onClick={() => onDraft(player.id)}
+              className={`shrink-0 rounded bg-blue-600 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed ${
+                snap ? 'min-h-11 px-2.5 text-xs' : 'px-1.5 py-0.5 text-[10px]'
+              }`}
+            >
+              Draft
+            </button>
             <button
               type="button"
               aria-label={`Remove ${player.name} from queue`}
@@ -1740,7 +1758,14 @@ export default function MockDraftRoom({
             ) : null}
           </div>
           {!isBelowLg ? (
-            <QueueBar queuedPlayers={queuedPlayers} onRemove={(id) => setQueue((cur) => cur.filter((x) => x !== id))} snap={false} />
+            <QueueBar
+              queuedPlayers={queuedPlayers}
+              onRemove={(id) => setQueue((cur) => cur.filter((x) => x !== id))}
+              onDraft={onDraft}
+              userTurn={userTurn}
+              canDraft={canRoster}
+              snap={false}
+            />
           ) : null}
           {isBelowLg && tab === 'roster' ? (
             <RosterPanel
@@ -1787,6 +1812,9 @@ export default function MockDraftRoom({
                 <QueueBar
                   queuedPlayers={queuedPlayers}
                   onRemove={(id) => setQueue((cur) => cur.filter((x) => x !== id))}
+                  onDraft={onDraft}
+                  userTurn={userTurn}
+                  canDraft={canRoster}
                   snap
                 />
               ) : null}
