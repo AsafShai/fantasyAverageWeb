@@ -59,6 +59,32 @@ def division_for_abbr(abbr: str) -> str:
     return TEAM_DIVISION.get(normalize_team_abbr(abbr), "Unknown")
 
 
+# ESPN sometimes sends the specific role (Point Guard) instead of the bucket (Guard).
+_POSITION_BUCKETS = {
+    "point guard": "Guard",
+    "pg": "Guard",
+    "shooting guard": "Guard",
+    "sg": "Guard",
+    "guard": "Guard",
+    "g": "Guard",
+    "small forward": "Forward",
+    "sf": "Forward",
+    "power forward": "Forward",
+    "pf": "Forward",
+    "forward": "Forward",
+    "f": "Forward",
+    "center": "Center",
+    "c": "Center",
+}
+
+
+def normalize_position(pos: str) -> str:
+    raw = (pos or "").strip()
+    if not raw:
+        return "Unknown"
+    return _POSITION_BUCKETS.get(raw.lower(), raw)
+
+
 def load_previous_players_by_id(path: Path) -> dict[str, dict]:
     if not path.is_file():
         return {}
@@ -105,7 +131,7 @@ def _player_from_athlete(a: dict, team_name: str, abbr: str) -> dict[str, Any] |
         "teamAbbr": abbr,
         "conference": conference_for_abbr(abbr),
         "division": division_for_abbr(abbr),
-        "position": str(pos),
+        "position": normalize_position(str(pos)),
         "photoUrl": href if href else None,
         "height": height,
         "nationality": nat,
