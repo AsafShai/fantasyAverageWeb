@@ -1,7 +1,7 @@
 {
   "seasonLabel": "2025-26",
   "source": "ESPN roster API (run create_nba_players_json.py)",
-  "updatedAt": "2026-07-31T10:02:04Z",
+  "updatedAt": "2026-08-31T10:05:36Z",
   "players": [
     {
       "id": "espn-4278039",
@@ -57,7 +57,7 @@
       "height": "6' 2\"",
       "nationality": "USA",
       "age": 25,
-      "jerseyNumber": "00"
+      "jerseyNumber": "10"
     },
     {
       "id": "espn-4397020",
@@ -71,7 +71,7 @@
       "height": "6' 4\"",
       "nationality": "Canada",
       "age": 27,
-      "jerseyNumber": "5"
+      "jerseyNumber": "0"
     },
     {
       "id": "espn-5106262",
@@ -85,7 +85,7 @@
       "height": "6' 8\"",
       "nationality": "USA",
       "age": 22,
-      "jerseyNumber": null
+      "jerseyNumber": "20"
     },
     {
       "id": "espn-5149077",
@@ -99,7 +99,7 @@
       "height": "6' 3\"",
       "nationality": "USA",
       "age": 19,
-      "jerseyNumber": null
+      "jerseyNumber": "4"
     },
     {
       "id": "espn-4585618",
@@ -113,7 +113,7 @@
       "height": "6' 4\"",
       "nationality": "USA",
       "age": 23,
-      "jerseyNumber": null
+      "jerseyNumber": "51"
     },
     {
       "id": "espn-4712863",
@@ -172,20 +172,6 @@
       "jerseyNumber": "24"
     },
     {
-      "id": "espn-4431778",
-      "displayName": "Christian Koloko",
-      "team": "Atlanta Hawks",
-      "teamAbbr": "ATL",
-      "conference": "East",
-      "division": "Southeast",
-      "position": "Center",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4431778.png",
-      "height": "6' 11\"",
-      "nationality": "Cameroon",
-      "age": 26,
-      "jerseyNumber": "35"
-    },
-    {
       "id": "espn-3146557",
       "displayName": "Jock Landale",
       "team": "Atlanta Hawks",
@@ -225,7 +211,7 @@
       "height": "5' 11\"",
       "nationality": "Canada",
       "age": 23,
-      "jerseyNumber": "9"
+      "jerseyNumber": "19"
     },
     {
       "id": "espn-4873201",
@@ -267,21 +253,7 @@
       "height": "7' 0\"",
       "nationality": "Estonia",
       "age": 22,
-      "jerseyNumber": null
-    },
-    {
-      "id": "espn-4279118",
-      "displayName": "Keaton Wallace",
-      "team": "Atlanta Hawks",
-      "teamAbbr": "ATL",
-      "conference": "East",
-      "division": "Southeast",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4279118.png",
-      "height": "6' 3\"",
-      "nationality": "USA",
-      "age": 27,
-      "jerseyNumber": "2"
+      "jerseyNumber": "13"
     },
     {
       "id": "espn-4397183",
@@ -295,7 +267,7 @@
       "height": "6' 5\"",
       "nationality": "USA",
       "age": 27,
-      "jerseyNumber": "21"
+      "jerseyNumber": "2"
     },
     {
       "id": "espn-4431714",
@@ -309,7 +281,7 @@
       "height": "6' 6\"",
       "nationality": "USA",
       "age": 25,
-      "jerseyNumber": "22"
+      "jerseyNumber": "12"
     },
     {
       "id": "espn-5142621",
@@ -337,7 +309,7 @@
       "height": "6' 1\"",
       "nationality": "USA",
       "age": 38,
-      "jerseyNumber": null
+      "jerseyNumber": "45"
     },
     {
       "id": "espn-4277951",
@@ -365,7 +337,7 @@
       "height": "6' 8\"",
       "nationality": "USA",
       "age": 36,
-      "jerseyNumber": "8"
+      "jerseyNumber": "13"
     },
     {
       "id": "espn-5175647",
@@ -393,7 +365,7 @@
       "height": "6' 5\"",
       "nationality": "USA",
       "age": 26,
-      "jerseyNumber": "13"
+      "jerseyNumber": "8"
     },
     {
       "id": "espn-4065804",
@@ -463,7 +435,7 @@
       "height": "7' 0\"",
       "nationality": "USA",
       "age": 28,
-      "jerseyNumber": null
+      "jerseyNumber": "4"
     },
     {
       "id": "espn-4593841",
@@ -924,22 +896,8 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5061575.png",
       "height": "6' 6\"",
       "nationality": "USA",
-      "age": 20,
+      "age": 21,
       "jerseyNumber": "7"
-    },
-    {
-      "id": "espn-4432819",
-      "displayName": "Tre Mann",
-      "team": "Charlotte Hornets",
-      "teamAbbr": "CHA",
-      "conference": "East",
-      "division": "Southeast",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432819.png",
-      "height": "6' 4\"",
-      "nationality": "USA",
-      "age": 25,
-      "jerseyNumber": "23"
     },
     {
       "id": "espn-5239590",
@@ -994,7 +952,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4396971.png",
       "height": "6' 9\"",
       "nationality": "USA",
-      "age": 26,
+      "age": 27,
       "jerseyNumber": null
     },
     {
@@ -1008,8 +966,22 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5211176.png",
       "height": "6' 10\"",
       "nationality": "France",
-      "age": 20,
+      "age": 21,
       "jerseyNumber": "31"
+    },
+    {
+      "id": "espn-3032979",
+      "displayName": "Dennis Schroder",
+      "team": "Charlotte Hornets",
+      "teamAbbr": "CHA",
+      "conference": "East",
+      "division": "Southeast",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3032979.png",
+      "height": "6' 1\"",
+      "nationality": "Germany",
+      "age": 32,
+      "jerseyNumber": "8"
     },
     {
       "id": "espn-5281370",
@@ -1260,7 +1232,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4431687.png",
       "height": "6' 6\"",
       "nationality": "USA",
-      "age": 24,
+      "age": 25,
       "jerseyNumber": "44"
     },
     {
@@ -1316,7 +1288,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3934723.png",
       "height": "6' 9\"",
       "nationality": "USA",
-      "age": 28,
+      "age": 29,
       "jerseyNumber": "3"
     },
     {
@@ -1344,7 +1316,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3992.png",
       "height": "6' 5\"",
       "nationality": "USA",
-      "age": 36,
+      "age": 37,
       "jerseyNumber": "1"
     },
     {
@@ -1460,34 +1432,6 @@
       "jerseyNumber": "33"
     },
     {
-      "id": "espn-3032979",
-      "displayName": "Dennis Schroder",
-      "team": "Cleveland Cavaliers",
-      "teamAbbr": "CLE",
-      "conference": "East",
-      "division": "Central",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3032979.png",
-      "height": "6' 1\"",
-      "nationality": "Germany",
-      "age": 32,
-      "jerseyNumber": "8"
-    },
-    {
-      "id": "espn-4065778",
-      "displayName": "Max Strus",
-      "team": "Cleveland Cavaliers",
-      "teamAbbr": "CLE",
-      "conference": "East",
-      "division": "Central",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4065778.png",
-      "height": "6' 5\"",
-      "nationality": "USA",
-      "age": 30,
-      "jerseyNumber": "2"
-    },
-    {
       "id": "espn-5041951",
       "displayName": "Meleek Thomas",
       "team": "Cleveland Cavaliers",
@@ -1498,7 +1442,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5041951.png",
       "height": "6' 3\"",
       "nationality": "USA",
-      "age": 19,
+      "age": 20,
       "jerseyNumber": null
     },
     {
@@ -1542,6 +1486,20 @@
       "nationality": "USA",
       "age": 22,
       "jerseyNumber": null
+    },
+    {
+      "id": "espn-4576087",
+      "displayName": "Peyton Watson",
+      "team": "Cleveland Cavaliers",
+      "teamAbbr": "CLE",
+      "conference": "East",
+      "division": "Central",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4576087.png",
+      "height": "6' 8\"",
+      "nationality": "USA",
+      "age": 23,
+      "jerseyNumber": "8"
     },
     {
       "id": "espn-4593125",
@@ -1796,20 +1754,6 @@
       "jerseyNumber": "25"
     },
     {
-      "id": "espn-6475",
-      "displayName": "Klay Thompson",
-      "team": "Dallas Mavericks",
-      "teamAbbr": "DAL",
-      "conference": "West",
-      "division": "Southwest",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/6475.png",
-      "height": "6' 5\"",
-      "nationality": "USA",
-      "age": 36,
-      "jerseyNumber": "31"
-    },
-    {
       "id": "espn-4278078",
       "displayName": "P.J. Washington",
       "team": "Dallas Mavericks",
@@ -1820,7 +1764,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4278078.png",
       "height": "6' 7\"",
       "nationality": "USA",
-      "age": 27,
+      "age": 28,
       "jerseyNumber": "25"
     },
     {
@@ -1866,6 +1810,20 @@
       "jerseyNumber": null
     },
     {
+      "id": "espn-3978",
+      "displayName": "DeMar DeRozan",
+      "team": "Denver Nuggets",
+      "teamAbbr": "DEN",
+      "conference": "West",
+      "division": "Northwest",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3978.png",
+      "height": "6' 6\"",
+      "nationality": "USA",
+      "age": 37,
+      "jerseyNumber": null
+    },
+    {
       "id": "espn-4065813",
       "displayName": "Alpha Diallo",
       "team": "Denver Nuggets",
@@ -1904,7 +1862,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4433607.png",
       "height": "6' 9\"",
       "nationality": "USA",
-      "age": 23,
+      "age": 24,
       "jerseyNumber": "14"
     },
     {
@@ -2006,20 +1964,6 @@
       "jerseyNumber": "22"
     },
     {
-      "id": "espn-4398390",
-      "displayName": "Jalen Pickett",
-      "team": "Denver Nuggets",
-      "teamAbbr": "DEN",
-      "conference": "West",
-      "division": "Northwest",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4398390.png",
-      "height": "6' 2\"",
-      "nationality": "USA",
-      "age": 26,
-      "jerseyNumber": "24"
-    },
-    {
       "id": "espn-4593041",
       "displayName": "David Roddy",
       "team": "Denver Nuggets",
@@ -2044,7 +1988,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4683834.png",
       "height": "6' 1\"",
       "nationality": "USA",
-      "age": 23,
+      "age": 24,
       "jerseyNumber": "25"
     },
     {
@@ -2062,18 +2006,18 @@
       "jerseyNumber": "3"
     },
     {
-      "id": "espn-4576087",
-      "displayName": "Peyton Watson",
+      "id": "espn-4277890",
+      "displayName": "Lonnie Walker IV",
       "team": "Denver Nuggets",
       "teamAbbr": "DEN",
       "conference": "West",
       "division": "Northwest",
       "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4576087.png",
-      "height": "6' 8\"",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4277890.png",
+      "height": "6' 4\"",
       "nationality": "USA",
-      "age": 23,
-      "jerseyNumber": "8"
+      "age": 27,
+      "jerseyNumber": null
     },
     {
       "id": "espn-3908845",
@@ -2184,7 +2128,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4066372.png",
       "height": "6' 6\"",
       "nationality": "USA",
-      "age": 27,
+      "age": 28,
       "jerseyNumber": "27"
     },
     {
@@ -2198,7 +2142,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5107199.png",
       "height": "6' 4\"",
       "nationality": "USA",
-      "age": 24,
+      "age": 25,
       "jerseyNumber": "24"
     },
     {
@@ -2510,6 +2454,34 @@
       "jerseyNumber": "4"
     },
     {
+      "id": "espn-2990969",
+      "displayName": "Georges Niang",
+      "team": "Golden State Warriors",
+      "teamAbbr": "GSW",
+      "conference": "West",
+      "division": "Pacific",
+      "position": "Forward",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/2990969.png",
+      "height": "6' 6\"",
+      "nationality": "USA",
+      "age": 33,
+      "jerseyNumber": "31"
+    },
+    {
+      "id": "espn-3134903",
+      "displayName": "Gary Payton II",
+      "team": "Golden State Warriors",
+      "teamAbbr": "GSW",
+      "conference": "West",
+      "division": "Pacific",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3134903.png",
+      "height": "6' 2\"",
+      "nationality": "USA",
+      "age": 33,
+      "jerseyNumber": "0"
+    },
+    {
       "id": "espn-4709138",
       "displayName": "Brandin Podziemski",
       "team": "Golden State Warriors",
@@ -2534,7 +2506,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3102531.png",
       "height": "7' 2\"",
       "nationality": "Latvia",
-      "age": 30,
+      "age": 31,
       "jerseyNumber": "7"
     },
     {
@@ -2564,6 +2536,20 @@
       "nationality": "Brazil",
       "age": 24,
       "jerseyNumber": "15"
+    },
+    {
+      "id": "espn-52131",
+      "displayName": "Brandon Williams",
+      "team": "Golden State Warriors",
+      "teamAbbr": "GSW",
+      "conference": "West",
+      "division": "Pacific",
+      "position": "Guard",
+      "photoUrl": null,
+      "height": "6' 6\"",
+      "nationality": null,
+      "age": null,
+      "jerseyNumber": null
     },
     {
       "id": "espn-4397821",
@@ -2604,7 +2590,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3037789.png",
       "height": "6' 5\"",
       "nationality": "Serbia",
-      "age": 33,
+      "age": 34,
       "jerseyNumber": null
     },
     {
@@ -2620,6 +2606,20 @@
       "nationality": "Switzerland",
       "age": 32,
       "jerseyNumber": "30"
+    },
+    {
+      "id": "espn-4684443",
+      "displayName": "Rafael Castro",
+      "team": "Houston Rockets",
+      "teamAbbr": "HOU",
+      "conference": "West",
+      "division": "Southwest",
+      "position": "Center",
+      "photoUrl": null,
+      "height": "6' 9\"",
+      "nationality": "USA",
+      "age": 23,
+      "jerseyNumber": null
     },
     {
       "id": "espn-4683860",
@@ -2650,20 +2650,6 @@
       "jerseyNumber": "27"
     },
     {
-      "id": "espn-4576085",
-      "displayName": "JD Davison",
-      "team": "Houston Rockets",
-      "teamAbbr": "HOU",
-      "conference": "West",
-      "division": "Southwest",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4576085.png",
-      "height": "6' 1\"",
-      "nationality": "USA",
-      "age": 23,
-      "jerseyNumber": "4"
-    },
-    {
       "id": "espn-3202",
       "displayName": "Kevin Durant",
       "team": "Houston Rockets",
@@ -2692,18 +2678,18 @@
       "jerseyNumber": "17"
     },
     {
-      "id": "espn-4592965",
-      "displayName": "Tristen Newton",
+      "id": "espn-4709131",
+      "displayName": "Sean Pedulla",
       "team": "Houston Rockets",
       "teamAbbr": "HOU",
       "conference": "West",
       "division": "Southwest",
       "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4592965.png",
-      "height": "6' 5\"",
+      "photoUrl": null,
+      "height": "6' 1\"",
       "nationality": "USA",
-      "age": 25,
-      "jerseyNumber": "13"
+      "age": 23,
+      "jerseyNumber": "00"
     },
     {
       "id": "espn-4871144",
@@ -2715,7 +2701,7 @@
       "position": "Center",
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4871144.png",
       "height": "6' 11\"",
-      "nationality": "Türkiye",
+      "nationality": "T\u00fcrkiye",
       "age": 24,
       "jerseyNumber": "28"
     },
@@ -2870,7 +2856,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4065731.png",
       "height": "7' 1\"",
       "nationality": "USA",
-      "age": 28,
+      "age": 29,
       "jerseyNumber": "32"
     },
     {
@@ -3014,20 +3000,6 @@
       "jerseyNumber": null
     },
     {
-      "id": "espn-4278516",
-      "displayName": "Ethan Thompson",
-      "team": "Indiana Pacers",
-      "teamAbbr": "IND",
-      "conference": "East",
-      "division": "Central",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4278516.png",
-      "height": "6' 5\"",
-      "nationality": "USA",
-      "age": 27,
-      "jerseyNumber": "55"
-    },
-    {
       "id": "espn-4278355",
       "displayName": "Obi Toppin",
       "team": "Indiana Pacers",
@@ -3068,6 +3040,20 @@
       "nationality": "Bosnia & Herzegovina",
       "age": 29,
       "jerseyNumber": "40"
+    },
+    {
+      "id": "espn-6580",
+      "displayName": "Bradley Beal",
+      "team": "LA Clippers",
+      "teamAbbr": "LAC",
+      "conference": "West",
+      "division": "Pacific",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/6580.png",
+      "height": "6' 4\"",
+      "nationality": "USA",
+      "age": 33,
+      "jerseyNumber": "0"
     },
     {
       "id": "espn-4433569",
@@ -3280,18 +3266,18 @@
       "jerseyNumber": "14"
     },
     {
-      "id": "espn-4709131",
-      "displayName": "Sean Pedulla",
+      "id": "espn-4398390",
+      "displayName": "Jalen Pickett",
       "team": "LA Clippers",
       "teamAbbr": "LAC",
       "conference": "West",
       "division": "Pacific",
       "position": "Guard",
-      "photoUrl": null,
-      "height": "6' 1\"",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4398390.png",
+      "height": "6' 2\"",
       "nationality": "USA",
-      "age": 23,
-      "jerseyNumber": "00"
+      "age": 26,
+      "jerseyNumber": "24"
     },
     {
       "id": "espn-4702352",
@@ -3306,6 +3292,34 @@
       "nationality": "USA",
       "age": 24,
       "jerseyNumber": "4"
+    },
+    {
+      "id": "espn-4897696",
+      "displayName": "Jamarion Sharp",
+      "team": "LA Clippers",
+      "teamAbbr": "LAC",
+      "conference": "West",
+      "division": "Pacific",
+      "position": "Center",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4897696.png",
+      "height": "7' 5\"",
+      "nationality": "USA",
+      "age": 25,
+      "jerseyNumber": null
+    },
+    {
+      "id": "espn-4065778",
+      "displayName": "Max Strus",
+      "team": "LA Clippers",
+      "teamAbbr": "LAC",
+      "conference": "West",
+      "division": "Pacific",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4065778.png",
+      "height": "6' 5\"",
+      "nationality": "USA",
+      "age": 30,
+      "jerseyNumber": "2"
     },
     {
       "id": "espn-5254165",
@@ -3766,7 +3780,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4594326.png",
       "height": "6' 8\"",
       "nationality": "USA",
-      "age": 25,
+      "age": 26,
       "jerseyNumber": "24"
     },
     {
@@ -3892,7 +3906,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5112087.png",
       "height": "6' 7\"",
       "nationality": "USA",
-      "age": 22,
+      "age": 23,
       "jerseyNumber": "0"
     },
     {
@@ -3994,6 +4008,20 @@
       "jerseyNumber": "50"
     },
     {
+      "id": "espn-4702784",
+      "displayName": "J'Vonne Hadley",
+      "team": "Miami Heat",
+      "teamAbbr": "MIA",
+      "conference": "East",
+      "division": "Southeast",
+      "position": "Forward",
+      "photoUrl": null,
+      "height": "6' 5\"",
+      "nationality": "USA",
+      "age": 24,
+      "jerseyNumber": null
+    },
+    {
       "id": "espn-2528210",
       "displayName": "Tim Hardaway Jr.",
       "team": "Miami Heat",
@@ -4006,6 +4034,20 @@
       "nationality": "USA",
       "age": 34,
       "jerseyNumber": "10"
+    },
+    {
+      "id": "espn-4431786",
+      "displayName": "Keshad Johnson",
+      "team": "Miami Heat",
+      "teamAbbr": "MIA",
+      "conference": "East",
+      "division": "Southeast",
+      "position": "Forward",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4431786.png",
+      "height": "6' 6\"",
+      "nationality": "USA",
+      "age": 25,
+      "jerseyNumber": "16"
     },
     {
       "id": "espn-4997528",
@@ -4032,7 +4074,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432645.png",
       "height": "6' 5\"",
       "nationality": "USA",
-      "age": 22,
+      "age": 23,
       "jerseyNumber": "8"
     },
     {
@@ -4078,6 +4120,20 @@
       "jerseyNumber": "95"
     },
     {
+      "id": "espn-4278076",
+      "displayName": "Nick Richards",
+      "team": "Miami Heat",
+      "teamAbbr": "MIA",
+      "conference": "East",
+      "division": "Southeast",
+      "position": "Center",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4278076.png",
+      "height": "6' 11\"",
+      "nationality": "Jamaica",
+      "age": 28,
+      "jerseyNumber": "8"
+    },
+    {
       "id": "espn-4066993",
       "displayName": "Dru Smith",
       "team": "Miami Heat",
@@ -4090,6 +4146,20 @@
       "nationality": "USA",
       "age": 28,
       "jerseyNumber": "12"
+    },
+    {
+      "id": "espn-6475",
+      "displayName": "Klay Thompson",
+      "team": "Miami Heat",
+      "teamAbbr": "MIA",
+      "conference": "East",
+      "division": "Southeast",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/6475.png",
+      "height": "6' 5\"",
+      "nationality": "USA",
+      "age": 36,
+      "jerseyNumber": "31"
     },
     {
       "id": "espn-3059319",
@@ -4256,7 +4326,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/2991043.png",
       "height": "6' 7\"",
       "nationality": "USA",
-      "age": 31,
+      "age": 32,
       "jerseyNumber": null
     },
     {
@@ -4410,7 +4480,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432816.png",
       "height": "6' 7\"",
       "nationality": "USA",
-      "age": 24,
+      "age": 25,
       "jerseyNumber": null
     },
     {
@@ -4480,7 +4550,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4594268.png",
       "height": "6' 4\"",
       "nationality": "USA",
-      "age": 24,
+      "age": 25,
       "jerseyNumber": "5"
     },
     {
@@ -4526,20 +4596,6 @@
       "jerseyNumber": "27"
     },
     {
-      "id": "espn-4432811",
-      "displayName": "Josh Green",
-      "team": "Minnesota Timberwolves",
-      "teamAbbr": "MIN",
-      "conference": "West",
-      "division": "Northwest",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432811.png",
-      "height": "6' 6\"",
-      "nationality": "Australia",
-      "age": 25,
-      "jerseyNumber": null
-    },
-    {
       "id": "espn-4592492",
       "displayName": "Bones Hyland",
       "team": "Minnesota Timberwolves",
@@ -4564,8 +4620,22 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4897438.png",
       "height": "6' 9\"",
       "nationality": "USA",
-      "age": 23,
+      "age": 24,
       "jerseyNumber": null
+    },
+    {
+      "id": "espn-3134932",
+      "displayName": "John Konchar",
+      "team": "Minnesota Timberwolves",
+      "teamAbbr": "MIN",
+      "conference": "West",
+      "division": "Northwest",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3134932.png",
+      "height": "6' 5\"",
+      "nationality": "USA",
+      "age": 30,
+      "jerseyNumber": "55"
     },
     {
       "id": "espn-3136196",
@@ -4634,8 +4704,22 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432847.png",
       "height": "6' 6\"",
       "nationality": "USA",
-      "age": 25,
+      "age": 26,
       "jerseyNumber": "1"
+    },
+    {
+      "id": "espn-4895758",
+      "displayName": "Cody Williams",
+      "team": "Minnesota Timberwolves",
+      "teamAbbr": "MIN",
+      "conference": "West",
+      "division": "Northwest",
+      "position": "Forward",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4895758.png",
+      "height": "6' 8\"",
+      "nationality": "USA",
+      "age": 21,
+      "jerseyNumber": "5"
     },
     {
       "id": "espn-5157587",
@@ -4666,18 +4750,18 @@
       "jerseyNumber": "41"
     },
     {
-      "id": "espn-4432180",
-      "displayName": "Hunter Dickinson",
+      "id": "espn-4712862",
+      "displayName": "Malik Dia",
       "team": "New Orleans Pelicans",
       "teamAbbr": "NOP",
       "conference": "West",
       "division": "Southwest",
-      "position": "Center",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432180.png",
-      "height": "7' 1\"",
+      "position": "Forward",
+      "photoUrl": null,
+      "height": "6' 9\"",
       "nationality": "USA",
-      "age": 25,
-      "jerseyNumber": "4"
+      "age": 22,
+      "jerseyNumber": null
     },
     {
       "id": "espn-5144091",
@@ -4876,6 +4960,20 @@
       "jerseyNumber": "22"
     },
     {
+      "id": "espn-4431675",
+      "displayName": "Trendon Watford",
+      "team": "New Orleans Pelicans",
+      "teamAbbr": "NOP",
+      "conference": "West",
+      "division": "Southwest",
+      "position": "Forward",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4431675.png",
+      "height": "6' 8\"",
+      "nationality": "USA",
+      "age": 25,
+      "jerseyNumber": "12"
+    },
+    {
       "id": "espn-4395628",
       "displayName": "Zion Williamson",
       "team": "New Orleans Pelicans",
@@ -4998,7 +5096,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/6585.png",
       "height": "6' 11\"",
       "nationality": "USA",
-      "age": 32,
+      "age": 33,
       "jerseyNumber": null
     },
     {
@@ -5014,20 +5112,6 @@
       "nationality": "USA",
       "age": 31,
       "jerseyNumber": "3"
-    },
-    {
-      "id": "espn-4395623",
-      "displayName": "Trey Jemison III",
-      "team": "New York Knicks",
-      "teamAbbr": "NYK",
-      "conference": "East",
-      "division": "Atlantic",
-      "position": "Forward",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4395623.png",
-      "height": "6' 10\"",
-      "nationality": "USA",
-      "age": 26,
-      "jerseyNumber": "50"
     },
     {
       "id": "espn-5234862",
@@ -5306,7 +5390,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5159925.png",
       "height": "6' 6\"",
       "nationality": "Serbia",
-      "age": 20,
+      "age": 21,
       "jerseyNumber": "44"
     },
     {
@@ -5600,7 +5684,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4566434.png",
       "height": "6' 10\"",
       "nationality": "Germany",
-      "age": 24,
+      "age": 25,
       "jerseyNumber": "22"
     },
     {
@@ -5670,7 +5754,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5124612.png",
       "height": "6' 4\"",
       "nationality": "Bahamas",
-      "age": 20,
+      "age": 21,
       "jerseyNumber": "77"
     },
     {
@@ -5840,20 +5924,6 @@
       "nationality": "USA",
       "age": 24,
       "jerseyNumber": "33"
-    },
-    {
-      "id": "espn-4431675",
-      "displayName": "Trendon Watford",
-      "team": "Philadelphia 76ers",
-      "teamAbbr": "PHI",
-      "conference": "East",
-      "division": "Atlantic",
-      "position": "Forward",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4431675.png",
-      "height": "6' 8\"",
-      "nationality": "USA",
-      "age": 25,
-      "jerseyNumber": "12"
     },
     {
       "id": "espn-3136193",
@@ -6286,7 +6356,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4279888.png",
       "height": "6' 2\"",
       "nationality": "USA",
-      "age": 26,
+      "age": 27,
       "jerseyNumber": "1"
     },
     {
@@ -6316,6 +6386,20 @@
       "nationality": "Canada",
       "age": 23,
       "jerseyNumber": "17"
+    },
+    {
+      "id": "espn-4610139",
+      "displayName": "Jeremy Sochan",
+      "team": "Portland Trail Blazers",
+      "teamAbbr": "POR",
+      "conference": "West",
+      "division": "Northwest",
+      "position": "Forward",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4610139.png",
+      "height": "6' 8\"",
+      "nationality": "England",
+      "age": 23,
+      "jerseyNumber": "20"
     },
     {
       "id": "espn-4593043",
@@ -6510,7 +6594,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4594327.png",
       "height": "6' 8\"",
       "nationality": "USA",
-      "age": 25,
+      "age": 26,
       "jerseyNumber": "13"
     },
     {
@@ -6524,7 +6608,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4279318.png",
       "height": "6' 6\"",
       "nationality": "USA",
-      "age": 27,
+      "age": 28,
       "jerseyNumber": "29"
     },
     {
@@ -6804,7 +6888,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5105809.png",
       "height": "6' 10\"",
       "nationality": "USA",
-      "age": 22,
+      "age": 23,
       "jerseyNumber": null
     },
     {
@@ -6818,7 +6902,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4395630.png",
       "height": "6' 5\"",
       "nationality": "USA",
-      "age": 25,
+      "age": 26,
       "jerseyNumber": "24"
     },
     {
@@ -6860,7 +6944,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4433134.png",
       "height": "6' 8\"",
       "nationality": "USA",
-      "age": 24,
+      "age": 25,
       "jerseyNumber": "4"
     },
     {
@@ -6976,6 +7060,20 @@
       "jerseyNumber": "3"
     },
     {
+      "id": "espn-4432190",
+      "displayName": "Andre Jackson Jr.",
+      "team": "Toronto Raptors",
+      "teamAbbr": "TOR",
+      "conference": "East",
+      "division": "Atlantic",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432190.png",
+      "height": "6' 6\"",
+      "nationality": "USA",
+      "age": 24,
+      "jerseyNumber": "44"
+    },
+    {
       "id": "espn-4431684",
       "displayName": "Trayce Jackson-Davis",
       "team": "Toronto Raptors",
@@ -6988,6 +7086,20 @@
       "nationality": "USA",
       "age": 26,
       "jerseyNumber": "32"
+    },
+    {
+      "id": "espn-4395623",
+      "displayName": "Trey Jemison III",
+      "team": "Toronto Raptors",
+      "teamAbbr": "TOR",
+      "conference": "East",
+      "division": "Atlantic",
+      "position": "Center",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4395623.png",
+      "height": "6' 10\"",
+      "nationality": "USA",
+      "age": 26,
+      "jerseyNumber": "50"
     },
     {
       "id": "espn-4067017",
@@ -7112,7 +7224,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4873138.png",
       "height": "6' 9\"",
       "nationality": "USA",
-      "age": 19,
+      "age": 20,
       "jerseyNumber": "19"
     },
     {
@@ -7186,6 +7298,20 @@
       "jerseyNumber": "3"
     },
     {
+      "id": "espn-4432811",
+      "displayName": "Josh Green",
+      "team": "Utah Jazz",
+      "teamAbbr": "UTA",
+      "conference": "West",
+      "division": "Northwest",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432811.png",
+      "height": "6' 6\"",
+      "nationality": "Australia",
+      "age": 25,
+      "jerseyNumber": null
+    },
+    {
       "id": "espn-4397077",
       "displayName": "Jaxson Hayes",
       "team": "Utah Jazz",
@@ -7226,20 +7352,6 @@
       "nationality": "USA",
       "age": 26,
       "jerseyNumber": "20"
-    },
-    {
-      "id": "espn-3134932",
-      "displayName": "John Konchar",
-      "team": "Utah Jazz",
-      "teamAbbr": "UTA",
-      "conference": "West",
-      "division": "Northwest",
-      "position": "Guard",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3134932.png",
-      "height": "6' 5\"",
-      "nationality": "USA",
-      "age": 30,
-      "jerseyNumber": "55"
     },
     {
       "id": "espn-4066336",
@@ -7294,7 +7406,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/3102530.png",
       "height": "6' 11\"",
       "nationality": "Bosnia & Herzegovina",
-      "age": 31,
+      "age": 32,
       "jerseyNumber": "30"
     },
     {
@@ -7352,20 +7464,6 @@
       "nationality": "Congo",
       "age": 26,
       "jerseyNumber": "34"
-    },
-    {
-      "id": "espn-4895758",
-      "displayName": "Cody Williams",
-      "team": "Utah Jazz",
-      "teamAbbr": "UTA",
-      "conference": "West",
-      "division": "Northwest",
-      "position": "Forward",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4895758.png",
-      "height": "6' 8\"",
-      "nationality": "USA",
-      "age": 21,
-      "jerseyNumber": "5"
     },
     {
       "id": "espn-4278129",
@@ -7494,6 +7592,20 @@
       "jerseyNumber": "12"
     },
     {
+      "id": "espn-4432819",
+      "displayName": "Tre Mann",
+      "team": "Washington Wizards",
+      "teamAbbr": "WAS",
+      "conference": "East",
+      "division": "Southeast",
+      "position": "Guard",
+      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/4432819.png",
+      "height": "6' 4\"",
+      "nationality": "USA",
+      "age": 25,
+      "jerseyNumber": "23"
+    },
+    {
       "id": "espn-6609",
       "displayName": "Khris Middleton",
       "team": "Washington Wizards",
@@ -7504,7 +7616,7 @@
       "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/6609.png",
       "height": "6' 7\"",
       "nationality": "USA",
-      "age": 34,
+      "age": 35,
       "jerseyNumber": "22"
     },
     {
@@ -7520,20 +7632,6 @@
       "nationality": "Nigeria",
       "age": 22,
       "jerseyNumber": null
-    },
-    {
-      "id": "espn-4683742",
-      "displayName": "Julian Reese",
-      "team": "Washington Wizards",
-      "teamAbbr": "WAS",
-      "conference": "East",
-      "division": "Southeast",
-      "position": "Forward",
-      "photoUrl": null,
-      "height": "6' 9\"",
-      "nationality": "USA",
-      "age": 23,
-      "jerseyNumber": "15"
     },
     {
       "id": "espn-5144126",
@@ -7590,20 +7688,6 @@
       "nationality": "USA",
       "age": 25,
       "jerseyNumber": "5"
-    },
-    {
-      "id": "espn-5105592",
-      "displayName": "Cam Whitmore",
-      "team": "Washington Wizards",
-      "teamAbbr": "WAS",
-      "conference": "East",
-      "division": "Southeast",
-      "position": "Forward",
-      "photoUrl": "https://a.espncdn.com/i/headshots/nba/players/full/5105592.png",
-      "height": "6' 6\"",
-      "nationality": "USA",
-      "age": 22,
-      "jerseyNumber": "1"
     },
     {
       "id": "espn-4277905",

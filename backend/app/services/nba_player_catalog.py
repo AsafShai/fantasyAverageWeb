@@ -11,7 +11,8 @@ from app.models.nba_player_models import NbaPlayerBio
 
 logger = logging.getLogger(__name__)
 
-_JSON_PATH = Path(__file__).resolve().parents[2] / "data" / "nba-players-2025-26.json"
+JSON_PATH = Path(__file__).resolve().parents[2] / "data" / "nba-players-2025-26.json"
+_JSON_PATH = JSON_PATH
 
 _by_id: Optional[dict[int, NbaPlayerBio]] = None
 
