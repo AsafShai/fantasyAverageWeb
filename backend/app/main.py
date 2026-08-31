@@ -33,6 +33,7 @@ from app.services.nba_stats_service import NBAStatsService
 from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
+from app.services import nba_players_scheduler
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
 # Configure logging
@@ -71,6 +72,10 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(model_nightly_scheduler.start_scheduler())
     else:
         logger.info("Model nightly scheduler disabled via MODEL_NIGHTLY_ENABLED=false")
+    if settings.nba_players_refresh_enabled:
+        asyncio.create_task(nba_players_scheduler.start_scheduler())
+    else:
+        logger.info("NBA players refresh scheduler disabled via NBA_PLAYERS_REFRESH_ENABLED=false")
     yield
     # Shutdown
     try:

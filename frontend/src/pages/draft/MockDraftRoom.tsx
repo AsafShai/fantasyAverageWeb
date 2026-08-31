@@ -170,7 +170,7 @@ const MockPlayerCard = memo(function MockPlayerCard({
 }) {
   return (
     <div
-      className={`flex items-center gap-1.5 px-2 py-2 min-w-0 ${
+      className={`flex items-center gap-1.5 px-2 py-2 min-w-0 border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${
         madePick != null
           ? 'opacity-70'
           : inQueue
@@ -1408,7 +1408,7 @@ export default function MockDraftRoom({
   const playerCards = (
     <div>
       {listPager('border-b border-gray-200 dark:border-gray-700')}
-      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+      <div>
         {paged.map((player) => {
           const full = detailsById.get(player.id)
           const made = pickByPlayer.get(player.id)
