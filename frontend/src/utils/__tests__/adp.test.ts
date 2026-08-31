@@ -4,6 +4,7 @@ import {
   blendRankValue,
   blendValue,
   clampLeagueSettings,
+  DEFAULT_DRAFT_METRIC,
   draftTeamForPick,
   groupDraftPicksByTeam,
   isThreeRrReverse,
@@ -13,6 +14,7 @@ import {
   sitesForMetric,
   spreadValue,
   threeRrDisplayRounds,
+  toListHeadshotUrl,
 } from '../adp'
 import type { AdpPlayer, ProviderMeta } from '../../types/api'
 
@@ -67,7 +69,11 @@ describe('3RR draft board', () => {
       rounds: 15,
       threeRr: false,
     })
-    expect(clampLeagueSettings(null).threeRr).toBe(true)
+    expect(clampLeagueSettings(null)).toEqual({
+      teams: 13,
+      rounds: 14,
+      threeRr: true,
+    })
   })
 })
 
@@ -101,6 +107,10 @@ describe('provider capabilities', () => {
 })
 
 describe('metric-aware player values', () => {
+  it('defaults draft pages to rankings blend, not ADP', () => {
+    expect(DEFAULT_DRAFT_METRIC).toBe('rank')
+  })
+
   const player = {
     espn: { adp: 12.5, rank: 9, ranking: 4 },
     blend: 12.5,
@@ -120,5 +130,15 @@ describe('metric-aware player values', () => {
     expect(blendRankValue(player, 'rank')).toBe(5)
     expect(spreadValue(player, 'adp')).toBe(3)
     expect(spreadValue(player, 'rank')).toBe(1)
+  })
+})
+
+describe('list headshots', () => {
+  it('shrinks ESPN full headshots for list avatars', () => {
+    expect(toListHeadshotUrl('https://a.espncdn.com/i/headshots/nba/players/full/3112335.png')).toBe(
+      'https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/3112335.png&w=96&h=70',
+    )
+    expect(toListHeadshotUrl(null)).toBeNull()
+    expect(toListHeadshotUrl('https://example.com/photo.png')).toBe('https://example.com/photo.png')
   })
 })

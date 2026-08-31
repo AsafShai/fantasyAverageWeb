@@ -1,4 +1,4 @@
-import type { AdpIndexPlayer, AdpMetric, AdpPlayer, LastYearStats, ProviderMeta } from '../types/api'
+import type { AdpIndexPlayer, AdpIndexQueryArgs, AdpMetric, AdpPlayer, LastYearStats, ProviderMeta } from '../types/api'
 
 export const ADP_SITES = ['espn', 'fantrax', 'sleeper', 'yahoo'] as const
 export type AdpSiteKey = (typeof ADP_SITES)[number]
@@ -61,6 +61,27 @@ export function spreadValue(player: AdpPlayer, metric: AdpMetric): number | null
 
 export const METRIC_LABEL: Record<AdpMetric, string> = { adp: 'ADP', rank: 'Rankings' }
 export const BLEND_LABEL: Record<AdpMetric, string> = { adp: 'Blend ADP', rank: 'Blend Rank' }
+/** Draft pages open on rankings blend, not ADP. */
+export const DEFAULT_DRAFT_METRIC: AdpMetric = 'rank'
+
+/** Shared `/adp/index` args so Mock setup and Pre-Draft hit the same RTK cache entry. */
+export function defaultAdpIndexArgs(metric: AdpMetric = DEFAULT_DRAFT_METRIC): AdpIndexQueryArgs {
+  return {
+    metric,
+    sites: sitesForMetric('adp').join(','),
+    rank_sites: sitesForMetric('rank').join(','),
+  }
+}
+
+const ESPN_FULL_HEADSHOT = /^(https:\/\/a\.espncdn\.com)\/i\/headshots\/nba\/players\/full\/(\d+)\.png(?:\?.*)?$/
+
+/** List avatars are 32px; ESPN `full/` PNGs are hundreds of KB each. */
+export function toListHeadshotUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  const match = url.match(ESPN_FULL_HEADSHOT)
+  if (!match) return url
+  return `${match[1]}/combiner/i?img=/i/headshots/nba/players/full/${match[2]}.png&w=96&h=70`
+}
 
 export function formatAdp(value: number | null | undefined): string {
   if (value == null) return '—'
@@ -147,8 +168,8 @@ export function draftTeamForPick(pick: number, teams: number, threeRr = true): n
   return isReverseRound(r, threeRr) ? teams - pos : pos + 1
 }
 
-export const DRAFT_TEAMS = 12
-export const DRAFT_ROUNDS = 15
+export const DRAFT_TEAMS = 13
+export const DRAFT_ROUNDS = 14
 export const DRAFT_PICKS = DRAFT_TEAMS * DRAFT_ROUNDS
 export const LEAGUE_SIZE_MIN = 8
 export const LEAGUE_SIZE_MAX = 16

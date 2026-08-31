@@ -8,14 +8,20 @@ const PILL: Record<string, string> = {
   F: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
 }
 
-export default function PositionPills({ positions }: { positions: string[] }) {
+export default function PositionPills({
+  positions,
+  nowrap = false,
+}: {
+  positions: string[]
+  nowrap?: boolean
+}) {
   if (!positions.length) return <span className="text-gray-400">—</span>
   return (
-    <span className="inline-flex flex-wrap gap-0.5">
+    <span className={`inline-flex items-center gap-0.5 ${nowrap ? 'flex-nowrap' : 'flex-wrap'}`}>
       {positions.map((pos) => (
         <span
           key={pos}
-          className={`px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${PILL[pos] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}
+          className={`px-1.5 py-0.5 rounded text-[10px] font-bold leading-none whitespace-nowrap ${PILL[pos] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}`}
         >
           {pos}
         </span>

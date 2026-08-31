@@ -429,6 +429,7 @@ export interface AdpQueryArgs {
   sites?: string;
   rank_sites?: string;
   metric?: AdpMetric;
+  include_stats?: boolean;
 }
 
 export interface AdpIndexQueryArgs {

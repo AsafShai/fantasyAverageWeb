@@ -28,9 +28,10 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Players', path: '/players', icon: '⛹️', group: 'Players' },
   ...(FF_DRAFT_PAGES
     ? [
-        { label: 'Consensus (ADP & Rankings)', path: '/draft/consensus', icon: '📊', group: 'Draft' },
+        { label: 'Rankings & ADP', path: '/draft/rankings-adp', icon: '📊', group: 'Draft' },
         { label: 'Draft Board', path: '/draft/board', icon: '🗂️', group: 'Draft' },
         { label: 'Pre-Draft Rankings', path: '/draft/rankings', icon: '📋', group: 'Draft' },
+        { label: 'Mock Draft', path: '/draft/mock', icon: '🏟️', group: 'Draft' },
       ]
     : []),
   ...(FF_PLAYER_RANKINGS ? [{ label: 'Player Rankings', path: '/player-rankings', icon: '📋', group: 'Players' }] : []),

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { memo } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import PositionPills from './PositionPills'
+import { toListHeadshotUrl } from '../../utils/adp'
 
-export default function PlayerIdentityCell({
+function PlayerIdentityCell({
   name,
   playerId,
   photoUrl,
@@ -11,6 +12,8 @@ export default function PlayerIdentityCell({
   wrapName = false,
   rowSelectOnMobile = false,
   splitMetaOnMobile = false,
+  link = true,
+  photoSize = 'list',
 }: {
   name: string
   playerId?: number | string | null
@@ -20,18 +23,34 @@ export default function PlayerIdentityCell({
   wrapName?: boolean
   rowSelectOnMobile?: boolean
   splitMetaOnMobile?: boolean
+  /** When false, the name is plain text (e.g. mock draft, where leaving the page would lose the session). */
+  link?: boolean
+  photoSize?: 'list' | 'full'
 }) {
-  const [broke, setBroke] = useState(false)
+  const src = photoSize === 'full' ? photoUrl || null : toListHeadshotUrl(photoUrl)
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
       <div className="shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
-        {photoUrl && !broke ? (
-          <img
-            src={photoUrl}
-            alt=""
-            className="w-full h-full object-cover object-top"
-            onError={() => setBroke(true)}
-          />
+        {src ? (
+          <>
+            <img
+              src={src}
+              alt=""
+              width={32}
+              height={32}
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover object-top"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+                const fallback = e.currentTarget.nextElementSibling
+                if (fallback instanceof HTMLElement) fallback.hidden = false
+              }}
+            />
+            <div hidden className="w-full h-full flex items-center justify-center text-sm">
+              🏀
+            </div>
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-sm">🏀</div>
         )}
@@ -44,15 +63,19 @@ export default function PlayerIdentityCell({
         }
       >
         <div className={wrapName ? 'whitespace-normal break-words leading-tight' : 'truncate'}>
-          <PlayerNameLink
-            name={name}
-            playerId={playerId}
-            className={
-              rowSelectOnMobile
-                ? 'text-blue-700 dark:text-blue-300 hover:underline font-medium pointer-events-none lg:pointer-events-auto'
-                : undefined
-            }
-          />
+          {link ? (
+            <PlayerNameLink
+              name={name}
+              playerId={playerId}
+              className={
+                rowSelectOnMobile
+                  ? 'text-blue-700 dark:text-blue-300 hover:underline font-medium pointer-events-none lg:pointer-events-auto'
+                  : undefined
+              }
+            />
+          ) : (
+            <span className="font-medium text-gray-800 dark:text-gray-100">{name}</span>
+          )}
         </div>
         <div
           className={`flex items-center gap-1.5 ${
@@ -68,3 +91,5 @@ export default function PlayerIdentityCell({
     </div>
   )
 }
+
+export default memo(PlayerIdentityCell)

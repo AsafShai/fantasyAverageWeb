@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.models.adp import AdpIndexResponse, AdpResponse, ProviderMeta
 from app.services.adp_service import (
@@ -12,6 +12,13 @@ from app.services.adp_service import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Short browser/CDN reuse; the process cache (30 min) is still the source of truth.
+_ADP_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=600"
+
+
+def _cache_headers(response: Response) -> None:
+    response.headers["Cache-Control"] = _ADP_CACHE_CONTROL
 
 
 def _positions(pos: Optional[str]) -> Optional[list[str]]:
@@ -28,12 +35,14 @@ def _ids(ids: Optional[str]) -> Optional[list[str]]:
 
 @router.get("/index", response_model=AdpIndexResponse)
 async def get_adp_index(
+    response: Response,
     ranked_only: bool = Query(True),
     sites: Optional[str] = Query(None),
     rank_sites: Optional[str] = Query(None),
     metric: str = Query("adp"),
     include_fringe: bool = Query(False),
 ):
+    _cache_headers(response)
     try:
         return await get_adp_index_response(
             ranked_only=ranked_only,
@@ -62,6 +71,7 @@ async def refresh_adp(provider: Optional[str] = Query(None)):
 @router.get("", response_model=AdpResponse)
 @router.get("/", response_model=AdpResponse)
 async def get_adp(
+    response: Response,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=2000),
     sort: str = Query("blend"),
@@ -75,7 +85,9 @@ async def get_adp(
     rank_sites: Optional[str] = Query(None),
     metric: str = Query("adp"),
     include_fringe: bool = Query(False),
+    include_stats: bool = Query(True),
 ):
+    _cache_headers(response)
     try:
         return await get_adp_response_enriched(
             page=page,
@@ -91,6 +103,7 @@ async def get_adp(
             rank_sites=rank_sites,
             metric=metric,
             include_fringe=include_fringe,
+            include_stats=include_stats,
         )
     except Exception as e:
         logger.error("Error building ADP response: %s", e)

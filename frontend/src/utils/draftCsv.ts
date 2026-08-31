@@ -7,6 +7,28 @@ const MAX_UNMATCHED_RATIO = 0.2
 
 export type RankingsCsvPlayer = { id: string; name: string }
 
+export type RankingsCsvExportPlayer = {
+  id: string
+  name: string
+  team_abbr?: string | null
+  positions: string[]
+  espn_id?: number | null
+}
+
+/** Same columns Pre-Draft Rankings and Mock Draft import (`rank,id,name,team,positions` plus espn_id). */
+export function rankingsExportRows(players: RankingsCsvExportPlayer[]): string[][] {
+  const header = [...RANKINGS_CSV_HEADERS, 'espn_id']
+  const rows = players.map((p, i) => [
+    String(i + 1),
+    p.id,
+    p.name,
+    p.team_abbr ?? '',
+    p.positions.join('/'),
+    p.espn_id != null ? String(p.espn_id) : '',
+  ])
+  return [header, ...rows]
+}
+
 export type RankingsCsvImportResult =
   | { ok: true; order: string[]; matched: number; unknown: string[] }
   | { ok: false; error: string }
@@ -93,6 +115,7 @@ export function rankingsCsvFileError(file: File): string | null {
 export function parseRankingsCsvImport(
   text: string,
   players: RankingsCsvPlayer[],
+  options?: { minMatched?: number },
 ): RankingsCsvImportResult {
   const rows = parseCsv(text)
   if (rows.length === 0) return { ok: false, error: 'That file is not a Pre-Draft Rankings CSV.' }
@@ -136,14 +159,18 @@ export function parseRankingsCsvImport(
   if (nextOrder.length === 0) {
     return { ok: false, error: 'None of the player ids in that CSV match the current ADP board.' }
   }
-  const minMatched = Math.min(10, players.length)
+  const minMatched = options?.minMatched ?? Math.min(10, players.length)
   if (nextOrder.length < minMatched) {
     return {
       ok: false,
-      error: `Too few player ids matched the current board (${nextOrder.length}). This does not look like a file exported from this page.`,
+      error:
+        options?.minMatched != null
+          ? `That CSV matched ${nextOrder.length} players; this mock needs at least ${minMatched} (league size × rounds).`
+          : `Too few player ids matched the current board (${nextOrder.length}). This does not look like a file exported from this page.`,
     }
   }
-  if (unknown.length / parsed.length > MAX_UNMATCHED_RATIO) {
+  const enoughForDraft = options?.minMatched != null && nextOrder.length >= options.minMatched
+  if (!enoughForDraft && unknown.length / parsed.length > MAX_UNMATCHED_RATIO) {
     return {
       ok: false,
       error: `Too many unknown player ids (${unknown.length} of ${parsed.length}). Import a CSV exported from this page.`,

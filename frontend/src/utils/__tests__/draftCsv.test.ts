@@ -3,6 +3,7 @@ import {
   parseRankingsCsvImport,
   rankingsCsvFileError,
   RANKINGS_CSV_HEADERS,
+  rankingsExportRows,
   toCsv,
 } from '../draftCsv'
 
@@ -97,11 +98,46 @@ describe('rankings CSV import', () => {
     if (result.ok) expect(result.order.at(-1)).toBe('99')
   })
 
+  it('imports a Rankings & ADP export built with the shared row helper', () => {
+    const exported = players.map((p) => ({
+      ...p,
+      team_abbr: 'DEN',
+      positions: ['PG'],
+      espn_id: Number(p.id),
+    }))
+    const result = parseRankingsCsvImport(toCsv(rankingsExportRows(exported)), players)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.order).toEqual(players.map((p) => p.id))
+  })
+
   it('still imports when an extra espn_id column is present', () => {
     const header = [...RANKINGS_CSV_HEADERS, 'espn_id']
     const rows = players.map((p, i) => [String(i + 1), p.id, p.name, 'DEN', 'PG', p.id])
     const result = parseRankingsCsvImport(toCsv([header, ...rows]), players)
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.order).toEqual(players.map((p) => p.id))
+  })
+
+  it('accepts a long unknown tail when enough ids match a mock draft', () => {
+    const rows = [
+      ...players.map((p, i) => [String(i + 1), p.id, p.name, 'DEN', 'PG']),
+      ...Array.from({ length: 20 }, (_, i) => [String(11 + i), `ghost-${i}`, 'Ghost', 'FA', 'C']),
+    ]
+    const result = parseRankingsCsvImport(rankingsCsv(rows), players, { minMatched: 8 })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.matched).toBe(10)
+      expect(result.order.slice(0, 10)).toEqual(players.map((p) => p.id))
+    }
+  })
+
+  it('still rejects a mock import that does not cover the pick count', () => {
+    const rows = [
+      ...players.slice(0, 3).map((p, i) => [String(i + 1), p.id, p.name, 'DEN', 'PG']),
+      ...Array.from({ length: 20 }, (_, i) => [String(4 + i), `ghost-${i}`, 'Ghost', 'FA', 'C']),
+    ]
+    const result = parseRankingsCsvImport(rankingsCsv(rows), players, { minMatched: 8 })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/needs at least 8/)
   })
 })

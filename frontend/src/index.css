@@ -27,6 +27,11 @@ html, body {
 }
 
 /* ── Dark mode base ── */
+@keyframes toast-timer-shrink {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
 .dark body {
   background-color: #111827;
   color: #f3f4f6;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
   DndContext,
@@ -25,6 +25,7 @@ import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
 import { useDebounce } from '../../hooks/useDebounce'
+import { useIsBelowLg } from '../../hooks/useIsBelowLg'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
@@ -35,6 +36,7 @@ import PlayerDetailSheet from '../../components/draft/PlayerDetailSheet'
 import MoveToModal from '../../components/draft/MoveToModal'
 import {
   BLEND_LABEL,
+  DEFAULT_DRAFT_METRIC,
   LAST_YEAR_COLS,
   SITE_LABEL,
   blendRankValue,
@@ -45,8 +47,9 @@ import {
   nextShortSeasonLabel,
   shortSeasonLabel,
 } from '../../utils/adp'
-import { downloadCsv, parseRankingsCsvImport, RANKINGS_CSV_HEADERS, rankingsCsvFileError, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
+import { downloadCsv, parseRankingsCsvImport, rankingsCsvFileError, rankingsExportRows, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
 import { pingEspnHelper, sendEspnRankings, toEspnRankingsPayload } from '../../utils/espnRankingsBridge'
+import EspnHelperInstallDialog from '../../components/draft/EspnHelperInstallDialog'
 import {
   EMPTY_RANKINGS,
   mergeIdsIntoRankings,
@@ -62,20 +65,6 @@ const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
 type StatsFrom = 'actual' | 'projection'
 
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 })
-
-function useIsBelowLg() {
-  const [below, setBelow] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)').matches : false,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 1023px)')
-    const sync = () => setBelow(mq.matches)
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-  return below
-}
 
 function DeltaBadge({ rank, compareRank }: { rank: number; compareRank: number | null }) {
   if (compareRank == null) return <span className="text-gray-400">—</span>
@@ -116,7 +105,7 @@ function FooterStat({
   )
 }
 
-function RankRowFooter({
+const RankRowFooter = memo(function RankRowFooter({
   player,
   rank,
   lastRank,
@@ -157,9 +146,9 @@ function RankRowFooter({
       </div>
     </div>
   )
-}
+})
 
-function RankRowBody({
+const RankRowBody = memo(function RankRowBody({
   player,
   rank,
   lastRank,
@@ -219,9 +208,9 @@ function RankRowBody({
       </div>
     </div>
   )
-}
+})
 
-function SortableRankRow({
+const SortableRankRow = memo(function SortableRankRow({
   player,
   rank,
   lastRank,
@@ -237,8 +226,8 @@ function SortableRankRow({
   stats?: LastYearStats | null
   metric: AdpMetric
   selected: boolean
-  onSelect: () => void
-  onMoveTo: () => void
+  onSelect: (id: string) => void
+  onMoveTo: (id: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: player.id,
@@ -251,7 +240,7 @@ function SortableRankRow({
     <div
       ref={setNodeRef}
       style={style}
-      onClick={onSelect}
+      onClick={() => onSelect(player.id)}
       className={`flex flex-col gap-0 px-3 py-2.5 sm:py-2 border-b border-gray-100 dark:border-gray-800 select-none ${
         isDragging ? 'opacity-30' : ''
       } ${
@@ -282,7 +271,7 @@ function SortableRankRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation()
-            onMoveTo()
+            onMoveTo(player.id)
           }}
           onPointerDown={(e) => e.stopPropagation()}
           className="hidden sm:inline-flex shrink-0 w-[4.5rem] px-2 py-1 rounded-md text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -293,10 +282,10 @@ function SortableRankRow({
       <RankRowFooter player={player} rank={rank} lastRank={lastRank} stats={stats} metric={metric} />
     </div>
   )
-}
+})
 
 export default function PreDraftRankingsPage() {
-  const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', 'adp')
+  const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', DEFAULT_DRAFT_METRIC)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
   const { sites, available, toggle: toggleSite, sitesParam, rankSitesParam } = useBlendSites(
     source,
@@ -325,6 +314,7 @@ export default function PreDraftRankingsPage() {
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const [espnMsg, setEspnMsg] = useState<string | null>(null)
   const [espnHelper, setEspnHelper] = useState(false)
+  const [espnHelpOpen, setEspnHelpOpen] = useState(false)
   const [pendingImport, setPendingImport] = useState<Extract<RankingsCsvImportResult, { ok: true }> | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -466,7 +456,7 @@ export default function PreDraftRankingsPage() {
     [neededDetailIds, detailsById],
   )
   const { data: details } = useGetAdpQuery(
-    { ids: missingDetailIds.join(',') },
+    { ids: missingDetailIds.join(','), include_stats: true },
     { skip: missingDetailIds.length === 0 },
   )
   if (details?.providers?.length && details.providers !== providers) setProviders(details.providers)
@@ -501,13 +491,25 @@ export default function PreDraftRankingsPage() {
   }, [])
   const playersById = useMemo(() => {
     const next = new Map<string, AdpPlayer>()
-    for (const p of ordered) next.set(p.id, hydrateAdpPlayer(p, detailsById.get(p.id)))
+    for (const p of players) next.set(p.id, hydrateAdpPlayer(p, detailsById.get(p.id)))
     return next
-  }, [ordered, detailsById])
+  }, [players, detailsById])
   const pagedFull = useMemo(
-    () => paged.map((p) => hydrateAdpPlayer(p, detailsById.get(p.id))),
-    [paged, detailsById],
+    () => paged.map((p) => playersById.get(p.id)).filter((p): p is AdpPlayer => p != null),
+    [paged, playersById],
   )
+  const rankById = useMemo(() => {
+    const next = new Map<string, number>()
+    board.order.forEach((id, i) => next.set(id, i + 1))
+    return next
+  }, [board.order])
+  const selectPlayer = useCallback((id: string) => {
+    setSelectedId((cur) => (cur === id ? null : id))
+  }, [])
+  const startMoveTo = useCallback((id: string) => {
+    setSelectedId(id)
+    setMovePlayerId(id)
+  }, [])
   const resolvedStatsFrom: StatsFrom = statsFrom === 'projection' ? 'projection' : 'actual'
   const actualSeasonShort = shortSeasonLabel(details?.last_year_season || detailsSeason.last) || '25/26'
   const projectionSeason = details?.projection_season || detailsSeason.proj
@@ -520,11 +522,11 @@ export default function PreDraftRankingsPage() {
   const playerStats = (p: AdpPlayer) => (resolvedStatsFrom === 'projection' ? p.projection : p.last_year)
 
   const selectedPlayer = selectedId ? playersById.get(selectedId) ?? null : null
-  const selectedRank = selectedId ? board.order.indexOf(selectedId) + 1 : 0
+  const selectedRank = selectedId ? rankById.get(selectedId) ?? 0 : 0
   const movePlayer = movePlayerId ? playersById.get(movePlayerId) ?? null : null
-  const moveRank = movePlayerId ? board.order.indexOf(movePlayerId) + 1 : 0
+  const moveRank = movePlayerId ? rankById.get(movePlayerId) ?? 0 : 0
   const activePlayer = activeId ? playersById.get(activeId) ?? null : null
-  const activeRank = activeId ? board.order.indexOf(activeId) + 1 : 0
+  const activeRank = activeId ? rankById.get(activeId) ?? 0 : 0
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -610,7 +612,7 @@ export default function PreDraftRankingsPage() {
         return
       }
       if (typing) return
-      if (movePlayerId || pendingImport) return
+      if (movePlayerId || pendingImport || espnHelpOpen) return
       if (e.key === 'Escape') {
         setSelectedId(null)
         return
@@ -640,19 +642,10 @@ export default function PreDraftRankingsPage() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [board, dirty, movePlayerId, pendingImport, moveSelected, saveRankings])
+  }, [board, dirty, movePlayerId, pendingImport, espnHelpOpen, moveSelected, saveRankings])
 
   const exportCsv = () => {
-    const header = [...RANKINGS_CSV_HEADERS, 'espn_id']
-    const rows = ordered.map((p, i) => [
-      String(i + 1),
-      p.id,
-      p.name,
-      p.team_abbr ?? '',
-      p.positions.join('/'),
-      p.espn_id != null ? String(p.espn_id) : '',
-    ])
-    downloadCsv('pre-draft-rankings.csv', toCsv([header, ...rows]))
+    downloadCsv('pre-draft-rankings.csv', toCsv(rankingsExportRows(ordered)))
   }
 
   const applyOnEspn = async () => {
@@ -660,14 +653,13 @@ export default function PreDraftRankingsPage() {
     const helper = await pingEspnHelper()
     setEspnHelper(helper)
     if (!helper) {
-      setEspnMsg(
-        'Install the Chrome helper first: extension/README.md, then reload this page. The helper reorders ESPN’s unsaved list only — you click Save Rankings on ESPN.',
-      )
+      setEspnHelpOpen(true)
       return
     }
+    setEspnHelpOpen(false)
     const stored = await sendEspnRankings(toEspnRankingsPayload(ordered))
     if (!stored) {
-      setEspnMsg('Could not reach the helper. Reload this page after loading the extension.')
+      setEspnMsg('The helper is on, but this tab could not talk to it. Reload this page and click Apply on ESPN again.')
       return
     }
     setEspnMsg(
@@ -768,8 +760,8 @@ export default function PreDraftRankingsPage() {
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1">
-          <Link to="/draft/consensus" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
-            ADP &amp; Rankings
+          <Link to="/draft/rankings-adp" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
+            Rankings &amp; ADP
           </Link>
           <Link to="/draft/board" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
             Open draft board
@@ -917,7 +909,7 @@ export default function PreDraftRankingsPage() {
             </button>
             <button
               type="button"
-              className={btnGhost}
+              className={`${btnGhost} hidden lg:inline-flex`}
               onClick={() => void applyOnEspn()}
               title={espnHelper ? 'Helper connected' : 'Requires the Chrome helper'}
             >
@@ -1008,9 +1000,6 @@ export default function PreDraftRankingsPage() {
                   className={menuItem}
                 >
                   Import CSV
-                </button>
-                <button type="button" role="menuitem" onClick={() => void applyOnEspn()} className={menuItem}>
-                  Apply on ESPN
                 </button>
               </div>
             )}
@@ -1132,25 +1121,19 @@ export default function PreDraftRankingsPage() {
           onDragCancel={onDragCancel}
         >
           <SortableContext items={pagedFull.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-            {pagedFull.map((p) => {
-              const rank = board.order.indexOf(p.id) + 1
-              return (
-                <SortableRankRow
-                  key={p.id}
-                  player={p}
-                  rank={rank > 0 ? rank : 0}
-                  lastRank={savedRankById?.get(p.id) ?? null}
-                  stats={playerStats(p)}
-                  metric={source}
-                  selected={selectedId === p.id}
-                  onSelect={() => setSelectedId((id) => (id === p.id ? null : p.id))}
-                  onMoveTo={() => {
-                    setSelectedId(p.id)
-                    setMovePlayerId(p.id)
-                  }}
-                />
-              )
-            })}
+            {pagedFull.map((p) => (
+              <SortableRankRow
+                key={p.id}
+                player={p}
+                rank={rankById.get(p.id) ?? 0}
+                lastRank={savedRankById?.get(p.id) ?? null}
+                stats={playerStats(p)}
+                metric={source}
+                selected={selectedId === p.id}
+                onSelect={selectPlayer}
+                onMoveTo={startMoveTo}
+              />
+            ))}
           </SortableContext>
           <DragOverlay dropAnimation={{ duration: 180, easing: 'ease-out' }}>
             {activePlayer ? (
@@ -1230,6 +1213,9 @@ export default function PreDraftRankingsPage() {
           onClose={closeMoveTo}
           onNeedIds={onMoveNeedIds}
         />
+      ) : null}
+      {espnHelpOpen ? (
+        <EspnHelperInstallDialog onClose={() => setEspnHelpOpen(false)} onRetry={() => void applyOnEspn()} />
       ) : null}
       {pendingImport ? (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 px-0 sm:px-4" onClick={() => setPendingImport(null)}>

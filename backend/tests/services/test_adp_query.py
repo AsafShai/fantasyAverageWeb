@@ -55,6 +55,14 @@ def test_ids_preserves_request_order():
     assert total == 2
 
 
+def test_ids_cap_covers_a_mock_page_plus_history():
+    players = [_p(f"P{i}", blend=float(i), pid=str(i)) for i in range(200)]
+    ids = [str(i) for i in range(200)]
+    page, total, *_ = paginate_players(players, ids=ids)
+    assert total == 200
+    assert len(page) == 200
+
+
 def _rank_p(name: str, *, blend, ranking_blend, espn_adp=None, espn_ranking=None) -> AdpPlayer:
     return AdpPlayer(
         id=name,

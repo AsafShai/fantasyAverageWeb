@@ -67,6 +67,8 @@ _refresh_lock = asyncio.Lock()
 _espn_stats_cache: Optional[tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]] = None
 _espn_stats_cached_at: Optional[datetime] = None
 _espn_stats_lock = asyncio.Lock()
+# Recomputed site-subset blends keyed by the live player-list identity + site params.
+_blend_cache: dict[tuple[int, Optional[str], Optional[str]], list[AdpPlayer]] = {}
 
 
 def _cache_fresh(cached_at: Optional[datetime], now: Optional[datetime] = None) -> bool:
@@ -497,6 +499,7 @@ def reset_adp_cache() -> None:
     _cached_at = None
     _espn_stats_cache = None
     _espn_stats_cached_at = None
+    _blend_cache.clear()
     adp_cache.reset_provider_cache()
 
 
@@ -615,6 +618,7 @@ async def get_adp_response_enriched(
     rank_sites: Optional[str] = None,
     metric: str = "adp",
     include_fringe: bool = False,
+    include_stats: bool = True,
 ) -> AdpResponse:
     base = await get_adp_response()
     metric = parse_metric(metric)
@@ -637,6 +641,8 @@ async def get_adp_response_enriched(
         metric=metric,
         include_fringe=include_fringe,
     )
+    if not include_stats:
+        return sliced
     last_season, last_by_id, proj_season, proj_by_id = await load_espn_stat_splits()
     out = sliced.model_copy(update={"last_year_season": last_season, "projection_season": proj_season})
     if last_by_id:
@@ -658,8 +664,16 @@ def apply_blend_sites(
     rankings blend the same rows carry, since the pre-draft board reads both at once to
     show a cross-metric delta.
     """
+    key = (id(players), sites, rank_sites)
+    cached = _blend_cache.get(key)
+    if cached is not None:
+        return cached
     out = apply_visible_sites(players, parse_sites(sites), "adp")
-    return apply_visible_sites(out, parse_sites(rank_sites), "rank")
+    out = apply_visible_sites(out, parse_sites(rank_sites), "rank")
+    if len(_blend_cache) >= 24:
+        _blend_cache.clear()
+    _blend_cache[key] = out
+    return out
 
 
 async def get_adp_index_response(
@@ -707,10 +721,14 @@ async def get_adp_response() -> AdpResponse:
         if cached is not None and cached_at is not None and now - cached_at < _CACHE_TTL:
             return cached
         try:
-            payload = await fetch_live_adp_payload()
+            payload, stats = await asyncio.gather(
+                fetch_live_adp_payload(),
+                load_espn_stat_splits(),
+            )
             response = build_adp_response(payload)
-            _actual_label, actuals, _proj_label, _proj = await load_espn_stat_splits()
+            _actual_label, actuals, _proj_label, _proj = stats
             response = mark_fringe(response, actuals)
+            _blend_cache.clear()
             _cached = response
             _cached_at = now
             return response

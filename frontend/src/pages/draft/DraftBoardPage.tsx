@@ -10,6 +10,7 @@ import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
 import LeagueSettingsModal from '../../components/draft/LeagueSettingsModal'
 import {
   BLEND_LABEL,
+  DEFAULT_DRAFT_METRIC,
   DEFAULT_LEAGUE_SETTINGS,
   SITE_LABEL,
   annotateDraftPicks,
@@ -49,9 +50,7 @@ function BoardPlayerCard({ entry }: { entry: DraftBoardPick<AdpPlayer> }) {
 
 export default function DraftBoardPage() {
   const [showBy, setShowBy] = usePersistedState<BoardShowBy>('draft.adp.showBy', 'round')
-  // A board predicts where players actually go, which is what ADP measures -- so ADP is the
-  // default here even though rankings are available.
-  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.board.metric', 'adp')
+  const [metric, setMetric] = usePersistedState<AdpMetric>('draft.board.metric', DEFAULT_DRAFT_METRIC)
   const [leagueRaw, setLeagueRaw] = usePersistedState<LeagueBoardSettings>(
     'draft.board.league',
     DEFAULT_LEAGUE_SETTINGS,
@@ -69,6 +68,7 @@ export default function DraftBoardPage() {
     sites: sitesParam,
     rank_sites: rankSitesParam,
     metric,
+    include_stats: false,
   })
   if (data?.providers?.length && data.providers !== providers) setProviders(data.providers)
   const players = data?.players ?? []
@@ -96,8 +96,8 @@ export default function DraftBoardPage() {
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1">
-          <Link to="/draft/consensus" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
-            ADP &amp; Rankings
+          <Link to="/draft/rankings-adp" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
+            Rankings &amp; ADP
           </Link>
           <Link to="/draft/rankings" className="text-sm text-blue-700 dark:text-blue-300 hover:underline whitespace-nowrap">
             Open pre-draft rankings
