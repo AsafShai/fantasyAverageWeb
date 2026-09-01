@@ -80,7 +80,7 @@ function Choice<T extends string | number>({
 }
 
 export default function MockDraftPage() {
-  const [settingsRaw, setSettingsRaw] = usePersistedState<MockDraftSettings>('draft.mock.settings', DEFAULT_MOCK_SETTINGS)
+  const [settingsRaw, setSettingsRaw] = usePersistedState<MockDraftSettings>('draft.mock.settings.v2', DEFAULT_MOCK_SETTINGS)
   const settings = useMemo(() => clampMockSettings(settingsRaw), [settingsRaw])
   const [saved] = usePersistedState<DraftRankingsState>('draft.rankings', EMPTY_RANKINGS())
   const hasSaved = saved.order.length > 0

@@ -52,7 +52,7 @@ export default function DraftBoardPage() {
   const [showBy, setShowBy] = usePersistedState<BoardShowBy>('draft.adp.showBy', 'round')
   const [metric, setMetric] = usePersistedState<AdpMetric>('draft.board.metric', DEFAULT_DRAFT_METRIC)
   const [leagueRaw, setLeagueRaw] = usePersistedState<LeagueBoardSettings>(
-    'draft.board.league',
+    'draft.board.league.v2',
     DEFAULT_LEAGUE_SETTINGS,
   )
   const league = useMemo(() => clampLeagueSettings(leagueRaw), [leagueRaw])
