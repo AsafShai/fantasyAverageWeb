@@ -70,8 +70,8 @@ describe('3RR draft board', () => {
       threeRr: false,
     })
     expect(clampLeagueSettings(null)).toEqual({
-      teams: 13,
-      rounds: 14,
+      teams: 12,
+      rounds: 15,
       threeRr: true,
     })
   })
