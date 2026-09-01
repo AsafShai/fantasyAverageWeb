@@ -37,7 +37,13 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
-  const { groups } = useGlobalSearch(query)
+  // Layout mounts the palette on every route, so the search data must not be
+  // fetched until it is actually opened. Latched rather than tied to `isOpen`
+  // directly: once opened, keep the subscription so reopening is instant.
+  const [everOpened, setEverOpened] = useState(false)
+  if (isOpen && !everOpened) setEverOpened(true)
+
+  const { groups, isLoading } = useGlobalSearch(query, everOpened)
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
   useEffect(() => {
@@ -126,7 +132,7 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
         <div className="flex-1 overflow-y-auto p-1 md:max-h-[300px] md:flex-none">
           {flatResults.length === 0 ? (
             <div className="py-10 text-center text-sm text-gray-400 dark:text-gray-500">
-              {query ? `No matches for "${query}"` : 'Start typing to search'}
+              {isLoading ? 'Searching…' : query ? `No matches for "${query}"` : 'Start typing to search'}
             </div>
           ) : (
             groups.map((group) => (

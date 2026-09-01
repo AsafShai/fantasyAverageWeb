@@ -102,15 +102,18 @@ function toPageResult(page: SearchablePage): SearchResult {
  * grouped result list. Reuses whatever's already in the RTK Query cache
  * (same query args as Players.tsx / Teams.tsx / NbaTeams.tsx) rather than
  * issuing new fetches.
+ *
+ * `enabled` gates the three queries. The palette is mounted by Layout on every
+ * route, so without it the ~1200-player list is fetched on every page load even
+ * though nothing renders it until the user opens search.
  */
-export function useGlobalSearch(query: string) {
-  const { data: playersData, isFetching: playersLoading } = useGetAllPlayersQuery({
-    page: 1,
-    limit: 1200,
-    time_period: 'season',
-  })
-  const { data: teams, isFetching: teamsLoading } = useGetTeamsListQuery()
-  const { data: nbaTeams, isFetching: nbaTeamsLoading } = useGetNbaTeamsListQuery()
+export function useGlobalSearch(query: string, enabled = true) {
+  const { data: playersData, isFetching: playersLoading } = useGetAllPlayersQuery(
+    { page: 1, limit: 1200, time_period: 'season' },
+    { skip: !enabled },
+  )
+  const { data: teams, isFetching: teamsLoading } = useGetTeamsListQuery(undefined, { skip: !enabled })
+  const { data: nbaTeams, isFetching: nbaTeamsLoading } = useGetNbaTeamsListQuery(undefined, { skip: !enabled })
 
   const trimmed = query.trim()
 

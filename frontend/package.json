@@ -20,7 +20,6 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@reduxjs/toolkit": "^2.8.2",
     "@tailwindcss/vite": "^4.1.10",
-    "@tanstack/react-table": "^8.21.3",
     "@types/node": "^24.0.4",
     "@types/nprogress": "^0.2.3",
     "nprogress": "^0.2.0",
