@@ -36,8 +36,8 @@ const p = (id: string, positions: string[]): MockSessionPlayer => ({
 describe('clampMockSettings', () => {
   it('uses the same league defaults as the draft board', () => {
     const s = clampMockSettings({})
-    expect(s.teams).toBe(13)
-    expect(s.rounds).toBe(14)
+    expect(s.teams).toBe(12)
+    expect(s.rounds).toBe(15)
     expect(s.threeRr).toBe(true)
     expect(s.userPick).toBe(1)
   })
