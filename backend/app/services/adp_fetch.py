@@ -65,6 +65,10 @@ _ESPN_BLK = "1"
 _ESPN_STL = "2"
 _ESPN_AST = "3"
 _ESPN_REB = "6"
+_ESPN_FGM = "13"
+_ESPN_FGA = "14"
+_ESPN_FTM = "15"
+_ESPN_FTA = "16"
 _ESPN_3PM = "17"
 _ESPN_FG = "19"
 _ESPN_FT = "20"
@@ -178,6 +182,10 @@ def projection_from_stat_block(block: dict) -> Optional[dict]:
         "gp": int(gp),
         "fg_pct": _pct(_stat_num(avgs, _ESPN_FG) if _stat_num(avgs, _ESPN_FG) is not None else _stat_num(totals, _ESPN_FG)),
         "ft_pct": _pct(_stat_num(avgs, _ESPN_FT) if _stat_num(avgs, _ESPN_FT) is not None else _stat_num(totals, _ESPN_FT)),
+        "fgm": per_game(_ESPN_FGM),
+        "fga": per_game(_ESPN_FGA),
+        "ftm": per_game(_ESPN_FTM),
+        "fta": per_game(_ESPN_FTA),
         "ppg": per_game(_ESPN_PTS),
         "rpg": per_game(_ESPN_REB),
         "apg": per_game(_ESPN_AST),

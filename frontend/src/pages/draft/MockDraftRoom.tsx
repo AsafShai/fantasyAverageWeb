@@ -34,12 +34,13 @@ import {
 } from '../../utils/mockDraft'
 import { readMockQueue, writeMockQueue } from '../../utils/mockDraftPersistence'
 import type { AdpIndexPlayer, AdpPlayer, LastYearStats } from '../../types/api'
+import { MockProjectedStandings } from './MockProjectedStandings'
+import type { StatsFrom } from '../../utils/mockProjectedStandings'
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
 const TOAST_MS = 5000
 const TOAST_MAX = 10
-type StatsFrom = 'actual' | 'projection'
-type RoomTab = 'players' | 'roster' | 'history' | 'board'
+type RoomTab = 'players' | 'roster' | 'history' | 'board' | 'standings'
 type PickToast = {
   id: number
   pick: number
@@ -48,6 +49,47 @@ type PickToast = {
   fromQueue: boolean
 }
 type BoardShowBy = 'round' | 'team'
+type PlayerSortKey = 'rk' | 'name' | (typeof LAST_YEAR_COLS)[number]['key']
+type SortDir = 'asc' | 'desc'
+
+function PlayerSortHeader({
+  label,
+  col,
+  sortBy,
+  sortDir,
+  onSort,
+  align = 'right',
+}: {
+  label: string
+  col: PlayerSortKey
+  sortBy: PlayerSortKey
+  sortDir: SortDir
+  onSort: (col: PlayerSortKey) => void
+  align?: 'left' | 'right'
+}) {
+  const active = sortBy === col
+  return (
+    <th
+      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={`p-0 font-semibold whitespace-nowrap ${align === 'left' ? 'text-left' : 'text-right'} ${
+        col !== 'rk' && col !== 'name' ? 'hidden lg:table-cell' : ''
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={`w-full min-h-9 px-2 py-2 inline-flex items-center gap-0.5 uppercase hover:text-gray-800 dark:hover:text-gray-200 ${
+          align === 'left' ? 'justify-start' : 'justify-end'
+        }`}
+      >
+        {label}
+        <span aria-hidden className={active ? 'visible' : 'invisible'}>
+          {sortDir === 'asc' ? '↑' : '↓'}
+        </span>
+      </button>
+    </th>
+  )
+}
 
 function PencilIcon() {
   return (
@@ -1077,6 +1119,9 @@ export default function MockDraftRoom({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<PageSize>(25)
+  const [playerSort, setPlayerSort] = useState<PlayerSortKey>('rk')
+  const [playerSortDir, setPlayerSortDir] = useState<SortDir>('asc')
+  const [detailsById, setDetailsById] = useState<Map<string, AdpPlayer>>(() => new Map())
 
   useEffect(() => {
     writeMockQueue(queue)
@@ -1212,13 +1257,43 @@ export default function MockDraftRoom({
       })
   }, [session.defaultOrder, session.userOrder, session.players, taken, debouncedSearch, teamFilter, posFilter])
 
+  const handlePlayerSort = (key: PlayerSortKey) => {
+    if (playerSort === key) {
+      setPlayerSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setPlayerSort(key)
+    setPlayerSortDir(key === 'rk' || key === 'name' ? 'asc' : 'desc')
+  }
+
   const resolvedPageSize = resolvePageSize(pageSize)
   const totalPages = Math.max(1, Math.ceil(listed.length / resolvedPageSize))
   const safePage = Math.min(page, totalPages)
-  const paged = useMemo(() => {
+  const pageSlice = useMemo(() => {
     const start = (safePage - 1) * resolvedPageSize
     return listed.slice(start, start + resolvedPageSize)
   }, [listed, safePage, resolvedPageSize])
+  const paged = useMemo(() => {
+    const rankOf = (id: string) => (isSearching ? adpRank.get(id) : userRank.get(id)) ?? Number.POSITIVE_INFINITY
+    if (playerSort === 'rk' && playerSortDir === 'asc') return pageSlice
+    return [...pageSlice].sort((a, b) => {
+      if (playerSort === 'rk') return rankOf(b.id) - rankOf(a.id)
+      if (playerSort === 'name') {
+        const cmp = a.name.localeCompare(b.name)
+        return playerSortDir === 'asc' ? cmp : -cmp
+      }
+      const statsA = statsFrom === 'projection' ? detailsById.get(a.id)?.projection : detailsById.get(a.id)?.last_year
+      const statsB = statsFrom === 'projection' ? detailsById.get(b.id)?.projection : detailsById.get(b.id)?.last_year
+      const va = statsA?.[playerSort]
+      const vb = statsB?.[playerSort]
+      if (va == null && vb == null) return rankOf(a.id) - rankOf(b.id)
+      if (va == null) return 1
+      if (vb == null) return -1
+      const cmp = va - vb
+      if (cmp !== 0) return playerSortDir === 'asc' ? cmp : -cmp
+      return rankOf(a.id) - rankOf(b.id)
+    })
+  }, [pageSlice, playerSort, playerSortDir, isSearching, adpRank, userRank, statsFrom, detailsById])
   const from = listed.length === 0 ? 0 : (safePage - 1) * resolvedPageSize + 1
   const to = Math.min(safePage * resolvedPageSize, listed.length)
 
@@ -1226,7 +1301,6 @@ export default function MockDraftRoom({
     setPage(1)
   }, [debouncedSearch, teamFilter, posFilter, resolvedPageSize])
 
-  const [detailsById, setDetailsById] = useState<Map<string, AdpPlayer>>(() => new Map())
   const neededDetailIds = useMemo(() => {
     const ids = paged.map((p) => p.id)
     ids.push(...queue)
@@ -1406,13 +1480,32 @@ export default function MockDraftRoom({
       <table className="min-w-full text-sm">
         <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-500">
           <tr>
-            <th className="text-left px-2 py-2">Rk</th>
-            <th className="text-left px-2 py-2">Player</th>
+            <PlayerSortHeader
+              label="Rk"
+              col="rk"
+              sortBy={playerSort}
+              sortDir={playerSortDir}
+              onSort={handlePlayerSort}
+              align="left"
+            />
+            <PlayerSortHeader
+              label="Player"
+              col="name"
+              sortBy={playerSort}
+              sortDir={playerSortDir}
+              onSort={handlePlayerSort}
+              align="left"
+            />
             <th className="px-2 py-2" />
             {LAST_YEAR_COLS.map((col) => (
-              <th key={col.key} className="text-right px-2 py-2 hidden lg:table-cell">
-                {col.label}
-              </th>
+              <PlayerSortHeader
+                key={col.key}
+                label={col.label}
+                col={col.key}
+                sortBy={playerSort}
+                sortDir={playerSortDir}
+                onSort={handlePlayerSort}
+              />
             ))}
           </tr>
         </thead>
@@ -1494,6 +1587,7 @@ export default function MockDraftRoom({
     { key: 'roster', label: 'Roster' },
     { key: 'history', label: 'History' },
     { key: 'board', label: 'Board' },
+    { key: 'standings', label: 'Standings' },
   ]
 
   return (
@@ -1735,6 +1829,7 @@ export default function MockDraftRoom({
           <div className="hidden lg:flex flex-wrap items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
             {tabBtn('players', 'Players', tab === 'players')}
             {tabBtn('board', 'Draft board', tab === 'board')}
+            {tabBtn('standings', 'Standings', tab === 'standings')}
             {tab === 'board'
               ? (['round', 'team'] as BoardShowBy[]).map((mode) => (
                   <button
@@ -1780,6 +1875,13 @@ export default function MockDraftRoom({
             />
           ) : tab === 'history' ? (
             <PickHistoryList session={session} detailsById={detailsById} stacked={isBelowLg} />
+          ) : tab === 'standings' ? (
+            <MockProjectedStandings
+              session={session}
+              detailsById={detailsById}
+              statsFrom={statsFrom}
+              onStatsFrom={setStatsFrom}
+            />
           ) : tab === 'board' ? (
             <>
               <div className="lg:hidden flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
@@ -1849,18 +1951,19 @@ export default function MockDraftRoom({
           className="fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          <div className="grid grid-cols-4">
+          <div className="grid grid-cols-5">
             {navItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setTab(item.key)}
                 aria-current={tab === item.key ? 'page' : undefined}
-                className={`min-h-11 text-xs font-bold ${
+                aria-label={item.label}
+                className={`min-h-11 px-0.5 text-[10px] font-bold leading-tight ${
                   tab === item.key ? 'text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400'
                 }`}
               >
-                {item.label}
+                {item.key === 'standings' ? 'Stand' : item.label}
               </button>
             ))}
           </div>

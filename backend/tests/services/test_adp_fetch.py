@@ -170,8 +170,16 @@ def test_parse_espn_payload_ignores_standard_only_ranks():
 def test_projection_from_stat_block_prefers_average_stats():
     block = {
         "id": "102026",
-        "stats": {"0": 2144.0, "1": 60.0, "2": 110.0, "3": 747.0, "6": 940.0, "17": 134.0, "19": 0.579, "20": 0.82, "42": 74.0},
-        "averageStats": {"0": 28.97, "1": 0.81, "2": 1.49, "3": 10.09, "6": 12.70, "17": 1.81, "19": 0.579, "20": 0.82, "42": 74.0},
+        "stats": {
+            "0": 2144.0, "1": 60.0, "2": 110.0, "3": 747.0, "6": 940.0,
+            "13": 814.0, "14": 1406.0, "15": 400.0, "16": 488.0,
+            "17": 134.0, "19": 0.579, "20": 0.82, "42": 74.0,
+        },
+        "averageStats": {
+            "0": 28.97, "1": 0.81, "2": 1.49, "3": 10.09, "6": 12.70,
+            "13": 11.0, "14": 19.0, "15": 5.4, "16": 6.6,
+            "17": 1.81, "19": 0.579, "20": 0.82, "42": 74.0,
+        },
     }
     row = projection_from_stat_block(block)
     assert row is not None
@@ -182,15 +190,29 @@ def test_projection_from_stat_block_prefers_average_stats():
     assert row["three_pm"] == 1.8
     assert row["fg_pct"] == 0.579
     assert row["ft_pct"] == 0.82
+    assert row["fgm"] == 11.0
+    assert row["fga"] == 19.0
+    assert row["ftm"] == 5.4
+    assert row["fta"] == 6.6
 
 
 def test_projection_from_stat_block_divides_totals_when_no_averages():
-    block = {"stats": {"0": 200.0, "3": 50.0, "6": 80.0, "1": 10.0, "2": 20.0, "17": 30.0, "19": 50.0, "20": 80.0, "42": 10.0}}
+    block = {
+        "stats": {
+            "0": 200.0, "3": 50.0, "6": 80.0, "1": 10.0, "2": 20.0,
+            "13": 80.0, "14": 160.0, "15": 40.0, "16": 50.0,
+            "17": 30.0, "19": 50.0, "20": 80.0, "42": 10.0,
+        }
+    }
     row = projection_from_stat_block(block)
     assert row == {
         "gp": 10,
         "fg_pct": 0.5,
         "ft_pct": 0.8,
+        "fgm": 8.0,
+        "fga": 16.0,
+        "ftm": 4.0,
+        "fta": 5.0,
         "ppg": 20.0,
         "rpg": 8.0,
         "apg": 5.0,
