@@ -377,6 +377,10 @@ _ACTUAL_ROW = {
         "spg": 1.0,
         "bpg": 0.5,
         "three_pm": 1.5,
+        "fgm": 7.0,
+        "fga": 14.0,
+        "ftm": 3.0,
+        "fta": 3.8,
     }
 }
 _PROJ_ROW = {
@@ -390,6 +394,10 @@ _PROJ_ROW = {
         "spg": 1.0,
         "bpg": 1.0,
         "three_pm": 2.0,
+        "fgm": 8.0,
+        "fga": 16.0,
+        "ftm": 3.2,
+        "fta": 4.0,
     }
 }
 

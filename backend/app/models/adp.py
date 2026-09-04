@@ -39,6 +39,10 @@ class LastYearStats(BaseModel):
     gp: int
     fg_pct: float
     ft_pct: float
+    fgm: float = 0.0
+    fga: float = 0.0
+    ftm: float = 0.0
+    fta: float = 0.0
     ppg: float
     rpg: float
     apg: float
