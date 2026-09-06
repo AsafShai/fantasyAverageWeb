@@ -1963,7 +1963,7 @@ export default function MockDraftRoom({
                   tab === item.key ? 'text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400'
                 }`}
               >
-                {item.key === 'standings' ? 'Stand' : item.label}
+                {item.label}
               </button>
             ))}
           </div>

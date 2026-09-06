@@ -106,6 +106,7 @@ describe('MockProjectedStandings mobile', () => {
     expect(screen.getByText('1. You')).toBeInTheDocument()
     expect(screen.getByText('2. T2')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tot' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'GP' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'PTS' })).toBeInTheDocument()
   })
 })
