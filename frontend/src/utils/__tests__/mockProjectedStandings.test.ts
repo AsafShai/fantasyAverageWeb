@@ -94,8 +94,9 @@ describe('aggregateTeamCats', () => {
   it('GP-weights counting stats and attempt-weights shooting', () => {
     const highVolume = stats({ gp: 80, ppg: 10, fgm: 5, fga: 10, ftm: 2, fta: 2, three_pm: 1, rpg: 4, apg: 3, spg: 1, bpg: 1 })
     const lowVolume = stats({ gp: 20, ppg: 20, fgm: 8, fga: 10, ftm: 4, fta: 8, three_pm: 3, rpg: 2, apg: 1, spg: 0, bpg: 0 })
-    const { values, playerCount } = aggregateTeamCats([highVolume, lowVolume], 'totals')
+    const { values, playerCount, gp } = aggregateTeamCats([highVolume, lowVolume], 'totals')
     expect(playerCount).toBe(2)
+    expect(gp).toBe(100)
     expect(values.pts).toBe(80 * 10 + 20 * 20)
     expect(values.reb).toBe(80 * 4 + 20 * 2)
     expect(values.three_pm).toBe(80 * 1 + 20 * 3)
@@ -124,6 +125,7 @@ describe('aggregateTeamCats', () => {
 
   it('returns nulls when nobody is eligible', () => {
     expect(aggregateTeamCats([], 'totals').values.pts).toBeNull()
+    expect(aggregateTeamCats([], 'totals').gp).toBeNull()
     expect(aggregateTeamCats([stats({ gp: 0 })], 'totals').playerCount).toBe(0)
   })
 
