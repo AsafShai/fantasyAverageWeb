@@ -345,6 +345,10 @@ export interface LastYearStats {
   gp: number;
   fg_pct: number;
   ft_pct: number;
+  fgm: number;
+  fga: number;
+  ftm: number;
+  fta: number;
   ppg: number;
   rpg: number;
   apg: number;
