@@ -157,7 +157,7 @@ export function MockProjectedStandings({
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [showGp, setShowGp] = useState(true)
   const [topN, setTopN] = useState(() => session.rounds)
-  const gpVisible = mode === 'totals' && showGp
+  const gpVisible = showGp
   const options = calcByOptions(session.rounds)
   const resolvedTopN = clampCalcBy(topN, session.rounds)
 
@@ -281,17 +281,15 @@ export function MockProjectedStandings({
           >
             +
           </button>
-          {mode === 'totals' ? (
-            <label className="ml-auto inline-flex items-center gap-2 min-h-11 lg:min-h-9 text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showGp}
-                onChange={(e) => setShowGp(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
-              />
-              Show GP
-            </label>
-          ) : null}
+          <label className="ml-auto inline-flex items-center gap-2 min-h-11 lg:min-h-9 text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showGp}
+              onChange={(e) => setShowGp(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+            />
+            Show GP
+          </label>
         </div>
         {mode === 'totals' ? (
           <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400">
