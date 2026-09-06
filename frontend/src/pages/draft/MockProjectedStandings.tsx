@@ -12,6 +12,7 @@ import {
   formatRotoPoints,
   formatStandingValue,
   normalizeColumn,
+  type ProjectedStandingRow,
   type StandingCatKey,
   type StandingsMode,
   type StatsFrom,
@@ -71,22 +72,13 @@ function SegBtn({
   )
 }
 
-type SortKey = 'team' | 'total' | StandingCatKey
+type SortKey = 'team' | 'total' | 'gp' | StandingCatKey
 type SortDir = 'asc' | 'desc'
 
-function sortValue(
-  row: {
-    team: number
-    rank: number
-    totalPoints: number
-    values: Record<StandingCatKey, number | null>
-    points: Record<StandingCatKey, number>
-  },
-  key: SortKey,
-  show: 'stats' | 'rankings',
-): number | null {
+function sortValue(row: ProjectedStandingRow, key: SortKey, show: 'stats' | 'rankings'): number | null {
   if (key === 'team') return row.rank
   if (key === 'total') return row.totalPoints
+  if (key === 'gp') return row.gp
   return show === 'rankings' ? row.points[key] : row.values[key]
 }
 
@@ -163,7 +155,9 @@ export function MockProjectedStandings({
   const [show, setShow] = useState<'stats' | 'rankings'>('rankings')
   const [sortBy, setSortBy] = useState<SortKey>('total')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [showGp, setShowGp] = useState(true)
   const [topN, setTopN] = useState(() => session.rounds)
+  const gpVisible = mode === 'totals' && showGp
   const options = calcByOptions(session.rounds)
   const resolvedTopN = clampCalcBy(topN, session.rounds)
 
@@ -198,6 +192,7 @@ export function MockProjectedStandings({
     return {
       cats: byCat,
       total: normalizeColumn(sortedRows.map((row) => row.totalPoints)),
+      gp: normalizeColumn(sortedRows.map((row) => row.gp)),
     }
   }, [sortedRows, show])
 
@@ -209,6 +204,13 @@ export function MockProjectedStandings({
     setSortBy(key)
     setSortDir(key === 'team' ? 'asc' : 'desc')
   }
+
+  useEffect(() => {
+    if (!gpVisible && sortBy === 'gp') {
+      setSortBy('total')
+      setSortDir('desc')
+    }
+  }, [gpVisible, sortBy])
 
   if (session.picks.length === 0) {
     return (
@@ -233,7 +235,7 @@ export function MockProjectedStandings({
               {isMobile ? 'Avg' : 'Averages'}
             </SegBtn>
             <SegBtn active={mode === 'totals'} onClick={() => setMode('totals')} ariaLabel="Totals">
-              {isMobile ? 'Tot' : 'Totals'}
+              {isMobile ? 'Tot' : 'Totals'}*
             </SegBtn>
           </SegGroup>
           <SegGroup label="Season">
@@ -254,7 +256,7 @@ export function MockProjectedStandings({
           </SegGroup>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Calculate by
           </span>
@@ -279,7 +281,23 @@ export function MockProjectedStandings({
           >
             +
           </button>
+          {mode === 'totals' ? (
+            <label className="ml-auto inline-flex items-center gap-2 min-h-11 lg:min-h-9 text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showGp}
+                onChange={(e) => setShowGp(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+              />
+              Show GP
+            </label>
+          ) : null}
         </div>
+        {mode === 'totals' ? (
+          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+            * Totals are heavily affected by games played. Do not judge a team’s strength from them.
+          </p>
+        ) : null}
       </div>
 
       {isMobile ? (
@@ -307,6 +325,14 @@ export function MockProjectedStandings({
                   dir={sortDir}
                   pin="total"
                   onClick={() => handleSort('total')}
+                />
+              ) : null}
+              {gpVisible ? (
+                <SortHeader
+                  label="GP"
+                  active={sortBy === 'gp'}
+                  dir={sortDir}
+                  onClick={() => handleSort('gp')}
                 />
               ) : null}
               {STANDING_CATS.map((cat) => (
@@ -383,6 +409,19 @@ export function MockProjectedStandings({
                       }}
                     >
                       {formatRotoPoints(row.totalPoints)}
+                    </td>
+                  ) : null}
+                  {gpVisible ? (
+                    <td
+                      className="px-2 py-2.5 text-center tabular-nums text-xs font-semibold whitespace-nowrap"
+                      style={{
+                        backgroundColor: getHeatmapColor(heat.gp[rowIndex] ?? 0.5, isDark),
+                        color: getTextColor(heat.gp[rowIndex] ?? 0.5, isDark),
+                        minWidth: '3.25rem',
+                        boxShadow: isYou ? youBar : undefined,
+                      }}
+                    >
+                      {row.gp == null ? '—' : Math.round(row.gp)}
                     </td>
                   ) : null}
                   {STANDING_CATS.map((cat) => {

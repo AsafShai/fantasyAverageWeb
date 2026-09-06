@@ -22,6 +22,7 @@ export type TeamCatValues = Record<StandingCatKey, number | null>
 export type ProjectedStandingRow = {
   team: number
   playerCount: number
+  gp: number | null
   values: TeamCatValues
   points: Record<StandingCatKey, number>
   totalPoints: number
@@ -78,9 +79,9 @@ export function resolvePlayerStats(player: AdpPlayer | undefined, statsFrom: Sta
 export function aggregateTeamCats(
   statsLines: LastYearStats[],
   mode: StandingsMode,
-): { values: TeamCatValues; playerCount: number } {
+): { values: TeamCatValues; playerCount: number; gp: number | null } {
   const eligible = statsLines.filter((s) => s.gp > 0)
-  if (eligible.length === 0) return { values: { ...EMPTY_VALUES }, playerCount: 0 }
+  if (eligible.length === 0) return { values: { ...EMPTY_VALUES }, playerCount: 0, gp: null }
 
   let fgm = 0
   let fga = 0
@@ -113,6 +114,7 @@ export function aggregateTeamCats(
   const div = mode === 'averages' ? teamGp : 1
   return {
     playerCount: eligible.length,
+    gp: teamGp,
     values: {
       fg_pct: fga > 0 ? fgm / fga : null,
       ft_pct: fta > 0 ? ftm / fta : null,
@@ -220,6 +222,7 @@ export function buildProjectedStandings(input: {
     return {
       team: row.team,
       playerCount: row.playerCount,
+      gp: row.gp,
       values: row.values,
       points,
       totalPoints,
