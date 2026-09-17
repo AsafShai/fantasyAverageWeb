@@ -81,6 +81,26 @@ export function playerFitsSlot(positions: string[], slot: MockDraftSlot): boolea
   return pos.has(slot)
 }
 
+export const COUNTED_POSITIONS: MockDraftSlot[] = ['PG', 'SG', 'SF', 'PF', 'C']
+
+/**
+ * Counts how many drafted players are eligible at each base position. A player
+ * with a secondary position is counted once for every position they list, so
+ * the totals sum to more than the roster size.
+ */
+export function rosterPositionCounts<T extends { positions: string[] }>(
+  roster: RosterSlotFill<T>[],
+): Record<string, number> {
+  const counts: Record<string, number> = Object.fromEntries(COUNTED_POSITIONS.map((p) => [p, 0]))
+  for (const row of roster) {
+    if (!row.player) continue
+    for (const pos of new Set(row.player.positions.map((p) => p.toUpperCase()))) {
+      if (pos in counts) counts[pos] += 1
+    }
+  }
+  return counts
+}
+
 export function hasOpenSlotFor<T>(roster: RosterSlotFill<T>[], positions: string[]): boolean {
   return roster.some((s) => !s.player && playerFitsSlot(positions, s.slot))
 }
