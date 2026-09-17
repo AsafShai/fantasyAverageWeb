@@ -5,6 +5,7 @@ import { useDebounce } from '../../hooks/useDebounce'
 import { useIsBelowLg } from '../../hooks/useIsBelowLg'
 import PlayerIdentityCell from '../../components/draft/PlayerIdentityCell'
 import PositionPills from '../../components/draft/PositionPills'
+import { POSITION_PILL_CLASS } from '../../components/draft/positionColors'
 import PaginationBar from '../../components/draft/PaginationBar'
 import { resolvePageSize, type PageSize } from '../../utils/pagination'
 import {
@@ -27,6 +28,7 @@ import {
   takenIds,
   teamLabel,
   teamOnTheClock,
+  rosterPositionCounts,
   tickerPickNumbers,
   totalPicks,
   type MockSession,
@@ -534,6 +536,7 @@ function RosterPanel({
 }) {
   const roster = session.rosters[viewTeam] ?? []
   const filled = roster.filter((s) => s.player).length
+  const posCounts = rosterPositionCounts(roster)
   const canEditRoster = viewTeam === session.userTeam
   return (
     <>
@@ -552,6 +555,28 @@ function RosterPanel({
             </option>
           ))}
         </select>
+      </div>
+      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Position count</div>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {POSITIONS.map((pos) => {
+            const count = posCounts[pos] ?? 0
+            return (
+              <span
+                key={pos}
+                title={`${count} player${count === 1 ? '' : 's'} eligible at ${pos}`}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold leading-none whitespace-nowrap ${
+                  count
+                    ? POSITION_PILL_CLASS[pos]
+                    : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                }`}
+              >
+                {pos}
+                <span className="tabular-nums">{count}</span>
+              </span>
+            )
+          })}
+        </div>
       </div>
       <table className="w-full text-sm">
         <thead>

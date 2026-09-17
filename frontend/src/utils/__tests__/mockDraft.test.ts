@@ -19,6 +19,7 @@ import {
   openEligibleSlotIndexes,
   playerFitsSlot,
   rosterPhase,
+  rosterPositionCounts,
   rosterSlots,
   runBotsUntilUser,
   tickerPickNumbers,
@@ -279,5 +280,26 @@ describe('tickerPickNumbers', () => {
     expect(tickerPickNumbers(182, 182, true, true)).toEqual(
       Array.from({ length: 16 }, (_, i) => 167 + i),
     )
+  })
+})
+
+describe('rosterPositionCounts', () => {
+  const fill = (positions: string[][]) =>
+    positions.map((p, i) => ({ slot: 'BE' as const, player: { id: String(i), positions: p } }))
+
+  it('counts secondary positions for every position a player lists', () => {
+    const counts = rosterPositionCounts([
+      ...fill([['PG'], ['SG', 'SF'], ['PF', 'C']]),
+      { slot: 'C' as const, player: null },
+    ])
+    expect(counts).toEqual({ PG: 1, SG: 1, SF: 1, PF: 1, C: 1 })
+  })
+
+  it('returns zeros for an empty roster and ignores unknown positions', () => {
+    expect(rosterPositionCounts(fill([['DH']]))).toEqual({ PG: 0, SG: 0, SF: 0, PF: 0, C: 0 })
+  })
+
+  it('counts a duplicated position only once per player', () => {
+    expect(rosterPositionCounts(fill([['PG', 'pg']])).PG).toBe(1)
   })
 })
