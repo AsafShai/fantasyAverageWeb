@@ -27,7 +27,6 @@ from app.routes.adp import router as adp_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
-from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
 from app.services import schedule_service
@@ -35,6 +34,8 @@ from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
 from app.services import nba_players_scheduler
+from app.services import health_service
+from app.utils.timing_middleware import add_timing_middleware
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
 # Configure logging
@@ -139,6 +140,8 @@ app.add_middleware(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+add_timing_middleware(app)
+
 app.include_router(rankings_router, prefix="/api", tags=["Rankings"])
 app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
 app.include_router(league_router, prefix="/api/league", tags=["League"])
@@ -165,12 +168,8 @@ async def root(request: Request):
 
 @app.get("/health")
 @limiter.limit("60/minute")
-async def health_check(request: Request):
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "Fantasy League Dashboard API"
-    }
+async def health_check(request: Request, verbose: int = 0):
+    return await health_service.collect(verbose=bool(verbose))
 
 load_dotenv()
 

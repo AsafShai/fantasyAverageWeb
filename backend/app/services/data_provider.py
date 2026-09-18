@@ -98,6 +98,7 @@ class DataProvider:
                 response = await self._client.get(self.espn_standings_url, headers=headers)
 
                 if response.status_code == 304:
+                    self.cache_manager.totals_cache['fetched_at'] = datetime.now()
                     return self.cache_manager.totals_cache['data']
 
                 response.raise_for_status()
@@ -115,6 +116,7 @@ class DataProvider:
                 self.cache_manager.totals_cache['data'] = totals_df
                 self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
                 self.cache_manager.totals_cache['data_date'] = None
+                self.cache_manager.totals_cache['fetched_at'] = datetime.now()
 
                 asyncio.create_task(self._sync_db_if_needed(scoring_period_id, totals_df))
 
@@ -142,6 +144,7 @@ class DataProvider:
                 self.cache_manager.totals_cache['raw'] = api_data
                 self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
                 self.cache_manager.totals_cache['data_date'] = None
+                self.cache_manager.totals_cache['fetched_at'] = datetime.now()
             except Exception as e:
                 self.logger.error(f"sync_db_now: ESPN fetch failed: {e}")
                 return False
@@ -166,6 +169,7 @@ class DataProvider:
         self.cache_manager.totals_cache['data'] = df
         self.cache_manager.totals_cache['data_date'] = snap_date
         self.cache_manager.totals_cache['etag'] = None
+        self.cache_manager.totals_cache['fetched_at'] = datetime.now()
         self.logger.warning(f"Serving DB fallback data from {snap_date}")
         return df
 
