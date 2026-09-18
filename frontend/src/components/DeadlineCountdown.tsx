@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 
+const VISIBLE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
 interface DeadlineCountdownProps {
   deadline: string | null
 }
@@ -17,7 +19,7 @@ const DeadlineCountdown = ({ deadline }: DeadlineCountdownProps) => {
     return () => clearInterval(id)
   }, [deadlineMs])
 
-  if (!deadlineMs || timeLeft <= 0) return null
+  if (!deadlineMs || timeLeft <= 0 || timeLeft > VISIBLE_WINDOW_MS) return null
 
   const totalSeconds = Math.floor(timeLeft / 1000)
   const days = Math.floor(totalSeconds / 86400)

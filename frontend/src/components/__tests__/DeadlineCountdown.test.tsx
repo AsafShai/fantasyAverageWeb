@@ -22,10 +22,20 @@ describe('DeadlineCountdown', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('renders days and hours remaining for a future deadline', () => {
-    render(<DeadlineCountdown deadline="2026-01-03T06:00:00Z" />)
+  it('renders nothing when deadline is more than 7 days away', () => {
+    const { container } = render(<DeadlineCountdown deadline="2026-01-09T00:00:01Z" />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('renders days and hours remaining when 3 days away', () => {
+    render(<DeadlineCountdown deadline="2026-01-04T06:00:00Z" />)
     expect(screen.getByText('Trade Deadline')).toBeInTheDocument()
-    expect(screen.getByText('02')).toBeInTheDocument()
+    expect(screen.getByText('03')).toBeInTheDocument()
     expect(screen.getByText('06')).toBeInTheDocument()
+  })
+
+  it('renders when just inside the 7-day window', () => {
+    render(<DeadlineCountdown deadline="2026-01-07T23:59:00Z" />)
+    expect(screen.getByText('Trade Deadline')).toBeInTheDocument()
   })
 })
