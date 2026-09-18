@@ -37,8 +37,6 @@ STATUS_BUCKETS = (AVAILABLE, PROBABLE, QUESTIONABLE, DOUBTFUL, OUT)
 # "Game Time Decision" is the NBA report's own wording for Questionable.
 _STATUS_ALIASES = {'game time decision': QUESTIONABLE, 'gtd': QUESTIONABLE}
 
-_MOVERS_LIMIT = 8
-
 _CACHE_TTL_S = 300
 _hub_cache: dict[str, Any] = {'ts': None, 'value': None}
 
@@ -151,7 +149,7 @@ class TodayService:
                 ))
 
         movers.sort(key=lambda m: (-abs(m.delta), m.team_name, m.category))
-        return movers[:_MOVERS_LIMIT]
+        return movers
 
     @staticmethod
     def _categories_of(row: dict) -> dict[str, Optional[float]]:
@@ -215,7 +213,17 @@ class TodayService:
             bucket = injuries.get(normalize_player_name(str(row.get('Name', ''))), AVAILABLE)
             entry['available_tonight' if bucket == AVAILABLE else bucket] += 1
 
-        health = [TeamRosterHealth(team_id=team_id, **entry) for team_id, entry in accumulators.items()]
+        health = [
+            TeamRosterHealth(
+                team_id=team_id,
+                games_tonight=(
+                    entry['available_tonight'] + entry['probable']
+                    + entry['questionable'] + entry['doubtful'] + entry['out']
+                ),
+                **entry,
+            )
+            for team_id, entry in accumulators.items()
+        ]
         health.sort(key=lambda t: (-t.out, -t.doubtful, -t.questionable, t.team_name))
         return health
 

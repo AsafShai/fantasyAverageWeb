@@ -1,8 +1,16 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TodayHub } from '../../types/api';
 import { renderWithProviders } from '../../test/helpers';
 import Dashboard from '../Dashboard';
+
+const flagState = vi.hoisted(() => ({ FF_TODAY_HUB: true }));
+vi.mock('../../config/featureFlags', () => ({
+  get FF_TODAY_HUB() {
+    return flagState.FF_TODAY_HUB;
+  },
+}));
 
 const summary = {
   total_teams: 12,
@@ -45,11 +53,11 @@ const fullHub: TodayHub = {
   })),
   roster_health: [
     {
-      team_id: 3, team_name: "Amihai's Awesome", available_tonight: 4,
+      team_id: 3, team_name: "Amihai's Awesome", games_tonight: 11, available_tonight: 4,
       probable: 1, questionable: 2, doubtful: 1, out: 3,
     },
     {
-      team_id: 1, team_name: '50 Shades of Shai', available_tonight: 6,
+      team_id: 1, team_name: '50 Shades of Shai', games_tonight: 7, available_tonight: 6,
       probable: 0, questionable: 1, doubtful: 0, out: 0,
     },
   ],
@@ -93,20 +101,21 @@ function stubApi(hub: TodayHub) {
 describe('Dashboard today hub', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    flagState.FF_TODAY_HUB = true;
   });
 
-  it('renders the three panels from the hub payload', async () => {
+  it('renders the two panels from the hub payload', async () => {
     stubApi(fullHub);
     renderWithProviders(<Dashboard />);
 
     await waitFor(() => expect(screen.getByText('Rank movers')).toBeInTheDocument());
-    expect(screen.getByText('Roster health')).toBeInTheDocument();
-    expect(screen.getByText('Tonight')).toBeInTheDocument();
+    expect(screen.getByText('Roster health today')).toBeInTheDocument();
+    expect(screen.queryByText('Tonight')).not.toBeInTheDocument();
 
     expect(screen.getByText('TOTAL')).toBeInTheDocument();
     expect(screen.getByText('▲ 7')).toBeInTheDocument();
     expect(screen.getByText('▼ 1.5')).toBeInTheDocument();
-    expect(screen.getAllByText("Amihai's Awesome").length).toBe(2);
+    expect(screen.getAllByText("Amihai's Awesome").length).toBe(1);
   });
 
   it('renders every mover row at any width, with no show-all button', async () => {
@@ -120,19 +129,31 @@ describe('Dashboard today hub', () => {
     expect(screen.queryByRole('button', { name: /show all/i })).not.toBeInTheDocument();
   });
 
-  it('shows the five injury counts for players with a game tonight', async () => {
+  it('shows the games-tonight and five injury counts for players with a game tonight', async () => {
     stubApi(fullHub);
     renderWithProviders(<Dashboard />);
 
-    await waitFor(() => expect(screen.getByText('Roster health')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Roster health today')).toBeInTheDocument());
     const headers = screen.getAllByRole('columnheader').map(h => h.textContent);
     expect(headers).toEqual(
-      expect.arrayContaining(['AVLAvail', 'PRBProb', 'QSTQues', 'DBTDoubt', 'OUTOut']),
+      expect.arrayContaining([
+        'Team',
+        'GAMES',
+        'AvailableAVAILABLEAvailable',
+        'ProbablePProbable',
+        'QuestionableQQuestionable',
+        'DoubtfulDDoubtful',
+        'OutOUTOut',
+      ]),
     );
+
+    const row = screen.getByText("Amihai's Awesome").closest('tr');
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText('11')).toBeInTheDocument();
     expect(screen.queryByText('4/6')).not.toBeInTheDocument();
   });
 
-  it('shows the tonight tiles derived from the slate and rosters', async () => {
+  it('shows the roster-health summary tiles derived from the slate and rosters', async () => {
     stubApi(fullHub);
     renderWithProviders(<Dashboard />);
 
@@ -170,5 +191,88 @@ describe('Dashboard today hub', () => {
 
     await waitFor(() => expect(screen.getByText('Top 5 Teams (average)')).toBeInTheDocument());
     expect(screen.getAllByText('50 Shades of Shai').length).toBeGreaterThan(0);
+  });
+
+  it('sorts rank movers by category and toggles direction on a second click', async () => {
+    stubApi(fullHub);
+    renderWithProviders(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Rank movers')).toBeInTheDocument());
+    const catHeader = screen.getByRole('button', { name: /^cat$/i });
+
+    const firstRowTeamCell = () => screen.getAllByRole('row')[1].querySelectorAll('td')[0];
+
+    expect(firstRowTeamCell().textContent).toBe('Mover Team 1');
+
+    await userEvent.click(catHeader);
+    await waitFor(() => expect(firstRowTeamCell().textContent).toBe('Mover Team 2'));
+
+    await userEvent.click(catHeader);
+    await waitFor(() => expect(firstRowTeamCell().textContent).toBe('Mover Team 1'));
+  });
+
+  it('filters rank movers by team', async () => {
+    stubApi(fullHub);
+    renderWithProviders(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Mover Team 1')).toBeInTheDocument());
+
+    const dropdownToggle = screen.getByRole('button', { name: /all teams/i });
+    await userEvent.click(dropdownToggle);
+
+    const option = screen.getByRole('checkbox', { name: /mover team 1/i });
+    await userEvent.click(option);
+
+    const table = screen.getAllByRole('table')[0];
+    expect(within(table).queryByText('Mover Team 2')).not.toBeInTheDocument();
+    expect(within(table).getByText('Mover Team 1')).toBeInTheDocument();
+  });
+
+  it('closes the team filter dropdown on Escape', async () => {
+    stubApi(fullHub);
+    renderWithProviders(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Mover Team 1')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: /all teams/i }));
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('gives rank movers a fixed-height scroll container with a sticky header, and no vertical scroll on roster health', async () => {
+    stubApi(fullHub);
+    const { container } = renderWithProviders(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Rank movers')).toBeInTheDocument());
+
+    const moversHeading = screen.getByText('Rank movers');
+    const moversCard = moversHeading.closest('div.rounded-lg') as HTMLElement;
+    const moversScroller = moversCard.querySelector('.overflow-y-auto');
+    expect(moversScroller).not.toBeNull();
+    expect(moversScroller?.querySelector('th.sticky, [class*="sticky"]')).not.toBeNull();
+
+    const rosterHeading = screen.getByText('Roster health today');
+    const rosterCard = rosterHeading.closest('div.rounded-lg') as HTMLElement;
+    expect(rosterCard.querySelector('.overflow-y-auto')).toBeNull();
+
+    expect(container).toBeTruthy();
+  });
+
+  it('hides the today-hub panels and skips the hub query when the flag is off', async () => {
+    flagState.FF_TODAY_HUB = false;
+    stubApi(fullHub);
+    renderWithProviders(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('League averages')).toBeInTheDocument());
+    expect(screen.getByText('Top 5 Teams (average)')).toBeInTheDocument();
+
+    expect(screen.queryByRole('heading', { name: 'Today' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Rank movers')).not.toBeInTheDocument();
+    expect(screen.queryByText('Roster health today')).not.toBeInTheDocument();
+
+    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const calledUrls = calls.map(([input]) => requestUrl(input));
+    expect(calledUrls.some(url => url.includes('/league/today'))).toBe(false);
   });
 });

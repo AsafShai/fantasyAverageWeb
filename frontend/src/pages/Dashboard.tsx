@@ -1,11 +1,12 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useGetLeagueSummaryQuery, useGetRankingsQuery, useGetTodayHubQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DeadlineCountdown from '../components/DeadlineCountdown'
 import RankMovers from '../components/today/RankMovers'
 import RosterHealth from '../components/today/RosterHealth'
-import TonightStrip from '../components/today/TonightStrip'
 import { getErrorMessage } from '../utils/errorMessage'
+import { FF_TODAY_HUB } from '../config/featureFlags'
 import type { AverageStats, RankingStats } from '../types/api'
 
 const AVERAGE_TILES: { label: string; value: (a: AverageStats) => string }[] = [
@@ -38,10 +39,39 @@ function formatSlate(slateDate: string | null): string {
   })
 }
 
+function useMatchDesktopHeight(deps: unknown[]) {
+  const targetRef = useRef<HTMLDivElement>(null)
+  const [heightPx, setHeightPx] = useState<number | null>(null)
+
+  useLayoutEffect(() => {
+    const node = targetRef.current
+    if (!node) return
+
+    const isDesktop = () => window.matchMedia('(min-width: 768px)').matches
+
+    const measure = () => {
+      setHeightPx(isDesktop() ? node.getBoundingClientRect().height : null)
+    }
+
+    measure()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    observer?.observe(node)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+
+  return { targetRef, heightPx }
+}
+
 const Dashboard = () => {
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
   const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
-  const { data: hub, isLoading: hubLoading } = useGetTodayHubQuery()
+  const { data: hub, isLoading: hubLoading } = useGetTodayHubQuery(undefined, { skip: !FF_TODAY_HUB })
+  const { targetRef: rosterRef, heightPx: rosterHeightPx } = useMatchDesktopHeight([hub])
 
   if (summaryLoading || rankingsLoading) {
     return <LoadingSpinner />
@@ -57,26 +87,30 @@ const Dashboard = () => {
     <div className="mx-auto max-w-7xl space-y-4 px-4 sm:space-y-6 sm:px-6 lg:px-8">
       <DeadlineCountdown />
 
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
-        <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">
-          {hub ? `${formatSlate(hub.slate_date)} · ${hub.games_count} games` : 'loading slate…'}
-        </span>
-      </div>
-
-      {hubLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <RankMovers movers={hub?.movers ?? []} />
-          <RosterHealth teams={hub?.roster_health ?? []} />
-          <TonightStrip
-            slateDate={hub?.slate_date ?? null}
-            gamesCount={hub?.games_count ?? 0}
-            teams={hub?.roster_health ?? []}
-          />
+      {FF_TODAY_HUB && (
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
+          <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">
+            {hub ? `${formatSlate(hub.slate_date)} · ${hub.games_count} games` : 'loading slate…'}
+          </span>
         </div>
       )}
+
+      {FF_TODAY_HUB &&
+        (hubLoading ? (
+          <LoadingSpinner />
+        ) : (
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[2fr_3fr]">
+            <RankMovers movers={hub?.movers ?? []} matchHeightPx={rosterHeightPx} />
+            <div ref={rosterRef}>
+              <RosterHealth
+                slateDate={hub?.slate_date ?? null}
+                gamesCount={hub?.games_count ?? 0}
+                teams={hub?.roster_health ?? []}
+              />
+            </div>
+          </div>
+        ))}
 
       {summary && (
         <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800">

@@ -67,7 +67,7 @@ class TestMovers:
         by_cat = {m.category: m.delta for m in TodayService.build_movers(rows)}
         assert by_cat['PTS'] == -3.5
 
-    def test_top_eight_by_absolute_delta(self):
+    def test_sorted_by_absolute_delta_descending_with_no_count_limit(self):
         previous = [rankings_row(10, tid, f'Team {tid}') for tid in range(1, 13)]
         latest = [
             rankings_row(11, tid, f'Team {tid}', rk_ast=6.0 + tid, rk_total=48.0 + tid)
@@ -75,9 +75,22 @@ class TestMovers:
         ]
         movers = TodayService.build_movers(previous + latest)
 
-        assert len(movers) == 8
+        assert len(movers) == 24
         assert [abs(m.delta) for m in movers] == sorted((abs(m.delta) for m in movers), reverse=True)
         assert abs(movers[0].delta) == 12.0
+
+    def test_zero_delta_movers_are_excluded_regardless_of_row_count(self):
+        previous = [rankings_row(10, tid, f'Team {tid}') for tid in range(1, 21)]
+        latest = [
+            rankings_row(11, tid, f'Team {tid}', rk_ast=6.0 + (1.0 if tid % 2 == 0 else 0.0),
+                         rk_total=48.0 + (1.0 if tid % 2 == 0 else 0.0))
+            for tid in range(1, 21)
+        ]
+        movers = TodayService.build_movers(previous + latest)
+
+        assert all(m.delta != 0 for m in movers)
+        assert len(movers) == 20
+        assert {int(m.delta) for m in movers} == {1}
 
     def test_single_period_yields_no_movers(self):
         assert TodayService.build_movers([rankings_row(11, 1, 'Alpha')]) == []
@@ -204,6 +217,27 @@ class TestRosterHealth:
         assert [t.team_name for t in TodayService.build_roster_health(df, {'LAL'}, injuries)] == [
             'Beta', 'Gamma', 'Delta', 'Alpha',
         ]
+
+    def test_games_tonight_equals_the_sum_of_the_five_counts(self):
+        df = players_df([
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'LeBron James', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Austin Reaves', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Rui Hachimura', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Dalton Knecht', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Jaxson Hayes', 'Pro Team': 'LAL'},
+        ])
+        injuries = {
+            'lebronjames': 'out',
+            'austinreaves': 'questionable',
+            'ruihachimura': 'doubtful',
+            'daltonknecht': 'probable',
+        }
+
+        team = TodayService.build_roster_health(df, {'LAL'}, injuries)[0]
+        assert team.games_tonight == (
+            team.available_tonight + team.probable + team.questionable + team.doubtful + team.out
+        )
+        assert team.games_tonight == 5
 
     def test_empty_frame_is_no_rows(self):
         assert TodayService.build_roster_health(pd.DataFrame(), {'LAL'}, {}) == []

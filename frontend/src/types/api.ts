@@ -716,6 +716,7 @@ export interface RankMover {
 export interface TeamRosterHealth {
   team_id: number;
   team_name: string;
+  games_tonight: number;
   available_tonight: number;
   probable: number;
   questionable: number;
