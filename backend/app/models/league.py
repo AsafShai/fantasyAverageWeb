@@ -91,13 +91,15 @@ class RankMover(BaseModel):
 
 
 class TeamRosterHealth(BaseModel):
+    """Counts over the team's rostered players who have a game tonight; the
+    five add up to exactly that number."""
     team_id: int
     team_name: str
-    out: int
+    available_tonight: int
+    probable: int
     questionable: int
-    playing_tonight: int
-    out_tonight: int
-    roster_size: int
+    doubtful: int
+    out: int
 
 
 class NightlyRun(BaseModel):

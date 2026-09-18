@@ -716,11 +716,11 @@ export interface RankMover {
 export interface TeamRosterHealth {
   team_id: number;
   team_name: string;
-  out: number;
+  available_tonight: number;
+  probable: number;
   questionable: number;
-  playing_tonight: number;
-  out_tonight: number;
-  roster_size: number;
+  doubtful: number;
+  out: number;
 }
 
 export interface NightlyRun {

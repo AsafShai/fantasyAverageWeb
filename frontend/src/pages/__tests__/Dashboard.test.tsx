@@ -37,18 +37,20 @@ const rankings = {
 const fullHub: TodayHub = {
   slate_date: '2026-09-18',
   games_count: 8,
-  movers: [
-    { team_id: 1, team_name: "Khachapuri's Team", category: 'AST', delta: 2 },
-    { team_id: 2, team_name: 'DORTAHTIT', category: 'TOTAL', delta: -1.5 },
-  ],
+  movers: Array.from({ length: 8 }, (_, i) => ({
+    team_id: i + 1,
+    team_name: `Mover Team ${i + 1}`,
+    category: i === 0 ? 'TOTAL' : 'AST',
+    delta: i === 0 ? -1.5 : 8 - i,
+  })),
   roster_health: [
     {
-      team_id: 3, team_name: "Amihai's Awesome", out: 3, questionable: 0,
-      playing_tonight: 4, out_tonight: 2, roster_size: 13,
+      team_id: 3, team_name: "Amihai's Awesome", available_tonight: 4,
+      probable: 1, questionable: 2, doubtful: 1, out: 3,
     },
     {
-      team_id: 1, team_name: '50 Shades of Shai', out: 0, questionable: 1,
-      playing_tonight: 6, out_tonight: 0, roster_size: 12,
+      team_id: 1, team_name: '50 Shades of Shai', available_tonight: 6,
+      probable: 0, questionable: 1, doubtful: 0, out: 0,
     },
   ],
   last_nightly: { game_date: '2026-09-17', rows: 240 },
@@ -102,10 +104,32 @@ describe('Dashboard today hub', () => {
     expect(screen.getByText('Tonight')).toBeInTheDocument();
 
     expect(screen.getByText('TOTAL')).toBeInTheDocument();
-    expect(screen.getByText('▲ 2')).toBeInTheDocument();
+    expect(screen.getByText('▲ 7')).toBeInTheDocument();
     expect(screen.getByText('▼ 1.5')).toBeInTheDocument();
     expect(screen.getAllByText("Amihai's Awesome").length).toBe(2);
-    expect(screen.getByText('4/6')).toBeInTheDocument();
+  });
+
+  it('renders every mover row at any width, with no show-all button', async () => {
+    stubApi(fullHub);
+    renderWithProviders(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Mover Team 1')).toBeInTheDocument());
+    for (let i = 1; i <= 8; i += 1) {
+      expect(screen.getByText(`Mover Team ${i}`)).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: /show all/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the five injury counts for players with a game tonight', async () => {
+    stubApi(fullHub);
+    renderWithProviders(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText('Roster health')).toBeInTheDocument());
+    const headers = screen.getAllByRole('columnheader').map(h => h.textContent);
+    expect(headers).toEqual(
+      expect.arrayContaining(['AVLAvail', 'PRBProb', 'QSTQues', 'DBTDoubt', 'OUTOut']),
+    );
+    expect(screen.queryByText('4/6')).not.toBeInTheDocument();
   });
 
   it('shows the tonight tiles derived from the slate and rosters', async () => {
@@ -114,8 +138,8 @@ describe('Dashboard today hub', () => {
 
     await waitFor(() => expect(screen.getByText('NBA games')).toBeInTheDocument());
     expect(screen.getByText('teams playing')).toBeInTheDocument();
-    expect(screen.getByText('rostered')).toBeInTheDocument();
-    expect(screen.getByText('10')).toBeInTheDocument();
+    expect(screen.getByText('available')).toBeInTheDocument();
+    expect(screen.getByText('Out tonight')).toBeInTheDocument();
   });
 
   it('keeps the league-average tiles on the dashboard', async () => {

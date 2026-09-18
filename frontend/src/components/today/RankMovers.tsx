@@ -1,12 +1,9 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import type { RankMover } from '../../types/api'
 
 interface RankMoversProps {
   movers: RankMover[]
 }
-
-const MOBILE_ROWS = 5
 
 function formatDelta(delta: number): string {
   const rounded = Math.abs(delta) % 1 === 0 ? Math.abs(delta).toFixed(0) : Math.abs(delta).toFixed(1)
@@ -15,7 +12,6 @@ function formatDelta(delta: number): string {
 
 export default function RankMovers({ movers }: RankMoversProps) {
   const navigate = useNavigate()
-  const [showAll, setShowAll] = useState(false)
 
   return (
     <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
@@ -46,15 +42,13 @@ export default function RankMovers({ movers }: RankMoversProps) {
                 </tr>
               </thead>
               <tbody>
-                {movers.map((mover, index) => (
+                {movers.map(mover => (
                   <tr
                     key={`${mover.team_id}-${mover.category}`}
                     onClick={() => navigate(`/team/${mover.team_id}`)}
-                    className={`cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 ${
-                      !showAll && index >= MOBILE_ROWS ? 'hidden sm:table-row' : ''
-                    }`}
+                    className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
                   >
-                    <td className="max-w-[9rem] truncate px-1.5 py-1.5 text-xs text-gray-900 sm:px-2 sm:text-sm dark:text-gray-100">
+                    <td className="max-w-[8rem] truncate px-1.5 py-1.5 text-xs text-gray-900 sm:max-w-[11rem] sm:px-3 sm:text-sm dark:text-gray-100">
                       {mover.team_name}
                     </td>
                     <td className="px-1.5 py-1.5 sm:px-2">
@@ -82,16 +76,6 @@ export default function RankMovers({ movers }: RankMoversProps) {
               </tbody>
             </table>
           </div>
-
-          {movers.length > MOBILE_ROWS && !showAll && (
-            <button
-              type="button"
-              onClick={() => setShowAll(true)}
-              className="mt-2 text-[11px] font-semibold text-blue-600 hover:underline sm:hidden dark:text-blue-400"
-            >
-              Show all {movers.length}
-            </button>
-          )}
         </>
       )}
     </div>

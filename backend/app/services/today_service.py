@@ -26,8 +26,16 @@ _RANK_COLUMNS = {
     'PTS': 'rk_pts',
 }
 
-_OUT_STATUSES = {'out'}
-_DOUBTFUL_STATUSES = {'questionable', 'doubtful', 'probable', 'game time decision'}
+AVAILABLE = 'available'
+PROBABLE = 'probable'
+QUESTIONABLE = 'questionable'
+DOUBTFUL = 'doubtful'
+OUT = 'out'
+
+STATUS_BUCKETS = (AVAILABLE, PROBABLE, QUESTIONABLE, DOUBTFUL, OUT)
+
+# "Game Time Decision" is the NBA report's own wording for Questionable.
+_STATUS_ALIASES = {'game time decision': QUESTIONABLE, 'gtd': QUESTIONABLE}
 
 _MOVERS_LIMIT = 8
 
@@ -39,13 +47,20 @@ def clear_today_hub_cache() -> None:
     _hub_cache.update({'ts': None, 'value': None})
 
 
-def _classify_status(status: str) -> Optional[str]:
+def classify_status(status: str) -> str:
+    """One of the five report statuses, never a collapsed bucket.
+
+    An unrecognized label lands in Questionable and is logged by name: a new
+    ESPN/NBA wording should surface in the logs rather than disappear into
+    Available."""
     normalized = status.strip().lower()
-    if normalized in _OUT_STATUSES:
-        return 'out'
-    if normalized in _DOUBTFUL_STATUSES:
-        return 'questionable'
-    return None
+    if normalized in STATUS_BUCKETS:
+        return normalized
+    alias = _STATUS_ALIASES.get(normalized)
+    if alias is not None:
+        return alias
+    logger.warning(f'Unknown injury status {status!r} — counted as questionable')
+    return QUESTIONABLE
 
 
 class TodayService:
@@ -167,17 +182,19 @@ class TodayService:
     def _injury_lookup() -> dict[str, str]:
         from app.services.injury_service import injury_store
 
-        lookup: dict[str, str] = {}
-        for record in injury_store.values():
-            bucket = _classify_status(record.status)
-            if bucket is not None:
-                lookup[normalize_player_name(record.player)] = bucket
-        return lookup
+        return {
+            normalize_player_name(record.player): classify_status(record.status)
+            for record in injury_store.values()
+        }
 
     @staticmethod
     def build_roster_health(
         players_df, teams_playing: set[str], injuries: dict[str, str]
     ) -> list[TeamRosterHealth]:
+        """Counts over rostered players who have a game tonight, and only those.
+
+        A player whose NBA team is idle is in no column at all, so the five
+        counts sum to the team's players on tonight's slate."""
         if players_df is None or players_df.empty:
             return []
 
@@ -187,28 +204,19 @@ class TodayService:
             team_id = row.get('team_id')
             if not fantasy_name or team_id is None or int(team_id) <= 0:
                 continue
-            team_id = int(team_id)
-            entry = accumulators.setdefault(team_id, {
+            if str(row.get('Pro Team', '')) not in teams_playing:
+                continue
+
+            entry = accumulators.setdefault(int(team_id), {
                 'team_name': str(fantasy_name),
-                'out': 0, 'questionable': 0,
-                'playing_tonight': 0, 'out_tonight': 0, 'roster_size': 0,
+                'available_tonight': 0, 'probable': 0,
+                'questionable': 0, 'doubtful': 0, 'out': 0,
             })
-            entry['roster_size'] += 1
-
-            bucket = injuries.get(normalize_player_name(str(row.get('Name', ''))))
-            if bucket == 'out':
-                entry['out'] += 1
-            elif bucket == 'questionable':
-                entry['questionable'] += 1
-
-            if str(row.get('Pro Team', '')) in teams_playing:
-                if bucket == 'out':
-                    entry['out_tonight'] += 1
-                else:
-                    entry['playing_tonight'] += 1
+            bucket = injuries.get(normalize_player_name(str(row.get('Name', ''))), AVAILABLE)
+            entry['available_tonight' if bucket == AVAILABLE else bucket] += 1
 
         health = [TeamRosterHealth(team_id=team_id, **entry) for team_id, entry in accumulators.items()]
-        health.sort(key=lambda t: (-t.out, -t.questionable, t.team_name))
+        health.sort(key=lambda t: (-t.out, -t.doubtful, -t.questionable, t.team_name))
         return health
 
     async def _get_last_nightly(self) -> Optional[NightlyRun]:

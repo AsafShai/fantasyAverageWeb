@@ -22,9 +22,9 @@ function Tile({ value, label, warn = false }: { value: number; label: string; wa
 }
 
 export default function TonightStrip({ slateDate, gamesCount, teams }: TonightStripProps) {
-  const playingTotal = teams.reduce((sum, team) => sum + team.playing_tonight, 0)
-  const outTotal = teams.reduce((sum, team) => sum + team.out_tonight, 0)
-  const ordered = [...teams].sort((a, b) => b.playing_tonight - a.playing_tonight)
+  const availableTotal = teams.reduce((sum, team) => sum + team.available_tonight, 0)
+  const outTotal = teams.reduce((sum, team) => sum + team.out, 0)
+  const ordered = [...teams].sort((a, b) => b.available_tonight - a.available_tonight)
 
   return (
     <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
@@ -40,7 +40,7 @@ export default function TonightStrip({ slateDate, gamesCount, teams }: TonightSt
           <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Tile value={gamesCount} label="NBA games" />
             <Tile value={gamesCount * 2} label="teams playing" />
-            <Tile value={playingTotal} label="rostered" />
+            <Tile value={availableTotal} label="available" />
             <Tile value={outTotal} label="Out tonight" warn />
           </div>
 
@@ -60,26 +60,26 @@ export default function TonightStrip({ slateDate, gamesCount, teams }: TonightSt
                       Slots
                     </th>
                     <th scope="col" className="px-1.5 pb-1.5 text-right text-[9.5px] font-bold uppercase tracking-wider text-gray-400 sm:px-2 dark:text-gray-500">
-                      Playing
+                      Available
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {ordered.map(team => (
                     <tr key={team.team_id} className="border-b border-gray-100 last:border-0 dark:border-gray-700">
-                      <td className="max-w-[8rem] truncate px-1.5 py-1.5 text-xs text-gray-900 sm:px-2 sm:text-sm dark:text-gray-100">
+                      <td className="max-w-[7rem] truncate px-1.5 py-1.5 text-xs text-gray-900 sm:max-w-[9rem] sm:px-3 sm:text-sm dark:text-gray-100">
                         {team.team_name}
                       </td>
                       <td className="px-1.5 py-1.5 sm:px-2">
                         <span className="block h-1.5 min-w-[3rem] overflow-hidden rounded bg-gray-100 dark:bg-gray-700">
                           <span
                             className="block h-full rounded bg-blue-400 dark:bg-blue-600"
-                            style={{ width: `${Math.min(100, (team.playing_tonight / ACTIVE_SLOTS) * 100)}%` }}
+                            style={{ width: `${Math.min(100, (team.available_tonight / ACTIVE_SLOTS) * 100)}%` }}
                           />
                         </span>
                       </td>
                       <td className="px-1.5 py-1.5 text-right text-xs tabular-nums text-gray-700 sm:px-2 sm:text-sm dark:text-gray-300">
-                        {team.playing_tonight}
+                        {team.available_tonight}
                       </td>
                     </tr>
                   ))}

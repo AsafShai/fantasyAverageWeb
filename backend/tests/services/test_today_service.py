@@ -1,9 +1,11 @@
+import logging
+
 import pandas as pd
 import pytest
 
 from app.models.injury_models import InjuryRecord
 from app.services import today_service as today_module
-from app.services.today_service import TodayService
+from app.services.today_service import TodayService, classify_status
 
 
 def rankings_row(period, team_id, name, **cats):
@@ -100,32 +102,87 @@ class TestMovers:
         assert TodayService.build_movers(rows) == []
 
 
+class TestClassifyStatus:
+    @pytest.mark.parametrize('raw, expected', [
+        ('Out', 'out'),
+        ('OUT', 'out'),
+        ('  Doubtful ', 'doubtful'),
+        ('Questionable', 'questionable'),
+        ('Probable', 'probable'),
+        ('Available', 'available'),
+    ])
+    def test_each_report_status_keeps_its_own_identity(self, raw, expected):
+        assert classify_status(raw) == expected
+
+    def test_game_time_decision_is_the_reports_wording_for_questionable(self):
+        assert classify_status('Game Time Decision') == 'questionable'
+
+    def test_an_unknown_status_is_questionable_and_logged_by_name(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            assert classify_status('Reconditioning') == 'questionable'
+        assert 'Reconditioning' in caplog.text
+
+
 class TestRosterHealth:
-    def test_joins_injuries_and_tonights_slate_onto_rosters(self):
+    def test_five_counts_over_players_with_a_game_tonight(self):
         df = players_df([
             {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'LeBron James', 'Pro Team': 'LAL'},
-            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Anthony Davis', 'Pro Team': 'DAL'},
             {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Austin Reaves', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Rui Hachimura', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Dalton Knecht', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Jaxson Hayes', 'Pro Team': 'LAL'},
             {'team_id': 2, 'fantasy_team_name': 'Beta', 'Name': 'Jayson Tatum', 'Pro Team': 'BOS'},
         ])
         injuries = {
             'lebronjames': 'out',
             'austinreaves': 'questionable',
-            'jaysontatum': 'out',
+            'ruihachimura': 'doubtful',
+            'daltonknecht': 'probable',
         }
 
         health = TodayService.build_roster_health(df, {'LAL', 'BOS'}, injuries)
-        by_name = {t.team_name: t for t in health}
+        alpha = {t.team_name: t for t in health}['Alpha']
 
-        alpha = by_name['Alpha']
-        assert alpha.roster_size == 3
-        assert alpha.out == 1
-        assert alpha.questionable == 1
-        assert alpha.playing_tonight == 1
-        assert alpha.out_tonight == 1
+        assert (alpha.out, alpha.doubtful, alpha.questionable, alpha.probable, alpha.available_tonight) == (
+            1, 1, 1, 1, 1,
+        )
 
-        beta = by_name['Beta']
-        assert (beta.out, beta.playing_tonight, beta.out_tonight) == (1, 0, 1)
+    def test_the_five_counts_sum_to_the_players_on_tonights_slate(self):
+        df = players_df([
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': f'Player {i}', 'Pro Team': 'LAL'}
+            for i in range(7)
+        ])
+        injuries = {'player0': 'out', 'player1': 'doubtful', 'player2': 'probable'}
+
+        team = TodayService.build_roster_health(df, {'LAL'}, injuries)[0]
+        total = (team.available_tonight + team.probable + team.questionable
+                 + team.doubtful + team.out)
+        assert total == 7
+
+    def test_a_player_with_no_game_tonight_is_in_no_column(self):
+        df = players_df([
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'LeBron James', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Anthony Davis', 'Pro Team': 'DAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Kyrie Irving', 'Pro Team': 'DAL'},
+        ])
+        injuries = {'anthonydavis': 'out', 'kyrieirving': 'questionable'}
+
+        team = TodayService.build_roster_health(df, {'LAL'}, injuries)[0]
+        assert (team.available_tonight, team.out, team.questionable) == (1, 0, 0)
+
+    def test_a_team_with_nobody_playing_tonight_has_no_row(self):
+        df = players_df([
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'LeBron James', 'Pro Team': 'LAL'},
+            {'team_id': 2, 'fantasy_team_name': 'Beta', 'Name': 'Kyrie Irving', 'Pro Team': 'DAL'},
+        ])
+        assert [t.team_name for t in TodayService.build_roster_health(df, {'LAL'}, {})] == ['Alpha']
+
+    def test_an_unknown_status_lands_in_questionable(self):
+        df = players_df([
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'LeBron James', 'Pro Team': 'LAL'},
+        ])
+        team = TodayService.build_roster_health(df, {'LAL'}, {'lebronjames': 'questionable'})[0]
+        assert (team.questionable, team.available_tonight) == (1, 0)
 
     def test_free_agents_are_not_a_fantasy_team(self):
         df = players_df([
@@ -134,32 +191,38 @@ class TestRosterHealth:
         ])
         health = TodayService.build_roster_health(df, {'LAL'}, {})
         assert [t.team_name for t in health] == ['Alpha']
-        assert health[0].roster_size == 1
+        assert health[0].available_tonight == 1
 
-    def test_sorted_by_out_then_questionable(self):
+    def test_sorted_by_out_then_doubtful_then_questionable_then_name(self):
         df = players_df([
             {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'A One', 'Pro Team': 'LAL'},
             {'team_id': 2, 'fantasy_team_name': 'Beta', 'Name': 'B One', 'Pro Team': 'LAL'},
             {'team_id': 3, 'fantasy_team_name': 'Gamma', 'Name': 'C One', 'Pro Team': 'LAL'},
+            {'team_id': 4, 'fantasy_team_name': 'Delta', 'Name': 'D One', 'Pro Team': 'LAL'},
         ])
-        injuries = {'bone': 'out', 'cone': 'questionable'}
-        assert [t.team_name for t in TodayService.build_roster_health(df, set(), injuries)] == [
-            'Beta', 'Gamma', 'Alpha',
+        injuries = {'bone': 'out', 'cone': 'doubtful', 'done': 'questionable'}
+        assert [t.team_name for t in TodayService.build_roster_health(df, {'LAL'}, injuries)] == [
+            'Beta', 'Gamma', 'Delta', 'Alpha',
         ]
 
     def test_empty_frame_is_no_rows(self):
         assert TodayService.build_roster_health(pd.DataFrame(), {'LAL'}, {}) == []
 
-    def test_injury_lookup_keeps_only_out_and_questionable(self, monkeypatch):
+    def test_injury_lookup_maps_every_record_to_one_of_the_five(self, monkeypatch):
         store = {
             'LAL|James, LeBron': injury('James, LeBron', 'Out'),
-            'LAL|Reaves, Austin': injury('Reaves, Austin', 'Questionable'),
+            'LAL|Reaves, Austin': injury('Reaves, Austin', 'Game Time Decision'),
+            'LAL|Hachimura, Rui': injury('Hachimura, Rui', 'Doubtful'),
             'LAL|Knecht, Dalton': injury('Knecht, Dalton', 'Available'),
         }
         monkeypatch.setattr('app.services.injury_service.injury_store', store)
 
-        lookup = TodayService._injury_lookup()
-        assert lookup == {'jameslebron': 'out', 'reavesaustin': 'questionable'}
+        assert TodayService._injury_lookup() == {
+            'jameslebron': 'out',
+            'reavesaustin': 'questionable',
+            'hachimurarui': 'doubtful',
+            'knechtdalton': 'available',
+        }
 
 
 class TestFailOpen:
