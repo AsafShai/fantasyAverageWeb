@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from datetime import date, datetime, timedelta
 from typing import Optional, Tuple
@@ -46,13 +47,25 @@ _SEASON_ANCHOR_TTL = timedelta(hours=1)
 _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 
 
-# The windowed DataFrame for a preset period (season/last_7/last_15/last_30)
-# only moves on nightly ingest, but build_windowed_players_df reruns a full
-# fs_player_games aggregation + pandas merge on every /players request.
-# Cached briefly per preset. Custom ranges are never cached here — the key
-# space is unbounded (any start/end pair), so caching them would grow forever.
+# The windowed players for a preset period (season/last_7/last_15/last_30)
+# only move on nightly ingest, but build_windowed_players_df reruns a full
+# fs_player_games aggregation + pandas merge on every /players request, and
+# building the ~1100 Player objects on top of it costs as much again. Both
+# are cached briefly per preset; pagination then slices the built list.
+# The cached list is read-only — it is handed out to every request, so it
+# must never be mutated in place. Custom ranges are never cached here — the
+# key space is unbounded (any start/end pair), so caching would grow forever.
 _WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
 _windowed_players_cache: dict = {}
+
+
+def players_etag(time_period: StatTimePeriod, page: int, limit: int) -> Optional[str]:
+    """Weak ETag for a /players page, or None when nothing is cached yet."""
+    entry = _windowed_players_cache.get(time_period)
+    if entry is None or datetime.now() - entry['ts'] >= _WINDOWED_PLAYERS_TTL:
+        return None
+    raw = f"{time_period.value}|{page}|{limit}|{entry['ts'].isoformat()}"
+    return f'W/"{hashlib.sha1(raw.encode()).hexdigest()[:8]}"'
 
 
 async def get_season_anchor_date(season: str, db_service: DBService) -> date:
@@ -179,9 +192,20 @@ class PlayerService:
             end: End date, required when time_period is custom
         """
         is_preset = time_period != StatTimePeriod.CUSTOM
+        categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
+
         cached = _windowed_players_cache.get(time_period) if is_preset else None
-        if cached is not None and datetime.now() - cached['ts'] < _WINDOWED_PLAYERS_TTL:
-            players_df, actual_start, actual_end = cached['df'], cached['start'], cached['end']
+        if cached is not None and (
+            datetime.now() - cached['ts'] >= _WINDOWED_PLAYERS_TTL
+            or cached['categories'] != categories
+        ):
+            cached = None
+
+        if cached is not None:
+            all_players = cached['players']
+            total_count = cached['total_count']
+            actual_start, actual_end = cached['start'], cached['end']
         else:
             stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
             espn_players_df = await self.data_provider.get_players_df(stat_split_id)
@@ -192,23 +216,20 @@ class PlayerService:
             players_df, actual_start, actual_end = await build_windowed_players_df(
                 time_period, espn_players_df, self.data_provider.db_service, start, end
             )
+            all_players = self.response_builder.build_all_players_response(players_df, categories)
+            total_count = len(players_df)
             if is_preset:
                 _windowed_players_cache[time_period] = {
-                    'df': players_df, 'start': actual_start, 'end': actual_end,
-                    'ts': datetime.now(),
+                    'players': all_players, 'total_count': total_count,
+                    'start': actual_start, 'end': actual_end,
+                    'categories': categories, 'ts': datetime.now(),
                 }
 
-        total_count = len(players_df)
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
 
-        page_df = players_df.iloc[start_idx:end_idx]
-        categories = await self.data_provider.get_ranking_categories()
-        reverse_categories = await self.data_provider.get_reverse_categories()
-        players = self.response_builder.build_all_players_response(page_df, categories)
-
         return PaginatedPlayers(
-            players=players,
+            players=all_players[start_idx:end_idx],
             total_count=total_count,
             page=page,
             limit=limit,
