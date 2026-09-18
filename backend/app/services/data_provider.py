@@ -338,6 +338,14 @@ class DataProvider:
             return set()
         return self.data_transformer.resolve_reverse_categories(raw)
 
+    async def get_trade_deadline(self) -> Optional[datetime]:
+        """Get this league's trade deadline, resolved from ESPN's settings.
+        Returns None if settings are unavailable or the deadline isn't set."""
+        raw = await self._settings_payload()
+        if not raw:
+            return None
+        return self.data_transformer.resolve_trade_deadline(raw)
+
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
         totals_df = await self.get_totals_df()

@@ -94,6 +94,7 @@ export interface LeagueSummary {
   last_updated: string;
   data_date?: string;
   season_start?: string;
+  trade_deadline?: string;
 }
 
 export interface HeatmapData {

@@ -25,6 +25,7 @@ class LeagueSummary(BaseModel):
     last_updated: datetime
     data_date: Optional[date] = None
     season_start: Optional[date] = None
+    trade_deadline: Optional[datetime] = None
 
 class LeagueShotsData(BaseModel):
     shots: List[TeamShotStats]
