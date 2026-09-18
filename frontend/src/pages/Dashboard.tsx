@@ -1,12 +1,47 @@
-import { useGetLeagueSummaryQuery, useGetRankingsQuery } from '../store/api/fantasyApi'
+import { useGetLeagueSummaryQuery, useGetRankingsQuery, useGetTodayHubQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DeadlineCountdown from '../components/DeadlineCountdown'
+import RankMovers from '../components/today/RankMovers'
+import RosterHealth from '../components/today/RosterHealth'
+import TonightStrip from '../components/today/TonightStrip'
 import { getErrorMessage } from '../utils/errorMessage'
+import type { AverageStats, RankingStats } from '../types/api'
+
+const AVERAGE_TILES: { label: string; value: (a: AverageStats) => string }[] = [
+  { label: 'GP', value: a => a.gp.toFixed(2) },
+  { label: 'FG%', value: a => a.fg_percentage.toFixed(3) },
+  { label: 'FT%', value: a => a.ft_percentage.toFixed(3) },
+  { label: '3PM', value: a => a.three_pm.toFixed(2) },
+  { label: 'AST', value: a => a.ast.toFixed(2) },
+  { label: 'REB', value: a => a.reb.toFixed(2) },
+  { label: 'STL', value: a => a.stl.toFixed(2) },
+  { label: 'BLK', value: a => a.blk.toFixed(2) },
+  { label: 'PTS', value: a => a.pts.toFixed(2) },
+]
+
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-gray-50 px-2 py-1.5 dark:bg-gray-700">
+      <p className="text-[9.5px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">{label}</p>
+      <p className="text-sm font-bold tabular-nums text-gray-900 sm:text-base dark:text-gray-50">{value}</p>
+    </div>
+  )
+}
+
+function formatSlate(slateDate: string | null): string {
+  if (!slateDate) return 'No games scheduled'
+  return new Date(slateDate + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
 
 const Dashboard = () => {
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
   const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
+  const { data: hub, isLoading: hubLoading } = useGetTodayHubQuery()
 
   if (summaryLoading || rankingsLoading) {
     return <LoadingSpinner />
@@ -19,112 +54,68 @@ const Dashboard = () => {
   const topTeams = rankings?.averages_rankings.slice(0, 5) || []
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-4 px-4 sm:space-y-6 sm:px-6 lg:px-8">
       <DeadlineCountdown />
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">League Overview</h2>
 
-        {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-xl border border-amber-200">
-              <h3 className="font-semibold text-amber-900 mb-1">NBA Avg Pace</h3>
-              <p className="text-3xl font-bold text-amber-600">
-                {(summary.nba_avg_pace ?? 0).toFixed(1)}
-              </p>
-              <p className="text-xs text-amber-700 mt-2">games played per team</p>
-            </div>
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-5 rounded-xl border border-emerald-200">
-              <h3 className="font-semibold text-emerald-900 mb-1">Game Days Left</h3>
-              <p className="text-3xl font-bold text-emerald-600">
-                {summary.nba_game_days_left ?? 0}
-              </p>
-              <p className="text-xs text-emerald-700 mt-2">until regular season ends</p>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200">
-              <h3 className="font-semibold text-blue-900 mb-1">Total Teams</h3>
-              <p className="text-3xl font-bold text-blue-600">{summary?.total_teams}</p>
-              <p className="text-xs text-blue-700 mt-2">in your league</p>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-green-900">Avg GP</h3>
-            <p className="text-2xl font-bold text-green-600">{summary?.league_averages.gp.toFixed(2)}</p>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-purple-900">Avg FG%</h3>
-            <p className="text-2xl font-bold text-purple-600">
-              {summary?.league_averages.fg_percentage.toFixed(3)}
-            </p>
-          </div>
-          <div className="bg-pink-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-pink-900">Avg FT%</h3>
-            <p className="text-2xl font-bold text-pink-600">
-              {summary?.league_averages.ft_percentage.toFixed(3)}
-            </p>
-          </div>
-          <div className="bg-indigo-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-indigo-900">Avg 3PM</h3>
-            <p className="text-2xl font-bold text-indigo-600">
-              {summary?.league_averages.three_pm.toFixed(2)}
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-yellow-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-yellow-900">Avg AST</h3>
-            <p className="text-2xl font-bold text-yellow-600">
-              {summary?.league_averages.ast.toFixed(2)}
-            </p>
-          </div>
-          <div className="bg-red-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-red-900">Avg REB</h3>
-            <p className="text-2xl font-bold text-red-600">
-              {summary?.league_averages.reb.toFixed(2)}
-            </p>
-          </div>
-          <div className="bg-teal-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-teal-900">Avg STL</h3>
-            <p className="text-2xl font-bold text-teal-600">
-              {summary?.league_averages.stl.toFixed(2)}
-            </p>
-          </div>
-          <div className="bg-orange-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-orange-900">Avg BLK</h3>
-            <p className="text-2xl font-bold text-orange-600">
-              {summary?.league_averages.blk.toFixed(2)}
-            </p>
-          </div>
-          <div className="bg-cyan-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-cyan-900">Avg PTS</h3>
-            <p className="text-2xl font-bold text-cyan-600">
-              {summary?.league_averages.pts.toFixed(2)}
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
+        <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">
+          {hub ? `${formatSlate(hub.slate_date)} · ${hub.games_count} games` : 'loading slate…'}
+        </span>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Top 5 Teams (average)</h2>
-        <div className="space-y-3">
-          {topTeams.map((team: import('../types/api').RankingStats, index: number) => (
+      {hubLoading ? (
+        <LoadingSpinner />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <RankMovers movers={hub?.movers ?? []} />
+          <RosterHealth teams={hub?.roster_health ?? []} />
+          <TonightStrip
+            slateDate={hub?.slate_date ?? null}
+            gamesCount={hub?.games_count ?? 0}
+            teams={hub?.roster_health ?? []}
+          />
+        </div>
+      )}
+
+      {summary && (
+        <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+          <div className="flex items-baseline justify-between gap-2 pb-2">
+            <h2 className="text-base font-bold text-gray-900 sm:text-lg dark:text-gray-50">League averages</h2>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">per team, season to date</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            {AVERAGE_TILES.map(tile => (
+              <StatTile key={tile.label} label={tile.label} value={tile.value(summary.league_averages)} />
+            ))}
+            <StatTile label="NBA pace" value={(summary.nba_avg_pace ?? 0).toFixed(1)} />
+            <StatTile label="Days left" value={String(summary.nba_game_days_left ?? 0)} />
+            <StatTile label="Teams" value={String(summary.total_teams)} />
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800">
+        <h2 className="pb-3 text-base font-bold text-gray-900 sm:text-lg dark:text-gray-50">Top 5 Teams (average)</h2>
+        <div className="space-y-2">
+          {topTeams.map((team: RankingStats, index: number) => (
             <div
               key={team.team.team_id}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              className="flex items-center justify-between rounded-lg bg-gray-50 p-2.5 dark:bg-gray-700"
             >
               <div className="flex items-center space-x-3">
-                <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-medium">
+                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                   {index + 1}
                 </span>
-                <span className="font-medium">{team.team.team_name}</span>
+                <span className="text-xs font-medium text-gray-900 sm:text-sm dark:text-gray-100">
+                  {team.team.team_name}
+                </span>
               </div>
               <div className="text-right">
-                <span className="text-lg font-bold text-gray-900">
+                <span className="text-sm font-bold tabular-nums text-gray-900 sm:text-base dark:text-gray-50">
                   {team.total_points}
                 </span>
-                <span className="text-sm text-gray-500 ml-1">pts</span>
+                <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">pts</span>
               </div>
             </div>
           ))}
