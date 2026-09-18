@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import httpx
 import json
 from datetime import datetime, timedelta
@@ -13,6 +14,9 @@ from app.exceptions import DataSourceError
 from app.utils.constants import RANKING_CATEGORIES
 from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
+
+PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
+
 
 class DataProvider:
     """Centralized data provider with caching for all ESPN data operations"""
@@ -47,7 +51,42 @@ class DataProvider:
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
             self.espn_draft_detail_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mDraftDetail'
             self.espn_players_directory_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/players?view=players_wl'
-    
+            self.espn_pro_team_schedules_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}?view=proTeamSchedules_wl'
+
+    async def get_pro_team_schedules(self) -> Dict:
+        """Full NBA season schedule for the configured season, in one request.
+
+        Cached for 24h with ETag revalidation; serves the last good payload if
+        ESPN fails so the schedule view survives a transient outage."""
+        cache = self.cache_manager.pro_team_schedules_cache
+        now = time.monotonic()
+        if cache['data'] is not None and now - cache['fetched_at'] < PRO_TEAM_SCHEDULES_TTL_SECONDS:
+            return cache['data']
+
+        try:
+            headers = {}
+            if cache['etag']:
+                headers['If-None-Match'] = cache['etag']
+
+            response = await self._client.get(self.espn_pro_team_schedules_url, headers=headers)
+
+            if response.status_code == 304 and cache['data'] is not None:
+                cache['fetched_at'] = now
+                return cache['data']
+
+            response.raise_for_status()
+            api_data = response.json()
+            cache['etag'] = response.headers.get('ETag')
+            cache['data'] = api_data
+            cache['fetched_at'] = now
+            return api_data
+        except Exception as e:
+            self.logger.error(f"Error fetching pro team schedules from ESPN API: {e}")
+            if cache['data'] is not None:
+                return cache['data']
+            raise DataSourceError("Error fetching pro team schedules from ESPN API")
+
+
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure."""
         async with self._fetch_lock:

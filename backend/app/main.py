@@ -30,6 +30,7 @@ import logging
 from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
+from app.services import schedule_service
 from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
@@ -48,15 +49,28 @@ logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
 
+async def derive_season_start():
+    """First regular-season game date: one fantasy request, falling back to the
+    ~16-call scoreboard binary search."""
+    derived_start = await schedule_service.get_season_start_date()
+    if derived_start is not None:
+        logger.info(f"Derived regular-season start from ESPN pro-team schedules: {derived_start}")
+        return derived_start
+    derived_start = await NBAStatsService().get_regular_season_start_date(settings.season_id)
+    if derived_start is not None:
+        logger.info(f"Derived regular-season start from NBA schedule: {derived_start}")
+    return derived_start
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan for proper resource cleanup"""
     # Startup
     logger.info("Starting Fantasy League Dashboard API")
     try:
-        derived_start = await NBAStatsService().get_regular_season_start_date(settings.season_id)
+        derived_start = await derive_season_start()
         if derived_start is not None:
-            logger.info(f"Derived regular-season start from NBA schedule: {derived_start} (was {settings.season_start})")
+            logger.info(f"Regular-season start: {derived_start} (was {settings.season_start})")
             settings.season_start = derived_start
         else:
             logger.warning(f"Could not derive regular-season start; keeping configured SEASON_START={settings.season_start}")
