@@ -1,15 +1,17 @@
 import logging
 
-import httpx
 from fastapi import APIRouter, HTTPException
 
 from app.models.nba_team_models import DepthChartPlayer, DepthChartPosition, InjuryInfo, NbaTeamInfo, TeamDepthChart
 from app.services.db_service import get_db_service
+from app.services.depth_chart_service import DepthChartFetchError, DepthChartService
 from app.utils.constants import PRO_TEAM_MAP, NBA_TEAM_NAMES
 from app.utils.name_matching import normalize_player_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+_depth_chart_service = DepthChartService()
 
 
 @router.get("/", response_model=list[NbaTeamInfo])
@@ -19,18 +21,13 @@ async def list_nba_teams():
 
 @router.get("/{team_id}/depthchart", response_model=TeamDepthChart)
 async def get_depth_chart(team_id: int):
-    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/depthcharts"
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url)
-    except httpx.HTTPError as e:
-        logger.error(f"ESPN depth chart fetch failed for team {team_id}: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=502, detail="Failed to fetch depth chart from ESPN")
-
-    if resp.status_code != 200:
+        data = await _depth_chart_service.get_depth_chart_raw(team_id)
+    except DepthChartFetchError as e:
+        if e.is_network_error:
+            raise HTTPException(status_code=502, detail="Failed to fetch depth chart from ESPN")
         raise HTTPException(status_code=404, detail=f"Team {team_id} not found on ESPN")
 
-    data = resp.json()
     team_data = data.get("team", {})
     depthcharts = data.get("depthchart", [])
 
