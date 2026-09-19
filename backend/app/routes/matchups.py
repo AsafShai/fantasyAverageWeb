@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from datetime import datetime
@@ -52,7 +53,7 @@ async def get_current_slate_date() -> Optional[str]:
 # Per-slate response cache: the full pipeline (schedule + fantasy roster +
 # batch model predict) is ~1-2s; repeat opens of the same slate are served
 # instantly. Keyed only by dates the slate picker actually offers (see
-# _known_slate_dates), so the key space stays small by construction —
+# _is_known_slate_date), so the key space stays small by construction —
 # no eviction/size-cap machinery needed. Cleared on the nightly refresh
 # (ModelNightlyService._invalidate_inference_store) so it never serves
 # pre-fold-in projections.
@@ -64,15 +65,20 @@ def clear_matchup_response_cache() -> None:
     _response_cache.clear()
 
 
-async def _known_slate_dates() -> set[str]:
-    """YYYYMMDD dates the slate picker actually offers: upcoming game days plus
-    dates already in the feature store. Anything else is rejected before it
-    costs a schedule fetch + model batch."""
-    upcoming = await _matchup_service.get_upcoming_game_dates()
+async def _is_known_slate_date(date: str) -> bool:
+    """Whether the slate picker offers this YYYYMMDD date: upcoming game days
+    plus dates already in the feature store. Anything else is rejected before
+    it costs a schedule fetch + model batch.
+
+    Stored dates are checked first because that side is a single local-ish
+    query, so a what-if date never pays for the upcoming-slate ESPN fetch as
+    well. Same membership either way — the two sets are only ever unioned.
+    """
     recent = await DBService().get_recent_game_dates()
-    known = {d.replace('-', '') for d in upcoming}
-    known.update(d.strftime('%Y%m%d') for d in recent)
-    return known
+    if date in {d.strftime('%Y%m%d') for d in recent}:
+        return True
+    upcoming = await _matchup_service.get_upcoming_game_dates()
+    return date in {d.replace('-', '') for d in upcoming}
 
 
 @router.get('/today', response_model=list[PlayerMatchupResponse])
@@ -82,19 +88,30 @@ async def get_matchups_today(
         description='YYYYMMDD — must be a date the slate picker offers (upcoming or stored)',
     )
 ) -> list[PlayerMatchupResponse]:
-    if date is not None and date not in await _known_slate_dates():
+    if date is not None and not await _is_known_slate_date(date):
         raise HTTPException(status_code=404, detail=f'Unknown slate date: {date}')
 
     cache_key = date or 'today'
     hit = _response_cache.get(cache_key)
     if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:
         return hit[1]
-    try:
-        games_today = await _matchup_service.get_games_today(date=date)
-        all_def = await _matchup_service.get_all_def_data()
-    except Exception as e:
-        logger.error(f'Matchup data fetch failed: {e}')
+    # Independent of one another: two ESPN reads and two DB reads, so they
+    # overlap rather than queue. return_exceptions keeps each failure's
+    # original handling — a slate/defense failure yields an empty response,
+    # anything else still propagates.
+    games_today, all_def, players_df, injury_rows = await asyncio.gather(
+        _matchup_service.get_games_today(date=date),
+        _matchup_service.get_all_def_data(),
+        _data_provider.get_players_df(stat_split_type_id=0),
+        DBService().load_all_injury_statuses(),
+        return_exceptions=True,
+    )
+    if isinstance(games_today, BaseException) or isinstance(all_def, BaseException):
+        logger.error(f'Matchup data fetch failed: {games_today if isinstance(games_today, BaseException) else all_def}')
         return []
+    for result in (players_df, injury_rows):
+        if isinstance(result, BaseException):
+            raise result
 
     # The date the slate actually resolved to — explicit for a pinned date,
     # otherwise whatever get_games_today's default view landed on (None in
@@ -125,16 +142,18 @@ async def get_matchups_today(
         fg_pct=league_avg_raw.get('fg_pct', 0.0),
     )
 
-    players_df = await _data_provider.get_players_df(stat_split_type_id=0)
-
-    depth_chart_names = await _depth_chart_service.get_on_depth_chart_names(set(games_today.keys()))
-    injury_rows = await DBService().load_all_injury_statuses()
     injury_lookup = {normalize_player_name(row['player']): row['status'] for row in injury_rows}
 
-    try:
-        projections = await _projection_service.project_today(players_df, games_today)
-    except Exception as e:
-        logger.error(f'Live projection fetch failed: {e}')
+    # Both need the slate, neither needs the other.
+    depth_chart_names, projections = await asyncio.gather(
+        _depth_chart_service.get_on_depth_chart_names(set(games_today.keys())),
+        _projection_service.project_today(players_df, games_today),
+        return_exceptions=True,
+    )
+    if isinstance(depth_chart_names, BaseException):
+        raise depth_chart_names
+    if isinstance(projections, BaseException):
+        logger.error(f'Live projection fetch failed: {projections}')
         projections = {}
 
     results: list[PlayerMatchupResponse] = []
