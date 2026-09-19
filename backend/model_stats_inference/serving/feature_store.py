@@ -40,7 +40,11 @@ class PlayerState:
     position: str
     last_game_date: pd.Timestamp
     games_count: int
-    vector: pd.Series  # feature name -> value (history mean/var/rate + efficiency)
+    features: dict[str, float]  # feature name -> value (history mean/var/rate + efficiency)
+
+    @property
+    def vector(self) -> pd.Series:
+        return pd.Series(self.features, dtype="float64")
 
 
 @dataclass
@@ -48,6 +52,8 @@ class TeamState:
     team_id: int
     allowed: pd.Series  # OPP_ALLOWED_* features
     own: pd.Series      # TEAM_* features
+    allowed_features: dict[str, float]
+    own_features: dict[str, float]
 
 
 class FeatureStore:
@@ -79,6 +85,8 @@ class FeatureStore:
         """
         self._team_state_cache: dict[int, TeamState] = {}
         self._player_feature_rows: pd.DataFrame | None = None
+        self._player_features: dict[int, dict[str, float]] | None = None
+        self._player_meta: dict[int, dict] | None = None
 
     # --- construction ------------------------------------------------------
 
@@ -205,23 +213,47 @@ class FeatureStore:
     def get_player_state(self, player_id: int) -> PlayerState:
         if player_id not in self.player_vectors.index:
             raise UnknownPlayerError(f"player {player_id} is not in the feature store")
-        row = self.player_vectors.loc[player_id]
-        games = int(row["games_count"])
+        if self._player_features is None:
+            self._build_read_views()
+        meta = self._player_meta[player_id]
+        games = int(meta["games_count"])
         if games < config.MIN_INFERENCE_GAMES:
             raise InsufficientHistoryError(player_id, games, config.MIN_INFERENCE_GAMES)
-        if self._player_feature_rows is None:
-            feature_cols = [c for c in self.player_vectors.columns if c not in _PLAYER_META]
-            # float64 copy: parquet loads arrow-backed columns whose per-value
-            # iteration makes the assembly-time .to_dict() several times slower.
-            self._player_feature_rows = self.player_vectors[feature_cols].astype("float64")
         return PlayerState(
             player_id=player_id,
-            team_id=int(row["TEAM_ID"]),
-            position=str(row.get("POSITION", "")),
-            last_game_date=row["last_game_date"],
+            team_id=int(meta["TEAM_ID"]),
+            position=str(meta.get("POSITION", "")),
+            last_game_date=meta["last_game_date"],
             games_count=games,
-            vector=self._player_feature_rows.loc[player_id],
+            features=self._player_features[player_id],
         )
+
+    def player_features(self, player_id: int) -> dict[str, float] | None:
+        """The player's feature dict, or None if unknown. Shared, do not mutate."""
+        if self._player_features is None:
+            self._build_read_views()
+        return self._player_features.get(player_id)
+
+    def player_meta(self, player_id: int) -> dict | None:
+        """The player's non-feature columns, or None if unknown. Shared, do not mutate."""
+        if self._player_meta is None:
+            self._build_read_views()
+        return self._player_meta.get(player_id)
+
+    def _build_read_views(self) -> None:
+        """Materialize every player's row once, as plain dicts.
+
+        A full slate asks for ~500 players; label-indexing two frames per player
+        and converting the Series to a dict each time is where the request time
+        went. One pass over the frame replaces ~1000 row extractions.
+        """
+        feature_cols = [c for c in self.player_vectors.columns if c not in _PLAYER_META]
+        # float64 copy: parquet loads arrow-backed columns whose per-value
+        # iteration makes the conversion several times slower.
+        self._player_feature_rows = self.player_vectors[feature_cols].astype("float64")
+        self._player_features = self._player_feature_rows.to_dict("index")
+        meta_cols = [c for c in _PLAYER_META if c in self.player_vectors.columns]
+        self._player_meta = self.player_vectors[meta_cols].to_dict("index")
 
     def get_team_state(self, team_id: int) -> TeamState:
         cached = self._team_state_cache.get(team_id)
@@ -231,7 +263,13 @@ class FeatureStore:
             raise UnknownTeamError(f"team {team_id} is not in the feature store")
         allowed = self.team_allowed_vectors.loc[team_id].drop(labels=["TEAM_ID"]).astype("float64")
         own = self.team_own_vectors.loc[team_id].drop(labels=["TEAM_ID"]).astype("float64")
-        state = TeamState(team_id=team_id, allowed=allowed, own=own)
+        state = TeamState(
+            team_id=team_id,
+            allowed=allowed,
+            own=own,
+            allowed_features=allowed.to_dict(),
+            own_features=own.to_dict(),
+        )
         self._team_state_cache[team_id] = state
         return state
 

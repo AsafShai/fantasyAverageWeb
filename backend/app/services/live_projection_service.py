@@ -75,7 +75,7 @@ class LiveProjectionService:
         reqs: list[PredictionRequest] = []
         meta: list[tuple[str, int, float]] = []
         today = pd.Timestamp.now().normalize()
-        for _, row in players_df.iterrows():
+        for row in players_df.to_dict('records'):
             name = str(row.get('Name', ''))
             info = games_today.get(str(row.get('Pro Team', '')))
             if info is None:
@@ -166,11 +166,14 @@ def _default_minutes(store: FeatureStore, player_id: int) -> float:
     """Slider default t: plain average of the last 5 appearances (UNGATED —
     sub-MIN_MINUTES cameos count, unlike the model's feature windows). The
     gated window means are only fallbacks for stores without the column."""
-    if player_id not in store.player_vectors.index:
+    meta = store.player_meta(player_id)
+    if meta is None:
         return 0.0
-    row = store.player_vectors.loc[player_id]
+    # MIN_LAST5_ALL rides along with the metadata columns, the fallbacks are
+    # model features, so both dicts have to be consulted in that fixed order.
+    feats = store.player_features(player_id) or {}
     for col in ('MIN_LAST5_ALL', 'MIN_w5_mean', 'MIN_w10_mean', 'MIN_global_mean'):
-        v = row.get(col)
+        v = meta.get(col, feats.get(col))
         if v is not None and np.isfinite(v):
             return float(round(v, 1))
     return 0.0
@@ -206,8 +209,8 @@ def _freshness(store: FeatureStore, player_id: int, game_date) -> tuple[str, str
     — the live store holds no raw rows, so it can't reproduce Simulation's precise
     recent-form window counts. Only called once eligibility (>= MIN_INFERENCE_GAMES)
     is already confirmed by a successful predict."""
-    row = store.player_vectors.loc[player_id]
-    last = row.get('last_game_date')
+    meta = store.player_meta(player_id)
+    last = meta.get('last_game_date') if meta is not None else None
     if last is None or pd.isna(last):
         return 'amber', 'no last-game date on record'
     gap = (pd.Timestamp(game_date) - pd.Timestamp(last)).days
