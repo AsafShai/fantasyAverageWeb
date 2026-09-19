@@ -1,5 +1,6 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
+import { useUrlState, enumParam, intParam, type UrlParam } from '../hooks/useUrlState'
 import {
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
@@ -578,18 +579,52 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
 
 const WINDOW_OPTIONS = [7, 15, 30] as const
 
+const DEFAULT_WINDOW_DAYS = 15
+const DEFAULT_BASELINE_SEASONS = 2
+
+const windowParam: UrlParam<number> = {
+  parse: (raw) => {
+    const parsed = Number(raw)
+    if (!Number.isInteger(parsed)) return undefined
+    return parsed >= MIN_CUSTOM_WINDOW_DAYS && parsed <= MAX_CUSTOM_WINDOW_DAYS ? parsed : undefined
+  },
+  serialize: (value) => String(value),
+  default: DEFAULT_WINDOW_DAYS,
+}
+
+const TRENDS_URL_SCHEMA = {
+  mode: enumParam<TabKey>(TABS.map(([key]) => key), 'minutes'),
+  window: windowParam,
+  baseline: intParam(DEFAULT_BASELINE_SEASONS, [0, 1, 2]),
+}
+
 export default function Trends() {
-  const [tab, setTab] = useState<TabKey>('minutes')
+  const [urlState, setUrlState, urlKeys] = useUrlState(TRENDS_URL_SCHEMA)
+  const urlBaseline = urlKeys.has('baseline') ? urlState.baseline : undefined
+  const urlTabIsForm = TAB_MODE[urlState.mode] === 'form'
+  const [tab, setTab] = useState<TabKey>(urlState.mode)
   const [nameFilter, setNameFilter] = useState('')
   const [position, setPosition] = useState<string | null>(null)
-  const [windowDays, setWindowDays] = usePersistedState<number>('trends.windowDays', 15)
+  const [windowDays, setWindowDays] = usePersistedState<number>(
+    'trends.windowDays',
+    DEFAULT_WINDOW_DAYS,
+    urlKeys.has('window') ? urlState.window : undefined,
+  )
   const [minGames, setMinGames] = usePersistedState('trends.minGames', 3)
   const [ownership, setOwnership] = usePersistedState<Ownership>('trends.ownership', 'all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
   // one remembered choice per tab: "prior 2 seasons" is the right default when
   // judging a season line, "this season" when judging current form
-  const [seasonBaseline, setSeasonBaseline] = usePersistedState('trends.seasonBaseline', 2)
-  const [formBaseline, setFormBaseline] = usePersistedState('trends.formBaseline', 0)
+  const [seasonBaseline, setSeasonBaseline] = usePersistedState(
+    'trends.seasonBaseline',
+    DEFAULT_BASELINE_SEASONS,
+    urlTabIsForm ? undefined : urlBaseline,
+  )
+  const [formBaseline, setFormBaseline] = usePersistedState(
+    'trends.formBaseline',
+    0,
+    urlTabIsForm ? urlBaseline : undefined,
+  )
   const [customStartIso, setCustomStartIso] = useState<string | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
   const [customError, setCustomError] = useState<string | null>(null)
@@ -599,6 +634,14 @@ export default function Trends() {
   const isFormTab = regressionMode === 'form'
   const baselineSeasons = isFormTab ? formBaseline : seasonBaseline
   const setBaselineSeasons = isFormTab ? setFormBaseline : setSeasonBaseline
+
+  useEffect(() => {
+    setUrlState({
+      mode: tab,
+      window: windowDays,
+      baseline: isShooting ? baselineSeasons : DEFAULT_BASELINE_SEASONS,
+    })
+  }, [setUrlState, tab, windowDays, isShooting, baselineSeasons])
 
   const minutesQuery = useGetTrendsMinutesQuery({ windowDays }, { skip: tab !== 'minutes' })
   const usageQuery = useGetTrendsUsageQuery({ windowDays }, { skip: tab !== 'usage' })

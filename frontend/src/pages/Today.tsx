@@ -34,7 +34,7 @@ const Today = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-4 sm:space-y-6 sm:px-6 lg:px-8">
-      <DeadlineCountdown />
+      <DeadlineCountdown deadline={summary?.trade_deadline ?? null} />
 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>

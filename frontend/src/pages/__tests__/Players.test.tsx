@@ -142,6 +142,20 @@ describe('Players page', () => {
     expect(screen.getByRole('columnheader', { name: /^PTS/i })).toBeInTheDocument();
   });
 
+  it('applies filters from the URL query string', async () => {
+    renderWithProviders(<Players />, { route: '/players?pos=C&period=last_7' });
+    await waitFor(() => expect(screen.getByText('Bench Guy')).toBeInTheDocument());
+
+    expect(screen.queryByText('Alpha Star')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/showing 1 players/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('checkbox', { name: /^C$/ })).toBeChecked();
+
+    const playersCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map(([input]) => requestUrl(input as RequestInfo | URL))
+      .find((url) => url.includes('/players'));
+    expect(playersCall).toContain('time_period=last_7');
+  });
+
   it('loading state', () => {
     vi.stubGlobal(
       'fetch',

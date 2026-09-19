@@ -19,16 +19,18 @@ class CacheManager:
     def __init__(self):
         if not self._initialized:
             # Cache each DataFrame with its own timestamp
-            self.totals_cache: Dict = {'etag': None, 'data': None}
+            self.totals_cache: Dict = {'etag': None, 'data': None, 'fetched_at': None}
             self.players_cache: Dict = {'etag': None, 'data': None}
             self.draft_detail_cache: Optional[Dict] = None
             self.players_directory_cache: Optional[Dict[int, str]] = None
+            self.pro_team_schedules_cache: Dict = {'etag': None, 'data': None, 'fetched_at': 0.0}
             self._initialized = True
     
     def invalidate_cache(self):
         """Clear all cached data"""
-        self.totals_cache = {'etag': None, 'data': None}
+        self.totals_cache = {'etag': None, 'data': None, 'fetched_at': None}
         self.players_cache = {'etag': None, 'data': None}
+        self.pro_team_schedules_cache = {'etag': None, 'data': None, 'fetched_at': 0.0}
 
     def get_cache_info(self) -> dict:
         """Get cache status information"""

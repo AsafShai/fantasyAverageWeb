@@ -43,6 +43,8 @@ class LeagueService:
         except Exception as e:
             self.logger.warning(f"Failed to fetch NBA stats: {e}")
 
+        trade_deadline = await self.data_provider.get_trade_deadline()
+
         return self.response_builder.build_league_summary_response(
             total_teams=len(averages_df),
             total_games_played=int(averages_df['GP'].sum()),
@@ -51,6 +53,7 @@ class LeagueService:
             nba_avg_pace=nba_avg_pace,
             nba_game_days_left=nba_game_days_left,
             data_date=self.data_provider.get_data_date(),
+            trade_deadline=trade_deadline,
         )
     
     async def get_heatmap_data(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> HeatmapData:

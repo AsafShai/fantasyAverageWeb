@@ -1,0 +1,144 @@
+{
+  "settings": {
+    "proTeams": [
+      {
+        "abbrev": "NY",
+        "byeWeek": 0,
+        "id": 18,
+        "location": "New York",
+        "name": "Knicks",
+        "proGamesByScoringPeriod": {
+          "1": [
+            {
+              "awayProTeamId": 20,
+              "date": 1792537200000,
+              "homeProTeamId": 18,
+              "id": 401909089,
+              "scoringPeriodId": 1,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ],
+          "4": [
+            {
+              "awayProTeamId": 18,
+              "date": 1792796400000,
+              "homeProTeamId": 2,
+              "id": 401909095,
+              "scoringPeriodId": 4,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ],
+          "6": [
+            {
+              "awayProTeamId": 19,
+              "date": 1792969200000,
+              "homeProTeamId": 18,
+              "id": 401909863,
+              "scoringPeriodId": 6,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ]
+        },
+        "universeId": 1
+      },
+      {
+        "abbrev": "PHI",
+        "byeWeek": 0,
+        "id": 20,
+        "location": "Philadelphia",
+        "name": "76ers",
+        "proGamesByScoringPeriod": {
+          "1": [
+            {
+              "awayProTeamId": 20,
+              "date": 1792537200000,
+              "homeProTeamId": 18,
+              "id": 401909089,
+              "scoringPeriodId": 1,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ],
+          "3": [
+            {
+              "awayProTeamId": 5,
+              "date": 1792710000000,
+              "homeProTeamId": 20,
+              "id": 401909093,
+              "scoringPeriodId": 3,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ],
+          "5": [
+            {
+              "awayProTeamId": 15,
+              "date": 1792884600000,
+              "homeProTeamId": 20,
+              "id": 401909855,
+              "scoringPeriodId": 5,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ]
+        },
+        "universeId": 1
+      },
+      {
+        "abbrev": "BOS",
+        "byeWeek": 0,
+        "id": 2,
+        "location": "Boston",
+        "name": "Celtics",
+        "proGamesByScoringPeriod": {
+          "1": [
+            {
+              "awayProTeamId": 2,
+              "date": 1792522800000,
+              "homeProTeamId": 8,
+              "id": 401909088,
+              "scoringPeriodId": 1,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ],
+          "4": [
+            {
+              "awayProTeamId": 18,
+              "date": 1792796400000,
+              "homeProTeamId": 2,
+              "id": 401909095,
+              "scoringPeriodId": 4,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ],
+          "7": [
+            {
+              "awayProTeamId": 4,
+              "date": 1793057400000,
+              "homeProTeamId": 2,
+              "id": 401909870,
+              "scoringPeriodId": 7,
+              "startTimeTBD": false,
+              "statsOfficial": false,
+              "validForLocking": true
+            }
+          ]
+        },
+        "universeId": 1
+      }
+    ]
+  }
+}

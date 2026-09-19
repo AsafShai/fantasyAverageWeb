@@ -1,6 +1,7 @@
 import pandas as pd
 import logging
-from typing import Dict
+from datetime import datetime, timezone
+from typing import Dict, Optional
 from app.utils.constants import (
     ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP,
     RANKING_CATEGORIES, RATIO_CATEGORIES
@@ -102,6 +103,20 @@ class DataTransformer:
         except Exception as e:
             self.logger.warning(f"Error resolving reverse categories from ESPN settings, using none: {e}")
             return set()
+
+    def resolve_trade_deadline(self, espn_data: Dict) -> Optional[datetime]:
+        """Determine the league's trade deadline from ESPN's
+        settings.tradeSettings.deadlineDate (epoch milliseconds, present when
+        the standings request includes the mSettings view). Returns None
+        when the key is missing or unparseable."""
+        try:
+            deadline_ms = espn_data.get('settings', {}).get('tradeSettings', {}).get('deadlineDate')
+            if not deadline_ms:
+                return None
+            return datetime.fromtimestamp(deadline_ms / 1000, tz=timezone.utc)
+        except Exception as e:
+            self.logger.warning(f"Error resolving trade deadline from ESPN settings: {e}")
+            return None
 
     def parse_slot_usage(self, espn_data: Dict) -> Dict[int, Dict[str, int]]:
         """Parse slot usage from mMatchupScore data. Returns {team_id: {slot_name: games_used}}"""

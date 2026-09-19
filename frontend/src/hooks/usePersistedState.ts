@@ -22,13 +22,17 @@ function writeStorage<T>(key: string, value: T): void {
 /**
  * Like useState, but the value is read from localStorage on mount and
  * written back on every change. Falls back to defaultValue when storage
- * is unavailable or corrupted.
+ * is unavailable or corrupted. An initialOverride (e.g. a value carried in
+ * the URL) takes precedence over what storage holds.
  */
 export function usePersistedState<T>(
   key: string,
-  defaultValue: T
+  defaultValue: T,
+  initialOverride?: T
 ): [T, Dispatch<SetStateAction<T>>] {
-  const [value, setValue] = useState<T>(() => readStorage(key, defaultValue));
+  const [value, setValue] = useState<T>(() =>
+    initialOverride === undefined ? readStorage(key, defaultValue) : initialOverride
+  );
 
   useEffect(() => {
     writeStorage(key, value);

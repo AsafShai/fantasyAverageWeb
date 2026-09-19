@@ -23,37 +23,6 @@ async def get_notifications():
     return injury_service.notification_history
 
 
-@router.post("/test-notification")
-async def test_notification():
-    """Broadcast a fake notification using a real player from the store and persist it."""
-    store = injury_service.injury_store
-    now_il = injury_service.get_utc_now_str()
-    if store:
-        key = next(iter(store))
-        record = store[key]
-        statuses = ["Out", "Questionable", "Doubtful", "Probable", "Available"]
-        new_status = next((s for s in statuses if s != record.status), "Out")
-        notif = InjuryNotification(
-            type="status_change",
-            player=record.player,
-            team=record.team,
-            old_status=record.status,
-            new_status=new_status,
-            timestamp=now_il,
-        )
-        store[key] = record.model_copy(update={"status": new_status, "last_update": now_il})
-    else:
-        notif = InjuryNotification(
-            type="added",
-            player="Test Player",
-            team="Test Team",
-            new_status="Out",
-            timestamp=now_il,
-        )
-    await injury_service.broadcast_notifications([notif])
-    return {"ok": True, "notification": notif}
-
-
 @router.get("/status")
 async def get_injury_status():
     return {"last_report_time": injury_service.last_report_time}

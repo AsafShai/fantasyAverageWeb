@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Union
 from app.models import (
     ShotChartStats, AverageStats, TeamAverageStats, RankingStats,
     TeamDetail, LeagueRankings, LeagueSummary, HeatmapData,
@@ -115,7 +115,8 @@ class ResponseBuilder:
                                     league_averages: AverageStats,
                                     nba_avg_pace: Optional[float] = None,
                                     nba_game_days_left: Optional[int] = None,
-                                    data_date=None) -> LeagueSummary:
+                                    data_date=None,
+                                    trade_deadline=None) -> LeagueSummary:
         """Build LeagueSummary response from calculated data"""
         return LeagueSummary(
             total_teams=total_teams,
@@ -127,6 +128,7 @@ class ResponseBuilder:
             last_updated=datetime.now(),
             data_date=data_date,
             season_start=settings.season_start,
+            trade_deadline=trade_deadline,
         )
     
     def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],
@@ -175,7 +177,7 @@ class ResponseBuilder:
             data_date=data_date,
         )
     
-    def _player_id_from_row(self, row: pd.Series) -> Optional[int]:
+    def _player_id_from_row(self, row: Union[pd.Series, Mapping[str, Any]]) -> Optional[int]:
         raw = row.get('player_id')
         if raw is None or (isinstance(raw, float) and pd.isna(raw)):
             return None
@@ -185,7 +187,7 @@ class ResponseBuilder:
             return None
         return value if value > 0 else None
 
-    def _build_player_stats(self, row: pd.Series, categories: Optional[List[str]] = None) -> PlayerStats:
+    def _build_player_stats(self, row: Union[pd.Series, Mapping[str, Any]], categories: Optional[List[str]] = None) -> PlayerStats:
         """Create PlayerStats from a player row, with the generic `stats` dict
         populated for the league's actual scoring categories (e.g. TO) on top
         of the fixed default fields. categories defaults to RANKING_CATEGORIES."""
@@ -210,8 +212,10 @@ class ResponseBuilder:
 
     def build_players_list(self, team_players: pd.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
         """Build list of Player objects from players DataFrame. categories defaults to RANKING_CATEGORIES."""
+        columns = list(team_players.columns)
         players = []
-        for _, row in team_players.iterrows():
+        for values in team_players.itertuples(index=False, name=None):
+            row = dict(zip(columns, values))
             players.append(Player(
                 player_name=str(row['Name']),
                 pro_team=str(row['Pro Team']),
@@ -326,8 +330,10 @@ class ResponseBuilder:
 
     def build_all_players_response(self, players_df: pd.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
         """Build list of all players from players DataFrame. categories defaults to RANKING_CATEGORIES."""
+        columns = list(players_df.columns)
         players = []
-        for _, row in players_df.iterrows():
+        for values in players_df.itertuples(index=False, name=None):
+            row = dict(zip(columns, values))
             players.append(Player(
                 player_name=str(row['Name']),
                 pro_team=str(row['Pro Team']),

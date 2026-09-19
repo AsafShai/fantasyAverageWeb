@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
+import ErrorBoundary from './components/ErrorBoundary'
 import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE, FF_TODAY_HUB } from './config/featureFlags'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -39,46 +40,48 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <GlobalLoadingBar />
-      <Suspense fallback={<LoadingSpinner />}>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={FF_TODAY_HUB ? <Today /> : <Dashboard />} />
-            <Route path="rankings" element={<Rankings />} />
-            {FF_NAV_REORG ? (
-              <Route path="shots" element={<Navigate to="/analytics" replace />} />
-            ) : (
-              <Route path="shots" element={<Shots />} />
-            )}
-            <Route path="teams" element={<Teams />} />
-            <Route path="team/:teamId" element={<TeamDetail />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="estimator" element={<Estimator />} />
-            <Route path="trade" element={<Trade />} />
-            <Route path="players" element={<Players />} />
-            <Route path="injuries" element={<Injuries />} />
-            <Route path="nba-teams" element={<NbaTeams />} />
-            {FF_SCHEDULE && <Route path="schedule" element={<Schedule />} />}
-            <Route path="player/:playerId" element={<PlayerProfile />} />
-            {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}
-            {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
-            {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
-            {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
-            {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
-            {FF_DRAFT_PAGES && <Route path="draft/rankings-adp" element={<AdpPage />} />}
-            {FF_DRAFT_PAGES && <Route path="draft/adp" element={<Navigate to="/draft/rankings-adp" replace />} />}
-            {FF_DRAFT_PAGES && <Route path="draft/board" element={<DraftBoardPage />} />}
-            {FF_DRAFT_PAGES && <Route path="draft/rankings" element={<PreDraftRankingsPage />} />}
-            {FF_DRAFT_PAGES && <Route path="draft/mock" element={<MockDraftPage />} />}
-            {FF_TRENDS && <Route path="trends" element={<Trends />} />}
-            {FF_MINIGAMES && <Route path="minigames" element={<Minigames />} />}
-            {FF_MINIGAMES && <Route path="minigames/hangman" element={<HangmanGame />} />}
-            {FF_MINIGAMES && <Route path="minigames/who-he-play-for" element={<WhoHePlayForGame />} />}
-            {FF_MINIGAMES && <Route path="minigames/who-am-i" element={<WhoAmIGame />} />}
-            {FF_MINIGAMES && <Route path="minigames/now-you-see-me" element={<NowYouSeeMeGame />} />}
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={FF_TODAY_HUB ? <Today /> : <Dashboard />} />
+              <Route path="rankings" element={<Rankings />} />
+              {FF_NAV_REORG ? (
+                <Route path="shots" element={<Navigate to="/analytics" replace />} />
+              ) : (
+                <Route path="shots" element={<Shots />} />
+              )}
+              <Route path="teams" element={<Teams />} />
+              <Route path="team/:teamId" element={<TeamDetail />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="estimator" element={<Estimator />} />
+              <Route path="trade" element={<Trade />} />
+              <Route path="players" element={<Players />} />
+              <Route path="injuries" element={<Injuries />} />
+              <Route path="nba-teams" element={<NbaTeams />} />
+              {FF_SCHEDULE && <Route path="schedule" element={<Schedule />} />}
+              <Route path="player/:playerId" element={<PlayerProfile />} />
+              {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}
+              {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
+              {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
+              {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
+              {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
+              {FF_DRAFT_PAGES && <Route path="draft/rankings-adp" element={<AdpPage />} />}
+              {FF_DRAFT_PAGES && <Route path="draft/adp" element={<Navigate to="/draft/rankings-adp" replace />} />}
+              {FF_DRAFT_PAGES && <Route path="draft/board" element={<DraftBoardPage />} />}
+              {FF_DRAFT_PAGES && <Route path="draft/rankings" element={<PreDraftRankingsPage />} />}
+              {FF_DRAFT_PAGES && <Route path="draft/mock" element={<MockDraftPage />} />}
+              {FF_TRENDS && <Route path="trends" element={<Trends />} />}
+              {FF_MINIGAMES && <Route path="minigames" element={<Minigames />} />}
+              {FF_MINIGAMES && <Route path="minigames/hangman" element={<HangmanGame />} />}
+              {FF_MINIGAMES && <Route path="minigames/who-he-play-for" element={<WhoHePlayForGame />} />}
+              {FF_MINIGAMES && <Route path="minigames/who-am-i" element={<WhoAmIGame />} />}
+              {FF_MINIGAMES && <Route path="minigames/now-you-see-me" element={<NowYouSeeMeGame />} />}
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </div>
   )
 }

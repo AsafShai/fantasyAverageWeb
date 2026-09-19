@@ -1,6 +1,17 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import pytest
+
+from app.services.depth_chart_service import DepthChartFetchError, DepthChartService
+
+
+@pytest.fixture(autouse=True)
+def reset_depth_chart_service_singleton():
+    DepthChartService._instance = None
+    DepthChartService._initialized = False
+    yield
+    DepthChartService._instance = None
+    DepthChartService._initialized = False
 
 
 def _depthchart_json():
@@ -32,8 +43,7 @@ def _depthchart_json():
 
 
 @patch("app.routes.nba_teams.get_db_service")
-@patch("app.routes.nba_teams.httpx.AsyncClient")
-def test_list_nba_teams(mock_async_client, mock_get_db, test_client):
+def test_list_nba_teams(mock_get_db, test_client):
     response = test_client.get("/api/nba-teams/")
     assert response.status_code == 200
     data = response.json()
@@ -42,22 +52,12 @@ def test_list_nba_teams(mock_async_client, mock_get_db, test_client):
     assert "team_id" in data[0]
     assert "abbreviation" in data[0]
     assert "team_name" in data[0]
-    mock_async_client.assert_not_called()
 
 
 @patch("app.routes.nba_teams.get_db_service")
-@patch("app.routes.nba_teams.httpx.AsyncClient")
-def test_depthchart_success(mock_async_client, mock_get_db, test_client):
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = _depthchart_json()
-
-    mock_http = MagicMock()
-    mock_http.get = AsyncMock(return_value=mock_resp)
-    mock_cm = MagicMock()
-    mock_cm.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_cm.__aexit__ = AsyncMock(return_value=None)
-    mock_async_client.return_value = mock_cm
+@patch("app.routes.nba_teams._depth_chart_service.get_depth_chart_raw")
+def test_depthchart_success(mock_get_raw, mock_get_db, test_client):
+    mock_get_raw.return_value = _depthchart_json()
 
     mock_db = MagicMock()
     mock_db.load_all_injury_statuses = AsyncMock(return_value=[])
@@ -74,16 +74,9 @@ def test_depthchart_success(mock_async_client, mock_get_db, test_client):
 
 
 @patch("app.routes.nba_teams.get_db_service")
-@patch("app.routes.nba_teams.httpx.AsyncClient")
-def test_depthchart_espn_404(mock_async_client, mock_get_db, test_client):
-    mock_resp = MagicMock()
-    mock_resp.status_code = 404
-    mock_http = MagicMock()
-    mock_http.get = AsyncMock(return_value=mock_resp)
-    mock_cm = MagicMock()
-    mock_cm.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_cm.__aexit__ = AsyncMock(return_value=None)
-    mock_async_client.return_value = mock_cm
+@patch("app.routes.nba_teams._depth_chart_service.get_depth_chart_raw")
+def test_depthchart_espn_404(mock_get_raw, mock_get_db, test_client):
+    mock_get_raw.side_effect = DepthChartFetchError(99, is_network_error=False)
     mock_get_db.return_value = MagicMock(load_all_injury_statuses=AsyncMock(return_value=[]))
 
     response = test_client.get("/api/nba-teams/99/depthchart")
@@ -91,14 +84,9 @@ def test_depthchart_espn_404(mock_async_client, mock_get_db, test_client):
 
 
 @patch("app.routes.nba_teams.get_db_service")
-@patch("app.routes.nba_teams.httpx.AsyncClient")
-def test_depthchart_timeout_502(mock_async_client, mock_get_db, test_client):
-    mock_http = MagicMock()
-    mock_http.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
-    mock_cm = MagicMock()
-    mock_cm.__aenter__ = AsyncMock(return_value=mock_http)
-    mock_cm.__aexit__ = AsyncMock(return_value=None)
-    mock_async_client.return_value = mock_cm
+@patch("app.routes.nba_teams._depth_chart_service.get_depth_chart_raw")
+def test_depthchart_timeout_502(mock_get_raw, mock_get_db, test_client):
+    mock_get_raw.side_effect = DepthChartFetchError(13, is_network_error=True)
     mock_get_db.return_value = MagicMock(load_all_injury_statuses=AsyncMock(return_value=[]))
 
     response = test_client.get("/api/nba-teams/13/depthchart")

@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 
 from app.services.data_transformer import DataTransformer
 
@@ -367,6 +368,19 @@ class TestResolveReverseCategories:
 
     def test_malformed_settings_returns_empty_set(self, transformer):
         assert transformer.resolve_reverse_categories({"settings": "not-a-dict"}) == set()
+
+
+class TestResolveTradeDeadline:
+    def test_real_epoch_resolves_expected_datetime(self, transformer):
+        payload = {"settings": {"tradeSettings": {"deadlineDate": 1805104800000}}}
+        assert transformer.resolve_trade_deadline(payload) == datetime(2027, 3, 15, 10, 0, tzinfo=timezone.utc)
+
+    def test_missing_key_returns_none(self, transformer):
+        assert transformer.resolve_trade_deadline({}) is None
+        assert transformer.resolve_trade_deadline({"settings": {"tradeSettings": {}}}) is None
+
+    def test_malformed_settings_returns_none(self, transformer):
+        assert transformer.resolve_trade_deadline({"settings": "not-a-dict"}) is None
 
 
 class TestStatColumnsToKeep:
