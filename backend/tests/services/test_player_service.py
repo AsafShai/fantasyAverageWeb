@@ -460,3 +460,169 @@ class TestDynamicCategoriesPlayers:
         assert player.stats.stats is not None
         assert player.stats.stats['TO'] == 60.0
         assert player.stats.stats['PTS'] == player.stats.pts
+
+
+class TestWindowedPlayersCache:
+    """Step 1-2 of the response-cache refactor: the preset cache entry holds a
+    fully built, unpaginated list[Player]; pagination slices that list instead
+    of rebuilding Pydantic objects per request."""
+
+    @pytest.fixture
+    def many_players_df(self, sample_window_players_df):
+        df = pd.concat([sample_window_players_df] * 4, ignore_index=True)
+        df['Name'] = [f"Player {i}" for i in range(len(df))]
+        return df
+
+    @staticmethod
+    def _build_side_effect(df, categories=None):
+        return [_sample_player(str(name)) for name in df['Name']]
+
+    @pytest.mark.asyncio
+    async def test_players_built_once_and_reused_within_ttl(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        assert player_service.response_builder.build_all_players_response.call_count == 1
+        assert len(first.players) == len(many_players_df)
+        for a, b in zip(first.players, second.players):
+            assert a is b
+
+    @pytest.mark.asyncio
+    async def test_cache_entry_holds_full_unpaginated_list(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        await player_service.get_all_players(page=1, limit=10, time_period=StatTimePeriod.SEASON)
+
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        assert len(entry['players']) == len(many_players_df)
+
+    @pytest.mark.asyncio
+    async def test_pagination_slices_cached_list(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        full = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        page2 = await player_service.get_all_players(page=2, limit=5, time_period=StatTimePeriod.SEASON)
+
+        assert player_service.response_builder.build_all_players_response.call_count == 1
+        assert [p.player_name for p in page2.players] == [p.player_name for p in full.players[5:10]]
+        for cached, sliced in zip(full.players[5:10], page2.players):
+            assert cached is sliced
+
+    @pytest.mark.asyncio
+    async def test_has_more_on_cached_list(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+        total = len(many_players_df)
+
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        first = await player_service.get_all_players(page=1, limit=5, time_period=StatTimePeriod.SEASON)
+        assert first.total_count == total
+        assert len(first.players) == 5
+        assert first.has_more is True
+
+        last = await player_service.get_all_players(page=3, limit=5, time_period=StatTimePeriod.SEASON)
+        assert len(last.players) == 2
+        assert last.has_more is False
+
+        past_end = await player_service.get_all_players(page=9, limit=5, time_period=StatTimePeriod.SEASON)
+        assert past_end.players == []
+        assert past_end.has_more is False
+        assert past_end.total_count == total
+
+    @pytest.mark.asyncio
+    async def test_expired_entry_rebuilds_players(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+
+        second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        assert player_service.response_builder.build_all_players_response.call_count == 2
+        assert first.players[0] is not second.players[0]
+
+    @pytest.mark.asyncio
+    async def test_custom_range_is_never_cached(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        await player_service.get_all_players(
+            page=1, limit=1200, time_period=StatTimePeriod.CUSTOM,
+            start=date(2026, 1, 1), end=date(2026, 1, 10),
+        )
+        await player_service.get_all_players(
+            page=1, limit=1200, time_period=StatTimePeriod.CUSTOM,
+            start=date(2026, 1, 1), end=date(2026, 1, 10),
+        )
+
+        assert StatTimePeriod.CUSTOM not in player_service_module._windowed_players_cache
+        assert player_service_module.players_etag(StatTimePeriod.CUSTOM, 1, 1200) is None
+        assert player_service.response_builder.build_all_players_response.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_separate_cache_entry_per_preset(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        season = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        last7 = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.LAST_7)
+
+        assert player_service.response_builder.build_all_players_response.call_count == 2
+        assert season.players[0] is not last7.players[0]
+
+
+class TestPlayersEtag:
+    @pytest.mark.asyncio
+    async def test_none_until_cache_is_warm(self, player_service, sample_window_players_df):
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) is None
+
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
+        player_service.response_builder.build_all_players_response.return_value = []
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        etag = player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200)
+        assert etag is not None
+        assert etag.startswith('W/"')
+
+    @pytest.mark.asyncio
+    async def test_stable_across_calls_and_varies_by_key(self, player_service, sample_window_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
+        player_service.response_builder.build_all_players_response.return_value = []
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        etag = player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200)
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) == etag
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 2, 1200) != etag
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 500) != etag
+
+    @pytest.mark.asyncio
+    async def test_none_after_ttl_expiry(self, player_service, sample_window_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
+        player_service.response_builder.build_all_players_response.return_value = []
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) is None
+
+    @pytest.mark.asyncio
+    async def test_changes_when_cache_refills(self, player_service, sample_window_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
+        player_service.response_builder.build_all_players_response.return_value = []
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        before = player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200)
+
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) != before
