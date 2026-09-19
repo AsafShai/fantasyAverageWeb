@@ -19,6 +19,7 @@ import httpx
 
 from app.config import settings
 from app.services.data_provider import get_data_provider
+from app.utils.ssl_context import shared_ssl_context
 from model_stats_inference.espn import client as espn_client
 from model_stats_inference.espn.games import event_game_date, is_countable, season_months
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR, TEAM_ID_TO_NAME, TEAM_IDS
@@ -257,7 +258,7 @@ def _build_payload(season: str, games_by_team: dict[int, list[ScheduledGame]]) -
 
 
 async def _fetch_from_scoreboards(season: str) -> dict[int, list[ScheduledGame]]:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(verify=shared_ssl_context()) as client:
         scoreboards = await asyncio.gather(*(
             espn_client.scoreboard_async(client, month)
             for month in season_months(season)

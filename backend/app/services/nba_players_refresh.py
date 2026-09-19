@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from app.services import nba_player_catalog
+from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,7 @@ async def refresh_nba_players_json(out_path: Path | None = None) -> int:
     Refuses to overwrite the file if ESPN returns fewer than ``MIN_PLAYERS``.
     """
     path = out_path or nba_player_catalog.JSON_PATH
-    async with httpx.AsyncClient(timeout=60.0, headers={"Accept": "application/json"}) as client:
+    async with httpx.AsyncClient(timeout=60.0, headers={"Accept": "application/json"}, verify=shared_ssl_context()) as client:
         teams_data = (await client.get(TEAMS_URL)).raise_for_status().json()
         teams = teams_data.get("sports", [{}])[0].get("leagues", [{}])[0].get("teams", [])
         players: list[dict] = []
