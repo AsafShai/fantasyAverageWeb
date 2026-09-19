@@ -33,6 +33,6 @@ describe('RankMovers team filter', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('No movers for the selected teams.')).toBeInTheDocument();
+    expect(screen.getByText('No movers match the selected filters.')).toBeInTheDocument();
   });
 });

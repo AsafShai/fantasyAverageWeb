@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE, FF_TODAY_HUB } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
 import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
@@ -129,7 +129,7 @@ const Layout = () => {
   }, [darkMode])
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: '📊' },
+    { path: '/', label: FF_TODAY_HUB ? 'Today' : 'Dashboard', icon: '📊' },
     { path: '/teams', label: 'Teams', icon: '👥' },
     { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
     { path: '/shots', label: 'Shots', icon: '🎯' },

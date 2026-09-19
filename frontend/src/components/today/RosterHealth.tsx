@@ -73,7 +73,7 @@ export default function RosterHealth({ slateDate, gamesCount, teams }: RosterHea
   const outTotal = teams.reduce((sum, team) => sum + team.out, 0)
 
   return (
-    <div className="flex flex-col rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+    <div className="flex min-w-0 flex-col rounded-lg bg-white p-4 shadow dark:bg-gray-800">
       <h2 className="pb-2 text-base font-bold text-gray-900 sm:text-lg dark:text-gray-50">Roster health today</h2>
 
       {gamesCount === 0 ? (
@@ -121,7 +121,7 @@ export default function RosterHealth({ slateDate, gamesCount, teams }: RosterHea
                     <button
                       type="button"
                       onClick={() => toggle(column.key)}
-                      className={`inline-flex items-center gap-0.5 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 ${
+                      className={`relative inline-flex items-center gap-0.5 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 ${
                         sortKey === column.key ? 'text-gray-700 dark:text-gray-200' : ''
                       }`}
                     >

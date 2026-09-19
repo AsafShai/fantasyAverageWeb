@@ -189,10 +189,11 @@ class TodayService:
     def build_roster_health(
         players_df, teams_playing: set[str], injuries: dict[str, str]
     ) -> list[TeamRosterHealth]:
-        """Counts over rostered players who have a game tonight, and only those.
-
-        A player whose NBA team is idle is in no column at all, so the five
-        counts sum to the team's players on tonight's slate."""
+        """Every fantasy team gets a row, every night — including a team with
+        nobody on tonight's slate, which rows out at all zeros rather than
+        vanishing. Counts themselves are still only over rostered players who
+        have a game tonight; a player whose NBA team is idle is in no column
+        at all, so the five counts sum to games_tonight."""
         if players_df is None or players_df.empty:
             return []
 
@@ -202,14 +203,16 @@ class TodayService:
             team_id = row.get('team_id')
             if not fantasy_name or team_id is None or int(team_id) <= 0:
                 continue
-            if str(row.get('Pro Team', '')) not in teams_playing:
-                continue
 
             entry = accumulators.setdefault(int(team_id), {
                 'team_name': str(fantasy_name),
                 'available_tonight': 0, 'probable': 0,
                 'questionable': 0, 'doubtful': 0, 'out': 0,
             })
+
+            if str(row.get('Pro Team', '')) not in teams_playing:
+                continue
+
             bucket = injuries.get(normalize_player_name(str(row.get('Name', ''))), AVAILABLE)
             entry['available_tonight' if bucket == AVAILABLE else bucket] += 1
 

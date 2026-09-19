@@ -183,12 +183,29 @@ class TestRosterHealth:
         team = TodayService.build_roster_health(df, {'LAL'}, injuries)[0]
         assert (team.available_tonight, team.out, team.questionable) == (1, 0, 0)
 
-    def test_a_team_with_nobody_playing_tonight_has_no_row(self):
+    def test_a_team_with_nobody_playing_tonight_still_gets_a_row_of_zeros(self):
         df = players_df([
             {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'LeBron James', 'Pro Team': 'LAL'},
             {'team_id': 2, 'fantasy_team_name': 'Beta', 'Name': 'Kyrie Irving', 'Pro Team': 'DAL'},
         ])
-        assert [t.team_name for t in TodayService.build_roster_health(df, {'LAL'}, {})] == ['Alpha']
+        health = {t.team_name: t for t in TodayService.build_roster_health(df, {'LAL'}, {})}
+
+        assert set(health) == {'Alpha', 'Beta'}
+        beta = health['Beta']
+        assert beta.games_tonight == 0
+        assert (beta.available_tonight, beta.probable, beta.questionable, beta.doubtful, beta.out) == (
+            0, 0, 0, 0, 0,
+        )
+
+    def test_every_fantasy_team_gets_exactly_one_row(self):
+        df = players_df([
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'LeBron James', 'Pro Team': 'LAL'},
+            {'team_id': 1, 'fantasy_team_name': 'Alpha', 'Name': 'Austin Reaves', 'Pro Team': 'LAL'},
+            {'team_id': 2, 'fantasy_team_name': 'Beta', 'Name': 'Someone Idle', 'Pro Team': 'DAL'},
+        ])
+        health = TodayService.build_roster_health(df, {'LAL'}, {})
+        assert len(health) == 2
+        assert sorted(t.team_name for t in health) == ['Alpha', 'Beta']
 
     def test_an_unknown_status_lands_in_questionable(self):
         df = players_df([

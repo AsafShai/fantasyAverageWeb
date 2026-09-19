@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-interface TeamFilterDropdownProps {
-  teams: string[]
+interface MultiSelectFilterProps {
+  label: string
+  options: string[]
   selected: string[]
   onChange: (values: string[]) => void
 }
 
-export default function TeamFilterDropdown({ teams, selected, onChange }: TeamFilterDropdownProps) {
+export default function MultiSelectFilter({ label, options, selected, onChange }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 })
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -46,20 +47,20 @@ export default function TeamFilterDropdown({ teams, selected, onChange }: TeamFi
     }
   }, [open])
 
-  const toggle = (team: string) => {
-    if (selected.includes(team)) {
-      onChange(selected.filter(t => t !== team))
+  const toggle = (option: string) => {
+    if (selected.includes(option)) {
+      onChange(selected.filter(o => o !== option))
     } else {
-      onChange([...selected, team])
+      onChange([...selected, option])
     }
   }
 
-  const label =
+  const buttonLabel =
     selected.length === 0
-      ? 'All teams'
+      ? `All ${label}`
       : selected.length === 1
         ? selected[0]
-        : `${selected.length} teams`
+        : `${selected.length} ${label}`
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -75,12 +76,12 @@ export default function TeamFilterDropdown({ teams, selected, onChange }: TeamFi
             : 'border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400'
         }`}
       >
-        <span>{label}</span>
+        <span>{buttonLabel}</span>
         {selected.length > 0 && (
           <span
             role="button"
             tabIndex={0}
-            aria-label="Clear team filter"
+            aria-label={`Clear ${label} filter`}
             className="text-blue-400 hover:text-blue-600"
             onClick={e => {
               e.stopPropagation()
@@ -110,18 +111,18 @@ export default function TeamFilterDropdown({ teams, selected, onChange }: TeamFi
             style={{ position: 'fixed', top: menuPos.top, left: menuPos.left }}
             className="z-50 max-h-60 w-44 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-700"
           >
-            {teams.map(team => (
+            {options.map(option => (
               <label
-                key={team}
+                key={option}
                 className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-blue-50 dark:text-gray-200 dark:hover:bg-gray-600"
               >
                 <input
                   type="checkbox"
-                  checked={selected.includes(team)}
-                  onChange={() => toggle(team)}
+                  checked={selected.includes(option)}
+                  onChange={() => toggle(option)}
                   className="accent-blue-500"
                 />
-                {team}
+                {option}
               </label>
             ))}
           </div>,
