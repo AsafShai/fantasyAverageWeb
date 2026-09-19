@@ -76,7 +76,7 @@ export default function RankMovers({ movers }: RankMoversProps) {
       ) : sorted.length === 0 ? (
         <p className="py-3 text-xs text-gray-500 dark:text-gray-400">No movers match the selected filters.</p>
       ) : (
-        <div className="relative max-h-[60vh] min-h-0 flex-1 md:max-h-none">
+        <div className="relative min-h-[60vh] flex-1 md:min-h-0">
           <div className="absolute inset-0 overflow-x-auto overflow-y-auto">
             <table className="w-full border-collapse">
               <thead>
