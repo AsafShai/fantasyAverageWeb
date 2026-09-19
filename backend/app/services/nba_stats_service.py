@@ -194,12 +194,17 @@ class NBAStatsService:
 
         all_game_dates = [datetime.fromisoformat(d.replace('Z', '+00:00')).date() for d in calendar]
 
-        start_idx = await self._binary_search_first(all_game_dates, min_type=2)
+        # The two probes search the same date list for different thresholds and
+        # share no state, so run them concurrently instead of back-to-back —
+        # each is itself a sequential binary search (~log2(n) ESPN round trips).
+        start_idx, postseason_idx = await asyncio.gather(
+            self._binary_search_first(all_game_dates, min_type=2),
+            self._binary_search_first(all_game_dates, min_type=3),
+        )
         if start_idx is None:
             self.logger.warning(f"Could not determine regular-season start for {season_id}; not filtering preseason")
             start_idx = 0
 
-        postseason_idx = await self._binary_search_first(all_game_dates, min_type=3)
         end_idx = (postseason_idx - 1) if postseason_idx is not None else len(all_game_dates) - 1
 
         return all_game_dates, start_idx, end_idx
