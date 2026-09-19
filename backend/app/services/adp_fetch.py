@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import ssl
 from datetime import datetime, timezone
 from typing import NamedTuple, Optional
 
@@ -46,6 +47,23 @@ _HEADERS = {
     "Accept": "application/json",
 }
 _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+_ssl_context: Optional[ssl.SSLContext] = None
+
+
+def _shared_ssl_context() -> ssl.SSLContext:
+    # Building httpx's default context reloads certifi's CA bundle, which costs ~0.6s on
+    # Windows; every ADP request built two clients and paid it twice.
+    global _ssl_context
+    if _ssl_context is None:
+        _ssl_context = httpx.create_ssl_context()
+    return _ssl_context
+
+
+def _adp_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True, verify=_shared_ssl_context()
+    )
+
 
 class AdpRow(NamedTuple):
     espn_id: Optional[int]
@@ -488,7 +506,7 @@ async def fetch_espn_stat_splits(
 async def fetch_espn_stat_splits_map(
     *, actual_season_id: int, proj_season_id: int
 ) -> tuple[dict[int, dict], dict[int, dict]]:
-    async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
+    async with _adp_client() as client:
         return await fetch_espn_stat_splits(
             client, actual_season_id=actual_season_id, proj_season_id=proj_season_id
         )
@@ -561,7 +579,7 @@ async def fetch_live_adp_payload() -> dict:
     inside its TTL is served from memory/Neon with no request at all. Failed sites with
     no cached payload anywhere are omitted.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
+    async with _adp_client() as client:
         fetchers = {
             "espn": lambda: fetch_espn(client),
             "fantrax": lambda: fetch_fantrax(client),
