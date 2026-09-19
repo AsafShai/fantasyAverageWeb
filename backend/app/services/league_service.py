@@ -22,26 +22,33 @@ class LeagueService:
     
     async def get_league_summary(self) -> LeagueSummary:
         """Get league summary statistics"""
-        averages_df = await self.data_provider.get_averages_df()
-        if averages_df is None:
-            raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
 
-        categories = await self.data_provider.get_ranking_categories()
-        reverse_categories = await self.data_provider.get_reverse_categories()
-        category_leaders = self._calculate_category_leaders(averages_df, categories, reverse_categories)
-        league_averages = self._calculate_league_averages(averages_df, categories)
+        async def _fetch_league_averages():
+            averages_df = await self.data_provider.get_averages_df()
+            if averages_df is None:
+                raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
 
-        nba_avg_pace = None
-        nba_game_days_left = None
+            categories = await self.data_provider.get_ranking_categories()
+            reverse_categories = await self.data_provider.get_reverse_categories()
+            category_leaders = self._calculate_category_leaders(averages_df, categories, reverse_categories)
+            league_averages = self._calculate_league_averages(averages_df, categories)
+            return averages_df, category_leaders, league_averages
 
-        try:
-            nba_service = NBAStatsService()
-            nba_avg_pace, nba_game_days_left = await asyncio.gather(
-                nba_service.get_nba_average_pace(settings.season_id),
-                nba_service.get_nba_game_days_remaining(settings.season_id),
-            )
-        except Exception as e:
-            self.logger.warning(f"Failed to fetch NBA stats: {e}")
+        async def _fetch_nba_stats():
+            try:
+                nba_service = NBAStatsService()
+                return await asyncio.gather(
+                    nba_service.get_nba_average_pace(settings.season_id),
+                    nba_service.get_nba_game_days_remaining(settings.season_id),
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to fetch NBA stats: {e}")
+                return None, None
+
+        # The ESPN league fetch and the NBA-wide stats fetch are independent —
+        # overlap them instead of paying both round trips serially.
+        (averages_df, category_leaders, league_averages), (nba_avg_pace, nba_game_days_left) = \
+            await asyncio.gather(_fetch_league_averages(), _fetch_nba_stats())
 
         trade_deadline = await self.data_provider.get_trade_deadline()
 
