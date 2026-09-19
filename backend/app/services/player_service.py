@@ -88,14 +88,31 @@ def espn_season_string(season_id: int) -> str:
     return f"{season_id - 1}-{str(season_id)[-2:]}"
 
 
-async def build_windowed_players_df(
+async def compute_windowed_agg(
     time_period: StatTimePeriod,
-    espn_players_df: pd.DataFrame,
     db_service: DBService,
     start: Optional[date] = None,
     end: Optional[date] = None,
 ) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
-    """Overlay fs_player_games-aggregated stats onto an ESPN players DataFrame.
+    """DB-only half of build_windowed_players_df: resolves the date window and
+    aggregates fs_player_games over it. Independent of the ESPN players
+    DataFrame, so callers that fetch ESPN data too can run this concurrently
+    with that fetch instead of waiting on it first."""
+    season = espn_season_string(settings.season_id)
+    anchor_date = await get_season_anchor_date(season, db_service)
+    resolved_start, resolved_end = StatTimePeriod.resolve_window(
+        time_period, start, end, settings.season_start, today=anchor_date
+    )
+    return await db_service.aggregate_player_games(resolved_start, resolved_end, season)
+
+
+def merge_windowed_players_df(
+    time_period: StatTimePeriod,
+    espn_players_df: pd.DataFrame,
+    agg_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Overlay fs_player_games-aggregated stats (from compute_windowed_agg) onto
+    an ESPN players DataFrame.
 
     For preset periods, a player is "known" if they're on a current NBA roster
     per ESPN (`Pro Team != 'FA'`), independent of whether they've played at
@@ -111,15 +128,6 @@ async def build_windowed_players_df(
     fall back to anyway, so every player is simply zeroed to their window
     totals (0 if they have no rows), always has_data=True.
     """
-    season = espn_season_string(settings.season_id)
-    anchor_date = await get_season_anchor_date(season, db_service)
-    resolved_start, resolved_end = StatTimePeriod.resolve_window(
-        time_period, start, end, settings.season_start, today=anchor_date
-    )
-    agg_df, actual_start, actual_end = await db_service.aggregate_player_games(
-        resolved_start, resolved_end, season
-    )
-
     merged = espn_players_df.copy()
     is_custom = time_period == StatTimePeriod.CUSTOM
     merged['_join_key'] = merged['Name'].map(resolve_join_key)
@@ -145,7 +153,7 @@ async def build_windowed_players_df(
 
     # Only custom ranges force-zero known-but-unwindowed players — they have
     # no ESPN split to fall back to. Presets leave the ESPN value in place
-    # (see the comment above build_windowed_players_df's docstring).
+    # (see the comment above this function's docstring).
     if is_custom:
         zero_matched = ~windowed
         if zero_matched.any():
@@ -163,6 +171,21 @@ async def build_windowed_players_df(
     merged['GP'] = merged['GP'].astype(int)
     drop_cols = ['_join_key'] + list(_DB_STAT_COLS.values())
     merged = merged.drop(columns=[c for c in drop_cols if c in merged.columns])
+    return merged
+
+
+async def build_windowed_players_df(
+    time_period: StatTimePeriod,
+    espn_players_df: pd.DataFrame,
+    db_service: DBService,
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
+    """compute_windowed_agg + merge_windowed_players_df run back-to-back.
+    Callers that can fetch espn_players_df concurrently with the DB
+    aggregation should call the two halves separately instead."""
+    agg_df, actual_start, actual_end = await compute_windowed_agg(time_period, db_service, start, end)
+    merged = merge_windowed_players_df(time_period, espn_players_df, agg_df)
     return merged, actual_start, actual_end
 
 

@@ -5,7 +5,7 @@ from typing import List, Optional
 from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
 from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.services.data_provider import DataProvider
-from app.services.player_service import build_windowed_players_df
+from app.services.player_service import compute_windowed_agg, merge_windowed_players_df
 from app.builders.response_builder import ResponseBuilder
 from app.utils.utils import is_team_exists
 from app.config import settings
@@ -46,6 +46,13 @@ class TeamService:
         if not is_team_exists(team_id, totals_df):
             raise ResourceNotFoundError(f"Team with ID {team_id} not found")
 
+        # The DB aggregation behind the windowed stats doesn't depend on the
+        # ESPN players fetch below it, so start it now and let it run
+        # alongside that fetch instead of waiting for it to finish first.
+        agg_task = asyncio.ensure_future(
+            compute_windowed_agg(time_period, self.data_provider.db_service, start, end)
+        )
+
         categories = await self.data_provider.get_ranking_categories()
 
         players_list = None
@@ -53,18 +60,25 @@ class TeamService:
         actual_start = None
         actual_end = None
         try:
-            players_df, slot_usage_map = await asyncio.gather(
-                self.data_provider.get_players_df(stat_split_id),
-                self.data_provider.get_slot_usage()
-            )
-            if players_df is not None:
-                players_df, actual_start, actual_end = await build_windowed_players_df(
-                    time_period, players_df, self.data_provider.db_service, start, end
+            try:
+                players_df, slot_usage_map = await asyncio.gather(
+                    self.data_provider.get_players_df(stat_split_id),
+                    self.data_provider.get_slot_usage()
                 )
-                team_players_df = self._filter_team_players(players_df, team_id)
-                players_list = self.response_builder.build_players_list(team_players_df, categories)
-        except Exception as e:
-            self.logger.warning(f"Player data unavailable for team {team_id}: {e}")
+                if players_df is not None:
+                    agg_df, actual_start, actual_end = await agg_task
+                    players_df = merge_windowed_players_df(time_period, players_df, agg_df)
+                    team_players_df = self._filter_team_players(players_df, team_id)
+                    players_list = self.response_builder.build_players_list(team_players_df, categories)
+            except Exception as e:
+                self.logger.warning(f"Player data unavailable for team {team_id}: {e}")
+        finally:
+            if not agg_task.done():
+                agg_task.cancel()
+            try:
+                await agg_task
+            except (Exception, asyncio.CancelledError):
+                pass
 
         espn_url = f"https://fantasy.espn.com/basketball/team?leagueId={settings.league_id}&teamId={team_id}"
         team_slot_usage = slot_usage_map.get(team_id, {})
