@@ -27,13 +27,15 @@ from app.routes.adp import router as adp_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
-from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
+from app.services import schedule_service
 from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
 from app.services import nba_players_scheduler
+from app.services import health_service
+from app.utils.timing_middleware import add_timing_middleware
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
 # Configure logging
@@ -46,7 +48,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
+limiter = Limiter(key_func=get_remote_address)
+
+async def derive_season_start():
+    """First regular-season game date: one fantasy request, falling back to the
+    ~16-call scoreboard binary search."""
+    derived_start = await schedule_service.get_season_start_date()
+    if derived_start is not None:
+        logger.info(f"Derived regular-season start from ESPN pro-team schedules: {derived_start}")
+        return derived_start
+    derived_start = await NBAStatsService().get_regular_season_start_date(settings.season_id)
+    if derived_start is not None:
+        logger.info(f"Derived regular-season start from NBA schedule: {derived_start}")
+    return derived_start
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,9 +69,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Fantasy League Dashboard API")
     try:
-        derived_start = await NBAStatsService().get_regular_season_start_date(settings.season_id)
+        derived_start = await derive_season_start()
         if derived_start is not None:
-            logger.info(f"Derived regular-season start from NBA schedule: {derived_start} (was {settings.season_start})")
+            logger.info(f"Regular-season start: {derived_start} (was {settings.season_start})")
             settings.season_start = derived_start
         else:
             logger.warning(f"Could not derive regular-season start; keeping configured SEASON_START={settings.season_start}")
@@ -125,6 +140,8 @@ app.add_middleware(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+add_timing_middleware(app)
+
 app.include_router(rankings_router, prefix="/api", tags=["Rankings"])
 app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
 app.include_router(league_router, prefix="/api/league", tags=["League"])
@@ -151,16 +168,12 @@ async def root(request: Request):
 
 @app.get("/health")
 @limiter.limit("60/minute")
-async def health_check(request: Request):
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "Fantasy League Dashboard API"
-    }
+async def health_check(request: Request, verbose: int = 0):
+    return await health_service.collect(verbose=bool(verbose))
 
 load_dotenv()
 
 if __name__ == "__main__":
     import uvicorn
     logger.info(f"Starting Fantasy League Dashboard API on port {settings.port}")
-    uvicorn.run(app, host="0.0.0.0", port=settings.port)
+    uvicorn.run(app, host="0.0.0.0", port=settings.port, proxy_headers=True, forwarded_allow_ips="*")

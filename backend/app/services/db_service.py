@@ -1453,6 +1453,20 @@ class DBService:
             logger.error(f"Failed to fetch model nightly run for {game_date}: {e}")
             return None
 
+    async def get_latest_model_nightly_run(self) -> Optional[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT * FROM model_nightly_runs ORDER BY game_date DESC LIMIT 1"
+                )
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Failed to fetch latest model nightly run: {e}")
+            return None
+
     async def upsert_model_nightly_run(
         self, game_date: date, status: str, num_games: int, num_rows: int
     ) -> bool:

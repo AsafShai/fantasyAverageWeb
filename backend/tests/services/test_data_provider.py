@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
 
+import app.services.data_provider as data_provider_module
 from app.services.data_provider import DataProvider
 
 pytestmark = pytest.mark.real_dataprovider
@@ -488,3 +489,90 @@ class TestExtraRankPayloads:
             from app.services.data_provider import DataProvider
             DataProvider._instance = None
             DataProvider._initialized = False
+
+
+def _pro_team_schedules_payload():
+    return {"settings": {"proTeams": [{"id": 18, "abbrev": "NY", "proGamesByScoringPeriod": {}}]}}
+
+
+@pytest.fixture
+def pro_schedules_provider(provider):
+    provider.cache_manager.pro_team_schedules_cache = {"etag": None, "data": None, "fetched_at": 0.0}
+    return provider
+
+
+@pytest.mark.asyncio
+async def test_get_pro_team_schedules_caches_payload_and_etag(pro_schedules_provider):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "pts-1"}
+    mock_resp.json.return_value = _pro_team_schedules_payload()
+    pro_schedules_provider._client.get = AsyncMock(return_value=mock_resp)
+
+    first = await pro_schedules_provider.get_pro_team_schedules()
+    second = await pro_schedules_provider.get_pro_team_schedules()
+
+    assert first == _pro_team_schedules_payload()
+    assert second is first
+    assert pro_schedules_provider._client.get.await_count == 1
+    assert pro_schedules_provider.cache_manager.pro_team_schedules_cache["etag"] == "pts-1"
+    url = pro_schedules_provider._client.get.await_args.args[0]
+    assert url.endswith("?view=proTeamSchedules_wl")
+
+
+@pytest.mark.asyncio
+async def test_get_pro_team_schedules_refetches_after_ttl(pro_schedules_provider, monkeypatch):
+    clock = 1000.0
+    monkeypatch.setattr(data_provider_module.time, "monotonic", lambda: clock)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "pts-1"}
+    mock_resp.json.return_value = _pro_team_schedules_payload()
+    pro_schedules_provider._client.get = AsyncMock(return_value=mock_resp)
+
+    await pro_schedules_provider.get_pro_team_schedules()
+    clock += data_provider_module.PRO_TEAM_SCHEDULES_TTL_SECONDS + 1
+    await pro_schedules_provider.get_pro_team_schedules()
+
+    assert pro_schedules_provider._client.get.await_count == 2
+    assert pro_schedules_provider._client.get.await_args.kwargs["headers"]["If-None-Match"] == "pts-1"
+
+
+@pytest.mark.asyncio
+async def test_get_pro_team_schedules_304_keeps_cached_payload(pro_schedules_provider, monkeypatch):
+    clock = 1000.0
+    monkeypatch.setattr(data_provider_module.time, "monotonic", lambda: clock)
+    cached = _pro_team_schedules_payload()
+    pro_schedules_provider.cache_manager.pro_team_schedules_cache = {
+        "etag": "pts-1", "data": cached, "fetched_at": clock,
+    }
+    clock += data_provider_module.PRO_TEAM_SCHEDULES_TTL_SECONDS + 1
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 304
+    pro_schedules_provider._client.get = AsyncMock(return_value=mock_resp)
+
+    assert await pro_schedules_provider.get_pro_team_schedules() is cached
+
+
+@pytest.mark.asyncio
+async def test_get_pro_team_schedules_serves_stale_payload_on_failure(pro_schedules_provider, monkeypatch):
+    clock = 1000.0
+    monkeypatch.setattr(data_provider_module.time, "monotonic", lambda: clock)
+    cached = _pro_team_schedules_payload()
+    pro_schedules_provider.cache_manager.pro_team_schedules_cache = {
+        "etag": "pts-1", "data": cached, "fetched_at": clock,
+    }
+    clock += data_provider_module.PRO_TEAM_SCHEDULES_TTL_SECONDS + 1
+    pro_schedules_provider._client.get = AsyncMock(side_effect=httpx.RequestError("boom"))
+
+    assert await pro_schedules_provider.get_pro_team_schedules() is cached
+
+
+@pytest.mark.asyncio
+async def test_get_pro_team_schedules_raises_without_any_cache(pro_schedules_provider):
+    pro_schedules_provider._client.get = AsyncMock(side_effect=httpx.RequestError("boom"))
+
+    with pytest.raises(DataSourceError):
+        await pro_schedules_provider.get_pro_team_schedules()
