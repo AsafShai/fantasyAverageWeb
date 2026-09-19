@@ -115,7 +115,8 @@ class ResponseBuilder:
                                     league_averages: AverageStats,
                                     nba_avg_pace: Optional[float] = None,
                                     nba_game_days_left: Optional[int] = None,
-                                    data_date=None) -> LeagueSummary:
+                                    data_date=None,
+                                    trade_deadline=None) -> LeagueSummary:
         """Build LeagueSummary response from calculated data"""
         return LeagueSummary(
             total_teams=total_teams,
@@ -127,6 +128,7 @@ class ResponseBuilder:
             last_updated=datetime.now(),
             data_date=data_date,
             season_start=settings.season_start,
+            trade_deadline=trade_deadline,
         )
     
     def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],

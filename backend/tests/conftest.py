@@ -143,6 +143,9 @@ class MockDataProvider:
     async def get_reverse_categories(self):
         return set()
 
+    async def get_trade_deadline(self):
+        return None
+
     async def get_slot_usage(self):
         return {}
 
