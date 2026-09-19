@@ -11,6 +11,7 @@ import pdfplumber
 
 from app.models.injury_models import InjuryRecord, InjuryNotification
 from app.services.db_service import get_db_service
+from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def compute_next_trigger() -> datetime:
 async def fetch_pdf_bytes(url: str) -> bytes | None:
     """Fetch PDF bytes. Returns None if unavailable."""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=shared_ssl_context()) as client:
             response = await client.get(url, follow_redirects=True)
             if response.status_code == 200:
                 return response.content

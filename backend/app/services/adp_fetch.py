@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import ssl
 from datetime import datetime, timezone
 from typing import NamedTuple, Optional
 
@@ -23,6 +22,7 @@ import httpx
 from app.config import settings
 from app.services import adp_cache
 from app.services.player_service import espn_season_string
+from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -47,21 +47,11 @@ _HEADERS = {
     "Accept": "application/json",
 }
 _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
-_ssl_context: Optional[ssl.SSLContext] = None
-
-
-def _shared_ssl_context() -> ssl.SSLContext:
-    # Building httpx's default context reloads certifi's CA bundle, which costs ~0.6s on
-    # Windows; every ADP request built two clients and paid it twice.
-    global _ssl_context
-    if _ssl_context is None:
-        _ssl_context = httpx.create_ssl_context()
-    return _ssl_context
 
 
 def _adp_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
-        timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True, verify=_shared_ssl_context()
+        timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True, verify=shared_ssl_context()
     )
 
 

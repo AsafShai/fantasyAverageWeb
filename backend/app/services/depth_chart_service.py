@@ -6,6 +6,7 @@ import httpx
 
 from app.utils.constants import PRO_TEAM_MAP
 from app.utils.name_matching import normalize_player_name
+from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class DepthChartService:
 
     def __init__(self) -> None:
         if not DepthChartService._initialized:
-            self._client = httpx.AsyncClient(timeout=15.0)
+            self._client = httpx.AsyncClient(timeout=15.0, verify=shared_ssl_context())
             self._cache: dict[int, tuple[float, dict]] = {}
             DepthChartService._initialized = True
 
