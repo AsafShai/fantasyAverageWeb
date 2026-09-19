@@ -83,3 +83,35 @@ class DraftPick(BaseModel):
 
 class DraftReport(BaseModel):
     picks: List[DraftPick]
+
+class RankMover(BaseModel):
+    team_id: int
+    team_name: str
+    category: str
+    delta: float
+
+
+class TeamRosterHealth(BaseModel):
+    """Counts over the team's rostered players who have a game tonight; the
+    five add up to exactly games_tonight."""
+    team_id: int
+    team_name: str
+    games_tonight: int
+    available_tonight: int
+    probable: int
+    questionable: int
+    doubtful: int
+    out: int
+
+
+class NightlyRun(BaseModel):
+    game_date: date
+    rows: int
+
+
+class TodayHub(BaseModel):
+    slate_date: Optional[date] = None
+    games_count: int = 0
+    movers: List[RankMover] = []
+    roster_health: List[TeamRosterHealth] = []
+    last_nightly: Optional[NightlyRun] = None

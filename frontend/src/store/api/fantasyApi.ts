@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, TodayHub } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
@@ -41,6 +41,11 @@ export const fantasyApi = createApi({
     //   query: (category) => `/rankings/category/${category}`,
     //   providesTags: ['Rankings'],
     // }),
+    getTodayHub: builder.query<TodayHub, void>({
+      query: () => '/league/today',
+      providesTags: ['League'],
+      keepUnusedDataFor: 300,
+    }),
     getLeagueShots: builder.query<LeagueShotsData, void>({
       query: () => '/league/shots',
       providesTags: ['Shots'],
@@ -233,6 +238,7 @@ export const {
   useGetLeagueSummaryQuery,
   useGetHeatmapDataQuery,
   // useGetCategoryRankingsQuery,
+  useGetTodayHubQuery,
   useGetLeagueShotsQuery,
   useGetTeamsListQuery,
   useGetTeamPlayersQuery,

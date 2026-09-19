@@ -4,9 +4,10 @@ import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE } from './config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE, FF_TODAY_HUB } from './config/featureFlags'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Today = lazy(() => import('./pages/Today'))
 const Rankings = lazy(() => import('./pages/Rankings'))
 const Shots = lazy(() => import('./pages/Shots'))
 const Teams = lazy(() => import('./pages/Teams'))
@@ -43,7 +44,7 @@ function App() {
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={FF_TODAY_HUB ? <Today /> : <Dashboard />} />
               <Route path="rankings" element={<Rankings />} />
               {FF_NAV_REORG ? (
                 <Route path="shots" element={<Navigate to="/analytics" replace />} />

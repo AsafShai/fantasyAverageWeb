@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.models import LeagueSummary, LeagueShotsData, DraftReport
+from app.models import LeagueSummary, LeagueShotsData, DraftReport, TodayHub
 from app.services.league_service import LeagueService
 from app.services.draft_report_service import DraftReportService
+from app.services.today_service import TodayService
 from app.exceptions import ResourceNotFoundError, DataSourceError
 from typing import Annotated
 import logging
@@ -11,6 +12,18 @@ logger = logging.getLogger(__name__)
 
 LeagueServiceDep = Annotated[LeagueService, Depends(LeagueService)]
 DraftReportServiceDep = Annotated[DraftReportService, Depends(DraftReportService)]
+
+# One instance, so the composed-response cache and the matchup service's own
+# schedule cache survive across requests.
+_today_service = TodayService()
+
+
+@router.get("/today", response_model=TodayHub)
+async def get_today_hub() -> TodayHub:
+    """Dashboard hub: rank movers vs yesterday, roster health, tonight's slate.
+
+    Never 503s — every part of the hub is fail-open inside the service."""
+    return await _today_service.get_today_hub()
 
 
 @router.get("/summary", response_model=LeagueSummary)

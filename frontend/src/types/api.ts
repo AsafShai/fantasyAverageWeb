@@ -706,3 +706,34 @@ export interface GameLogResponse {
   baseline_seasons: number;
   games: GameLogEntry[];
 }
+
+export interface RankMover {
+  team_id: number;
+  team_name: string;
+  category: string;
+  delta: number;
+}
+
+export interface TeamRosterHealth {
+  team_id: number;
+  team_name: string;
+  games_tonight: number;
+  available_tonight: number;
+  probable: number;
+  questionable: number;
+  doubtful: number;
+  out: number;
+}
+
+export interface NightlyRun {
+  game_date: string;
+  rows: number;
+}
+
+export interface TodayHub {
+  slate_date: string | null;
+  games_count: number;
+  movers: RankMover[];
+  roster_health: TeamRosterHealth[];
+  last_nightly: NightlyRun | null;
+}

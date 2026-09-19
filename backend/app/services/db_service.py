@@ -410,6 +410,43 @@ class DBService:
             logger.error(f"Failed to fetch rankings over time from {table}: {e}")
             return []
 
+    async def get_latest_two_periods_rankings(
+        self, league_id: int, season_id: int
+    ) -> list[dict]:
+        """Rows for the two highest scoring periods that actually exist — the
+        pair the Today hub diffs. Picks the top two present rather than
+        (max, max-1) so a gap in the ledger still yields a comparable pair."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
+                rows = await conn.fetch(
+                    f"""
+                    WITH periods AS (
+                        SELECT DISTINCT scoring_period_id
+                        FROM team_rankings_averages
+                        WHERE league_id = $1 AND season_id = $2
+                        ORDER BY scoring_period_id DESC
+                        LIMIT 2
+                    )
+                    SELECT r.scoring_period_id, r.team_id, r.team_name,
+                           r.rk_fg_pct, r.rk_ft_pct, r.rk_three_pm, r.rk_reb,
+                           r.rk_ast, r.rk_stl, r.rk_blk, r.rk_pts, r.rk_total
+                           {', r.ranks' if dynamic else ''}
+                    FROM team_rankings_averages r
+                    JOIN periods p ON p.scoring_period_id = r.scoring_period_id
+                    WHERE r.league_id = $1 AND r.season_id = $2
+                    ORDER BY r.scoring_period_id, r.team_id
+                    """,
+                    league_id, season_id,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch latest two periods of rankings: {e}")
+            return []
+
     @staticmethod
     def _rankings_row_to_point(row: dict) -> dict:
         """Fold the JSONB extras into a generic `ranks` mapping alongside the
