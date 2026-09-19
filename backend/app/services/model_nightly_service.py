@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 CATCHUP_DAYS = 7
+_INVALIDATING_STATUSES = {"processed", "store_already_ingested"}
 
 _EVAL_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
 
@@ -195,6 +196,8 @@ class ModelNightlyService:
             if status not in ("processed", "no_games", "already_processed", "store_already_ingested"):
                 logger.warning(f"Model nightly catch-up stopped at {d}: {status}")
                 break
+        if missing == "vectors_refreshed" or _INVALIDATING_STATUSES.intersection(statuses.values()):
+            await self._prewarm_inference_store()
         return statuses
 
     async def run_for_date(self, game_date: date, force: bool = False) -> str:
@@ -414,6 +417,22 @@ class ModelNightlyService:
                 return self._inference_store
             self._inference_store = await self._load_inference_store()
             return self._inference_store
+
+    async def _prewarm_inference_store(self) -> None:
+        """Reload the store right after the nightly invalidates it, so the first
+        user request of the day doesn't pay the cold-load cost. Runs in the same
+        background flow as the scheduler (already off the request path); a
+        failure here leaves ``_inference_store`` at None (get_inference_store's
+        lock guarantees no half-loaded store is ever observed), same as if
+        prewarming didn't exist — the next request just lazy-loads it.
+        """
+        try:
+            await self.get_inference_store(refresh=True)
+        except Exception as e:
+            logger.warning(
+                f"Inference store prewarm failed, will lazy-load on next request: "
+                f"{type(e).__name__}: {e}"
+            )
 
     async def _load_inference_store(self) -> Optional[FeatureStore]:
         pv, tav, tov = await self._db.load_feature_vectors()
