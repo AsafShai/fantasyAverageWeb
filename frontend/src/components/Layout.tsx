@@ -555,6 +555,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
       label: 'League',
       icon: '👥',
       items: [
+        ...(FF_TODAY_HUB ? [{ path: '/', label: 'Today', icon: '📊' }] : []),
         { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
         { path: '/teams', label: 'Teams', icon: '👥' },
         ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
