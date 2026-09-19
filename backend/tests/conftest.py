@@ -146,7 +146,10 @@ class MockDataProvider:
     async def get_trade_deadline(self):
         return None
 
-    async def get_slot_usage(self):
+    def cached_totals_raw(self):
+        return None
+
+    async def get_slot_usage(self, raw=None):
         return {}
 
     async def get_draft_detail_raw(self):

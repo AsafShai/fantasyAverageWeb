@@ -337,10 +337,19 @@ class DataProvider:
             self.logger.error(f"Error fetching players directory from ESPN API: {e}")
             raise DataSourceError("Error fetching players directory from ESPN API")
 
-    async def get_slot_usage(self) -> Dict[int, Dict[str, int]]:
-        """Get games used per roster slot for all teams, parsed from cached mMatchupScore data"""
-        await self.get_totals_df()
-        raw = self.cache_manager.totals_cache.get('raw')
+    def cached_totals_raw(self) -> Optional[Dict]:
+        """The raw totals payload already held for this season, or None."""
+        return self.cache_manager.totals_cache.get('raw')
+
+    async def get_slot_usage(self, raw: Optional[Dict] = None) -> Dict[int, Dict[str, int]]:
+        """Get games used per roster slot for all teams, parsed from cached mMatchupScore data.
+
+        Callers that already fetched totals earlier in the same request can pass
+        that raw payload to skip a redundant ESPN round trip; omit it (or pass
+        None) to revalidate totals first, same as before."""
+        if raw is None:
+            await self.get_totals_df()
+            raw = self.cache_manager.totals_cache.get('raw')
         if not raw:
             return {}
         return self.data_transformer.parse_slot_usage(raw)
