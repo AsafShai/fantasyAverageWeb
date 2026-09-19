@@ -17,12 +17,15 @@ export function createTestStore() {
 
 export function renderWithProviders(
   ui: ReactElement,
-  options: { store?: ReturnType<typeof createTestStore> } & Omit<RenderOptions, 'wrapper'> = {},
+  options: { store?: ReturnType<typeof createTestStore>; route?: string } & Omit<
+    RenderOptions,
+    'wrapper'
+  > = {},
 ) {
-  const { store = createTestStore(), ...renderOptions } = options;
+  const { store = createTestStore(), route = '/', ...renderOptions } = options;
   function Wrapper({ children }: { children: ReactNode }) {
     return (
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>
         <Provider store={store}>{children}</Provider>
       </MemoryRouter>
     );
