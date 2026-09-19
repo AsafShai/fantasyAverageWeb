@@ -4,6 +4,8 @@ from typing import Optional
 from datetime import datetime, timedelta
 import logging
 
+from app.utils.ssl_context import shared_ssl_context
+
 _CACHE_TTL = timedelta(minutes=30)
 
 
@@ -27,7 +29,8 @@ class NBAStatsService:
         self.logger = logging.getLogger(__name__)
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(30.0, connect=10.0),
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            verify=shared_ssl_context()
         )
         self._pace_cache: dict = {'season_id': None, 'value': None, 'ts': None}
         self._days_left_cache: dict = {'season_id': None, 'value': None, 'ts': None}

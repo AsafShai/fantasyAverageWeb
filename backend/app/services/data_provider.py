@@ -14,6 +14,7 @@ from app.exceptions import DataSourceError
 from app.utils.constants import RANKING_CATEGORIES
 from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
+from app.utils.ssl_context import shared_ssl_context
 
 PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
 
@@ -42,7 +43,8 @@ class DataProvider:
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
-                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+                verify=shared_ssl_context()
             )
             DataProvider._initialized = True
             if not settings.season_id or not settings.league_id:
