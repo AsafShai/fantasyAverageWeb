@@ -61,9 +61,13 @@ class TeamService:
         actual_end = None
         try:
             try:
+                # get_all_dataframes() above already fetched totals for this
+                # request, so hand that raw payload to get_slot_usage instead
+                # of letting it re-fetch the same data itself.
+                cached_raw = self.data_provider.cached_totals_raw()
                 players_df, slot_usage_map = await asyncio.gather(
                     self.data_provider.get_players_df(stat_split_id),
-                    self.data_provider.get_slot_usage()
+                    self.data_provider.get_slot_usage(raw=cached_raw)
                 )
                 if players_df is not None:
                     agg_df, actual_start, actual_end = await agg_task
