@@ -138,7 +138,7 @@ async def get_matchups_today(
         projections = {}
 
     results: list[PlayerMatchupResponse] = []
-    for _, row in players_df.iterrows():
+    for row in players_df.to_dict('records'):
         pro_team: str = str(row.get('Pro Team', ''))
         game = games_today.get(pro_team)
         if game is None:

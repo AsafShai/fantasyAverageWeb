@@ -75,7 +75,7 @@ class LiveProjectionService:
         reqs: list[PredictionRequest] = []
         meta: list[tuple[str, int, float]] = []
         today = pd.Timestamp.now().normalize()
-        for _, row in players_df.iterrows():
+        for row in players_df.to_dict('records'):
             name = str(row.get('Name', ''))
             info = games_today.get(str(row.get('Pro Team', '')))
             if info is None:
