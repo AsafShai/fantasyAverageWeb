@@ -88,13 +88,16 @@ async def get_matchups_today(
         description='YYYYMMDD — must be a date the slate picker offers (upcoming or stored)',
     )
 ) -> list[PlayerMatchupResponse]:
-    if date is not None and not await _is_known_slate_date(date):
-        raise HTTPException(status_code=404, detail=f'Unknown slate date: {date}')
-
+    # Cache first: only a date that already passed validation can be a key
+    # here, so a hit never needs to revalidate — which otherwise costs a DB
+    # round trip on the most common request of all.
     cache_key = date or 'today'
     hit = _response_cache.get(cache_key)
     if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:
         return hit[1]
+
+    if date is not None and not await _is_known_slate_date(date):
+        raise HTTPException(status_code=404, detail=f'Unknown slate date: {date}')
     # Independent of one another: two ESPN reads and two DB reads, so they
     # overlap rather than queue. return_exceptions keeps each failure's
     # original handling — a slate/defense failure yields an empty response,
