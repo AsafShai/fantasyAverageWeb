@@ -228,6 +228,18 @@ class FeatureStore:
             features=self._player_features[player_id],
         )
 
+    def player_features(self, player_id: int) -> dict[str, float] | None:
+        """The player's feature dict, or None if unknown. Shared, do not mutate."""
+        if self._player_features is None:
+            self._build_read_views()
+        return self._player_features.get(player_id)
+
+    def player_meta(self, player_id: int) -> dict | None:
+        """The player's non-feature columns, or None if unknown. Shared, do not mutate."""
+        if self._player_meta is None:
+            self._build_read_views()
+        return self._player_meta.get(player_id)
+
     def _build_read_views(self) -> None:
         """Materialize every player's row once, as plain dicts.
 
