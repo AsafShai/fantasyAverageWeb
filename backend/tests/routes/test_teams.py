@@ -5,8 +5,17 @@ from app.models import Team, TeamDetail, TeamPlayers
 from app.config import settings
 from unittest.mock import patch
 from fastapi import HTTPException
+import pytest
+from app.routes import teams as teams_route
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _clear_team_detail_cache():
+    teams_route.clear_team_detail_cache()
+    yield
+    teams_route.clear_team_detail_cache()
 
 
 def test_get_teams_list():
@@ -154,3 +163,43 @@ def test_get_team_detail_custom_end_in_future():
     response = client.get(f"/api/teams/1?time_period=custom&start={start}&end={end}")
     assert response.status_code == 422
     assert "future" in response.json()["detail"]
+
+def test_team_detail_preset_served_from_cache_within_ttl():
+    first = client.get("/api/teams/1?time_period=last_7")
+    assert first.status_code == 200
+    with patch.object(teams_route.TeamService, "get_team_detail") as never_called:
+        second = client.get("/api/teams/1?time_period=last_7")
+    assert second.status_code == 200
+    assert second.json() == first.json()
+    never_called.assert_not_called()
+
+
+def test_team_detail_cache_keyed_by_team_and_period():
+    client.get("/api/teams/1?time_period=last_7")
+    assert set(teams_route._response_cache) == {(1, "last_7")}
+    client.get("/api/teams/1?time_period=last_30")
+    client.get("/api/teams/3?time_period=last_7")
+    assert set(teams_route._response_cache) == {(1, "last_7"), (1, "last_30"), (3, "last_7")}
+
+
+def test_team_detail_custom_range_is_not_cached():
+    start = settings.season_start
+    end = min(start + timedelta(days=7), date.today() - timedelta(days=1))
+    response = client.get(f"/api/teams/1?time_period=custom&start={start}&end={end}")
+    assert response.status_code in (200, 422)
+    assert teams_route._response_cache == {}
+
+
+def test_team_detail_cache_expires_after_ttl():
+    client.get("/api/teams/1?time_period=last_7")
+    stamp, payload = teams_route._response_cache[(1, "last_7")]
+    teams_route._response_cache[(1, "last_7")] = (stamp - teams_route._RESPONSE_CACHE_TTL_S - 1, payload)
+    with patch.object(teams_route.TeamService, "get_team_detail", wraps=teams_route.TeamService().get_team_detail) as refetched:
+        client.get("/api/teams/1?time_period=last_7")
+    refetched.assert_called_once()
+
+
+def test_team_detail_404_is_not_cached():
+    response = client.get("/api/teams/9999")
+    assert response.status_code == 404
+    assert teams_route._response_cache == {}
