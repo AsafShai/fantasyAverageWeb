@@ -1008,28 +1008,23 @@ class DBService:
         time-range player stats feature. Returns (df, actual_start, actual_end)
         where the actual dates are the real game_date coverage found in the
         window (None if no rows at all). Percentages are SUM(makes)/SUM(attempts),
-        never a mean of per-game ratios; gp is COUNT(*)."""
+        never a mean of per-game ratios; gp is COUNT(*).
+
+        Coverage rides along as window aggregates over the same GROUP BY rather
+        than a second query: Neon round trips cost ~60ms each here, more than the
+        scan itself. MAX(ARRAY[date, name]) picks the latest name the same way an
+        ORDER BY array_agg would, but hash-aggregates instead of forcing a sort
+        of every row in the window (which spills to disk at season length)."""
         pool = await self._get_pool()
         if pool is None:
             return pd.DataFrame(), None, None
         try:
             async with pool.acquire() as conn:
-                coverage = await conn.fetchrow(
-                    """
-                    SELECT MIN(game_date) AS start_date, MAX(game_date) AS end_date
-                    FROM fs_player_games
-                    WHERE season = $1 AND game_date BETWEEN $2 AND $3 AND min > 0
-                    """,
-                    season, start, end,
-                )
-                actual_start = coverage['start_date'] if coverage else None
-                actual_end = coverage['end_date'] if coverage else None
-
                 rows = await conn.fetch(
                     """
                     SELECT
                         player_id,
-                        (array_agg(player_name ORDER BY game_date DESC))[1] AS player_name,
+                        (MAX(ARRAY[game_date::text, player_name]))[2] AS player_name,
                         COUNT(*) AS gp,
                         SUM(pts) AS pts,
                         SUM(reb) AS reb,
@@ -1043,14 +1038,23 @@ class DBService:
                         SUM(fg3m) AS three_pm,
                         SUM(min) AS min,
                         COALESCE(SUM(fgm) / NULLIF(SUM(fga), 0), 0.0) AS fg_pct,
-                        COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct
+                        COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct,
+                        MIN(MIN(game_date)) OVER () AS _actual_start,
+                        MAX(MAX(game_date)) OVER () AS _actual_end
                     FROM fs_player_games
                     WHERE season = $1 AND game_date BETWEEN $2 AND $3 AND min > 0
                     GROUP BY player_id
                     """,
                     season, start, end,
                 )
-                return pd.DataFrame([dict(r) for r in rows]), actual_start, actual_end
+                records = []
+                actual_start = actual_end = None
+                for r in rows:
+                    row = dict(r)
+                    actual_start = row.pop('_actual_start')
+                    actual_end = row.pop('_actual_end')
+                    records.append(row)
+                return pd.DataFrame(records), actual_start, actual_end
         except Exception as e:
             logger.error(f"Failed to aggregate player games for {start}..{end} ({season}): {e}")
             return pd.DataFrame(), None, None
