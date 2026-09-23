@@ -2,6 +2,7 @@ import asyncio
 import logging
 import pandas as pd
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from app.config import settings
 from app.services.db_service import DBService
@@ -12,6 +13,14 @@ from app.services.slot_games_estimator import SlotGamesEstimator
 logger = logging.getLogger(__name__)
 
 _NBA_AVG_PACE_FALLBACK = 65.9
+
+# The scheduler fires on Israel time; "today" for the run-once-a-day cache
+# must use the same calendar, not the server's (UTC) one.
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
+
+
+def israel_today(now: datetime | None = None) -> date:
+    return (now or datetime.now(ISRAEL_TZ)).astimezone(ISRAEL_TZ).date()
 
 
 class EstimatorService:
@@ -28,6 +37,9 @@ class EstimatorService:
             self.db_service = DBService()
             self._cache: dict | None = None
             self._cache_date: date | None = None
+            # _cache_date is only set once the Monte Carlo finishes, so without
+            # this every caller arriving mid-run would start its own run.
+            self._run_lock = asyncio.Lock()
             EstimatorService._initialized = True
 
     async def _get_snapshot_df(self) -> pd.DataFrame:
@@ -67,8 +79,21 @@ class EstimatorService:
             logger.warning(f"Failed to fetch NBA avg pace, using fallback: {e}")
         return _NBA_AVG_PACE_FALLBACK
 
-    async def run_and_store(self) -> bool:
-        today = date.today()
+    async def run_and_store(self, *, wait: bool = False) -> bool:
+        """Run the estimator once per (Israel) day. If a run is already in
+        flight, skip it (returns False) — or with wait=True, wait for that run
+        and return whether it left today's results in place."""
+        if self._run_lock.locked():
+            if not wait:
+                logger.info("Estimator run already in progress, skipping")
+                return False
+            async with self._run_lock:
+                return self._cache_date == israel_today()
+        async with self._run_lock:
+            return await self._run_and_store_locked()
+
+    async def _run_and_store_locked(self) -> bool:
+        today = israel_today()
 
         if self._cache_date == today:
             logger.info("Estimator already ran today (cached), skipping")
@@ -124,7 +149,7 @@ class EstimatorService:
             return False
 
     async def get_latest(self) -> dict | None:
-        today = date.today()
+        today = israel_today()
         if self._cache and self._cache_date == today:
             return self._cache
 
