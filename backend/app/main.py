@@ -40,6 +40,7 @@ from app.services import nba_players_scheduler
 from app.services import health_service
 from app.utils.timing_middleware import add_timing_middleware
 from app.utils.request_context import RequestIdFilter
+from app.utils.http_cache import HttpCacheMiddleware
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
 # Configure logging. [request_id] ties every line logged while serving a
@@ -150,6 +151,9 @@ async def global_exception_handler(request: Request, exc: Exception):
             "message": "An unexpected error occurred. Please try again later."
         }
     )
+
+# Innermost (added first): must see the uncompressed body, see HttpCacheMiddleware.
+app.add_middleware(HttpCacheMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
