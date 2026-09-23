@@ -79,6 +79,27 @@ async def test_get_totals_200_caches_and_transforms(provider):
 
 
 @pytest.mark.asyncio
+async def test_get_totals_200_spawns_db_sync_as_tracked_background_task(provider, monkeypatch):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e1"}
+    mock_resp.json.return_value = _api_teams_payload()
+    provider._client.get = AsyncMock(return_value=mock_resp)
+    provider._sync_db_if_needed = AsyncMock()
+    spawned = []
+
+    def fake_spawn(coro, *, name):
+        spawned.append(name)
+        coro.close()
+
+    monkeypatch.setattr(data_provider_module.background_tasks, "spawn", fake_spawn)
+
+    await provider.get_totals_df()
+
+    assert spawned == ["standings-db-sync"]
+
+
+@pytest.mark.asyncio
 async def test_get_totals_304_returns_cached(provider):
     cached = pd.DataFrame({"team_id": [99]})
     provider.cache_manager.totals_cache = {"etag": "old", "data": cached}
