@@ -40,6 +40,7 @@ async def get_estimator_results():
 
         data = await service.get_latest()
         if data is None:
+            logger.info("No stored estimator results; syncing ESPN and running estimator inline")
             synced = await provider.sync_db_now()
             if synced:
                 ran = await service.run_and_store()
@@ -49,7 +50,6 @@ async def get_estimator_results():
             asyncio.create_task(_sync_and_run(service, provider))
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-        logger.info(f"Estimator endpoint completed in {elapsed_ms:.1f}ms")
 
         if not data or not data.get("rankings"):
             raise HTTPException(
@@ -62,5 +62,5 @@ async def get_estimator_results():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting estimator results: {e}")
+        logger.exception(f"Error getting estimator results: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve estimator results")

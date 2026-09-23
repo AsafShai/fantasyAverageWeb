@@ -46,7 +46,7 @@ async def get_heatmap(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting heatmap data: {e}")
+        logger.exception(f"Error getting heatmap data: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve heatmap data")
 
 @router.get("/over-time", response_model=RankingsOverTimeResponse)
@@ -77,5 +77,5 @@ async def get_over_time(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting over-time data: {e}")
+        logger.exception(f"Error getting over-time data: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve over-time data")

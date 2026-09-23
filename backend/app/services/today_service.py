@@ -79,9 +79,9 @@ class TodayService:
             return _hub_cache['value']
 
         movers, tonight, nightly = await asyncio.gather(
-            self._safe(self._get_movers(), []),
-            self._safe(self._get_tonight(), (None, 0, [])),
-            self._safe(self._get_last_nightly(), None),
+            self._safe('movers', self._get_movers(), []),
+            self._safe('tonight', self._get_tonight(), (None, 0, [])),
+            self._safe('last_nightly', self._get_last_nightly(), None),
         )
         slate_date, games_count, roster_health = tonight
 
@@ -96,11 +96,11 @@ class TodayService:
         return hub
 
     @staticmethod
-    async def _safe(coro, fallback):
+    async def _safe(part, coro, fallback):
         try:
             return await coro
         except Exception as e:
-            logger.warning(f'Today hub part failed, serving empty: {e}')
+            logger.warning(f'Today hub part {part!r} failed, serving empty: {type(e).__name__}: {e}', exc_info=True)
             return fallback
 
     async def _get_movers(self) -> list[RankMover]:

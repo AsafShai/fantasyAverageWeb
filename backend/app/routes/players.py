@@ -62,5 +62,5 @@ async def get_all_players(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting all players: {e}")
+        logger.exception(f"Error getting all players: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve players")

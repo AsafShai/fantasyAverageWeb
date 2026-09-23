@@ -48,5 +48,5 @@ async def get_rankings(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting rankings: {e}")
+        logger.exception(f"Error getting rankings: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve rankings: {e}")

@@ -110,7 +110,8 @@ async def get_matchups_today(
         return_exceptions=True,
     )
     if isinstance(games_today, BaseException) or isinstance(all_def, BaseException):
-        logger.error(f'Matchup data fetch failed: {games_today if isinstance(games_today, BaseException) else all_def}')
+        failed = games_today if isinstance(games_today, BaseException) else all_def
+        logger.error(f'Matchup data fetch failed, serving empty slate (date={date}): {type(failed).__name__}: {failed}', exc_info=failed)
         return []
     for result in (players_df, injury_rows):
         if isinstance(result, BaseException):
@@ -156,7 +157,7 @@ async def get_matchups_today(
     if isinstance(depth_chart_names, BaseException):
         raise depth_chart_names
     if isinstance(projections, BaseException):
-        logger.error(f'Live projection fetch failed: {projections}')
+        logger.error(f'Live projection fetch failed, serving matchups without projections: {type(projections).__name__}: {projections}', exc_info=projections)
         projections = {}
 
     results: list[PlayerMatchupResponse] = []
@@ -221,6 +222,10 @@ async def get_matchups_today(
             injury_status=injury_lookup.get(normalize_player_name(row['Name'])),
         ))
 
+    logger.info(
+        f'Matchups built for slate {resolved_date}: {len(games_today)} teams playing, '
+        f'{len(results)} players, {sum(1 for r in results if r.projection is not None)} with projections'
+    )
     if results:
         _response_cache[cache_key] = (time.monotonic(), results)
     return results

@@ -618,6 +618,8 @@ class TrendService:
         the same correctness without that churn."""
         if self._anchor == anchor:
             return
+        if self._anchor is not None:
+            logger.info(f"Trend anchor date moved {self._anchor} -> {anchor}; clearing trend caches")
         self._season_shooting_cache.clear()
         self._season_usage_cache.clear()
         self._baseline_cache.clear()

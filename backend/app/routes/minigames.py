@@ -46,7 +46,7 @@ async def get_leaderboard(game_slug: str):
         rows = await lb.get_top5(game_slug)
         return {"rows": rows}
     except Exception as e:
-        logger.error("leaderboard get failed: %s", e)
+        logger.exception("leaderboard get failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to load leaderboard")
 
 
@@ -57,7 +57,7 @@ async def qualify_leaderboard(game_slug: str, body: QualifyRequest):
         ok = await lb.check_qualifies(game_slug, body.bestStreak, body.hintsUsed)
         return {"qualifies": ok}
     except Exception as e:
-        logger.error("qualify check failed: %s", e)
+        logger.exception("qualify check failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to check qualification")
 
 
@@ -72,7 +72,7 @@ async def submit_leaderboard(game_slug: str, body: SubmitLeaderboardRequest):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        logger.error("leaderboard submit failed: %s", e)
+        logger.exception("leaderboard submit failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to submit score")
 
 
