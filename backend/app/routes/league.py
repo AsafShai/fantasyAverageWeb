@@ -40,7 +40,7 @@ async def get_league_summary(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting league summary: {e}")
+        logger.exception(f"Error getting league summary: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve league summary") from e
 
 
@@ -58,7 +58,7 @@ async def get_league_shots(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting league shots data: {e}")
+        logger.exception(f"Error getting league shots data: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve league shots data") from e
 
 
@@ -74,7 +74,7 @@ async def get_draft_report(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting draft report: {e}")
+        logger.exception(f"Error getting draft report: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve draft report") from e
 
 

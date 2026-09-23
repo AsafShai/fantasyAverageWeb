@@ -113,11 +113,14 @@ class EstimatorService:
                 "rank_probabilities": rank_prob_df.to_dict(orient='records'),
             }
             self._cache_date = today
-            logger.info("Estimator run complete")
+            logger.info(
+                f"Estimator run complete: {len(df)} snapshot rows in, {len(prediction_df)} predictions, "
+                f"{len(ranking_df)} rankings out (nba_avg_pace={nba_avg_pace:.1f})"
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Estimator run failed: {e}")
+            logger.error(f"Estimator run failed: {type(e).__name__}: {e}", exc_info=True)
             return False
 
     async def get_latest(self) -> dict | None:

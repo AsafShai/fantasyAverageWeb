@@ -75,7 +75,7 @@ class TeamService:
                     team_players_df = self._filter_team_players(players_df, team_id)
                     players_list = self.response_builder.build_players_list(team_players_df, categories)
             except Exception as e:
-                self.logger.warning(f"Player data unavailable for team {team_id}: {e}")
+                self.logger.warning(f"Player data unavailable for team {team_id}, serving team without roster: {type(e).__name__}: {e}")
         finally:
             if not agg_task.done():
                 agg_task.cancel()

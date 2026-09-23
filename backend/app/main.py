@@ -1,12 +1,15 @@
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
@@ -36,15 +39,17 @@ from app.services import model_nightly_scheduler
 from app.services import nba_players_scheduler
 from app.services import health_service
 from app.utils.timing_middleware import add_timing_middleware
+from app.utils.request_context import RequestIdFilter
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
-# Configure logging
+# Configure logging. [request_id] ties every line logged while serving a
+# request to that request's access-log line ("-" outside a request).
+_log_handler = logging.StreamHandler()
+_log_handler.addFilter(RequestIdFilter())
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] %(message)s',
+    handlers=[_log_handler]
 )
 logger = logging.getLogger(__name__)
 
@@ -110,13 +115,29 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# The handlers below stash the error on request.state; the timing middleware
+# appends it to the request's access-log line, so a 4xx/5xx says why without
+# a second log line per error.
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_logging_handler(request: Request, exc: StarletteHTTPException):
+    request.state.error_detail = exc.detail
+    return await http_exception_handler(request, exc)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_logging_handler(request: Request, exc: RequestValidationError):
+    request.state.error_detail = "; ".join(
+        f"{'.'.join(str(p) for p in err.get('loc', ()))}: {err.get('msg')}" for err in exc.errors()
+    )
+    return await request_validation_exception_handler(request, exc)
+
 @app.exception_handler(ResourceNotFoundError)
 async def resource_not_found_handler(request: Request, exc: ResourceNotFoundError):
+    request.state.error_detail = str(exc)
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 @app.exception_handler(DataSourceError)
 async def data_source_error_handler(request: Request, exc: DataSourceError):
-    logger.warning(f"Data source unavailable for {request.url}: {exc}")
+    request.state.error_detail = f"data source unavailable: {exc}"
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 @app.exception_handler(Exception)
@@ -176,4 +197,6 @@ load_dotenv()
 if __name__ == "__main__":
     import uvicorn
     logger.info(f"Starting Fantasy League Dashboard API on port {settings.port}")
-    uvicorn.run(app, host="0.0.0.0", port=settings.port, proxy_headers=True, forwarded_allow_ips="*")
+    # uvicorn's own access log is off: the timing middleware logs every request
+    # with its duration, request id and error detail instead.
+    uvicorn.run(app, host="0.0.0.0", port=settings.port, proxy_headers=True, forwarded_allow_ips="*", access_log=False)

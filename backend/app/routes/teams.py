@@ -42,7 +42,7 @@ async def get_teams_list(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting teams list: {e}")
+        logger.exception(f"Error getting teams list: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve teams list")
 
 
@@ -94,7 +94,7 @@ async def get_team_detail(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting team stats for {team_id}: {e}")
+        logger.exception(f"Error getting team stats for {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team statistics")
 
 
@@ -116,5 +116,5 @@ async def get_team_players(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting players for team ID {team_id}: {e}")
+        logger.exception(f"Error getting players for team ID {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team players")

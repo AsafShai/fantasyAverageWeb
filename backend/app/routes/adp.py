@@ -52,7 +52,7 @@ async def get_adp_index(
             include_fringe=include_fringe,
         )
     except Exception as e:
-        logger.error("Error building ADP index: %s", e)
+        logger.exception("Error building ADP index: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve ADP data")
 
 
@@ -64,7 +64,7 @@ async def refresh_adp(provider: Optional[str] = Query(None)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error("Error refreshing ADP sources: %s", e)
+        logger.exception("Error refreshing ADP sources: %s", e)
         raise HTTPException(status_code=500, detail="Failed to refresh ADP data")
 
 
@@ -106,5 +106,5 @@ async def get_adp(
             include_stats=include_stats,
         )
     except Exception as e:
-        logger.error("Error building ADP response: %s", e)
+        logger.exception("Error building ADP response: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve ADP data")

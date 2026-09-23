@@ -241,6 +241,10 @@ class PlayerService:
             )
             all_players = self.response_builder.build_all_players_response(players_df, categories)
             total_count = len(players_df)
+            logger.info(
+                f"Players list built: time_period={time_period.value}, {total_count} players, "
+                f"window {actual_start}..{actual_end}"
+            )
             if is_preset:
                 _windowed_players_cache[time_period] = {
                     'players': all_players, 'total_count': total_count,
