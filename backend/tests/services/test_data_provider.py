@@ -48,6 +48,9 @@ def provider():
     DataProvider._instance = None
     DataProvider._initialized = False
     p = DataProvider()
+    # CacheManager is a process-wide singleton: without this, a totals TTL
+    # stamp left by an earlier test would serve this one from cache.
+    p.cache_manager.totals_cache.pop('espn_checked_at', None)
     p._client = AsyncMock()
     p.db_service = AsyncMock()
     p.data_transformer = MagicMock()
@@ -597,3 +600,135 @@ async def test_get_pro_team_schedules_raises_without_any_cache(pro_schedules_pro
 
     with pytest.raises(DataSourceError):
         await pro_schedules_provider.get_pro_team_schedules()
+
+
+# --- standings TTL (#4) ---------------------------------------------------
+# Every page load fans out to several endpoints that each call get_totals_df.
+# A short TTL lets those share one ESPN round trip instead of queueing behind
+# _fetch_lock for one request apiece.
+
+def _standings_resp(status=200, etag="e1"):
+    resp = MagicMock()
+    resp.status_code = status
+    resp.headers = {"ETag": etag}
+    resp.json.return_value = _api_teams_payload()
+    return resp
+
+
+@pytest.fixture
+def ttl_provider(provider, monkeypatch):
+    provider.cache_manager.totals_cache = {"etag": None, "data": None, "fetched_at": None}
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(data_provider_module.time, "monotonic", lambda: clock["now"])
+    provider.clock = clock
+    return provider
+
+
+@pytest.mark.asyncio
+async def test_get_totals_within_ttl_reuses_cached_frame(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+
+    first = await ttl_provider.get_totals_df()
+    ttl_provider.clock["now"] += data_provider_module.TOTALS_TTL_SECONDS - 1
+    second = await ttl_provider.get_totals_df()
+
+    assert ttl_provider._client.get.await_count == 1
+    assert second is first
+
+
+@pytest.mark.asyncio
+async def test_get_totals_after_ttl_revalidates_with_etag(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    await ttl_provider.get_totals_df()
+
+    ttl_provider.clock["now"] += data_provider_module.TOTALS_TTL_SECONDS + 1
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
+    await ttl_provider.get_totals_df()
+
+    assert ttl_provider._client.get.await_count == 1
+    assert ttl_provider._client.get.await_args.kwargs["headers"]["If-None-Match"] == "e1"
+
+
+@pytest.mark.asyncio
+async def test_get_totals_304_restarts_ttl(ttl_provider):
+    cached = pd.DataFrame({"team_id": [99]})
+    ttl_provider.cache_manager.totals_cache = {"etag": "old", "data": cached, "fetched_at": None}
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
+
+    await ttl_provider.get_totals_df()
+    ttl_provider.clock["now"] += data_provider_module.TOTALS_TTL_SECONDS - 1
+    df = await ttl_provider.get_totals_df()
+
+    assert ttl_provider._client.get.await_count == 1
+    pd.testing.assert_frame_equal(df, cached)
+
+
+@pytest.mark.asyncio
+async def test_get_totals_concurrent_callers_share_one_request(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+
+    frames = await asyncio.gather(*(ttl_provider.get_totals_df() for _ in range(10)))
+
+    assert ttl_provider._client.get.await_count == 1
+    assert all(f is frames[0] for f in frames)
+
+
+@pytest.mark.asyncio
+async def test_get_totals_espn_failure_does_not_start_ttl(ttl_provider):
+    cached = pd.DataFrame({"team_id": [7]})
+    ttl_provider.cache_manager.totals_cache = {"etag": "e", "data": cached, "fetched_at": None}
+    ttl_provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
+
+    pd.testing.assert_frame_equal(await ttl_provider.get_totals_df(), cached)
+    pd.testing.assert_frame_equal(await ttl_provider.get_totals_df(), cached)
+
+    # ESPN is retried on every call while it's failing, same as before
+    assert ttl_provider._client.get.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_totals_db_fallback_does_not_start_ttl(ttl_provider):
+    ttl_provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
+    ttl_provider.db_service.get_latest_snapshot = AsyncMock(
+        return_value=("2025-01-01", [{"team_id": 1, "team_name": "T", "pts": 1, "date": "2025-01-01"}])
+    )
+    await ttl_provider.get_totals_df()
+
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    await ttl_provider.get_totals_df()
+
+    assert ttl_provider._client.get.await_count == 1
+    assert ttl_provider.cache_manager.totals_cache["data_date"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_totals_expires_after_invalidate_cache(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    await ttl_provider.get_totals_df()
+
+    ttl_provider.cache_manager.invalidate_cache()
+    await ttl_provider.get_totals_df()
+
+    assert ttl_provider._client.get.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_db_now_ignores_totals_ttl(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    ttl_provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=99)
+    await ttl_provider.get_totals_df()
+
+    await ttl_provider.sync_db_now()
+
+    assert ttl_provider._client.get.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_db_now_fresh_fetch_restarts_totals_ttl(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    ttl_provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=99)
+
+    await ttl_provider.sync_db_now()
+    await ttl_provider.get_totals_df()
+
+    assert ttl_provider._client.get.await_count == 1
