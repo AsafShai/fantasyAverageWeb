@@ -15,6 +15,7 @@ from app.utils.constants import RANKING_CATEGORIES
 from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
 from app.utils.ssl_context import shared_ssl_context
+from app.utils import background_tasks
 
 PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
 
@@ -126,7 +127,9 @@ class DataProvider:
                     f"{len(totals_df)} teams, categories={categories}"
                 )
 
-                asyncio.create_task(self._sync_db_if_needed(scoring_period_id, totals_df))
+                background_tasks.spawn(
+                    self._sync_db_if_needed(scoring_period_id, totals_df), name="standings-db-sync"
+                )
 
                 return totals_df
 

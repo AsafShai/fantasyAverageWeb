@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -40,6 +39,7 @@ from app.services import nba_players_scheduler
 from app.services import health_service
 from app.utils.timing_middleware import add_timing_middleware
 from app.utils.request_context import RequestIdFilter
+from app.utils import background_tasks
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
 # Configure logging. [request_id] ties every line logged while serving a
@@ -84,20 +84,21 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to derive regular-season start, keeping configured SEASON_START={settings.season_start}: {type(e).__name__}: {e}")
     await injury_service.initialize()
     if settings.injury_scheduler_enabled:
-        asyncio.create_task(injury_service.start_scheduler())
+        background_tasks.spawn(injury_service.start_scheduler(), name="injury-scheduler")
     else:
         logger.info("Injury scheduler disabled via INJURY_SCHEDULER_ENABLED=false")
-    asyncio.create_task(estimator_scheduler.start_scheduler())
+    background_tasks.spawn(estimator_scheduler.start_scheduler(), name="estimator-scheduler")
     if settings.model_nightly_enabled:
-        asyncio.create_task(model_nightly_scheduler.start_scheduler())
+        background_tasks.spawn(model_nightly_scheduler.start_scheduler(), name="model-nightly-scheduler")
     else:
         logger.info("Model nightly scheduler disabled via MODEL_NIGHTLY_ENABLED=false")
     if settings.nba_players_refresh_enabled:
-        asyncio.create_task(nba_players_scheduler.start_scheduler())
+        background_tasks.spawn(nba_players_scheduler.start_scheduler(), name="nba-players-scheduler")
     else:
         logger.info("NBA players refresh scheduler disabled via NBA_PLAYERS_REFRESH_ENABLED=false")
     yield
     # Shutdown
+    await background_tasks.cancel_all()
     try:
         data_provider = DataProvider()
         await data_provider.close()

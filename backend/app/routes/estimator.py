@@ -1,10 +1,10 @@
-import asyncio
 import logging
 import time
 from fastapi import APIRouter, HTTPException
 from app.models.estimator import EstimatorResults, TeamPrediction, TeamRanking, TeamRankProbability
 from app.services.estimator_service import EstimatorService
 from app.services.data_provider import DataProvider
+from app.utils import background_tasks
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ async def get_estimator_results():
                 if ran:
                     data = await service.get_latest()
         else:
-            asyncio.create_task(_sync_and_run(service, provider))
+            background_tasks.spawn(_sync_and_run(service, provider), name="estimator-refresh")
 
         elapsed_ms = (time.perf_counter() - start) * 1000
 
