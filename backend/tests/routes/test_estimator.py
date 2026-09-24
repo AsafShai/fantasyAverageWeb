@@ -70,3 +70,22 @@ def test_estimator_results_service_error_500(mock_svc_cls, mock_prov_cls, test_c
 
     response = test_client.get("/api/estimator/results")
     assert response.status_code == 500
+
+
+@patch("app.routes.estimator.background_tasks.spawn")
+@patch("app.routes.estimator.DataProvider")
+@patch("app.routes.estimator.EstimatorService")
+def test_estimator_results_cached_refreshes_in_tracked_background_task(
+    mock_svc_cls, mock_prov_cls, mock_spawn, test_client
+):
+    mock_svc = MagicMock()
+    mock_svc.get_latest = AsyncMock(return_value=_full_payload())
+    mock_svc_cls.return_value = mock_svc
+    mock_prov_cls.return_value = MagicMock()
+    mock_spawn.side_effect = lambda coro, *, name: coro.close()
+
+    response = test_client.get("/api/estimator/results")
+
+    assert response.status_code == 200
+    mock_spawn.assert_called_once()
+    assert mock_spawn.call_args.kwargs["name"] == "estimator-refresh"

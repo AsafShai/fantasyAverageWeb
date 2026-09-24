@@ -15,8 +15,14 @@ from app.utils.constants import RANKING_CATEGORIES
 from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
 from app.utils.ssl_context import shared_ssl_context
+from app.utils import background_tasks
 
 PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
+# One page load fans out to several endpoints that all need standings; within
+# this window they share one ESPN round trip instead of queueing behind
+# _fetch_lock for one request apiece. Only a successful ESPN answer (200/304)
+# starts the window, so failures and the DB fallback keep retrying ESPN.
+TOTALS_TTL_SECONDS = 30
 
 
 class DataProvider:
@@ -94,6 +100,14 @@ class DataProvider:
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure."""
         async with self._fetch_lock:
+            cache = self.cache_manager.totals_cache
+            checked_at = cache.get('espn_checked_at')
+            if (
+                cache.get('data') is not None
+                and checked_at is not None
+                and time.monotonic() - checked_at < TOTALS_TTL_SECONDS
+            ):
+                return cache['data']
             try:
                 headers = {}
                 if self.cache_manager.totals_cache['etag']:
@@ -103,6 +117,7 @@ class DataProvider:
 
                 if response.status_code == 304:
                     self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+                    self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
                     return self.cache_manager.totals_cache['data']
 
                 response.raise_for_status()
@@ -121,12 +136,15 @@ class DataProvider:
                 self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
                 self.cache_manager.totals_cache['data_date'] = None
                 self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+                self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
                 self.logger.info(
                     f"ESPN standings refreshed: scoring_period_id={scoring_period_id}, "
                     f"{len(totals_df)} teams, categories={categories}"
                 )
 
-                asyncio.create_task(self._sync_db_if_needed(scoring_period_id, totals_df))
+                background_tasks.spawn(
+                    self._sync_db_if_needed(scoring_period_id, totals_df), name="standings-db-sync"
+                )
 
                 return totals_df
 
@@ -154,6 +172,7 @@ class DataProvider:
                 self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
                 self.cache_manager.totals_cache['data_date'] = None
                 self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+                self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
             except Exception as e:
                 self.logger.error(f"sync_db_now: ESPN fetch failed: {type(e).__name__}: {e}")
                 return False
@@ -179,6 +198,7 @@ class DataProvider:
         self.cache_manager.totals_cache['data_date'] = snap_date
         self.cache_manager.totals_cache['etag'] = None
         self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+        self.cache_manager.totals_cache['espn_checked_at'] = None
         self.logger.warning(f"Serving DB fallback data from {snap_date}")
         return df
 
