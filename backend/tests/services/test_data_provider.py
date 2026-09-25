@@ -164,10 +164,12 @@ async def test_get_players_df_fetch_error_raises(provider):
 async def test_get_players_df_304_returns_cached(provider):
     cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
     provider.cache_manager.players_0 = {"data": cached, "etag": "e1", "timestamp": datetime.now()}
-    # Force the TTL check to be bypassed by expiring the timestamp, so the
-    # 304 branch (not the fresh in-memory hit) is what's under test.
+    # Expire the timestamp past the stale-while-revalidate window, so the
+    # blocking 304 branch (not an in-memory hit) is what's under test.
     from datetime import timedelta
-    provider.cache_manager.players_0["timestamp"] = datetime.now() - timedelta(minutes=10)
+    provider.cache_manager.players_0["timestamp"] = datetime.now() - timedelta(
+        seconds=data_provider_module.PLAYERS_STALE_WINDOW_SECONDS + 60
+    )
 
     mock_resp = MagicMock()
     mock_resp.status_code = 304
@@ -186,7 +188,7 @@ async def test_get_players_df_sends_if_none_match(provider):
     provider.cache_manager.players_0 = {
         "data": cached,
         "etag": "e1",
-        "timestamp": datetime.now() - timedelta(minutes=10),
+        "timestamp": datetime.now() - timedelta(seconds=data_provider_module.PLAYERS_STALE_WINDOW_SECONDS + 60),
     }
 
     mock_resp = MagicMock()
@@ -637,11 +639,11 @@ async def test_get_totals_within_ttl_reuses_cached_frame(ttl_provider):
 
 
 @pytest.mark.asyncio
-async def test_get_totals_after_ttl_revalidates_with_etag(ttl_provider):
+async def test_get_totals_past_stale_window_revalidates_with_etag_before_answering(ttl_provider):
     ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
     await ttl_provider.get_totals_df()
 
-    ttl_provider.clock["now"] += data_provider_module.TOTALS_TTL_SECONDS + 1
+    ttl_provider.clock["now"] += data_provider_module.TOTALS_STALE_WINDOW_SECONDS + 1
     ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
     await ttl_provider.get_totals_df()
 
@@ -732,3 +734,164 @@ async def test_sync_db_now_fresh_fetch_restarts_totals_ttl(ttl_provider):
     await ttl_provider.get_totals_df()
 
     assert ttl_provider._client.get.await_count == 1
+
+
+# --- stale-while-revalidate ------------------------------------------------
+# Past the TTL but inside the stale window, callers get the cached frame at
+# once and ESPN is revalidated in the background for the next caller.
+
+from app.utils import background_tasks
+
+
+async def _drain_background():
+    while background_tasks._tasks:
+        await asyncio.gather(*list(background_tasks._tasks), return_exceptions=True)
+
+
+def _standings_resp_with_frame(provider, frame, etag="e2"):
+    provider.data_transformer.raw_standings_to_totals_df.return_value = frame
+    return _standings_resp(status=200, etag=etag)
+
+
+@pytest.mark.asyncio
+async def test_get_totals_stale_is_served_at_once_and_revalidated_in_background(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    first = await ttl_provider.get_totals_df()
+    await _drain_background()
+
+    ttl_provider.clock["now"] += data_provider_module.TOTALS_TTL_SECONDS + 1
+    fresh = pd.DataFrame({"team_id": [2], "team_name": ["B"], "PTS": [20]})
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp_with_frame(ttl_provider, fresh))
+
+    served = await ttl_provider.get_totals_df()
+    assert served is first
+    assert ttl_provider._client.get.await_count == 0
+
+    await _drain_background()
+    assert ttl_provider._client.get.await_count == 1
+    assert ttl_provider._client.get.await_args.kwargs["headers"]["If-None-Match"] == "e1"
+    assert await ttl_provider.get_totals_df() is fresh
+    assert ttl_provider._client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_totals_stale_concurrent_callers_trigger_one_revalidation(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    first = await ttl_provider.get_totals_df()
+    await _drain_background()
+
+    ttl_provider.clock["now"] += data_provider_module.TOTALS_TTL_SECONDS + 1
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
+    frames = await asyncio.gather(*(ttl_provider.get_totals_df() for _ in range(10)))
+    await _drain_background()
+
+    assert all(f is first for f in frames)
+    assert ttl_provider._client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_totals_background_failure_keeps_cache_and_next_caller_retries(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    first = await ttl_provider.get_totals_df()
+    await _drain_background()
+
+    ttl_provider.clock["now"] += data_provider_module.TOTALS_TTL_SECONDS + 1
+    ttl_provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
+    assert await ttl_provider.get_totals_df() is first
+    await _drain_background()
+    assert await ttl_provider.get_totals_df() is first
+    await _drain_background()
+
+    assert ttl_provider._client.get.await_count == 2
+    assert ttl_provider.cache_manager.totals_cache["data"] is first
+
+
+@pytest.mark.asyncio
+async def test_get_totals_db_fallback_frame_is_never_served_stale(ttl_provider):
+    ttl_provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
+    ttl_provider.db_service.get_latest_snapshot = AsyncMock(
+        return_value=("2025-01-01", [{"team_id": 1, "team_name": "T", "pts": 1, "date": "2025-01-01"}])
+    )
+    await ttl_provider.get_totals_df()
+
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    await ttl_provider.get_totals_df()
+
+    # the ESPN answer was awaited by the caller, not deferred to the background
+    assert ttl_provider._client.get.await_count == 1
+    assert ttl_provider.cache_manager.totals_cache["data_date"] is None
+
+
+def _players_resp(etag="e2"):
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.headers = {"ETag": etag}
+    resp.json.return_value = {"players": []}
+    return resp
+
+
+@pytest.mark.asyncio
+async def test_get_players_df_stale_is_served_at_once_and_revalidated_in_background(provider):
+    from datetime import timedelta
+    cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
+    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.players_0 = {
+        "data": cached,
+        "etag": "e1",
+        "timestamp": datetime.now() - timedelta(seconds=data_provider_module.PLAYERS_TTL_SECONDS + 1),
+    }
+    fresh = pd.DataFrame({"Name": ["Fresh"], "team_id": [1]})
+    provider.data_transformer.raw_all_players_to_df.return_value = fresh
+    provider._client.get = AsyncMock(return_value=_players_resp())
+
+    served = await provider.get_players_df(0)
+    assert served is cached
+    assert provider._client.get.await_count == 0
+
+    await _drain_background()
+    assert provider._client.get.await_count == 1
+    assert provider._client.get.await_args.kwargs["headers"]["If-None-Match"] == "e1"
+    assert await provider.get_players_df(0) is fresh
+    assert provider._client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_players_df_stale_concurrent_callers_trigger_one_revalidation(provider):
+    from datetime import timedelta
+    cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
+    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.players_0 = {
+        "data": cached,
+        "etag": "e1",
+        "timestamp": datetime.now() - timedelta(seconds=data_provider_module.PLAYERS_TTL_SECONDS + 1),
+    }
+
+    async def slow_get(*args, **kwargs):
+        await asyncio.sleep(0.05)
+        return _players_resp()
+
+    provider._client.get = AsyncMock(side_effect=slow_get)
+
+    first = await provider.get_players_df(0)
+    await asyncio.sleep(0)  # background fetch is now in flight
+    rest = await asyncio.gather(*(provider.get_players_df(0) for _ in range(5)))
+    await _drain_background()
+
+    assert first is cached and all(r is cached for r in rest)
+    assert provider._client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_players_df_background_failure_keeps_cached_frame(provider):
+    from datetime import timedelta
+    cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
+    stale_ts = datetime.now() - timedelta(seconds=data_provider_module.PLAYERS_TTL_SECONDS + 1)
+    provider.cache_manager.players_0 = {"data": cached, "etag": "e1", "timestamp": stale_ts}
+    provider._client.get = AsyncMock(side_effect=httpx.ConnectError("x"))
+
+    assert await provider.get_players_df(0) is cached
+    await _drain_background()
+
+    assert provider.cache_manager.players_0["data"] is cached
+    assert provider.cache_manager.players_0["timestamp"] == stale_ts
+    assert provider._players_inflight == {}

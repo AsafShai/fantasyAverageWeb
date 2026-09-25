@@ -3,7 +3,7 @@ import logging
 import time
 import httpx
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional, Tuple
 import pandas as pd
 from app.services.cache_manager import CacheManager
@@ -23,6 +23,14 @@ PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
 # _fetch_lock for one request apiece. Only a successful ESPN answer (200/304)
 # starts the window, so failures and the DB fallback keep retrying ESPN.
 TOTALS_TTL_SECONDS = 30
+# Stale-while-revalidate: past the TTL but within this age, the cached standings
+# are served immediately and ESPN is revalidated in the background, so a page
+# load after a short idle no longer waits on the ESPN round trip. Older than
+# this (or never fetched from ESPN) the caller waits for a fresh answer as before.
+TOTALS_STALE_WINDOW_SECONDS = 10 * 60
+PLAYERS_TTL_SECONDS = 5 * 60
+# Same idea for the ~1s kona_player_info fetch behind players, today hub and matchups.
+PLAYERS_STALE_WINDOW_SECONDS = 30 * 60
 
 
 class DataProvider:
@@ -97,57 +105,29 @@ class DataProvider:
             raise DataSourceError("Error fetching pro team schedules from ESPN API")
 
 
+    def _totals_age(self) -> Optional[float]:
+        """Seconds since ESPN last answered for the cached standings, or None
+        when there is no ESPN-backed frame (never fetched, or DB fallback)."""
+        cache = self.cache_manager.totals_cache
+        checked_at = cache.get('espn_checked_at')
+        if cache.get('data') is None or checked_at is None:
+            return None
+        return time.monotonic() - checked_at
+
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure."""
+        age = self._totals_age()
+        if age is not None and TOTALS_TTL_SECONDS <= age < TOTALS_STALE_WINDOW_SECONDS:
+            if not self._fetch_lock.locked():
+                background_tasks.spawn(self._revalidate_totals(), name="standings-revalidate")
+            return self.cache_manager.totals_cache['data']
+
         async with self._fetch_lock:
-            cache = self.cache_manager.totals_cache
-            checked_at = cache.get('espn_checked_at')
-            if (
-                cache.get('data') is not None
-                and checked_at is not None
-                and time.monotonic() - checked_at < TOTALS_TTL_SECONDS
-            ):
-                return cache['data']
+            age = self._totals_age()
+            if age is not None and age < TOTALS_TTL_SECONDS:
+                return self.cache_manager.totals_cache['data']
             try:
-                headers = {}
-                if self.cache_manager.totals_cache['etag']:
-                    headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
-
-                response = await self._client.get(self.espn_standings_url, headers=headers)
-
-                if response.status_code == 304:
-                    self.cache_manager.totals_cache['fetched_at'] = datetime.now()
-                    self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
-                    return self.cache_manager.totals_cache['data']
-
-                response.raise_for_status()
-                api_data = response.json()
-                # Cache raw payload before the stats transform, which can fail on its
-                # own (e.g. preseason: teams exist but carry no valuesByStat yet) —
-                # get_team_names_df() still needs team identity from this same fetch.
-                self.cache_manager.totals_cache['raw'] = api_data
-
-                categories = self.data_transformer.resolve_ranking_categories(api_data)
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
-
-                scoring_period_id = api_data.get('scoringPeriodId', 0)
-                self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
-                self.cache_manager.totals_cache['data'] = totals_df
-                self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
-                self.cache_manager.totals_cache['data_date'] = None
-                self.cache_manager.totals_cache['fetched_at'] = datetime.now()
-                self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
-                self.logger.info(
-                    f"ESPN standings refreshed: scoring_period_id={scoring_period_id}, "
-                    f"{len(totals_df)} teams, categories={categories}"
-                )
-
-                background_tasks.spawn(
-                    self._sync_db_if_needed(scoring_period_id, totals_df), name="standings-db-sync"
-                )
-
-                return totals_df
-
+                return await self._fetch_totals_locked()
             except Exception as e:
                 self.logger.error(f"ESPN standings fetch failed: {type(e).__name__}: {e}")
                 if self.cache_manager.totals_cache.get('data') is not None:
@@ -155,6 +135,59 @@ class DataProvider:
                     self.logger.warning(f"Serving in-memory standings after ESPN failure (last fetched {fetched_at})")
                     return self.cache_manager.totals_cache['data']
                 return await self._fallback_from_db()
+
+    async def _revalidate_totals(self) -> None:
+        """Background half of the stale-while-revalidate path. A failure keeps
+        the cached frame (and its age), so the next caller retries ESPN."""
+        async with self._fetch_lock:
+            age = self._totals_age()
+            if age is not None and age < TOTALS_TTL_SECONDS:
+                return
+            try:
+                await self._fetch_totals_locked()
+            except Exception as e:
+                self.logger.warning(f"Background ESPN standings revalidation failed: {type(e).__name__}: {e}")
+
+    async def _fetch_totals_locked(self) -> pd.DataFrame:
+        """One ESPN standings round trip (ETag-revalidated). Caller holds _fetch_lock."""
+        headers = {}
+        if self.cache_manager.totals_cache['etag']:
+            headers['If-None-Match'] = self.cache_manager.totals_cache['etag']
+
+        response = await self._client.get(self.espn_standings_url, headers=headers)
+
+        if response.status_code == 304:
+            self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+            self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
+            return self.cache_manager.totals_cache['data']
+
+        response.raise_for_status()
+        api_data = response.json()
+        # Cache raw payload before the stats transform, which can fail on its
+        # own (e.g. preseason: teams exist but carry no valuesByStat yet) —
+        # get_team_names_df() still needs team identity from this same fetch.
+        self.cache_manager.totals_cache['raw'] = api_data
+
+        categories = self.data_transformer.resolve_ranking_categories(api_data)
+        totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
+
+        scoring_period_id = api_data.get('scoringPeriodId', 0)
+        self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
+        self.cache_manager.totals_cache['data'] = totals_df
+        self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
+        self.cache_manager.totals_cache['data_date'] = None
+        self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+        self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
+        self.logger.info(
+            f"ESPN standings refreshed: scoring_period_id={scoring_period_id}, "
+            f"{len(totals_df)} teams, categories={categories}"
+        )
+
+        background_tasks.spawn(
+            self._sync_db_if_needed(scoring_period_id, totals_df), name="standings-db-sync"
+        )
+
+        return totals_df
 
     async def sync_db_now(self) -> bool:
         """Fetch from ESPN and synchronously await the DB sync. Returns True if new data was written."""
@@ -232,8 +265,10 @@ class DataProvider:
 
             cache = getattr(self.cache_manager, cache_key)
 
+            age = None
             if cache.get('data') is not None and cache.get('timestamp'):
-                if datetime.now() - cache['timestamp'] < timedelta(minutes=5):
+                age = (datetime.now() - cache['timestamp']).total_seconds()
+                if age < PLAYERS_TTL_SECONDS:
                     self.logger.debug(f"ESPN players (split={stat_split_type_id}) served from cache")
                     return cache['data']
 
@@ -294,6 +329,16 @@ class DataProvider:
 
                 return players_df
 
+            if age is not None and age < PLAYERS_STALE_WINDOW_SECONDS:
+                # Stale-while-revalidate: answer from the cached frame now and
+                # let one background fetch refresh it for the next caller.
+                if stat_split_type_id not in self._players_inflight:
+                    background_tasks.spawn(
+                        self._revalidate_players(stat_split_type_id, _fetch_and_transform),
+                        name=f"players-revalidate-{stat_split_type_id}",
+                    )
+                return cache['data']
+
             return await self._coalesced(self._players_inflight, stat_split_type_id, _fetch_and_transform)
 
         except httpx.RequestError as e:
@@ -305,6 +350,17 @@ class DataProvider:
         except Exception as e:
             self.logger.error(f"Unexpected error fetching ESPN players data (split={stat_split_type_id}): {type(e).__name__}: {e}", exc_info=True)
             raise DataSourceError("Unexpected error fetching ESPN players data")
+
+    async def _revalidate_players(self, stat_split_type_id: int, fetch) -> None:
+        """Background half of the players stale-while-revalidate path. Shares the
+        in-flight Future with any blocking caller; a failure keeps the cached
+        frame and its timestamp, so the next caller retries ESPN."""
+        try:
+            await self._coalesced(self._players_inflight, stat_split_type_id, fetch)
+        except Exception as e:
+            self.logger.warning(
+                f"Background ESPN players revalidation failed (split={stat_split_type_id}): {type(e).__name__}: {e}"
+            )
 
     @staticmethod
     async def _coalesced(inflight: dict, key, compute):
