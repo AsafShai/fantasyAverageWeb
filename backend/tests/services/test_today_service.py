@@ -341,3 +341,81 @@ class TestFailOpen:
         await service.get_today_hub()
         await service.get_today_hub()
         assert calls['n'] == 1
+
+
+class TestInjuryReportRefreshesCachedHub:
+    """A new injury report recounts the cached hub's roster health at once,
+    without re-fetching the slate or resetting the hub's age."""
+
+    @staticmethod
+    def _service(monkeypatch, store):
+        from unittest.mock import AsyncMock, MagicMock
+        from app.services.nba_matchup_service import GameInfo
+
+        monkeypatch.setattr('app.services.injury_service.injury_store', store)
+        service = TodayService()
+        service.matchup_service = MagicMock(
+            get_games_today=AsyncMock(return_value={'LAL': GameInfo(opponent='BOS', is_home=True)}),
+            get_schedule_date=MagicMock(return_value='2026-11-01'),
+        )
+        service.data_provider = MagicMock(get_players_df=AsyncMock(return_value=players_df([
+            {'Name': 'LeBron James', 'Pro Team': 'LAL', 'team_id': 1, 'fantasy_team_name': 'Alpha'},
+            {'Name': 'Austin Reaves', 'Pro Team': 'LAL', 'team_id': 1, 'fantasy_team_name': 'Alpha'},
+        ])))
+
+        async def movers():
+            return []
+
+        async def nightly():
+            return None
+
+        monkeypatch.setattr(service, '_get_movers', movers)
+        monkeypatch.setattr(service, '_get_last_nightly', nightly)
+        return service
+
+    @pytest.mark.asyncio
+    async def test_report_recounts_cached_roster_health(self, monkeypatch):
+        store = {'LAL|LeBron James': injury('LeBron James', 'Questionable')}
+        service = self._service(monkeypatch, store)
+
+        first = await service.get_today_hub()
+        assert (first.roster_health[0].questionable, first.roster_health[0].out) == (1, 0)
+        cached_at = today_module._hub_cache['ts']
+
+        store['LAL|LeBron James'] = injury('LeBron James', 'Out')
+        store['LAL|Austin Reaves'] = injury('Austin Reaves', 'Doubtful')
+        today_module.refresh_roster_health()
+
+        hub = await service.get_today_hub()
+        row = hub.roster_health[0]
+        assert (row.out, row.doubtful, row.questionable, row.available_tonight) == (1, 1, 0, 0)
+        assert today_module._hub_cache['ts'] == cached_at
+        assert service.matchup_service.get_games_today.await_count == 1
+        assert hub.slate_date == first.slate_date and hub.games_count == first.games_count
+        assert first.roster_health[0].questionable == 1  # already-served hub untouched
+
+    @pytest.mark.asyncio
+    async def test_hub_composed_across_a_report_is_not_cached(self, monkeypatch):
+        import asyncio
+        from unittest.mock import AsyncMock
+        from app.services.nba_matchup_service import GameInfo
+
+        service = self._service(monkeypatch, {})
+        release = asyncio.Event()
+
+        async def slow_games():
+            await release.wait()
+            return {'LAL': GameInfo(opponent='BOS', is_home=True)}
+
+        service.matchup_service.get_games_today = AsyncMock(side_effect=slow_games)
+        build = asyncio.create_task(service.get_today_hub())
+        await asyncio.sleep(0)
+        today_module.refresh_roster_health()  # report lands mid-build
+        release.set()
+        await build
+
+        assert today_module._hub_cache['value'] is None
+
+    def test_refresh_without_a_cached_hub_is_a_no_op(self):
+        today_module.refresh_roster_health()
+        assert today_module._hub_cache['value'] is None

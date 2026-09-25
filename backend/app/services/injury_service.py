@@ -416,6 +416,10 @@ async def _try_update_injury_data() -> bool:
     old_store = dict(injury_store)
     injury_store.clear()
     injury_store.update(new_store)
+    if notifications:
+        # The Dashboard hub counts injuries from this store — recount its cached panel.
+        from app.services.today_service import refresh_roster_health
+        refresh_roster_health()
 
     db_service = get_db_service()
     for notif in notifications:

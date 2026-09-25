@@ -38,11 +38,30 @@ STATUS_BUCKETS = (AVAILABLE, PROBABLE, QUESTIONABLE, DOUBTFUL, OUT)
 _STATUS_ALIASES = {'game time decision': QUESTIONABLE, 'gtd': QUESTIONABLE}
 
 _CACHE_TTL_S = 300
-_hub_cache: dict[str, Any] = {'ts': None, 'value': None}
+# 'inputs' = (players_df, teams playing) the cached roster_health was built from,
+# kept so an injury report can recount just that panel.
+_hub_cache: dict[str, Any] = {'ts': None, 'value': None, 'inputs': None}
+# Bumped on every injury-report change so a hub composed across a report (from
+# the pre-report injury store) is never cached.
+_injury_generation = 0
 
 
 def clear_today_hub_cache() -> None:
-    _hub_cache.update({'ts': None, 'value': None})
+    _hub_cache.update({'ts': None, 'value': None, 'inputs': None})
+
+
+def refresh_roster_health() -> None:
+    """Recount the cached hub's roster health from the current injury store after
+    an injury report changed it. Only roster_health changes and the hub keeps its
+    age; the other panels follow the normal cache rules."""
+    global _injury_generation
+    _injury_generation += 1
+    hub, inputs = _hub_cache.get('value'), _hub_cache.get('inputs')
+    if hub is None or inputs is None:
+        return
+    players_df, teams_playing = inputs
+    health = TodayService.build_roster_health(players_df, teams_playing, TodayService._injury_lookup())
+    _hub_cache['value'] = hub.model_copy(update={'roster_health': health})
 
 
 def classify_status(status: str) -> str:
@@ -69,6 +88,7 @@ class TodayService:
     and a dead injury feed should not hide the rank movers."""
 
     def __init__(self) -> None:
+        self._tonight_inputs = None
         self.db_service = DBService()
         self.data_provider = DataProvider()
         self.matchup_service = NbaMatchupService()
@@ -78,6 +98,8 @@ class TodayService:
         if cached_ts is not None and time.monotonic() - cached_ts < _CACHE_TTL_S:
             return _hub_cache['value']
 
+        injury_generation = _injury_generation
+        self._tonight_inputs = None
         movers, tonight, nightly = await asyncio.gather(
             self._safe('movers', self._get_movers(), []),
             self._safe('tonight', self._get_tonight(), (None, 0, [])),
@@ -92,7 +114,8 @@ class TodayService:
             roster_health=roster_health,
             last_nightly=nightly,
         )
-        _hub_cache.update({'ts': time.monotonic(), 'value': hub})
+        if injury_generation == _injury_generation:
+            _hub_cache.update({'ts': time.monotonic(), 'value': hub, 'inputs': self._tonight_inputs})
         return hub
 
     @staticmethod
@@ -173,7 +196,9 @@ class TodayService:
         resolved = self.matchup_service.get_schedule_date()
         slate_date = date.fromisoformat(resolved) if resolved else None
         injuries = self._injury_lookup()
-        health = self.build_roster_health(players_df, set(games.keys()), injuries)
+        teams_playing = set(games.keys())
+        health = self.build_roster_health(players_df, teams_playing, injuries)
+        self._tonight_inputs = (players_df, teams_playing)
         return slate_date, len(games), health
 
     @staticmethod
