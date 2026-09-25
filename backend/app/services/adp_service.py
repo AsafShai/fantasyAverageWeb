@@ -29,6 +29,7 @@ from app.services.adp_query import (
     to_index_player,
 )
 from app.services.player_service import espn_season_string
+from app.utils import background_tasks
 from app.utils.name_matching import (
     clean_fantasy_scraped_name,
     fantasy_name_keys,
@@ -47,6 +48,11 @@ _METRIC_FIELDS = {
     "rank": ("ranking_blend", "ranking_blend_rank", "ranking_spread"),
 }
 _CACHE_TTL = timedelta(minutes=30)
+# Stale-while-revalidate: once past _CACHE_TTL but younger than this, the cached ADP
+# response / ESPN stat splits are served at once and rebuilt in the background, so the
+# draft pages never wait on the rebuild. ADP itself moves at most daily (the per-provider
+# caches are 24h), so an answer a few minutes past its TTL is still current.
+_STALE_WINDOW = timedelta(hours=6)
 
 _SUFFIX_RE = re.compile(r"\b(jr|sr|ii|iii|iv|v)\.?$", re.IGNORECASE)
 _CATALOG_POS = {
@@ -69,6 +75,10 @@ _espn_stats_cached_at: Optional[datetime] = None
 _espn_stats_lock = asyncio.Lock()
 # Recomputed site-subset blends keyed by the live player-list identity + site params.
 _blend_cache: dict[tuple[int, Optional[str], Optional[str]], list[AdpPlayer]] = {}
+
+
+def _within_stale_window(cached_at: Optional[datetime], now: datetime) -> bool:
+    return cached_at is not None and now - cached_at < _STALE_WINDOW
 
 
 def _cache_fresh(cached_at: Optional[datetime], now: Optional[datetime] = None) -> bool:
@@ -542,14 +552,15 @@ def resolve_adp_seasons() -> tuple[str, int, int]:
     return (espn_season_string(actual_id), actual_id, proj_id)
 
 
-async def load_espn_stat_splits() -> tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]:
+async def load_espn_stat_splits(
+    allow_stale: bool = True,
+) -> tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]:
     """(actual season label, actual per-game stats, projection season label, projections).
 
     Both splits come from a single ESPN request (see fetch_espn_stat_splits) -- there is no
     separate DB read for actuals. Projections stay empty until ESPN publishes them; that
     alone does not block caching the actuals half.
     """
-    global _espn_stats_cache, _espn_stats_cached_at
     actual_label, actual_id, proj_id = resolve_adp_seasons()
     proj_label = espn_season_string(proj_id)
     now = datetime.now(timezone.utc)
@@ -566,10 +577,43 @@ async def load_espn_stat_splits() -> tuple[str, dict[int, LastYearStats], str, d
     if _fresh(cached):
         assert cached is not None
         return cached
+    if (
+        allow_stale
+        and cached is not None
+        and cached[0] == actual_label
+        and cached[2] == proj_label
+        and _within_stale_window(_espn_stats_cached_at, now)
+    ):
+        if not _espn_stats_lock.locked():
+            background_tasks.spawn(_revalidate_espn_stat_splits(), name="adp-stat-splits-revalidate")
+        return cached
+    return await _load_espn_stat_splits_locked()
+
+
+async def _revalidate_espn_stat_splits() -> None:
+    try:
+        await _load_espn_stat_splits_locked()
+    except Exception:
+        logger.exception("Background ESPN stat split refresh failed")
+
+
+async def _load_espn_stat_splits_locked() -> tuple[str, dict[int, LastYearStats], str, dict[int, LastYearStats]]:
+    global _espn_stats_cache, _espn_stats_cached_at
+    actual_label, actual_id, proj_id = resolve_adp_seasons()
+    proj_label = espn_season_string(proj_id)
+
+    def _fresh(entry, now):
+        return (
+            entry is not None
+            and entry[0] == actual_label
+            and entry[2] == proj_label
+            and _cache_fresh(_espn_stats_cached_at, now)
+        )
+
     async with _espn_stats_lock:
         now = datetime.now(timezone.utc)
         cached = _espn_stats_cache
-        if _fresh(cached):
+        if _fresh(cached, now):
             assert cached is not None
             return cached
         try:
@@ -708,12 +752,27 @@ async def get_adp_response() -> AdpResponse:
 
     If a refresh fails after a successful fetch, the last good response is kept.
     """
-    global _cached, _cached_at
     now = datetime.now(timezone.utc)
     cached = _cached
     cached_at = _cached_at
     if cached is not None and cached_at is not None and now - cached_at < _CACHE_TTL:
         return cached
+    if cached is not None and _within_stale_window(cached_at, now):
+        if not _refresh_lock.locked():
+            background_tasks.spawn(_revalidate_adp_response(), name="adp-revalidate")
+        return cached
+    return await _refresh_adp_response()
+
+
+async def _revalidate_adp_response() -> None:
+    try:
+        await _refresh_adp_response()
+    except Exception:
+        logger.exception("Background ADP refresh failed")
+
+
+async def _refresh_adp_response() -> AdpResponse:
+    global _cached, _cached_at
     async with _refresh_lock:
         now = datetime.now(timezone.utc)
         cached = _cached
@@ -721,9 +780,11 @@ async def get_adp_response() -> AdpResponse:
         if cached is not None and cached_at is not None and now - cached_at < _CACHE_TTL:
             return cached
         try:
+            # allow_stale=False: a rebuild must not mark fringe players from stale
+            # splits it would only refresh afterwards.
             payload, stats = await asyncio.gather(
                 fetch_live_adp_payload(),
-                load_espn_stat_splits(),
+                load_espn_stat_splits(allow_stale=False),
             )
             response = build_adp_response(payload)
             _actual_label, actuals, _proj_label, _proj = stats

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -202,10 +203,95 @@ async def test_get_adp_response_keeps_stale_on_refresh_failure():
         first = await get_adp_response()
         import app.services.adp_service as svc
 
-        svc._cached_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        # Past the stale window, so the caller waits on the (failing) rebuild.
+        svc._cached_at = datetime.now(timezone.utc) - svc._STALE_WINDOW - timedelta(minutes=1)
         second = await get_adp_response()
     assert second is first
     assert fetch.await_count == 2
+
+
+async def _drain_background():
+    from app.utils import background_tasks
+
+    while background_tasks._tasks:
+        await asyncio.gather(*list(background_tasks._tasks), return_exceptions=True)
+
+
+def _payload(label="2025-26", adp=1.0):
+    return {
+        "seasonLabel": label,
+        "updatedAt": "2026-08-21T00:00:00Z",
+        "sources": {"espn": "espn-src"},
+        "players": [{"espn_id": 1, "name": "A", "adp": {"espn": adp}}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_adp_response_past_ttl_serves_cached_and_rebuilds_in_background():
+    import app.services.adp_service as svc
+
+    reset_adp_cache()
+    fetch = AsyncMock(side_effect=[_payload(adp=1.0), _payload(adp=2.0)])
+    stats = AsyncMock(return_value=("2024-25", {}, "2025-26", {}))
+    with (
+        patch("app.services.adp_service.fetch_live_adp_payload", fetch),
+        patch("app.services.adp_service.load_espn_stat_splits", stats),
+        patch("app.services.adp_service.nba_player_catalog.list_all_bios", return_value={}),
+    ):
+        first = await get_adp_response()
+        svc._cached_at = datetime.now(timezone.utc) - svc._CACHE_TTL - timedelta(minutes=1)
+
+        served = await get_adp_response()
+        assert served is first
+        assert fetch.await_count == 1
+
+        await _drain_background()
+        assert fetch.await_count == 2
+        rebuilt = await get_adp_response()
+    assert rebuilt is not first
+    assert rebuilt.players[0].espn.adp == 2.0
+    # the rebuild itself never settles for stale stat splits
+    assert stats.await_args.kwargs == {"allow_stale": False}
+
+
+@pytest.mark.asyncio
+async def test_get_adp_response_stale_concurrent_callers_trigger_one_rebuild():
+    import app.services.adp_service as svc
+
+    reset_adp_cache()
+    fetch = AsyncMock(return_value=_payload())
+    with (
+        patch("app.services.adp_service.fetch_live_adp_payload", fetch),
+        patch("app.services.adp_service.load_espn_stat_splits",
+              AsyncMock(return_value=("2024-25", {}, "2025-26", {}))),
+        patch("app.services.adp_service.nba_player_catalog.list_all_bios", return_value={}),
+    ):
+        first = await get_adp_response()
+        svc._cached_at = datetime.now(timezone.utc) - svc._CACHE_TTL - timedelta(minutes=1)
+        served = await asyncio.gather(*(get_adp_response() for _ in range(10)))
+        await _drain_background()
+    assert all(r is first for r in served)
+    assert fetch.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_adp_response_background_failure_keeps_serving_cached():
+    import app.services.adp_service as svc
+
+    reset_adp_cache()
+    fetch = AsyncMock(side_effect=[_payload(), RuntimeError("down")])
+    with (
+        patch("app.services.adp_service.fetch_live_adp_payload", fetch),
+        patch("app.services.adp_service.load_espn_stat_splits",
+              AsyncMock(return_value=("2024-25", {}, "2025-26", {}))),
+        patch("app.services.adp_service.nba_player_catalog.list_all_bios", return_value={}),
+    ):
+        first = await get_adp_response()
+        svc._cached_at = datetime.now(timezone.utc) - svc._CACHE_TTL - timedelta(minutes=1)
+        assert await get_adp_response() is first
+        await _drain_background()
+        assert await get_adp_response() is first
+    assert svc._cached is first
 
 
 def test_adp_route_rankings_view_uses_the_rankings_blend(test_client):

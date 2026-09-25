@@ -441,6 +441,74 @@ async def test_stat_splits_caches_actuals_even_when_projections_unpublished():
     fetch.assert_awaited_once()  # second call served from cache, not refetched
 
 
+async def _drain_background():
+    import asyncio
+    from app.utils import background_tasks
+
+    while background_tasks._tasks:
+        await asyncio.gather(*list(background_tasks._tasks), return_exceptions=True)
+
+
+def _age_stat_splits(delta):
+    import app.services.adp_service as svc
+    from datetime import datetime, timezone
+
+    svc._espn_stats_cached_at = datetime.now(timezone.utc) - delta
+
+
+@pytest.mark.asyncio
+async def test_stat_splits_past_ttl_served_at_once_and_refreshed_in_background():
+    import app.services.adp_service as svc
+    from datetime import timedelta
+
+    reset_adp_cache()
+    newer = {99: {**_ACTUAL_ROW[99], "ppg": 30.0}}
+    fetch = AsyncMock(side_effect=[(_ACTUAL_ROW, _PROJ_ROW), (newer, _PROJ_ROW)])
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        first = await load_espn_stat_splits()
+        _age_stat_splits(svc._CACHE_TTL + timedelta(minutes=1))
+
+        served = await load_espn_stat_splits()
+        assert served is first
+        assert fetch.await_count == 1
+
+        await _drain_background()
+        assert fetch.await_count == 2
+        refreshed = await load_espn_stat_splits()
+    assert refreshed[1][99].ppg == 30.0
+
+
+@pytest.mark.asyncio
+async def test_stat_splits_allow_stale_false_waits_for_the_refresh():
+    import app.services.adp_service as svc
+    from datetime import timedelta
+
+    reset_adp_cache()
+    newer = {99: {**_ACTUAL_ROW[99], "ppg": 30.0}}
+    fetch = AsyncMock(side_effect=[(_ACTUAL_ROW, _PROJ_ROW), (newer, _PROJ_ROW)])
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        await load_espn_stat_splits()
+        _age_stat_splits(svc._CACHE_TTL + timedelta(minutes=1))
+        refreshed = await load_espn_stat_splits(allow_stale=False)
+    assert refreshed[1][99].ppg == 30.0
+    assert fetch.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_stat_splits_past_stale_window_waits_for_the_refresh():
+    import app.services.adp_service as svc
+    from datetime import timedelta
+
+    reset_adp_cache()
+    newer = {99: {**_ACTUAL_ROW[99], "ppg": 30.0}}
+    fetch = AsyncMock(side_effect=[(_ACTUAL_ROW, _PROJ_ROW), (newer, _PROJ_ROW)])
+    with patch("app.services.adp_service.fetch_espn_stat_splits_map", fetch):
+        await load_espn_stat_splits()
+        _age_stat_splits(svc._STALE_WINDOW + timedelta(minutes=1))
+        refreshed = await load_espn_stat_splits()
+    assert refreshed[1][99].ppg == 30.0
+
+
 def test_resolve_seasons_before_tipoff_uses_previous_actuals():
     with patch("app.services.adp_service.settings") as cfg:
         cfg.season_id = 2027
