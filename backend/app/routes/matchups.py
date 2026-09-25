@@ -76,6 +76,32 @@ def clear_matchup_response_cache() -> None:
     _response_cache.clear()
 
 
+# Bumped by apply_injury_changes so a slate built from the injury table as it was
+# before a report landed is never cached (it would carry the old statuses).
+_injury_generation = 0
+
+
+def apply_injury_changes(changes: dict[str, Optional[str]]) -> None:
+    """Patch injury_status in every cached slate from one injury-report update:
+    normalized player name -> new status, or None when the player left the report.
+    Only the injury field changes and each slate keeps its age, so injuries in a
+    served slate are always as current as the latest report while the rest of the
+    slate follows the normal cache rules."""
+    global _injury_generation
+    _injury_generation += 1
+    if not changes:
+        return
+    for key, (cached_at, rows) in list(_response_cache.items()):
+        patched = [
+            row.model_copy(update={'injury_status': changes[name]})
+            if (name := normalize_player_name(row.player_name)) in changes
+            and row.injury_status != changes[name]
+            else row
+            for row in rows
+        ]
+        _response_cache[key] = (cached_at, patched)
+
+
 async def _is_known_slate_date(date: str) -> bool:
     """Whether the slate picker offers this YYYYMMDD date: upcoming game days
     plus dates already in the feature store. Anything else is rejected before
@@ -133,7 +159,9 @@ async def _build_matchups(
     date: Optional[str], cache_key: str, generation: Optional[int] = None
 ) -> list[PlayerMatchupResponse]:
     """The full slate pipeline; caches a non-empty result under cache_key (unless the
-    cache was invalidated since `generation` was read)."""
+    cache was invalidated since `generation` was read, or an injury report landed
+    while it was being built)."""
+    injury_generation = _injury_generation
     # Independent of one another: two ESPN reads and two DB reads, so they
     # overlap rather than queue. return_exceptions keeps each failure's
     # original handling — a slate/defense failure yields an empty response,
@@ -262,6 +290,10 @@ async def _build_matchups(
         f'Matchups built for slate {resolved_date}: {len(games_today)} teams playing, '
         f'{len(results)} players, {sum(1 for r in results if r.projection is not None)} with projections'
     )
-    if results and (generation is None or generation == _cache_generation):
+    if (
+        results
+        and (generation is None or generation == _cache_generation)
+        and injury_generation == _injury_generation
+    ):
         _response_cache[cache_key] = (time.monotonic(), results)
     return results

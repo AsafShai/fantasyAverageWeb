@@ -342,3 +342,45 @@ async def test_pinned_date_stale_hit_skips_revalidation_and_rebuilds_that_date(m
 
     assert known.await_count == 1
     assert svc.get_games_today.await_args_list[-1].kwargs == {'date': '20260115'}
+
+
+# --- injury reports patch cached slates ---------------------------------------
+
+@pytest.mark.asyncio
+async def test_injury_report_patches_cached_slate_without_resetting_its_age(mock_services, swr_clock):
+    svc, _ = mock_services
+    first = await matchups_route.get_matchups_today(date=None)
+    assert first[0].injury_status is None
+    cached_at = matchups_route._response_cache['today'][0]
+
+    matchups_route.apply_injury_changes({'anthonydavis': 'Out', 'someoneelse': 'Doubtful'})
+
+    served = await matchups_route.get_matchups_today(date=None)
+    assert served[0].injury_status == 'Out'
+    assert served[0].player_name == 'Anthony Davis'
+    assert matchups_route._response_cache['today'][0] == cached_at
+    assert svc.get_games_today.await_count == 1  # patched in place, not rebuilt
+    assert first[0].injury_status is None  # an already-served list is not mutated
+
+    matchups_route.apply_injury_changes({'anthonydavis': None})
+    assert (await matchups_route.get_matchups_today(date=None))[0].injury_status is None
+
+
+@pytest.mark.asyncio
+async def test_slate_built_across_an_injury_report_is_not_cached(mock_services, swr_clock):
+    svc, _ = mock_services
+    release = asyncio.Event()
+    real_games = svc.get_games_today.return_value
+
+    async def slow_games(date=None):
+        await release.wait()
+        return real_games
+
+    svc.get_games_today = AsyncMock(side_effect=slow_games)
+    build = asyncio.create_task(matchups_route.get_matchups_today(date=None))
+    await asyncio.sleep(0)
+    matchups_route.apply_injury_changes({'anthonydavis': 'Out'})  # lands mid-build
+    release.set()
+    await build
+
+    assert 'today' not in matchups_route._response_cache
