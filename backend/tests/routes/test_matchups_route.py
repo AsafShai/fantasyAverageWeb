@@ -222,3 +222,123 @@ def test_clear_matchup_response_cache_empties_dict(monkeypatch):
     monkeypatch.setattr(matchups_module, '_response_cache', {'today': (0.0, [])})
     matchups_module.clear_matchup_response_cache()
     assert matchups_module._response_cache == {}
+
+
+# --- stale-while-revalidate --------------------------------------------------
+# Past the TTL but inside the stale window, the cached slate is served at once
+# and rebuilt in the background for the next caller.
+
+import asyncio  # noqa: E402
+
+import app.routes.matchups as matchups_route  # noqa: E402
+from app.utils import background_tasks  # noqa: E402
+
+
+async def _drain_background():
+    while background_tasks._tasks:
+        await asyncio.gather(*list(background_tasks._tasks), return_exceptions=True)
+
+
+@pytest.fixture
+def swr_clock(monkeypatch):
+    clock = {'now': 10_000.0}
+    monkeypatch.setattr(matchups_route.time, 'monotonic', lambda: clock['now'])
+    monkeypatch.setattr(matchups_route, '_rebuilding', set())
+    return clock
+
+
+@pytest.mark.asyncio
+async def test_stale_slate_is_served_at_once_and_rebuilt_in_background(mock_services, swr_clock):
+    svc, provider = mock_services
+    first = await matchups_route.get_matchups_today(date=None)
+    assert svc.get_games_today.await_count == 1
+
+    swr_clock['now'] += matchups_route._RESPONSE_CACHE_TTL_S + 1
+    served = await matchups_route.get_matchups_today(date=None)
+    assert served is first
+    assert svc.get_games_today.await_count == 1
+
+    await _drain_background()
+    assert svc.get_games_today.await_count == 2
+    rebuilt = await matchups_route.get_matchups_today(date=None)
+    assert rebuilt is not first
+    assert [r.player_name for r in rebuilt] == [r.player_name for r in first]
+    assert svc.get_games_today.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_stale_slate_concurrent_callers_trigger_one_rebuild(mock_services, swr_clock):
+    svc, _ = mock_services
+    first = await matchups_route.get_matchups_today(date=None)
+
+    swr_clock['now'] += matchups_route._RESPONSE_CACHE_TTL_S + 1
+    served = await asyncio.gather(*(matchups_route.get_matchups_today(date=None) for _ in range(10)))
+    await _drain_background()
+
+    assert all(r is first for r in served)
+    assert svc.get_games_today.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_slate_past_stale_window_is_rebuilt_before_answering(mock_services, swr_clock):
+    svc, _ = mock_services
+    first = await matchups_route.get_matchups_today(date=None)
+
+    swr_clock['now'] += matchups_route._RESPONSE_STALE_WINDOW_S + 1
+    again = await matchups_route.get_matchups_today(date=None)
+
+    assert again is not first
+    assert svc.get_games_today.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_background_rebuild_failure_keeps_serving_cached_slate(mock_services, swr_clock):
+    _, provider = mock_services
+    first = await matchups_route.get_matchups_today(date=None)
+
+    swr_clock['now'] += matchups_route._RESPONSE_CACHE_TTL_S + 1
+    provider.get_players_df = AsyncMock(side_effect=RuntimeError('espn down'))
+    assert await matchups_route.get_matchups_today(date=None) is first
+    await _drain_background()
+
+    assert matchups_route._response_cache['today'][1] is first
+    assert matchups_route._rebuilding == set()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_started_before_nightly_invalidation_is_not_cached(mock_services, swr_clock):
+    svc, _ = mock_services
+    await matchups_route.get_matchups_today(date=None)
+    swr_clock['now'] += matchups_route._RESPONSE_CACHE_TTL_S + 1
+
+    release = asyncio.Event()
+    real_games = svc.get_games_today.return_value
+
+    async def slow_games(date=None):
+        await release.wait()
+        return real_games
+
+    svc.get_games_today = AsyncMock(side_effect=slow_games)
+    await matchups_route.get_matchups_today(date=None)  # stale hit, spawns rebuild
+    await asyncio.sleep(0)
+    matchups_route.clear_matchup_response_cache()  # nightly fold-in lands mid-rebuild
+    release.set()
+    await _drain_background()
+
+    assert 'today' not in matchups_route._response_cache
+
+
+@pytest.mark.asyncio
+async def test_pinned_date_stale_hit_skips_revalidation_and_rebuilds_that_date(mock_services, swr_clock, monkeypatch):
+    svc, _ = mock_services
+    known = AsyncMock(return_value=True)
+    monkeypatch.setattr(matchups_route, '_is_known_slate_date', known)
+    first = await matchups_route.get_matchups_today(date='20260115')
+    assert known.await_count == 1
+
+    swr_clock['now'] += matchups_route._RESPONSE_CACHE_TTL_S + 1
+    assert await matchups_route.get_matchups_today(date='20260115') is first
+    await _drain_background()
+
+    assert known.await_count == 1
+    assert svc.get_games_today.await_args_list[-1].kwargs == {'date': '20260115'}

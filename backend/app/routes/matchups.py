@@ -13,6 +13,7 @@ from app.services.db_service import DBService
 from app.services.depth_chart_service import DepthChartService
 from app.services.live_projection_service import LiveProjectionService
 from app.services.nba_matchup_service import NbaMatchupService
+from app.utils import background_tasks
 from app.utils.name_matching import normalize_player_name
 
 router = APIRouter()
@@ -58,10 +59,20 @@ async def get_current_slate_date() -> Optional[str]:
 # (ModelNightlyService._invalidate_inference_store) so it never serves
 # pre-fold-in projections.
 _RESPONSE_CACHE_TTL_S = 300
+# Stale-while-revalidate: past the TTL but younger than this, the cached slate is
+# served at once and rebuilt in the background (one rebuild per slate at a time),
+# so opening the matchups page never waits on the full pipeline after a short idle.
+_RESPONSE_STALE_WINDOW_S = 15 * 60
 _response_cache: dict[str, tuple[float, list[PlayerMatchupResponse]]] = {}
+_rebuilding: set[str] = set()
+# Bumped by clear_matchup_response_cache so a rebuild that started before the
+# nightly invalidation never writes its pre-fold-in result back.
+_cache_generation = 0
 
 
 def clear_matchup_response_cache() -> None:
+    global _cache_generation
+    _cache_generation += 1
     _response_cache.clear()
 
 
@@ -93,11 +104,36 @@ async def get_matchups_today(
     # round trip on the most common request of all.
     cache_key = date or 'today'
     hit = _response_cache.get(cache_key)
-    if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:
-        return hit[1]
+    if hit is not None:
+        age = time.monotonic() - hit[0]
+        if age < _RESPONSE_CACHE_TTL_S:
+            return hit[1]
+        if age < _RESPONSE_STALE_WINDOW_S:
+            if cache_key not in _rebuilding:
+                _rebuilding.add(cache_key)
+                background_tasks.spawn(_rebuild_in_background(date, cache_key), name=f'matchups-rebuild-{cache_key}')
+            return hit[1]
 
     if date is not None and not await _is_known_slate_date(date):
         raise HTTPException(status_code=404, detail=f'Unknown slate date: {date}')
+    return await _build_matchups(date, cache_key)
+
+
+async def _rebuild_in_background(date: Optional[str], cache_key: str) -> None:
+    generation = _cache_generation
+    try:
+        await _build_matchups(date, cache_key, generation=generation)
+    except Exception as e:
+        logger.warning(f'Background matchups rebuild failed (date={date}): {type(e).__name__}: {e}', exc_info=True)
+    finally:
+        _rebuilding.discard(cache_key)
+
+
+async def _build_matchups(
+    date: Optional[str], cache_key: str, generation: Optional[int] = None
+) -> list[PlayerMatchupResponse]:
+    """The full slate pipeline; caches a non-empty result under cache_key (unless the
+    cache was invalidated since `generation` was read)."""
     # Independent of one another: two ESPN reads and two DB reads, so they
     # overlap rather than queue. return_exceptions keeps each failure's
     # original handling — a slate/defense failure yields an empty response,
@@ -226,6 +262,6 @@ async def get_matchups_today(
         f'Matchups built for slate {resolved_date}: {len(games_today)} teams playing, '
         f'{len(results)} players, {sum(1 for r in results if r.projection is not None)} with projections'
     )
-    if results:
+    if results and (generation is None or generation == _cache_generation):
         _response_cache[cache_key] = (time.monotonic(), results)
     return results
