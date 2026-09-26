@@ -247,6 +247,44 @@ class TestRawAllPlayersToDf:
         assert rookie_row["GP"] == 0
 
 
+    @staticmethod
+    def _entry_with_lines(lines):
+        from app.config import settings
+        entry = _player_entry(103, "Star S", season_id=settings.season_id)
+        entry["player"]["stats"] = [
+            {"scoringPeriodId": 0, "statSplitTypeId": 0, "seasonId": settings.season_id,
+             "statSourceId": source, "stats": stats}
+            for source, stats in lines
+        ]
+        return {"players": [entry]}
+
+    def test_reads_actual_line_when_projection_is_listed_first(self, transformer):
+        """ESPN lists the projected line (statSourceId 1) next to the actual one,
+        in either order — the stats shown are always the actual ones."""
+        payload = self._entry_with_lines([(1, {"0": 2144.0, "42": 74}), (0, {"0": 1799.0, "42": 65})])
+
+        row = transformer.raw_all_players_to_df(payload).iloc[0]
+
+        assert row["PTS"] == 1799.0
+        assert row["GP"] == 65
+
+    def test_reads_actual_line_when_projection_is_listed_second(self, transformer):
+        payload = self._entry_with_lines([(0, {"0": 1799.0, "42": 65}), (1, {"0": 2144.0, "42": 74})])
+
+        row = transformer.raw_all_players_to_df(payload).iloc[0]
+
+        assert row["PTS"] == 1799.0
+        assert row["GP"] == 65
+
+    def test_actual_line_with_no_games_is_a_zero_row_not_the_projection(self, transformer):
+        payload = self._entry_with_lines([(1, {"0": 2375.0, "42": 76}), (0, {})])
+
+        row = transformer.raw_all_players_to_df(payload).iloc[0]
+
+        assert row["GP"] == 0
+        assert row["PTS"] == 0
+
+
 class TestResolveRankingCategories:
     def test_no_settings_falls_back_to_default(self, transformer):
         from app.utils.constants import RANKING_CATEGORIES

@@ -12,6 +12,7 @@ from app.services.db_service import DBService
 from app.config import settings
 from app.exceptions import DataSourceError
 from app.utils.constants import RANKING_CATEGORIES
+from app.services.data_transformer import ACTUAL_STAT_SOURCE_ID
 from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
 from app.utils.ssl_context import shared_ssl_context
@@ -245,12 +246,19 @@ class DataProvider:
                 # used to be 500) silently drops any player outside the ownership-rank
                 # cutoff — including drafted players later dropped to 0% owned, who
                 # are still real players with real games (e.g. Reed Sheppard).
+                #
+                # Only this split's actual (statSourceId 0) lines are read, so ask ESPN
+                # for just those: unfiltered, every player also carries per-game splits
+                # and projections — ~25 MB of JSON (vs ~1-2.5 MB) to download and parse
+                # on the event loop.
                 espn_filter = {
                     "players": {
                         "filterStatus": {"value": ["ONTEAM", "FREEAGENT", "WAIVERS"]},
                         "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
                         "limit": 1200,
-                        "offset": 0
+                        "offset": 0,
+                        "filterStatsForSplitTypeIds": {"value": [stat_split_type_id]},
+                        "filterStatsForSourceIds": {"value": [ACTUAL_STAT_SOURCE_ID]},
                     }
                 }
                 headers['X-Fantasy-Filter'] = json.dumps(espn_filter)
