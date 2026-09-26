@@ -95,3 +95,17 @@ export function trendBadge(delta: number | null | undefined): { text: string; cl
     className: delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
   }
 }
+
+/** Which movers list(s) to show: one section key ("blend" or a site), or every one. */
+export type MoversShown = string
+export const SHOW_ALL_SECTIONS = 'all'
+
+/**
+ * One list at a time by default. A stored choice the current view lacks (Blend in the
+ * rankings "Latest update" view, an unchecked site) falls back to the first list.
+ */
+export function pickSections<T extends { key: string }>(sections: T[], shown: MoversShown): T[] {
+  if (shown === SHOW_ALL_SECTIONS) return sections
+  const match = sections.find((s) => s.key === shown)
+  return match ? [match] : sections.slice(0, 1)
+}

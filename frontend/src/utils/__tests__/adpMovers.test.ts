@@ -4,6 +4,7 @@ import {
   formatMoveDelta,
   formatMoverDate,
   moversQueryArgs,
+  pickSections,
   trendBadge,
   utcDaysAgo,
 } from '../adpMovers'
@@ -55,5 +56,19 @@ describe('formatting', () => {
     expect(trendBadge(0)).toBeNull()
     expect(trendBadge(4.5)?.text).toBe('▲4.5')
     expect(trendBadge(-2)?.text).toBe('▼2')
+  })
+})
+
+describe('pickSections', () => {
+  const sections = [{ key: 'blend' }, { key: 'espn' }, { key: 'yahoo' }]
+
+  it('shows one list, or all side by side on request', () => {
+    expect(pickSections(sections, 'espn')).toEqual([{ key: 'espn' }])
+    expect(pickSections(sections, 'all')).toEqual(sections)
+  })
+
+  it('falls back to the first list when the stored one is not in this view', () => {
+    expect(pickSections([{ key: 'espn' }, { key: 'sleeper' }], 'blend')).toEqual([{ key: 'espn' }])
+    expect(pickSections([], 'blend')).toEqual([])
   })
 })

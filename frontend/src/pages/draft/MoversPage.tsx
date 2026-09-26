@@ -10,12 +10,15 @@ import { SITE_LABEL, formatAdp, sitesForMetric, type AdpSiteKey } from '../../ut
 import {
   MOVERS_TOP_OPTIONS,
   MOVERS_WINDOWS,
+  SHOW_ALL_SECTIONS,
   type MoversDirection,
+  type MoversShown,
   type MoversWindow,
   effectiveWindow,
   formatMoveDelta,
   formatMoverDate,
   moversQueryArgs,
+  pickSections,
   shortDateRange,
 } from '../../utils/adpMovers'
 import type { AdpMetric, AdpMover, AdpMoversSection, AdpSnapshotHistory } from '../../types/api'
@@ -221,6 +224,7 @@ export default function MoversPage() {
   const [rankWindow, setRankWindow] = usePersistedState<MoversWindow>('draft.movers.rankWindow', 'last_update')
   const [direction, setDirection] = usePersistedState<MoversDirection>('draft.movers.direction', 'both')
   const [top, setTop] = usePersistedState<number>('draft.movers.top', 150)
+  const [shown, setShown] = usePersistedState<MoversShown>('draft.movers.shown', 'blend')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
@@ -240,6 +244,9 @@ export default function MoversPage() {
   const { data, isLoading, isFetching, error } = useGetAdpMoversQuery(args ?? { metric, mode: 'range', top }, {
     skip: args === null,
   })
+
+  const visible = data ? pickSections(data.sections, shown) : []
+  const visibleKey = shown === SHOW_ALL_SECTIONS ? shown : (visible[0]?.key ?? shown)
 
   const windows = MOVERS_WINDOWS.filter((w) => w.key !== 'last_update' || metric === 'rank')
 
@@ -337,8 +344,21 @@ export default function MoversPage() {
         <ErrorMessage message={getErrorMessage(error, 'Failed to load movers')} />
       ) : data ? (
         <div className={isFetching ? 'opacity-70' : undefined}>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {data.sections.map((section) => (
+          {data.sections.length > 1 ? (
+            <div className="mb-3">
+              <Segmented
+                label="List"
+                options={[
+                  ...data.sections.map((s) => ({ key: s.key, label: s.label })),
+                  { key: SHOW_ALL_SECTIONS, label: 'All side by side' },
+                ]}
+                value={visibleKey}
+                onChange={setShown}
+              />
+            </div>
+          ) : null}
+          <div className={visible.length > 1 ? 'grid gap-4 lg:grid-cols-2' : 'max-w-4xl'}>
+            {visible.map((section) => (
               <SectionCard key={section.key} section={section} direction={direction} metric={metric} top={top} />
             ))}
           </div>
