@@ -46,7 +46,7 @@ ESPN_ADP_FLOOR = 138.0
 State = dict[str, AdpPlayer]
 PairFn = Callable[[Optional[AdpPlayer], Optional[AdpPlayer]], tuple[Optional[float], Optional[float]]]
 
-_states: dict[tuple[tuple[str, date], ...], State] = {}
+_states: dict[tuple[tuple[str, date, str, str], ...], State] = {}
 
 
 def reset_movers_cache() -> None:
@@ -140,15 +140,21 @@ def blend_pair(sites: tuple[str, ...], metric: str) -> PairFn:
     return pair
 
 
-async def build_state(site_dates: dict[str, date]) -> State:
-    """Players keyed by board id, from each site's snapshot on the given day."""
-    key = tuple(sorted(site_dates.items()))
+async def build_state(snapshots: dict[str, SnapshotMeta]) -> State:
+    """Players keyed by board id, from each site's given snapshot.
+
+    Keyed by content hash as well as day: a second fetch the same UTC day rewrites that
+    day's row, and must not keep serving the state built from the first one.
+    """
+    key = tuple(
+        sorted((site, m.snapshot_date, m.adp_hash, m.ranking_hash) for site, m in snapshots.items())
+    )
     cached = _states.get(key)
     if cached is not None:
         return cached
     fetched = {}
-    for site, day in site_dates.items():
-        payload = await adp_snapshots.load_payload(site, day)
+    for site, meta in snapshots.items():
+        payload = await adp_snapshots.load_payload(site, meta.snapshot_date)
         if payload:
             fetched[site] = (payload, "")
     if not fetched:
@@ -319,8 +325,8 @@ async def get_movers(
             ends[site] = (before, after)
             if _hash(before, metric) != _hash(after, metric):
                 result = compare_states(
-                    await build_state({site: before.snapshot_date}),
-                    await build_state({site: after.snapshot_date}),
+                    await build_state({site: before}),
+                    await build_state({site: after}),
                     site_pair(site, metric),
                     top=top,
                     limit=limit,
@@ -358,8 +364,8 @@ async def _blend_section(
         )
     used = tuple(site for site in chosen if site in ends)
     result = compare_states(
-        await build_state({site: ends[site][0].snapshot_date for site in used}),
-        await build_state({site: ends[site][1].snapshot_date for site in used}),
+        await build_state({site: ends[site][0] for site in used}),
+        await build_state({site: ends[site][1] for site in used}),
         blend_pair(used, metric),
         top=top,
         limit=limit,
@@ -393,8 +399,8 @@ async def _last_update_section(
     i = changes[-1]
     before, after = timeline[i - 1], timeline[i]
     result = compare_states(
-        await build_state({site: before.snapshot_date}),
-        await build_state({site: after.snapshot_date}),
+        await build_state({site: before}),
+        await build_state({site: after}),
         site_pair(site, metric),
         top=top,
         limit=limit,

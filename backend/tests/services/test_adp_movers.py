@@ -154,3 +154,16 @@ async def test_espn_slide_onto_undrafted_floor_is_an_exit_not_a_fall(store):
     assert [m.name for m in section.exited] == ["Bj Johnson"]
     assert [m.name for m in section.entered] == ["Tre Jones"]
     assert section.risers == []
+
+
+@pytest.mark.asyncio
+async def test_same_day_rewrite_is_not_served_from_the_stale_state_cache(store):
+    store[("espn", D21)] = [_row("Mover", 50.0)]
+    store[("espn", D25)] = [_row("Mover", 40.0)]
+    first = await adp_movers.get_movers(metric="adp", sites="espn", from_date=D21)
+    assert _names(first.sections[0].risers) == [("Mover", 10.0)]
+
+    # A second fetch the same UTC day rewrites D25's row in place.
+    store[("espn", D25)] = [_row("Mover", 30.0)]
+    second = await adp_movers.get_movers(metric="adp", sites="espn", from_date=D21)
+    assert _names(second.sections[0].risers) == [("Mover", 20.0)]
