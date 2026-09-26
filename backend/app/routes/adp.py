@@ -1,9 +1,17 @@
 import logging
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from app.models.adp import AdpIndexResponse, AdpResponse, ProviderMeta
+from app.models.adp import (
+    AdpIndexResponse,
+    AdpMoversResponse,
+    AdpResponse,
+    AdpTrendResponse,
+    ProviderMeta,
+)
+from app.services.adp_movers import get_movers, get_trend
 from app.services.adp_service import (
     get_adp_index_response,
     get_adp_response_enriched,
@@ -54,6 +62,52 @@ async def get_adp_index(
     except Exception as e:
         logger.exception("Error building ADP index: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve ADP data")
+
+
+@router.get("/movers", response_model=AdpMoversResponse)
+async def get_adp_movers(
+    response: Response,
+    metric: str = Query("adp"),
+    sites: Optional[str] = Query(None),
+    mode: str = Query("range"),
+    from_date: Optional[date] = Query(None),
+    to_date: Optional[date] = Query(None),
+    top: Optional[int] = Query(150, ge=0, le=2000),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Biggest risers/fallers per site (plus Blend) between two stored snapshots."""
+    _cache_headers(response)
+    try:
+        return await get_movers(
+            metric=metric,
+            sites=sites,
+            mode=mode,
+            from_date=from_date,
+            to_date=to_date,
+            top=top,
+            limit=limit,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error building ADP movers: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to retrieve ADP movers")
+
+
+@router.get("/trend", response_model=AdpTrendResponse)
+async def get_adp_trend(
+    response: Response,
+    metric: str = Query("adp"),
+    sites: Optional[str] = Query(None),
+    days: int = Query(7, ge=1, le=60),
+):
+    """Per-player Blend change over the last `days`, for the board's trend badges."""
+    _cache_headers(response)
+    try:
+        return await get_trend(metric=metric, sites=sites, days=days)
+    except Exception as e:
+        logger.error("Error building ADP trend: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to retrieve ADP trend")
 
 
 @router.post("/refresh", response_model=list[ProviderMeta])

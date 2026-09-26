@@ -23,8 +23,12 @@ def no_real_adp_provider_db():
     """fetch_live_adp_payload now persists through adp_cache, which talks to Neon by
     default. Keep these tests off the real database -- adp_cache's own DB behavior is
     covered separately in test_adp_cache.py."""
-    with patch("app.services.adp_cache.DBService") as mock_db:
+    with (
+        patch("app.services.adp_cache.DBService") as mock_db,
+        patch("app.services.adp_snapshots.DBService") as mock_snap_db,
+    ):
         mock_db.return_value._get_pool = AsyncMock(return_value=None)
+        mock_snap_db.return_value._get_pool = AsyncMock(return_value=None)
         yield
 
 
@@ -364,7 +368,11 @@ async def test_fetch_live_adp_payload_omits_failed_site():
         patch("app.services.adp_fetch.settings") as settings,
     ):
         settings.season_id = 2026
-        payload = await fetch_live_adp_payload()
+        record = AsyncMock(return_value=True)
+        with patch("app.services.adp_fetch.adp_snapshots.record_snapshot", record):
+            payload = await fetch_live_adp_payload()
+    # Every site that served a payload offers it to the snapshot history; failed ones don't.
+    assert [c.args[0] for c in record.await_args_list] == ["espn", "sleeper", "yahoo"]
     assert "espn" in payload["sources"]
     assert "sleeper" in payload["sources"]
     assert "yahoo" in payload["sources"]

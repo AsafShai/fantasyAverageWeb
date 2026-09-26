@@ -20,7 +20,7 @@ from typing import NamedTuple, Optional
 import httpx
 
 from app.config import settings
-from app.services import adp_cache
+from app.services import adp_cache, adp_snapshots
 from app.services.player_service import espn_season_string
 from app.utils.ssl_context import shared_ssl_context
 
@@ -612,6 +612,11 @@ async def fetch_live_adp_payload() -> dict:
 
     if not fetched:
         raise RuntimeError("All ADP sources failed")
+
+    # History for the Movers page. A no-op unless this payload differs from the stored one.
+    for site, result in zip(SITES, results):
+        if not isinstance(result, BaseException):
+            await adp_snapshots.record_snapshot(site, result.payload, result.fetched_at)
 
     return assemble_adp_payload(
         fetched,
