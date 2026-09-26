@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from app.services.adp_service import ensure_daily_snapshot
 from app.services.estimator_service import EstimatorService, ISRAEL_TZ
 from app.services.data_provider import DataProvider
 
@@ -32,6 +33,12 @@ async def start_scheduler():
         sleep_seconds = (next_trigger - now).total_seconds()
         logger.info(f"Estimator scheduler sleeping {sleep_seconds:.0f}s until {next_trigger.strftime('%H:%M')} IL")
         await asyncio.sleep(sleep_seconds)
+        # Draft ADP/rankings history rides the same morning slots. Independent of the
+        # estimator: a no-op once every provider was fetched today, a retry otherwise.
+        try:
+            await ensure_daily_snapshot()
+        except Exception as e:
+            logger.warning("Daily ADP snapshot failed: %s: %s", type(e).__name__, e)
         logger.info("Estimator scheduler triggered - syncing snapshot tables")
         synced = await provider.sync_db_now()
         if not synced:

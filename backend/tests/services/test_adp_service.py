@@ -531,3 +531,23 @@ def test_mark_fringe_ignores_a_zero_game_stat_line():
     zero = LastYearStats(gp=0, fg_pct=0, ft_pct=0, ppg=0, rpg=0, apg=0, spg=0, bpg=0, three_pm=0)
     response = AdpResponse(season_label="2026-27", updated_at="", players=[p])
     assert mark_fringe(response, {9: zero}).players[0].fringe is True
+
+
+@pytest.mark.asyncio
+async def test_ensure_daily_snapshot_sets_todays_floor_and_rebuilds():
+    from datetime import datetime, timezone
+
+    from app.services import adp_service
+
+    reset_adp_cache()
+    adp_service._cached = AdpResponse(season_label="x", updated_at="")
+    adp_service._cached_at = datetime.now(timezone.utc)
+    with (
+        patch("app.services.adp_service.adp_cache.require_fetched_on_or_after") as floor,
+        patch("app.services.adp_service.get_adp_response", new_callable=AsyncMock) as rebuild,
+    ):
+        await adp_service.ensure_daily_snapshot()
+    floor.assert_called_once_with(datetime.now(timezone.utc).date())
+    rebuild.assert_awaited_once()
+    assert adp_service._cached is None  # the 30-min response cache must not short-circuit it
+    reset_adp_cache()

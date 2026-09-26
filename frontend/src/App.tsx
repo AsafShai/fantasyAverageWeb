@@ -35,6 +35,7 @@ const AdpPage = lazy(() => import('./pages/draft/AdpPage'))
 const DraftBoardPage = lazy(() => import('./pages/draft/DraftBoardPage'))
 const PreDraftRankingsPage = lazy(() => import('./pages/draft/PreDraftRankingsPage'))
 const MockDraftPage = lazy(() => import('./pages/draft/MockDraftPage'))
+const MoversPage = lazy(() => import('./pages/draft/MoversPage'))
 
 function App() {
   return (
@@ -71,6 +72,7 @@ function App() {
               {FF_DRAFT_PAGES && <Route path="draft/board" element={<DraftBoardPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/rankings" element={<PreDraftRankingsPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/mock" element={<MockDraftPage />} />}
+              {FF_DRAFT_PAGES && <Route path="draft/movers" element={<MoversPage />} />}
               {FF_TRENDS && <Route path="trends" element={<Trends />} />}
               {FF_MINIGAMES && <Route path="minigames" element={<Minigames />} />}
               {FF_MINIGAMES && <Route path="minigames/hangman" element={<HangmanGame />} />}

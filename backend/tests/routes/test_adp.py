@@ -323,3 +323,26 @@ def test_adp_can_omit_season_stats(test_client):
     player = response.json()["players"][0]
     assert player.get("last_year") is None
     assert player.get("projection") is None
+
+
+def test_adp_movers_route_passes_filters_through(test_client):
+    from app.models.adp import AdpMoversResponse
+
+    fake = AdpMoversResponse(metric="rank", mode="last_update", top=100)
+    with patch("app.routes.adp.get_movers", new_callable=AsyncMock, return_value=fake) as movers:
+        response = test_client.get(
+            "/api/adp/movers?metric=rank&sites=espn,yahoo&mode=last_update&top=100&limit=5"
+        )
+    assert response.status_code == 200
+    assert response.json()["mode"] == "last_update"
+    kwargs = movers.await_args.kwargs
+    assert kwargs["metric"] == "rank"
+    assert kwargs["sites"] == "espn,yahoo"
+    assert kwargs["top"] == 100
+    assert kwargs["limit"] == 5
+
+
+def test_adp_movers_route_rejects_inverted_range(test_client):
+    response = test_client.get("/api/adp/movers?from_date=2026-09-25&to_date=2026-09-20")
+    assert response.status_code == 400
+

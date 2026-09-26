@@ -121,3 +121,63 @@ class AdpResponse(BaseModel):
     page_size: int = 50
     total_pages: int = 1
     offset: int = 0
+
+
+class AdpMover(BaseModel):
+    """One player's change between two snapshots. `delta` is positive when he moved up
+    (a lower ADP or ranking), matching how risers are read."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    espn_id: Optional[int] = None
+    name: str
+    team_abbr: Optional[str] = None
+    photo_url: Optional[str] = None
+    positions: list[str] = Field(default_factory=list)
+    from_value: Optional[float] = None
+    to_value: Optional[float] = None
+    delta: Optional[float] = None
+
+
+class AdpMoversSection(BaseModel):
+    """Movers for one site, or for the Blend of the selected sites (key "blend")."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    key: str
+    label: str
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    compared: int = 0
+    risers: list[AdpMover] = Field(default_factory=list)
+    fallers: list[AdpMover] = Field(default_factory=list)
+    entered: list[AdpMover] = Field(default_factory=list)
+    exited: list[AdpMover] = Field(default_factory=list)
+    note: Optional[str] = None
+
+
+class AdpSnapshotHistory(BaseModel):
+    """Which days a provider has stored data for, and on which of them the active
+    metric actually changed (for rankings: the site's update dates)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    key: str
+    label: str
+    first_date: Optional[str] = None
+    last_date: Optional[str] = None
+    change_dates: list[str] = Field(default_factory=list)
+
+
+class AdpMoversResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    metric: str
+    mode: str
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    top: Optional[int] = None
+    sections: list[AdpMoversSection] = Field(default_factory=list)
+    history: list[AdpSnapshotHistory] = Field(default_factory=list)
+
