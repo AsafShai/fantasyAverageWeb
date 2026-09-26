@@ -9,6 +9,20 @@ from app.utils import background_tasks
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Every visit with stored results used to start a background ESPN sync plus
+# an estimator check; now at most one per cooldown window.
+REFRESH_COOLDOWN_SECONDS = 10 * 60
+_last_refresh_at: float | None = None
+
+
+def _refresh_due() -> bool:
+    global _last_refresh_at
+    now = time.monotonic()
+    if _last_refresh_at is not None and now - _last_refresh_at < REFRESH_COOLDOWN_SECONDS:
+        return False
+    _last_refresh_at = now
+    return True
+
 
 def _build_results(data: dict, elapsed_ms: float) -> EstimatorResults:
     predictions = [TeamPrediction(**r) for r in data.get("predictions", [])]
@@ -43,10 +57,10 @@ async def get_estimator_results():
             logger.info("No stored estimator results; syncing ESPN and running estimator inline")
             synced = await provider.sync_db_now()
             if synced:
-                ran = await service.run_and_store()
+                ran = await service.run_and_store(wait=True)
                 if ran:
                     data = await service.get_latest()
-        else:
+        elif _refresh_due():
             background_tasks.spawn(_sync_and_run(service, provider), name="estimator-refresh")
 
         elapsed_ms = (time.perf_counter() - start) * 1000
