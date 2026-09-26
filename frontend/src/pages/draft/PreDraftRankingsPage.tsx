@@ -46,6 +46,7 @@ import {
   hydrateAdpPlayer,
   nextShortSeasonLabel,
   shortSeasonLabel,
+  withIndexBlends,
 } from '../../utils/adp'
 import { downloadCsv, parseRankingsCsvImport, rankingsCsvFileError, rankingsExportRows, toCsv, type RankingsCsvImportResult } from '../../utils/draftCsv'
 import { pingEspnHelper, sendEspnRankings, toEspnRankingsPayload } from '../../utils/espnRankingsBridge'
@@ -491,7 +492,7 @@ export default function PreDraftRankingsPage() {
   }, [])
   const playersById = useMemo(() => {
     const next = new Map<string, AdpPlayer>()
-    for (const p of players) next.set(p.id, hydrateAdpPlayer(p, detailsById.get(p.id)))
+    for (const p of players) next.set(p.id, withIndexBlends(hydrateAdpPlayer(p, detailsById.get(p.id)), p))
     return next
   }, [players, detailsById])
   const pagedFull = useMemo(
