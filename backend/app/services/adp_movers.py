@@ -23,7 +23,6 @@ from app.models.adp import (
     AdpMoversSection,
     AdpPlayer,
     AdpSnapshotHistory,
-    AdpTrendResponse,
 )
 from app.services import adp_snapshots
 from app.services.adp_fetch import PROVIDER_CAPABILITIES, PROVIDER_LABELS, assemble_adp_payload
@@ -406,45 +405,4 @@ async def _last_update_section(
         from_date=before.snapshot_date.isoformat(),
         to_date=after.snapshot_date.isoformat(),
         **result,
-    )
-
-
-async def get_trend(
-    *,
-    metric: str = "adp",
-    sites: Optional[str] = None,
-    days: int = 7,
-) -> AdpTrendResponse:
-    """Per-player Blend change over the last `days`, for trend badges on the board."""
-    metric = parse_metric(metric)
-    chosen = resolve_sites(metric, sites)
-    days = max(1, min(days, 60))
-    to_day = today_utc()
-    from_day = to_day - timedelta(days=days)
-    timelines = _timelines(await adp_snapshots.list_snapshots())
-    ends: dict[str, tuple[SnapshotMeta, SnapshotMeta]] = {}
-    for site in chosen:
-        before, after, _note = _range_endpoints(timelines.get(site, []), metric, from_day, to_day)
-        if before is not None and after is not None:
-            ends[site] = (before, after)
-    if not ends:
-        return AdpTrendResponse(metric=metric, days=days)
-    used = tuple(site for site in chosen if site in ends)
-    before_state = await build_state({s: ends[s][0].snapshot_date for s in used})
-    after_state = await build_state({s: ends[s][1].snapshot_date for s in used})
-    pair = blend_pair(used, metric)
-    deltas: dict[str, float] = {}
-    for pid in before_state.keys() & after_state.keys():
-        before, after = pair(before_state[pid], after_state[pid])
-        if before is None or after is None:
-            continue
-        delta = round(before - after, 1)
-        if delta:
-            deltas[pid] = delta
-    return AdpTrendResponse(
-        metric=metric,
-        days=days,
-        from_date=min(ends[s][0].snapshot_date for s in used).isoformat(),
-        to_date=max(ends[s][1].snapshot_date for s in used).isoformat(),
-        deltas=deltas,
     )

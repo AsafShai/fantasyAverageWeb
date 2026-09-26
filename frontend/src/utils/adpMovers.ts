@@ -85,17 +85,6 @@ export function shortDateRange(from: string | null | undefined, to: string | nul
   return `${formatMoverDate(from)} → ${formatMoverDate(to)}`
 }
 
-/** Compact badge text for the board: "▲4.5" / "▼2". */
-export function trendBadge(delta: number | null | undefined): { text: string; className: string } | null {
-  if (delta == null || delta === 0) return null
-  const abs = Math.abs(delta)
-  const text = `${delta > 0 ? '▲' : '▼'}${Number.isInteger(abs) ? abs : abs.toFixed(1)}`
-  return {
-    text,
-    className: delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
-  }
-}
-
 /** Which movers list(s) to show: one section key ("blend" or a site), or every one. */
 export type MoversShown = string
 export const SHOW_ALL_SECTIONS = 'all'

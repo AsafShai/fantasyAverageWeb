@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { useGetAdpQuery, useGetAdpTrendQuery, useLazyGetAdpQuery } from '../../store/api/fantasyApi'
+import { useGetAdpQuery, useLazyGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
 import { useDebounce } from '../../hooks/useDebounce'
@@ -26,7 +26,6 @@ import {
   type AdpSiteKey,
 } from '../../utils/adp'
 import { downloadCsv, rankingsExportRows, toCsv } from '../../utils/draftCsv'
-import { trendBadge } from '../../utils/adpMovers'
 import type { AdpMetric, AdpPlayer, AdpResponse, ProviderMeta } from '../../types/api'
 
 type SortKey = 'blend' | 'spread' | 'name' | 'team' | AdpSiteKey
@@ -64,34 +63,17 @@ function FooterStat({
   )
 }
 
-const TREND_DAYS = 7
-
-function TrendBadge({ delta }: { delta: number | undefined }) {
-  const badge = trendBadge(delta)
-  if (!badge) return null
-  return (
-    <span
-      className={`text-[10px] font-semibold tabular-nums ${badge.className}`}
-      title={`Blend change over the last ${TREND_DAYS} days`}
-    >
-      {badge.text}
-    </span>
-  )
-}
-
 const AdpMobileCard = memo(function AdpMobileCard({
   player,
   metric,
   sites,
   listRank,
-  trend,
   onOpen,
 }: {
   player: AdpPlayer
   metric: AdpMetric
   sites: AdpSiteKey[]
   listRank: number
-  trend?: number
   onOpen: (id: string) => void
 }) {
   const blend = blendValue(player, metric)
@@ -116,9 +98,6 @@ const AdpMobileCard = memo(function AdpMobileCard({
             link={false}
           />
         </div>
-        <span className="shrink-0">
-          <TrendBadge delta={trend} />
-        </span>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-x-1 gap-y-1.5 rounded-md bg-blue-50 dark:bg-blue-950/50 ring-1 ring-inset ring-blue-200/80 dark:ring-blue-800 py-1.5 px-0.5">
         {sites.map((site) => {
@@ -150,13 +129,11 @@ const AdpTableRow = memo(function AdpTableRow({
   metric,
   sites,
   listRank,
-  trend,
 }: {
   player: AdpPlayer
   metric: AdpMetric
   sites: AdpSiteKey[]
   listRank: number
-  trend?: number
 }) {
   const blend = blendValue(player, metric)
   return (
@@ -182,14 +159,11 @@ const AdpTableRow = memo(function AdpTableRow({
           </td>
         )
       })}
-      <td className="table-cell text-right font-semibold whitespace-nowrap">
+      <td className="table-cell text-right font-semibold">
         {formatAdp(blend)}
-        {(metric === 'adp' ? player.blend_rank : player.ranking_blend_rank) != null || trend ? (
+        {(metric === 'adp' ? player.blend_rank : player.ranking_blend_rank) != null ? (
           <div className="text-[10px] text-gray-400 font-normal">
-            <TrendBadge delta={trend} />
-            {(metric === 'adp' ? player.blend_rank : player.ranking_blend_rank) != null
-              ? ` #${metric === 'adp' ? player.blend_rank : player.ranking_blend_rank}`
-              : null}
+            #{metric === 'adp' ? player.blend_rank : player.ranking_blend_rank}
           </div>
         ) : null}
       </td>
@@ -291,12 +265,6 @@ export default function AdpPage() {
     ],
   )
   const { data, isLoading, isFetching, error } = useGetAdpQuery(queryArgs)
-  const { data: trendData } = useGetAdpTrendQuery({
-    metric,
-    sites: metric === 'adp' ? sitesParam : rankSitesParam,
-    days: TREND_DAYS,
-  })
-  const trends = trendData?.deltas
   const [fetchAll] = useLazyGetAdpQuery()
   if (data?.providers?.length && data.providers !== providers) setProviders(data.providers)
   if (data && data !== lastGood) setLastGood(data)
@@ -406,14 +374,6 @@ export default function AdpPage() {
           </p>
           {view?.updated_at ? (
             <p className="text-xs text-gray-400 mt-1">Updated {formatUpdatedAt(view.updated_at)}</p>
-          ) : null}
-          {trends && Object.keys(trends).length ? (
-            <p className="text-xs text-gray-400 mt-1">
-              ▲/▼ next to Blend is the change over the last {TREND_DAYS} days.{' '}
-              <Link to="/draft/movers" className="text-blue-700 dark:text-blue-300 hover:underline">
-                See biggest movers
-              </Link>
-            </p>
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1">
@@ -563,7 +523,6 @@ export default function AdpPage() {
               metric={metric}
               sites={visibleSites}
               listRank={offset + i + 1}
-              trend={trends?.[p.id]}
               onOpen={openPlayer}
             />
           ))}
@@ -626,7 +585,6 @@ export default function AdpPage() {
                   metric={metric}
                   sites={visibleSites}
                   listRank={offset + i + 1}
-                  trend={trends?.[p.id]}
                 />
               ))}
             </tbody>

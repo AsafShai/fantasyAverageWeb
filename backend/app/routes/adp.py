@@ -8,10 +8,9 @@ from app.models.adp import (
     AdpIndexResponse,
     AdpMoversResponse,
     AdpResponse,
-    AdpTrendResponse,
     ProviderMeta,
 )
-from app.services.adp_movers import get_movers, get_trend
+from app.services.adp_movers import get_movers
 from app.services.adp_service import (
     get_adp_index_response,
     get_adp_response_enriched,
@@ -92,22 +91,6 @@ async def get_adp_movers(
     except Exception as e:
         logger.error("Error building ADP movers: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve ADP movers")
-
-
-@router.get("/trend", response_model=AdpTrendResponse)
-async def get_adp_trend(
-    response: Response,
-    metric: str = Query("adp"),
-    sites: Optional[str] = Query(None),
-    days: int = Query(7, ge=1, le=60),
-):
-    """Per-player Blend change over the last `days`, for the board's trend badges."""
-    _cache_headers(response)
-    try:
-        return await get_trend(metric=metric, sites=sites, days=days)
-    except Exception as e:
-        logger.error("Error building ADP trend: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to retrieve ADP trend")
 
 
 @router.post("/refresh", response_model=list[ProviderMeta])

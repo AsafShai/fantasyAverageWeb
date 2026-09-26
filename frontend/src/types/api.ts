@@ -502,15 +502,6 @@ export interface AdpMoversQueryArgs {
   limit?: number;
 }
 
-export interface AdpTrendResponse {
-  metric: AdpMetric;
-  days: number;
-  from_date: string | null;
-  to_date: string | null;
-  /** Board player id -> Blend change (positive = moved up). */
-  deltas: Record<string, number>;
-}
-
 export interface NbaPlayerBio {
   id: string;
   display_name: string;

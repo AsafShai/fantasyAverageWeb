@@ -5,7 +5,6 @@ import {
   formatMoverDate,
   moversQueryArgs,
   pickSections,
-  trendBadge,
   utcDaysAgo,
 } from '../adpMovers'
 
@@ -50,12 +49,6 @@ describe('formatting', () => {
   it('reads snapshot dates as calendar days', () => {
     expect(formatMoverDate('2026-09-22')).toMatch(/22/)
     expect(formatMoverDate(null)).toBe('')
-  })
-
-  it('hides zero trend badges', () => {
-    expect(trendBadge(0)).toBeNull()
-    expect(trendBadge(4.5)?.text).toBe('▲4.5')
-    expect(trendBadge(-2)?.text).toBe('▼2')
   })
 })
 

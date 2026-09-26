@@ -346,12 +346,3 @@ def test_adp_movers_route_rejects_inverted_range(test_client):
     response = test_client.get("/api/adp/movers?from_date=2026-09-25&to_date=2026-09-20")
     assert response.status_code == 400
 
-
-def test_adp_trend_route(test_client):
-    from app.models.adp import AdpTrendResponse
-
-    fake = AdpTrendResponse(metric="adp", days=7, deltas={"123": 4.5})
-    with patch("app.routes.adp.get_trend", new_callable=AsyncMock, return_value=fake):
-        response = test_client.get("/api/adp/trend?days=7")
-    assert response.status_code == 200
-    assert response.json()["deltas"] == {"123": 4.5}

@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, AdpTrendResponse, AdpMetric, TodayHub } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
@@ -193,13 +193,6 @@ export const fantasyApi = createApi({
       }),
       keepUnusedDataFor: 600,
     }),
-    getAdpTrend: builder.query<AdpTrendResponse, { metric: AdpMetric; sites?: string; days?: number }>({
-      query: ({ metric, sites, days = 7 }) => ({
-        url: '/adp/trend',
-        params: { metric, days, ...(sites ? { sites } : {}) },
-      }),
-      keepUnusedDataFor: 600,
-    }),
     getTrendsMinutes: builder.query<MinutesResponse, { windowDays?: number }>({
       query: ({ windowDays = 15 } = {}) => ({ url: '/trends/minutes', params: { window_days: windowDays } }),
       keepUnusedDataFor: 600,
@@ -288,7 +281,6 @@ export const {
   useLazyGetAdpQuery,
   useGetAdpIndexQuery,
   useGetAdpMoversQuery,
-  useGetAdpTrendQuery,
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
   useGetTrendsRegressionQuery,

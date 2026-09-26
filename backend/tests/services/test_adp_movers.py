@@ -145,18 +145,6 @@ async def test_from_after_to_is_rejected(store):
 
 
 @pytest.mark.asyncio
-async def test_trend_returns_blend_delta_per_player(store):
-    store[("espn", D21)] = [_row("Paul Reed", 40.0), _row("Tre Jones", 50.0)]
-    store[("espn", D25)] = [_row("Paul Reed", 30.0), _row("Tre Jones", 50.0)]
-    store[("fantrax", D21)] = [_row("Paul Reed", 42.0)]
-    store[("fantrax", D25)] = [_row("Paul Reed", 38.0)]
-
-    resp = await adp_movers.get_trend(metric="adp", sites="espn,fantrax", days=7)
-    assert resp.deltas == {"name:paul reed": 7.0}
-    assert (resp.from_date, resp.to_date) == ("2026-09-21", "2026-09-25")
-
-
-@pytest.mark.asyncio
 async def test_espn_slide_onto_undrafted_floor_is_an_exit_not_a_fall(store):
     store[("espn", D21)] = [_row("Jordan Poole", 120.0), _row("Bj Johnson", 131.7), _row("Tre Jones", 139.2)]
     store[("espn", D25)] = [_row("Jordan Poole", 137.9), _row("Bj Johnson", 138.0), _row("Tre Jones", 125.0)]

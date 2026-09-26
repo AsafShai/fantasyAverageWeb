@@ -181,14 +181,3 @@ class AdpMoversResponse(BaseModel):
     sections: list[AdpMoversSection] = Field(default_factory=list)
     history: list[AdpSnapshotHistory] = Field(default_factory=list)
 
-
-class AdpTrendResponse(BaseModel):
-    """Blend change per player over the last `days`, for the ADP table's trend badges."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    metric: str
-    days: int
-    from_date: Optional[str] = None
-    to_date: Optional[str] = None
-    deltas: dict[str, float] = Field(default_factory=dict)
