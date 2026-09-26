@@ -202,6 +202,28 @@ async def test_get_players_df_sends_if_none_match(provider):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("split", [0, 1, 2, 3])
+async def test_get_players_df_asks_espn_for_only_the_split_and_actual_lines_it_reads(provider, split):
+    """Unfiltered, kona_player_info carries every per-game split and projection
+    for every player (~25 MB); only this split's actual line is ever read."""
+    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    setattr(provider.cache_manager, f"players_{split}", {"data": None, "timestamp": None, "etag": None})
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e1"}
+    mock_resp.json.return_value = {"players": []}
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    await provider.get_players_df(split)
+
+    sent = json.loads(provider._client.get.await_args.kwargs["headers"]["X-Fantasy-Filter"])["players"]
+    assert sent["filterStatsForSplitTypeIds"] == {"value": [split]}
+    assert sent["filterStatsForSourceIds"] == {"value": [0]}
+    assert sent["limit"] == 1200
+    assert sent["filterStatus"] == {"value": ["ONTEAM", "FREEAGENT", "WAIVERS"]}
+
+
+@pytest.mark.asyncio
 async def test_get_players_df_concurrent_calls_coalesce(provider):
     provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
     provider.cache_manager.players_0 = {"data": None, "timestamp": None, "etag": None}

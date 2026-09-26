@@ -1,15 +1,13 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 from app.services.adp_service import ensure_daily_snapshot
-from app.services.estimator_service import EstimatorService
+from app.services.estimator_service import EstimatorService, ISRAEL_TZ
 from app.services.data_provider import DataProvider
 
 logger = logging.getLogger(__name__)
 
-ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 SCHEDULE_TIMES = [(9, 0), (9, 30), (10, 0), (10, 30), (11, 0)]
 
 

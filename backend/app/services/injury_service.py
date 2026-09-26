@@ -398,6 +398,25 @@ async def broadcast_fetch_update(report_time: str) -> None:
         await queue.put({"_event": "fetch_update", "data": payload})
 
 
+def _patch_cached_matchups(
+    notifications: list[InjuryNotification], new_store: dict[str, InjuryRecord]
+) -> None:
+    """Push this report's changes into the cached matchup slates, mirroring what the
+    injury table now holds (Available and removed players have no row)."""
+    from app.routes.matchups import apply_injury_changes
+    from app.utils.name_matching import normalize_player_name
+
+    changes: dict[str, str | None] = {}
+    for notif in notifications:
+        status = None
+        if notif.type in ("added", "status_change"):
+            record = new_store.get(f"{notif.team}|{notif.player}")
+            if record is not None and record.status != "Available":
+                status = record.status
+        changes[normalize_player_name(notif.player)] = status
+    apply_injury_changes(changes)
+
+
 async def _try_update_injury_data() -> bool:
     """Like update_injury_data but returns True on success, False if PDF unavailable."""
     url = get_current_pdf_url()
@@ -416,6 +435,10 @@ async def _try_update_injury_data() -> bool:
     old_store = dict(injury_store)
     injury_store.clear()
     injury_store.update(new_store)
+    if notifications:
+        # The Dashboard hub counts injuries from this store — recount its cached panel.
+        from app.services.today_service import refresh_roster_health
+        refresh_roster_health()
 
     db_service = get_db_service()
     for notif in notifications:
@@ -450,6 +473,7 @@ async def _try_update_injury_data() -> bool:
                 ))
 
     if notifications:
+        _patch_cached_matchups(notifications, new_store)
         logger.info(f"Broadcasting {len(notifications)} injury update(s)")
         await broadcast_notifications(notifications)
 
