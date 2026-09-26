@@ -177,3 +177,35 @@ async def test_successful_fetch_persists_to_db():
     assert "INSERT INTO adp_provider_cache" in args[0]
     assert args[1] == "espn"
     assert args[5] == adp_cache.PAYLOAD_VERSION
+
+
+@pytest.mark.asyncio
+async def test_daily_floor_makes_an_earlier_day_fetch_due_despite_ttl():
+    good = AsyncMock(return_value=([(1, "A", 1.0, ["C"])], "src"))
+    await adp_cache.get_or_refresh("espn", good)
+    now = datetime.now(timezone.utc)
+    yesterday = now - timedelta(days=1)
+    # Last fetched on the previous UTC day, but checked recently: inside the 24h TTL.
+    adp_cache._mem["espn"].fetched_at = yesterday
+    adp_cache._mem["espn"].checked_at = now - timedelta(hours=1)
+
+    adp_cache.require_fetched_on_or_after(yesterday.date())
+    await adp_cache.get_or_refresh("espn", good)
+    assert good.await_count == 1  # floor already met: TTL still rules
+
+    adp_cache.require_fetched_on_or_after(now.date())
+    await adp_cache.get_or_refresh("espn", good)
+    assert good.await_count == 2
+    await adp_cache.get_or_refresh("espn", good)
+    assert good.await_count == 2  # fetched today now: no repeat
+
+
+@pytest.mark.asyncio
+async def test_daily_floor_does_not_bypass_failure_backoff():
+    good = AsyncMock(return_value=([(1, "A", 1.0, ["C"])], "src"))
+    await adp_cache.get_or_refresh("espn", good)
+    adp_cache._mem["espn"].ok = False
+    adp_cache._mem["espn"].fetched_at = datetime.now(timezone.utc) - timedelta(days=2)
+    adp_cache.require_fetched_on_or_after(datetime.now(timezone.utc).date())
+    await adp_cache.get_or_refresh("espn", good)
+    assert good.await_count == 1  # just failed: wait out FAILURE_RETRY, don't hammer
