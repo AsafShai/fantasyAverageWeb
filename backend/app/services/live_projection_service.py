@@ -74,6 +74,7 @@ class LiveProjectionService:
 
         reqs: list[PredictionRequest] = []
         meta: list[tuple[str, int, float]] = []
+        unmatched: list[str] = []
         today = pd.Timestamp.now().normalize()
         for row in players_df.to_dict('records'):
             name = str(row.get('Name', ''))
@@ -82,7 +83,7 @@ class LiveProjectionService:
                 continue
             pid = self._name_index.get(normalize_player_name(name))
             if pid is None:
-                logger.warning(f"No feature-store match for '{name}' — has a game today but was skipped")
+                unmatched.append(name)
                 continue
             opp_id = _opponent_team_id(info.opponent)
             if opp_id is None:
@@ -94,6 +95,11 @@ class LiveProjectionService:
             ))
             meta.append((name, pid, default_min))
 
+        if unmatched:
+            logger.warning(
+                f"No feature-store match for {len(unmatched)} player(s) with a game today, "
+                f"skipped: {', '.join(unmatched)}"
+            )
         if not reqs:
             return {}
 

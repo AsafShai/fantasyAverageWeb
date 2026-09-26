@@ -93,7 +93,18 @@ async def _ensure_table(conn) -> None:
     global _table_ready
     if _table_ready:
         return
-    await conn.execute(_DDL)
+    # Check first: CREATE TABLE IF NOT EXISTS still needs CREATE on the schema, so a
+    # role without it fails even when the table is already there.
+    if await conn.fetchval("SELECT to_regclass('adp_provider_snapshots') IS NOT NULL"):
+        _table_ready = True
+        return
+    try:
+        await conn.execute(_DDL)
+    except Exception as e:
+        raise RuntimeError(
+            "adp_provider_snapshots is missing and this DB role cannot create it "
+            f"({type(e).__name__}: {e}); apply migrations/create_adp_provider_snapshots.sql"
+        ) from e
     _table_ready = True
 
 
