@@ -110,3 +110,37 @@ async def test_database_error_is_swallowed():
     with patch("app.services.adp_snapshots.DBService") as db:
         db.return_value._get_pool = AsyncMock(return_value=_mock_pool(conn))
         assert await adp_snapshots.record_snapshot("espn", ROWS, FETCHED) is False
+
+
+@pytest.mark.asyncio
+async def test_existing_table_skips_the_ddl():
+    # CREATE TABLE IF NOT EXISTS needs CREATE on the schema even when the table exists,
+    # so a role without it must not run the DDL at all once the table is there.
+    conn = _conn()
+    conn.fetchval = AsyncMock(return_value=True)
+    with patch("app.services.adp_snapshots.DBService") as db:
+        db.return_value._get_pool = AsyncMock(return_value=_mock_pool(conn))
+        assert await adp_snapshots.record_snapshot("espn", ROWS, FETCHED) is True
+    assert not [c for c in conn.execute.await_args_list if "CREATE TABLE" in c.args[0]]
+    assert len(_inserts(conn)) == 1
+
+
+@pytest.mark.asyncio
+async def test_missing_table_is_created():
+    conn = _conn()
+    conn.fetchval = AsyncMock(return_value=False)
+    with patch("app.services.adp_snapshots.DBService") as db:
+        db.return_value._get_pool = AsyncMock(return_value=_mock_pool(conn))
+        assert await adp_snapshots.record_snapshot("espn", ROWS, FETCHED) is True
+    assert "CREATE TABLE IF NOT EXISTS adp_provider_snapshots" in conn.execute.await_args_list[0].args[0]
+
+
+@pytest.mark.asyncio
+async def test_missing_table_without_create_rights_fails_soft_and_names_the_migration(caplog):
+    conn = _conn()
+    conn.fetchval = AsyncMock(return_value=False)
+    conn.execute = AsyncMock(side_effect=Exception("permission denied for schema public"))
+    with patch("app.services.adp_snapshots.DBService") as db:
+        db.return_value._get_pool = AsyncMock(return_value=_mock_pool(conn))
+        assert await adp_snapshots.record_snapshot("espn", ROWS, FETCHED) is False
+    assert "create_adp_provider_snapshots.sql" in caplog.text
