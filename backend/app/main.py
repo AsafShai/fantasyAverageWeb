@@ -1,12 +1,14 @@
-import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.routes.rankings import router as rankings_router
 from app.routes.teams import router as teams_router
@@ -27,26 +29,45 @@ from app.routes.adp import router as adp_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
-from datetime import datetime
 from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
+from app.services import schedule_service
 from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
 from app.services import nba_players_scheduler
+from app.services import health_service
+from app.utils.timing_middleware import add_timing_middleware
+from app.utils.request_context import RequestIdFilter
+from app.utils.http_cache import HttpCacheMiddleware
+from app.utils import background_tasks
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
-# Configure logging
+# Configure logging. [request_id] ties every line logged while serving a
+# request to that request's access-log line ("-" outside a request).
+_log_handler = logging.StreamHandler()
+_log_handler.addFilter(RequestIdFilter())
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] %(message)s',
+    handlers=[_log_handler]
 )
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
+limiter = Limiter(key_func=get_remote_address)
+
+async def derive_season_start():
+    """First regular-season game date: one fantasy request, falling back to the
+    ~16-call scoreboard binary search."""
+    derived_start = await schedule_service.get_season_start_date()
+    if derived_start is not None:
+        logger.info(f"Derived regular-season start from ESPN pro-team schedules: {derived_start}")
+        return derived_start
+    derived_start = await NBAStatsService().get_regular_season_start_date(settings.season_id)
+    if derived_start is not None:
+        logger.info(f"Derived regular-season start from NBA schedule: {derived_start}")
+    return derived_start
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,9 +75,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Fantasy League Dashboard API")
     try:
-        derived_start = await NBAStatsService().get_regular_season_start_date(settings.season_id)
+        derived_start = await derive_season_start()
         if derived_start is not None:
-            logger.info(f"Derived regular-season start from NBA schedule: {derived_start} (was {settings.season_start})")
+            logger.info(f"Regular-season start: {derived_start} (was {settings.season_start})")
             settings.season_start = derived_start
         else:
             logger.warning(f"Could not derive regular-season start; keeping configured SEASON_START={settings.season_start}")
@@ -64,20 +85,21 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to derive regular-season start, keeping configured SEASON_START={settings.season_start}: {type(e).__name__}: {e}")
     await injury_service.initialize()
     if settings.injury_scheduler_enabled:
-        asyncio.create_task(injury_service.start_scheduler())
+        background_tasks.spawn(injury_service.start_scheduler(), name="injury-scheduler")
     else:
         logger.info("Injury scheduler disabled via INJURY_SCHEDULER_ENABLED=false")
-    asyncio.create_task(estimator_scheduler.start_scheduler())
+    background_tasks.spawn(estimator_scheduler.start_scheduler(), name="estimator-scheduler")
     if settings.model_nightly_enabled:
-        asyncio.create_task(model_nightly_scheduler.start_scheduler())
+        background_tasks.spawn(model_nightly_scheduler.start_scheduler(), name="model-nightly-scheduler")
     else:
         logger.info("Model nightly scheduler disabled via MODEL_NIGHTLY_ENABLED=false")
     if settings.nba_players_refresh_enabled:
-        asyncio.create_task(nba_players_scheduler.start_scheduler())
+        background_tasks.spawn(nba_players_scheduler.start_scheduler(), name="nba-players-scheduler")
     else:
         logger.info("NBA players refresh scheduler disabled via NBA_PLAYERS_REFRESH_ENABLED=false")
     yield
     # Shutdown
+    await background_tasks.cancel_all()
     try:
         data_provider = DataProvider()
         await data_provider.close()
@@ -95,13 +117,29 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# The handlers below stash the error on request.state; the timing middleware
+# appends it to the request's access-log line, so a 4xx/5xx says why without
+# a second log line per error.
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_logging_handler(request: Request, exc: StarletteHTTPException):
+    request.state.error_detail = exc.detail
+    return await http_exception_handler(request, exc)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_logging_handler(request: Request, exc: RequestValidationError):
+    request.state.error_detail = "; ".join(
+        f"{'.'.join(str(p) for p in err.get('loc', ()))}: {err.get('msg')}" for err in exc.errors()
+    )
+    return await request_validation_exception_handler(request, exc)
+
 @app.exception_handler(ResourceNotFoundError)
 async def resource_not_found_handler(request: Request, exc: ResourceNotFoundError):
+    request.state.error_detail = str(exc)
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 @app.exception_handler(DataSourceError)
 async def data_source_error_handler(request: Request, exc: DataSourceError):
-    logger.warning(f"Data source unavailable for {request.url}: {exc}")
+    request.state.error_detail = f"data source unavailable: {exc}"
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 @app.exception_handler(Exception)
@@ -115,6 +153,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
+# Innermost (added first): must see the uncompressed body, see HttpCacheMiddleware.
+app.add_middleware(HttpCacheMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins_list],
@@ -124,6 +165,8 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+add_timing_middleware(app)
 
 app.include_router(rankings_router, prefix="/api", tags=["Rankings"])
 app.include_router(teams_router, prefix="/api/teams", tags=["Teams"])
@@ -151,16 +194,14 @@ async def root(request: Request):
 
 @app.get("/health")
 @limiter.limit("60/minute")
-async def health_check(request: Request):
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "Fantasy League Dashboard API"
-    }
+async def health_check(request: Request, verbose: int = 0):
+    return await health_service.collect(verbose=bool(verbose))
 
 load_dotenv()
 
 if __name__ == "__main__":
     import uvicorn
     logger.info(f"Starting Fantasy League Dashboard API on port {settings.port}")
-    uvicorn.run(app, host="0.0.0.0", port=settings.port)
+    # uvicorn's own access log is off: the timing middleware logs every request
+    # with its duration, request id and error detail instead.
+    uvicorn.run(app, host="0.0.0.0", port=settings.port, proxy_headers=True, forwarded_allow_ips="*", access_log=False)

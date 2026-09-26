@@ -15,8 +15,9 @@ import {
   spreadValue,
   threeRrDisplayRounds,
   toListHeadshotUrl,
+  withIndexBlends,
 } from '../adp'
-import type { AdpPlayer, ProviderMeta } from '../../types/api'
+import type { AdpIndexPlayer, AdpPlayer, ProviderMeta } from '../../types/api'
 
 describe('3RR draft board', () => {
   it('reverses rounds 2 and 3, then snakes from there', () => {
@@ -130,6 +131,24 @@ describe('metric-aware player values', () => {
     expect(blendRankValue(player, 'rank')).toBe(5)
     expect(spreadValue(player, 'adp')).toBe(3)
     expect(spreadValue(player, 'rank')).toBe(1)
+  })
+
+  it('keeps the site-filtered index blends over the all-sites detail record', () => {
+    const index = {
+      id: 'tari-eason',
+      blend: 116.5,
+      blend_rank: 110,
+      ranking_blend: 90,
+      ranking_blend_rank: 88,
+    } as AdpIndexPlayer
+    const detail = { ...player, id: 'tari-eason', blend: 127.9, blend_rank: 121 } as AdpPlayer
+    const merged = withIndexBlends(detail, index)
+    expect(merged.blend).toBe(116.5)
+    expect(merged.blend_rank).toBe(110)
+    expect(merged.ranking_blend).toBe(90)
+    expect(merged.ranking_blend_rank).toBe(88)
+    expect(merged.espn).toBe(detail.espn)
+    expect(withIndexBlends(merged, index)).toBe(merged)
   })
 })
 

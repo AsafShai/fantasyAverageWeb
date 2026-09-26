@@ -20,8 +20,9 @@ from typing import NamedTuple, Optional
 import httpx
 
 from app.config import settings
-from app.services import adp_cache
+from app.services import adp_cache, adp_snapshots
 from app.services.player_service import espn_season_string
+from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,13 @@ _HEADERS = {
     "Accept": "application/json",
 }
 _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+
+
+def _adp_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True, verify=shared_ssl_context()
+    )
+
 
 class AdpRow(NamedTuple):
     espn_id: Optional[int]
@@ -488,7 +496,7 @@ async def fetch_espn_stat_splits(
 async def fetch_espn_stat_splits_map(
     *, actual_season_id: int, proj_season_id: int
 ) -> tuple[dict[int, dict], dict[int, dict]]:
-    async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
+    async with _adp_client() as client:
         return await fetch_espn_stat_splits(
             client, actual_season_id=actual_season_id, proj_season_id=proj_season_id
         )
@@ -561,7 +569,7 @@ async def fetch_live_adp_payload() -> dict:
     inside its TTL is served from memory/Neon with no request at all. Failed sites with
     no cached payload anywhere are omitted.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
+    async with _adp_client() as client:
         fetchers = {
             "espn": lambda: fetch_espn(client),
             "fantrax": lambda: fetch_fantrax(client),
@@ -604,6 +612,11 @@ async def fetch_live_adp_payload() -> dict:
 
     if not fetched:
         raise RuntimeError("All ADP sources failed")
+
+    # History for the Movers page. A no-op unless this payload differs from the stored one.
+    for site, result in zip(SITES, results):
+        if not isinstance(result, BaseException):
+            await adp_snapshots.record_snapshot(site, result.payload, result.fetched_at)
 
     return assemble_adp_payload(
         fetched,

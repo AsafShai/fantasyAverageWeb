@@ -18,6 +18,7 @@ import httpx
 
 from app.config import settings
 from app.services.db_service import DBService
+from app.utils.ssl_context import shared_ssl_context
 from app.utils.team_abbr_map import TEAM_ID_TO_ABBR, canonical_abbr
 from model_stats_inference.espn import client as espn_client
 from model_stats_inference.espn.games import event_game_date, is_countable, is_final
@@ -52,7 +53,7 @@ _STAT_COLS: dict[str, str] = {
 class NbaMatchupService:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0), verify=shared_ssl_context())
         self._db = DBService()
         self._def_cache: dict = {
             'ranks': None,

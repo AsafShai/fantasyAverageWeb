@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import httpx
 import json
 from datetime import datetime, timedelta
@@ -11,8 +12,19 @@ from app.services.db_service import DBService
 from app.config import settings
 from app.exceptions import DataSourceError
 from app.utils.constants import RANKING_CATEGORIES
+from app.services.data_transformer import ACTUAL_STAT_SOURCE_ID
 from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
+from app.utils.ssl_context import shared_ssl_context
+from app.utils import background_tasks
+
+PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
+# One page load fans out to several endpoints that all need standings; within
+# this window they share one ESPN round trip instead of queueing behind
+# _fetch_lock for one request apiece. Only a successful ESPN answer (200/304)
+# starts the window, so failures and the DB fallback keep retrying ESPN.
+TOTALS_TTL_SECONDS = 30
+
 
 class DataProvider:
     """Centralized data provider with caching for all ESPN data operations"""
@@ -38,7 +50,8 @@ class DataProvider:
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
-                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+                verify=shared_ssl_context()
             )
             DataProvider._initialized = True
             if not settings.season_id or not settings.league_id:
@@ -47,10 +60,55 @@ class DataProvider:
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
             self.espn_draft_detail_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mDraftDetail'
             self.espn_players_directory_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/players?view=players_wl'
-    
+            self.espn_pro_team_schedules_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}?view=proTeamSchedules_wl'
+
+    async def get_pro_team_schedules(self) -> Dict:
+        """Full NBA season schedule for the configured season, in one request.
+
+        Cached for 24h with ETag revalidation; serves the last good payload if
+        ESPN fails so the schedule view survives a transient outage."""
+        cache = self.cache_manager.pro_team_schedules_cache
+        now = time.monotonic()
+        if cache['data'] is not None and now - cache['fetched_at'] < PRO_TEAM_SCHEDULES_TTL_SECONDS:
+            return cache['data']
+
+        try:
+            headers = {}
+            if cache['etag']:
+                headers['If-None-Match'] = cache['etag']
+
+            response = await self._client.get(self.espn_pro_team_schedules_url, headers=headers)
+
+            if response.status_code == 304 and cache['data'] is not None:
+                cache['fetched_at'] = now
+                return cache['data']
+
+            response.raise_for_status()
+            api_data = response.json()
+            cache['etag'] = response.headers.get('ETag')
+            cache['data'] = api_data
+            cache['fetched_at'] = now
+            self.logger.info("ESPN pro-team schedules refreshed (cached for 24h)")
+            return api_data
+        except Exception as e:
+            if cache['data'] is not None:
+                self.logger.warning(f"Error fetching pro team schedules from ESPN API, serving last good copy: {type(e).__name__}: {e}")
+                return cache['data']
+            self.logger.error(f"Error fetching pro team schedules from ESPN API, no cached copy: {type(e).__name__}: {e}")
+            raise DataSourceError("Error fetching pro team schedules from ESPN API")
+
+
     async def get_totals_df(self) -> pd.DataFrame:
         """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure."""
         async with self._fetch_lock:
+            cache = self.cache_manager.totals_cache
+            checked_at = cache.get('espn_checked_at')
+            if (
+                cache.get('data') is not None
+                and checked_at is not None
+                and time.monotonic() - checked_at < TOTALS_TTL_SECONDS
+            ):
+                return cache['data']
             try:
                 headers = {}
                 if self.cache_manager.totals_cache['etag']:
@@ -59,6 +117,8 @@ class DataProvider:
                 response = await self._client.get(self.espn_standings_url, headers=headers)
 
                 if response.status_code == 304:
+                    self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+                    self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
                     return self.cache_manager.totals_cache['data']
 
                 response.raise_for_status()
@@ -76,15 +136,24 @@ class DataProvider:
                 self.cache_manager.totals_cache['data'] = totals_df
                 self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
                 self.cache_manager.totals_cache['data_date'] = None
+                self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+                self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
+                self.logger.info(
+                    f"ESPN standings refreshed: scoring_period_id={scoring_period_id}, "
+                    f"{len(totals_df)} teams, categories={categories}"
+                )
 
-                asyncio.create_task(self._sync_db_if_needed(scoring_period_id, totals_df))
+                background_tasks.spawn(
+                    self._sync_db_if_needed(scoring_period_id, totals_df), name="standings-db-sync"
+                )
 
                 return totals_df
 
             except Exception as e:
-                self.logger.error(f"ESPN fetch failed, attempting DB fallback: {e}")
+                self.logger.error(f"ESPN standings fetch failed: {type(e).__name__}: {e}")
                 if self.cache_manager.totals_cache.get('data') is not None:
-                    self.logger.info("Returning in-memory cached data after ESPN failure")
+                    fetched_at = self.cache_manager.totals_cache.get('fetched_at')
+                    self.logger.warning(f"Serving in-memory standings after ESPN failure (last fetched {fetched_at})")
                     return self.cache_manager.totals_cache['data']
                 return await self._fallback_from_db()
 
@@ -103,8 +172,10 @@ class DataProvider:
                 self.cache_manager.totals_cache['raw'] = api_data
                 self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
                 self.cache_manager.totals_cache['data_date'] = None
+                self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+                self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
             except Exception as e:
-                self.logger.error(f"sync_db_now: ESPN fetch failed: {e}")
+                self.logger.error(f"sync_db_now: ESPN fetch failed: {type(e).__name__}: {e}")
                 return False
 
         completed_period = scoring_period_id - 1
@@ -127,6 +198,8 @@ class DataProvider:
         self.cache_manager.totals_cache['data'] = df
         self.cache_manager.totals_cache['data_date'] = snap_date
         self.cache_manager.totals_cache['etag'] = None
+        self.cache_manager.totals_cache['fetched_at'] = datetime.now()
+        self.cache_manager.totals_cache['espn_checked_at'] = None
         self.logger.warning(f"Serving DB fallback data from {snap_date}")
         return df
 
@@ -142,7 +215,7 @@ class DataProvider:
                 raw = response.json()
                 self.cache_manager.totals_cache['raw'] = raw
             except httpx.RequestError as e:
-                self.logger.error(f"Error fetching team names from ESPN API: {e}")
+                self.logger.error(f"Error fetching team names from ESPN API: {type(e).__name__}: {e}")
                 raise DataSourceError("Error fetching team names from ESPN API")
         return self.data_transformer.raw_standings_to_team_names(raw)
 
@@ -162,6 +235,7 @@ class DataProvider:
 
             if cache.get('data') is not None and cache.get('timestamp'):
                 if datetime.now() - cache['timestamp'] < timedelta(minutes=5):
+                    self.logger.debug(f"ESPN players (split={stat_split_type_id}) served from cache")
                     return cache['data']
 
             async def _fetch_and_transform():
@@ -172,12 +246,19 @@ class DataProvider:
                 # used to be 500) silently drops any player outside the ownership-rank
                 # cutoff — including drafted players later dropped to 0% owned, who
                 # are still real players with real games (e.g. Reed Sheppard).
+                #
+                # Only this split's actual (statSourceId 0) lines are read, so ask ESPN
+                # for just those: unfiltered, every player also carries per-game splits
+                # and projections — ~25 MB of JSON (vs ~1-2.5 MB) to download and parse
+                # on the event loop.
                 espn_filter = {
                     "players": {
                         "filterStatus": {"value": ["ONTEAM", "FREEAGENT", "WAIVERS"]},
                         "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
                         "limit": 1200,
-                        "offset": 0
+                        "offset": 0,
+                        "filterStatsForSplitTypeIds": {"value": [stat_split_type_id]},
+                        "filterStatsForSourceIds": {"value": [ACTUAL_STAT_SOURCE_ID]},
                     }
                 }
                 headers['X-Fantasy-Filter'] = json.dumps(espn_filter)
@@ -217,19 +298,20 @@ class DataProvider:
                 cache['etag'] = response.headers.get('ETag')
                 cache['timestamp'] = datetime.now()
                 cache['data'] = players_df
+                self.logger.info(f"ESPN players refreshed: split={stat_split_type_id}, {len(players_df)} players")
 
                 return players_df
 
             return await self._coalesced(self._players_inflight, stat_split_type_id, _fetch_and_transform)
 
         except httpx.RequestError as e:
-            self.logger.error(f"Error fetching players data from ESPN API: {e}")
+            self.logger.error(f"Error fetching players data from ESPN API (split={stat_split_type_id}): {type(e).__name__}: {e}")
             raise DataSourceError("Error fetching players data from ESPN API")
         except (KeyError, ValueError) as e:
-            self.logger.error(f"Error parsing ESPN API response: {e}")
+            self.logger.error(f"Error parsing ESPN players response (split={stat_split_type_id}): {type(e).__name__}: {e}", exc_info=True)
             raise DataSourceError("Error parsing ESPN API response")
         except Exception as e:
-            self.logger.error(f"Unexpected error fetching ESPN players data: {e}")
+            self.logger.error(f"Unexpected error fetching ESPN players data (split={stat_split_type_id}): {type(e).__name__}: {e}", exc_info=True)
             raise DataSourceError("Unexpected error fetching ESPN players data")
 
     @staticmethod
@@ -272,9 +354,10 @@ class DataProvider:
             response.raise_for_status()
             api_data = response.json()
             self.cache_manager.draft_detail_cache = api_data
+            self.logger.info("ESPN draft detail loaded (cached for process lifetime)")
             return api_data
         except httpx.RequestError as e:
-            self.logger.error(f"Error fetching draft detail from ESPN API: {e}")
+            self.logger.error(f"Error fetching draft detail from ESPN API: {type(e).__name__}: {e}")
             raise DataSourceError("Error fetching draft detail from ESPN API")
 
     async def get_players_directory(self) -> Dict[int, str]:
@@ -289,15 +372,25 @@ class DataProvider:
             api_data = response.json()
             directory = {p['id']: p['fullName'] for p in api_data}
             self.cache_manager.players_directory_cache = directory
+            self.logger.info(f"ESPN players directory loaded: {len(directory)} players (cached for process lifetime)")
             return directory
         except httpx.RequestError as e:
-            self.logger.error(f"Error fetching players directory from ESPN API: {e}")
+            self.logger.error(f"Error fetching players directory from ESPN API: {type(e).__name__}: {e}")
             raise DataSourceError("Error fetching players directory from ESPN API")
 
-    async def get_slot_usage(self) -> Dict[int, Dict[str, int]]:
-        """Get games used per roster slot for all teams, parsed from cached mMatchupScore data"""
-        await self.get_totals_df()
-        raw = self.cache_manager.totals_cache.get('raw')
+    def cached_totals_raw(self) -> Optional[Dict]:
+        """The raw totals payload already held for this season, or None."""
+        return self.cache_manager.totals_cache.get('raw')
+
+    async def get_slot_usage(self, raw: Optional[Dict] = None) -> Dict[int, Dict[str, int]]:
+        """Get games used per roster slot for all teams, parsed from cached mMatchupScore data.
+
+        Callers that already fetched totals earlier in the same request can pass
+        that raw payload to skip a redundant ESPN round trip; omit it (or pass
+        None) to revalidate totals first, same as before."""
+        if raw is None:
+            await self.get_totals_df()
+            raw = self.cache_manager.totals_cache.get('raw')
         if not raw:
             return {}
         return self.data_transformer.parse_slot_usage(raw)
@@ -316,7 +409,7 @@ class DataProvider:
         try:
             await self.get_totals_df()
         except Exception as e:
-            self.logger.warning(f"Could not load league settings, using default categories: {e}")
+            self.logger.warning(f"Could not load league settings, using default categories: {type(e).__name__}: {e}")
             return None
         return self.cache_manager.totals_cache.get('raw')
 
@@ -337,6 +430,14 @@ class DataProvider:
         if not raw:
             return set()
         return self.data_transformer.resolve_reverse_categories(raw)
+
+    async def get_trade_deadline(self) -> Optional[datetime]:
+        """Get this league's trade deadline, resolved from ESPN's settings.
+        Returns None if settings are unavailable or the deadline isn't set."""
+        raw = await self._settings_payload()
+        if not raw:
+            return None
+        return self.data_transformer.resolve_trade_deadline(raw)
 
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
@@ -425,10 +526,11 @@ class DataProvider:
                     tasks.append(self.db_service.upsert_daily_snapshot(completed_period, totals_df, league_id, season_id))
 
                 if tasks:
+                    self.logger.info(f"DB sync: writing {len(tasks)} table(s) for completed period {completed_period}")
                     await asyncio.gather(*tasks)
                 self._last_synced_period = completed_period
             except Exception as e:
-                self.logger.error(f"DB sync failed for scoring_period_id={scoring_period_id}: {e}")
+                self.logger.error(f"DB sync failed for scoring_period_id={scoring_period_id}: {type(e).__name__}: {e}", exc_info=True)
 
     async def close(self):
         """Close the httpx client and DB pool to clean up connections"""

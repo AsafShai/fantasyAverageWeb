@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
 import { useGetRankingsQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import { Link } from 'react-router'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -18,15 +19,39 @@ const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
 const formatAverageValue = (categoryKey: string, val: number) =>
   PERCENTAGE_CATEGORIES.has(categoryKey) ? (val * 100).toFixed(4) + '%' : val.toFixed(4)
 
+const RANKINGS_URL_SCHEMA = {
+  from: isoDateParam(),
+  to: isoDateParam(),
+  mode: enumParam(['averages', 'totals'] as const, 'averages'),
+  view: enumParam(['standings', 'rankings'] as const, 'rankings'),
+  sort: stringParam('total_points'),
+  order: enumParam(['asc', 'desc'] as const, 'desc'),
+}
+
 const Rankings = () => {
-  const [sortBy, setSortBy] = useState<string>('total_points')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [mode, setMode] = useState<'averages' | 'totals'>('averages')
-  const [viewMode, setViewMode] = useState<'standings' | 'rankings'>('rankings')
-  const [startDate, setStartDate] = useState<string>('')
-  const [endDate, setEndDate] = useState<string>('')
+  const [urlState, setUrlState] = useUrlState(RANKINGS_URL_SCHEMA)
+  const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from < urlState.to
+  const [sortBy, setSortBy] = useState<string>(urlState.sort)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(urlState.order)
+  const [mode, setMode] = useState<'averages' | 'totals'>(urlState.mode)
+  const [viewMode, setViewMode] = useState<'standings' | 'rankings'>(urlState.view)
+  const [startDate, setStartDate] = useState<string>(hasUrlRange ? urlState.from : '')
+  const [endDate, setEndDate] = useState<string>(hasUrlRange ? urlState.to : '')
   const [dateError, setDateError] = useState<string>('')
-  const [appliedDates, setAppliedDates] = useState<{ startDate?: string; endDate?: string }>({})
+  const [appliedDates, setAppliedDates] = useState<{ startDate?: string; endDate?: string }>(() =>
+    hasUrlRange ? { startDate: urlState.from, endDate: urlState.to } : {}
+  )
+
+  useEffect(() => {
+    setUrlState({
+      from: appliedDates.startDate ?? '',
+      to: appliedDates.endDate ?? '',
+      mode,
+      view: viewMode,
+      sort: sortBy,
+      order: sortOrder,
+    })
+  }, [setUrlState, appliedDates, mode, viewMode, sortBy, sortOrder])
 
   const today = todayIso()
 

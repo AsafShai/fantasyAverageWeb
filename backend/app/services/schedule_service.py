@@ -1,26 +1,35 @@
 """Forward NBA schedule data used by the schedule views.
 
-The schedule is small enough to rebuild from ESPN in seven monthly requests,
-so it stays an in-process cache rather than becoming another database dataset.
+Built from ESPN's fantasy `proTeamSchedules_wl` view in a single request, with
+the seven-month scoreboard scan kept as a fallback. Either way the result is an
+in-process cache rather than another database dataset.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from app.config import settings
+from app.services.data_provider import get_data_provider
+from app.utils.ssl_context import shared_ssl_context
 from model_stats_inference.espn import client as espn_client
 from model_stats_inference.espn.games import event_game_date, is_countable, season_months
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR, TEAM_ID_TO_NAME, TEAM_IDS
 
+logger = logging.getLogger(__name__)
+
 HIGH_VOLUME_THRESHOLD = 10
 CACHE_TTL_SECONDS = 24 * 60 * 60
+EASTERN = ZoneInfo("America/New_York")
+FIRST_SCORING_PERIOD = 1
 
 
 @dataclass(frozen=True)
@@ -100,6 +109,69 @@ def _extract_games(scoreboards: list[dict[str, Any]]) -> dict[int, list[Schedule
     for games in games_by_team.values():
         games.sort(key=lambda game: (game.game_date, game.game_id))
     return games_by_team
+
+
+def _pro_games(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every regular-season game in a `proTeamSchedules_wl` payload, deduped —
+    ESPN lists each game under both participating teams."""
+    games: dict[int, dict[str, Any]] = {}
+    pro_teams = (payload or {}).get("settings", {}).get("proTeams") or []
+    for pro_team in pro_teams:
+        for period_games in (pro_team.get("proGamesByScoringPeriod") or {}).values():
+            for game in period_games or []:
+                try:
+                    period = int(game["scoringPeriodId"])
+                    game_id = int(game["id"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if period < FIRST_SCORING_PERIOD:
+                    continue
+                games.setdefault(game_id, game)
+    return list(games.values())
+
+
+def _pro_game_date(game: dict[str, Any]) -> date:
+    return datetime.fromtimestamp(int(game["date"]) / 1000, EASTERN).date()
+
+
+def _games_from_pro_team_schedules(payload: dict[str, Any]) -> dict[int, list[ScheduledGame]]:
+    games_by_team: dict[int, list[ScheduledGame]] = {team_id: [] for team_id in TEAM_IDS}
+
+    for game in _pro_games(payload):
+        try:
+            home_id = int(game["homeProTeamId"])
+            away_id = int(game["awayProTeamId"])
+            game_date = _pro_game_date(game)
+            game_id = str(game["id"])
+        except (KeyError, TypeError, ValueError, OSError, OverflowError):
+            continue
+        if home_id not in TEAM_IDS or away_id not in TEAM_IDS:
+            continue
+        games_by_team[home_id].append(ScheduledGame(game_id, game_date, away_id, True))
+        games_by_team[away_id].append(ScheduledGame(game_id, game_date, home_id, False))
+
+    for games in games_by_team.values():
+        games.sort(key=lambda game: (game.game_date, game.game_id))
+    return games_by_team
+
+
+def season_start_from_pro_team_schedules(payload: dict[str, Any]) -> date | None:
+    """First regular-season game date, i.e. the earliest scoring period 1 game."""
+    opening_dates = [
+        _pro_game_date(game)
+        for game in _pro_games(payload)
+        if int(game["scoringPeriodId"]) == FIRST_SCORING_PERIOD
+    ]
+    return min(opening_dates) if opening_dates else None
+
+
+async def get_season_start_date() -> date | None:
+    try:
+        payload = await get_data_provider().get_pro_team_schedules()
+        return season_start_from_pro_team_schedules(payload)
+    except Exception as e:
+        logger.warning(f"Could not derive season start from pro-team schedules: {type(e).__name__}: {e}")
+        return None
 
 
 def _date_bounds(games_by_team: dict[int, list[ScheduledGame]]) -> tuple[date, date] | None:
@@ -185,13 +257,30 @@ def _build_payload(season: str, games_by_team: dict[int, list[ScheduledGame]]) -
     }
 
 
-async def _fetch_schedule(season: str) -> dict[str, Any]:
-    async with httpx.AsyncClient() as client:
+async def _fetch_from_scoreboards(season: str) -> dict[int, list[ScheduledGame]]:
+    async with httpx.AsyncClient(verify=shared_ssl_context()) as client:
         scoreboards = await asyncio.gather(*(
             espn_client.scoreboard_async(client, month)
             for month in season_months(season)
         ))
-    return _build_payload(season, _extract_games(scoreboards))
+    return _extract_games(scoreboards)
+
+
+async def _fetch_schedule(season: str) -> dict[str, Any]:
+    # The fantasy endpoint only serves the configured SEASON_ID, so any other
+    # season still has to go through the scoreboard scan.
+    if season == season_label():
+        try:
+            payload = await get_data_provider().get_pro_team_schedules()
+            games_by_team = _games_from_pro_team_schedules(payload)
+            if any(games_by_team.values()):
+                return _build_payload(season, games_by_team)
+            logger.warning("Pro-team schedules returned no games; falling back to scoreboard scan")
+        except Exception as e:
+            logger.warning(
+                f"Pro-team schedules unavailable, falling back to scoreboard scan: {type(e).__name__}: {e}"
+            )
+    return _build_payload(season, await _fetch_from_scoreboards(season))
 
 
 async def get_schedule(season: str | None = None) -> dict[str, Any]:

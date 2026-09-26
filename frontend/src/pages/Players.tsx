@@ -1,6 +1,15 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useDebounce } from '../hooks/useDebounce';
+import {
+  useUrlState,
+  boolParam,
+  csvParam,
+  enumParam,
+  isoDateParam,
+  stringParam,
+  type UrlParam,
+} from '../hooks/useUrlState';
 import { useGetAllPlayersQuery, useGetScheduleQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
 import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStatKey, CustomDateRange } from '../types/api';
@@ -13,11 +22,81 @@ import PlayerNameLink from '../components/PlayerNameLink';
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_PAST_SLATES, FF_SCHEDULE } from '../config/featureFlags';
 import './Players.css';
 
+const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
+
+const STATUS_OPTIONS = [
+  { value: 'ONTEAM', label: 'On Team' },
+  { value: 'FREEAGENT', label: 'Free Agent' },
+  { value: 'WAIVERS', label: 'Waivers' },
+] as const;
+
+const TIME_PERIODS: readonly TimePeriod[] = ['season', 'last_7', 'last_15', 'last_30', 'custom'];
+
+const STAT_KEYS: readonly PlayerStatKey[] = [
+  'minutes', 'pts', 'reb', 'ast', 'stl', 'blk', 'fg_percentage', 'ft_percentage', 'three_pm',
+];
+
+const OPERATORS: readonly ComparisonOperator[] = ['eq', 'gt', 'gte', 'lt', 'lte'];
+
+const teamParam: UrlParam<string> = {
+  parse: (raw) => (/^\d+$/.test(raw) ? raw : undefined),
+  serialize: (value) => value,
+  default: '',
+};
+
+const statFiltersParam: UrlParam<StatFilter[]> = {
+  parse: (raw) => {
+    const parsed: StatFilter[] = [];
+    for (const part of raw.split(',')) {
+      const [stat, operator, value] = part.split(':');
+      const numeric = Number(value);
+      if (
+        !STAT_KEYS.includes(stat as PlayerStatKey) ||
+        !OPERATORS.includes(operator as ComparisonOperator) ||
+        value === undefined ||
+        value.trim() === '' ||
+        !Number.isFinite(numeric)
+      ) continue;
+      parsed.push({ stat: stat as PlayerStatKey, operator: operator as ComparisonOperator, value: numeric });
+    }
+    return parsed.length > 0 ? parsed : undefined;
+  },
+  serialize: (value) => value.map(f => `${f.stat}:${f.operator}:${f.value}`).join(','),
+  default: [],
+};
+
+const PLAYERS_URL_SCHEMA = {
+  q: stringParam(),
+  pos: csvParam<string>(POSITIONS),
+  status: csvParam<string>(STATUS_OPTIONS.map(s => s.value)),
+  team: teamParam,
+  period: enumParam<TimePeriod>(TIME_PERIODS, 'season'),
+  from: isoDateParam(),
+  to: isoDateParam(),
+  slate: isoDateParam(),
+  onslate: boolParam(false),
+  avg: boolParam(true),
+  sf: statFiltersParam,
+};
+
 const Players = () => {
-  const [filters, setFilters] = useState<PlayerFilters>({});
-  const [showAverages, setShowAverages] = usePersistedState('players.showAverages', true);
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
-  const [customRange, setCustomRange] = useState<CustomDateRange | null>(null);
+  const [urlState, setUrlState, urlKeys] = useUrlState(PLAYERS_URL_SCHEMA);
+  const [filters, setFilters] = useState<PlayerFilters>(() => ({
+    search: urlState.q,
+    positions: urlState.pos,
+    status: urlState.status,
+    team_id: urlState.team === '' ? null : Number(urlState.team),
+    stat_filters: urlState.sf,
+  }));
+  const [showAverages, setShowAverages] = usePersistedState(
+    'players.showAverages',
+    true,
+    urlKeys.has('avg') ? urlState.avg : undefined,
+  );
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(urlState.period);
+  const [customRange, setCustomRange] = useState<CustomDateRange | null>(() =>
+    urlState.from && urlState.to ? { start: urlState.from, end: urlState.to } : null
+  );
   const [integerMode, setIntegerMode] = usePersistedState('players.integerMode', true);
 
   const { data, isLoading, error } = useGetAllPlayersQuery({
@@ -42,7 +121,7 @@ const Players = () => {
 
   // Slate picker: next game days for everyone; past dates (what-if/debug view
   // — that day's games with current player state) are flag-gated.
-  const [slateDate, setSlateDate] = useState('');
+  const [slateDate, setSlateDate] = useState(urlState.slate);
   const { data: upcomingDates = [] } = useGetUpcomingDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
   const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !FF_PAST_SLATES });
   const { data: currentSlateDate } = useGetCurrentSlateDateQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
@@ -55,7 +134,7 @@ const Players = () => {
         .map(team => team.abbreviation)
     );
   }, [schedule, selectedSlateDate]);
-  const [playingOnSlateOnly, setPlayingOnSlateOnly] = useState(false);
+  const [playingOnSlateOnly, setPlayingOnSlateOnly] = useState(urlState.onslate);
   const { data: matchups = [] } = useGetMatchupsTodayQuery(
     slateDate ? slateDate.replaceAll('-', '') : undefined,
     { skip: !FF_MATCHUP_QUALITY }
@@ -71,6 +150,36 @@ const Players = () => {
   }, [teams]);
 
   const debouncedSearch = useDebounce(filters.search, 250);
+
+  const isCustom = timePeriod === 'custom' && customRange !== null;
+  useEffect(() => {
+    setUrlState({
+      q: debouncedSearch ?? '',
+      pos: filters.positions ?? [],
+      status: filters.status ?? [],
+      team: filters.team_id === null || filters.team_id === undefined ? '' : String(filters.team_id),
+      sf: filters.stat_filters ?? [],
+      period: timePeriod,
+      from: isCustom ? customRange.start : '',
+      to: isCustom ? customRange.end : '',
+      slate: slateDate,
+      onslate: playingOnSlateOnly,
+      avg: showAverages,
+    });
+  }, [
+    setUrlState,
+    debouncedSearch,
+    filters.positions,
+    filters.status,
+    filters.team_id,
+    filters.stat_filters,
+    timePeriod,
+    isCustom,
+    customRange,
+    slateDate,
+    playingOnSlateOnly,
+    showAverages,
+  ]);
 
   const filteredPlayers = useMemo(() => {
     if (!data?.players) return [];
@@ -289,7 +398,7 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
       <div className="filter-group">
         <label>Position:</label>
         <div className="checkbox-group">
-          {['PG', 'SG', 'SF', 'PF', 'C'].map(pos => (
+          {POSITIONS.map(pos => (
             <label key={pos}>
               <input
                 type="checkbox"
@@ -310,11 +419,7 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
       <div className="filter-group">
         <label>Status:</label>
         <div className="checkbox-group">
-          {[
-            { value: 'ONTEAM', label: 'On Team' },
-            { value: 'FREEAGENT', label: 'Free Agent' },
-            { value: 'WAIVERS', label: 'Waivers' }
-          ].map(status => (
+          {STATUS_OPTIONS.map(status => (
             <label key={status.value}>
               <input
                 type="checkbox"

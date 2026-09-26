@@ -61,6 +61,7 @@ class LiveInference:
 
     def __init__(self, store: FeatureStore, models_dir: Path | None = None):
         self.store = store
+        self._rate_keys: list[tuple[str, str]] | None = None
         self.models: dict[str, dict] = {}
         d = models_dir or config.MODELS_DIR
         for path in sorted(Path(d).glob("*.joblib")):
@@ -176,9 +177,9 @@ class LiveInference:
         rest = (game_date - pd.Timestamp(state.last_game_date)).days
 
         row: dict[str, float] = {}
-        row.update(state.vector.to_dict())   # player history mean/var/rate + efficiency
-        row.update(own.own.to_dict())        # TEAM_* own-team context
-        row.update(opp.allowed.to_dict())    # OPP_ALLOWED_* opponent context
+        row.update(state.features)        # player history mean/var/rate + efficiency
+        row.update(own.own_features)      # TEAM_* own-team context
+        row.update(opp.allowed_features)  # OPP_ALLOWED_* opponent context
 
         # Context.
         pos = state.position or ""
@@ -193,8 +194,10 @@ class LiveInference:
         # Minutes-dependent features: t and every t*rate.
         t = float(req.minutes)
         row["T_MIN"] = t
-        for key in [k for k in row if k.endswith("_rate")]:
-            row[f"T_x_{key}"] = t * row[key]
+        if self._rate_keys is None:
+            self._rate_keys = [(k, f"T_x_{k}") for k in row if k.endswith("_rate")]
+        for key, t_key in self._rate_keys:
+            row[t_key] = t * row[key]
         return row
 
 

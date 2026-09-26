@@ -72,7 +72,6 @@ async def test_aggregate_player_games_no_pool_returns_empty(db_service, monkeypa
 
 @pytest.mark.asyncio
 async def test_aggregate_player_games_success(db_service, monkeypatch):
-    coverage = {"start_date": date(2026, 1, 2), "end_date": date(2026, 1, 9)}
     rows = [
         {
             "player_id": 1, "player_name": "Player One", "gp": 3,
@@ -80,9 +79,10 @@ async def test_aggregate_player_games_success(db_service, monkeypatch):
             "fgm": 21.0, "fga": 45.0, "ftm": 12.0, "fta": 14.0,
             "three_pm": 6.0, "min": 90.0,
             "fg_pct": 21.0 / 45.0, "ft_pct": 12.0 / 14.0,
+            "_actual_start": date(2026, 1, 2), "_actual_end": date(2026, 1, 9),
         },
     ]
-    conn = FakeConn(fetchrow_result=coverage, fetch_result=rows)
+    conn = FakeConn(fetch_result=rows)
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
 
     df, actual_start, actual_end = await db_service.aggregate_player_games(
@@ -97,15 +97,32 @@ async def test_aggregate_player_games_success(db_service, monkeypatch):
     assert row["pts"] == 60.0
     assert row["fg_pct"] == pytest.approx(21.0 / 45.0)
 
-    query_args = conn.fetchrow.call_args[0]
+    assert "_actual_start" not in df.columns
+    assert "_actual_end" not in df.columns
+    conn.fetchrow.assert_not_called()
+
+    query_args = conn.fetch.call_args[0]
     assert "season" in query_args[0].lower() or "WHERE" in query_args[0]
     assert query_args[1:] == ("2025-26", date(2026, 1, 1), date(2026, 1, 10))
 
 
 @pytest.mark.asyncio
+async def test_aggregate_player_games_empty_window_returns_no_coverage(db_service, monkeypatch):
+    conn = FakeConn(fetch_result=[])
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    df, actual_start, actual_end = await db_service.aggregate_player_games(
+        date(2026, 1, 1), date(2026, 1, 10), "2025-26"
+    )
+
+    assert df.empty
+    assert actual_start is None
+    assert actual_end is None
+
+
+@pytest.mark.asyncio
 async def test_aggregate_player_games_db_error_returns_empty(db_service, monkeypatch):
-    conn = FakeConn(fetchrow_result=None, raise_on_fetch=False)
-    conn.fetchrow = AsyncMock(side_effect=RuntimeError("connection lost"))
+    conn = FakeConn(raise_on_fetch=True)
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
 
     df, actual_start, actual_end = await db_service.aggregate_player_games(

@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
@@ -41,6 +41,11 @@ export const fantasyApi = createApi({
     //   query: (category) => `/rankings/category/${category}`,
     //   providesTags: ['Rankings'],
     // }),
+    getTodayHub: builder.query<TodayHub, void>({
+      query: () => '/league/today',
+      providesTags: ['League'],
+      keepUnusedDataFor: 300,
+    }),
     getLeagueShots: builder.query<LeagueShotsData, void>({
       query: () => '/league/shots',
       providesTags: ['Shots'],
@@ -173,6 +178,21 @@ export const fantasyApi = createApi({
       },
       keepUnusedDataFor: 600,
     }),
+    getAdpMovers: builder.query<AdpMoversResponse, AdpMoversQueryArgs>({
+      query: (a) => ({
+        url: '/adp/movers',
+        params: {
+          metric: a.metric,
+          mode: a.mode,
+          top: a.top,
+          ...(a.sites ? { sites: a.sites } : {}),
+          ...(a.from_date ? { from_date: a.from_date } : {}),
+          ...(a.to_date ? { to_date: a.to_date } : {}),
+          ...(a.limit ? { limit: a.limit } : {}),
+        },
+      }),
+      keepUnusedDataFor: 600,
+    }),
     getTrendsMinutes: builder.query<MinutesResponse, { windowDays?: number }>({
       query: ({ windowDays = 15 } = {}) => ({ url: '/trends/minutes', params: { window_days: windowDays } }),
       keepUnusedDataFor: 600,
@@ -233,6 +253,7 @@ export const {
   useGetLeagueSummaryQuery,
   useGetHeatmapDataQuery,
   // useGetCategoryRankingsQuery,
+  useGetTodayHubQuery,
   useGetLeagueShotsQuery,
   useGetTeamsListQuery,
   useGetTeamPlayersQuery,
@@ -259,6 +280,7 @@ export const {
   useGetAdpQuery,
   useLazyGetAdpQuery,
   useGetAdpIndexQuery,
+  useGetAdpMoversQuery,
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
   useGetTrendsRegressionQuery,

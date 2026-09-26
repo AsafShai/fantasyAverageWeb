@@ -110,7 +110,7 @@ class DBService:
                     init=_init_connection,
                 )
             except Exception as e:
-                logger.error(f"Failed to create DB connection pool: {e}")
+                logger.error(f"Failed to create DB connection pool: {type(e).__name__}: {e}")
                 return None
         return self._pool
 
@@ -131,7 +131,7 @@ class DBService:
                         "stored. Apply migrations/add_dynamic_category_columns.sql."
                     )
             except Exception as e:
-                logger.error(f"Failed to probe for dynamic category columns: {e}")
+                logger.error(f"Failed to probe for dynamic category columns: {type(e).__name__}: {e}")
                 DBService._dynamic_columns = False
         return DBService._dynamic_columns
 
@@ -148,7 +148,7 @@ class DBService:
                 )
                 return row['max_period']
         except Exception as e:
-            logger.error(f"Failed to query max scoring_period_id from {table}: {e}")
+            logger.error(f"Failed to query max scoring_period_id from {table}: {type(e).__name__}: {e}")
             return 0
 
     async def upsert_rankings_averages(
@@ -204,7 +204,7 @@ class DBService:
                 f"scoring_period_id={scoring_period_id}"
             )
         except Exception as e:
-            logger.error(f"Failed to upsert team_rankings_averages: {e}")
+            logger.error(f"Failed to upsert team_rankings_averages: {type(e).__name__}: {e}")
 
     async def upsert_rankings_totals(
         self, scoring_period_id: int, rankings_totals_df: pd.DataFrame, league_id: int, season_id: int,
@@ -259,7 +259,7 @@ class DBService:
                 f"scoring_period_id={scoring_period_id}"
             )
         except Exception as e:
-            logger.error(f"Failed to upsert team_rankings_totals: {e}")
+            logger.error(f"Failed to upsert team_rankings_totals: {type(e).__name__}: {e}")
 
     async def upsert_daily_snapshot(
         self, scoring_period_id: int, totals_df: pd.DataFrame, league_id: int, season_id: int
@@ -322,7 +322,7 @@ class DBService:
                 f"scoring_period_id={scoring_period_id}"
             )
         except Exception as e:
-            logger.error(f"Failed to upsert team_daily_snapshot: {e}")
+            logger.error(f"Failed to upsert team_daily_snapshot: {type(e).__name__}: {e}")
 
     async def get_latest_snapshot(self, league_id: int, season_id: int):
         """
@@ -359,7 +359,7 @@ class DBService:
                 snap_date = rows[0]['date']
                 return snap_date, [_snapshot_row_to_categories(dict(r)) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch latest snapshot: {e}")
+            logger.error(f"Failed to fetch latest snapshot: {type(e).__name__}: {e}")
             return None, []
 
     async def get_rankings_over_time(
@@ -407,7 +407,44 @@ class DBService:
                     )
                 return [self._rankings_row_to_point(dict(r)) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch rankings over time from {table}: {e}")
+            logger.error(f"Failed to fetch rankings over time from {table}: {type(e).__name__}: {e}")
+            return []
+
+    async def get_latest_two_periods_rankings(
+        self, league_id: int, season_id: int
+    ) -> list[dict]:
+        """Rows for the two highest scoring periods that actually exist — the
+        pair the Today hub diffs. Picks the top two present rather than
+        (max, max-1) so a gap in the ledger still yields a comparable pair."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
+                rows = await conn.fetch(
+                    f"""
+                    WITH periods AS (
+                        SELECT DISTINCT scoring_period_id
+                        FROM team_rankings_averages
+                        WHERE league_id = $1 AND season_id = $2
+                        ORDER BY scoring_period_id DESC
+                        LIMIT 2
+                    )
+                    SELECT r.scoring_period_id, r.team_id, r.team_name,
+                           r.rk_fg_pct, r.rk_ft_pct, r.rk_three_pm, r.rk_reb,
+                           r.rk_ast, r.rk_stl, r.rk_blk, r.rk_pts, r.rk_total
+                           {', r.ranks' if dynamic else ''}
+                    FROM team_rankings_averages r
+                    JOIN periods p ON p.scoring_period_id = r.scoring_period_id
+                    WHERE r.league_id = $1 AND r.season_id = $2
+                    ORDER BY r.scoring_period_id, r.team_id
+                    """,
+                    league_id, season_id,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch latest two periods of rankings: {type(e).__name__}: {e}")
             return []
 
     @staticmethod
@@ -464,7 +501,7 @@ class DBService:
                     )
                 return [dict(r) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch snapshot over time: {e}")
+            logger.error(f"Failed to fetch snapshot over time: {type(e).__name__}: {e}")
             return []
 
     async def get_averages_over_time(
@@ -500,7 +537,7 @@ class DBService:
                     )
                 return [dict(r) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch averages over time: {e}")
+            logger.error(f"Failed to fetch averages over time: {type(e).__name__}: {e}")
             return []
 
     async def get_snapshots_for_date_range(
@@ -551,6 +588,11 @@ class DBService:
                 if actual_start_date is not None:
                     rows_start = await conn.fetch(query, league_id, season_id, actual_start_date)
 
+                logger.info(
+                    f"Date range {start_date}..{end_date} resolved to snapshots "
+                    f"{actual_start_date}..{actual_end_date} ({len(rows_start)} start / {len(rows_end)} end rows)"
+                )
+
                 return (
                     actual_end_date,
                     actual_start_date,
@@ -558,7 +600,7 @@ class DBService:
                     [_snapshot_row_to_categories(dict(r)) for r in rows_start],
                 )
         except Exception as e:
-            logger.error(f"Failed to fetch snapshots for date range: {e}")
+            logger.error(f"Failed to fetch snapshots for date range: {type(e).__name__}: {e}")
             return None, None, [], []
 
     async def upsert_estimator_prediction(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
@@ -632,7 +674,7 @@ class DBService:
                         )
             logger.info(f"Upserted estimator_prediction for league_id={league_id} season_id={season_id}")
         except Exception as e:
-            logger.error(f"Failed to upsert estimator_prediction: {e}")
+            logger.error(f"Failed to upsert estimator_prediction: {type(e).__name__}: {e}")
 
     async def upsert_estimator_ranking(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
@@ -686,7 +728,7 @@ class DBService:
                         )
             logger.info(f"Upserted estimator_ranking for league_id={league_id} season_id={season_id}")
         except Exception as e:
-            logger.error(f"Failed to upsert estimator_ranking: {e}")
+            logger.error(f"Failed to upsert estimator_ranking: {type(e).__name__}: {e}")
 
     async def upsert_estimator_rank_probability(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
@@ -711,7 +753,7 @@ class DBService:
                     )
             logger.info(f"Upserted estimator_rank_probability for league_id={league_id} season_id={season_id}")
         except Exception as e:
-            logger.error(f"Failed to upsert estimator_rank_probability: {e}")
+            logger.error(f"Failed to upsert estimator_rank_probability: {type(e).__name__}: {e}")
 
     async def get_estimator_latest(self, league_id: int, season_id: int) -> dict:
         pool = await self._get_pool()
@@ -738,7 +780,7 @@ class DBService:
                     "rank_probabilities": [dict(r) for r in rank_probs],
                 }
         except Exception as e:
-            logger.error(f"Failed to fetch estimator latest: {e}")
+            logger.error(f"Failed to fetch estimator latest: {type(e).__name__}: {e}")
             return {}
 
     async def estimator_has_data(self, league_id: int, season_id: int) -> bool:
@@ -753,7 +795,7 @@ class DBService:
                 )
                 return (count or 0) > 0
         except Exception as e:
-            logger.error(f"Failed to check estimator data: {e}")
+            logger.error(f"Failed to check estimator data: {type(e).__name__}: {e}")
             return False
 
     async def upsert_injury_status(self, record: InjuryRecord) -> None:
@@ -776,7 +818,7 @@ class DBService:
                     record.team, record.player, record.status, record.injury,
                 )
         except Exception as e:
-            logger.error(f"Failed to upsert injury status for {record.team}|{record.player}: {e}")
+            logger.error(f"Failed to upsert injury status for {record.team}|{record.player}: {type(e).__name__}: {e}")
 
     async def delete_injury_status(self, team: str, player: str) -> None:
         pool = await self._get_pool()
@@ -789,7 +831,7 @@ class DBService:
                     team, player,
                 )
         except Exception as e:
-            logger.error(f"Failed to delete injury status for {team}|{player}: {e}")
+            logger.error(f"Failed to delete injury status for {team}|{player}: {type(e).__name__}: {e}")
 
     async def get_injury_statuses_for_teams(self, teams: list[str]) -> list[dict]:
         pool = await self._get_pool()
@@ -803,7 +845,7 @@ class DBService:
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch injury statuses for teams: {e}")
+            logger.error(f"Failed to fetch injury statuses for teams: {type(e).__name__}: {e}")
             return []
 
     async def load_all_injury_statuses(self) -> list[dict]:
@@ -817,7 +859,7 @@ class DBService:
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to load all injury statuses: {e}")
+            logger.error(f"Failed to load all injury statuses: {type(e).__name__}: {e}")
             return []
 
     # --- nightly model pipeline (feature-store rows / eval results / runs) ---
@@ -833,7 +875,7 @@ class DBService:
                 t = await conn.fetchval("SELECT COUNT(*) FROM fs_team_games")
                 return int(p or 0), int(t or 0)
         except Exception as e:
-            logger.error(f"Failed to count feature-store rows: {e}")
+            logger.error(f"Failed to count feature-store rows: {type(e).__name__}: {e}")
             return 0, 0
 
     async def get_team_defense_aggregates(self, season: str) -> list[dict]:
@@ -872,7 +914,7 @@ class DBService:
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to aggregate team defense for {season}: {e}")
+            logger.error(f"Failed to aggregate team defense for {season}: {type(e).__name__}: {e}")
             return []
 
     async def get_last5_minutes(self) -> dict[int, float]:
@@ -900,7 +942,7 @@ class DBService:
                 )
                 return {int(r["player_id"]): float(r["avg_min"]) for r in rows}
         except Exception as e:
-            logger.error(f"Failed to compute last-5 minutes averages: {e}")
+            logger.error(f"Failed to compute last-5 minutes averages: {type(e).__name__}: {e}")
             return {}
 
     async def get_recent_game_dates(self, limit: int = 60) -> list[date]:
@@ -918,7 +960,7 @@ class DBService:
                 )
                 return [r["game_date"] for r in rows]
         except Exception as e:
-            logger.error(f"Failed to list recent game dates: {e}")
+            logger.error(f"Failed to list recent game dates: {type(e).__name__}: {e}")
             return []
 
     async def fs_has_date(self, game_date: date) -> Optional[bool]:
@@ -934,7 +976,7 @@ class DBService:
                     game_date,
                 ))
         except Exception as e:
-            logger.error(f"Failed to check fs rows for {game_date}: {e}")
+            logger.error(f"Failed to check fs rows for {game_date}: {type(e).__name__}: {e}")
             return None
 
     async def get_fs_rows_before(self, game_date: date) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -961,7 +1003,7 @@ class DBService:
                 )
                 return fs_records_to_frame(players), fs_records_to_frame(teams)
         except Exception as e:
-            logger.error(f"Failed to fetch fs rows before {game_date}: {e}")
+            logger.error(f"Failed to fetch fs rows before {game_date}: {type(e).__name__}: {e}")
             return pd.DataFrame(), pd.DataFrame()
 
     async def aggregate_player_games(
@@ -971,28 +1013,23 @@ class DBService:
         time-range player stats feature. Returns (df, actual_start, actual_end)
         where the actual dates are the real game_date coverage found in the
         window (None if no rows at all). Percentages are SUM(makes)/SUM(attempts),
-        never a mean of per-game ratios; gp is COUNT(*)."""
+        never a mean of per-game ratios; gp is COUNT(*).
+
+        Coverage rides along as window aggregates over the same GROUP BY rather
+        than a second query: Neon round trips cost ~60ms each here, more than the
+        scan itself. MAX(ARRAY[date, name]) picks the latest name the same way an
+        ORDER BY array_agg would, but hash-aggregates instead of forcing a sort
+        of every row in the window (which spills to disk at season length)."""
         pool = await self._get_pool()
         if pool is None:
             return pd.DataFrame(), None, None
         try:
             async with pool.acquire() as conn:
-                coverage = await conn.fetchrow(
-                    """
-                    SELECT MIN(game_date) AS start_date, MAX(game_date) AS end_date
-                    FROM fs_player_games
-                    WHERE season = $1 AND game_date BETWEEN $2 AND $3 AND min > 0
-                    """,
-                    season, start, end,
-                )
-                actual_start = coverage['start_date'] if coverage else None
-                actual_end = coverage['end_date'] if coverage else None
-
                 rows = await conn.fetch(
                     """
                     SELECT
                         player_id,
-                        (array_agg(player_name ORDER BY game_date DESC))[1] AS player_name,
+                        (MAX(ARRAY[game_date::text, player_name]))[2] AS player_name,
                         COUNT(*) AS gp,
                         SUM(pts) AS pts,
                         SUM(reb) AS reb,
@@ -1006,16 +1043,25 @@ class DBService:
                         SUM(fg3m) AS three_pm,
                         SUM(min) AS min,
                         COALESCE(SUM(fgm) / NULLIF(SUM(fga), 0), 0.0) AS fg_pct,
-                        COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct
+                        COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct,
+                        MIN(MIN(game_date)) OVER () AS _actual_start,
+                        MAX(MAX(game_date)) OVER () AS _actual_end
                     FROM fs_player_games
                     WHERE season = $1 AND game_date BETWEEN $2 AND $3 AND min > 0
                     GROUP BY player_id
                     """,
                     season, start, end,
                 )
-                return pd.DataFrame([dict(r) for r in rows]), actual_start, actual_end
+                records = []
+                actual_start = actual_end = None
+                for r in rows:
+                    row = dict(r)
+                    actual_start = row.pop('_actual_start')
+                    actual_end = row.pop('_actual_end')
+                    records.append(row)
+                return pd.DataFrame(records), actual_start, actual_end
         except Exception as e:
-            logger.error(f"Failed to aggregate player games for {start}..{end} ({season}): {e}")
+            logger.error(f"Failed to aggregate player games for {start}..{end} ({season}): {type(e).__name__}: {e}")
             return pd.DataFrame(), None, None
 
     async def aggregate_single_player_games(
@@ -1087,7 +1133,7 @@ class DBService:
                 )
                 return row['d'] if row else None
         except Exception as e:
-            logger.error(f"Failed to fetch latest game date for season {season}: {e}")
+            logger.error(f"Failed to fetch latest game date for season {season}: {type(e).__name__}: {e}")
             return None
 
     async def aggregate_shooting_by_player(
@@ -1128,7 +1174,7 @@ class DBService:
                 )
                 return pd.DataFrame([dict(r) for r in rows])
         except Exception as e:
-            logger.error(f"Failed to aggregate shooting for seasons {seasons}: {e}")
+            logger.error(f"Failed to aggregate shooting for seasons {seasons}: {type(e).__name__}: {e}")
             return pd.DataFrame()
 
     async def get_usage_components(self, season: str, start: date, end: date) -> pd.DataFrame:
@@ -1173,7 +1219,7 @@ class DBService:
                 )
                 return pd.DataFrame([dict(r) for r in rows])
         except Exception as e:
-            logger.error(f"Failed to fetch usage components for {start}..{end} ({season}): {e}")
+            logger.error(f"Failed to fetch usage components for {start}..{end} ({season}): {type(e).__name__}: {e}")
             return pd.DataFrame()
 
     async def get_player_game_log(self, player_id: int, season: str, start: date, end: date) -> pd.DataFrame:
@@ -1217,7 +1263,7 @@ class DBService:
                 )
                 return pd.DataFrame([dict(r) for r in rows])
         except Exception as e:
-            logger.error(f"Failed to fetch game log for player {player_id} ({season}): {e}")
+            logger.error(f"Failed to fetch game log for player {player_id} ({season}): {type(e).__name__}: {e}")
             return pd.DataFrame()
 
     async def get_games_since(self, since_date: date) -> dict[int, int]:
@@ -1241,7 +1287,7 @@ class DBService:
                 )
                 return {int(r["player_id"]): int(r["g"]) for r in rows}
         except Exception as e:
-            logger.error(f"Failed to count games since {since_date}: {e}")
+            logger.error(f"Failed to count games since {since_date}: {type(e).__name__}: {e}")
             return {}
 
     async def insert_fs_rows(
@@ -1288,7 +1334,7 @@ class DBService:
             logger.info(f"Inserted {len(player_rows)} player / {len(team_rows)} team fs rows")
             return True
         except Exception as e:
-            logger.error(f"Failed to insert fs rows: {e}")
+            logger.error(f"Failed to insert fs rows: {type(e).__name__}: {e}")
             return False
 
     async def _copy_fs_rows(
@@ -1316,7 +1362,7 @@ class DBService:
                         )
             return True
         except Exception as e:
-            logger.error(f"Failed to COPY fs rows: {e}")
+            logger.error(f"Failed to COPY fs rows: {type(e).__name__}: {e}")
             return False
 
     async def truncate_fs_tables(self) -> bool:
@@ -1333,7 +1379,7 @@ class DBService:
             logger.info("Truncated feature-store + vector tables")
             return True
         except Exception as e:
-            logger.error(f"Failed to truncate feature-store tables: {e}")
+            logger.error(f"Failed to truncate feature-store tables: {type(e).__name__}: {e}")
             return False
 
     async def upsert_feature_vectors(
@@ -1387,7 +1433,7 @@ class DBService:
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to upsert feature vectors: {e}")
+            logger.error(f"Failed to upsert feature vectors: {type(e).__name__}: {e}")
             return False
 
     async def get_feature_vector_keys(self) -> Optional[set[str]]:
@@ -1420,7 +1466,7 @@ class DBService:
                     if row:
                         keys.update(row)
         except Exception as e:
-            logger.error(f"Failed to read feature vector keys: {e}")
+            logger.error(f"Failed to read feature vector keys: {type(e).__name__}: {e}")
             return None
         return keys or None
 
@@ -1436,7 +1482,7 @@ class DBService:
                 tov = await conn.fetch("SELECT * FROM fs_team_own_vectors")
                 return [dict(r) for r in pv], [dict(r) for r in tav], [dict(r) for r in tov]
         except Exception as e:
-            logger.error(f"Failed to load feature vectors: {e}")
+            logger.error(f"Failed to load feature vectors: {type(e).__name__}: {e}")
             return [], [], []
 
     async def get_model_nightly_run(self, game_date: date) -> Optional[dict]:
@@ -1450,7 +1496,21 @@ class DBService:
                 )
                 return dict(row) if row else None
         except Exception as e:
-            logger.error(f"Failed to fetch model nightly run for {game_date}: {e}")
+            logger.error(f"Failed to fetch model nightly run for {game_date}: {type(e).__name__}: {e}")
+            return None
+
+    async def get_latest_model_nightly_run(self) -> Optional[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT * FROM model_nightly_runs ORDER BY game_date DESC LIMIT 1"
+                )
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Failed to fetch latest model nightly run: {type(e).__name__}: {e}")
             return None
 
     async def upsert_model_nightly_run(
@@ -1476,7 +1536,7 @@ class DBService:
             logger.info(f"Marked model nightly run {game_date} as '{status}'")
             return True
         except Exception as e:
-            logger.error(f"Failed to upsert model nightly run for {game_date}: {e}")
+            logger.error(f"Failed to upsert model nightly run for {game_date}: {type(e).__name__}: {e}")
             return False
 
     async def insert_model_eval_rows(self, rows: list[tuple]) -> bool:
@@ -1503,7 +1563,7 @@ class DBService:
             logger.info(f"Upserted {len(rows)} model eval rows")
             return True
         except Exception as e:
-            logger.error(f"Failed to insert model eval rows: {e}")
+            logger.error(f"Failed to insert model eval rows: {type(e).__name__}: {e}")
             return False
 
     async def get_model_eval_for_date(self, game_date: date) -> list[dict]:
@@ -1518,7 +1578,7 @@ class DBService:
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch model eval rows for {game_date}: {e}")
+            logger.error(f"Failed to fetch model eval rows for {game_date}: {type(e).__name__}: {e}")
             return []
 
     async def close(self) -> None:

@@ -91,3 +91,59 @@ class TestGetCurrentPdfUrl:
         assert "2025-12-01" in url
         assert "Injury-Report_" in url
         assert "_02_30PM" in url
+
+
+class TestPatchesCachedMatchups:
+    """Each report's changes are pushed into the cached matchup slates, mirroring
+    the injury table (Available / removed players have no row -> None)."""
+
+    @pytest.mark.asyncio
+    async def test_report_changes_reach_matchup_cache(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        monkeypatch.setattr(inj, "injury_store", {
+            "LAL|LeBron James": _rec(player="LeBron James", status="Out"),
+            "LAL|Old Guy": _rec(player="Old Guy", status="Doubtful"),
+            "LAL|Back Soon": _rec(player="Back Soon", status="Out"),
+        })
+        new = [
+            _rec(player="LeBron James", status="Questionable"),
+            _rec(player="New Guy", status="Out"),
+            _rec(player="Back Soon", status="Available"),
+        ]
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_pdf", lambda _: new)
+        db = MagicMock(
+            upsert_injury_status=AsyncMock(), delete_injury_status=AsyncMock(),
+            get_injury_statuses_for_teams=AsyncMock(return_value=[]),
+        )
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        monkeypatch.setattr(inj, "broadcast_notifications", AsyncMock())
+        monkeypatch.setattr(inj, "broadcast_fetch_update", AsyncMock())
+        apply = MagicMock()
+        monkeypatch.setattr("app.routes.matchups.apply_injury_changes", apply)
+
+        assert await inj._try_update_injury_data() is True
+
+        apply.assert_called_once_with({
+            "lebronjames": "Questionable",
+            "newguy": "Out",
+            "backsoon": None,
+            "oldguy": None,
+        })
+
+    @pytest.mark.asyncio
+    async def test_unchanged_report_leaves_matchup_cache_alone(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        monkeypatch.setattr(inj, "injury_store", {"LAL|LeBron James": _rec(player="LeBron James")})
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_pdf", lambda _: [_rec(player="LeBron James")])
+        monkeypatch.setattr(inj, "get_db_service", lambda: MagicMock(get_injury_statuses_for_teams=AsyncMock(return_value=[])))
+        monkeypatch.setattr(inj, "broadcast_fetch_update", AsyncMock())
+        apply = MagicMock()
+        monkeypatch.setattr("app.routes.matchups.apply_injury_changes", apply)
+
+        await inj._try_update_injury_data()
+
+        apply.assert_not_called()

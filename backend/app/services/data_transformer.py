@@ -1,6 +1,7 @@
 import pandas as pd
 import logging
-from typing import Dict
+from datetime import datetime, timezone
+from typing import Dict, Optional
 from app.utils.constants import (
     ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP,
     RANKING_CATEGORIES, RATIO_CATEGORIES
@@ -10,6 +11,9 @@ from app.config import settings
 from app.utils.roster_slots import SLOT_CAPS
 from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY, NON_RANKING_STAT_KEYS, UNSUPPORTED_CATEGORIES
 
+
+# ESPN statSourceId: 0 = actual stats, 1 = projections.
+ACTUAL_STAT_SOURCE_ID = 0
 
 SLOT_MAP = {0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C', 5: 'G', 6: 'F', 11: 'UTIL'}
 
@@ -103,6 +107,20 @@ class DataTransformer:
             self.logger.warning(f"Error resolving reverse categories from ESPN settings, using none: {e}")
             return set()
 
+    def resolve_trade_deadline(self, espn_data: Dict) -> Optional[datetime]:
+        """Determine the league's trade deadline from ESPN's
+        settings.tradeSettings.deadlineDate (epoch milliseconds, present when
+        the standings request includes the mSettings view). Returns None
+        when the key is missing or unparseable."""
+        try:
+            deadline_ms = espn_data.get('settings', {}).get('tradeSettings', {}).get('deadlineDate')
+            if not deadline_ms:
+                return None
+            return datetime.fromtimestamp(deadline_ms / 1000, tz=timezone.utc)
+        except Exception as e:
+            self.logger.warning(f"Error resolving trade deadline from ESPN settings: {e}")
+            return None
+
     def parse_slot_usage(self, espn_data: Dict) -> Dict[int, Dict[str, int]]:
         """Parse slot usage from mMatchupScore data. Returns {team_id: {slot_name: games_used}}"""
         result: Dict[int, Dict[str, int]] = {}
@@ -168,37 +186,43 @@ class DataTransformer:
                     positions = ", ".join(filter(None, slots)) or "Unknown"
 
                 stats = player.get('stats', [])
-                for stat in stats:
-                    if stat.get('scoringPeriodId') == 0 and stat.get('statSplitTypeId') == stat_split_type_id and stat.get('seasonId') == settings.season_id:
-                        player_stats = stat.get('stats', {})
-                        # ESPN tags this split with the current season before any games
-                        # have been played, but leaves 'stats' empty — treat that as a
-                        # real zero row (0 GP) rather than dropping the player, so the
-                        # DataFrame always has every ESPN_COLUMN_MAP column.
-                        mapped_stats: Dict[str, object] = {col: 0 for col in ESPN_COLUMN_MAP.values()}
-                        mapped_stats.update({
-                            ESPN_COLUMN_MAP[key]: value
-                            for key, value in player_stats.items()
-                            if key in ESPN_COLUMN_MAP
-                        })
+                matches = [
+                    stat for stat in stats
+                    if stat.get('scoringPeriodId') == 0 and stat.get('statSplitTypeId') == stat_split_type_id and stat.get('seasonId') == settings.season_id
+                ]
+                # ESPN can list the projected line (statSourceId 1) for the same
+                # split next to the actual one, in either order — always read the actual.
+                matches.sort(key=lambda stat: stat.get('statSourceId', ACTUAL_STAT_SOURCE_ID) != ACTUAL_STAT_SOURCE_ID)
+                for stat in matches:
+                    player_stats = stat.get('stats', {})
+                    # ESPN tags this split with the current season before any games
+                    # have been played, but leaves 'stats' empty — treat that as a
+                    # real zero row (0 GP) rather than dropping the player, so the
+                    # DataFrame always has every ESPN_COLUMN_MAP column.
+                    mapped_stats: Dict[str, object] = {col: 0 for col in ESPN_COLUMN_MAP.values()}
+                    mapped_stats.update({
+                        ESPN_COLUMN_MAP[key]: value
+                        for key, value in player_stats.items()
+                        if key in ESPN_COLUMN_MAP
+                    })
 
-                        mapped_stats.update({
-                            'Name': player_name,
-                            'player_id': int(espn_player_id) if espn_player_id is not None else None,
-                            'team_id': team_id,
-                            'Pro Team': pro_team,
-                            'Positions': positions,
-                            'status': status,
-                            'injured': injured,
-                            'fantasy_team_name': fantasy_team_name,
-                            'season_rating': season_rating,
-                            'last7_rating': last7_rating,
-                            'last15_rating': last15_rating,
-                            'last30_rating': last30_rating,
-                        })
+                    mapped_stats.update({
+                        'Name': player_name,
+                        'player_id': int(espn_player_id) if espn_player_id is not None else None,
+                        'team_id': team_id,
+                        'Pro Team': pro_team,
+                        'Positions': positions,
+                        'status': status,
+                        'injured': injured,
+                        'fantasy_team_name': fantasy_team_name,
+                        'season_rating': season_rating,
+                        'last7_rating': last7_rating,
+                        'last15_rating': last15_rating,
+                        'last30_rating': last30_rating,
+                    })
 
-                        all_players.append(mapped_stats)
-                        break
+                    all_players.append(mapped_stats)
+                    break
 
             if not all_players:
                 raise ValueError("No valid player data found")

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request, Response
 from app.models import PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError, DataSourceError
-from app.services.player_service import PlayerService
+from app.services.player_service import PlayerService, players_etag
 from typing import Annotated, Optional
 from datetime import date
 from app.config import settings
@@ -12,9 +12,13 @@ logger = logging.getLogger(__name__)
 
 PlayerServiceDep = Annotated[PlayerService, Depends(PlayerService)]
 
+PLAYERS_CACHE_CONTROL = "private, max-age=0, must-revalidate"
+
 
 @router.get("/", response_model=PaginatedPlayers)
 async def get_all_players(
+    request: Request,
+    response: Response,
     player_service: PlayerServiceDep,
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(500, ge=10, le=1200, description="Players per page"),
@@ -37,7 +41,20 @@ async def get_all_players(
             if end > date.today():
                 raise HTTPException(status_code=422, detail="end cannot be in the future")
 
-        return await player_service.get_all_players(page, limit, time_period, start, end)
+        etag = players_etag(time_period, page, limit)
+        if etag is not None and request.headers.get("if-none-match") == etag:
+            return Response(
+                status_code=304,
+                headers={"ETag": etag, "Cache-Control": PLAYERS_CACHE_CONTROL},
+            )
+
+        result = await player_service.get_all_players(page, limit, time_period, start, end)
+
+        etag = etag or players_etag(time_period, page, limit)
+        if etag is not None:
+            response.headers["ETag"] = etag
+            response.headers["Cache-Control"] = PLAYERS_CACHE_CONTROL
+        return result
     except HTTPException:
         raise
     except ResourceNotFoundError as e:
@@ -45,5 +62,5 @@ async def get_all_players(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting all players: {e}")
+        logger.exception(f"Error getting all players: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve players")

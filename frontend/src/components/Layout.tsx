@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE, FF_TODAY_HUB } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
 import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
@@ -18,6 +18,7 @@ const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/draft/board': () => import('../pages/draft/DraftBoardPage'),
   '/draft/rankings': () => import('../pages/draft/PreDraftRankingsPage'),
   '/draft/mock': () => import('../pages/draft/MockDraftPage'),
+  '/draft/movers': () => import('../pages/draft/MoversPage'),
 }
 
 const prefetchDraftData = () => {
@@ -78,11 +79,11 @@ const SearchButton = ({ onClick }: { onClick: () => void }) => {
       type="button"
       onClick={onClick}
       title="Search (Ctrl K)"
-      className="hidden md:flex items-center gap-2 w-40 lg:w-56 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-3.5 py-1.5 text-gray-400 dark:text-gray-500 shrink-0 transition-colors hover:border-blue-300 hover:bg-white hover:text-gray-500 dark:hover:border-blue-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+      className="hidden md:flex items-center gap-2 flex-1 min-w-0 max-w-[10rem] lg:max-w-[14rem] rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-3.5 py-1.5 text-gray-400 dark:text-gray-500 transition-colors hover:border-blue-300 hover:bg-white hover:text-gray-500 dark:hover:border-blue-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
     >
       <SearchIcon />
-      <span className="flex-1 text-left text-sm truncate">Search…</span>
-      <kbd className="hidden lg:inline rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500">
+      <span className="hidden lg:inline flex-1 min-w-0 text-left text-sm truncate">Search…</span>
+      <kbd className="hidden xl:inline rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500">
         Ctrl K
       </kbd>
     </button>
@@ -129,7 +130,7 @@ const Layout = () => {
   }, [darkMode])
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: '📊' },
+    { path: '/', label: FF_TODAY_HUB ? 'Today' : 'Dashboard', icon: '📊' },
     { path: '/teams', label: 'Teams', icon: '👥' },
     { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
     { path: '/shots', label: 'Shots', icon: '🎯' },
@@ -172,7 +173,7 @@ const Layout = () => {
             </h1>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-0.5 overflow-x-auto">
+            <div className="hidden md:flex items-center gap-0.5 min-w-0 overflow-x-auto">
               {navItems.map((item) => (
                 <Fragment key={item.path}>
                   <Link
@@ -308,6 +309,7 @@ const DRAFT_NAV_GROUP: NavGroupDef = {
   icon: '📝',
   items: [
     { path: '/draft/rankings-adp', label: 'Rankings & ADP', icon: '📊' },
+    { path: '/draft/movers', label: 'Movers', icon: '📈' },
     { path: '/draft/board', label: 'Draft Board', icon: '🗂️' },
     { path: '/draft/rankings', label: 'Pre-Draft Rankings', icon: '📋' },
     { path: '/draft/mock', label: 'Mock Draft', icon: '🏟️' },
@@ -315,7 +317,7 @@ const DRAFT_NAV_GROUP: NavGroupDef = {
 }
 
 const desktopItemClass = (active: boolean) =>
-  `inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-200 ${
+  `inline-flex items-center gap-0.5 lg:gap-1 px-1.5 lg:px-2 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-200 ${
     active
       ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
       : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
@@ -452,7 +454,7 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
       >
         <span className="text-sm">{group.icon}</span>
         <span>{group.label}</span>
-        <span className="text-[10px]">▾</span>
+        <span className="hidden lg:inline text-[10px]">▾</span>
       </button>
       {isOpen && menuPos && (
         // Outer shell includes a top padding bridge so hover stays active while
@@ -555,6 +557,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
       label: 'League',
       icon: '👥',
       items: [
+        ...(FF_TODAY_HUB ? [{ path: '/', label: 'Today', icon: '📊' }] : []),
         { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
         { path: '/teams', label: 'Teams', icon: '👥' },
         ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
@@ -638,7 +641,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-0.5 overflow-x-auto">
+            <div className="hidden md:flex items-center gap-0.5 min-w-0 overflow-x-auto">
               {navGroups.map((group) => (
                 <DesktopNavGroup
                   key={group.key}

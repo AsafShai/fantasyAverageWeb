@@ -1,8 +1,11 @@
 import asyncio
 import httpx
+from bisect import bisect_left
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import logging
+
+from app.utils.ssl_context import shared_ssl_context
 
 _CACHE_TTL = timedelta(minutes=30)
 
@@ -27,7 +30,8 @@ class NBAStatsService:
         self.logger = logging.getLogger(__name__)
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(30.0, connect=10.0),
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            verify=shared_ssl_context()
         )
         self._pace_cache: dict = {'season_id': None, 'value': None, 'ts': None}
         self._days_left_cache: dict = {'season_id': None, 'value': None, 'ts': None}
@@ -181,7 +185,10 @@ class NBAStatsService:
         start."""
         anchor = datetime(season_id - 1, 11, 1).strftime('%Y%m%d')
         url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?calendartype=whitelist&dates={anchor}"
-        response = await self._client.get(url)
+        response, boundaries = await asyncio.gather(
+            self._client.get(url),
+            self._fetch_season_type_boundaries(season_id),
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -191,15 +198,97 @@ class NBAStatsService:
 
         all_game_dates = [datetime.fromisoformat(d.replace('Z', '+00:00')).date() for d in calendar]
 
-        start_idx = await self._binary_search_first(all_game_dates, min_type=2)
+        regular_start, postseason_start = boundaries if boundaries else (None, None)
+        start_idx = bisect_left(all_game_dates, regular_start) if regular_start else None
+        postseason_idx = bisect_left(all_game_dates, postseason_start) if postseason_start else None
+
+        start_ok, postseason_ok = await asyncio.gather(
+            self._boundary_holds(all_game_dates, start_idx, min_type=2),
+            self._boundary_holds(all_game_dates, postseason_idx, min_type=3),
+        )
+        start_ok = start_ok and start_idx < len(all_game_dates)
+
+        probes = {}
+        if not start_ok:
+            probes['regular-season start'] = self._binary_search_first(all_game_dates, min_type=2)
+        if not postseason_ok:
+            probes['postseason start'] = self._binary_search_first(all_game_dates, min_type=3)
+        if probes:
+            self.logger.warning(
+                f"Season-type metadata for {season_id} did not match the calendar at "
+                f"{', '.join(sorted(probes))}; falling back to probing"
+            )
+            probed = dict(zip(probes, await asyncio.gather(*probes.values())))
+            if 'regular-season start' in probed:
+                start_idx = probed['regular-season start']
+            if 'postseason start' in probed:
+                postseason_idx = probed['postseason start']
+
         if start_idx is None:
             self.logger.warning(f"Could not determine regular-season start for {season_id}; not filtering preseason")
             start_idx = 0
 
-        postseason_idx = await self._binary_search_first(all_game_dates, min_type=3)
         end_idx = (postseason_idx - 1) if postseason_idx is not None else len(all_game_dates) - 1
 
         return all_game_dates, start_idx, end_idx
+
+    async def _boundary_holds(self, calendar_dates: list, idx: Optional[int], min_type: int) -> bool:
+        """Whether `idx` really is the leftmost index in `calendar_dates` whose season.type
+        >= min_type, checked against the events straddling it. ESPN's declared season-type
+        dates have been a day or two stale for past seasons (e.g. 2023 lists Play-In as
+        starting 2023-04-12 while 2023-04-11 already carried play-in games), and a
+        misplaced boundary silently shifts every derived regular-season day count."""
+        if idx is None:
+            return False
+        checks = []
+        if idx > 0:
+            checks.append(self._get_event_season_type(calendar_dates[idx - 1]))
+        if idx < len(calendar_dates):
+            checks.append(self._get_event_season_type(calendar_dates[idx]))
+        types = await asyncio.gather(*checks)
+        if any(t is None for t in types):
+            return False
+        if idx > 0 and types[0] >= min_type:
+            return False
+        return not (idx < len(calendar_dates) and types[-1] < min_type)
+
+    async def _fetch_season_type_boundaries(self, season_id: int) -> Optional[tuple[date, Optional[date]]]:
+        """(regular_season_start, postseason_start) for `season_id` in one request, as
+        the UTC dates of ESPN's boundary stamps — the same convention the whitelist
+        calendar entries are parsed with. Returns None if the lookup fails or yields no
+        regular-season start, so the caller can fall back to probing.
+
+        Play-In is type 5 yet starts ~5 days BEFORE the type-3 Postseason, so the
+        regular season ends at the EARLIEST start among all types >= 3, not at the
+        Postseason's own start."""
+        try:
+            url = f"https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/seasons/{season_id}"
+            response = await self._client.get(url)
+            response.raise_for_status()
+            items = response.json().get('types', {}).get('items', [])
+
+            regular_start = None
+            post_starts = []
+            for item in items:
+                try:
+                    season_type = int(item.get('type'))
+                except (TypeError, ValueError):
+                    continue
+                raw_start = item.get('startDate')
+                if not raw_start:
+                    continue
+                start = datetime.fromisoformat(raw_start.replace('Z', '+00:00')).date()
+                if season_type == 2:
+                    regular_start = start
+                elif season_type >= 3:
+                    post_starts.append(start)
+
+            if regular_start is None:
+                return None
+            return regular_start, (min(post_starts) if post_starts else None)
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch season boundaries for {season_id}: {type(e).__name__}: {e}")
+            return None
 
     async def _fetch_nba_game_days_remaining(self, season_id: int) -> Optional[int]:
         try:

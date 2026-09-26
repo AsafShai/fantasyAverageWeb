@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react'
 
-const DEADLINE = new Date('2026-03-16T10:00:00Z') // 12:00 Israel Standard Time (UTC+2)
+const VISIBLE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
-const DeadlineCountdown = () => {
-  const [timeLeft, setTimeLeft] = useState(() => DEADLINE.getTime() - Date.now())
+interface DeadlineCountdownProps {
+  deadline: string | null
+}
+
+const DeadlineCountdown = ({ deadline }: DeadlineCountdownProps) => {
+  const deadlineMs = deadline ? new Date(deadline).getTime() : null
+  const [timeLeft, setTimeLeft] = useState(() => (deadlineMs ? deadlineMs - Date.now() : 0))
 
   useEffect(() => {
+    if (!deadlineMs) return
+    setTimeLeft(deadlineMs - Date.now())
     const id = setInterval(() => {
-      setTimeLeft(DEADLINE.getTime() - Date.now())
+      setTimeLeft(deadlineMs - Date.now())
     }, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [deadlineMs])
 
-  if (timeLeft <= 0) return null
+  if (!deadlineMs || timeLeft <= 0 || timeLeft > VISIBLE_WINDOW_MS) return null
 
   const totalSeconds = Math.floor(timeLeft / 1000)
   const days = Math.floor(totalSeconds / 86400)
@@ -22,11 +29,19 @@ const DeadlineCountdown = () => {
 
   const pad = (n: number) => String(n).padStart(2, '0')
 
+  const label = new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(deadlineMs)
+
   return (
     <div className="bg-gradient-to-r from-red-600 to-orange-500 rounded-lg shadow-lg p-6 text-white">
       <div className="text-center mb-4">
         <h2 className="text-2xl font-bold tracking-wide">Trade Deadline</h2>
-        <p className="text-red-100 mt-1">16/3 12:00</p>
+        <p className="text-red-100 mt-1">{label}</p>
       </div>
       <div className="flex justify-center gap-4">
         {[

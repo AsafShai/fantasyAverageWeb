@@ -1,13 +1,27 @@
-import asyncio
 import logging
 import time
 from fastapi import APIRouter, HTTPException
 from app.models.estimator import EstimatorResults, TeamPrediction, TeamRanking, TeamRankProbability
 from app.services.estimator_service import EstimatorService
 from app.services.data_provider import DataProvider
+from app.utils import background_tasks
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Every visit with stored results used to start a background ESPN sync plus
+# an estimator check; now at most one per cooldown window.
+REFRESH_COOLDOWN_SECONDS = 10 * 60
+_last_refresh_at: float | None = None
+
+
+def _refresh_due() -> bool:
+    global _last_refresh_at
+    now = time.monotonic()
+    if _last_refresh_at is not None and now - _last_refresh_at < REFRESH_COOLDOWN_SECONDS:
+        return False
+    _last_refresh_at = now
+    return True
 
 
 def _build_results(data: dict, elapsed_ms: float) -> EstimatorResults:
@@ -40,16 +54,16 @@ async def get_estimator_results():
 
         data = await service.get_latest()
         if data is None:
+            logger.info("No stored estimator results; syncing ESPN and running estimator inline")
             synced = await provider.sync_db_now()
             if synced:
-                ran = await service.run_and_store()
+                ran = await service.run_and_store(wait=True)
                 if ran:
                     data = await service.get_latest()
-        else:
-            asyncio.create_task(_sync_and_run(service, provider))
+        elif _refresh_due():
+            background_tasks.spawn(_sync_and_run(service, provider), name="estimator-refresh")
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-        logger.info(f"Estimator endpoint completed in {elapsed_ms:.1f}ms")
 
         if not data or not data.get("rankings"):
             raise HTTPException(
@@ -62,5 +76,5 @@ async def get_estimator_results():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting estimator results: {e}")
+        logger.exception(f"Error getting estimator results: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve estimator results")

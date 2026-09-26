@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional
 
 from app.services.db_service import DBService
@@ -41,13 +41,24 @@ class ProviderCacheEntry:
 
 _mem: dict[str, ProviderCacheEntry] = {}
 _db_probed: set[str] = set()
+# Set by the daily snapshot job: a healthy entry fetched before this UTC day is due now,
+# whatever its TTL says, so every day gets its own snapshot even though the 24h TTL drifts.
+_fetched_on_or_after: Optional[date] = None
+
+
+def require_fetched_on_or_after(day: date) -> None:
+    global _fetched_on_or_after
+    _fetched_on_or_after = day
 
 
 def _due_for_refresh(entry: Optional[ProviderCacheEntry], now: datetime) -> bool:
     if entry is None:
         return True
-    interval = CACHE_TTL if entry.ok else FAILURE_RETRY
-    return now - entry.checked_at >= interval
+    if not entry.ok:
+        return now - entry.checked_at >= FAILURE_RETRY
+    if _fetched_on_or_after is not None and entry.fetched_at.astimezone(timezone.utc).date() < _fetched_on_or_after:
+        return True
+    return now - entry.checked_at >= CACHE_TTL
 
 
 async def _load_from_db(provider: str) -> Optional[ProviderCacheEntry]:
@@ -164,8 +175,10 @@ async def get_or_refresh(
 
 
 def reset_provider_cache() -> None:
+    global _fetched_on_or_after
     _mem.clear()
     _db_probed.clear()
+    _fetched_on_or_after = None
 
 
 async def invalidate(provider: Optional[str] = None) -> list[str]:

@@ -94,6 +94,7 @@ export interface LeagueSummary {
   last_updated: string;
   data_date?: string;
   season_start?: string;
+  trade_deadline?: string;
 }
 
 export interface HeatmapData {
@@ -442,6 +443,65 @@ export interface AdpIndexQueryArgs {
   metric?: AdpMetric;
 }
 
+/** One player's change between two snapshots. `delta` > 0 means he moved up. */
+export interface AdpMover {
+  id: string;
+  espn_id: number | null;
+  name: string;
+  team_abbr: string | null;
+  photo_url: string | null;
+  positions: string[];
+  from_value: number | null;
+  to_value: number | null;
+  delta: number | null;
+}
+
+export interface AdpMoversSection {
+  /** A site key, or "blend" for the Blend of the selected sites. */
+  key: string;
+  label: string;
+  from_date: string | null;
+  to_date: string | null;
+  compared: number;
+  risers: AdpMover[];
+  fallers: AdpMover[];
+  entered: AdpMover[];
+  exited: AdpMover[];
+  note: string | null;
+}
+
+export interface AdpSnapshotHistory {
+  key: string;
+  label: string;
+  first_date: string | null;
+  last_date: string | null;
+  /** Days this site's data for the active metric changed (rankings: update dates). */
+  change_dates: string[];
+}
+
+export type AdpMoversMode = "range" | "last_update";
+
+export interface AdpMoversResponse {
+  metric: AdpMetric;
+  mode: AdpMoversMode;
+  from_date: string | null;
+  to_date: string | null;
+  top: number | null;
+  sections: AdpMoversSection[];
+  history: AdpSnapshotHistory[];
+}
+
+export interface AdpMoversQueryArgs {
+  metric: AdpMetric;
+  sites?: string;
+  mode: AdpMoversMode;
+  from_date?: string;
+  to_date?: string;
+  /** 0 = no depth filter. */
+  top: number;
+  limit?: number;
+}
+
 export interface NbaPlayerBio {
   id: string;
   display_name: string;
@@ -704,4 +764,35 @@ export interface GameLogResponse {
   league_usg: number | null;
   baseline_seasons: number;
   games: GameLogEntry[];
+}
+
+export interface RankMover {
+  team_id: number;
+  team_name: string;
+  category: string;
+  delta: number;
+}
+
+export interface TeamRosterHealth {
+  team_id: number;
+  team_name: string;
+  games_tonight: number;
+  available_tonight: number;
+  probable: number;
+  questionable: number;
+  doubtful: number;
+  out: number;
+}
+
+export interface NightlyRun {
+  game_date: string;
+  rows: number;
+}
+
+export interface TodayHub {
+  slate_date: string | null;
+  games_count: number;
+  movers: RankMover[];
+  roster_health: TeamRosterHealth[];
+  last_nightly: NightlyRun | null;
 }

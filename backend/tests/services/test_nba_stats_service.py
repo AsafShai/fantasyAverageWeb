@@ -1,5 +1,8 @@
+import json
+import re
 import pytest
 import httpx
+from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, date
 from app.services.nba_stats_service import NBAStatsService
@@ -453,3 +456,139 @@ class TestNBAStatsServiceClose:
         delattr(service, '_client')
 
         await service.close()
+
+
+_FIXTURES = Path(__file__).resolve().parents[1] / 'fixtures'
+
+
+def _fixture(name):
+    with open(_FIXTURES / name, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _espn_client_mock(calendar_payload, day_types, seasons_payload):
+    """Fake httpx 'get' routing the three ESPN endpoints the season window uses:
+    the whitelist calendar, the core-API season-types lookup, and the single-day
+    scoreboard probes. `seasons_payload=None` makes the core-API call 404."""
+    async def _get(url, *args, **kwargs):
+        resp = Mock()
+        resp.raise_for_status = Mock()
+        if 'sports.core.api.espn.com' in url:
+            if seasons_payload is None:
+                resp.raise_for_status = Mock(side_effect=httpx.HTTPStatusError(
+                    "404 Not Found", request=Mock(), response=Mock(status_code=404)))
+                resp.json.return_value = {}
+            else:
+                resp.json.return_value = seasons_payload
+        elif 'calendartype=whitelist' in url:
+            resp.json.return_value = calendar_payload
+        else:
+            m = re.search(r'dates=(\d{8})', url)
+            season_type = day_types.get(m.group(1)) if m else None
+            events = [{'season': {'type': season_type}}] if season_type is not None else []
+            resp.json.return_value = {'events': events}
+        return resp
+
+    return AsyncMock(side_effect=_get)
+
+
+class _FrozenDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 3, 1, 12, 0)
+
+
+class TestNBAStatsServiceSeasonBoundariesFromFixtures:
+    """Regression suite pinned to real captured ESPN payloads (whitelist calendar,
+    core-API season types, and the per-day scoreboard season.type for every date in
+    each calendar). Guards the derived regular-season window against ESPN reshaping
+    the season-types response: a silently shifted boundary would corrupt
+    nba_game_days_remaining without raising anything."""
+
+    @pytest.mark.parametrize("season_id,n_dates,start_idx,end_idx,first_day,last_day,expected_calls", [
+        (2026, 229, 16, 181, date(2025, 10, 21), date(2026, 4, 12), 6),
+        # 2027's postseason is not in the whitelist calendar yet, so the window runs to
+        # the final index and the right-hand probe of the end boundary is skipped.
+        (2027, 174, 14, 173, date(2026, 10, 20), date(2027, 4, 11), 5),
+    ])
+    @pytest.mark.asyncio
+    async def test_window_from_season_types(self, nba_stats_service, season_id, n_dates,
+                                            start_idx, end_idx, first_day, last_day, expected_calls):
+        client = _espn_client_mock(
+            _fixture(f'nba_whitelist_calendar_{season_id}_trimmed.json'),
+            _fixture(f'nba_day_season_types_{season_id}_trimmed.json'),
+            _fixture(f'nba_season_types_{season_id}_trimmed.json'),
+        )
+        with patch.object(nba_stats_service._client, 'get', client):
+            dates, got_start, got_end = await nba_stats_service._get_regular_season_calendar(season_id)
+
+        assert len(dates) == n_dates
+        assert (got_start, got_end) == (start_idx, end_idx)
+        assert dates[got_start] == first_day
+        assert dates[got_end] == last_day
+        assert client.call_count == expected_calls
+
+    @pytest.mark.asyncio
+    async def test_stale_playin_metadata_falls_back_to_probing(self, nba_stats_service):
+        """ESPN's 2023 season types put Play-In at 2023-04-12, but 2023-04-11 already
+        carried play-in games. Taking the metadata at face value would count that day as
+        regular season; the boundary check must reject it and probe instead."""
+        day_types = _fixture('nba_day_season_types_2023_trimmed.json')
+        client = _espn_client_mock(
+            _fixture('nba_whitelist_calendar_2023_trimmed.json'),
+            day_types,
+            _fixture('nba_season_types_2023_trimmed.json'),
+        )
+        with patch.object(nba_stats_service._client, 'get', client):
+            dates, start_idx, end_idx = await nba_stats_service._get_regular_season_calendar(2023)
+
+        assert day_types['20230411'] == 5
+        assert dates[start_idx] == date(2022, 10, 18)
+        assert dates[end_idx] == date(2023, 4, 9)
+        assert dates[end_idx + 1] == date(2023, 4, 11)
+        assert client.call_count < 2 + 2 * 8
+
+    @pytest.mark.parametrize("seasons_payload,label", [
+        (None, "404"),
+        ({'types': {'items': [
+            {'type': 1, 'startDate': '2025-10-01T07:00Z'},
+            {'type': 2, 'startDate': '2025-10-21T07:00Z'},
+        ]}}, "no type >= 3"),
+        ({'types': {'items': []}}, "empty types"),
+        ({'unexpected': 'shape'}, "unexpected shape"),
+    ])
+    @pytest.mark.asyncio
+    async def test_fallback_matches_probe_only_window(self, nba_stats_service, seasons_payload, label):
+        """However the season-types lookup fails, the window must equal what the
+        probe-only path derives from the same real 2026 calendar."""
+        client = _espn_client_mock(
+            _fixture('nba_whitelist_calendar_2026_trimmed.json'),
+            _fixture('nba_day_season_types_2026_trimmed.json'),
+            seasons_payload,
+        )
+        with patch.object(nba_stats_service._client, 'get', client):
+            dates, start_idx, end_idx = await nba_stats_service._get_regular_season_calendar(2026)
+
+        assert (start_idx, end_idx) == (16, 181), label
+        assert dates[start_idx] == date(2025, 10, 21)
+        assert dates[end_idx] == date(2026, 4, 12)
+
+    @pytest.mark.asyncio
+    async def test_start_date_and_days_remaining_from_fixtures(self, nba_stats_service):
+        calendar = _fixture('nba_whitelist_calendar_2026_trimmed.json')
+        client = _espn_client_mock(
+            calendar,
+            _fixture('nba_day_season_types_2026_trimmed.json'),
+            _fixture('nba_season_types_2026_trimmed.json'),
+        )
+        nba_stats_service._days_left_cache = {'season_id': None, 'value': None, 'ts': None}
+        with patch.object(nba_stats_service._client, 'get', client), \
+             patch('app.services.nba_stats_service.datetime', _FrozenDatetime):
+            start = await nba_stats_service.get_regular_season_start_date(2026)
+            days_left = await nba_stats_service.get_nba_game_days_remaining(2026)
+        nba_stats_service._days_left_cache = {'season_id': None, 'value': None, 'ts': None}
+
+        dates = [datetime.fromisoformat(d.replace('Z', '+00:00')).date()
+                 for d in calendar['leagues'][0]['calendar']]
+        assert start == date(2025, 10, 21)
+        assert days_left == len([d for d in dates[16:182] if d >= date(2026, 3, 1)])

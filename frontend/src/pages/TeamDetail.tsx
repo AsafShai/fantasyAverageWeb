@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router'
 import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
+import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
 import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery } from '../store/api/fantasyApi'
 import type { TimePeriod, PlayerMatchup, CustomDateRange, PlayerStatKey } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -32,12 +33,25 @@ const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
   TO: 'Turnovers',
 }
 
+const TIME_PERIODS: readonly TimePeriod[] = ['season', 'last_7', 'last_15', 'last_30', 'custom']
+
+const TEAM_DETAIL_URL_SCHEMA = {
+  period: enumParam<TimePeriod>(TIME_PERIODS, 'season'),
+  from: isoDateParam(),
+  to: isoDateParam(),
+  sort: stringParam(),
+  order: enumParam(['asc', 'desc'] as const, 'asc'),
+}
+
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
   const navigate = useNavigate()
   const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
-  const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
+  const [urlState, setUrlState] = useUrlState(TEAM_DETAIL_URL_SCHEMA)
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(urlState.period)
+  const [customRange, setCustomRange] = useState<CustomDateRange | null>(() =>
+    urlState.from && urlState.to ? { start: urlState.from, end: urlState.to } : null
+  )
   const { data: team_detail, error, isLoading } = useGetTeamDetailQuery({
     teamId: teamIdNumber,
     time_period: timePeriod,
@@ -55,8 +69,19 @@ const TeamDetail = () => {
       )
     }
   }, [timePeriod, customRange, team_detail])
-  const [sortBy, setSortBy] = useState<string | null>(null)
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [sortBy, setSortBy] = useState<string | null>(urlState.sort || null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(urlState.order)
+
+  const isCustom = timePeriod === 'custom' && customRange !== null
+  useEffect(() => {
+    setUrlState({
+      period: timePeriod,
+      from: isCustom ? customRange.start : '',
+      to: isCustom ? customRange.end : '',
+      sort: sortBy ?? '',
+      order: sortOrder,
+    })
+  }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder])
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
   const [integerMode, setIntegerMode] = usePersistedState('teamDetail.integerMode', true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)

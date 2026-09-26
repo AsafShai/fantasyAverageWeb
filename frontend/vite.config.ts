@@ -12,6 +12,11 @@ export default defineConfig({
     rollupOptions: {
       output: {
         codeSplitting: {
+          // Capture only the matched packages, not everything they depend on:
+          // recharts depends on @reduxjs/toolkit/react-redux, which the app's
+          // store needs at startup, so capturing dependencies dragged the
+          // whole chart library into every first page load.
+          includeDependenciesRecursively: false,
           groups: [
             { name: 'recharts', test: /node_modules[\\/]recharts/ },
             { name: 'react-table', test: /node_modules[\\/]@tanstack[\\/]react-table/ },

@@ -6,11 +6,26 @@ from typing import Annotated, List, Optional
 from datetime import date
 from app.config import settings
 import logging
+import time
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 TeamServiceDep = Annotated[TeamService, Depends(TeamService)]
+
+# Team detail has no other cache, so every request re-fetched ESPN and
+# re-ran the windowed-stats aggregation — ~570ms each, paid again for every
+# team a user clicks through. Only preset windows are cached: their key space
+# is bounded by construction (12 teams x 4 presets), while a custom range is
+# caller-supplied and would let the dict grow without bound. _MAX_ENTRIES is a
+# backstop, not the real bound.
+_RESPONSE_CACHE_TTL_S = 60
+_MAX_ENTRIES = 64
+_response_cache: dict[tuple[int, str], tuple[float, TeamDetail]] = {}
+
+
+def clear_team_detail_cache() -> None:
+    _response_cache.clear()
 
 
 @router.get("/", response_model=List[Team])
@@ -27,7 +42,7 @@ async def get_teams_list(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting teams list: {e}")
+        logger.exception(f"Error getting teams list: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve teams list")
 
 
@@ -57,7 +72,19 @@ async def get_team_detail(
             if end > date.today():
                 raise HTTPException(status_code=422, detail="end cannot be in the future")
 
-        return await team_service.get_team_detail(team_id, time_period, start, end)
+        if time_period == StatTimePeriod.CUSTOM:
+            return await team_service.get_team_detail(team_id, time_period, start, end)
+
+        key = (team_id, time_period.value)
+        hit = _response_cache.get(key)
+        if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:
+            return hit[1]
+
+        detail = await team_service.get_team_detail(team_id, time_period, start, end)
+        if len(_response_cache) >= _MAX_ENTRIES:
+            _response_cache.clear()
+        _response_cache[key] = (time.monotonic(), detail)
+        return detail
     except HTTPException:
         raise
     except InvalidParameterError as e:
@@ -67,7 +94,7 @@ async def get_team_detail(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting team stats for {team_id}: {e}")
+        logger.exception(f"Error getting team stats for {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team statistics")
 
 
@@ -89,5 +116,5 @@ async def get_team_players(
     except DataSourceError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        logger.error(f"Error getting players for team ID {team_id}: {e}")
+        logger.exception(f"Error getting players for team ID {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team players")

@@ -59,5 +59,5 @@ async def get_nba_player_stats(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        logger.error("Error getting NBA player stats for %s: %s", player_id, e)
+        logger.exception("Error getting NBA player stats for %s: %s", player_id, e)
         raise HTTPException(status_code=500, detail="Failed to retrieve player stats")

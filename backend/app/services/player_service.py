@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from datetime import date, datetime, timedelta
 from typing import Optional, Tuple
@@ -46,13 +47,25 @@ _SEASON_ANCHOR_TTL = timedelta(hours=1)
 _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 
 
-# The windowed DataFrame for a preset period (season/last_7/last_15/last_30)
-# only moves on nightly ingest, but build_windowed_players_df reruns a full
-# fs_player_games aggregation + pandas merge on every /players request.
-# Cached briefly per preset. Custom ranges are never cached here — the key
-# space is unbounded (any start/end pair), so caching them would grow forever.
+# The windowed players for a preset period (season/last_7/last_15/last_30)
+# only move on nightly ingest, but build_windowed_players_df reruns a full
+# fs_player_games aggregation + pandas merge on every /players request, and
+# building the ~1100 Player objects on top of it costs as much again. Both
+# are cached briefly per preset; pagination then slices the built list.
+# The cached list is read-only — it is handed out to every request, so it
+# must never be mutated in place. Custom ranges are never cached here — the
+# key space is unbounded (any start/end pair), so caching would grow forever.
 _WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
 _windowed_players_cache: dict = {}
+
+
+def players_etag(time_period: StatTimePeriod, page: int, limit: int) -> Optional[str]:
+    """Weak ETag for a /players page, or None when nothing is cached yet."""
+    entry = _windowed_players_cache.get(time_period)
+    if entry is None or datetime.now() - entry['ts'] >= _WINDOWED_PLAYERS_TTL:
+        return None
+    raw = f"{time_period.value}|{page}|{limit}|{entry['ts'].isoformat()}"
+    return f'W/"{hashlib.sha1(raw.encode()).hexdigest()[:8]}"'
 
 
 async def get_season_anchor_date(season: str, db_service: DBService) -> date:
@@ -75,14 +88,31 @@ def espn_season_string(season_id: int) -> str:
     return f"{season_id - 1}-{str(season_id)[-2:]}"
 
 
-async def build_windowed_players_df(
+async def compute_windowed_agg(
     time_period: StatTimePeriod,
-    espn_players_df: pd.DataFrame,
     db_service: DBService,
     start: Optional[date] = None,
     end: Optional[date] = None,
 ) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
-    """Overlay fs_player_games-aggregated stats onto an ESPN players DataFrame.
+    """DB-only half of build_windowed_players_df: resolves the date window and
+    aggregates fs_player_games over it. Independent of the ESPN players
+    DataFrame, so callers that fetch ESPN data too can run this concurrently
+    with that fetch instead of waiting on it first."""
+    season = espn_season_string(settings.season_id)
+    anchor_date = await get_season_anchor_date(season, db_service)
+    resolved_start, resolved_end = StatTimePeriod.resolve_window(
+        time_period, start, end, settings.season_start, today=anchor_date
+    )
+    return await db_service.aggregate_player_games(resolved_start, resolved_end, season)
+
+
+def merge_windowed_players_df(
+    time_period: StatTimePeriod,
+    espn_players_df: pd.DataFrame,
+    agg_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Overlay fs_player_games-aggregated stats (from compute_windowed_agg) onto
+    an ESPN players DataFrame.
 
     For preset periods, a player is "known" if they're on a current NBA roster
     per ESPN (`Pro Team != 'FA'`), independent of whether they've played at
@@ -98,15 +128,6 @@ async def build_windowed_players_df(
     fall back to anyway, so every player is simply zeroed to their window
     totals (0 if they have no rows), always has_data=True.
     """
-    season = espn_season_string(settings.season_id)
-    anchor_date = await get_season_anchor_date(season, db_service)
-    resolved_start, resolved_end = StatTimePeriod.resolve_window(
-        time_period, start, end, settings.season_start, today=anchor_date
-    )
-    agg_df, actual_start, actual_end = await db_service.aggregate_player_games(
-        resolved_start, resolved_end, season
-    )
-
     merged = espn_players_df.copy()
     is_custom = time_period == StatTimePeriod.CUSTOM
     merged['_join_key'] = merged['Name'].map(resolve_join_key)
@@ -132,7 +153,7 @@ async def build_windowed_players_df(
 
     # Only custom ranges force-zero known-but-unwindowed players — they have
     # no ESPN split to fall back to. Presets leave the ESPN value in place
-    # (see the comment above build_windowed_players_df's docstring).
+    # (see the comment above this function's docstring).
     if is_custom:
         zero_matched = ~windowed
         if zero_matched.any():
@@ -150,6 +171,21 @@ async def build_windowed_players_df(
     merged['GP'] = merged['GP'].astype(int)
     drop_cols = ['_join_key'] + list(_DB_STAT_COLS.values())
     merged = merged.drop(columns=[c for c in drop_cols if c in merged.columns])
+    return merged
+
+
+async def build_windowed_players_df(
+    time_period: StatTimePeriod,
+    espn_players_df: pd.DataFrame,
+    db_service: DBService,
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
+    """compute_windowed_agg + merge_windowed_players_df run back-to-back.
+    Callers that can fetch espn_players_df concurrently with the DB
+    aggregation should call the two halves separately instead."""
+    agg_df, actual_start, actual_end = await compute_windowed_agg(time_period, db_service, start, end)
+    merged = merge_windowed_players_df(time_period, espn_players_df, agg_df)
     return merged, actual_start, actual_end
 
 
@@ -179,9 +215,20 @@ class PlayerService:
             end: End date, required when time_period is custom
         """
         is_preset = time_period != StatTimePeriod.CUSTOM
+        categories = await self.data_provider.get_ranking_categories()
+        reverse_categories = await self.data_provider.get_reverse_categories()
+
         cached = _windowed_players_cache.get(time_period) if is_preset else None
-        if cached is not None and datetime.now() - cached['ts'] < _WINDOWED_PLAYERS_TTL:
-            players_df, actual_start, actual_end = cached['df'], cached['start'], cached['end']
+        if cached is not None and (
+            datetime.now() - cached['ts'] >= _WINDOWED_PLAYERS_TTL
+            or cached['categories'] != categories
+        ):
+            cached = None
+
+        if cached is not None:
+            all_players = cached['players']
+            total_count = cached['total_count']
+            actual_start, actual_end = cached['start'], cached['end']
         else:
             stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
             espn_players_df = await self.data_provider.get_players_df(stat_split_id)
@@ -192,23 +239,24 @@ class PlayerService:
             players_df, actual_start, actual_end = await build_windowed_players_df(
                 time_period, espn_players_df, self.data_provider.db_service, start, end
             )
+            all_players = self.response_builder.build_all_players_response(players_df, categories)
+            total_count = len(players_df)
+            logger.info(
+                f"Players list built: time_period={time_period.value}, {total_count} players, "
+                f"window {actual_start}..{actual_end}"
+            )
             if is_preset:
                 _windowed_players_cache[time_period] = {
-                    'df': players_df, 'start': actual_start, 'end': actual_end,
-                    'ts': datetime.now(),
+                    'players': all_players, 'total_count': total_count,
+                    'start': actual_start, 'end': actual_end,
+                    'categories': categories, 'ts': datetime.now(),
                 }
 
-        total_count = len(players_df)
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
 
-        page_df = players_df.iloc[start_idx:end_idx]
-        categories = await self.data_provider.get_ranking_categories()
-        reverse_categories = await self.data_provider.get_reverse_categories()
-        players = self.response_builder.build_all_players_response(page_df, categories)
-
         return PaginatedPlayers(
-            players=players,
+            players=all_players[start_idx:end_idx],
             total_count=total_count,
             page=page,
             limit=limit,

@@ -29,6 +29,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   ...(FF_DRAFT_PAGES
     ? [
         { label: 'Rankings & ADP', path: '/draft/rankings-adp', icon: '📊', group: 'Draft' },
+        { label: 'ADP & Rankings Movers', path: '/draft/movers', icon: '📈', group: 'Draft' },
         { label: 'Draft Board', path: '/draft/board', icon: '🗂️', group: 'Draft' },
         { label: 'Pre-Draft Rankings', path: '/draft/rankings', icon: '📋', group: 'Draft' },
         { label: 'Mock Draft', path: '/draft/mock', icon: '🏟️', group: 'Draft' },

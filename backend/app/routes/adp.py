@@ -1,9 +1,16 @@
 import logging
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from app.models.adp import AdpIndexResponse, AdpResponse, ProviderMeta
+from app.models.adp import (
+    AdpIndexResponse,
+    AdpMoversResponse,
+    AdpResponse,
+    ProviderMeta,
+)
+from app.services.adp_movers import get_movers
 from app.services.adp_service import (
     get_adp_index_response,
     get_adp_response_enriched,
@@ -52,8 +59,38 @@ async def get_adp_index(
             include_fringe=include_fringe,
         )
     except Exception as e:
-        logger.error("Error building ADP index: %s", e)
+        logger.exception("Error building ADP index: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve ADP data")
+
+
+@router.get("/movers", response_model=AdpMoversResponse)
+async def get_adp_movers(
+    response: Response,
+    metric: str = Query("adp"),
+    sites: Optional[str] = Query(None),
+    mode: str = Query("range"),
+    from_date: Optional[date] = Query(None),
+    to_date: Optional[date] = Query(None),
+    top: Optional[int] = Query(150, ge=0, le=2000),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Biggest risers/fallers per site (plus Blend) between two stored snapshots."""
+    _cache_headers(response)
+    try:
+        return await get_movers(
+            metric=metric,
+            sites=sites,
+            mode=mode,
+            from_date=from_date,
+            to_date=to_date,
+            top=top,
+            limit=limit,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error building ADP movers: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to retrieve ADP movers")
 
 
 @router.post("/refresh", response_model=list[ProviderMeta])
@@ -64,7 +101,7 @@ async def refresh_adp(provider: Optional[str] = Query(None)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error("Error refreshing ADP sources: %s", e)
+        logger.exception("Error refreshing ADP sources: %s", e)
         raise HTTPException(status_code=500, detail="Failed to refresh ADP data")
 
 
@@ -106,5 +143,5 @@ async def get_adp(
             include_stats=include_stats,
         )
     except Exception as e:
-        logger.error("Error building ADP response: %s", e)
+        logger.exception("Error building ADP response: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve ADP data")

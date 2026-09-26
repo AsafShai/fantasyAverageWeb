@@ -276,6 +276,28 @@ export function hydrateAdpPlayer(index: AdpIndexPlayer, full?: AdpPlayer): AdpPl
   }
 }
 
+/**
+ * `/adp?ids=` always returns the all-sites Blend, while the index honours the checked
+ * blend sites. Pages that hydrate index rows with detail records keep the index's blends.
+ */
+export function withIndexBlends(player: AdpPlayer, index: AdpIndexPlayer): AdpPlayer {
+  if (
+    player.blend === index.blend &&
+    player.blend_rank === index.blend_rank &&
+    player.ranking_blend === index.ranking_blend &&
+    player.ranking_blend_rank === index.ranking_blend_rank
+  ) {
+    return player
+  }
+  return {
+    ...player,
+    blend: index.blend,
+    blend_rank: index.blend_rank,
+    ranking_blend: index.ranking_blend,
+    ranking_blend_rank: index.ranking_blend_rank,
+  }
+}
+
 export function shortSeasonLabel(label?: string | null): string {
   const match = label?.match(/^(\d{2})(\d{2})-(\d{2})$/)
   if (!match) return label || ''

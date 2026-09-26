@@ -463,6 +463,21 @@ async def refresh_adp_sources(provider: Optional[str] = None) -> list[ProviderMe
     return (await get_adp_response()).providers
 
 
+async def ensure_daily_snapshot() -> None:
+    """Fetch any provider not yet fetched today (UTC), which records today's snapshot.
+
+    Run by the morning scheduler. Without it a day nobody opens a draft page gets no
+    snapshot, and the 24h TTL drifts so a fixed-time check alone could find nothing due.
+    Providers already fetched today are served from cache, so repeat runs are free.
+    """
+    global _cached, _cached_at
+    adp_cache.require_fetched_on_or_after(datetime.now(timezone.utc).date())
+    async with _refresh_lock:
+        _cached = None
+        _cached_at = None
+    await get_adp_response()
+
+
 CURATED_RANK_SITES = ("espn", "yahoo")
 
 
