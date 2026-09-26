@@ -158,9 +158,11 @@ async def test_trend_returns_blend_delta_per_player(store):
 
 @pytest.mark.asyncio
 async def test_espn_slide_onto_undrafted_floor_is_an_exit_not_a_fall(store):
-    store[("espn", D21)] = [_row("Jordan Poole", 120.0), _row("Bj Johnson", 131.7)]
-    store[("espn", D25)] = [_row("Jordan Poole", 138.8), _row("Bj Johnson", 139.98)]
+    store[("espn", D21)] = [_row("Jordan Poole", 120.0), _row("Bj Johnson", 131.7), _row("Tre Jones", 139.2)]
+    store[("espn", D25)] = [_row("Jordan Poole", 137.9), _row("Bj Johnson", 138.0), _row("Tre Jones", 125.0)]
 
     section = (await adp_movers.get_movers(metric="adp", sites="espn", from_date=D21)).sections[0]
-    assert _names(section.fallers) == [("Jordan Poole", -18.8)]
+    assert _names(section.fallers) == [("Jordan Poole", -17.9)]
     assert [m.name for m in section.exited] == ["Bj Johnson"]
+    assert [m.name for m in section.entered] == ["Tre Jones"]
+    assert section.risers == []

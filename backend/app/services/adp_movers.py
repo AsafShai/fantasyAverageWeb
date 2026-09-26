@@ -38,9 +38,11 @@ MAX_LIMIT = 50
 MIN_DELTA = 0.05
 _STATE_CACHE_SIZE = 12
 # ESPN parks hundreds of undrafted players just under its 140 sentinel (357 players at
-# 139.0-139.99 on 2026-09-26). A slide onto that floor means "went undrafted", so for
-# movement it counts as leaving the list, not as a -8 faller crowding out real ones.
-ESPN_ADP_FLOOR = 139.5
+# 139.0-139.99 on 2026-09-26), and the few just above them are barely drafted. A move
+# touching 138+ at either end counts as entering or leaving the list, not as a -8
+# faller crowding out real ones. Yahoo needs no floor: it gives undrafted players no ADP
+# at all (only 194 of 684 have one, topping out near 121), so leaving is already an exit.
+ESPN_ADP_FLOOR = 138.0
 
 State = dict[str, AdpPlayer]
 PairFn = Callable[[Optional[AdpPlayer], Optional[AdpPlayer]], tuple[Optional[float], Optional[float]]]
