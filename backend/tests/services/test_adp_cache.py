@@ -209,3 +209,29 @@ async def test_daily_floor_does_not_bypass_failure_backoff():
     adp_cache.require_fetched_on_or_after(datetime.now(timezone.utc).date())
     await adp_cache.get_or_refresh("espn", good)
     assert good.await_count == 1  # just failed: wait out FAILURE_RETRY, don't hammer
+
+
+@pytest.mark.asyncio
+async def test_requested_refresh_refetches_once_then_ttl_rules_again():
+    good = AsyncMock(return_value=([(1, "A", 1.0, ["C"])], "src"))
+    await adp_cache.get_or_refresh("yahoo", good)
+    await adp_cache.get_or_refresh("espn", good)
+    assert good.await_count == 2
+
+    adp_cache.request_refresh(["yahoo"])
+    await adp_cache.get_or_refresh("espn", good)
+    assert good.await_count == 2  # not requested: still inside its TTL
+    await adp_cache.get_or_refresh("yahoo", good)
+    assert good.await_count == 3
+    await adp_cache.get_or_refresh("yahoo", good)
+    assert good.await_count == 3  # one re-fetch per request
+
+
+@pytest.mark.asyncio
+async def test_requested_refresh_does_not_bypass_failure_backoff():
+    good = AsyncMock(return_value=([(1, "A", 1.0, ["C"])], "src"))
+    await adp_cache.get_or_refresh("yahoo", good)
+    adp_cache._mem["yahoo"].ok = False
+    adp_cache.request_refresh(["yahoo"])
+    await adp_cache.get_or_refresh("yahoo", good)
+    assert good.await_count == 1

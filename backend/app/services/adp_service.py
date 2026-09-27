@@ -19,7 +19,7 @@ from app.models.adp import (
 )
 from app.models.nba_player_models import NbaPlayerBio
 from app.config import settings
-from app.services import adp_cache, nba_player_catalog
+from app.services import adp_cache, adp_snapshots, nba_player_catalog
 from app.services.adp_fetch import fetch_espn_stat_splits_map, fetch_live_adp_payload
 from app.services.adp_query import (
     filter_players,
@@ -463,19 +463,35 @@ async def refresh_adp_sources(provider: Optional[str] = None) -> list[ProviderMe
     return (await get_adp_response()).providers
 
 
-async def ensure_daily_snapshot() -> None:
-    """Fetch any provider not yet fetched today (UTC), which records today's snapshot.
+# Sleeper asks for at most one fetch a day, so it only gets the once-a-day floor below,
+# never the hourly retry. The others publish on their own clock (Yahoo's daily update
+# lands hours after midnight UTC), so one fetch a day can miss the day's change.
+HOURLY_RETRY_SITES = ("espn", "fantrax", "yahoo")
 
-    Run by the morning scheduler. Without it a day nobody opens a draft page gets no
-    snapshot, and the 24h TTL drifts so a fixed-time check alone could find nothing due.
-    Providers already fetched today are served from cache, so repeat runs are free.
+
+async def ensure_daily_snapshot() -> bool:
+    """Make sure today's (UTC) snapshot gets recorded, re-checking providers until it is.
+
+    Run hourly. Every provider is fetched at least once per UTC day (the 24h TTL drifts,
+    so the TTL alone can skip a day). A retry-eligible provider with no snapshot row for
+    today yet is re-fetched each run; record_snapshot writes only when its content differs
+    from the latest stored row, so a run writes at most the day's first change. Once a
+    provider has today's row it is left alone until tomorrow. Returns False when there
+    was nothing to check.
     """
     global _cached, _cached_at
-    adp_cache.require_fetched_on_or_after(datetime.now(timezone.utc).date())
+    today = datetime.now(timezone.utc).date()
+    missing = await adp_snapshots.providers_missing_day(SITES, today)
+    retry = [p for p in missing if p in HOURLY_RETRY_SITES]
+    if not retry and (not missing or adp_cache.fetched_floor() == today):
+        return False
+    adp_cache.require_fetched_on_or_after(today)
+    adp_cache.request_refresh(retry)
     async with _refresh_lock:
         _cached = None
         _cached_at = None
     await get_adp_response()
+    return True
 
 
 CURATED_RANK_SITES = ("espn", "yahoo")
