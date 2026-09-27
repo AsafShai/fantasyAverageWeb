@@ -108,6 +108,38 @@ async def _ensure_table(conn) -> None:
     _table_ready = True
 
 
+async def _probe_latest(conn, provider: str) -> Optional[tuple[date, str, str]]:
+    row = await conn.fetchrow(
+        "SELECT snapshot_date, adp_hash, ranking_hash FROM adp_provider_snapshots"
+        " WHERE provider = $1 ORDER BY snapshot_date DESC LIMIT 1",
+        provider,
+    )
+    _latest[provider] = (row["snapshot_date"], row["adp_hash"], row["ranking_hash"]) if row else None
+    return _latest[provider]
+
+
+async def providers_missing_day(providers: tuple[str, ...], day: date) -> list[str]:
+    """The providers with no snapshot row for `day` yet.
+
+    Empty when there is no database (or it errors): without somewhere to store a row
+    there is nothing to go looking for.
+    """
+    unknown = [p for p in providers if p not in _latest]
+    if unknown:
+        pool = await _pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                await _ensure_table(conn)
+                for provider in unknown:
+                    await _probe_latest(conn, provider)
+        except Exception:
+            logger.exception("Failed to read latest ADP snapshot dates")
+            return []
+    return [p for p in providers if (_latest.get(p) or (None,))[0] != day]
+
+
 async def record_snapshot(provider: str, payload: list, fetched_at: datetime) -> bool:
     """Store `payload` as `provider`'s state for fetched_at's UTC day if it changed.
 
@@ -129,15 +161,7 @@ async def record_snapshot(provider: str, payload: list, fetched_at: datetime) ->
         async with pool.acquire() as conn:
             await _ensure_table(conn)
             if provider not in _latest:
-                row = await conn.fetchrow(
-                    "SELECT snapshot_date, adp_hash, ranking_hash FROM adp_provider_snapshots"
-                    " WHERE provider = $1 ORDER BY snapshot_date DESC LIMIT 1",
-                    provider,
-                )
-                _latest[provider] = (
-                    (row["snapshot_date"], row["adp_hash"], row["ranking_hash"]) if row else None
-                )
-                known = _latest[provider]
+                known = await _probe_latest(conn, provider)
                 if known is not None and known[1:] == (adp_hash, ranking_hash):
                     return False
             if known is not None and known[0] > day:

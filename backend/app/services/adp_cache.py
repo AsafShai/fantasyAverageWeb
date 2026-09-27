@@ -46,9 +46,22 @@ _db_probed: set[str] = set()
 _fetched_on_or_after: Optional[date] = None
 
 
+# Set by the hourly snapshot check: providers to re-fetch once on their next read even
+# though fetched today, because their stored history has nothing for today yet.
+_force_refresh: set[str] = set()
+
+
 def require_fetched_on_or_after(day: date) -> None:
     global _fetched_on_or_after
     _fetched_on_or_after = day
+
+
+def fetched_floor() -> Optional[date]:
+    return _fetched_on_or_after
+
+
+def request_refresh(providers) -> None:
+    _force_refresh.update(providers)
 
 
 def _due_for_refresh(entry: Optional[ProviderCacheEntry], now: datetime) -> bool:
@@ -56,6 +69,8 @@ def _due_for_refresh(entry: Optional[ProviderCacheEntry], now: datetime) -> bool
         return True
     if not entry.ok:
         return now - entry.checked_at >= FAILURE_RETRY
+    if entry.provider in _force_refresh:
+        return True
     if _fetched_on_or_after is not None and entry.fetched_at.astimezone(timezone.utc).date() < _fetched_on_or_after:
         return True
     return now - entry.checked_at >= CACHE_TTL
@@ -142,6 +157,7 @@ async def get_or_refresh(
 
     if not _due_for_refresh(entry, now):
         return entry  # type: ignore[return-value]
+    _force_refresh.discard(provider)
 
     try:
         payload, source = await fetch()
@@ -178,6 +194,7 @@ def reset_provider_cache() -> None:
     global _fetched_on_or_after
     _mem.clear()
     _db_probed.clear()
+    _force_refresh.clear()
     _fetched_on_or_after = None
 
 

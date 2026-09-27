@@ -534,7 +534,7 @@ def test_mark_fringe_ignores_a_zero_game_stat_line():
 
 
 @pytest.mark.asyncio
-async def test_ensure_daily_snapshot_sets_todays_floor_and_rebuilds():
+async def test_ensure_daily_snapshot_retries_providers_missing_today_and_rebuilds():
     from datetime import datetime, timezone
 
     from app.services import adp_service
@@ -542,12 +542,47 @@ async def test_ensure_daily_snapshot_sets_todays_floor_and_rebuilds():
     reset_adp_cache()
     adp_service._cached = AdpResponse(season_label="x", updated_at="")
     adp_service._cached_at = datetime.now(timezone.utc)
+    today = datetime.now(timezone.utc).date()
     with (
+        patch(
+            "app.services.adp_service.adp_snapshots.providers_missing_day",
+            new_callable=AsyncMock,
+            return_value=["sleeper", "yahoo"],
+        ) as missing,
         patch("app.services.adp_service.adp_cache.require_fetched_on_or_after") as floor,
+        patch("app.services.adp_service.adp_cache.request_refresh") as force,
         patch("app.services.adp_service.get_adp_response", new_callable=AsyncMock) as rebuild,
     ):
-        await adp_service.ensure_daily_snapshot()
-    floor.assert_called_once_with(datetime.now(timezone.utc).date())
+        assert await adp_service.ensure_daily_snapshot() is True
+    missing.assert_awaited_once_with(adp_service.SITES, today)
+    floor.assert_called_once_with(today)
+    force.assert_called_once_with(["yahoo"])  # Sleeper: once a day only, never retried
     rebuild.assert_awaited_once()
     assert adp_service._cached is None  # the 30-min response cache must not short-circuit it
+    reset_adp_cache()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("missing", "floor_is_today"),
+    [([], False), (["sleeper"], True)],
+)
+async def test_ensure_daily_snapshot_is_a_no_op_once_nothing_is_left_to_check(missing, floor_is_today):
+    from datetime import datetime, timezone
+
+    from app.services import adp_cache, adp_service
+
+    reset_adp_cache()
+    if floor_is_today:
+        adp_cache.require_fetched_on_or_after(datetime.now(timezone.utc).date())
+    with (
+        patch(
+            "app.services.adp_service.adp_snapshots.providers_missing_day",
+            new_callable=AsyncMock,
+            return_value=missing,
+        ),
+        patch("app.services.adp_service.get_adp_response", new_callable=AsyncMock) as rebuild,
+    ):
+        assert await adp_service.ensure_daily_snapshot() is False
+    rebuild.assert_not_awaited()
     reset_adp_cache()
