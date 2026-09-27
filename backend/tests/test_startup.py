@@ -59,6 +59,7 @@ async def test_lifespan_keeps_schedulers_referenced_and_cancels_them_on_shutdown
          patch.object(main.estimator_scheduler, "start_scheduler", fake_scheduler("estimator")), \
          patch.object(main.model_nightly_scheduler, "start_scheduler", fake_scheduler("nightly")), \
          patch.object(main.nba_players_scheduler, "start_scheduler", fake_scheduler("players")), \
+         patch.object(main.adp_snapshot_scheduler, "start_scheduler", fake_scheduler("adp")), \
          patch.object(main.settings, "injury_scheduler_enabled", True), \
          patch.object(main.settings, "model_nightly_enabled", True), \
          patch.object(main.settings, "nba_players_refresh_enabled", True), \
@@ -68,9 +69,10 @@ async def test_lifespan_keeps_schedulers_referenced_and_cancels_them_on_shutdown
             await asyncio.sleep(0)
             names = {t.get_name() for t in background_tasks._tasks}
             assert {"injury-scheduler", "estimator-scheduler",
-                    "model-nightly-scheduler", "nba-players-scheduler"} <= names
+                    "model-nightly-scheduler", "nba-players-scheduler",
+                    "adp-snapshot-scheduler"} <= names
             tasks = list(background_tasks._tasks)
 
-    assert sorted(started) == ["estimator", "injury", "nightly", "players"]
+    assert sorted(started) == ["adp", "estimator", "injury", "nightly", "players"]
     assert all(t.cancelled() for t in tasks)
     assert not background_tasks._tasks

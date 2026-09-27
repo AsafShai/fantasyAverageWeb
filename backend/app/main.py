@@ -36,6 +36,7 @@ from app.services import injury_service
 from app.services import estimator_scheduler
 from app.services import model_nightly_scheduler
 from app.services import nba_players_scheduler
+from app.services import adp_snapshot_scheduler
 from app.services import health_service
 from app.utils.timing_middleware import add_timing_middleware
 from app.utils.request_context import RequestIdFilter
@@ -97,6 +98,7 @@ async def lifespan(app: FastAPI):
         background_tasks.spawn(nba_players_scheduler.start_scheduler(), name="nba-players-scheduler")
     else:
         logger.info("NBA players refresh scheduler disabled via NBA_PLAYERS_REFRESH_ENABLED=false")
+    background_tasks.spawn(adp_snapshot_scheduler.start_scheduler(), name="adp-snapshot-scheduler")
     yield
     # Shutdown
     await background_tasks.cancel_all()
