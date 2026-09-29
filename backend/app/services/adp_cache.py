@@ -46,18 +46,14 @@ _db_probed: set[str] = set()
 _fetched_on_or_after: Optional[date] = None
 
 
-# Set by the hourly snapshot check: providers to re-fetch once on their next read even
-# though fetched today, because their stored history has nothing for today yet.
+# Set by the hourly snapshot job: providers to re-fetch once on their next read, whatever
+# their TTL says.
 _force_refresh: set[str] = set()
 
 
 def require_fetched_on_or_after(day: date) -> None:
     global _fetched_on_or_after
     _fetched_on_or_after = day
-
-
-def fetched_floor() -> Optional[date]:
-    return _fetched_on_or_after
 
 
 def request_refresh(providers) -> None:

@@ -1,12 +1,9 @@
-"""Hourly check that each ADP provider gets a snapshot row for the current UTC day.
+"""Hourly ADP refresh that keeps the board and each day's snapshot current.
 
 Providers publish on their own clocks -- Yahoo's daily ADP update lands hours after
-midnight UTC -- so a single morning fetch can see yesterday's numbers and record
-nothing. Each run re-fetches only the providers with no row for today yet (see
-adp_service.ensure_daily_snapshot) and is a DB lookup only once they all have one.
-
-It only runs while the process is awake; the external health cron keeps the Render
-instance from sleeping.
+midnight UTC -- so a once-a-day fetch leaves both up to a day behind. Each run re-fetches
+ESPN, Fantrax and Yahoo (Sleeper stays once a day) and records any change as the current
+UTC day's snapshot (see adp_service.ensure_daily_snapshot).
 """
 
 import asyncio

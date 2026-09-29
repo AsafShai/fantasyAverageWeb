@@ -118,28 +118,6 @@ async def _probe_latest(conn, provider: str) -> Optional[tuple[date, str, str]]:
     return _latest[provider]
 
 
-async def providers_missing_day(providers: tuple[str, ...], day: date) -> list[str]:
-    """The providers with no snapshot row for `day` yet.
-
-    Empty when there is no database (or it errors): without somewhere to store a row
-    there is nothing to go looking for.
-    """
-    unknown = [p for p in providers if p not in _latest]
-    if unknown:
-        pool = await _pool()
-        if pool is None:
-            return []
-        try:
-            async with pool.acquire() as conn:
-                await _ensure_table(conn)
-                for provider in unknown:
-                    await _probe_latest(conn, provider)
-        except Exception:
-            logger.exception("Failed to read latest ADP snapshot dates")
-            return []
-    return [p for p in providers if (_latest.get(p) or (None,))[0] != day]
-
-
 async def record_snapshot(provider: str, payload: list, fetched_at: datetime) -> bool:
     """Store `payload` as `provider`'s state for fetched_at's UTC day if it changed.
 

@@ -95,6 +95,22 @@ async def test_changed_payload_is_written_for_its_own_day():
 
 
 @pytest.mark.asyncio
+async def test_later_change_the_same_day_replaces_that_days_row():
+    conn = _conn(latest_row=None)
+    later = [[1, "A", 9.5, ["C"], 12], ROWS[1]]
+    with patch("app.services.adp_snapshots.DBService") as db:
+        db.return_value._get_pool = AsyncMock(return_value=_mock_pool(conn))
+        assert await adp_snapshots.record_snapshot("yahoo", ROWS, FETCHED) is True
+        assert await adp_snapshots.record_snapshot("yahoo", later, FETCHED.replace(hour=14)) is True
+        assert await adp_snapshots.record_snapshot("yahoo", later, FETCHED.replace(hour=15)) is False
+
+    inserts = _inserts(conn)
+    assert [c.args[2] for c in inserts] == [date(2026, 9, 22), date(2026, 9, 22)]
+    assert "ON CONFLICT (provider, snapshot_date) DO UPDATE" in inserts[1].args[0]
+    assert inserts[1].args[3] == [list(row) for row in later]
+
+
+@pytest.mark.asyncio
 async def test_older_payload_never_overwrites_newer_history():
     conn = _conn(latest_row={"snapshot_date": date(2026, 9, 25), "adp_hash": "x", "ranking_hash": "y"})
     with patch("app.services.adp_snapshots.DBService") as db:
@@ -144,32 +160,3 @@ async def test_missing_table_without_create_rights_fails_soft_and_names_the_migr
         db.return_value._get_pool = AsyncMock(return_value=_mock_pool(conn))
         assert await adp_snapshots.record_snapshot("espn", ROWS, FETCHED) is False
     assert "create_adp_provider_snapshots.sql" in caplog.text
-
-
-@pytest.mark.asyncio
-async def test_providers_missing_day_probes_once_and_tracks_writes():
-    today = date(2026, 9, 22)
-    rows = {
-        "espn": {"snapshot_date": today, "adp_hash": "a", "ranking_hash": "r"},
-        "yahoo": {"snapshot_date": date(2026, 9, 21), "adp_hash": "a", "ranking_hash": "r"},
-        "fantrax": None,
-    }
-    conn = _conn()
-    conn.fetchval = AsyncMock(return_value=True)
-    conn.fetchrow = AsyncMock(side_effect=lambda _sql, provider: rows[provider])
-    with patch("app.services.adp_snapshots.DBService") as db:
-        db.return_value._get_pool = AsyncMock(return_value=_mock_pool(conn))
-        providers = ("espn", "fantrax", "yahoo")
-        assert await adp_snapshots.providers_missing_day(providers, today) == ["fantrax", "yahoo"]
-        assert conn.fetchrow.await_count == 3
-
-        assert await adp_snapshots.record_snapshot("yahoo", ROWS, FETCHED) is True
-        assert await adp_snapshots.providers_missing_day(providers, today) == ["fantrax"]
-        assert conn.fetchrow.await_count == 3  # answered from memory after the first probe
-
-
-@pytest.mark.asyncio
-async def test_providers_missing_day_without_database_checks_nothing():
-    with patch("app.services.adp_snapshots.DBService") as db:
-        db.return_value._get_pool = AsyncMock(return_value=None)
-        assert await adp_snapshots.providers_missing_day(("espn",), date(2026, 9, 22)) == []
