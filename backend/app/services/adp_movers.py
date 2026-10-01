@@ -33,6 +33,7 @@ MODES = ("range", "last_update")
 DEFAULT_RANGE_DAYS = 3
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 50
+# limit=0 returns every mover (the rankings view scrolls the full list).
 # Below this a move is rounding noise (ADP is published to one or two decimals).
 MIN_DELTA = 0.05
 _STATE_CACHE_SIZE = 12
@@ -188,7 +189,7 @@ def compare_states(
     pair: PairFn,
     *,
     top: Optional[int],
-    limit: int,
+    limit: Optional[int],
 ) -> dict:
     """Risers / fallers / entered / exited between two states.
 
@@ -288,7 +289,7 @@ async def get_movers(
     metric = parse_metric(metric)
     resolved_mode = parse_mode(mode)
     chosen = resolve_sites(metric, sites)
-    limit = max(1, min(limit, MAX_LIMIT))
+    cap: Optional[int] = min(limit, MAX_LIMIT) if limit and limit > 0 else None
     top = top if top and top > 0 else None
     timelines = _timelines(await adp_snapshots.list_snapshots())
     history = [_history(site, timelines.get(site, []), metric) for site in chosen]
@@ -299,7 +300,7 @@ async def get_movers(
             mode=resolved_mode,
             top=top,
             sections=[
-                await _last_update_section(site, timelines.get(site, []), metric, top, limit)
+                await _last_update_section(site, timelines.get(site, []), metric, top, cap)
                 for site in chosen
             ],
             history=history,
@@ -329,13 +330,13 @@ async def get_movers(
                     await build_state({site: after}),
                     site_pair(site, metric),
                     top=top,
-                    limit=limit,
+                    limit=cap,
                 )
                 section = section.model_copy(update=result)
         sections.append(section)
 
     if len(chosen) > 1:
-        sections.insert(0, await _blend_section(chosen, ends, metric, top, limit))
+        sections.insert(0, await _blend_section(chosen, ends, metric, top, cap))
 
     return AdpMoversResponse(
         metric=metric,
@@ -353,7 +354,7 @@ async def _blend_section(
     ends: dict[str, tuple[SnapshotMeta, SnapshotMeta]],
     metric: str,
     top: Optional[int],
-    limit: int,
+    limit: Optional[int],
 ) -> AdpMoversSection:
     label = "Blend"
     if len(ends) < 2:
@@ -385,7 +386,7 @@ async def _last_update_section(
     timeline: list[SnapshotMeta],
     metric: str,
     top: Optional[int],
-    limit: int,
+    limit: Optional[int],
 ) -> AdpMoversSection:
     label = PROVIDER_LABELS.get(site, site.title())
     changes = change_indices(timeline, metric)

@@ -188,7 +188,7 @@ export const fantasyApi = createApi({
           ...(a.sites ? { sites: a.sites } : {}),
           ...(a.from_date ? { from_date: a.from_date } : {}),
           ...(a.to_date ? { to_date: a.to_date } : {}),
-          ...(a.limit ? { limit: a.limit } : {}),
+          ...(a.limit != null ? { limit: a.limit } : {}),
         },
       }),
       keepUnusedDataFor: 600,

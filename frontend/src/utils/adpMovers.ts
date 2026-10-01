@@ -50,7 +50,9 @@ export function moversQueryArgs({
   customTo?: string
   now?: number
 }): AdpMoversQueryArgs | null {
-  const base = { metric, sites: sites.join(','), top }
+  // Rankings lists every mover (each list scrolls on its own); ADP keeps the server's
+  // short default, since a full ADP list is mostly decimal-point noise.
+  const base = { metric, sites: sites.join(','), top, ...(metric === 'rank' ? { limit: 0 } : {}) }
   const resolved = effectiveWindow(metric, window)
   if (resolved === 'last_update') return { ...base, mode: 'last_update' }
   if (resolved === 'custom') {

@@ -72,7 +72,7 @@ async def get_adp_movers(
     from_date: Optional[date] = Query(None),
     to_date: Optional[date] = Query(None),
     top: Optional[int] = Query(150, ge=0, le=2000),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(10, ge=0, le=50),
 ):
     """Biggest risers/fallers per site (plus Blend) between two stored snapshots."""
     _cache_headers(response)

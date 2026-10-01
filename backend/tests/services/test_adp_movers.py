@@ -71,6 +71,18 @@ async def test_top_filter_drops_deep_players_on_both_ends(store):
 
 
 @pytest.mark.asyncio
+async def test_limit_caps_each_list_and_zero_returns_every_mover(store):
+    store[("espn", D21)] = [_row(f"P{i}", 50.0 + i) for i in range(12)]
+    store[("espn", D25)] = [_row(f"P{i}", 40.0 + i) for i in range(12)]
+
+    capped = await adp_movers.get_movers(metric="adp", sites="espn", from_date=D21, limit=5)
+    assert len(capped.sections[0].risers) == 5
+
+    every = await adp_movers.get_movers(metric="adp", sites="espn", from_date=D21, limit=0)
+    assert len(every.sections[0].risers) == 12
+
+
+@pytest.mark.asyncio
 async def test_new_and_dropped_players_are_listed_separately_not_as_moves(store):
     store[("espn", D21)] = [_row("Old", 50.0), _row("Stay", 20.0)]
     store[("espn", D25)] = [_row("New", 60.0), _row("Stay", 20.0)]

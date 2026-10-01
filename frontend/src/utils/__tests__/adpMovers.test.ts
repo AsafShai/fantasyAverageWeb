@@ -23,6 +23,7 @@ describe('moversQueryArgs', () => {
       metric: 'rank',
       sites: 'espn',
       top: 100,
+      limit: 0,
       mode: 'last_update',
     })
     expect(effectiveWindow('adp', 'last_update')).toBe('3d')

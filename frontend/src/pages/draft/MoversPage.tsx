@@ -58,11 +58,13 @@ function MoverList({
   movers,
   kind,
   empty,
+  scroll,
 }: {
   title: string
   movers: AdpMover[]
   kind: 'up' | 'down'
   empty: string
+  scroll: boolean
 }) {
   const accent =
     kind === 'up'
@@ -72,7 +74,7 @@ function MoverList({
     <div className="min-w-0">
       <h3 className={`text-xs font-bold uppercase tracking-wide pb-1 mb-1 border-b-2 ${accent}`}>{title}</h3>
       {movers.length ? (
-        <ol>
+        <ol className={scroll ? 'max-h-[28rem] overflow-y-auto overscroll-contain pr-1' : undefined}>
           {movers.map((m, i) => (
             <MoverRow key={m.id} mover={m} index={i} kind={kind} />
           ))}
@@ -84,12 +86,22 @@ function MoverList({
   )
 }
 
-function InOutList({ title, movers, field }: { title: string; movers: AdpMover[]; field: 'to_value' | 'from_value' }) {
+function InOutList({
+  title,
+  movers,
+  field,
+  scroll,
+}: {
+  title: string
+  movers: AdpMover[]
+  field: 'to_value' | 'from_value'
+  scroll: boolean
+}) {
   if (!movers.length) return null
   return (
     <div className="min-w-0">
       <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">{title}</h4>
-      <ul className="flex flex-wrap gap-1.5">
+      <ul className={`flex flex-wrap gap-1.5 ${scroll ? 'max-h-32 overflow-y-auto overscroll-contain' : ''}`}>
         {movers.map((m) => (
           <li
             key={m.id}
@@ -119,6 +131,8 @@ function SectionCard({
   const hasMoves = section.risers.length || section.fallers.length
   const nothing = !hasMoves && !section.entered.length && !section.exited.length
   const depth = top ? `top ${top}` : 'the list'
+  // Rankings come back uncapped, so each list scrolls inside the card instead of stretching the page.
+  const scroll = metric === 'rank'
   return (
     <section className="card p-3 sm:p-4 min-w-0">
       <div className="flex items-baseline justify-between gap-2 mb-2">
@@ -134,17 +148,17 @@ function SectionCard({
       {!nothing ? (
         <div className={`grid gap-4 ${direction === 'both' ? 'sm:grid-cols-2' : ''}`}>
           {direction !== 'fallers' ? (
-            <MoverList title="Biggest risers" movers={section.risers} kind="up" empty="No risers." />
+            <MoverList title="Biggest risers" movers={section.risers} kind="up" empty="No risers." scroll={scroll} />
           ) : null}
           {direction !== 'risers' ? (
-            <MoverList title="Biggest fallers" movers={section.fallers} kind="down" empty="No fallers." />
+            <MoverList title="Biggest fallers" movers={section.fallers} kind="down" empty="No fallers." scroll={scroll} />
           ) : null}
         </div>
       ) : null}
       {section.entered.length || section.exited.length ? (
         <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
-          <InOutList title={`New in ${depth}`} movers={section.entered} field="to_value" />
-          <InOutList title={`Dropped out of ${depth}`} movers={section.exited} field="from_value" />
+          <InOutList title={`New in ${depth}`} movers={section.entered} field="to_value" scroll={scroll} />
+          <InOutList title={`Dropped out of ${depth}`} movers={section.exited} field="from_value" scroll={scroll} />
         </div>
       ) : null}
       {section.compared ? (
