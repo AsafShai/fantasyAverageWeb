@@ -5,43 +5,128 @@ on:
     branches:
       - master
 
+# One deploy at a time, in push order: a later push waits for the running
+# deploy (and its smoke check) instead of racing it.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
+  ci:
+    uses: ./.github/workflows/pr-check.yaml
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.diff.outputs.backend }}
+      frontend: ${{ steps.diff.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Diff everything this push brought in (github.event.before..sha), not
+      # just its last commit, so a multi-commit push can't hide a change.
+      # No usable base (new branch, force push) -> deploy both to be safe.
+      - name: Detect changed apps
+        id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "No usable base commit ($BEFORE); deploying both apps"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BEFORE" "$GITHUB_SHA")
+          echo "Changed files since $BEFORE:"
+          echo "$files"
+          for app in backend frontend; do
+            if echo "$files" | grep -q "^$app/"; then
+              echo "$app=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$app=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
   deploy-backend:
+    needs: [ci, changes]
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2
-
-      - name: Check backend changes
-        id: changed
-        run: |
-          if git diff --name-only HEAD^ HEAD | grep -q '^backend/'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
+          fetch-depth: 0
 
       - name: Deploy Backend to Render
-        if: steps.changed.outputs.changed == 'true'
-        run: curl "${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}"
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
+        run: curl -fsS -o /dev/null "$HOOK"
+
+      # Render deploys asynchronously: poll /health until it reports this
+      # commit (or a later one, if another push already superseded it).
+      # Needs the repo variable BACKEND_URL, e.g. https://<service>.onrender.com
+      - name: Smoke check /health
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+        run: |
+          if [ -z "$BACKEND_URL" ]; then
+            echo "::warning::BACKEND_URL repo variable not set; skipping post-deploy smoke check"
+            exit 0
+          fi
+          deadline=$(( $(date +%s) + 15 * 60 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            body=$(curl -fsS --max-time 20 "$BACKEND_URL/health" || true)
+            status=$(echo "$body" | jq -r '.status // empty' 2>/dev/null || true)
+            commit=$(echo "$body" | jq -r '.commit // empty' 2>/dev/null || true)
+            echo "status=${status:-unreachable} commit=${commit:-none}"
+            if [ "$status" = "healthy" ] && [ -n "$commit" ] \
+               && git merge-base --is-ancestor "$GITHUB_SHA" "$commit" 2>/dev/null; then
+              echo "Backend healthy on $commit"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::Backend did not report a healthy deploy of $GITHUB_SHA within 15 minutes"
+          exit 1
 
   deploy-frontend:
+    needs: [ci, changes]
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2
-
-      - name: Check frontend changes
-        id: changed
-        run: |
-          if git diff --name-only HEAD^ HEAD | grep -q '^frontend/'; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
+          fetch-depth: 0
 
       - name: Deploy Frontend to Render
-        if: steps.changed.outputs.changed == 'true'
-        run: curl "${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}"
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
+        run: curl -fsS -o /dev/null "$HOOK"
+
+      # index.html carries <meta name="app-commit"> (vite.config.ts); poll the
+      # site until it serves this commit or a later one.
+      # Needs the repo variable FRONTEND_URL, e.g. https://<site>.onrender.com
+      - name: Smoke check site
+        env:
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+        run: |
+          if [ -z "$FRONTEND_URL" ]; then
+            echo "::warning::FRONTEND_URL repo variable not set; skipping post-deploy smoke check"
+            exit 0
+          fi
+          deadline=$(( $(date +%s) + 15 * 60 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            html=$(curl -fsS --max-time 20 "$FRONTEND_URL" || true)
+            commit=$(echo "$html" | grep -o '<meta name="app-commit" content="[0-9a-f]*"' | sed 's/.*content="//; s/"$//' || true)
+            echo "served commit=${commit:-none}"
+            if [ -n "$commit" ] && git merge-base --is-ancestor "$GITHUB_SHA" "$commit" 2>/dev/null; then
+              echo "Frontend serving $commit"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::Frontend did not serve $GITHUB_SHA within 15 minutes"
+          exit 1
