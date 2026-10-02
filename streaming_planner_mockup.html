@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule Planner — Mockup</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --off:#fef9c3; --off-ink:#a16207;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --off:#422006; --off-ink:#fbbf24;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1)}
+nav{position:sticky;top:0;z-index:40;background:var(--card);box-shadow:0 4px 10px rgba(0,0,0,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:8px 14px;overflow-x:auto}
+nav .brand{font-weight:800;font-size:13px;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;margin-right:8px}
+nav a{display:inline-flex;align-items:center;gap:4px;padding:6px 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2);text-decoration:none;white-space:nowrap}
+nav a.active{background:var(--chip-on);color:var(--chip-on-ink)}
+nav .spacer{flex:1}
+nav button{border:none;background:none;font-size:14px;cursor:pointer;padding:6px}
+main{max-width:1100px;margin:0 auto;padding:18px 12px 40px}
+h1{font-size:20px;font-weight:800;margin-bottom:2px}
+h2{font-size:14px;font-weight:700}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.group{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px}
+.group button{border:none;background:none;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+select{background:var(--chip);border:1px solid var(--border);color:var(--ink1);border-radius:8px;padding:6px 8px;font-size:12px;font-weight:600}
+.gridwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:11.5px}
+th,td{border:1px solid var(--border);padding:4px 6px;text-align:center;white-space:nowrap}
+th{background:var(--chip);color:var(--ink2);font-size:10.5px}
+th.off{background:var(--off);color:var(--off-ink)}
+td.abbr{font-weight:800;position:sticky;left:0;background:var(--card);z-index:2}
+td.off{background:var(--off)}
+td .aw{opacity:.6;font-weight:400}
+td.total{font-weight:800}
+.fa td{text-align:left}
+.badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;color:#fff;white-space:nowrap}
+.note{font-size:11px;color:var(--ink3);margin-top:8px}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏀 Fantasy League</span>
+  <a>📊 Dashboard</a><a>👥 Teams</a><a>🏆 Rankings</a><a>⛹️ Players</a><a class="active">📅 Schedule</a><a>🩺 Injuries</a>
+  <span class="spacer"></span>
+  <button id="theme">🌙</button>
+</nav>
+<main>
+  <h1>📅 Schedule Planner</h1>
+  <div class="sub">Games per NBA team per night. Yellow columns = off-nights (≤ 5 NBA games) — the nights pickups matter most. Pick a fantasy team to see its thin nights.</div>
+  <div class="card">
+    <div class="controls">
+      <div class="group" id="week">
+        <button data-w="0" class="on">Week Jan 5–11</button>
+        <button data-w="1">Week Jan 12–18</button>
+      </div>
+      <select id="fteam">
+        <option>Roster coverage: Asaf's Astounding Team</option>
+        <option>Roster coverage: (any league team — dropdown)</option>
+      </select>
+    </div>
+    <div class="gridwrap" id="grid"></div>
+    <div class="note">Real NBA schedule (from <code>fs_team_games</code>, weeks of Jan 5 and Jan 12, 2026). In production the grid reads the forward schedule from nba_api and defaults to “next 7 days”.</div>
+  </div>
+  <div class="card fa">
+    <h2 style="margin-bottom:8px">Best available for this week <span style="font-weight:400;color:var(--ink3)">(free agents)</span></h2>
+    <div class="gridwrap"><table>
+      <thead><tr><th>Player</th><th>Team</th><th>Games</th><th>Off-night games</th><th>Best matchup</th><th>Fit</th></tr></thead>
+      <tbody id="fas"></tbody>
+    </table></div>
+    <div class="note">Player rows illustrative (real names, sample values) — production ranks actual FAs by games × matchup quality × your thin nights, with cap-pace warning from <code>team_slot_pace</code>.</div>
+  </div>
+</main>
+<script>
+const SCHED = [{"t": "Detroit Pistons", "d": "2026-01-05", "m": "DET vs. NYK"}, {"t": "New York Knicks", "d": "2026-01-05", "m": "NYK @ DET"}, {"t": "Oklahoma City Thunder", "d": "2026-01-05", "m": "OKC vs. CHA"}, {"t": "Utah Jazz", "d": "2026-01-05", "m": "UTA @ POR"}, {"t": "Atlanta Hawks", "d": "2026-01-05", "m": "ATL @ TOR"}, {"t": "Chicago Bulls", "d": "2026-01-05", "m": "CHI @ BOS"}, {"t": "Phoenix Suns", "d": "2026-01-05", "m": "PHX @ HOU"}, {"t": "Golden State Warriors", "d": "2026-01-05", "m": "GSW @ LAC"}, {"t": "Philadelphia 76ers", "d": "2026-01-05", "m": "PHI vs. DEN"}, {"t": "LA Clippers", "d": "2026-01-05", "m": "LAC vs. GSW"}, {"t": "Denver Nuggets", "d": "2026-01-05", "m": "DEN @ PHI"}, {"t": "Houston Rockets", "d": "2026-01-05", "m": "HOU vs. PHX"}, {"t": "Boston Celtics", "d": "2026-01-05", "m": "BOS vs. CHI"}, {"t": "Toronto Raptors", "d": "2026-01-05", "m": "TOR vs. ATL"}, {"t": "Portland Trail Blazers", "d": "2026-01-05", "m": "POR vs. UTA"}, {"t": "Charlotte Hornets", "d": "2026-01-05", "m": "CHA @ OKC"}, {"t": "Washington Wizards", "d": "2026-01-06", "m": "WAS vs. ORL"}, {"t": "Miami Heat", "d": "2026-01-06", "m": "MIA @ MIN"}, {"t": "New Orleans Pelicans", "d": "2026-01-06", "m": "NOP vs. LAL"}, {"t": "Orlando Magic", "d": "2026-01-06", "m": "ORL @ WAS"}, {"t": "Indiana Pacers", "d": "2026-01-06", "m": "IND vs. CLE"}, {"t": "Sacramento Kings", "d": "2026-01-06", "m": "SAC vs. DAL"}, {"t": "San Antonio Spurs", "d": "2026-01-06", "m": "SAS @ MEM"}, {"t": "Memphis Grizzlies", "d": "2026-01-06", "m": "MEM vs. SAS"}, {"t": "Dallas Mavericks", "d": "2026-01-06", "m": "DAL @ SAC"}, {"t": "Cleveland Cavaliers", "d": "2026-01-06", "m": "CLE @ IND"}, {"t": "Los Angeles Lakers", "d": "2026-01-06", "m": "LAL @ NOP"}, {"t": "Minnesota Timberwolves", "d": "2026-01-06", "m": "MIN vs. MIA"}, {"t": "LA Clippers", "d": "2026-01-07", "m": "LAC @ NYK"}, {"t": "Washington Wizards", "d": "2026-01-07", "m": "WAS @ PHI"}, {"t": "Memphis Grizzlies", "d": "2026-01-07", "m": "MEM vs. PHX"}, {"t": "New Orleans Pelicans", "d": "2026-01-07", "m": "NOP @ ATL"}, {"t": "Los Angeles Lakers", "d": "2026-01-07", "m": "LAL @ SAS"}, {"t": "Chicago Bulls", "d": "2026-01-07", "m": "CHI @ DET"}, {"t": "Milwaukee Bucks", "d": "2026-01-07", "m": "MIL @ GSW"}, {"t": "Boston Celtics", "d": "2026-01-07", "m": "BOS vs. DEN"}, {"t": "Utah Jazz", "d": "2026-01-07", "m": "UTA @ OKC"}, {"t": "Charlotte Hornets", "d": "2026-01-07", "m": "CHA vs. TOR"}, {"t": "Houston Rockets", "d": "2026-01-07", "m": "HOU @ POR"}, {"t": "Brooklyn Nets", "d": "2026-01-07", "m": "BKN vs. ORL"}, {"t": "Toronto Raptors", "d": "2026-01-07", "m": "TOR @ CHA"}, {"t": "Portland Trail Blazers", "d": "2026-01-07", "m": "POR vs. HOU"}, {"t": "Orlando Magic", "d": "2026-01-07", "m": "ORL @ BKN"}, {"t": "Denver Nuggets", "d": "2026-01-07", "m": "DEN @ BOS"}, {"t": "Oklahoma City Thunder", "d": "2026-01-07", "m": "OKC vs. UTA"}, {"t": "Golden State Warriors", "d": "2026-01-07", "m": "GSW vs. MIL"}, {"t": "New York Knicks", "d": "2026-01-07", "m": "NYK vs. LAC"}, {"t": "Detroit Pistons", "d": "2026-01-07", "m": "DET vs. CHI"}, {"t": "San Antonio Spurs", "d": "2026-01-07", "m": "SAS vs. LAL"}, {"t": "Atlanta Hawks", "d": "2026-01-07", "m": "ATL vs. NOP"}, {"t": "Phoenix Suns", "d": "2026-01-07", "m": "PHX @ MEM"}, {"t": "Philadelphia 76ers", "d": "2026-01-07", "m": "PHI vs. WAS"}, {"t": "Cleveland Cavaliers", "d": "2026-01-08", "m": "CLE @ MIN"}, {"t": "Utah Jazz", "d": "2026-01-08", "m": "UTA vs. DAL"}, {"t": "Minnesota Timberwolves", "d": "2026-01-08", "m": "MIN vs. CLE"}, {"t": "Charlotte Hornets", "d": "2026-01-08", "m": "CHA vs. IND"}, {"t": "Dallas Mavericks", "d": "2026-01-08", "m": "DAL @ UTA"}, {"t": "Indiana Pacers", "d": "2026-01-08", "m": "IND @ CHA"}, {"t": "Orlando Magic", "d": "2026-01-09", "m": "ORL vs. PHI"}, {"t": "Toronto Raptors", "d": "2026-01-09", "m": "TOR @ BOS"}, {"t": "Houston Rockets", "d": "2026-01-09", "m": "HOU @ POR"}, {"t": "New York Knicks", "d": "2026-01-09", "m": "NYK @ PHX"}, {"t": "Los Angeles Lakers", "d": "2026-01-09", "m": "LAL vs. MIL"}, {"t": "Memphis Grizzlies", "d": "2026-01-09", "m": "MEM vs. OKC"}, {"t": "Oklahoma City Thunder", "d": "2026-01-09", "m": "OKC @ MEM"}, {"t": "Milwaukee Bucks", "d": "2026-01-09", "m": "MIL @ LAL"}, {"t": "Phoenix Suns", "d": "2026-01-09", "m": "PHX vs. NYK"}, {"t": "Portland Trail Blazers", "d": "2026-01-09", "m": "POR vs. HOU"}, {"t": "Boston Celtics", "d": "2026-01-09", "m": "BOS vs. TOR"}, {"t": "Philadelphia 76ers", "d": "2026-01-09", "m": "PHI @ ORL"}, {"t": "LA Clippers", "d": "2026-01-09", "m": "LAC @ BKN"}, {"t": "Atlanta Hawks", "d": "2026-01-09", "m": "ATL @ DEN"}, {"t": "New Orleans Pelicans", "d": "2026-01-09", "m": "NOP @ WAS"}, {"t": "Golden State Warriors", "d": "2026-01-09", "m": "GSW vs. SAC"}, {"t": "Sacramento Kings", "d": "2026-01-09", "m": "SAC @ GSW"}, {"t": "Denver Nuggets", "d": "2026-01-09", "m": "DEN vs. ATL"}, {"t": "Washington Wizards", "d": "2026-01-09", "m": "WAS vs. NOP"}, {"t": "Brooklyn Nets", "d": "2026-01-09", "m": "BKN vs. LAC"}, {"t": "Chicago Bulls", "d": "2026-01-10", "m": "CHI vs. DAL"}, {"t": "Charlotte Hornets", "d": "2026-01-10", "m": "CHA @ UTA"}, {"t": "Utah Jazz", "d": "2026-01-10", "m": "UTA vs. CHA"}, {"t": "Miami Heat", "d": "2026-01-10", "m": "MIA @ IND"}, {"t": "Dallas Mavericks", "d": "2026-01-10", "m": "DAL @ CHI"}, {"t": "Minnesota Timberwolves", "d": "2026-01-10", "m": "MIN @ CLE"}, {"t": "Detroit Pistons", "d": "2026-01-10", "m": "DET vs. LAC"}, {"t": "Boston Celtics", "d": "2026-01-10", "m": "BOS vs. SAS"}, {"t": "San Antonio Spurs", "d": "2026-01-10", "m": "SAS @ BOS"}, {"t": "LA Clippers", "d": "2026-01-10", "m": "LAC @ DET"}, {"t": "Cleveland Cavaliers", "d": "2026-01-10", "m": "CLE vs. MIN"}, {"t": "Indiana Pacers", "d": "2026-01-10", "m": "IND vs. MIA"}, {"t": "New York Knicks", "d": "2026-01-11", "m": "NYK @ POR"}, {"t": "Phoenix Suns", "d": "2026-01-11", "m": "PHX vs. WAS"}, {"t": "Atlanta Hawks", "d": "2026-01-11", "m": "ATL @ GSW"}, {"t": "Sacramento Kings", "d": "2026-01-11", "m": "SAC vs. HOU"}, {"t": "Oklahoma City Thunder", "d": "2026-01-11", "m": "OKC vs. MIA"}, {"t": "Orlando Magic", "d": "2026-01-11", "m": "ORL vs. NOP"}, {"t": "Memphis Grizzlies", "d": "2026-01-11", "m": "MEM vs. BKN"}, {"t": "Denver Nuggets", "d": "2026-01-11", "m": "DEN vs. MIL"}, {"t": "Toronto Raptors", "d": "2026-01-11", "m": "TOR vs. PHI"}, {"t": "Minnesota Timberwolves", "d": "2026-01-11", "m": "MIN vs. SAS"}, {"t": "Philadelphia 76ers", "d": "2026-01-11", "m": "PHI @ TOR"}, {"t": "San Antonio Spurs", "d": "2026-01-11", "m": "SAS @ MIN"}, {"t": "Milwaukee Bucks", "d": "2026-01-11", "m": "MIL @ DEN"}, {"t": "Brooklyn Nets", "d": "2026-01-11", "m": "BKN @ MEM"}, {"t": "Portland Trail Blazers", "d": "2026-01-11", "m": "POR vs. NYK"}, {"t": "New Orleans Pelicans", "d": "2026-01-11", "m": "NOP @ ORL"}, {"t": "Miami Heat", "d": "2026-01-11", "m": "MIA @ OKC"}, {"t": "Golden State Warriors", "d": "2026-01-11", "m": "GSW vs. ATL"}, {"t": "Houston Rockets", "d": "2026-01-11", "m": "HOU @ SAC"}, {"t": "Washington Wizards", "d": "2026-01-11", "m": "WAS @ PHX"}, {"t": "Los Angeles Lakers", "d": "2026-01-12", "m": "LAL @ SAC"}, {"t": "Cleveland Cavaliers", "d": "2026-01-12", "m": "CLE vs. UTA"}, {"t": "Brooklyn Nets", "d": "2026-01-12", "m": "BKN @ DAL"}, {"t": "Charlotte Hornets", "d": "2026-01-12", "m": "CHA @ LAC"}, {"t": "Boston Celtics", "d": "2026-01-12", "m": "BOS @ IND"}, {"t": "Indiana Pacers", "d": "2026-01-12", "m": "IND vs. BOS"}, {"t": "Dallas Mavericks", "d": "2026-01-12", "m": "DAL vs. BKN"}, {"t": "LA Clippers", "d": "2026-01-12", "m": "LAC vs. CHA"}, {"t": "Utah Jazz", "d": "2026-01-12", "m": "UTA @ CLE"}, {"t": "Sacramento Kings", "d": "2026-01-12", "m": "SAC vs. LAL"}, {"t": "Philadelphia 76ers", "d": "2026-01-12", "m": "PHI @ TOR"}, {"t": "Toronto Raptors", "d": "2026-01-12", "m": "TOR vs. PHI"}, {"t": "Golden State Warriors", "d": "2026-01-13", "m": "GSW vs. POR"}, {"t": "Minnesota Timberwolves", "d": "2026-01-13", "m": "MIN @ MIL"}, {"t": "Los Angeles Lakers", "d": "2026-01-13", "m": "LAL vs. ATL"}, {"t": "Milwaukee Bucks", "d": "2026-01-13", "m": "MIL vs. MIN"}, {"t": "Atlanta Hawks", "d": "2026-01-13", "m": "ATL @ LAL"}, {"t": "Portland Trail Blazers", "d": "2026-01-13", "m": "POR @ GSW"}, {"t": "San Antonio Spurs", "d": "2026-01-13", "m": "SAS @ OKC"}, {"t": "Chicago Bulls", "d": "2026-01-13", "m": "CHI @ HOU"}, {"t": "New Orleans Pelicans", "d": "2026-01-13", "m": "NOP vs. DEN"}, {"t": "Phoenix Suns", "d": "2026-01-13", "m": "PHX @ MIA"}, {"t": "Houston Rockets", "d": "2026-01-13", "m": "HOU vs. CHI"}, {"t": "Denver Nuggets", "d": "2026-01-13", "m": "DEN @ NOP"}, {"t": "Miami Heat", "d": "2026-01-13", "m": "MIA vs. PHX"}, {"t": "Oklahoma City Thunder", "d": "2026-01-13", "m": "OKC vs. SAS"}, {"t": "LA Clippers", "d": "2026-01-14", "m": "LAC vs. WAS"}, {"t": "Philadelphia 76ers", "d": "2026-01-14", "m": "PHI vs. CLE"}, {"t": "Indiana Pacers", "d": "2026-01-14", "m": "IND vs. TOR"}, {"t": "Washington Wizards", "d": "2026-01-14", "m": "WAS @ LAC"}, {"t": "New York Knicks", "d": "2026-01-14", "m": "NYK @ SAC"}, {"t": "Dallas Mavericks", "d": "2026-01-14", "m": "DAL vs. DEN"}, {"t": "Brooklyn Nets", "d": "2026-01-14", "m": "BKN @ NOP"}, {"t": "Utah Jazz", "d": "2026-01-14", "m": "UTA @ CHI"}, {"t": "Chicago Bulls", "d": "2026-01-14", "m": "CHI vs. UTA"}, {"t": "New Orleans Pelicans", "d": "2026-01-14", "m": "NOP vs. BKN"}, {"t": "Denver Nuggets", "d": "2026-01-14", "m": "DEN @ DAL"}, {"t": "Sacramento Kings", "d": "2026-01-14", "m": "SAC vs. NYK"}, {"t": "Toronto Raptors", "d": "2026-01-14", "m": "TOR @ IND"}, {"t": "Cleveland Cavaliers", "d": "2026-01-14", "m": "CLE @ PHI"}, {"t": "Detroit Pistons", "d": "2026-01-15", "m": "DET vs. PHX"}, {"t": "Utah Jazz", "d": "2026-01-15", "m": "UTA @ DAL"}, {"t": "Houston Rockets", "d": "2026-01-15", "m": "HOU vs. OKC"}, {"t": "Milwaukee Bucks", "d": "2026-01-15", "m": "MIL @ SAS"}, {"t": "Los Angeles Lakers", "d": "2026-01-15", "m": "LAL vs. CHA"}, {"t": "Atlanta Hawks", "d": "2026-01-15", "m": "ATL @ POR"}, {"t": "New York Knicks", "d": "2026-01-15", "m": "NYK @ GSW"}, {"t": "Memphis Grizzlies", "d": "2026-01-15", "m": "MEM @ ORL"}, {"t": "Miami Heat", "d": "2026-01-15", "m": "MIA vs. BOS"}, {"t": "Phoenix Suns", "d": "2026-01-15", "m": "PHX @ DET"}, {"t": "Boston Celtics", "d": "2026-01-15", "m": "BOS @ MIA"}, {"t": "Orlando Magic", "d": "2026-01-15", "m": "ORL @ MEM"}, {"t": "Golden State Warriors", "d": "2026-01-15", "m": "GSW vs. NYK"}, {"t": "Portland Trail Blazers", "d": "2026-01-15", "m": "POR vs. ATL"}, {"t": "San Antonio Spurs", "d": "2026-01-15", "m": "SAS vs. MIL"}, {"t": "Charlotte Hornets", "d": "2026-01-15", "m": "CHA @ LAL"}, {"t": "Oklahoma City Thunder", "d": "2026-01-15", "m": "OKC @ HOU"}, {"t": "Dallas Mavericks", "d": "2026-01-15", "m": "DAL vs. UTA"}, {"t": "Sacramento Kings", "d": "2026-01-16", "m": "SAC vs. WAS"}, {"t": "Washington Wizards", "d": "2026-01-16", "m": "WAS @ SAC"}, {"t": "New Orleans Pelicans", "d": "2026-01-16", "m": "NOP @ IND"}, {"t": "Minnesota Timberwolves", "d": "2026-01-16", "m": "MIN @ HOU"}, {"t": "Toronto Raptors", "d": "2026-01-16", "m": "TOR vs. LAC"}, {"t": "Chicago Bulls", "d": "2026-01-16", "m": "CHI @ BKN"}, {"t": "Philadelphia 76ers", "d": "2026-01-16", "m": "PHI vs. CLE"}, {"t": "Cleveland Cavaliers", "d": "2026-01-16", "m": "CLE @ PHI"}, {"t": "Brooklyn Nets", "d": "2026-01-16", "m": "BKN vs. CHI"}, {"t": "LA Clippers", "d": "2026-01-16", "m": "LAC @ TOR"}, {"t": "Houston Rockets", "d": "2026-01-16", "m": "HOU vs. MIN"}, {"t": "Indiana Pacers", "d": "2026-01-16", "m": "IND vs. NOP"}, {"t": "Detroit Pistons", "d": "2026-01-17", "m": "DET vs. IND"}, {"t": "Indiana Pacers", "d": "2026-01-17", "m": "IND @ DET"}, {"t": "Atlanta Hawks", "d": "2026-01-17", "m": "ATL vs. BOS"}, {"t": "Charlotte Hornets", "d": "2026-01-17", "m": "CHA @ GSW"}, {"t": "Utah Jazz", "d": "2026-01-17", "m": "UTA @ DAL"}, {"t": "Los Angeles Lakers", "d": "2026-01-17", "m": "LAL @ POR"}, {"t": "New York Knicks", "d": "2026-01-17", "m": "NYK vs. PHX"}, {"t": "Washington Wizards", "d": "2026-01-17", "m": "WAS @ DEN"}, {"t": "Minnesota Timberwolves", "d": "2026-01-17", "m": "MIN @ SAS"}, {"t": "Oklahoma City Thunder", "d": "2026-01-17", "m": "OKC @ MIA"}, {"t": "Miami Heat", "d": "2026-01-17", "m": "MIA vs. OKC"}, {"t": "San Antonio Spurs", "d": "2026-01-17", "m": "SAS vs. MIN"}, {"t": "Denver Nuggets", "d": "2026-01-17", "m": "DEN vs. WAS"}, {"t": "Phoenix Suns", "d": "2026-01-17", "m": "PHX @ NYK"}, {"t": "Portland Trail Blazers", "d": "2026-01-17", "m": "POR vs. LAL"}, {"t": "Dallas Mavericks", "d": "2026-01-17", "m": "DAL vs. UTA"}, {"t": "Golden State Warriors", "d": "2026-01-17", "m": "GSW vs. CHA"}, {"t": "Boston Celtics", "d": "2026-01-17", "m": "BOS @ ATL"}, {"t": "Orlando Magic", "d": "2026-01-18", "m": "ORL @ MEM"}, {"t": "Toronto Raptors", "d": "2026-01-18", "m": "TOR @ LAL"}, {"t": "Denver Nuggets", "d": "2026-01-18", "m": "DEN vs. CHA"}, {"t": "Charlotte Hornets", "d": "2026-01-18", "m": "CHA @ DEN"}, {"t": "Brooklyn Nets", "d": "2026-01-18", "m": "BKN @ CHI"}, {"t": "Chicago Bulls", "d": "2026-01-18", "m": "CHI vs. BKN"}, {"t": "Memphis Grizzlies", "d": "2026-01-18", "m": "MEM @ ORL"}, {"t": "Los Angeles Lakers", "d": "2026-01-18", "m": "LAL vs. TOR"}, {"t": "Houston Rockets", "d": "2026-01-18", "m": "HOU vs. NOP"}, {"t": "Portland Trail Blazers", "d": "2026-01-18", "m": "POR @ SAC"}, {"t": "Sacramento Kings", "d": "2026-01-18", "m": "SAC vs. POR"}, {"t": "New Orleans Pelicans", "d": "2026-01-18", "m": "NOP @ HOU"}];
+const WEEKS = [['2026-01-05','2026-01-11'],['2026-01-12','2026-01-18']];
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+let week = 0;
+
+function buildGrid(){
+  const [from,to] = WEEKS[week];
+  const rows = SCHED.filter(g => g.d >= from && g.d <= to);
+  const dates = [...Array(7)].map((_,i)=>{ const d = new Date(from); d.setDate(d.getDate()+i); return d.toISOString().slice(0,10); });
+  const perDay = Object.fromEntries(dates.map(d=>[d, rows.filter(g=>g.d===d).length/2]));
+  const teams = {};
+  rows.forEach(g => {
+    const ab = g.m.split(' ')[0];
+    teams[ab] ??= {};
+    const opp = g.m.includes('@') ? '@'+g.m.split('@ ')[1] : g.m.split('vs. ')[1];
+    teams[ab][g.d] = opp;
+  });
+  const abbrs = Object.keys(teams).sort();
+  let h = '<table><tr><th style="position:sticky;left:0;z-index:3">Team</th>';
+  dates.forEach((d,i)=> h += `<th class="${perDay[d]<=5?'off':''}">${DAYS[i]} ${d.slice(8)}<br><span style="font-weight:400">${perDay[d]} games${perDay[d]<=5?' · OFF':''}</span></th>`);
+  h += '<th>Total</th></tr>';
+  abbrs.forEach(ab=>{
+    const n = dates.filter(d=>teams[ab][d]).length;
+    h += `<tr><td class="abbr">${ab}</td>`;
+    dates.forEach(d=>{
+      const o = teams[ab][d];
+      h += `<td class="${perDay[d]<=5?'off':''}">${o ? (o.startsWith('@') ? `<span class="aw">${o}</span>` : o) : ''}</td>`;
+    });
+    h += `<td class="total" style="background:rgba(37,99,235,${(0.06+(n-1)*0.09).toFixed(2)})">${n}</td></tr>`;
+  });
+  document.getElementById('grid').innerHTML = h + '</table>';
+}
+document.getElementById('week').querySelectorAll('button').forEach(b=> b.onclick=()=>{ week=+b.dataset.w;
+  document.querySelectorAll('#week button').forEach(x=>x.className=''); b.className='on'; buildGrid(); });
+
+const FAS = [
+  ['Jaylon Tyson','CLE',4,2,'vs WAS (30th REB)','#16a34a','Great'],
+  ['Kris Dunn','LAC',3,2,'vs UTA (28th STL)','#16a34a','Great'],
+  ['Precious Achiuwa','MIA',4,1,'@ CHA (27th FG%)','#0d9488','Good'],
+  ['Keaton Wallace','ATL',3,2,'vs POR (26th 3PM)','#0d9488','Good'],
+  ['Jock Landale','MEM',3,1,'vs BKN (29th REB)','#d97706','OK'],
+  ['Gabe Vincent','LAL',2,1,'@ TOR (22nd AST)','#d97706','OK'],
+  ['Caleb Houstan','ORL',3,0,'@ BOS (5th 3PM)','#9ca3af','Thin'],
+];
+document.getElementById('fas').innerHTML = FAS.map(f=>`
+  <tr><td><b>${f[0]}</b></td><td>${f[1]}</td><td style="text-align:center">${f[2]}</td><td style="text-align:center">${f[3]}</td>
+  <td>${f[4]}</td><td style="text-align:center"><span class="badge" style="background:${f[5]}">${f[6]}</span></td></tr>`).join('');
+
+document.getElementById('theme').onclick=()=>{ document.documentElement.classList.toggle('dark');
+  document.getElementById('theme').textContent = document.documentElement.classList.contains('dark')?'☀️':'🌙'; };
+buildGrid();
+</script>
+</body>
+</html>

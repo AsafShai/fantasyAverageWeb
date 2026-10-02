@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Global Search — Ctrl-K palette + mobile search</title>
+<style>
+  :root {
+    --blue:#2563eb; --purple:#9333ea; --gray-600:#4b5563; --gray-100:#f3f4f6; --gray-500:#6b7280;
+    --border:#e5e7eb; --green:#16a34a; --red:#dc2626; --amber:#d97706; --ink:#1f2937; --page:#fafafa;
+    --card:#fff; --sub:#6b7280; --hl:#dbeafe;
+  }
+  body.dark {
+    --gray-100:#1f2937; --gray-600:#d1d5db; --gray-500:#9ca3af; --border:#374151;
+    --ink:#f3f4f6; --page:#111827; --card:#1f2937; --sub:#9ca3af; --hl:#1e3a8a;
+  }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,sans-serif; max-width:1060px; margin:0 auto; padding:24px 18px 60px;
+         color:var(--ink); line-height:1.5; background:var(--page); }
+  h1 { background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text;
+       color:transparent; font-size:27px; margin-bottom:4px; }
+  h2 { border-bottom:2px solid var(--border); padding-bottom:6px; margin-top:34px; font-size:19px; }
+  h3 { font-size:15px; margin:18px 0 6px; }
+  .sub { color:var(--sub); font-size:14px; margin-top:0; }
+  p, li { font-size:13.5px; color:var(--gray-600); }
+  code { background:var(--gray-100); padding:1px 5px; border-radius:4px; font-size:12px; color:var(--ink); }
+  kbd { background:var(--card); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px;
+        padding:1px 5px; font-size:11px; font-family:ui-monospace,monospace; color:var(--gray-600); }
+
+  .topbar { display:flex; gap:8px; align-items:center; margin:12px 0 0; flex-wrap:wrap; }
+  .btn { font-size:12.5px; padding:5px 11px; border-radius:6px; background:var(--gray-100); color:var(--gray-600);
+         cursor:pointer; border:1px solid var(--border); user-select:none; }
+  .btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+
+  .stack { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; }
+  .col { flex:1; min-width:330px; }
+
+  /* ---- fake app frame ---- */
+  .frame { background:var(--page); border:1px solid var(--border); border-radius:10px; overflow:hidden;
+           box-shadow:0 2px 10px rgba(0,0,0,.08); position:relative; }
+  .frame.phone { max-width:390px; }
+  .navmock { background:var(--card); border-bottom:1px solid var(--border); padding:9px 11px;
+             display:flex; align-items:center; gap:5px; flex-wrap:nowrap; }
+  .brand { font-weight:700; background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text;
+           background-clip:text; color:transparent; white-space:nowrap; margin-right:5px; font-size:13.5px; }
+  .navitem { font-size:12.5px; padding:5px 8px; border-radius:6px; color:var(--gray-600); white-space:nowrap; cursor:pointer; }
+  .navitem.active { background:var(--hl); color:var(--blue); font-weight:600; }
+  .spacer { flex:1; }
+  .searchbtn { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gray-500);
+               border:1px solid var(--border); background:var(--gray-100); border-radius:7px; padding:4px 8px; cursor:pointer; }
+  .searchbtn:hover { border-color:var(--blue); color:var(--blue); }
+  .iconbtn { font-size:16px; padding:4px 7px; border-radius:6px; cursor:pointer; color:var(--gray-500); }
+  .iconbtn:hover { background:var(--gray-100); }
+  .body-fake { padding:16px 14px 40px; min-height:210px; }
+  .skel { height:9px; background:var(--gray-100); border-radius:5px; margin-bottom:9px; }
+
+  /* ---- palette ---- */
+  .scrim { position:absolute; inset:0; background:rgba(15,23,42,.42); display:none; }
+  .scrim.show { display:block; }
+  .palette { position:absolute; left:50%; transform:translateX(-50%); top:44px; width:min(520px,92%);
+             background:var(--card); border:1px solid var(--border); border-radius:12px;
+             box-shadow:0 18px 44px rgba(0,0,0,.30); display:none; overflow:hidden; }
+  .palette.show { display:block; }
+  .phone .palette { top:0; left:0; transform:none; width:100%; height:100%; border-radius:0; }
+  .pinput { display:flex; align-items:center; gap:8px; padding:11px 13px; border-bottom:1px solid var(--border); }
+  .pinput .mag { font-size:14px; color:var(--gray-500); }
+  .pinput input { flex:1; border:0; outline:0; background:transparent; font-size:14.5px; color:var(--ink); font-family:inherit; }
+  .pinput .esc { font-size:10.5px; color:var(--sub); border:1px solid var(--border); border-radius:4px; padding:1px 5px; cursor:pointer; }
+  .plist { max-height:300px; overflow-y:auto; padding:5px; }
+  .phone .plist { max-height:none; height:calc(100% - 48px); }
+  .ghead { font-size:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; color:var(--gray-500);
+           padding:8px 9px 4px; }
+  .row { display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:7px; cursor:pointer; }
+  .row.sel { background:var(--hl); }
+  .row .ic { width:20px; text-align:center; font-size:13px; }
+  .row .main { flex:1; min-width:0; }
+  .row .t { font-size:13px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .t em { font-style:normal; background:#fde68a; border-radius:2px; padding:0 1px; color:#1f2937; }
+  .row .d { font-size:11px; color:var(--sub); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .badge { font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.3px;
+                padding:2px 6px; border-radius:99px; background:var(--gray-100); color:var(--gray-500); }
+  .row .badge.fa { background:#dcfce7; color:#15803d; }
+  .row .badge.out { background:#fee2e2; color:#b91c1c; }
+  body.dark .row .badge.fa { background:#14532d; color:#bbf7d0; }
+  body.dark .row .badge.out { background:#7f1d1d; color:#fecaca; }
+  .pfoot { border-top:1px solid var(--border); padding:6px 11px; display:flex; gap:12px; font-size:10.5px; color:var(--sub); }
+  .phone .pfoot { display:none; }
+  .empty { padding:26px 12px; text-align:center; font-size:12.5px; color:var(--sub); }
+
+  .note { margin-top:10px; padding:9px 13px; background:var(--gray-100); border-radius:8px; font-size:12.5px; color:var(--gray-600); }
+  .note b { color:var(--blue); }
+  .demo { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 0; align-items:center; }
+  .demo .lbl { font-size:12px; color:var(--sub); margin-right:2px; }
+
+  table.spec { border-collapse:collapse; width:100%; margin-top:8px; }
+  table.spec th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--gray-500);
+                  padding:7px 6px; border-bottom:1px solid var(--border); }
+  table.spec td { font-size:12.5px; padding:7px 6px; border-bottom:1px solid var(--border); color:var(--gray-600); vertical-align:top; }
+  table.spec td b { color:var(--ink); }
+</style>
+</head>
+<body>
+
+<h1>Global Search — <kbd>Ctrl</kbd>+<kbd>K</kbd> palette + mobile search</h1>
+<p class="sub">Mockup for review · one overlay serves desktop and mobile · zero new dependencies</p>
+
+<div class="topbar">
+  <span style="font-size:12px;color:var(--sub);">Preview:</span>
+  <span class="btn active" id="b-desk" onclick="setMode('desk')">🖥 Desktop</span>
+  <span class="btn" id="b-phone" onclick="setMode('phone')">📱 Mobile 390px</span>
+  <span class="btn" onclick="document.body.classList.toggle('dark')">🌙 Dark</span>
+</div>
+
+<h2>Try it</h2>
+<p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere on this page, or click the search control in the fake navbar. Type, use <kbd>↑</kbd><kbd>↓</kbd>, <kbd>Esc</kbd> closes.</p>
+
+<div class="demo">
+  <span class="lbl">Sample queries:</span>
+  <span class="btn" onclick="demo('gilg')">gilg</span>
+  <span class="btn" onclick="demo('lebr')">lebr</span>
+  <span class="btn" onclick="demo('trade')">trade</span>
+  <span class="btn" onclick="demo('bucket')">bucket</span>
+  <span class="btn" onclick="demo('zzz')">zzz (empty)</span>
+</div>
+
+<div class="frame" id="frame" style="margin-top:12px;">
+  <div class="navmock" id="navmock">
+    <span class="brand">FantasyLeague</span>
+    <span class="navitem active desk-only">League</span>
+    <span class="navitem desk-only">Players</span>
+    <span class="navitem desk-only">Insights</span>
+    <span class="navitem desk-only">Tools</span>
+    <span class="navitem desk-only">NBA</span>
+    <span class="spacer"></span>
+    <span class="searchbtn desk-only" onclick="openP()">🔍 Search <kbd style="margin-left:2px;">Ctrl K</kbd></span>
+    <span class="iconbtn phone-only" onclick="openP()" style="display:none;">🔍</span>
+    <span class="iconbtn">🌙</span>
+    <span class="iconbtn phone-only" style="display:none;">☰</span>
+  </div>
+  <div class="body-fake">
+    <div class="skel" style="width:38%;height:14px;"></div>
+    <div class="skel" style="width:92%;"></div>
+    <div class="skel" style="width:80%;"></div>
+    <div class="skel" style="width:88%;"></div>
+    <div class="skel" style="width:64%;"></div>
+  </div>
+
+  <div class="scrim" id="scrim" onclick="closeP()"></div>
+  <div class="palette" id="palette">
+    <div class="pinput">
+      <span class="mag">🔍</span>
+      <input id="q" placeholder="Search players, teams, pages…" autocomplete="off">
+      <span class="esc" onclick="closeP()">esc</span>
+    </div>
+    <div class="plist" id="plist"></div>
+    <div class="pfoot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span>
+    </div>
+  </div>
+</div>
+
+<div class="note" id="behaviour"><b>Desktop:</b> <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> from any page, or the navbar search control. Centred overlay, keyboard-first.</div>
+
+<h2>What's searchable</h2>
+<table class="spec">
+  <thead><tr><th>Group</th><th>Source</th><th>Row shows</th><th>Enter goes to</th></tr></thead>
+  <tbody>
+    <tr><td><b>Players</b></td><td>React Query cache (already loaded)</td><td>Name · NBA team · pos · owner or FA · injury badge</td><td><code>/players/:id</code> profile</td></tr>
+    <tr><td><b>Fantasy teams</b></td><td>League standings query</td><td>Team name · roto rank</td><td><code>/teams/:id</code></td></tr>
+    <tr><td><b>NBA teams</b></td><td>Static list</td><td>Team · conference</td><td><code>/nba-teams/:abbr</code></td></tr>
+    <tr><td><b>Pages</b></td><td>Static array mirroring nav</td><td>Page name · nav group</td><td>the route</td></tr>
+  </tbody>
+</table>
+<p style="margin-top:6px;">Ranking: exact prefix &gt; word-start match &gt; substring. Players first when the query looks like a name, pages first for short nav-ish words. Cap ~6 per group.</p>
+
+<h2>Desktop vs mobile</h2>
+<div class="stack">
+  <div class="col">
+    <h3>Desktop</h3>
+    <ul>
+      <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> global listener; ignored while typing in another input.</li>
+      <li>Visible navbar control so it's discoverable without knowing the shortcut.</li>
+      <li>Centred overlay, ~520px, max 300px list. Arrows + Enter, Esc closes, click-outside closes.</li>
+      <li>Focus returns to whatever was focused before opening.</li>
+    </ul>
+  </div>
+  <div class="col">
+    <h3>Mobile (≈390px)</h3>
+    <ul>
+      <li>No keyboard shortcut — a 🔍 icon sits left of the ☰ hamburger.</li>
+      <li>Overlay goes full-screen: input pinned top, results fill the rest, keyboard-safe.</li>
+      <li>Rows are 44px tall, footer hint row hidden.</li>
+      <li><b>This is the bigger win.</b> Today there is no global player search on mobile at all — the only search input lives inside the Trade page.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Cost</h2>
+<ul>
+  <li><b>No new dependency.</b> Fuzzy match is token/prefix filtering over arrays already in cache — no <code>cmdk</code>, no <code>fuse.js</code>.</li>
+  <li><b>Reuse:</b> <code>components/PlayerSearchInput.tsx</code> already has the debounce + dropdown + click-outside pattern; lift its logic instead of rewriting.</li>
+  <li><b>New:</b> <code>components/CommandPalette.tsx</code>, <code>hooks/useGlobalSearch.ts</code> (merges + ranks the four sources), <code>constants/searchablePages.ts</code>.</li>
+  <li><b>Edit:</b> <code>Layout.tsx</code> and <code>ReorgLayout</code> — mount the palette, add the desktop control and the mobile icon.</li>
+  <li><b>Backend:</b> none.</li>
+</ul>
+<p><b>Open question for you:</b> if the player list isn't already in cache on every page, the palette either fetches it on first open (small delay once) or prefetches it at app boot. Prefetch is one extra query on load — cheap, but it's your call given Render cold starts.</p>
+
+<script>
+  const PLAYERS = [
+    {n:'Shai Gilgeous-Alexander', t:'OKC', p:'PG', o:'Team Asaf'},
+    {n:'Josh Giddey', t:'CHI', p:'PG', o:'FA', fa:true},
+    {n:'Rudy Gobert', t:'MIN', p:'C', o:'Rim Runners'},
+    {n:'LeBron James', t:'LAL', p:'SF', o:'Bucket Brigade', out:'GTD'},
+    {n:'Lauri Markkanen', t:'UTA', p:'PF', o:'Team Asaf'},
+    {n:'Alperen Sengun', t:'HOU', p:'C', o:'Rim Runners'},
+    {n:'Anthony Edwards', t:'MIN', p:'SG', o:'Bucket Brigade'},
+    {n:'Tyrese Haliburton', t:'IND', p:'PG', o:'FA', fa:true, out:'OUT'}
+  ];
+  const FTEAMS = [
+    {n:'Team Asaf', d:'Roto rank 1 · 78 pts'},
+    {n:'Bucket Brigade', d:'Roto rank 3 · 71 pts'},
+    {n:'Rim Runners', d:'Roto rank 9 · 49 pts'}
+  ];
+  const NBATEAMS = [{n:'Oklahoma City Thunder', d:'OKC · West'},{n:'Los Angeles Lakers', d:'LAL · West'},{n:'Chicago Bulls', d:'CHI · East'}];
+  const PAGES = [
+    {n:'Trade Analyzer', d:'Tools'},{n:'Trends', d:'Insights'},{n:'Standings Race', d:'League'},
+    {n:'Draft Report', d:'League'},{n:'Injuries', d:'Players'},{n:'Rankings', d:'League'},
+    {n:'Shot Charts', d:'NBA'},{n:'Minigames', d:'Tools'},{n:'Projections', d:'Insights'}
+  ];
+  let mode='desk', sel=0, rows=[];
+
+  function setMode(m){
+    mode=m;
+    document.getElementById('b-desk').classList.toggle('active', m==='desk');
+    document.getElementById('b-phone').classList.toggle('active', m==='phone');
+    const f=document.getElementById('frame'); f.classList.toggle('phone', m==='phone');
+    document.querySelectorAll('.desk-only').forEach(e=>e.style.display = m==='phone'?'none':'');
+    document.querySelectorAll('.phone-only').forEach(e=>e.style.display = m==='phone'?'':'none');
+    document.getElementById('behaviour').innerHTML = m==='phone'
+      ? '<b>Mobile:</b> no shortcut — 🔍 icon left of the hamburger. Full-screen overlay, 44px rows. Currently there is <i>no</i> global player search on mobile at all.'
+      : '<b>Desktop:</b> <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> from any page, or the navbar search control. Centred overlay, keyboard-first.';
+    closeP();
+  }
+  function openP(){
+    document.getElementById('scrim').classList.add('show');
+    document.getElementById('palette').classList.add('show');
+    const q=document.getElementById('q'); q.value=''; q.focus(); render('');
+  }
+  function closeP(){
+    document.getElementById('scrim').classList.remove('show');
+    document.getElementById('palette').classList.remove('show');
+  }
+  function demo(s){ openP(); const q=document.getElementById('q'); q.value=s; render(s); }
+  function hl(name, q){
+    if(!q) return name;
+    const i = name.toLowerCase().indexOf(q.toLowerCase());
+    if(i<0) return name;
+    return name.slice(0,i)+'<em>'+name.slice(i,i+q.length)+'</em>'+name.slice(i+q.length);
+  }
+  function match(name,q){
+    if(!q) return true;
+    const n=name.toLowerCase(), s=q.toLowerCase();
+    if(n.includes(s)) return true;
+    return n.split(/[\s-]+/).some(w=>w.startsWith(s));
+  }
+  function render(q){
+    rows=[]; sel=0;
+    let html='';
+    const pl = PLAYERS.filter(p=>match(p.n,q)).slice(0,6);
+    const ft = FTEAMS.filter(t=>match(t.n,q)).slice(0,6);
+    const nt = NBATEAMS.filter(t=>match(t.n,q)).slice(0,6);
+    const pg = PAGES.filter(p=>match(p.n,q)||match(p.d,q)).slice(0,6);
+    function grp(label, items, icon, fmt){
+      if(!items.length) return;
+      html += '<div class="ghead">'+label+'</div>';
+      items.forEach(it=>{ rows.push(it); html += fmt(it, icon); });
+    }
+    grp('Players', pl, '🏀', (p)=> '<div class="row" data-i="'+rows.indexOf(p)+'"><span class="ic">🏀</span><span class="main">'
+      +'<div class="t">'+hl(p.n,q)+'</div><div class="d">'+p.t+' · '+p.p+' · '+p.o+'</div></span>'
+      +(p.out?'<span class="badge out">'+p.out+'</span>':'')+(p.fa?'<span class="badge fa">FA</span>':'')+'</div>');
+    grp('Fantasy teams', ft, '👥', (t)=> '<div class="row" data-i="'+rows.indexOf(t)+'"><span class="ic">👥</span><span class="main">'
+      +'<div class="t">'+hl(t.n,q)+'</div><div class="d">'+t.d+'</div></span></div>');
+    grp('NBA teams', nt, '🏟', (t)=> '<div class="row" data-i="'+rows.indexOf(t)+'"><span class="ic">🏟</span><span class="main">'
+      +'<div class="t">'+hl(t.n,q)+'</div><div class="d">'+t.d+'</div></span></div>');
+    grp('Pages', pg, '📄', (p)=> '<div class="row" data-i="'+rows.indexOf(p)+'"><span class="ic">📄</span><span class="main">'
+      +'<div class="t">'+hl(p.n,q)+'</div><div class="d">'+p.d+'</div></span></div>');
+    if(!rows.length) html = '<div class="empty">No matches for “'+q+'”</div>';
+    const el=document.getElementById('plist'); el.innerHTML=html; paint();
+    el.querySelectorAll('.row').forEach(r=>r.addEventListener('mouseenter',()=>{ sel=+r.dataset.i; paint(); }));
+  }
+  function paint(){
+    document.querySelectorAll('#plist .row').forEach(r=>r.classList.toggle('sel', +r.dataset.i===sel));
+  }
+  document.getElementById('q').addEventListener('input', e=>render(e.target.value));
+  document.addEventListener('keydown', e=>{
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openP(); return; }
+    if(!document.getElementById('palette').classList.contains('show')) return;
+    if(e.key==='Escape'){ closeP(); }
+    if(e.key==='ArrowDown'){ e.preventDefault(); sel=Math.min(sel+1, rows.length-1); paint(); }
+    if(e.key==='ArrowUp'){ e.preventDefault(); sel=Math.max(sel-1, 0); paint(); }
+    if(e.key==='Enter'){ e.preventDefault(); closeP(); }
+  });
+  render('');
+</script>
+</body>
+</html>

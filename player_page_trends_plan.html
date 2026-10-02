@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player page → Trends card — Plan</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --grid:#f3f4f6; --axis:#d1d5db; --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --up:#059669; --up-bg:#d1fae5; --down:#dc2626; --down-bg:#fee2e2;
+  --warn:#b45309; --warn-bg:#fef3c7; --warn-bd:#fde68a;
+  --bad:#b91c1c; --bad-bg:#fee2e2; --bad-bd:#fecaca;
+  --ok-bg:#d1fae5;
+  --skel:#e5e7eb; --skel2:#f3f4f6;
+}
+@media (prefers-color-scheme: dark){
+:root{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --grid:#273244; --axis:#4b5563; --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --up:#34d399; --up-bg:#064e3b; --down:#f87171; --down-bg:#7f1d1d;
+  --warn:#fcd34d; --warn-bg:#422006; --warn-bd:#713f12;
+  --bad:#fca5a5; --bad-bg:#450a0a; --bad-bd:#7f1d1d;
+  --ok-bg:#064e3b;
+  --skel:#374151; --skel2:#4b5563;
+}
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1);padding-bottom:60px}
+main{max-width:1180px;margin:0 auto;padding:20px 12px}
+h1{font-size:22px;font-weight:800;margin-bottom:4px}
+h2{font-size:16px;font-weight:800;margin:26px 0 10px;padding-top:14px;border-top:1px solid var(--border)}
+h3{font-size:13px;font-weight:800;margin:14px 0 6px;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
+p,li{font-size:13.5px;color:var(--ink2);line-height:1.6}
+ul,ol{margin:6px 0 6px 20px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:var(--chip);padding:1px 5px;border-radius:4px;color:var(--ink1)}
+.sub{font-size:13px;color:var(--ink2);margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.note{border-left:3px solid var(--chip-on-ink);background:var(--chip);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink2)}
+.warn{border-left:3px solid var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd);border-left-width:3px;border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink1)}
+.bad{border-left:3px solid var(--bad);background:var(--bad-bg);border:1px solid var(--bad-bd);border-left-width:3px;border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink1)}
+.ok{border-left:3px solid var(--up);background:var(--ok-bg);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink1)}
+
+/* ---- interactive demo shell ---- */
+.demo{border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.09);background:var(--card);margin-bottom:16px}
+.demobar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--grid);border-bottom:1px solid var(--border);padding:8px 12px}
+.demobar .t{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:var(--ink3);margin-right:auto}
+.demobar button{border:1px solid var(--border);background:var(--card);color:var(--ink2);font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:7px;cursor:pointer}
+.demobar button:hover{color:var(--ink1)}
+.demobar button.on{background:var(--chip-on);color:var(--chip-on-ink);border-color:var(--chip-on-ink)}
+.stage{padding:16px;transition:max-width .25s;margin:0 auto}
+.stage.mobile{max-width:390px;border-left:1px dashed var(--border);border-right:1px dashed var(--border)}
+
+.bio{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px}
+.avatar{width:64px;height:64px;border-radius:999px;background:var(--grid);display:flex;align-items:center;justify-content:center;font-size:26px;flex:0 0 auto}
+.pname{font-size:20px;font-weight:800;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pmeta{font-size:12.5px;color:var(--ink2)}
+.panel{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;background:var(--card)}
+.panel h4{font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 12px}
+.group{display:flex;flex-wrap:wrap;gap:3px;background:var(--chip);padding:3px;border-radius:8px}
+.group button{border:none;background:none;padding:6px 11px;border-radius:6px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.group button.dash{border:1px dashed var(--ink3)}
+.group button.dash.on{border-color:var(--chip-on-ink)}
+input[type=date]{border:1px solid var(--border);background:var(--card);color:var(--ink1);border-radius:6px;padding:6px 9px;font-size:12.5px}
+input[type=date]:disabled{background:var(--grid);color:var(--ink3)}
+.stage.mobile input[type=date]{width:100%}
+.fld{font-size:11px;font-weight:600;color:var(--ink2);margin-bottom:4px}
+.decided{border-left:3px solid var(--up);background:var(--chip);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink2)}
+.tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:1px 8px;margin-right:8px;vertical-align:1px}
+.decided .tag,.ok .tag{color:var(--up);border:1px solid var(--up)}
+.warn .tag{color:var(--warn);border:1px solid var(--warn)}
+.bad .tag{color:var(--bad);border:1px solid var(--bad)}
+.stage.mobile .group{width:100%;overflow-x:auto}
+.stage.mobile .group.stretch button{flex:1}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.stage:not(.mobile) .tiles{grid-template-columns:repeat(4,1fr)}
+.tile{background:var(--grid);border-radius:9px;padding:8px 10px}
+.tile .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);font-weight:700}
+.tile .v{font-size:18px;font-weight:800;color:var(--ink1);line-height:1.35}
+.tile .v.up{color:var(--up)} .tile .v.down{color:var(--down)}
+.tile .h{font-size:10.5px;color:var(--ink3)}
+.tile.muted .v{color:var(--ink3)}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.badge.up{background:var(--up-bg);color:var(--up)}
+.badge.down{background:var(--down-bg);color:var(--down)}
+.badge.new{background:#f3e8ff;color:#7e22ce}
+@media (prefers-color-scheme: dark){.badge.new{background:#3b0764;color:#d8b4fe}}
+.badge.keep{background:var(--chip);color:var(--ink3)}
+.badge.low{background:var(--chip);color:var(--ink3);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:10.5px;color:var(--ink3);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.legend i.sq{height:9px;border-radius:2px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);border-bottom:1px solid var(--border);padding:7px 8px;white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--grid);color:var(--ink2);vertical-align:top}
+td b{color:var(--ink1)}
+.tw{overflow-x:auto}
+.stack{list-style:none;margin:0;padding:0}
+.stack li{padding:7px 0 7px 22px;position:relative;border-bottom:1px solid var(--grid)}
+.stack li:before{content:"→";position:absolute;left:0;color:var(--chip-on-ink);font-weight:800}
+.q{font-weight:700;color:var(--ink1)}
+
+/* skeleton */
+@keyframes sh{0%{background-position:-380px 0}100%{background-position:380px 0}}
+.skel{background:linear-gradient(90deg,var(--skel) 0%,var(--skel2) 50%,var(--skel) 100%);background-size:760px 100%;animation:sh 1.25s linear infinite;border-radius:6px}
+.timer{font-size:11px;font-weight:700;color:var(--chip-on-ink);background:var(--chip-on);padding:2px 9px;border-radius:999px;white-space:nowrap}
+.empty{padding:34px 12px;text-align:center;color:var(--ink3);font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Player page → Trends card</h1>
+<p class="sub">Plan + <b>working demo</b>. Route <code>/player/:playerId</code> — <code>frontend/src/pages/PlayerProfile.tsx</code>, the single-player page, <i>not</i> the <code>/players</code> league table. Reuses <code>TrendGameLogChart</code> and the existing trends game-log endpoint.</p>
+
+<div class="ok">
+<span class="tag">Resolved</span><b>Feasibility check — done, and it is good news.</b> The id spaces already line up. <code>PlayerProfile</code> routes on the ESPN athlete id (<code>espn-4278039</code> in <code>backend/data/nba-players-2025-26.json</code>), and <code>fs_player_games.player_id</code> is that same ESPN id — verified live against Neon: <code>player_id = 4278039</code> → 301 rows, <code>player_name = 'Nickeil Alexander-Walker'</code>. The Trends tables and <code>/trends/player/{id}/gamelog</code> key on the same column. <b>No id-bridge or name-matching layer is needed.</b>
+</div>
+
+<h2>0 · Decisions — all locked, nothing open</h2>
+<div class="tw"><table>
+  <tr><th>Item</th><th>Decision</th></tr>
+  <tr><td><b>Fetch timing</b></td><td><b>Fire on mount</b>, non-blocking. No <code>IntersectionObserver</code>. One request per profile view — cheap, and simpler.</td></tr>
+  <tr><td><b>Role badge + z</b></td><td><b>Option A</b> — omit them. Derive only window averages and Δ client-side. No formula duplication, no backend work.</td></tr>
+  <tr><td><b>Shooting baseline</b></td><td><code>mode=form</code>, <code>baseline_seasons=0</code>. Baseline = this season outside the window.</td></tr>
+  <tr><td>Ids</td><td>ESPN athlete id throughout — verified, no bridge.</td></tr>
+  <tr><td>Loading</td><td>Card owns its query and its states. The <code>bioLoading</code> early return is untouched.</td></tr>
+  <tr><td>Data source</td><td>Game-log endpoint only. Never the league-wide list endpoints.</td></tr>
+  <tr><td>Window control</td><td>Mirrors the Trends page — presets + 📆 start date, end pinned.</td></tr>
+  <tr><td>Backend work</td><td><b>None.</b> Option A needs no new route.</td></tr>
+</table></div>
+
+<div class="ok">
+<span class="tag">Consequence</span>Choosing <b>fire-on-mount</b> makes the trends page's <b>request-coalescing</b> work (P2 there) more valuable, not less: every profile view now hits <code>/trends/player/{id}/gamelog</code>, so two people opening the same player on a cold instance would otherwise run the same expensive query twice. Nothing to change here — just a reason not to skip P2.
+</div>
+
+<h2>0b · Interim plan</h2>
+
+<div class="card">
+<h3>S1 · Card shell, non-blocking <span class="badge low">frontend</span></h3>
+<ul>
+<li>New <code>PlayerTrendsCard.tsx</code>, mounted below the Stats card in <code>PlayerProfile.tsx</code>. <b>No change to the <code>bioLoading</code> / <code>bioError</code> guard.</b></li>
+<li><code>useGetTrendGameLogQuery({ playerId, windowDays, baselineSeasons: 0, mode: 'form' })</code> inside the card — own <code>isLoading</code> / <code>error</code> by construction.</li>
+<li><code>refetchOnFocus: false</code> for this query — the server caches 6h, so refetching on tab focus is pure cost.</li>
+<li>Fixed-height skeleton (~320px desktop, ~300px mobile) so nothing below shifts when data lands.</li>
+<li>404 → "No game log this season" inside the card. Other errors → retry line inside the card. Never page-level <code>ErrorMessage</code>.</li>
+<li><b>Verify:</b> throttle the network, confirm bio + Stats paint while the card is still skeletal.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>S2 · Mode chips + chart <span class="badge low">frontend</span></h3>
+<ul>
+<li>Chips: Minutes · Usage · 3P% · FT% · FG%, passing <code>mode</code> and <code>stat</code> through to <code>TrendGameLogChart</code>.</li>
+<li>Hide a shooting chip when the player has zero season attempts for that stat.</li>
+<li>Pass all three shooting stats as <code>qualifiedStats</code> so the chart's internal stat switcher stays consistent.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>S3 · Summary tiles <span class="badge low">frontend</span></h3>
+<ul>
+<li>Shared helper: slice <code>games</code> by <code>game_date &gt;= window_start</code>, average <code>min</code> / <code>usg</code>, pool makes÷attempts for percentages.</li>
+<li>Four tiles: season value, window value, Δ, window start — each with its game count.</li>
+<li>Below 3 games in the window: grey the Δ tile and show the <code>partial</code> badge, matching <code>LOW_SAMPLE_GP = 3</code>.</li>
+<li><b>No role badge, no z</b> (decision above).</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>S4 · Window control <span class="badge low">frontend · follows the Trends page</span></h3>
+<ul>
+<li>Presets 7/15/30 + 📆 start-date custom, end pinned to the anchor — reusing whatever ships as P5 on the Trends page.</li>
+<li>Uses the same <code>toLocalIso</code> / <code>daysBetween</code> helpers from that work (P3) — do not hand-roll date maths here.</li>
+<li><b>Sequencing:</b> S1–S3 do not depend on the Trends work and can ship first with fixed presets. S4 lands after Trends P3+P5.</li>
+<li><b>Verify:</b> desktop + 390px.</li>
+</ul>
+</div>
+
+<h2>1 · Live demo — click everything</h2>
+<p class="sub">Fake but plausible game log (deterministic, 41 games). Chart, tiles and window band all recompute for real.</p>
+
+<div class="demo">
+  <div class="demobar">
+    <span class="t">Demo controls</span>
+    <button id="btnWidth">📱 Mobile 390px</button>
+    <button id="btnCold">⏱ Simulate cold start</button>
+    <button id="btnEmpty">🚫 No game log (404)</button>
+  </div>
+  <div class="stage" id="stage">
+
+    <div class="bio">
+      <div class="avatar">🏀</div>
+      <div>
+        <div class="pname">Nickeil Alexander-Walker <span style="font-size:16px;color:var(--ink3)">#6</span></div>
+        <div class="pmeta">Atlanta Hawks (ATL) · SG &nbsp;·&nbsp; East / Southeast &nbsp;·&nbsp; 6'5" · 27</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h4>Stats <span class="badge keep">existing — unchanged</span></h4>
+      <div class="controls">
+        <div class="group"><button class="on">📅 Season</button><button>🔥 L7</button><button>📊 L15</button><button>📈 L30</button><button style="border:1px dashed var(--ink3)">📆 Custom</button></div>
+        <div class="group"><button class="on">Per Game</button><button>Totals</button></div>
+      </div>
+      <div class="tw"><table>
+        <tr><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr><td>41</td><td>26.1</td><td>13.1</td><td>3.5</td><td>2.9</td><td>1.1</td><td>0.4</td><td>2.4</td><td>44.2%</td><td>86.7%</td></tr>
+      </table></div>
+    </div>
+
+    <div class="panel" id="trendsCard">
+      <h4>📈 Trends <span class="badge new">new</span> <span id="cardTimer"></span></h4>
+      <div id="trendsBody"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="note">
+Press <b>⏱ Simulate cold start</b> — bio and Stats stay on screen the whole time while only the Trends card swaps to a skeleton. That is the behaviour §3 specifies. Press <b>🚫 No game log</b> for the 404 state.
+</div>
+
+<h2>2 · Independent, non-blocking load <span class="badge new">per your ask</span></h2>
+
+<p><b>Agreed, and it matters more than it first looks.</b> Three separate reasons, in increasing order of severity:</p>
+
+<ol>
+  <li><b>The endpoint is genuinely slow on a miss.</b> <code>/trends/player/{id}/gamelog</code> runs a multi-join query over <code>fs_player_games</code> + <code>fs_team_games</code>, then <code>_prior_shooting</code> across up to two prior seasons, then <code>_get_league_refs</code> which aggregates <b>every player's</b> shooting and usage for the season. The result is cached 6h — but the first caller after a restart pays all of it.</li>
+  <li><b>Render free tier sleeps after ~15 min idle.</b> A cold start means the container boots, and on this app boot also kicks off the injury-PDF fetch and scheduler setup before serving. Blocking the profile on that turns a 300ms page into a 30s+ page.</li>
+  <li><b>It can 404 legitimately.</b> A player with no <code>fs_player_games</code> rows this season returns 404 by design. If that sits on the page's critical path, a perfectly valid player page shows an error.</li>
+</ol>
+
+<div class="ok">
+<span class="tag">Resolved</span><b>The page already works this way — just don't break the pattern.</b> <code>PlayerProfile.tsx</code> today blocks only on the bio query (<code>if (bioLoading) return &lt;LoadingSpinner /&gt;</code> at line 85), and the bio comes from a <b>static JSON catalog held in memory</b> — <code>nba_player_catalog.py</code> reads <code>nba-players-2025-26.json</code> once and caches it, no DB, no external call. Stats already render their own spinner <i>inside</i> the Stats card. The Trends card follows that same shape.
+</div>
+
+<h3>Rules for the implementation</h3>
+<ul class="stack">
+  <li><b>Own query, own state.</b> Put <code>useGetTrendGameLogQuery</code> inside the card component. RTK Query gives it independent <code>isLoading</code>/<code>error</code> by construction — nothing is shared with the bio or stats queries.</li>
+  <li><b>Never touch the early return.</b> The <code>bioLoading</code> / <code>bioError</code> guard at the top of <code>PlayerProfile</code> stays exactly as it is. No trends state joins it.</li>
+  <li><b>Skeleton, not a spinner — and reserve the height.</b> The card is ~320px tall when loaded. A collapsing spinner makes the page jump when data lands. Render a fixed-height skeleton so nothing below it moves.</li>
+  <li><b>Lazy-fetch on visibility.</b> The card sits below the fold on most screens. Gate the query on an <code>IntersectionObserver</code> (or the card's expanded state) via RTK Query's <code>skip</code>, so a user who never scrolls never pays for it — and a cold backend is not woken by every profile view.</li>
+  <li><b>Isolate the failure.</b> 404 → "No game log this season" inside the card. 500 / timeout → a small retry line inside the card. Neither may render <code>ErrorMessage</code> at page level.</li>
+  <li><b>Don't refetch on window focus</b> for this one — the underlying data is on a 6h server cache, so refetching on every tab focus is pure cost with no freshness gain.</li>
+</ul>
+
+<div class="decided">
+<span class="tag">Decided</span><b>Fetch timing: fire on mount.</b> The alternative was lazy-on-visibility and "appears when ready" pull in slightly different directions: if the user scrolls straight down, the fetch <i>starts</i> when they arrive, so they watch the skeleton for the full cold-start duration instead of it having loaded in the background. Options: (a) fire the query immediately on mount but keep it non-blocking — simplest, costs one request per profile view; (b) lazy on visibility with a generous <code>rootMargin</code> (~600px) so it starts fetching just before it scrolls into view. <b>Recommend (b)</b> — it gets the head start without waking the backend for users who bounce off the page.
+</div>
+
+<h2>3 · Where the numbers come from</h2>
+
+<p>Everything in the card comes from a <b>single existing endpoint</b>: <code>GET /trends/player/{player_id}/gamelog?window_days&amp;baseline_seasons&amp;mode</code>.</p>
+
+<div class="tw"><table>
+  <tr><th>Shown</th><th>Source</th><th>Backend work</th></tr>
+  <tr><td><b>Chart</b> (minutes / usage / shooting)</td><td><code>GameLogResponse.games[]</code> — <code>TrendGameLogChart</code> already renders all three modes off this</td><td>none</td></tr>
+  <tr><td><b>Season MPG / USG / pct</b></td><td><code>season_mpg</code>, <code>season_usg</code>, <code>season_pct</code></td><td>none</td></tr>
+  <tr><td><b>Window MPG / USG / pct</b></td><td>derive client-side: filter <code>games</code> by <code>game_date &gt;= window_start</code>, average <code>min</code> / <code>usg</code>, pool makes÷attempts</td><td>none</td></tr>
+  <tr><td><b>Δ vs season</b></td><td>derived from the two above</td><td>none</td></tr>
+  <tr><td><b>Baseline % / league %</b> (shooting modes)</td><td><code>baseline_pct</code>, <code>league_pct</code></td><td>none</td></tr>
+  <tr><td><b>Role badge, z</b></td><td>would duplicate <code>classify_role_badge</code> / <code>_form_stat</code> in TypeScript</td><td><i>see below</i></td></tr>
+</table></div>
+
+<div class="note">
+<b>Why not call the list endpoints?</b> <code>/trends/minutes</code>, <code>/trends/usage</code> and <code>/trends/regression</code> return the whole league and are <b>threshold-gated</b> — a player who has not moved (or who fails <code>MIN_SEASON_GP = 10</code>, or the <code>drift_score ≥ 0.35</code> / <code>|z| ≥ 1.5</code> gates) has <b>no row at all</b>. On a player page every player must render something, so the gates are wrong here. Pulling a ~500-player payload to find one row is also wasteful on a free instance.
+</div>
+
+<div class="decided">
+<span class="tag">Decided → A</span><b>Duplicated-formula risk.</b> Deriving the role badge and z in TypeScript duplicates Python thresholds. If one moves, the player page silently disagrees with the Trends table.
+<ul>
+<li><b>A (recommended):</b> derive only the uncontroversial numbers client-side — window averages and Δ. Nothing to drift. The demo above does exactly this: it shows Δ and game counts, no badge, no z.</li>
+<li><b>B:</b> add <code>GET /trends/player/{id}/summary</code> running the same Python helpers ungated for one player. One thin route + service method; single source of truth. Do this only if you want the badge and z on the page.</li>
+</ul>
+</div>
+
+<h2>4 · Files to touch</h2>
+<h3>Frontend</h3>
+<ul class="stack">
+  <li><code>frontend/src/pages/PlayerProfile.tsx</code> — mount the card below Stats. No change to the early-return guard.</li>
+  <li><code>frontend/src/components/PlayerTrendsCard.tsx</code> <b>(new)</b> — mode chips, window control, tiles, skeleton, 404/error states, <code>IntersectionObserver</code> gate; renders <code>TrendGameLogChart</code>.</li>
+  <li><code>frontend/src/components/TrendGameLogChart.tsx</code> — no change expected; it already takes <code>playerId / playerName / mode / windowDays / baselineSeasons / stat</code>. Only needs a caller that passes all three shooting stats as <code>qualifiedStats</code>.</li>
+  <li><code>frontend/src/utils/</code> — small shared helper for window-slice averages.</li>
+  <li><code>frontend/src/store/api/fantasyApi.ts</code> — reuse <code>useGetTrendGameLogQuery</code>; add a summary query only under option B.</li>
+</ul>
+<h3>Backend</h3>
+<ul class="stack">
+  <li>Option A: <b>nothing</b>.</li>
+  <li>Option B: <code>routes/trends.py</code> + <code>trend_service.py</code> + <code>models/trend_models.py</code>, plus a pytest for the ungated path.</li>
+</ul>
+
+<h2>5 · Edge cases the card must handle</h2>
+<ul>
+  <li><span class="q">404</span> — no <code>fs_player_games</code> rows this season (two-way, G-League, injured all year, offseason signing). "No game log this season", inside the card. <i>Demo it with the 🚫 button.</i></li>
+  <li><span class="q">Rookie / no prior seasons</span> — <code>baseline_pct</code> comes back empty, so the shooting chart has no baseline line. Confirm it degrades cleanly rather than drawing a line at 0.</li>
+  <li><span class="q">Very few games in window</span> — below 3 games the Δ is noise. Grey the Δ tile and show the game count, matching the Trends page's <code>partial</code> badge at <code>LOW_SAMPLE_GP = 3</code>. <i>Try the 7d window in the demo.</i></li>
+  <li><span class="q">Zero attempts for a stat</span> — hide that mode chip rather than plotting a flat 0 (a centre with no 3PA).</li>
+  <li><span class="q">Baseline choice</span> — do <b>not</b> expose the 0/1/2 prior-seasons picker here. Pin it and keep the surface small.</li>
+</ul>
+
+<h2>6 · Build order</h2>
+<ol>
+  <li>Card shell + mode/window controls + <code>TrendGameLogChart</code> on the existing gamelog query, non-blocking with a fixed-height skeleton. This is most of the value.</li>
+  <li>Summary tiles from client-derived window slices.</li>
+  <li><code>IntersectionObserver</code> gate with <code>rootMargin</code>.</li>
+  <li><i>Only if wanted:</i> option B summary endpoint for role badge + z.</li>
+</ol>
+
+<h2>7 · Shooting baseline — decided</h2>
+<div class="decided">
+<span class="tag">Decided → form / 0</span><b><code>mode=form</code>, <code>baseline_seasons=0</code>.</b> The plan said "pin them and keep the surface small" without saying to what — and the choice is visible, because it changes the baseline reference line the chart draws:
+<ul>
+<li><code>mode=season</code> + <code>baseline_seasons=2</code> → baseline is <b>prior seasons only</b>. Answers "is this season out of step with his career". Steady line, slow to react to a genuine change in the shooter.</li>
+<li><code>mode=form</code> + <code>baseline_seasons=0</code> → baseline is <b>this season outside the window</b>. Answers "is he hot or cold right now relative to himself". Follows a player whose level has actually moved.</li>
+</ul>
+<b>Recommend <code>form</code> / <code>0</code>.</b> A player page is read to answer "how is he doing lately", which is the form question — and it is the only one of the two that stays meaningful for a rookie, where the season-mode baseline is empty and the chart draws no line at all. The Trends page keeps both because it has a tab per question; the player card should not grow a tab bar for this.
+</div>
+
+<div class="note">The window control here should match whatever ships on the Trends page — see <a href="trends_dynamic_range_plan.html">trends_dynamic_range_plan.html</a>. Presets plus an optional start-date custom, end always pinned to the anchor.</div>
+
+<script>
+(function(){
+const ANCHOR = new Date('2026-02-07T00:00:00');
+const SEASON_START = new Date('2025-10-21T00:00:00');
+// local-parts, never toISOString(): in UTC+2/+3 the latter shifts local midnight back a day
+const fmt = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const shortD = d => (d.getMonth()+1)+'/'+d.getDate();
+
+// deterministic pseudo-random so the demo is stable across reloads
+function lcg(s){return function(){s=(s*1664525+1013904223)%4294967296;return s/4294967296}}
+const rnd = lcg(20260207);
+
+// 41 games walking back from the anchor, 2-3 days apart.
+const games = [];
+(function(){
+  let d = new Date(ANCHOR);
+  for(let i=0;i<41;i++){
+    games.push(new Date(d));
+    d = new Date(d.getTime() - (rnd()<.45?2:3)*86400000);
+  }
+  games.reverse();
+})();
+
+const log = games.map((date,i)=>{
+  const ramp = i>=32 ? (i-31)*1.15 : 0;          // role bump over the last ~9 games
+  const min  = Math.max(8, 23.2 + ramp + (rnd()-.5)*7);
+  const usg  = Math.max(8, 17.6 + ramp*.55 + (rnd()-.5)*5.5);
+  const fga  = Math.max(2, Math.round(min*0.36 + (rnd()-.5)*4));
+  const fgm  = Math.max(0, Math.min(fga, Math.round(fga*(0.445 + (rnd()-.5)*0.30))));
+  const fg3a = Math.max(0, Math.round(fga*0.52 + (rnd()-.5)*2));
+  const fg3m = Math.max(0, Math.min(fg3a, Math.round(fg3a*(0.375 + (rnd()-.5)*0.42))));
+  const fta  = Math.max(0, Math.round(min*0.09 + (rnd()-.5)*2.4));
+  const ftm  = Math.max(0, Math.min(fta, Math.round(fta*(0.86 + (rnd()-.5)*0.26))));
+  return {date, min, usg, fga, fgm, fg3a, fg3m, fta, ftm};
+});
+
+const MODES = [
+  {k:'minutes', label:'Minutes', short:'Min', color:'#3b82f6', unit:''},
+  {k:'usage',   label:'Usage',   short:'Usg', color:'#f59e0b', unit:'%'},
+  {k:'3P%',     label:'3P%',     short:'3P%', color:'#10b981', unit:'%'},
+  {k:'FT%',     label:'FT%',     short:'FT%', color:'#10b981', unit:'%'},
+  {k:'FG%',     label:'FG%',     short:'FG%', color:'#10b981', unit:'%'}
+];
+const STATF = {'3P%':['fg3m','fg3a'],'FT%':['ftm','fta'],'FG%':['fgm','fga']};
+
+let mode = 'minutes', windowDays = 15, state = 'ready', mobile = false, custom = false;
+
+const winStart = () => new Date(ANCHOR.getTime() - windowDays*86400000);
+const inWindow = g => g.date >= winStart();
+
+function seriesFor(m){
+  if(m==='minutes') return log.map(g=>g.min);
+  if(m==='usage')   return log.map(g=>g.usg);
+  const [mk,at] = STATF[m];
+  return log.map((g,i)=>{                        // rolling 5-game pct, same as TrendGameLogChart
+    const s = log.slice(Math.max(0,i-4), i+1);
+    const a = s.reduce((t,x)=>t+x[at],0), k = s.reduce((t,x)=>t+x[mk],0);
+    return a ? k/a*100 : 0;
+  });
+}
+function seasonRef(m){
+  if(m==='minutes') return log.reduce((t,g)=>t+g.min,0)/log.length;
+  if(m==='usage')   return log.reduce((t,g)=>t+g.usg,0)/log.length;
+  const [mk,at]=STATF[m];
+  const a=log.reduce((t,g)=>t+g[at],0), k=log.reduce((t,g)=>t+g[mk],0);
+  return a?k/a*100:0;
+}
+function windowRef(m){
+  const w = log.filter(inWindow);
+  if(!w.length) return null;
+  if(m==='minutes') return w.reduce((t,g)=>t+g.min,0)/w.length;
+  if(m==='usage')   return w.reduce((t,g)=>t+g.usg,0)/w.length;
+  const [mk,at]=STATF[m];
+  const a=w.reduce((t,g)=>t+g[at],0), k=w.reduce((t,g)=>t+g[mk],0);
+  return a?k/a*100:null;
+}
+
+function chartSVG(){
+  const W=720,H=220,L=42,R=12,T=16,B=34;
+  const vals = seriesFor(mode), sref = seasonRef(mode);
+  const isShoot = mode!=='minutes' && mode!=='usage';
+  const bars = isShoot ? log.map(g=>g[STATF[mode][1]]) : (mode==='usage'? log.map(g=>g.min) : null);
+  let lo=Math.min(...vals,sref), hi=Math.max(...vals,sref);
+  const pad=(hi-lo)*0.18||4; lo=Math.max(0,lo-pad); hi=hi+pad;
+  const x = i => L + i*(W-L-R)/(vals.length-1);
+  const y = v => T + (H-T-B)*(1-(v-lo)/(hi-lo));
+  const ws = winStart();
+  const firstW = log.findIndex(g=>g.date>=ws);
+  const bandX = firstW<=0 ? L : x(firstW)-((W-L-R)/(vals.length-1))/2;
+  const col = MODES.find(m=>m.k===mode).color;
+  const unit = MODES.find(m=>m.k===mode).unit;
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${mobile?150:200}" role="img" aria-label="${mode} chart">`;
+  s += `<rect x="${bandX}" y="${T}" width="${W-R-bandX}" height="${H-T-B}" fill="var(--chip-on)" opacity=".38"/>`;
+  s += `<text x="${bandX+6}" y="${T+13}" font-size="10" font-weight="700" fill="var(--chip-on-ink)">last ${windowDays}d</text>`;
+  for(let i=0;i<=3;i++){const yy=T+i*(H-T-B)/3;s+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="var(--grid)"/>`;}
+  if(bars){
+    const bmax=Math.max(...bars)||1, bw=(W-L-R)/vals.length*0.55;
+    bars.forEach((b,i)=>{const bh=(H-T-B)*0.34*(b/bmax);
+      s+=`<rect x="${x(i)-bw/2}" y="${H-B-bh}" width="${bw}" height="${bh}" fill="#8b5cf6" opacity=".33"/>`;});
+  }
+  s += `<line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="var(--axis)"/>`;
+  s += `<line x1="${L}" y1="${T}" x2="${L}" y2="${H-B}" stroke="var(--axis)"/>`;
+  s += `<line x1="${L}" y1="${y(sref)}" x2="${W-R}" y2="${y(sref)}" stroke="var(--ink3)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+  s += `<text x="${L+5}" y="${y(sref)-5}" font-size="10" fill="var(--ink3)">season ${sref.toFixed(1)}${unit}</text>`;
+  s += `<polyline fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round" points="${vals.map((v,i)=>x(i)+','+y(v)).join(' ')}"/>`;
+  vals.forEach((v,i)=>{ if(log[i].date>=ws) s+=`<circle cx="${x(i)}" cy="${y(v)}" r="3.2" fill="${col}"/>`; });
+  s += `<text x="6" y="${y(hi)+10}" font-size="10" fill="var(--ink3)">${hi.toFixed(0)}</text>`;
+  s += `<text x="6" y="${y(lo)}" font-size="10" fill="var(--ink3)">${lo.toFixed(0)}</text>`;
+  [0,Math.floor(vals.length/2),vals.length-1].forEach(i=>{
+    s+=`<text x="${x(i)}" y="${H-B+18}" font-size="9.5" fill="var(--ink3)" text-anchor="middle">${shortD(log[i].date)}</text>`;});
+  return s+'</svg>';
+}
+
+function tilesHTML(){
+  const w = log.filter(inWindow), n = w.length;
+  const sref = seasonRef(mode), wref = windowRef(mode);
+  const unit = MODES.find(m=>m.k===mode).unit;
+  const d = wref===null?null:wref-sref;
+  const thin = n < 3;
+  const lbl = mode==='minutes'?'MPG':mode==='usage'?'USG%':mode;
+  const t = (k,v,h,cls='')=>`<div class="tile ${cls}"><div class="k">${k}</div><div class="v ${cls==='muted'?'':(cls||'')}">${v}</div><div class="h">${h}</div></div>`;
+  return `<div class="tiles">
+    ${t('Season '+lbl, sref.toFixed(1)+unit, log.length+' games')}
+    ${t(windowDays+'d '+lbl, wref===null?'—':wref.toFixed(1)+unit, n+' game'+(n===1?'':'s'))}
+    ${t('Δ vs season', d===null?'—':(d>=0?'▲ +':'▼ ')+d.toFixed(1)+unit, thin?'too few games':'per game', thin?'muted':(d>=0?'up':'down'))}
+    ${t('Window starts', shortD(winStart()), fmt(winStart()))}
+  </div>` + (thin?`<div style="margin:-4px 0 10px"><span class="badge low">partial</span> <span style="font-size:11.5px;color:var(--ink3)">under 3 games in the window — Δ is noise, same rule as the Trends page.</span></div>`:'');
+}
+
+function render(){
+  const body = document.getElementById('trendsBody');
+  const timer = document.getElementById('cardTimer');
+  const stage = document.getElementById('stage');
+  stage.classList.toggle('mobile', mobile);
+
+  if(state==='loading'){
+    timer.innerHTML = '<span class="timer">loading…</span>';
+    body.innerHTML = `<div style="height:${mobile?300:376}px;display:flex;flex-direction:column;gap:10px">
+      <div class="skel" style="height:30px;width:${mobile?'100%':'340px'}"></div>
+      <div class="skel" style="height:${mobile?'116px':'62px'}"></div>
+      <div class="skel" style="flex:1"></div>
+      <div style="font-size:11px;color:var(--ink3);text-align:center">fixed-height skeleton — nothing below shifts when data lands</div>
+    </div>`;
+    return;
+  }
+  if(state==='empty'){
+    timer.innerHTML = '';
+    body.innerHTML = `<div class="empty" style="height:${mobile?300:376}px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px">
+      <div style="font-size:26px">📭</div><div><b style="color:var(--ink2)">No game log this season</b></div>
+      <div style="max-width:320px">404 from the endpoint — handled inside the card. Bio and Stats above are untouched.</div></div>`;
+    return;
+  }
+
+  timer.innerHTML = '';
+  const chips = MODES.map(m=>`<button data-mode="${m.k}" class="${m.k===mode?'on':''}">${mobile?m.short:m.label}</button>`).join('');
+  const wins = [7,15,30].map(d=>`<button data-win="${d}" class="${!custom&&d===windowDays?'on':''}">${d}d</button>`).join('')
+    + `<button data-win="custom" class="dash ${custom?'on':''}" title="Pick a start date — end always pinned to the latest game day">📆</button>`;
+  const custHTML = custom ? `<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div><div class="fld">Window starts</div>
+        <input type="date" id="pStart" value="${fmt(winStart())}" min="${fmt(SEASON_START)}" max="${fmt(new Date(ANCHOR.getTime()-5*86400000))}"></div>
+      <div style="opacity:.6"><div class="fld">Through</div>
+        <input type="date" value="${fmt(ANCHOR)}" disabled></div>
+      <button id="pApply" style="border:none;background:#2563eb;color:#fff;font-weight:700;font-size:12.5px;padding:7px 16px;border-radius:6px;cursor:pointer">Apply</button>
+      <div style="flex-basis:100%;font-size:11px;color:var(--ink3)">Through ${shortD(ANCHOR)} (latest game day) — end pinned, exactly as on the Trends page.</div>
+    </div>` : '';
+  const col = MODES.find(m=>m.k===mode).color;
+  const isShoot = mode!=='minutes'&&mode!=='usage';
+  body.innerHTML = `
+    <div class="controls">
+      <div class="group" id="modeGrp">${chips}</div>
+      <div class="group stretch" id="winGrp" title="Recency window">${wins}</div>
+    </div>
+    ${custHTML}
+    ${tilesHTML()}
+    ${chartSVG()}
+    <div class="legend">
+      <span><i style="background:${col}"></i>${isShoot?'Rolling 5-game '+mode:(mode==='usage'?'USG%':'Minutes per game')}</span>
+      <span><i style="background:var(--ink3)"></i>Season average</span>
+      <span><i class="sq" style="background:var(--chip-on)"></i>Recency window</span>
+      ${(isShoot||mode==='usage')?`<span><i class="sq" style="background:#8b5cf6;opacity:.4"></i>${isShoot?'Attempts':'Minutes'}</span>`:''}
+    </div>`;
+
+  body.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;render()});
+  body.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{
+    if(b.dataset.win==='custom'){ custom=true; } else { custom=false; windowDays=+b.dataset.win; }
+    render();
+  });
+  const pa = document.getElementById('pApply');
+  if(pa) pa.onclick=()=>{
+    const v = document.getElementById('pStart').value; if(!v) return;
+    const n = Math.round((ANCHOR - new Date(v+'T00:00:00'))/86400000);
+    windowDays = Math.max(5, Math.min(60, n));
+    render();
+  };
+}
+
+document.getElementById('btnWidth').onclick = function(){
+  mobile=!mobile; this.classList.toggle('on',mobile);
+  this.textContent = mobile?'🖥 Desktop':'📱 Mobile 390px'; render();
+};
+document.getElementById('btnEmpty').onclick = function(){
+  state = state==='empty'?'ready':'empty';
+  this.classList.toggle('on', state==='empty'); render();
+};
+document.getElementById('btnCold').onclick = function(){
+  const b=this; b.disabled=true; state='loading'; render();
+  const t0=Date.now();
+  const iv=setInterval(()=>{const el=document.getElementById('cardTimer');
+    if(el) el.innerHTML='<span class="timer">loading… '+((Date.now()-t0)/1000).toFixed(1)+'s</span>';},100);
+  setTimeout(()=>{clearInterval(iv); state='ready'; render(); b.disabled=false;}, 2800);
+};
+render();
+})();
+</script>
+
+</main>
+</body>
+</html>

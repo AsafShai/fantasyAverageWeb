@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Player page — full layout options</title>
+<style>
+  :root{
+    --page:#1e293b; --card:#111827; --card2:#1f2937; --line:#374151; --line2:#1f2937;
+    --txt:#f3f4f6; --muted:#9ca3af; --dim:#6b7280; --blue:#2563eb; --blue2:#3b82f6;
+    --amber:#f59e0b; --green:#10b981;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--txt);
+    font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;padding:0 0 80px}
+  .band{background:#0f172a;padding:26px 16px 18px;border-bottom:1px solid var(--line)}
+  .band .inner{max-width:1000px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 6px}
+  .lede{color:var(--muted);margin:0;max-width:780px;font-size:13px}
+  .opt{max-width:1000px;margin:0 auto;padding:36px 16px 0}
+  .optHead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .optHead h2{font-size:16px;margin:0}
+  .pill{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--blue2);
+    border:1px solid var(--blue);border-radius:999px;padding:2px 8px}
+  .why{color:var(--muted);font-size:12.5px;margin:0 0 14px;max-width:780px}
+  .frame{background:var(--page);border:1px solid var(--line);border-radius:10px;padding:18px;
+    box-shadow:0 8px 24px rgba(0,0,0,.28)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px}
+  .pad{padding:16px 18px}
+  .mt{margin-top:14px}
+  .name{font-size:26px;font-weight:800;
+    background:linear-gradient(90deg,#3b82f6,#a855f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .num{color:var(--muted);font-size:18px;font-weight:700;-webkit-text-fill-color:var(--muted)}
+  .pos{color:#d1d5db;font-size:14px;margin:2px 0 12px}
+  .avatar{width:96px;height:96px;border-radius:50%;background:var(--card2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:30px;flex:none}
+  .bioGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 22px;font-size:12.5px}
+  .bioGrid dt{color:var(--muted)}
+  .bioGrid dd{margin:0;font-weight:600}
+  .hero{display:flex;gap:18px;align-items:flex-start}
+
+  h3{font-size:17px;font-weight:700;margin:0}
+  .sub{color:var(--muted);font-size:12px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg span{padding:5px 10px;font-size:12px;color:var(--muted)}
+  .seg span.on{background:var(--blue);color:#fff;font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;
+    padding:7px 4px;text-align:center}
+  td{padding:9px 4px;text-align:center;font-weight:600}
+  tr.proj{background:rgba(37,99,235,.13)}
+  tr.proj td{color:#dbeafe}
+  .rowlab{text-align:left !important;color:var(--muted);font-weight:500;white-space:nowrap}
+  .rowlab b{color:var(--txt)}
+
+  .tiles{display:grid;grid-template-columns:repeat(8,1fr);gap:7px}
+  .tile{background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:7px 2px;text-align:center}
+  .tile .k{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .tile .v{font-size:16px;font-weight:700;margin-top:1px}
+  .tile .f{font-size:9px;color:var(--dim)}
+
+  .slider{display:flex;align-items:center;gap:9px}
+  .slider input[type=range]{flex:1;max-width:230px;accent-color:var(--blue);height:3px}
+  .lab{font-size:11px;color:var(--muted)}
+  .val{font-weight:700;font-size:12.5px;width:22px;text-align:right}
+  .ghostbtn{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:3px 7px}
+
+  .tabs{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--line)}
+  .tab{padding:10px 14px;font-size:13px;color:var(--muted);border-bottom:2px solid transparent}
+  .tab.on{color:var(--txt);font-weight:600;border-bottom-color:var(--blue2)}
+  .tab .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue2);margin-left:6px;vertical-align:middle}
+
+  .cols{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;align-items:start}
+  .kv{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line2)}
+  .kv:last-child{border-bottom:0}
+  .kv span:first-child{color:var(--muted)}
+  .kv b{font-variant-numeric:tabular-nums}
+
+  .chart{height:96px;background:
+     linear-gradient(90deg,transparent 0 49.6%,var(--line) 49.6% 50%,transparent 50%),
+     repeating-linear-gradient(90deg,transparent 0 38px,rgba(255,255,255,.03) 38px 39px);
+    border-radius:6px;position:relative;overflow:hidden;border:1px solid var(--line2)}
+  .chart svg{position:absolute;inset:0;width:100%;height:100%}
+  .statRow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .statBox{background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+  .statBox .k{font-size:9px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}
+  .statBox .v{font-size:19px;font-weight:700}
+  .statBox .n{font-size:10px;color:var(--dim)}
+  .amber{color:var(--amber)}
+  .flexline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .spacer{margin-left:auto}
+  .divider{height:1px;background:var(--line2);margin:14px 0}
+  .verdict{font-size:12px;color:var(--muted);margin-top:10px;padding-left:12px;border-left:2px solid var(--line)}
+  .verdict b{color:#d1d5db}
+  @media(max-width:820px){ .cols{grid-template-columns:1fr} .tiles{grid-template-columns:repeat(4,1fr)} }
+</style>
+</head>
+<body>
+
+<div class="band"><div class="inner">
+  <h1>Player page — four full layouts</h1>
+  <p class="lede">Real data throughout: Derrick White's actual season line, actual trends numbers, and the actual model projection (13.7 / 3.8 / 4.2 at his default 31 minutes). Shown at real page proportions so you can judge density, not just the projection element. Read each one as the whole page, not as a widget.</p>
+</div></div>
+
+<!-- ============ OPTION 1 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>1 — Projection lives in the header</h2><span class="pill">no new block</span></div>
+  <p class="why">The next game is a fact about the player, so it sits with his other facts — same row as height and age, separated by a rule. Nothing is added to the page's block count; Stats and Trends are untouched. Slider opens on "adjust".</p>
+  <div class="frame">
+    <div class="card pad">
+      <div class="hero">
+        <div class="avatar">🏀</div>
+        <div style="flex:1;min-width:0">
+          <div class="name">Derrick White <span class="num">#9</span></div>
+          <div class="pos">Boston Celtics (BOS) · Guard</div>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:20px;align-items:start">
+            <dl class="bioGrid" style="margin:0">
+              <div><dt>Conference</dt><dd>East</dd></div>
+              <div><dt>Division</dt><dd>Atlantic</dd></div>
+              <div><dt>Height</dt><dd>6' 4"</dd></div>
+              <div><dt>Age</dt><dd>32</dd></div>
+              <div><dt>Nationality</dt><dd>USA</dd></div>
+              <div><dt>Games</dt><dd>77</dd></div>
+            </dl>
+            <div style="border-left:1px solid var(--line);padding-left:18px">
+              <div class="sub" style="margin-bottom:4px">Next game · @ ORL · Thu, in 2 days</div>
+              <div style="font-size:20px;font-weight:800;letter-spacing:-.02em">14 <span style="color:var(--dim);font-weight:400">/</span> 4 <span style="color:var(--dim);font-weight:400">/</span> 4</div>
+              <div class="sub" style="margin:2px 0 8px">2 3PM · 1 STL · 1 BLK · 45% FG</div>
+              <div class="flexline"><span class="sub">at 31 min</span><span class="ghostbtn">adjust ▾</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card pad mt">
+      <div class="flexline" style="margin-bottom:12px"><h3>Stats</h3>
+        <span class="spacer"></span>
+        <span class="seg"><span class="on">Season</span><span>L7</span><span>L15</span><span>L30</span></span>
+        <span class="seg"><span class="on">Per Game</span><span>Totals</span></span>
+      </div>
+      <table>
+        <tr><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr><td>77</td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>39.4%</td><td>90.2%</td></tr>
+      </table>
+    </div>
+
+    <div class="card pad mt">
+      <div class="flexline" style="margin-bottom:12px"><h3>Trends</h3><span class="spacer"></span>
+        <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span></div>
+      <div class="statRow" style="margin-bottom:12px">
+        <div class="statBox"><div class="k">Season</div><div class="v">34.1</div><div class="n">77 games</div></div>
+        <div class="statBox"><div class="k">Last 15d</div><div class="v">32.4</div><div class="n">7 games</div></div>
+        <div class="statBox"><div class="k">Δ vs season</div><div class="v">-1.6</div><div class="n">7 games</div></div>
+        <div class="statBox"><div class="k">Window start</div><div class="v">03/28</div><div class="n">7 games</div></div>
+      </div>
+      <div class="chart"><svg viewBox="0 0 600 96" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,52 25,34 50,66 75,28 100,74 125,40 150,20 175,58 200,36 225,70 250,30 275,48 300,24 325,62 350,38 375,26 400,56 425,32 450,68 475,42 500,22 525,50 550,36 575,60 600,44"/></svg></div>
+    </div>
+  </div>
+  <p class="verdict"><b>Cost:</b> the header gets busier, and on mobile that panel drops below the bio grid, which weakens the "it's a bio fact" idea. <b>Best if</b> you want the number visible instantly and rarely touch the slider.</p>
+</div>
+
+<!-- ============ OPTION 2 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>2 — One card, three tabs</h2><span class="pill">page becomes 2 blocks</span></div>
+  <p class="why">The page stops being a stack. Header, then a single card whose tabs are Stats / Trends / Next Game. The projection is a first-class view rather than a strip wedged between things, and it has room to breathe — full tiles, slider, percentage splits, no compromises.</p>
+  <div class="frame">
+    <div class="card pad">
+      <div class="hero">
+        <div class="avatar">🏀</div>
+        <div style="flex:1;min-width:0">
+          <div class="name">Derrick White <span class="num">#9</span></div>
+          <div class="pos">Boston Celtics (BOS) · Guard</div>
+          <dl class="bioGrid" style="margin:0;max-width:520px">
+            <div><dt>Conference</dt><dd>East</dd></div>
+            <div><dt>Division</dt><dd>Atlantic</dd></div>
+            <div><dt>Height</dt><dd>6' 4"</dd></div>
+            <div><dt>Age</dt><dd>32</dd></div>
+            <div><dt>Nationality</dt><dd>USA</dd></div>
+            <div><dt>Games</dt><dd>77</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <div class="tabs">
+        <div class="tab">Stats</div>
+        <div class="tab">Trends</div>
+        <div class="tab on">Next Game<span class="dot"></span></div>
+      </div>
+      <div class="pad">
+        <div class="flexline" style="margin-bottom:14px">
+          <h3 style="font-size:15px">@ ORL</h3>
+          <span class="sub">Thu, Jan 8 · in 2 days</span>
+          <span class="spacer"></span>
+          <span class="seg"><span class="on">Whole</span><span>Decimal</span></span>
+        </div>
+        <div class="slider" style="margin-bottom:14px">
+          <span class="lab">Minutes</span>
+          <input type="range" min="0" max="48" value="31" />
+          <span class="val">31</span>
+          <span class="ghostbtn">↺ reset</span>
+          <span class="sub spacer">his last 5 games averaged 31.4</span>
+        </div>
+        <div class="tiles">
+          <div class="tile"><div class="k">PTS</div><div class="v">14</div><div class="f">&nbsp;</div></div>
+          <div class="tile"><div class="k">REB</div><div class="v">4</div><div class="f">&nbsp;</div></div>
+          <div class="tile"><div class="k">AST</div><div class="v">4</div><div class="f">&nbsp;</div></div>
+          <div class="tile"><div class="k">3PM</div><div class="v">2</div><div class="f">&nbsp;</div></div>
+          <div class="tile"><div class="k">STL</div><div class="v">1</div><div class="f">&nbsp;</div></div>
+          <div class="tile"><div class="k">BLK</div><div class="v">1</div><div class="f">&nbsp;</div></div>
+          <div class="tile"><div class="k">FG%</div><div class="v">45%</div><div class="f">5/11</div></div>
+          <div class="tile"><div class="k">FT%</div><div class="v">89%</div><div class="f">2/2</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="flexline sub"><span>vs his season averages:</span>
+          <span>PTS <b style="color:#f87171">-2.5</b></span>
+          <span>REB <b style="color:#f87171">-0.6</b></span>
+          <span>AST <b style="color:#f87171">-1.2</b></span>
+          <span>3PM <b style="color:var(--green)">+0.0</b></span>
+          <span class="spacer">fewer minutes than his 34.1 season average</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Cost:</b> Stats and Trends can no longer be seen at the same time — one click to switch. <b>Best if</b> the page feeling clean matters more than seeing everything at once. This is the only option that actually reduces the number of blocks.</p>
+</div>
+
+<!-- ============ OPTION 3 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>3 — A row inside the Stats table</h2><span class="pill">smallest change</span></div>
+  <p class="why">Projection uses the same columns as the season line, so the comparison is free: you read down a column instead of across two boxes. No new element, no new styling vocabulary. Minutes control sits in the Stats header.</p>
+  <div class="frame">
+    <div class="card pad">
+      <div class="hero">
+        <div class="avatar">🏀</div>
+        <div style="flex:1;min-width:0">
+          <div class="name">Derrick White <span class="num">#9</span></div>
+          <div class="pos">Boston Celtics (BOS) · Guard</div>
+          <dl class="bioGrid" style="margin:0;max-width:520px">
+            <div><dt>Conference</dt><dd>East</dd></div>
+            <div><dt>Division</dt><dd>Atlantic</dd></div>
+            <div><dt>Height</dt><dd>6' 4"</dd></div>
+            <div><dt>Age</dt><dd>32</dd></div>
+            <div><dt>Nationality</dt><dd>USA</dd></div>
+            <div><dt>Games</dt><dd>77</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="card pad mt">
+      <div class="flexline" style="margin-bottom:6px"><h3>Stats</h3>
+        <span class="spacer"></span>
+        <span class="seg"><span class="on">Season</span><span>L7</span><span>L15</span><span>L30</span></span>
+        <span class="seg"><span class="on">Per Game</span><span>Totals</span></span>
+      </div>
+      <div class="flexline" style="margin:10px 0 4px">
+        <span class="lab">Projected minutes @ ORL</span>
+        <input type="range" min="0" max="48" value="31" style="max-width:180px;accent-color:var(--blue);height:3px" />
+        <span class="val">31</span>
+        <span class="ghostbtn">↺</span>
+      </div>
+      <table>
+        <tr><th class="rowlab"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FGM</th><th>FGA</th><th>FG%</th><th>FTM</th><th>FTA</th><th>FT%</th></tr>
+        <tr><td class="rowlab">Season <span style="color:var(--dim)">· 77 GP</span></td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>5.7</td><td>14.4</td><td>39.4%</td><td>2.4</td><td>2.6</td><td>90.2%</td></tr>
+        <tr><td class="rowlab">Last 15 days <span style="color:var(--dim)">· 7 GP</span></td><td>32.4</td><td>15.8</td><td>4.1</td><td>5.0</td><td>1.0</td><td>1.1</td><td>2.6</td><td>5.4</td><td>13.9</td><td>38.8%</td><td>2.2</td><td>2.5</td><td>88.0%</td></tr>
+        <tr class="proj"><td class="rowlab"><b>Next</b> · @ ORL, Thu</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td><td>4.7</td><td>10.9</td><td>42.8%</td><td>1.7</td><td>1.9</td><td>89.3%</td></tr>
+      </table>
+    </div>
+
+    <div class="card pad mt">
+      <div class="flexline" style="margin-bottom:12px"><h3>Trends</h3><span class="spacer"></span>
+        <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span></div>
+      <div class="chart"><svg viewBox="0 0 600 96" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,52 25,34 50,66 75,28 100,74 125,40 150,20 175,58 200,36 225,70 250,30 275,48 300,24 325,62 350,38 375,26 400,56 425,32 450,68 475,42 500,22 525,50 550,36 575,60 600,44"/></svg></div>
+    </div>
+  </div>
+  <p class="verdict"><b>Cost:</b> the table gets wide — on mobile the projection row scrolls sideways like the rest of the table. <b>Best if</b> what you actually want is "is tonight above or below his normal?".</p>
+</div>
+
+<!-- ============ OPTION 4 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>4 — Two columns: identity left, analysis right</h2><span class="pill">biggest restructure</span></div>
+  <p class="why">The real problem is that everything is full-width and stacked, so the page reads as a queue of boxes. Splitting it gives the projection a permanent home in a narrow left rail under the bio — visible while you scroll the charts on the right. Collapses to today's single column on mobile.</p>
+  <div class="frame">
+    <div class="cols">
+      <div>
+        <div class="card pad" style="text-align:center">
+          <div class="avatar" style="margin:0 auto 10px;width:104px;height:104px">🏀</div>
+          <div class="name" style="font-size:22px">Derrick White <span class="num" style="font-size:15px">#9</span></div>
+          <div class="pos" style="margin-bottom:12px">Boston Celtics (BOS) · Guard</div>
+          <div style="text-align:left">
+            <div class="kv"><span>Conference</span><b>East</b></div>
+            <div class="kv"><span>Division</span><b>Atlantic</b></div>
+            <div class="kv"><span>Height</span><b>6' 4"</b></div>
+            <div class="kv"><span>Age</span><b>32</b></div>
+            <div class="kv"><span>Nationality</span><b>USA</b></div>
+          </div>
+        </div>
+
+        <div class="card pad mt" style="border-color:#1d4ed8">
+          <div class="flexline" style="margin-bottom:2px">
+            <h3 style="font-size:14px">Next game</h3>
+            <span class="spacer sub">Thu, in 2 days</span>
+          </div>
+          <div class="sub" style="margin-bottom:10px">@ Orlando Magic</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px">
+            <div class="tile"><div class="k">PTS</div><div class="v">14</div></div>
+            <div class="tile"><div class="k">REB</div><div class="v">4</div></div>
+            <div class="tile"><div class="k">AST</div><div class="v">4</div></div>
+            <div class="tile"><div class="k">3PM</div><div class="v">2</div></div>
+            <div class="tile"><div class="k">STL</div><div class="v">1</div></div>
+            <div class="tile"><div class="k">BLK</div><div class="v">1</div></div>
+            <div class="tile"><div class="k">FG%</div><div class="v" style="font-size:14px">45%</div><div class="f">5/11</div></div>
+            <div class="tile"><div class="k">FT%</div><div class="v" style="font-size:14px">89%</div><div class="f">2/2</div></div>
+            <div class="tile" style="display:flex;align-items:center;justify-content:center"><span class="ghostbtn">↺</span></div>
+          </div>
+          <div class="slider">
+            <span class="lab">MIN</span>
+            <input type="range" min="0" max="48" value="31" />
+            <span class="val">31</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card pad">
+          <div class="flexline" style="margin-bottom:12px"><h3>Stats</h3><span class="spacer"></span>
+            <span class="seg"><span class="on">Season</span><span>L7</span><span>L15</span><span>L30</span></span></div>
+          <table>
+            <tr><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+            <tr><td>77</td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>39.4%</td><td>90.2%</td></tr>
+          </table>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:12px"><h3>Trends</h3><span class="spacer"></span>
+            <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span></div>
+          <div class="statRow" style="margin-bottom:12px">
+            <div class="statBox"><div class="k">Season</div><div class="v">34.1</div><div class="n">77 games</div></div>
+            <div class="statBox"><div class="k">Last 15d</div><div class="v">32.4</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Δ vs season</div><div class="v">-1.6</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Start</div><div class="v">03/28</div><div class="n">7 games</div></div>
+          </div>
+          <div class="chart"><svg viewBox="0 0 600 96" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,52 25,34 50,66 75,28 100,74 125,40 150,20 175,58 200,36 225,70 250,30 275,48 300,24 325,62 350,38 375,26 400,56 425,32 450,68 475,42 500,22 525,50 550,36 575,60 600,44"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Cost:</b> touches every part of the player page, not just the projection — the largest diff of the four. <b>Best if</b> your real complaint is the page, not the card.</p>
+</div>
+
+</body>
+</html>

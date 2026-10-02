@@ -1,0 +1,268 @@
+{
+  "title": {
+    "kicker": "FANTASY LEAGUE INFO",
+    "line1": "What we built",
+    "line2": "over the offseason",
+    "sub": "Eight new things — trends, projections, a player page, and games."
+  },
+  "agenda": {
+    "title": "What's new",
+    "sub": "All of it is already live.",
+    "items": [
+      [
+        "New navbar",
+        "Where everything sits"
+      ],
+      [
+        "Trends",
+        "Who just changed role"
+      ],
+      [
+        "Player Rankings",
+        "8-cat z-scores, your weights"
+      ],
+      [
+        "Projections",
+        "A line for tonight's games"
+      ],
+      [
+        "Matchup Quality",
+        "How they defend each cat"
+      ],
+      [
+        "Player Page",
+        "One page per player"
+      ],
+      [
+        "Slot usage",
+        "Games left in every slot"
+      ],
+      [
+        "Custom ranges",
+        "Any window you want"
+      ],
+      [
+        "Minigames",
+        "Four games, four leaderboards"
+      ],
+      [
+        "Global search",
+        "Ctrl+K to jump anywhere"
+      ]
+    ]
+  },
+  "slides": [
+    {
+      "feature": "New Navbar",
+      "sub": "Where everything sits now",
+      "bullets": [
+        "Six menus: League, Players, Insights, Tools, Minigames, NBA",
+        "Trends, Projections and Analytics live under Insights",
+        "Search sits on the right — or hit Ctrl + K"
+      ],
+      "image": "01-navbar.png"
+    },
+    {
+      "bullets": [
+        "Biggest minutes swings vs season average",
+        "Owner column: free agent, or whose roster",
+        "Window: 7d / 15d / 30d, or any custom range",
+        "Filter by position, team, minimum games"
+      ],
+      "image": "10-trends-minutes.png",
+      "feature": "Trends",
+      "sub": "Who just got more minutes",
+      "step": "1 / 4"
+    },
+    {
+      "bullets": [
+        "Minutes in every game this season",
+        "Shaded band = the recency window",
+        "Dashed line = season average",
+        "Same charts sit on each player's page"
+      ],
+      "image": "13-trends-minutes-expanded.png",
+      "feature": "Trends",
+      "sub": "Click a row, get the chart",
+      "step": "2 / 4"
+    },
+    {
+      "bullets": [
+        "Usage% line with minutes as bars",
+        "Role = minutes and usage moved together",
+        "Usage = same minutes, more of the offense",
+        "Catches breakouts before the box scores"
+      ],
+      "image": "14-trends-usage-expanded.png",
+      "feature": "Trends",
+      "sub": "Usage and role changes",
+      "step": "3 / 4"
+    },
+    {
+      "bullets": [
+        "Hot and cold streaks vs his own baseline",
+        "Baseline: last season, or prior two",
+        "“If it normalizes” = makes/game you'd lose",
+        "Season mode, or just the recent window"
+      ],
+      "image": "15-trends-shooting-expanded.png",
+      "feature": "Trends",
+      "sub": "Shooting due to regress",
+      "step": "4 / 4"
+    },
+    {
+      "bullets": [
+        "Every player ranked, best value first",
+        "8-cat z-scores over any date range",
+        "Slide the weights to match your build",
+        "Punt a category with one click"
+      ],
+      "image": "20-player-rankings.png",
+      "feature": "Player Rankings",
+      "sub": "The whole pool, ranked by 8-cat value"
+    },
+    {
+      "bullets": [
+        "Projected stat line for the whole slate",
+        "Drag minutes, the projection updates",
+        "Green dot = enough recent games to trust",
+        "Also on player pages, players and roster tables"
+      ],
+      "image": "21-projections.png",
+      "feature": "Projections",
+      "sub": "A line for every player tonight"
+    },
+    {
+      "bullets": [
+        "Tonight's opponent, right in the table",
+        "Badge = best category to attack, for him",
+        "Same column on the team roster page"
+      ],
+      "image": "02-players.png",
+      "feature": "Matchup Quality",
+      "sub": "Who your player draws tonight",
+      "step": "1 / 2"
+    },
+    {
+      "bullets": [
+        "Opponent's defensive rank in all 7 cats",
+        "Green = soft matchup, red = avoid",
+        "Pace shown against league average",
+        "Tonight's projection sits underneath"
+      ],
+      "image": "03-players-matchup-expanded.png",
+      "feature": "Matchup Quality",
+      "sub": "Open the row for the detail",
+      "step": "2 / 2"
+    },
+    {
+      "bullets": [
+        "Rate: games used, and how far off NBA pace",
+        "Max: the most that slot can still reach",
+        "Est.: where you finish if the pace holds",
+        "Replaces the old slots view"
+      ],
+      "image": "50-team-slots.png",
+      "feature": "Slot Usage",
+      "sub": "Games left in every lineup slot"
+    },
+    {
+      "bullets": [
+        "Bio, team, and who rosters him",
+        "Season · L7 · L15 · L30 · custom range",
+        "Linked from every table and from search"
+      ],
+      "image": "40-player-page.png",
+      "feature": "Player Page",
+      "sub": "One page per player",
+      "step": "1 / 2"
+    },
+    {
+      "bullets": [
+        "Minutes, usage and shooting charts",
+        "Same trend data, scoped to one player",
+        "Next-game projection at the bottom"
+      ],
+      "image": "41-player-page-trends.png",
+      "feature": "Player Page",
+      "sub": "Charts and tonight, together",
+      "step": "2 / 2"
+    },
+    {
+      "bullets": [
+        "Pick any start and end date",
+        "Players, teams, player pages and trends",
+        "Answers “since the trade” questions"
+      ],
+      "image": "04-players-custom-range.png",
+      "feature": "Custom Date Ranges",
+      "sub": "Any window, not just 7 / 15 / 30"
+    },
+    {
+      "bullets": [
+        "Players, fantasy teams, NBA teams, pages",
+        "Arrows to move, Enter to open",
+        "Free agents and injured flagged inline"
+      ],
+      "image": "60-global-search.png",
+      "feature": "Global Search",
+      "sub": "Ctrl + K from anywhere"
+    },
+    {
+      "feature": "Minigames",
+      "sub": "Four NBA guessing games",
+      "step": "1 / 3",
+      "bullets": [
+        "Hangman, Who He Play For, Who Am I, Now You See Me",
+        "Each game keeps its own top-10 streak board",
+        "Timed rounds on two of them — 30s and 60s"
+      ],
+      "image": "30-minigames-hub.png"
+    }
+  ],
+  "minigames1": {
+    "feature": "Minigames",
+    "sub": "Hangman and Who He Play For",
+    "step": "2 / 3",
+    "images": [
+      "33-minigame-hangman.png",
+      "34-minigame-who-he-play-for.png"
+    ],
+    "labels": [
+      "Hangman — guess the name, build a streak.",
+      "Who He Play For — pick his team, 30s a round."
+    ],
+    "footer": "Leaderboards are shared across the league."
+  },
+  "minigames2": {
+    "feature": "Minigames",
+    "sub": "Who Am I and Now You See Me",
+    "step": "3 / 3",
+    "images": [
+      "31-minigame-who-am-i.png",
+      "32-minigame-now-you-see-me.png"
+    ],
+    "labels": [
+      "Who Am I — Poeltl-style clues, eight guesses.",
+      "Now You See Me — name him from the photo, 60s."
+    ],
+    "footer": "Hints cost you a place on the board."
+  },
+  "mobile": {
+    "bullets": [
+      "Built for a 390px screen, not shrunk",
+      "Tables scroll with the player column pinned",
+      "Charts, filters and pickers all reflow"
+    ],
+    "images": [
+      "70-mobile-trends.png",
+      "71-mobile-player-page.png"
+    ],
+    "feature": "Mobile",
+    "sub": "All of it works on your phone"
+  },
+  "closing": {
+    "title": "Go break it",
+    "url": "fantasyleagueinfo.onrender.com"
+  }
+}

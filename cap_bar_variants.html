@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slot Cap Bar — Variants</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --used:#2563eb; --usedsoft:rgba(37,99,235,.16);
+  --gone:#fecaca; --gone-ink:#b91c1c;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --used:#60a5fa; --usedsoft:rgba(96,165,250,.18);
+  --gone:#450a0a; --gone-ink:#fca5a5;
+  --ok:#4ade80; --ok-bg:#052e16; --warn:#fbbf24; --warn-bg:#451a03; --bad:#f87171; --bad-bg:#450a0a;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1);padding:18px 12px 48px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:16px;line-height:1.6}
+h2{font-size:15px;font-weight:800;margin-bottom:2px}
+.vhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.verdict{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.verdict.ok{background:var(--ok-bg);color:var(--ok)}
+.verdict.warn{background:var(--warn-bg);color:var(--warn)}
+.verdict.bad{background:var(--bad-bg);color:var(--bad)}
+.why{font-size:11.5px;color:var(--ink3);line-height:1.55;margin-top:10px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:16px}
+.split{display:grid;grid-template-columns:1fr 391px;gap:14px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.pane{border:1px dashed var(--border);border-radius:10px;padding:10px}
+.pane .lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+.mob{width:375px;max-width:100%}
+button.theme{position:fixed;top:12px;right:12px;border:1px solid var(--border);background:var(--card);border-radius:8px;font-size:15px;cursor:pointer;padding:6px 9px;z-index:9}
+
+/* shared bar bits */
+.track{position:relative;height:15px;border-radius:8px;background:var(--chip);overflow:hidden}
+.trackTall{height:20px}
+.fill{position:absolute;left:0;top:0;bottom:0;background:var(--used)}
+.gap{position:absolute;top:0;bottom:0;background:var(--usedsoft)}
+.dead{position:absolute;top:0;bottom:0;right:0;background:var(--gone);opacity:.75}
+.tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink1)}
+.num{font-variant-numeric:tabular-nums}
+
+/* A */
+.A .row{padding:7px 0;border-bottom:1px solid var(--border)}
+.A .row:last-child{border-bottom:none}
+.A .top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.A .slot{font-weight:800;font-size:12.5px;width:34px}
+.A .track{flex:1}
+.A .cap{font-size:11px;color:var(--ink3);white-space:nowrap}
+.A .nums{display:flex;flex-wrap:wrap;gap:4px;padding-left:42px}
+.A .n{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--chip);color:var(--ink2)}
+.A .n b{font-variant-numeric:tabular-nums}
+.A .n.used{background:var(--usedsoft);color:var(--used)}
+.A .n.est.ok{background:var(--ok-bg);color:var(--ok)}
+.A .n.est.warn{background:var(--warn-bg);color:var(--warn)}
+.A .n.est.bad{background:var(--bad-bg);color:var(--bad)}
+.A .n.gone{background:var(--gone);color:var(--gone-ink)}
+
+/* B */
+.B table{width:100%;border-collapse:collapse;font-size:11.5px}
+.B th,.B td{padding:5px 4px;border-bottom:1px solid var(--border);text-align:right}
+.B th{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);font-weight:800}
+.B td.s{text-align:left;font-weight:800;font-size:12.5px;width:32px}
+.B td.bar{width:auto;min-width:70px}
+.B td.n{font-variant-numeric:tabular-nums;font-weight:700;width:34px}
+.B .goneTxt{color:var(--gone-ink)}
+
+/* C */
+.C table{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+.C th,.C td{border:1px solid var(--border);padding:5px 3px;text-align:center;position:relative;overflow:hidden}
+.C th{background:var(--chip);color:var(--ink2);font-size:10px;font-weight:800}
+.C td.rl{background:var(--chip);font-size:10px;font-weight:800;color:var(--ink2);text-align:left;padding-left:6px}
+.C .cellfill{position:absolute;left:0;top:0;bottom:0;background:var(--usedsoft)}
+.C .cellval{position:relative;font-variant-numeric:tabular-nums;font-weight:700}
+.C .cellval small{font-weight:400;opacity:.55}
+
+/* D */
+.D .cols{display:flex;gap:5px;align-items:flex-end}
+.D .col{flex:1;min-width:0;text-align:center}
+.D .vt{height:120px;position:relative;background:var(--chip);border-radius:6px;overflow:hidden}
+.D .vfill{position:absolute;left:0;right:0;bottom:0;background:var(--used)}
+.D .vdead{position:absolute;left:0;right:0;top:0;background:var(--gone);opacity:.75}
+.D .vtick{position:absolute;left:-1px;right:-1px;height:2px;background:var(--ink1)}
+.D .sl{font-size:11px;font-weight:800;margin-top:4px}
+.D .vn{font-size:10px;font-variant-numeric:tabular-nums;color:var(--ink2);line-height:1.45}
+.D .vn .e{font-weight:800;color:var(--ink1)}
+.D .vn .g{color:var(--gone-ink);font-weight:800}
+
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--ink2);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.kv{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.kv span{font-size:11px;background:var(--chip);border-radius:6px;padding:3px 8px;color:var(--ink2)}
+.kv b{color:var(--ink1)}
+</style>
+</head>
+<body>
+<button class="theme" id="theme">🌙</button>
+<div class="wrap">
+  <h1>Slot cap bar — four ways to keep the numbers readable</h1>
+  <div class="sub">
+    Same data every time: <b>used</b>, <b>max still reachable</b>, <b>projected</b>, <b>cap</b> — the three numbers <code>SlotUsageTable</code> already computes.
+    Every number is printed. Nothing is hover-only. Each variant is shown at desktop width and at 375px.
+  </div>
+  <div class="kv">
+    <span>Scenario: <b>day 134 of 156</b></span><span><b>22</b> game days left</span><span>UTIL gains up to <b>3</b>/day</span>
+    <span>Total used <b>664</b>/822</span><span>Projected <b>773</b></span>
+  </div>
+
+  <!-- A -->
+  <div class="card">
+    <div class="vhead"><div><h2>A · Bar + printed chip row</h2><div class="why" style="margin:0">One bar, numbers as chips underneath.</div></div><span class="verdict ok">recommended</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab">Desktop</div><div class="A" id="A1"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="A" id="A2"></div></div></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--used)"></i>used</span>
+      <span><i style="background:var(--usedsoft)"></i>projected gain</span>
+      <span><i style="background:var(--gone)"></i>unreachable — cap you cannot fill</span>
+      <span><i style="background:var(--ink1);width:3px;height:12px;border-radius:0"></i>projected finish</span>
+    </div>
+    <div class="why"><b>Why it wins:</b> reads identically at both widths — chips wrap instead of shrinking. Two lines per slot × 8 = 16 lines, still shorter than the current 3-row table on mobile. The unreachable red block is the one thing you actually act on and it is impossible to miss.</div>
+  </div>
+
+  <!-- B -->
+  <div class="card">
+    <div class="vhead"><div><h2>B · Compact table, bar as one column</h2><div class="why" style="margin:0">Numbers in real columns; bar is decoration.</div></div><span class="verdict warn">good on desktop, tight on mobile</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab">Desktop</div><div class="B" id="B1"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="B" id="B2"></div></div></div>
+    </div>
+    <div class="why"><b>Trade-off:</b> best number-scanning of the four — aligned columns beat chips when comparing slots. But at 375px the bar column is squeezed to ~70px and stops communicating proportion, so you are really just reading a table. Viable if you drop the bar below <code>sm</code>.</div>
+  </div>
+
+  <!-- C -->
+  <div class="card">
+    <div class="vhead"><div><h2>C · Today's table, bar as cell background</h2><div class="why" style="margin:0">Smallest possible change to <code>SlotUsageTable.tsx</code>.</div></div><span class="verdict warn">cheapest, weakest</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab">Desktop</div><div class="C" id="C1"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="C" id="C2"></div></div></div>
+    </div>
+    <div class="why"><b>Trade-off:</b> keeps every number and the layout you already ship — the fill just replaces the tone class. But a fill inside an 8-column grid is 40px wide on mobile; proportion is unreadable, so it buys almost nothing over the current colour coding. Pick this only if the goal is "don't touch the layout".</div>
+  </div>
+
+  <!-- D -->
+  <div class="card">
+    <div class="vhead"><div><h2>D · Vertical columns</h2><div class="why" style="margin:0">Eight columns, numbers stacked beneath.</div></div><span class="verdict bad">fails at 375px</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab">Desktop</div><div class="D" id="D1"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="D" id="D2"></div></div></div>
+    </div>
+    <div class="why"><b>Why it fails:</b> most striking on desktop — the C column visibly falls short of everything else. But 8 columns in 375px is ~40px each, so the three numbers stack into an unreadable pile and UTIL's 248 cap makes every other column look full at a glance. Would need horizontal scroll, which defeats the point of a summary.</div>
+  </div>
+
+  <div class="card">
+    <div class="why" style="font-size:12px;color:var(--ink2)">
+      <b>One thing all four fix.</b> The current table shows <code>Max</code> as a number (<code>74/82</code>) — you have to subtract to notice C is already dead. Every variant here shows it as territory the bar can never enter, so "8 games of C cap are gone" is visual, not arithmetic.<br><br>
+      <b>Note on UTIL.</b> Its cap is 248 and it gains up to 3/day, so on a shared axis it always looks proportionally similar to the rest. Each bar is scaled to its own cap — comparison across slots is by <i>fill fraction</i>, not width. Worth an InfoTip.
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS_LEFT = 22;
+const S = [
+  {n:'PG',   cap:82,  used:68, est:79},
+  {n:'SG',   cap:82,  used:71, est:82},
+  {n:'SF',   cap:82,  used:66, est:77},
+  {n:'PF',   cap:82,  used:69, est:80},
+  {n:'C',    cap:82,  used:52, est:62},
+  {n:'G',    cap:82,  used:70, est:81},
+  {n:'F',    cap:82,  used:58, est:68},
+  {n:'UTIL', cap:248, used:210,est:244},
+].map(s=>{
+  const perDay = s.n==='UTIL' ? 3 : 1;
+  s.max = Math.min(s.cap, s.used + DAYS_LEFT*perDay);
+  s.gone = s.cap - s.max;
+  s.tone = s.est >= s.cap-1 ? 'ok' : s.est >= s.cap*0.93 ? 'warn' : 'bad';
+  return s;
+});
+const pct = (v,cap)=> (v/cap*100).toFixed(1)+'%';
+
+function renderA(el){
+  el.innerHTML = S.map(s=>`
+    <div class="row">
+      <div class="top">
+        <span class="slot">${s.n}</span>
+        <span class="track">
+          <span class="fill" style="width:${pct(s.used,s.cap)}"></span>
+          <span class="gap" style="left:${pct(s.used,s.cap)};width:${pct(Math.max(0,s.est-s.used),s.cap)}"></span>
+          ${s.gone>0?`<span class="dead" style="width:${pct(s.gone,s.cap)}"></span>`:''}
+          <span class="tick" style="left:${pct(s.est,s.cap)}"></span>
+        </span>
+        <span class="cap num">/${s.cap}</span>
+      </div>
+      <div class="nums">
+        <span class="n used">used <b>${s.used}</b></span>
+        <span class="n est ${s.tone}">est <b>${s.est}</b></span>
+        <span class="n ${s.gone>0?'gone':''}">max <b>${s.max}</b>${s.gone>0?` · −${s.gone} gone`:''}</span>
+      </div>
+    </div>`).join('');
+}
+
+function renderB(el){
+  el.innerHTML = `<table>
+    <thead><tr><th style="text-align:left">Slot</th><th style="text-align:left">Progress</th><th>Used</th><th>Est</th><th>Max</th><th>Cap</th></tr></thead>
+    <tbody>${S.map(s=>`<tr>
+      <td class="s">${s.n}</td>
+      <td class="bar"><span class="track" style="display:block">
+        <span class="fill" style="width:${pct(s.used,s.cap)}"></span>
+        <span class="gap" style="left:${pct(s.used,s.cap)};width:${pct(Math.max(0,s.est-s.used),s.cap)}"></span>
+        ${s.gone>0?`<span class="dead" style="width:${pct(s.gone,s.cap)}"></span>`:''}
+        <span class="tick" style="left:${pct(s.est,s.cap)}"></span>
+      </span></td>
+      <td class="n">${s.used}</td>
+      <td class="n" style="color:var(--${s.tone==='ok'?'ok':s.tone==='warn'?'warn':'bad'})">${s.est}</td>
+      <td class="n ${s.gone>0?'goneTxt':''}">${s.max}</td>
+      <td class="n" style="color:var(--ink3)">${s.cap}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderC(el){
+  const rows = [['Used','used'],['Max','max'],['Est.','est']];
+  el.innerHTML = `<table>
+    <thead><tr><th style="width:38px"></th>${S.map(s=>`<th>${s.n}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(([lab,key])=>`<tr><td class="rl">${lab}</td>${S.map(s=>`
+      <td><span class="cellfill" style="width:${pct(s[key],s.cap)}"></span>
+      <span class="cellval" style="${key==='max'&&s.gone>0?'color:var(--gone-ink)':''}">${s[key]}<small>/${s.cap}</small></span></td>`).join('')}</tr>`).join('')}
+    </tbody></table>`;
+}
+
+function renderD(el){
+  el.innerHTML = `<div class="cols">${S.map(s=>`
+    <div class="col">
+      <div class="vt">
+        ${s.gone>0?`<span class="vdead" style="height:${pct(s.gone,s.cap)}"></span>`:''}
+        <span class="vfill" style="height:${pct(s.used,s.cap)}"></span>
+        <span class="vtick" style="bottom:${pct(s.est,s.cap)}"></span>
+      </div>
+      <div class="sl">${s.n}</div>
+      <div class="vn">${s.used}<br><span class="e">${s.est}</span><br><span class="${s.gone>0?'g':''}">${s.max}</span><br><span style="color:var(--ink3)">${s.cap}</span></div>
+    </div>`).join('')}</div>`;
+}
+
+renderA(document.getElementById('A1')); renderA(document.getElementById('A2'));
+renderB(document.getElementById('B1')); renderB(document.getElementById('B2'));
+renderC(document.getElementById('C1')); renderC(document.getElementById('C2'));
+renderD(document.getElementById('D1')); renderD(document.getElementById('D2'));
+
+document.getElementById('theme').onclick=()=>{
+  document.body.classList.toggle('dark');
+  document.getElementById('theme').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+};
+</script>
+</body>
+</html>

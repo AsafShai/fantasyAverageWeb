@@ -1,0 +1,526 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Draft ADP + Rankings — interactive mockup</title>
+<style>
+  :root{
+    --bg:#f9fafb; --card:#fff; --ink:#111827; --ink2:#374151; --muted:#6b7280;
+    --muted2:#9ca3af; --line:#e5e7eb; --line2:#f3f4f6; --head:#f9fafb;
+    --blue:#2563eb; --blue-t:#1d4ed8; --em:#059669; --em2:#047857;
+    --ro:#e11d48; --ro2:#be123c;
+  }
+  body.dark{
+    --bg:#111827; --card:#1f2937; --ink:#f3f4f6; --ink2:#e5e7eb; --muted:#9ca3af;
+    --muted2:#6b7280; --line:#374151; --line2:#1f2937; --head:#1f2937;
+    --em:#34d399; --em2:#6ee7b7; --ro:#fb7185; --ro2:#fda4af;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:20px 0 60px}
+  .wrap{max-width:1536px;margin:0 auto;padding:0 16px}
+  @media(min-width:640px){.wrap{padding:0 24px}}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  body.dark a{color:#93c5fd}
+
+  .card{background:var(--card);border-radius:8px;border:1px solid var(--line);
+    box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1)}
+  .p4{padding:16px}
+  .mb4{margin-bottom:16px}
+  .row{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+  .row.g2{gap:8px}
+  .ml-auto{margin-left:auto}
+
+  h1{font-size:24px;font-weight:700;margin:0;color:var(--ink)}
+  .desc{font-size:14px;color:var(--muted);margin:4px 0 0;max-width:78ch}
+  .upd{font-size:12px;color:var(--muted2);margin:4px 0 0}
+  .lbl{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+  .seg button{border:0;background:transparent;padding:7px 16px;font:600 13px inherit;
+    color:var(--muted);cursor:pointer}
+  .seg button.on{background:var(--blue);color:#fff}
+
+  input[type=checkbox]{width:15px;height:15px;accent-color:var(--blue);cursor:pointer}
+  .chk{display:inline-flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;color:var(--ink2)}
+  .txt,.sel{border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:6px;padding:6px 12px;font:14px inherit}
+  .txt{width:190px}
+  .posbtn{padding:4px 9px;border-radius:4px;font:600 12px inherit;border:1px solid var(--line);
+    background:transparent;color:var(--ink2);cursor:pointer}
+  .posbtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .btn-primary{background:var(--blue);color:#fff;font-weight:500;padding:6px 12px;
+    border:0;border-radius:6px;cursor:pointer;font-size:12px}
+  .btn-primary:hover{background:var(--blue-t)}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink2);
+    padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600}
+
+  .scroll{overflow-x:auto;border-radius:8px}
+  table{min-width:100%;border-collapse:collapse}
+  .table-header{background:var(--head);padding:12px 24px;text-align:left;font-size:12px;
+    font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;
+    border-bottom:1px solid var(--line);white-space:nowrap}
+  .table-header.r{text-align:right}
+  .table-header.s{cursor:pointer;user-select:none}
+  .table-header.s:hover{color:var(--ink)}
+  .table-cell{padding:12px 24px;white-space:nowrap;font-size:14px;color:var(--ink)}
+  .table-cell.r{text-align:right}
+  tbody tr{border-bottom:1px solid var(--line2)}
+  tbody tr:hover{background:rgba(0,0,0,.02)}
+  body.dark tbody tr:hover{background:rgba(255,255,255,.03)}
+  .sticky{position:sticky;left:0;z-index:10;background:var(--card)}
+  th.sticky{background:var(--head)}
+  .sub{font-size:10px;color:var(--muted2);font-weight:400}
+  .pname{font-weight:500}
+  .pmeta{font-size:11px;color:var(--muted)}
+  .em{color:var(--em)} .em.b{color:var(--em2);font-weight:600}
+  .ro{color:var(--ro)} .ro.b{color:var(--ro2);font-weight:600}
+  .dash{color:var(--muted2)}
+  .bold{font-weight:600}
+  .excl{opacity:.45}
+
+  .pagebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 24px;
+    border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+
+  /* annotation chrome — not part of the app */
+  .anno{border-left:3px solid #7c3aed;background:#f5f3ff;color:#4c1d95;padding:9px 13px;
+    border-radius:0 6px 6px 0;font-size:12.5px;margin:10px 0;max-width:100ch}
+  body.dark .anno{background:#2e1065;color:#ddd6fe}
+  .anno b{color:#6d28d9} body.dark .anno b{color:#c4b5fd}
+  .anno.warn{border-color:#d97706;background:#fffbeb;color:#78350f}
+  body.dark .anno.warn{background:#451a03;color:#fde68a}
+  .anno.warn b{color:#b45309} body.dark .anno.warn b{color:#fcd34d}
+  .secttl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+    margin:28px 0 8px;padding-top:14px;border-top:2px solid var(--line)}
+  .topbar{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <span class="lbl">Interactive mockup</span>
+    <button class="btn-ghost" onclick="document.body.classList.toggle('dark')">Toggle dark</button>
+    <span class="pmeta">Toggle sites, switch views, sort columns, filter — Blend recalculates live.</span>
+  </div>
+
+  <!-- ── header ── -->
+  <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
+    <div class="row" style="align-items:flex-end">
+      <div style="flex:1;min-width:280px">
+        <h1 id="ttl">Fantasy Basketball ADP</h1>
+        <p class="desc" id="desc"></p>
+        <p class="upd" id="upd"></p>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <div class="seg">
+          <button id="vADP" class="on" onclick="setView('adp')">ADP</button>
+          <button id="vRNK" onclick="setView('rank')">Rankings</button>
+        </div>
+        <a href="#">Open draft board</a>
+        <a href="#">Open pre-draft rankings</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── controls card ── -->
+  <div class="card p4 mb4">
+    <div class="row" style="margin-bottom:12px">
+      <span class="lbl">Sites</span>
+      <div id="sites" class="row g2"></div>
+    </div>
+    <div class="row g2">
+      <input class="txt" id="q" placeholder="Search player…" oninput="render()">
+      <select class="sel" id="team" onchange="render()"><option value="">All teams</option></select>
+      <span id="pos" class="row g2"></span>
+      <button class="btn-primary ml-auto" onclick="alert('CSV columns unchanged: blend, blend_rank, <site>_adp, <site>_rank')">Export CSV</button>
+    </div>
+  </div>
+
+  <!-- ── table ── -->
+  <div class="card">
+    <div class="scroll">
+      <table>
+        <thead><tr id="head"></tr></thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+    <div class="pagebar"><span id="count"></span><span class="ml-auto" id="fresh"></span></div>
+  </div>
+
+  <!-- ══ PRE-DRAFT RANKINGS ══ -->
+  <div class="secttl">Pre-Draft Rankings — same page, new source selector</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
+    <div class="row" style="align-items:flex-end">
+      <div style="flex:1;min-width:280px">
+        <h1>Pre-Draft Rankings</h1>
+        <p class="desc">Drag the handle to reorder. Starts in <span id="srcName">Blend ADP</span> order.
+          Edits stay on this page until you save.</p>
+      </div>
+      <div class="seg">
+        <button id="sADP" class="on" onclick="setSrc('adp')">Blend ADP</button>
+        <button id="sRNK" onclick="setSrc('rank')">Blend Rank</button>
+      </div>
+    </div>
+  </div>
+  <div class="card p4 mb4">
+    <div class="row" style="margin-bottom:12px">
+      <span class="lbl">Blend sites</span>
+      <div id="pdSites" class="row g2"></div>
+    </div>
+    <div class="row g2">
+      <button class="btn-primary" id="saveBtn" disabled style="opacity:.45">Save rankings</button>
+      <button class="btn-ghost" onclick="setSrc(pdSrc==='adp'?'rank':'adp')">Undo</button>
+      <button class="btn-ghost">Export CSV</button>
+      <button class="btn-ghost">Import CSV</button>
+      <button class="btn-ghost">Apply on ESPN</button>
+      <span id="dirty" class="pmeta"></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th class="table-header r" style="width:48px">Rank</th>
+          <th class="table-header sticky">Player</th>
+          <th class="table-header r">PPG</th><th class="table-header r">RPG</th><th class="table-header r">APG</th>
+          <th class="table-header r">Blend rank</th>
+          <th class="table-header r">Blend ADP</th>
+          <th class="table-header r" id="pdDeltaHead">Δ vs Blend Rank</th>
+        </tr></thead>
+        <tbody id="pdBody"></tbody>
+      </table>
+    </div>
+    <div class="pagebar"><span id="pdNote"></span></div>
+  </div>
+  <div class="anno"><b>Only the source selector is new.</b> The board still merges into the saved
+  order, still marks dirty, still saves deliberately — switching source is a normal edit,
+  never a silent reorder of a saved board.</div>
+  <div class="anno warn"><b>Backend gap:</b> this board is fed by <code>/adp/index</code>, whose
+  <code>AdpIndexPlayer</code> carries only <code>blend</code> / <code>blend_rank</code>.
+  Rankings order requires adding <code>ranking_blend</code> to the index payload too — easy to
+  miss, since the index is a separate slimmed model from <code>AdpPlayer</code>.</div>
+
+  <!-- ══ DRAFT BOARD ══ -->
+  <div class="secttl">Draft Board — inherits whichever metric is active</div>
+  <div class="row" style="align-items:flex-end;margin-bottom:12px">
+    <div style="flex:1;min-width:260px">
+      <h1>Draft Board</h1>
+      <p class="desc">Top <b id="dbN">36</b> players laid into a snake draft, ordered by
+        <span id="dbSrcName">Blend ADP</span>.</p>
+    </div>
+    <div class="seg">
+      <button id="dADP" class="on" onclick="setDb('adp')">Blend ADP</button>
+      <button id="dRNK" onclick="setDb('rank')">Blend Rank</button>
+    </div>
+  </div>
+  <div class="card p4 mb4">
+    <div class="row" style="margin-bottom:12px">
+      <span class="lbl">Blend sites</span>
+      <div id="dbSites" class="row g2"></div>
+    </div>
+    <div id="board" style="display:grid;gap:10px"></div>
+  </div>
+  <div class="anno"><b>ADP is arguably the right default here.</b> A draft board predicts
+  <em>where players actually go</em> — that is what ADP measures. Rankings answer a different
+  question (where they <em>should</em> go), so offering both is useful, but the default should
+  stay ADP.</div>
+
+  <div class="secttl">What changed vs today</div>
+  <div class="anno"><b>View toggle is the only new chrome.</b> Everything else is the existing page —
+  same header, same Sites card, same sticky Player column, same per-cell <span class="sub">#rank</span> subscript.</div>
+  <div class="anno"><b>One checkbox per site, exactly as today</b> — checked shows the column and
+  counts toward Blend. To blend Yahoo + Fantrax only, uncheck ESPN. No popover, no second control.</div>
+  <div class="anno"><b>The same selection appears on all three draft pages</b> and is one piece of
+  state — change it anywhere and the other pages follow. Try it: uncheck a site above, then scroll
+  down and watch the Pre-Draft and Draft Board control and ordering change with it.</div>
+  <div class="anno"><b>Persisted to localStorage</b> via the existing <code>usePersistedState</code>
+  hook, keyed per view — so an ADP-view choice never clobbers a Rankings-view choice.</div>
+  <div class="anno"><b>Sites with no data for the active view are not rendered at all.</b>
+  Switch to Rankings: Fantrax disappears. Switch to ADP: Sleeper disappears.</div>
+  <div class="anno"><b>Single-site rows show Blend as is</b> — no minimum-site threshold.
+  Rui Hachimura is listed only by Fantrax, so his Blend is that value; the empty
+  <code>Spread</code> is what signals it was not averaged.</div>
+  <div class="anno warn"><b>CSV header is unchanged</b> — <code>blend</code>, <code>blend_rank</code>,
+  <code>&lt;site&gt;_adp</code>, <code>&lt;site&gt;_rank</code> keep their names, so the Chrome extension's
+  parser keeps working untouched. Rankings adds new fields alongside; it renames nothing.</div>
+</div>
+
+<script>
+const SITES = {
+  espn:    {label:'ESPN',    adp:true,  rank:true },
+  yahoo:   {label:'Yahoo',   adp:true,  rank:true },
+  fantrax: {label:'Fantrax', adp:true,  rank:false},
+  sleeper: {label:'Sleeper', adp:false, rank:true },
+};
+
+// Real values measured from each provider on 2026-08-24. null = provider genuinely has no value.
+const P = [
+  {n:'Nikola Jokić',            t:'DEN', p:'C',     adp:{fantrax:1.57, yahoo:5.0,  espn:1.76}, rank:{yahoo:2,  espn:2,   sleeper:2}},
+  {n:'Victor Wembanyama',       t:'SAS', p:'C',     adp:{fantrax:1.54, yahoo:2.7,  espn:2.82}, rank:{yahoo:1,  espn:4,   sleeper:1}},
+  {n:'Shai Gilgeous-Alexander', t:'OKC', p:'PG',    adp:{fantrax:3.35, yahoo:11.6, espn:3.09}, rank:{yahoo:4,  espn:2,   sleeper:4}},
+  {n:'Luka Dončić',             t:'LAL', p:'PG',    adp:{fantrax:3.73, yahoo:8.8,  espn:4.62}, rank:{yahoo:3,  espn:5,   sleeper:3}},
+  {n:'Giannis Antetokounmpo',   t:'MIA', p:'PF/C',  adp:{fantrax:null, yahoo:null, espn:5.32}, rank:{yahoo:7,  espn:3,   sleeper:7}},
+  {n:'Anthony Edwards',         t:'MIN', p:'SG/SF', adp:{fantrax:null, yahoo:32.1, espn:6.79}, rank:{yahoo:8,  espn:7,   sleeper:6}},
+  {n:'Cade Cunningham',         t:'DET', p:'PG',    adp:{fantrax:5.47, yahoo:15.6, espn:8.15}, rank:{yahoo:5,  espn:8,   sleeper:5}},
+  {n:'Jayson Tatum',            t:'BOS', p:'SF/PF', adp:{fantrax:null, yahoo:22.0, espn:11.45},rank:{yahoo:7,  espn:12,  sleeper:11}},
+  {n:'Anthony Davis',           t:'WAS', p:'PF/C',  adp:{fantrax:null, yahoo:null, espn:12.73},rank:{yahoo:12, espn:6,   sleeper:14}},
+  {n:'LeBron James',            t:'LAL', p:'SF',    adp:{fantrax:null, yahoo:null, espn:13.82},rank:{yahoo:15, espn:10,  sleeper:19}},
+  {n:'Karl-Anthony Towns',      t:'NYK', p:'C',     adp:{fantrax:null, yahoo:null, espn:14.51},rank:{yahoo:10, espn:13,  sleeper:9}},
+  {n:'Tyrese Maxey',            t:'PHI', p:'PG/SG', adp:{fantrax:null, yahoo:19.7, espn:16.46},rank:{yahoo:6,  espn:21,  sleeper:8}},
+  {n:'Alperen Şengün',          t:'HOU', p:'C',     adp:{fantrax:null, yahoo:null, espn:null}, rank:{yahoo:11, espn:14,  sleeper:10}},
+  {n:'Toumani Camara',          t:'POR', p:'SF',    adp:{fantrax:null, yahoo:null, espn:130.19},rank:{yahoo:73, espn:61,  sleeper:88}},
+  {n:'Jeremiah Fears',          t:'NOP', p:'PG',    adp:{fantrax:null, yahoo:null, espn:138.38},rank:{yahoo:140,espn:125, sleeper:151}},
+  {n:'Collin Sexton',           t:'CHA', p:'PG/SG', adp:{fantrax:null, yahoo:118.3,espn:null}, rank:{yahoo:188,espn:null,sleeper:210}},
+  {n:'Mitchell Robinson',       t:'NYK', p:'C',     adp:{fantrax:null, yahoo:122.7,espn:null}, rank:{yahoo:195,espn:null,sleeper:221}},
+  {n:'Keldon Johnson',          t:'SAS', p:'SF',    adp:{fantrax:null, yahoo:130.0,espn:null}, rank:{yahoo:204,espn:null,sleeper:243}},
+  {n:'Rui Hachimura',           t:'LAL', p:'PF',    adp:{fantrax:148.2,yahoo:null, espn:null}, rank:{yahoo:198,espn:null,sleeper:236}},
+  {n:'Chris Boucher',           t:'TOR', p:'PF',    adp:{fantrax:null, yahoo:null, espn:null}, rank:{yahoo:340,espn:322, sleeper:412}},
+  {n:'Gabe Vincent',            t:'LAL', p:'PG',    adp:{fantrax:null, yahoo:null, espn:null}, rank:{yahoo:225,espn:209, sleeper:288}},
+  {n:'Yang Hansen',             t:'POR', p:'C',     adp:{fantrax:null, yahoo:null, espn:null}, rank:{yahoo:310,espn:297, sleeper:355}},
+];
+
+let view='adp';
+// One checkbox per site, per view: checked = column shown AND counted in Blend.
+let sel={adp:{espn:1,yahoo:1,fantrax:1}, rank:{espn:1,yahoo:1,sleeper:1}};
+let sortBy='blend', sortDir='asc', posF=[];
+const POSITIONS=['PG','SG','SF','PF','C'];
+
+const cap = k => view==='adp' ? SITES[k].adp : SITES[k].rank;
+const activeSites = () => Object.keys(SITES).filter(cap);
+const shownSites  = () => activeSites().filter(k=>sel[view][k]);
+const blendSites  = () => shownSites();
+
+function metric(pl,k){ return (view==='adp'?pl.adp:pl.rank)[k] ?? null }
+
+function blendOf(pl){
+  const v = blendSites().map(k=>metric(pl,k)).filter(x=>x!=null);
+  if(!v.length) return {b:null,s:null,n:0};
+  const b = v.reduce((a,c)=>a+c,0)/v.length;
+  return {b:Math.round(b*100)/100, s:v.length>1?Math.round((Math.max(...v)-Math.min(...v))*100)/100:null, n:v.length};
+}
+
+function fmt(v){ if(v==null) return '—'; return Number.isInteger(v)?String(v):v.toFixed(view==='adp'?2:1) }
+
+function deltaClass(v,b){
+  if(v==null||b==null) return 'dash';
+  const d=v-b;
+  if(d<=-4) return 'em b'; if(d<=-1.5) return 'em';
+  if(d>=4)  return 'ro b'; if(d>=1.5) return 'ro';
+  return '';
+}
+
+function setView(v){
+  view=v;
+  document.getElementById('vADP').className = v==='adp'?'on':'';
+  document.getElementById('vRNK').className = v==='rank'?'on':'';
+  document.getElementById('ttl').textContent = v==='adp'?'Fantasy Basketball ADP':'Fantasy Basketball Rankings';
+  sortBy='blend'; sortDir='asc';
+  buildSites(); render();
+}
+
+/* One shared control, one checkbox per site — same semantics as today:
+   checked shows the column and counts toward Blend. */
+function buildSiteControl(hostId, metric, hint){
+  const host=document.getElementById(hostId); if(!host) return;
+  host.innerHTML='';
+  Object.keys(SITES).filter(k=>metric==='adp'?SITES[k].adp:SITES[k].rank).forEach(k=>{
+    const w=document.createElement('label');
+    w.className='chk';
+    w.innerHTML=`<input type="checkbox" ${sel[metric][k]?'checked':''}
+      onchange="sel['${metric}']['${k}']=this.checked;syncAll()"> ${SITES[k].label}`;
+    host.appendChild(w);
+  });
+  const h=document.createElement('span');
+  h.className='pmeta'; h.textContent=hint;
+  host.appendChild(h);
+}
+
+function buildSites(){ buildSiteControl('sites', view, 'Blend uses checked sites') }
+
+/* Selection is one shared piece of state, so a change anywhere updates every page. */
+function syncAll(){
+  buildSites();
+  buildSiteControl('pdSites', pdSrc, 'Shared with the ADP / Rankings page · saved to localStorage');
+  buildSiteControl('dbSites', dbSrc, 'Shared with the ADP / Rankings page · saved to localStorage');
+  render(); renderPd(); renderBoard();
+}
+
+function buildPos(){
+  const host=document.getElementById('pos');
+  POSITIONS.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='posbtn'; b.textContent=p;
+    b.onclick=()=>{ posF=posF.includes(p)?posF.filter(x=>x!==p):[...posF,p];
+      [...host.children].forEach(c=>c.className='posbtn'+(posF.includes(c.textContent)?' on':'')); render(); };
+    host.appendChild(b);
+  });
+  const sel=document.getElementById('team');
+  [...new Set(P.map(p=>p.t))].sort().forEach(t=>{
+    const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o);
+  });
+}
+
+function sortOn(c){ if(sortBy===c){sortDir=sortDir==='asc'?'desc':'asc'} else {sortBy=c;sortDir='asc'} render() }
+
+function render(){
+  document.getElementById('desc').textContent = view==='adp'
+    ? 'Average draft position from the sites below (fetched live), plus a Blend of the checked sites that list the player. Unchecking a site hides its column; the blend box controls whether it counts toward Blend.'
+    : 'Provider-published rankings from the sites below, plus a Blend of the checked sites that rank the player. ESPN uses its Roto list.';
+  document.getElementById('upd').textContent = view==='adp'
+    ? 'Updated 2 hours ago' : 'Updated 4 hours ago';
+  document.getElementById('fresh').textContent = shownSites()
+    .map(k=>SITES[k].label+(k==='fantrax'?' 2h':' 4h')+' ago').join(' · ');
+
+  const cols=shownSites();
+  const head=document.getElementById('head');
+  head.innerHTML = `<th class="table-header r" style="width:48px">#</th>
+    <th class="table-header sticky">Player</th>`
+    + cols.map(k=>`<th class="table-header r s" onclick="sortOn('${k}')">${SITES[k].label}${sortBy===k?(sortDir==='asc'?' ▲':' ▼'):''}</th>`).join('')
+    + `<th class="table-header r s" onclick="sortOn('blend')">Blend${sortBy==='blend'?(sortDir==='asc'?' ▲':' ▼'):''}</th>`
+    + `<th class="table-header r s" onclick="sortOn('spread')">Spread${sortBy==='spread'?(sortDir==='asc'?' ▲':' ▼'):''}</th>`;
+
+  const q=document.getElementById('q').value.trim().toLowerCase();
+  const tf=document.getElementById('team').value;
+
+  let rows=P.map(pl=>({pl,...blendOf(pl)}))
+    .filter(r=>r.b!=null || cols.some(k=>metric(r.pl,k)!=null))
+    .filter(r=>!q||r.pl.n.toLowerCase().includes(q))
+    .filter(r=>!tf||r.pl.t===tf)
+    .filter(r=>!posF.length||posF.some(p=>r.pl.p.split('/').includes(p)));
+
+  rows.sort((a,b)=>{
+    const g=r=> sortBy==='blend'?r.b : sortBy==='spread'?r.s : metric(r.pl,sortBy);
+    const x=g(a),y=g(b);
+    if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1;
+    return sortDir==='asc'?x-y:y-x;
+  });
+  rows.forEach((r,i)=>r.br=r.b==null?null:i+1);
+
+  document.getElementById('body').innerHTML = rows.map(r=>{
+    return `<tr>
+      <td class="table-cell r" style="color:var(--muted)">${r.br??'—'}</td>
+      <td class="table-cell sticky">
+        <div class="pname">${r.pl.n}</div>
+        <div class="pmeta">${r.pl.t} · ${r.pl.p}</div>
+      </td>
+      ${cols.map(k=>{
+        const v=metric(r.pl,k);
+        return `<td class="table-cell r ${deltaClass(v,r.b)}">
+          <div>${fmt(v)}</div>${v!=null?`<div class="sub">#${rankIn(k,r.pl)}</div>`:''}
+        </td>`;
+      }).join('')}
+      <td class="table-cell r bold">${fmt(r.b)}
+        ${r.br!=null?`<div class="sub">#${r.br}</div>`:''}</td>
+      <td class="table-cell r" style="color:var(--muted)">${fmt(r.s)}</td>
+    </tr>`;
+  }).join('') || `<tr><td class="table-cell" colspan="9" style="text-align:center;color:var(--muted);padding:32px">No players match these filters.</td></tr>`;
+
+  document.getElementById('count').textContent =
+    `${rows.length} players · Blend = ${blendSites().map(k=>SITES[k].label).join(' + ')||'no sites selected'}`;
+}
+
+const rankCache={};
+function rankIn(site,pl){
+  const key=view+site;
+  if(!rankCache[key]){
+    const list=P.filter(x=>metric(x,site)!=null).sort((a,b)=>metric(a,site)-metric(b,site));
+    rankCache[key]=new Map(list.map((x,i)=>[x.n,i+1]));
+  }
+  return rankCache[key].get(pl.n) ?? '—';
+}
+
+/* ── Pre-Draft Rankings ── */
+const STATS={'Nikola Jokić':[27.7,12.9,10.7],'Victor Wembanyama':[25.0,11.5,3.1],
+ 'Shai Gilgeous-Alexander':[31.1,4.3,6.6],'Luka Dončić':[33.5,7.7,8.3],
+ 'Giannis Antetokounmpo':[27.6,9.8,5.4],'Anthony Edwards':[28.8,5.0,3.7],
+ 'Cade Cunningham':[23.9,5.5,9.9],'Jayson Tatum':[21.8,10.0,5.3],
+ 'Anthony Davis':[20.4,11.1,2.8],'LeBron James':[19.7,6.9,7.8],
+ 'Karl-Anthony Towns':[20.1,11.9,3.0],'Tyrese Maxey':[28.3,4.1,6.6],
+ 'Alperen Şengün':[20.4,8.9,6.2],'Toumani Camara':[11.3,5.9,2.2],'Jeremiah Fears':[13.4,3.1,5.2]};
+let pdSrc='adp', pdDirty=false;
+
+function blendFor(pl,v){
+  const prev=view; view=v;
+  const r=blendOf(pl); view=prev; return r.b;
+}
+function pdRows(){
+  return P.map(pl=>({pl, a:blendFor(pl,'adp'), r:blendFor(pl,'rank')}))
+    .filter(x=>x.a!=null||x.r!=null);
+}
+function setSrc(v){
+  pdDirty = v!==pdSrc; pdSrc=v;
+  document.getElementById('sADP').className = v==='adp'?'on':'';
+  document.getElementById('sRNK').className = v==='rank'?'on':'';
+  document.getElementById('srcName').textContent = v==='adp'?'Blend ADP':'Blend Rank';
+  buildSiteControl('pdSites', v, 'Shared with the ADP / Rankings page · saved to localStorage');
+  renderPd();
+}
+function renderPd(){
+  const key = pdSrc==='adp'?'a':'r';
+  const other = pdSrc==='adp'?'r':'a';
+  document.getElementById('pdDeltaHead').textContent =
+    pdSrc==='adp' ? 'Δ vs Blend Rank' : 'Δ vs Blend ADP';
+  const rows=pdRows().filter(x=>x[key]!=null).sort((x,y)=>x[key]-y[key]);
+  // cross-metric delta: where the OTHER blend would slot this player
+  const otherOrder=pdRows().filter(x=>x[other]!=null).sort((x,y)=>x[other]-y[other]).map(x=>x.pl.n);
+  document.getElementById('pdBody').innerHTML = rows.map((x,i)=>{
+    const st=STATS[x.pl.n]||[null,null,null];
+    const oi=otherOrder.indexOf(x.pl.n);
+    const d= oi<0 ? null : (oi+1)-(i+1);
+    return `<tr>
+      <td class="table-cell r" style="color:var(--muted)">${i+1}</td>
+      <td class="table-cell sticky"><div class="pname">${x.pl.n}</div>
+        <div class="pmeta">${x.pl.t} · ${x.pl.p}</div></td>
+      <td class="table-cell r">${st[0]??'—'}</td>
+      <td class="table-cell r">${st[1]??'—'}</td>
+      <td class="table-cell r">${st[2]??'—'}</td>
+      <td class="table-cell r ${pdSrc==='rank'?'bold':''}">${x.r==null?'—':x.r.toFixed(1)}</td>
+      <td class="table-cell r ${pdSrc==='adp'?'bold':''}">${x.a==null?'—':x.a.toFixed(2)}</td>
+      <td class="table-cell r ${d==null?'dash':d>0?'em':d<0?'ro':'dash'}">${d==null?'—':d===0?'0':(d>0?'+':'')+d}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pdNote').textContent =
+    `${rows.length} players · ordered by ${pdSrc==='adp'?'Blend ADP':'Blend Rank'}`;
+  const btn=document.getElementById('saveBtn'), dz=document.getElementById('dirty');
+  btn.disabled=!pdDirty; btn.style.opacity=pdDirty?1:.45;
+  dz.innerHTML = pdDirty
+    ? `<b style="color:#b45309">Unsaved</b> — switching source reordered ${rows.length} players`
+    : 'No unsaved changes';
+}
+
+/* ── Draft Board ── */
+let dbSrc='adp';
+const TEAMS=6, ROUNDS=6;
+function setDb(v){
+  dbSrc=v;
+  document.getElementById('dADP').className=v==='adp'?'on':'';
+  document.getElementById('dRNK').className=v==='rank'?'on':'';
+  document.getElementById('dbSrcName').textContent=v==='adp'?'Blend ADP':'Blend Rank';
+  buildSiteControl('dbSites', v, 'Shared with the ADP / Rankings page · saved to localStorage');
+  renderBoard();
+}
+function renderBoard(){
+  const key=dbSrc==='adp'?'a':'r';
+  const pool=pdRows().filter(x=>x[key]!=null).sort((x,y)=>x[key]-y[key]);
+  const need=TEAMS*ROUNDS;
+  document.getElementById('dbN').textContent=Math.min(need,pool.length);
+  const host=document.getElementById('board');
+  host.style.gridTemplateColumns=`repeat(${TEAMS},minmax(120px,1fr))`;
+  let html='', pick=0;
+  for(let r=0;r<ROUNDS;r++){
+    const order=[...Array(TEAMS).keys()];
+    if(r%2) order.reverse();
+    for(const t of order){
+      const p=pool[pick];
+      html+=`<div style="border:1px solid var(--line);border-radius:6px;padding:7px;background:var(--card);min-height:62px">
+        <div style="font-size:10px;color:var(--muted)">Team ${t+1} · #${pick+1}<br>R${r+1}, pick ${order.indexOf(t)+1}</div>
+        ${p?`<div class="pname" style="font-size:12px;margin-top:3px">${p.pl.n}</div>
+             <div class="pmeta">${p.pl.t} · ${p.pl.p}</div>`:'<div class="dash">—</div>'}
+      </div>`;
+      pick++;
+    }
+  }
+  host.innerHTML=html;
+}
+
+buildPos(); syncAll();
+</script>

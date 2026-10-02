@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate Calendar v2</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --used:#2563eb; --usedhi:#1e3a8a; --heat:37,99,235; --axis:#475569;
+  --dot:#2563eb; --dotoff:#e5e7eb; --b2b:#f59e0b;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --used:#60a5fa; --usedhi:#bfdbfe; --heat:96,165,250; --axis:#94a3b8;
+  --dot:#60a5fa; --dotoff:#374151; --b2b:#fbbf24;
+  --ok:#4ade80; --ok-bg:#052e16; --warn:#fbbf24; --warn-bg:#451a03; --bad:#f87171; --bad-bg:#450a0a;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1)}
+nav{position:sticky;top:0;z-index:40;background:var(--card);box-shadow:0 4px 10px rgba(0,0,0,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:8px 14px;overflow-x:auto}
+nav .brand{font-weight:800;font-size:13px;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;margin-right:8px}
+nav a{padding:6px 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2);white-space:nowrap}
+nav a.active{background:var(--chip-on);color:var(--chip-on-ink)}
+nav .spacer{flex:1}
+nav button{border:none;background:none;font-size:14px;cursor:pointer;padding:6px}
+main{max-width:1140px;margin:0 auto;padding:18px 12px 48px}
+h1{font-size:20px;font-weight:800;margin-bottom:2px}
+h2{font-size:14.5px;font-weight:800}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.6}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.cardhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.hint{font-size:11.5px;color:var(--ink3);font-weight:400}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.group{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;flex-wrap:wrap}
+.group button{border:none;background:none;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tabs{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;margin-bottom:14px;overflow-x:auto}
+.tabs button{border:none;background:none;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.tabs button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.panel{display:none}.panel.on{display:block}
+.pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.good{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.flat{background:var(--chip);color:var(--ink2)}
+.note{font-size:11.5px;color:var(--ink3);margin-top:9px;line-height:1.6}
+.note b{color:var(--ink2)}
+.legend{display:flex;flex-wrap:wrap;gap:11px;font-size:11px;color:var(--ink2);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.where{font-size:11px;font-weight:700;color:var(--chip-on-ink);background:var(--chip-on);border-radius:6px;padding:3px 9px;display:inline-block;margin-bottom:10px}
+.callout{border-left:3px solid var(--chip-on-ink);background:var(--chip);border-radius:0 8px 8px 0;padding:10px 12px;font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:12px}
+.callout b{color:var(--ink1)}
+.callout.warnc{border-left-color:var(--warn)}
+.callout.cut{border-left-color:var(--bad)}
+.it{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:var(--ink3);color:var(--card);font-size:9px;font-weight:800;cursor:help;margin-left:3px;vertical-align:1px;position:relative}
+.it:hover::after,.it:focus::after{content:attr(data-tip);position:absolute;bottom:130%;left:50%;transform:translateX(-50%);background:var(--ink1);color:var(--card);font-size:11px;font-weight:500;line-height:1.45;padding:7px 9px;border-radius:7px;width:230px;white-space:normal;text-align:left;z-index:30;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+
+.mus{display:flex;flex-wrap:wrap;gap:4px}
+.mu{font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:5px;background:var(--chip);color:var(--ink2);
+    font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;border:1px solid transparent}
+.mu b{color:var(--ink1);font-weight:800}
+.mu em{font-style:normal;color:var(--ink3);font-weight:600;padding:0 1px}
+.mu.hit{background:var(--chip-on);border-color:var(--chip-on-ink)}
+
+/* ---------- strip ---------- */
+.stripwrap{position:relative}
+.strip{display:flex;gap:3px;align-items:flex-end;overflow-x:auto;padding-bottom:4px}
+.sday{flex:1 1 0;min-width:42px;text-align:center;cursor:pointer;border:none;background:none;padding:0;font:inherit;color:inherit}
+.sbar{height:110px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:4px;padding:2px;position:relative}
+.sday:hover .sbar{background:var(--chip)}
+.sday.sel .sbar{background:var(--chip-on);box-shadow:inset 0 0 0 1px var(--chip-on-ink)}
+.sfill{background:var(--used);border-radius:3px 3px 0 0;transition:height .15s}
+.sday.hv .sfill{background:var(--usedhi)}
+.sday.tm .sfill{box-shadow:inset 0 0 0 2px var(--ink1)}
+.sday.tmno .sfill{opacity:.22}
+.sday .n{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}
+.sday.hv .n{color:var(--usedhi)}
+.sday .d{font-size:9.5px;color:var(--ink3);line-height:1.35;margin-top:1px}
+.sday.sel .d{color:var(--chip-on-ink);font-weight:700}
+/* threshold rule */
+.thr{position:absolute;left:0;right:0;border-top:1.5px dashed var(--axis);pointer-events:none;z-index:5}
+.thr span{position:absolute;right:0;top:-15px;font-size:9.5px;font-weight:800;color:var(--axis);
+  background:var(--card);padding:0 4px;letter-spacing:.02em}
+
+.detail{margin-top:12px;border-top:1px solid var(--border);padding-top:11px}
+.detail .dh{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:8px}
+.detail .dh h3{font-size:13px;font-weight:800;margin:0}
+
+/* ---------- team grid ---------- */
+.tgwrap{overflow-x:auto;border:1px solid var(--border);border-radius:9px;max-height:460px;overflow-y:auto}
+table.tg{border-collapse:separate;border-spacing:0;width:100%;font-size:11.5px}
+table.tg th,table.tg td{padding:3px 5px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border)}
+table.tg thead th{position:sticky;top:0;z-index:6;background:var(--chip);color:var(--ink2);font-size:10px;
+  text-transform:uppercase;letter-spacing:.03em;cursor:pointer;user-select:none;padding:6px 5px}
+table.tg thead th:hover{color:var(--chip-on-ink)}
+table.tg thead th.sorted{color:var(--chip-on-ink)}
+table.tg th.tm,table.tg td.tm{position:sticky;left:0;z-index:4;background:var(--card);text-align:left;font-weight:800;
+  border-right:1px solid var(--border);min-width:52px}
+table.tg thead th.tm{z-index:8;background:var(--chip)}
+table.tg tbody tr{cursor:pointer}
+table.tg tbody tr:hover td{background:var(--chip)}
+table.tg tbody tr:hover td.tm{background:var(--chip)}
+table.tg tbody tr.on td{background:var(--chip-on)}
+table.tg tbody tr.on td.tm{background:var(--chip-on);color:var(--chip-on-ink)}
+table.tg tbody tr.dim td .dot.p{background:var(--dot);opacity:.34}
+table.tg tbody tr.dim td .dot.p.b{background:var(--b2b);opacity:.34}
+table.tg tbody tr.dim td{color:var(--ink3)}
+td.num{font-variant-numeric:tabular-nums;font-weight:700}
+td.dl{padding:3px 1px}
+.dot{width:11px;height:11px;border-radius:3px;background:var(--dotoff);display:inline-block}
+.dot.p{background:var(--dot)}
+.dot.p.b{background:var(--b2b)}
+td.colsel{background:rgba(var(--heat),.10)}
+th.colsel{color:var(--chip-on-ink)}
+.delta{font-weight:800;font-variant-numeric:tabular-nums}
+.delta.up{color:var(--ok)}
+.delta.dn{color:var(--bad)}
+.delta.z{color:var(--ink3)}
+
+@media(max-width:640px){
+  h1{font-size:17px}
+  .strip{gap:2px}.sday{min-width:36px}
+  table.tg{font-size:10.5px}
+  .dot{width:9px;height:9px}
+}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏀 Fantasy League</span>
+  <a>📊 Dashboard</a><a>👥 Teams</a><a>🏆 Rankings</a><a>⛹️ Players</a><a class="active">🏀 NBA ▾</a><a>🩺 Injuries</a>
+  <span class="spacer"></span><button id="theme">🌙</button>
+</nav>
+<main>
+  <h1>📅 Slate calendar v2 — strip + who plays when</h1>
+  <div class="sub">
+    Real published <b>2026-27</b> schedule, window from <b>Tue Jan 5 2027</b>.
+    Fixed from v1: <b>10+ is now a threshold rule</b> across the strip instead of an invisible per-bar outline
+    (the flags were always correct — 12, 11 and 10 were all marked, you just couldn't see it), and the
+    <b>light-night colour is gone</b>. New: the strip drives a <b>team × night grid</b> underneath, so the same card
+    answers "how big is each night", "who plays when", and "who has the most games coming".
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-p="a" class="on">Ⓐ The card</button>
+    <button data-p="why">Ⓑ Why these columns</button>
+  </div>
+
+  <section class="panel on" id="p-a">
+    <span class="where">Schedule page — new card above the season grid</span>
+
+    <div class="card">
+      <div class="controls">
+        <div class="group" id="hz"><button data-h="14" class="on">14 days</button><button data-h="28">28 days</button></div>
+        <span class="hint" id="selinfo"></span>
+      </div>
+
+      <div class="cardhead">
+        <h2>Games per night<span class="it" data-tip="Count of NBA games league-wide on that date. 15 is the theoretical max; a real night runs 2–13.">i</span></h2>
+        <span class="hint" id="hintA"></span>
+      </div>
+
+      <div class="stripwrap">
+        <div class="strip" id="strip"></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--used)"></i>games that night</span>
+        <span><i style="background:var(--usedhi)"></i>high-volume night (10+)</span>
+        <span><i style="background:none;border-top:1.5px dashed var(--axis);height:0;width:14px;border-radius:0"></i>the 10-game line</span>
+      </div>
+
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <h2>Who plays when<span class="it" data-tip="One row per NBA team, one cell per night in the window. Filled = that team plays. Click a team to trace its nights on the strip above; click a night on the strip to highlight that column.">i</span></h2>
+        <span class="hint">click a team row to trace it on the strip · click a column header to sort</span>
+      </div>
+      <div class="tgwrap"><table class="tg" id="tg"></table></div>
+      <div class="legend">
+        <span><i style="background:var(--dot)"></i>plays</span>
+        <span><i style="background:var(--b2b)"></i>second night of a back-to-back</span>
+        <span><i style="background:var(--dotoff)"></i>off</span>
+      </div>
+      <div class="note">
+        <b>G</b> = games in the window. <b>Δ</b> = whole games above or below the count most teams have —
+        <b>—</b> means ordinary. <b>B2B</b> = back-to-backs inside the window. <b>Next</b> = first game from the window start.
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-why">
+    <div class="card">
+      <div class="cardhead"><h2>“Which teams are good to pick up”</h2><span class="pill flat">a query, not advice</span></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        The schedule can answer exactly one version of that question honestly: <b>who gives you the most games</b>.
+        In an 8-cat roto league with per-slot game caps, every extra game is raw counting stats against a cap you are trying to fill —
+        so <code>Δ vs league average</code> is the whole signal, and it is a fact, not an opinion. It ranks schedules, never players.<br><br>
+        <b>What it deliberately does not do:</b> it does not know who is good, who is injured, who is startable, or who is available in your league.
+        A team at <b>+3</b> tells you a streamer from that roster gets three more games than average — nothing about whether they should be on your roster.
+        The same posture as the rest of this page.
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Column by column</h2></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        <b>The dot row is the point.</b> It is the only place in the app that answers "when does this team actually play" without
+        opening one team at a time, and it is what makes the strip clickable in both directions:
+        pick a night, see who is on; pick a team, see its nights.<br><br>
+        <b>How much signal is actually in Δ — measured, not assumed.</b> On this real window:
+        over <b>7 days</b> every team plays 3 or 4 games — the column is binary and close to worthless.
+        Over <b>14 days</b> the range is 5–8, but <b>26 of 30 teams sit at 7 or 8</b>.
+        Over <b>28 days</b> it is 12–15 with 25 of 30 at 14–15.
+        So Δ is a <i>tails</i> signal: it says nothing about most of the league and a lot about the four teams at the edges.
+        That is worth showing — the two teams at 5 games over a fortnight are a genuine 60% shortfall — but it is not the
+        continuous ranking it first looks like, which is why it now reads <code>+1</code> / <code>—</code> / <code>-2</code>
+        in whole games rather than <code>+0.9</code>. A count difference does not have a tenths place, and printing one
+        made 26 identical teams look separable.<br><br>
+        <b>B2B is kept and stays neutral-coloured.</b> A back-to-back is two games in two nights — good for volume, bad for minutes and rest.
+        Whether that is a plus or a minus depends on whether you are chasing counting stats or percentages, so the view states it and stops.<br><br>
+        <b>Light nights were cut.</b> They were a colour on the strip in v1. Cut per your call — and the concept went with the colour rather than
+        surviving as a column, since keeping "games on light nights" while removing the light-night marking would have left a
+        column pointing at something the chart no longer shows.
+      </div>
+    </div>
+    <div class="callout">
+      <b>Still frontend-only.</b> <code>calendar_days[]</code> gives the strip; the per-team <code>games[]</code> in the same cached payload
+      give the dot rows, the counts, the B2Bs and the matchups. No new endpoint, no extra request. The Δ is a one-line mean over the window.
+    </div>
+    <div class="callout warnc">
+      <b>Open: 30 rows is a lot under a 30-row season grid.</b> Same page would then carry two 30-row tables.
+      Options: collapse this one to a "top 10 / bottom 10 by Δ" with a show-all toggle, or move the season grid into a second tab on the page.
+      Leaning toggle — the full grid is the part that is actually new.
+    </div>
+    <div class="callout cut">
+      <b>Still not here: your roster.</b> No "3 of your guys play" overlay, no free-agent join. That is RosterCoverage on TeamDetail.
+      League-wide card stays league-wide.
+    </div>
+  </section>
+</main>
+
+<script>
+const DAYS = [{"date":"2027-01-05","n":9,"hv":false,"g":[["ATL","CHA"],["DET","SAC"],["LAC","ORL"],["LAL","WAS"],["MEM","MIA"],["MIL","CHI"],["MIN","HOU"],["PHO","DEN"],["TOR","CLE"]]},{"date":"2027-01-06","n":5,"hv":false,"g":[["IND","SAS"],["NYK","GSW"],["OKC","PHL"],["POR","NOP"],["UTA","BKN"]]},{"date":"2027-01-07","n":12,"hv":true,"g":[["BOS","LAL"],["CHI","SAC"],["CLE","ORL"],["DEN","CHA"],["DET","GSW"],["IND","ATL"],["LAC","MIL"],["MEM","HOU"],["MIA","BKN"],["MIN","TOR"],["OKC","WAS"],["POR","DAL"]]},{"date":"2027-01-08","n":8,"hv":false,"g":[["DET","LAL"],["MEM","SAS"],["MIA","PHL"],["MIN","WAS"],["NYK","SAC"],["ORL","NOP"],["PHO","DAL"],["UTA","TOR"]]},{"date":"2027-01-09","n":6,"hv":false,"g":[["BOS","LAC"],["CHA","POR"],["CHI","GSW"],["DEN","CLE"],["HOU","BKN"],["MIL","IND"]]},{"date":"2027-01-10","n":8,"hv":false,"g":[["CHA","SAC"],["CHI","PHO"],["DAL","MEM"],["NOP","MIA"],["OKC","ORL"],["PHL","TOR"],["SAS","ATL"],["UTA","DET"]]},{"date":"2027-01-11","n":6,"hv":false,"g":[["ATL","WAS"],["BKN","IND"],["CLE","MIN"],["DEN","NYK"],["HOU","BOS"],["LAL","LAC"]]},{"date":"2027-01-12","n":8,"hv":false,"g":[["BKN","MIA"],["CHI","UTA"],["DAL","MEM"],["DEN","MIL"],["DET","TOR"],["ORL","POR"],["SAC","GSW"],["WAS","PHL"]]},{"date":"2027-01-13","n":7,"hv":false,"g":[["CHA","GSW"],["CLE","ATL"],["HOU","OKC"],["LAL","POR"],["MIL","IND"],["NYK","BOS"],["PHO","TOR"]]},{"date":"2027-01-14","n":9,"hv":false,"g":[["BKN","PHL"],["CHA","UTA"],["DAL","DET"],["LAC","SAC"],["MEM","DEN"],["MIA","NYK"],["MIN","CHI"],["NOP","SAS"],["ORL","LAL"]]},{"date":"2027-01-15","n":8,"hv":false,"g":[["CLE","MIL"],["GSW","ATL"],["MIA","TOR"],["ORL","LAC"],["PHO","IND"],["SAC","POR"],["UTA","OKC"],["WAS","HOU"]]},{"date":"2027-01-16","n":6,"hv":false,"g":[["BKN","BOS"],["CHA","DEN"],["CLE","MEM"],["DAL","NYK"],["DET","HOU"],["MIN","PHL"]]},{"date":"2027-01-17","n":8,"hv":false,"g":[["GSW","MIA"],["IND","WAS"],["MIL","LAL"],["ORL","DEN"],["POR","OKC"],["SAC","UTA"],["SAS","NOP"],["TOR","CHI"]]},{"date":"2027-01-18","n":7,"hv":false,"g":[["BOS","WAS"],["DET","CLE"],["HOU","MEM"],["MIN","NYK"],["OKC","DAL"],["PHL","ATL"],["PHO","LAC"]]},{"date":"2027-01-19","n":7,"hv":false,"g":[["CHA","DAL"],["CHI","TOR"],["GSW","ORL"],["IND","PHL"],["LAL","SAC"],["POR","MIA"],["UTA","DEN"]]},{"date":"2027-01-20","n":10,"hv":true,"g":[["CHI","BKN"],["HOU","MIN"],["IND","BOS"],["LAC","UTA"],["MEM","PHO"],["MIA","SAS"],["MIL","SAC"],["OKC","NOP"],["POR","ATL"],["TOR","NYK"]]},{"date":"2027-01-21","n":4,"hv":false,"g":[["CLE","BKN"],["LAL","GSW"],["PHL","BOS"],["WAS","DEN"]]},{"date":"2027-01-22","n":11,"hv":true,"g":[["DAL","NOP"],["HOU","CHA"],["IND","DET"],["MEM","OKC"],["MIL","GSW"],["MIN","SAS"],["NYK","ATL"],["POR","ORL"],["SAC","LAL"],["UTA","PHO"],["WAS","LAC"]]},{"date":"2027-01-23","n":6,"hv":false,"g":[["ATL","MIA"],["CHA","BOS"],["CLE","DAL"],["MIL","DEN"],["PHL","CHI"],["TOR","BKN"]]},{"date":"2027-01-24","n":7,"hv":false,"g":[["HOU","ORL"],["LAC","NYK"],["MIN","DET"],["OKC","GSW"],["POR","SAS"],["UTA","PHO"],["WAS","LAL"]]},{"date":"2027-01-25","n":8,"hv":false,"g":[["CLE","NOP"],["DAL","CHI"],["LAC","PHL"],["MIA","BKN"],["MIN","MEM"],["ORL","CHA"],["SAC","DEN"],["TOR","BOS"]]},{"date":"2027-01-26","n":7,"hv":false,"g":[["ATL","DET"],["CHI","IND"],["HOU","SAS"],["MIL","UTA"],["OKC","LAL"],["PHO","NYK"],["WAS","POR"]]},{"date":"2027-01-27","n":9,"hv":false,"g":[["CHA","SAS"],["DAL","TOR"],["DEN","MIN"],["DET","CLE"],["GSW","POR"],["LAC","BOS"],["NOP","HOU"],["PHO","BKN"],["SAC","PHL"]]},{"date":"2027-01-28","n":8,"hv":false,"g":[["ATL","NYK"],["CHI","ORL"],["GSW","UTA"],["LAL","IND"],["MEM","OKC"],["MIA","MIL"],["PHL","NOP"],["SAC","WAS"]]},{"date":"2027-01-29","n":6,"hv":false,"g":[["CHA","MIN"],["CLE","TOR"],["DET","DAL"],["LAC","BKN"],["ORL","HOU"],["PHO","BOS"]]},{"date":"2027-01-30","n":8,"hv":false,"g":[["ATL","MIL"],["DEN","OKC"],["LAL","NYK"],["MEM","UTA"],["NOP","CLE"],["PHL","MIA"],["SAS","GSW"],["WAS","IND"]]},{"date":"2027-01-31","n":8,"hv":false,"g":[["BKN","ORL"],["BOS","TOR"],["CHI","OKC"],["HOU","DAL"],["LAL","CHA"],["PHO","MIN"],["POR","DEN"],["SAC","DET"]]},{"date":"2027-02-01","n":7,"hv":false,"g":[["CLE","UTA"],["MEM","MIL"],["MIA","IND"],["NOP","PHL"],["NYK","BKN"],["SAS","GSW"],["WAS","ATL"]]}];
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const HV = 10;
+
+function d(iso){ const [y,m,dd]=iso.split('-').map(Number); return new Date(y,m-1,dd); }
+function fmt(iso){ const x=d(iso); return DOW[x.getDay()]+' '+MON[x.getMonth()]+' '+x.getDate(); }
+
+let horizon=14, selDay=0, selTeam=null, sortKey='delta', sortDir=-1;
+
+function windowDays(){ return DAYS.slice(0,horizon); }
+
+function teamRows(){
+  const days = windowDays();
+  const teams = {};
+  days.forEach((day,i) => day.g.forEach(pair => pair.forEach(t => {
+    (teams[t] = teams[t] || {abbr:t, plays:new Array(days.length).fill(false)}).plays[i] = true;
+  })));
+  const rows = Object.values(teams);
+  rows.forEach(r => {
+    r.g = r.plays.filter(Boolean).length;
+    r.b2b = r.plays.filter((p,i) => p && i>0 && r.plays[i-1]).length;
+    r.next = r.plays.indexOf(true);
+  });
+  const avg = rows.reduce((s,r) => s+r.g, 0) / rows.length;
+  const counts = {};
+  rows.forEach(r => counts[r.g] = (counts[r.g]||0) + 1);
+  const modal = +Object.keys(counts).reduce((a,b) => counts[b] > counts[a] ? b : a);
+  rows.forEach(r => r.delta = r.g - modal);
+  return {rows, avg, modal, counts};
+}
+
+function renderStrip(){
+  const days = windowDays();
+  const max = Math.max(...days.map(x => x.n));
+  const total = days.reduce((s,x) => s+x.n, 0);
+  const hvN = days.filter(x => x.n >= HV).length;
+  document.getElementById('hintA').innerHTML =
+    `${total} games over ${horizon} nights · avg <b>${(total/horizon).toFixed(1)}</b> · ${hvN} night${hvN===1?'':'s'} at 10+`;
+
+  document.getElementById('strip').innerHTML = days.map((x,i) => {
+    const plays = selTeam ? x.g.some(p => p.includes(selTeam)) : null;
+    const cls = [
+      x.n>=HV ? 'hv' : '',
+      i===selDay ? 'sel' : '',
+      plays===true ? 'tm' : (plays===false ? 'tmno' : '')
+    ].join(' ');
+    return `<button class="sday ${cls}" data-i="${i}">
+      <span class="sbar"><span class="sfill" style="height:${Math.round(x.n/max*100)}%"></span></span>
+      <span class="n">${x.n}</span>
+      <span class="d">${DOW[d(x.date).getDay()]}<br>${d(x.date).getMonth()+1}/${d(x.date).getDate()}</span>
+    </button>`;
+  }).join('');
+
+  // threshold rule, positioned inside the 110px bar box (2px pad top+bottom)
+  const inner = 110 - 4;
+  const y = 2 + inner * (1 - HV/max);
+  const rule = document.createElement('div');
+  rule.className = 'thr';
+  rule.style.top = y.toFixed(1) + 'px';
+  rule.innerHTML = '<span>10 games</span>';
+  document.querySelector('.stripwrap').querySelectorAll('.thr').forEach(n => n.remove());
+  document.querySelector('.stripwrap').appendChild(rule);
+
+  document.querySelectorAll('#strip .sday').forEach(b =>
+    b.onclick = () => { selDay = +b.dataset.i; render(); });
+}
+
+function renderDetail(){
+  const s = windowDays()[selDay];
+  document.getElementById('detail').innerHTML = `
+    <div class="dh">
+      <h3>${fmt(s.date)}</h3>
+      <span class="pill ${s.n>=HV?'warn':'flat'}">${s.n} game${s.n===1?'':'s'}${s.n>=HV?' · high volume':''}</span>
+      <span class="hint">${s.n*2} of 30 teams active${selTeam ? ' · tracing '+selTeam : ''}</span>
+    </div>
+    <div class="mus">${s.g.map(([a,h]) => {
+      const hit = selTeam && (a===selTeam || h===selTeam);
+      return `<span class="mu ${hit?'hit':''}" data-a="${a}" data-h="${h}"><b>${a}</b><em>@</em><b>${h}</b></span>`;
+    }).join('')}</div>`;
+  document.querySelectorAll('#detail .mu').forEach(m =>
+    m.onclick = () => { selTeam = (selTeam===m.dataset.a) ? m.dataset.h
+                                : (selTeam===m.dataset.h ? null : m.dataset.a); render(); });
+}
+
+function renderGrid(){
+  const days = windowDays();
+  const {rows, avg, modal, counts} = teamRows();
+  const cmp = {
+    abbr: (a,b) => a.abbr < b.abbr ? -1 : 1,
+    g:     (a,b) => a.g - b.g,
+    delta: (a,b) => a.delta - b.delta,
+    b2b:   (a,b) => a.b2b - b.b2b,
+    next:  (a,b) => b.next - a.next,
+  }[sortKey];
+  rows.sort((a,b) => cmp(a,b)*sortDir || (a.abbr<b.abbr?-1:1));
+
+  const sc = k => sortKey===k ? 'sorted' : '';
+  const arrow = k => sortKey===k ? (sortDir>0 ? ' ▲' : ' ▼') : '';
+
+  const head = `<thead><tr>
+    <th class="tm ${sc('abbr')}" data-k="abbr">Team${arrow('abbr')}</th>
+    ${days.map((x,i) => `<th class="${i===selDay?'colsel':''}" title="${fmt(x.date)}">
+        ${DOW[d(x.date).getDay()][0]}<br>${d(x.date).getDate()}</th>`).join('')}
+    <th class="${sc('g')}" data-k="g">G${arrow('g')}</th>
+    <th class="${sc('delta')}" data-k="delta">Δ${arrow('delta')}</th>
+    <th class="${sc('b2b')}" data-k="b2b">B2B${arrow('b2b')}</th>
+    <th class="${sc('next')}" data-k="next">Next${arrow('next')}</th>
+  </tr></thead>`;
+
+  const body = '<tbody>' + rows.map(r => {
+    const dim = selTeam && r.abbr !== selTeam;
+    const dv = r.delta;
+    const dcls = dv === 0 ? 'z' : (dv > 0 ? 'up' : 'dn');
+    const dtxt = dv === 0 ? '—' : (dv > 0 ? '+' : '') + dv;
+    return `<tr class="${r.abbr===selTeam?'on':''} ${dim?'dim':''}" data-t="${r.abbr}">
+      <td class="tm">${r.abbr}</td>
+      ${r.plays.map((p,i) => {
+        const b = p && i>0 && r.plays[i-1];
+        return `<td class="dl ${i===selDay?'colsel':''}"><span class="dot ${p?'p':''} ${b?'b':''}"></span></td>`;
+      }).join('')}
+      <td class="num">${r.g}</td>
+      <td class="num"><span class="delta ${dcls}">${dtxt}</span></td>
+      <td class="num" style="color:var(--ink2)">${r.b2b}</td>
+      <td style="font-size:10.5px;color:var(--ink3)">${DOW[d(days[r.next].date).getDay()]} ${d(days[r.next].date).getMonth()+1}/${d(days[r.next].date).getDate()}</td>
+    </tr>`;
+  }).join('') + '</tbody>';
+
+  const t = document.getElementById('tg');
+  t.innerHTML = head + body;
+  t.querySelectorAll('thead th[data-k]').forEach(th => th.onclick = () => {
+    if(sortKey === th.dataset.k) sortDir *= -1;
+    else { sortKey = th.dataset.k; sortDir = (sortKey==='abbr'||sortKey==='next') ? 1 : -1; }
+    render();
+  });
+  t.querySelectorAll('tbody tr').forEach(tr =>
+    tr.onclick = () => { selTeam = (selTeam === tr.dataset.t) ? null : tr.dataset.t; render(); });
+
+  const spread = Object.keys(counts).map(Number).sort((a,b)=>a-b);
+  const ordinary = counts[modal];
+  document.getElementById('selinfo').innerHTML = selTeam
+    ? `tracing <b>${selTeam}</b> — click again to clear`
+    : `over ${horizon} nights every team plays <b>${spread[0]}–${spread[spread.length-1]}</b> games · ${ordinary} of 30 sit at <b>${modal}</b>`;
+}
+
+function render(){ renderStrip(); renderDetail(); renderGrid(); }
+
+document.getElementById('hz').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  horizon = +b.dataset.h; selDay = 0;
+  document.querySelectorAll('#hz button').forEach(x => x.classList.toggle('on', x===b));
+  render();
+};
+document.getElementById('tabs').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x===b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id==='p-'+b.dataset.p));
+};
+document.getElementById('theme').onclick = e => {
+  document.body.classList.toggle('dark');
+  e.target.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+};
+
+render();
+</script>
+</body>
+</html>

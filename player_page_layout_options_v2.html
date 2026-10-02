@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Player page — two-column variations (round 2)</title>
+<style>
+  :root{
+    --page:#1e293b; --card:#111827; --card2:#1f2937; --line:#374151; --line2:#1f2937;
+    --txt:#f3f4f6; --muted:#9ca3af; --dim:#6b7280; --blue:#2563eb; --blue2:#3b82f6;
+    --amber:#f59e0b; --green:#10b981; --red:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--txt);
+    font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;padding:0 0 90px}
+  .band{background:#0f172a;padding:24px 16px 18px;border-bottom:1px solid var(--line)}
+  .inner,.opt{max-width:1060px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 6px}
+  .lede{color:var(--muted);margin:0;max-width:820px;font-size:13px}
+  .opt{padding:34px 16px 0}
+  .optHead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .optHead h2{font-size:16px;margin:0}
+  .pill{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--blue2);
+    border:1px solid var(--blue);border-radius:999px;padding:2px 8px}
+  .axis{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+    border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+  .why{color:var(--muted);font-size:12.5px;margin:0 0 14px;max-width:820px}
+  .frame{background:var(--page);border:1px solid var(--line);border-radius:10px;padding:18px;
+    box-shadow:0 8px 24px rgba(0,0,0,.28)}
+  .verdict{font-size:12px;color:var(--muted);margin-top:10px;padding-left:12px;border-left:2px solid var(--line)}
+  .verdict b{color:#d1d5db}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px}
+  .pad{padding:15px 17px}
+  .mt{margin-top:13px}
+  .name{font-size:23px;font-weight:800;
+    background:linear-gradient(90deg,#3b82f6,#a855f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .num{color:var(--muted);font-size:15px;font-weight:700;-webkit-text-fill-color:var(--muted)}
+  .pos{color:#d1d5db;font-size:13px;margin:2px 0 12px}
+  .avatar{width:92px;height:92px;border-radius:50%;background:var(--card2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:28px;flex:none}
+  h3{font-size:15px;font-weight:700;margin:0}
+  .sub{color:var(--muted);font-size:12px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg span{padding:4px 9px;font-size:11.5px;color:var(--muted)}
+  .seg span.on{background:var(--blue);color:#fff;font-weight:600}
+  .flexline{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .spacer{margin-left:auto}
+  .divider{height:1px;background:var(--line2);margin:12px 0}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:6px 4px;text-align:center}
+  td{padding:8px 4px;text-align:center;font-weight:600}
+  tr.proj{background:rgba(37,99,235,.13)}
+  tr.proj td{color:#dbeafe}
+  .rowlab{text-align:left !important;color:var(--muted);font-weight:500;white-space:nowrap}
+  .rowlab b{color:var(--txt)}
+
+  .tile{background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:6px 2px;text-align:center}
+  .tile .k{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .tile .v{font-size:15px;font-weight:700;margin-top:1px}
+  .tile .f{font-size:9px;color:var(--dim)}
+  .t3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .t4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .t8{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+
+  .slider{display:flex;align-items:center;gap:8px}
+  .slider input[type=range]{flex:1;accent-color:var(--blue);height:3px;max-width:200px}
+  .lab{font-size:11px;color:var(--muted)}
+  .val{font-weight:700;font-size:12px;width:20px;text-align:right}
+  .ghostbtn{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 7px}
+
+  .cols{display:grid;gap:13px;align-items:start}
+  .cols.left{grid-template-columns:296px minmax(0,1fr)}
+  .cols.right{grid-template-columns:minmax(0,1fr) 296px}
+  .cols.wide{grid-template-columns:340px minmax(0,1fr)}
+
+  .kv{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line2)}
+  .kv:last-child{border-bottom:0}
+  .kv span:first-child{color:var(--muted)}
+  .kv b{font-variant-numeric:tabular-nums}
+
+  .statline{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line2);font-size:13px}
+  .statline:last-child{border-bottom:0}
+  .statline .k{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+  .statline .v{font-weight:700;font-variant-numeric:tabular-nums}
+  .statline .d{font-size:10.5px;width:42px;text-align:right}
+  .up{color:var(--green)} .down{color:var(--red)} .flat{color:var(--dim)}
+
+  .bar{height:5px;background:var(--card2);border-radius:3px;overflow:hidden;margin-top:3px}
+  .bar i{display:block;height:100%;background:var(--blue2);border-radius:3px}
+
+  .chart{height:92px;border:1px solid var(--line2);border-radius:6px;position:relative;overflow:hidden;
+    background:repeating-linear-gradient(90deg,transparent 0 38px,rgba(255,255,255,.03) 38px 39px)}
+  .chart svg{position:absolute;inset:0;width:100%;height:100%}
+  .statRow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .statBox{background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+  .statBox .k{font-size:9px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}
+  .statBox .v{font-size:18px;font-weight:700}
+  .statBox .n{font-size:10px;color:var(--dim)}
+  .stickyTag{font-size:9px;color:var(--dim);border:1px dashed var(--line);border-radius:4px;padding:1px 5px}
+  .accent{border-color:#1d4ed8}
+  .hdrBar{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line2)}
+  @media(max-width:860px){ .cols.left,.cols.right,.cols.wide{grid-template-columns:1fr} .t8{grid-template-columns:repeat(4,1fr)} }
+</style>
+</head>
+<body>
+
+<div class="band"><div class="inner">
+  <h1>Round 2 — variations on the two-column layout</h1>
+  <p class="lede">Option 4 survived, option 3 (row in the Stats table) is still alive, 1 and 2 are out. Below: five variants, each changing <em>one</em> axis of option 4 — which side the rail is on, how the projection is drawn, whether it sticks while scrolling, and whether it merges with the Stats table. Same real data everywhere: season 34.1 MIN / 16.5 PTS, projection 13.7 / 3.8 / 4.2 at 31 minutes.</p>
+</div></div>
+
+<!-- ===== 4A ===== -->
+<div class="opt">
+  <div class="optHead"><h2>4A — Projection above the bio, sticky rail</h2><span class="pill">closest to 4</span><span class="axis">axis: order + sticky</span></div>
+  <p class="why">Same two columns, but the projection is the <em>first</em> thing in the rail, not an afterthought under the bio — and the rail sticks while you scroll the charts. The bio drops to a quiet list underneath, since it's reference material you read once.</p>
+  <div class="frame">
+    <div class="cols left">
+      <div>
+        <div class="card pad accent">
+          <div class="flexline" style="margin-bottom:2px"><h3>Next game</h3><span class="spacer stickyTag">sticky</span></div>
+          <div class="sub" style="margin-bottom:11px">@ Orlando Magic · Thu, in 2 days</div>
+          <div class="t3" style="margin-bottom:9px">
+            <div class="tile"><div class="k">PTS</div><div class="v">14</div></div>
+            <div class="tile"><div class="k">REB</div><div class="v">4</div></div>
+            <div class="tile"><div class="k">AST</div><div class="v">4</div></div>
+            <div class="tile"><div class="k">3PM</div><div class="v">2</div></div>
+            <div class="tile"><div class="k">STL</div><div class="v">1</div></div>
+            <div class="tile"><div class="k">BLK</div><div class="v">1</div></div>
+            <div class="tile"><div class="k">FG%</div><div class="v" style="font-size:13px">45%</div><div class="f">5/11</div></div>
+            <div class="tile"><div class="k">FT%</div><div class="v" style="font-size:13px">89%</div><div class="f">2/2</div></div>
+            <div class="tile" style="display:flex;align-items:center;justify-content:center"><span class="ghostbtn">↺</span></div>
+          </div>
+          <div class="slider"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="val">31</span></div>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:10px">
+            <div class="avatar" style="width:52px;height:52px;font-size:18px">🏀</div>
+            <div><div class="name" style="font-size:17px">Derrick White <span class="num" style="font-size:12px">#9</span></div>
+            <div class="pos" style="margin:0;font-size:12px">BOS · Guard</div></div>
+          </div>
+          <div class="kv"><span>Conference</span><b>East</b></div>
+          <div class="kv"><span>Division</span><b>Atlantic</b></div>
+          <div class="kv"><span>Height</span><b>6' 4"</b></div>
+          <div class="kv"><span>Age</span><b>32</b></div>
+          <div class="kv"><span>Nationality</span><b>USA</b></div>
+        </div>
+      </div>
+      <div>
+        <div class="card pad">
+          <div class="flexline" style="margin-bottom:11px"><h3>Stats</h3><span class="spacer"></span>
+            <span class="seg"><span class="on">Season</span><span>L7</span><span>L15</span><span>L30</span></span>
+            <span class="seg"><span class="on">Per Game</span><span>Totals</span></span></div>
+          <table>
+            <tr><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+            <tr><td>77</td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>39.4%</td><td>90.2%</td></tr>
+          </table>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:11px"><h3>Trends</h3><span class="spacer"></span>
+            <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span>
+            <span class="seg"><span class="on">Minutes</span><span>Usage</span><span>3P%</span></span></div>
+          <div class="statRow" style="margin-bottom:11px">
+            <div class="statBox"><div class="k">Season</div><div class="v">34.1</div><div class="n">77 games</div></div>
+            <div class="statBox"><div class="k">Last 15d</div><div class="v">32.4</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Δ vs season</div><div class="v">-1.6</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Start</div><div class="v">03/28</div><div class="n">7 games</div></div>
+          </div>
+          <div class="chart"><svg viewBox="0 0 600 92" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,50 25,33 50,64 75,27 100,71 125,39 150,19 175,56 200,35 225,67 250,29 275,46 300,23 325,60 350,37 375,25 400,54 425,31 450,65 475,41 500,21 525,48 550,35 575,58 600,42"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Change vs 4:</b> projection first, bio demoted, rail sticks. <b>Cost:</b> the player's name is no longer the biggest thing on the page.</p>
+</div>
+
+<!-- ===== 4B ===== -->
+<div class="opt">
+  <div class="optHead"><h2>4B — No tiles: a stat list with deltas</h2><span class="axis">axis: how it's drawn</span></div>
+  <p class="why">Tiles were the styling complaint. Here the projection is a plain list — one line per stat, value right-aligned, and the delta against his season average beside it. It reads like the rest of the app's tables instead of introducing a card-of-boxes vocabulary.</p>
+  <div class="frame">
+    <div class="cols left">
+      <div>
+        <div class="card pad" style="text-align:center">
+          <div class="avatar" style="margin:0 auto 9px">🏀</div>
+          <div class="name" style="font-size:20px">Derrick White <span class="num" style="font-size:14px">#9</span></div>
+          <div class="pos" style="margin-bottom:11px">Boston Celtics · Guard</div>
+          <div style="text-align:left">
+            <div class="kv"><span>Height</span><b>6' 4"</b></div>
+            <div class="kv"><span>Age</span><b>32</b></div>
+            <div class="kv"><span>Conference</span><b>East · Atlantic</b></div>
+          </div>
+        </div>
+        <div class="card mt accent">
+          <div class="hdrBar"><h3 style="font-size:14px">Next game</h3><span class="spacer sub">@ ORL · Thu</span></div>
+          <div class="pad" style="padding-top:11px">
+            <div class="slider" style="margin-bottom:9px">
+              <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="val">31</span><span class="ghostbtn">↺</span>
+            </div>
+            <div class="statline"><span class="k">PTS</span><span><span class="v">13.7</span> <span class="d down">-2.8</span></span></div>
+            <div class="statline"><span class="k">REB</span><span><span class="v">3.8</span> <span class="d down">-0.6</span></span></div>
+            <div class="statline"><span class="k">AST</span><span><span class="v">4.2</span> <span class="d down">-1.2</span></span></div>
+            <div class="statline"><span class="k">3PM</span><span><span class="v">2.7</span> <span class="d flat">0.0</span></span></div>
+            <div class="statline"><span class="k">STL</span><span><span class="v">1.0</span> <span class="d flat">-0.1</span></span></div>
+            <div class="statline"><span class="k">BLK</span><span><span class="v">0.9</span> <span class="d down">-0.4</span></span></div>
+            <div class="statline"><span class="k">FG%</span><span><span class="v">42.8%</span> <span class="d up">+3.4</span></span></div>
+            <div class="statline"><span class="k">FT%</span><span><span class="v">89.3%</span> <span class="d down">-0.9</span></span></div>
+            <div class="sub" style="margin-top:9px;font-size:11px">deltas vs his season average</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card pad">
+          <div class="flexline" style="margin-bottom:11px"><h3>Stats</h3><span class="spacer"></span>
+            <span class="seg"><span class="on">Season</span><span>L7</span><span>L15</span><span>L30</span></span></div>
+          <table>
+            <tr><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+            <tr><td>77</td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>39.4%</td><td>90.2%</td></tr>
+          </table>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:11px"><h3>Trends</h3><span class="spacer"></span>
+            <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span></div>
+          <div class="statRow" style="margin-bottom:11px">
+            <div class="statBox"><div class="k">Season</div><div class="v">34.1</div><div class="n">77 games</div></div>
+            <div class="statBox"><div class="k">Last 15d</div><div class="v">32.4</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Δ vs season</div><div class="v">-1.6</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Start</div><div class="v">03/28</div><div class="n">7 games</div></div>
+          </div>
+          <div class="chart"><svg viewBox="0 0 600 92" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,50 25,33 50,64 75,27 100,71 125,39 150,19 175,56 200,35 225,67 250,29 275,46 300,23 325,60 350,37 375,25 400,54 425,31 450,65 475,41 500,21 525,48 550,35 575,58 600,42"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Change vs 4:</b> list instead of tiles, deltas added. <b>Cost:</b> taller rail — eight rows instead of a 3×3 grid.</p>
+</div>
+
+<!-- ===== 4C ===== -->
+<div class="opt">
+  <div class="optHead"><h2>4C — Rail on the right</h2><span class="axis">axis: which side</span></div>
+  <p class="why">Stats and Trends start at the left margin where you naturally read, and identity + projection become a sidebar. The analysis is the page; the player is context.</p>
+  <div class="frame">
+    <div class="cols right">
+      <div>
+        <div class="card pad">
+          <div class="flexline" style="margin-bottom:11px"><h3>Stats</h3><span class="spacer"></span>
+            <span class="seg"><span class="on">Season</span><span>L7</span><span>L15</span><span>L30</span></span>
+            <span class="seg"><span class="on">Per Game</span><span>Totals</span></span></div>
+          <table>
+            <tr><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+            <tr><td>77</td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>39.4%</td><td>90.2%</td></tr>
+          </table>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:11px"><h3>Trends</h3><span class="spacer"></span>
+            <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span>
+            <span class="seg"><span class="on">Minutes</span><span>Usage</span></span></div>
+          <div class="statRow" style="margin-bottom:11px">
+            <div class="statBox"><div class="k">Season</div><div class="v">34.1</div><div class="n">77 games</div></div>
+            <div class="statBox"><div class="k">Last 15d</div><div class="v">32.4</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Δ vs season</div><div class="v">-1.6</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Start</div><div class="v">03/28</div><div class="n">7 games</div></div>
+          </div>
+          <div class="chart"><svg viewBox="0 0 600 92" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,50 25,33 50,64 75,27 100,71 125,39 150,19 175,56 200,35 225,67 250,29 275,46 300,23 325,60 350,37 375,25 400,54 425,31 450,65 475,41 500,21 525,48 550,35 575,58 600,42"/></svg></div>
+        </div>
+      </div>
+      <div>
+        <div class="card pad" style="text-align:center">
+          <div class="avatar" style="margin:0 auto 9px">🏀</div>
+          <div class="name" style="font-size:20px">Derrick White <span class="num" style="font-size:14px">#9</span></div>
+          <div class="pos" style="margin-bottom:11px">Boston Celtics · Guard</div>
+          <div style="text-align:left">
+            <div class="kv"><span>Height</span><b>6' 4"</b></div>
+            <div class="kv"><span>Age</span><b>32</b></div>
+            <div class="kv"><span>Conference</span><b>East</b></div>
+            <div class="kv"><span>Division</span><b>Atlantic</b></div>
+          </div>
+        </div>
+        <div class="card pad mt accent">
+          <div class="flexline" style="margin-bottom:2px"><h3 style="font-size:14px">Next game</h3><span class="spacer stickyTag">sticky</span></div>
+          <div class="sub" style="margin-bottom:10px">@ ORL · Thu, in 2 days</div>
+          <div class="t3" style="margin-bottom:9px">
+            <div class="tile"><div class="k">PTS</div><div class="v">14</div></div>
+            <div class="tile"><div class="k">REB</div><div class="v">4</div></div>
+            <div class="tile"><div class="k">AST</div><div class="v">4</div></div>
+            <div class="tile"><div class="k">3PM</div><div class="v">2</div></div>
+            <div class="tile"><div class="k">STL</div><div class="v">1</div></div>
+            <div class="tile"><div class="k">BLK</div><div class="v">1</div></div>
+          </div>
+          <div class="flexline sub" style="margin-bottom:8px;font-size:11px"><span>FG 45% <span style="color:var(--dim)">5/11</span></span><span>FT 89% <span style="color:var(--dim)">2/2</span></span></div>
+          <div class="slider"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="val">31</span><span class="ghostbtn">↺</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Change vs 4:</b> mirrored. <b>Cost:</b> on mobile the rail collapses <em>below</em> the charts, so the projection ends up at the bottom of the page unless it's reordered.</p>
+</div>
+
+<!-- ===== 4D ===== -->
+<div class="opt">
+  <div class="optHead"><h2>4D — Two columns AND the projection row in Stats</h2><span class="pill">4 + 3 combined</span><span class="axis">axis: merged with stats</span></div>
+  <p class="why">The rail holds only identity. The projection goes where the comparison is free — a highlighted row in the Stats table, same columns as Season and Last 15d — with the minutes slider in that card's header. One place, no duplicate vocabulary.</p>
+  <div class="frame">
+    <div class="cols left">
+      <div>
+        <div class="card pad" style="text-align:center">
+          <div class="avatar" style="margin:0 auto 9px">🏀</div>
+          <div class="name" style="font-size:20px">Derrick White <span class="num" style="font-size:14px">#9</span></div>
+          <div class="pos" style="margin-bottom:11px">Boston Celtics · Guard</div>
+          <div style="text-align:left">
+            <div class="kv"><span>Height</span><b>6' 4"</b></div>
+            <div class="kv"><span>Age</span><b>32</b></div>
+            <div class="kv"><span>Conference</span><b>East</b></div>
+            <div class="kv"><span>Division</span><b>Atlantic</b></div>
+            <div class="kv"><span>Nationality</span><b>USA</b></div>
+          </div>
+        </div>
+        <div class="card pad mt">
+          <div class="sub" style="margin-bottom:6px">Next game</div>
+          <div style="font-weight:700">@ ORL <span class="sub" style="font-weight:400">· Thu, in 2 days</span></div>
+          <div class="sub" style="margin-top:7px;font-size:11px">projection is the highlighted row →</div>
+        </div>
+      </div>
+      <div>
+        <div class="card pad">
+          <div class="flexline" style="margin-bottom:8px"><h3>Stats</h3><span class="spacer"></span>
+            <span class="seg"><span class="on">Per Game</span><span>Totals</span></span></div>
+          <div class="flexline" style="margin-bottom:9px">
+            <span class="lab">Projected minutes</span>
+            <input type="range" min="0" max="48" value="31" style="max-width:170px;accent-color:var(--blue);height:3px">
+            <span class="val">31</span><span class="ghostbtn">↺</span>
+            <span class="spacer sub" style="font-size:11px">last 5 games: 31.4</span>
+          </div>
+          <table>
+            <tr><th class="rowlab"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FGM</th><th>FGA</th><th>FG%</th><th>FT%</th></tr>
+            <tr><td class="rowlab">Season <span style="color:var(--dim)">77 GP</span></td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>5.7</td><td>14.4</td><td>39.4%</td><td>90.2%</td></tr>
+            <tr><td class="rowlab">Last 15d <span style="color:var(--dim)">7 GP</span></td><td>32.4</td><td>15.8</td><td>4.1</td><td>5.0</td><td>1.0</td><td>1.1</td><td>2.6</td><td>5.4</td><td>13.9</td><td>38.8%</td><td>88.0%</td></tr>
+            <tr class="proj"><td class="rowlab"><b>Next</b> @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td><td>4.7</td><td>10.9</td><td>42.8%</td><td>89.3%</td></tr>
+          </table>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:11px"><h3>Trends</h3><span class="spacer"></span>
+            <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span></div>
+          <div class="chart"><svg viewBox="0 0 600 92" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,50 25,33 50,64 75,27 100,71 125,39 150,19 175,56 200,35 225,67 250,29 275,46 300,23 325,60 350,37 375,25 400,54 425,31 450,65 475,41 500,21 525,48 550,35 575,58 600,42"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Change vs 4:</b> projection moves out of the rail into the table. <b>Cost:</b> the rail's "next game" note is nearly empty — it may not deserve its own card at all.</p>
+</div>
+
+<!-- ===== 4E ===== -->
+<div class="opt">
+  <div class="optHead"><h2>4E — Rail holds everything the player <em>is</em>; projection is a banner over the analysis</h2><span class="axis">axis: full-width projection</span></div>
+  <p class="why">Two columns for identity vs analysis, but the projection spans the top of the right column as a single wide strip — one row of eight values, slider inline, no card-inside-a-card. It reads as a headline over Stats and Trends rather than a competing box.</p>
+  <div class="frame">
+    <div class="cols wide">
+      <div>
+        <div class="card pad" style="text-align:center">
+          <div class="avatar" style="margin:0 auto 10px;width:100px;height:100px">🏀</div>
+          <div class="name">Derrick White <span class="num">#9</span></div>
+          <div class="pos" style="margin-bottom:12px">Boston Celtics (BOS) · Guard</div>
+          <div style="text-align:left">
+            <div class="kv"><span>Conference</span><b>East</b></div>
+            <div class="kv"><span>Division</span><b>Atlantic</b></div>
+            <div class="kv"><span>Height</span><b>6' 4"</b></div>
+            <div class="kv"><span>Age</span><b>32</b></div>
+            <div class="kv"><span>Nationality</span><b>USA</b></div>
+            <div class="kv"><span>Games played</span><b>77</b></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card accent">
+          <div class="hdrBar">
+            <h3 style="font-size:14px">Next game</h3>
+            <span class="sub">@ ORL · Thu, in 2 days</span>
+            <span class="spacer"></span>
+            <span class="lab">MIN</span>
+            <input type="range" min="0" max="48" value="31" style="max-width:130px;accent-color:var(--blue);height:3px">
+            <span class="val">31</span>
+            <span class="ghostbtn">↺</span>
+          </div>
+          <div class="pad" style="padding-top:12px;padding-bottom:13px">
+            <div class="t8">
+              <div class="tile"><div class="k">PTS</div><div class="v">14</div><div class="f">&nbsp;</div></div>
+              <div class="tile"><div class="k">REB</div><div class="v">4</div><div class="f">&nbsp;</div></div>
+              <div class="tile"><div class="k">AST</div><div class="v">4</div><div class="f">&nbsp;</div></div>
+              <div class="tile"><div class="k">3PM</div><div class="v">2</div><div class="f">&nbsp;</div></div>
+              <div class="tile"><div class="k">STL</div><div class="v">1</div><div class="f">&nbsp;</div></div>
+              <div class="tile"><div class="k">BLK</div><div class="v">1</div><div class="f">&nbsp;</div></div>
+              <div class="tile"><div class="k">FG%</div><div class="v">45%</div><div class="f">5/11</div></div>
+              <div class="tile"><div class="k">FT%</div><div class="v">89%</div><div class="f">2/2</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:11px"><h3>Stats</h3><span class="spacer"></span>
+            <span class="seg"><span class="on">Season</span><span>L7</span><span>L15</span><span>L30</span></span></div>
+          <table>
+            <tr><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+            <tr><td>77</td><td>34.1</td><td>16.5</td><td>4.4</td><td>5.4</td><td>1.1</td><td>1.3</td><td>2.7</td><td>39.4%</td><td>90.2%</td></tr>
+          </table>
+        </div>
+        <div class="card pad mt">
+          <div class="flexline" style="margin-bottom:11px"><h3>Trends</h3><span class="spacer"></span>
+            <span class="seg"><span>7d</span><span class="on">15d</span><span>30d</span></span></div>
+          <div class="statRow" style="margin-bottom:11px">
+            <div class="statBox"><div class="k">Season</div><div class="v">34.1</div><div class="n">77 games</div></div>
+            <div class="statBox"><div class="k">Last 15d</div><div class="v">32.4</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Δ vs season</div><div class="v">-1.6</div><div class="n">7 games</div></div>
+            <div class="statBox"><div class="k">Start</div><div class="v">03/28</div><div class="n">7 games</div></div>
+          </div>
+          <div class="chart"><svg viewBox="0 0 600 92" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.6" points="0,50 25,33 50,64 75,27 100,71 125,39 150,19 175,56 200,35 225,67 250,29 275,46 300,23 325,60 350,37 375,25 400,54 425,31 450,65 475,41 500,21 525,48 550,35 575,58 600,42"/></svg></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Change vs 4:</b> projection is wide and on top, rail is pure identity. <b>Cost:</b> it's the loudest element on the page — fine if the projection is the reason you open a player, wrong if it isn't.</p>
+</div>
+
+</body>
+</html>

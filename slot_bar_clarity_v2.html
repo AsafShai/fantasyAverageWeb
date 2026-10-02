@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot pace — clarity, round 2</title>
+<style>
+  :root{
+    --card:#fff; --page:#f9fafb; --ink:#111827; --ink2:#4b5563; --ink3:#6b7280;
+    --track:#f9fafb; --border:#d1d5db; --hair:#e5e7eb;
+    --played:#60a5fa; --ontrack:#bfdbfe; --possible:#f3f4f6; --gone:#fecdd3;
+    --mgone:#fda4af; --mrest:#e5e7eb;
+    --marker:#64748b; --ring:#fff;
+    --chip:#eff6ff; --chip-ink:#1e40af; --chip-gray:#f3f4f6; --chip-gray-ink:#4b5563;
+    --chip-rose:#ffe4e6; --chip-rose-ink:#9f1239; --bad:#e11d48;
+  }
+  body.dark{
+    --card:#1f2937; --page:#111827; --ink:#f9fafb; --ink2:#d1d5db; --ink3:#9ca3af;
+    --track:#374151; --border:#4b5563; --hair:#374151;
+    --played:#3b82f6; --ontrack:#1e40af; --possible:#4b5563; --gone:#881337;
+    --mgone:#9f1239; --mrest:#4b5563;
+    --marker:#cbd5e1; --ring:#1f2937;
+    --chip:#2d3748; --chip-ink:#93c5fd; --chip-gray:#374151; --chip-gray-ink:#d1d5db;
+    --chip-rose:#4c0519; --chip-rose-ink:#fda4af; --bad:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header.top{position:sticky;top:0;z-index:50;background:var(--card);border-bottom:1px solid var(--hair);
+    padding:12px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  header.top h1{margin:0;font-size:16px}
+  button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card);color:var(--ink);cursor:pointer}
+  main{padding:16px;max-width:1200px;margin:0 auto}
+  section{margin:0 0 44px}
+  h2{font-size:17px;margin:0 0 4px}
+  .why{color:var(--ink3);font-size:13px;margin:0 0 6px;max-width:64ch}
+  .diff{font-size:12px;color:var(--ink2);background:var(--chip-gray);border-radius:8px;
+    padding:7px 10px;margin:0 0 14px;max-width:64ch}
+  .diff b{color:var(--ink)}
+  .frames{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  .frame{flex:0 0 auto}
+  .frame.desk{flex:1 1 500px;min-width:340px}
+  .frame > .cap{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink3);margin-bottom:6px}
+  .phone{width:390px}
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:14px}
+  .card h3{margin:0;font-size:18px}
+  .sub{color:var(--ink3);font-size:11.5px;margin:3px 0 0}
+
+  .dots{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 2px;font-size:11px;color:var(--ink3)}
+  .dots span{display:inline-flex;align-items:center;gap:4px}
+  .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  .anatomy{margin:12px 0 6px;padding:10px 10px 4px;border:1px dashed var(--border);border-radius:10px}
+  .anatomy .hint{font-size:10.5px;color:var(--ink3);margin:0 0 18px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.04em}
+  .callouts{position:relative;height:0}
+  .co{position:absolute;font-size:10px;color:var(--ink2);white-space:nowrap;transform:translateX(-50%)}
+  .co b{color:var(--ink)}
+  .co::before{content:"";position:absolute;left:50%;width:1px;background:var(--border)}
+  .co.up{bottom:6px}.co.up::before{top:100%;height:8px}
+  .co.dn{top:6px}.co.dn::before{bottom:100%;height:8px}
+
+  .rows{margin-top:12px;display:flex;flex-direction:column;gap:11px}
+  .row{display:grid;grid-template-columns:1fr;gap:4px}
+  .desk .row{grid-template-columns:44px minmax(0,1fr) 92px;align-items:center;gap:10px;
+    grid-template-areas:"slot bar rail" ". meta ."}
+  .desk .row > .slot{grid-area:slot}
+  .desk .row > .barwrap{grid-area:bar}
+  .desk .row > .rail{grid-area:rail}
+  .desk .row > .meta{grid-area:meta}
+  .slot{font-size:11.5px;font-weight:800;letter-spacing:.05em;color:var(--ink2)}
+  .rail{font-size:11px;color:var(--ink3);text-align:right;font-variant-numeric:tabular-nums}
+  .rail b{color:var(--ink)}
+  .rail.bad b,.rail.bad{color:var(--bad)}
+  .phone .rowhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+
+  .barwrap{position:relative}
+  .bar{position:relative;display:flex;height:18px;border:1px solid var(--border);
+    border-radius:999px;background:var(--track)}
+  .seg{height:100%;min-width:2px}
+  .seg:first-child{border-radius:999px 0 0 999px}
+  .seg:last-child{border-radius:0 999px 999px 0}
+  .seg.played{background:var(--played)}
+  .seg.ontrack{background:var(--ontrack)}
+  .seg.possible{background:var(--possible)}
+  .seg.gone{background:var(--gone)}
+  .mono .seg.ontrack,.mono .seg.possible{background:var(--mrest)}
+  .mono .seg.gone{background:var(--mgone)}
+
+  .mk{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--marker);
+    box-shadow:0 0 0 1.5px var(--ring);border-radius:2px;transform:translateX(-1px)}
+  .mk.caret{top:auto;bottom:-3px;height:8px;background:transparent;box-shadow:none}
+  .mk.caret::after{content:"";position:absolute;left:-3px;bottom:0;border-left:4px solid transparent;
+    border-right:4px solid transparent;border-bottom:5px solid var(--marker)}
+  .lane{position:relative;height:15px;margin-top:2px}
+  .lab{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap;font-size:9.5px;
+    font-weight:700;color:var(--ink2);background:var(--chip-gray);padding:1px 5px;border-radius:5px;
+    font-variant-numeric:tabular-nums}
+  .lab.edge-r{transform:translateX(-100%)}
+  .lab.edge-l{transform:none}
+
+  .meta{display:flex;flex-wrap:wrap;gap:5px;align-items:baseline}
+  .chip{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:5px;
+    font-size:10px;font-weight:800;background:var(--chip-gray);color:var(--chip-gray-ink);
+    font-variant-numeric:tabular-nums}
+  .chip.blue{background:var(--chip);color:var(--chip-ink)}
+  .chip.rose{background:var(--chip-rose);color:var(--chip-rose-ink)}
+  .chip .dot{width:8px;height:8px;border-radius:3px}
+  .vals{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .vals b{color:var(--ink);font-weight:800}
+  .vals .warn{color:var(--bad);font-weight:800}
+  .quiet{font-size:10.5px;color:var(--ink3);font-style:italic}
+
+  /* vertical */
+  .vwrap{position:relative;margin-top:14px}
+  .vcols{display:flex;gap:6px;align-items:flex-end;justify-content:space-between}
+  .vcol{flex:1 1 0;min-width:0;text-align:center}
+  .vtop{font-size:11px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+  .vtop small{display:block;font-size:9px;font-weight:600;color:var(--ink3)}
+  .vtrack{position:relative;height:150px;margin:4px auto 0;border:1px solid var(--border);
+    border-radius:6px;background:var(--track);overflow:hidden;display:flex;flex-direction:column-reverse}
+  .vseg{width:100%}
+  .vseg.played{background:var(--played)}
+  .vseg.ontrack{background:var(--ontrack)}
+  .vseg.possible{background:var(--possible)}
+  .vseg.gone{background:var(--gone);position:absolute;top:0;left:0;right:0}
+  .mono .vseg.ontrack,.mono .vseg.possible{background:var(--mrest)}
+  .mono .vseg.gone{background:var(--mgone)}
+  .vslot{font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--ink2);margin-top:5px}
+  .vslot small{display:block;font-weight:600;color:var(--ink3);font-size:9px}
+  .paceline{position:absolute;left:0;right:0;border-top:2px dashed var(--marker);pointer-events:none}
+  .paceline .tag{position:absolute;right:0;top:-16px;font-size:9.5px;font-weight:800;color:var(--ink2);
+    background:var(--chip-gray);padding:1px 6px;border-radius:5px}
+  .vlegendrow{display:flex;justify-content:space-between;font-size:9.5px;color:var(--ink3);margin-top:2px}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Slot pace — clarity, round 2</h1>
+  <button id="tog">Toggle dark</button>
+</header>
+<main id="app"></main>
+
+<script>
+/* Mid-season scenario, pace 60 GP/team, 20 game days left.
+   Deliberately mixed: three rows exactly on pace and clean, two rows with games gone. */
+const PACE = 60;
+const ROWS = [
+  { slot:'PG',  played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'SG',  played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'SF',  played:57,  est:78,  max:82,  cap:82,  mult:1 },
+  { slot:'PF',  played:48,  est:66,  max:68,  cap:82,  mult:1 },
+  { slot:'C',   played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'G',   played:44,  est:60,  max:64,  cap:82,  mult:1 },
+  { slot:'F',   played:59,  est:81,  max:82,  cap:82,  mult:1 },
+  { slot:'UTIL',played:175, est:240, max:246, cap:248, mult:3 },
+];
+const pct = (v,cap) => (v/cap)*100;
+const parts = r => ({
+  onTrack : Math.max(0, r.est - r.played),
+  possible: Math.max(0, r.max - Math.max(r.played, r.est)),
+  gone    : Math.max(0, r.cap - r.max),
+});
+const paceFor = r => PACE * r.mult;
+const vsPace  = r => +(r.played - paceFor(r)).toFixed(1);
+const quiet   = r => parts(r).gone === 0 && Math.abs(vsPace(r)) < 1;
+const capTxt  = r => r.cap === 248 ? '(246+2)' : r.cap;
+
+function segs(r){
+  const p = parts(r);
+  return [['played',r.played],['ontrack',p.onTrack],['possible',p.possible],['gone',p.gone]]
+    .filter(s => s[1] > 0)
+    .map(([c,v]) => `<span class="seg ${c}" style="width:${pct(v,r.cap)}%"></span>`).join('');
+}
+
+/* Markers placed in a lane BELOW the bar, never over the fill.
+   Labels that would collide are merged into one. */
+function lane(r, opts){
+  const pts = [];
+  if (opts.now)  pts.push({ k:'now',  v:r.played, t:`now ${r.played}` });
+  if (opts.est)  pts.push({ k:'est',  v:r.est,    t:`est ${r.est}` });
+  if (opts.pace) pts.push({ k:'pace', v:paceFor(r), t:`NBA ${paceFor(r)}` });
+  pts.sort((a,b) => a.v - b.v);
+
+  const MIN = opts.narrow ? 22 : 13;          // % gap needed to keep two labels apart
+  const merged = [];
+  pts.forEach(p => {
+    const last = merged[merged.length - 1];
+    if (last && pct(p.v - last.v, r.cap) < MIN) { last.t += ` · ${p.t}`; last.v = (last.v + p.v) / 2; }
+    else merged.push(Object.assign({}, p));
+  });
+
+  const ticks = pts.map(p => {
+    const L = Math.min(100, pct(p.v, r.cap));
+    return `<span class="mk ${p.k === 'now' ? '' : 'caret'}" style="left:${L}%"></span>`;
+  }).join('');
+  const labels = merged.map(p => {
+    const L = Math.min(100, pct(p.v, r.cap));
+    const edge = L > 82 ? ' edge-r' : (L < 12 ? ' edge-l' : '');
+    const left = L > 82 ? 100 : (L < 12 ? 0 : L);
+    return `<span class="lab${edge}" style="left:${left}%">${p.t}</span>`;
+  }).join('');
+  return { ticks, labels: `<div class="lane">${labels}</div>` };
+}
+
+function valsLine(r){
+  const p = parts(r);
+  return `<div class="vals"><b>${r.played}</b> played · est <b>${r.est}</b> · max <b>${r.max}</b> of ${capTxt(r)}` +
+    (p.gone > 0 ? ` · <span class="warn">${p.gone} gone</span>` : '') + `</div>`;
+}
+function chips(r){
+  const p = parts(r);
+  const d = c => `<span class="dot" style="background:var(--${c})"></span>`;
+  return `<span class="chip blue">${d('played')}played <b>${r.played}</b></span>
+    <span class="chip blue">${d('ontrack')}estimated <b>${r.est}</b></span>
+    <span class="chip">${d('possible')}max <b>${r.max}</b></span>
+    ${p.gone > 0 ? `<span class="chip rose">${d('gone')}gone <b>${p.gone}</b></span>` : ''}
+    <span class="chip">vs pace <b>${vsPace(r) > 0 ? '+' : ''}${vsPace(r).toFixed(1)}</b></span>`;
+}
+
+function rowHTML(r, o){
+  const p = parts(r);
+  const L = o.lane ? lane(r, Object.assign({ narrow:o.narrow }, o.lane)) : { ticks:'', labels:'' };
+  const paceTick = (!o.lane || !o.lane.pace)
+    ? `<span class="mk" style="left:${Math.min(100, pct(paceFor(r), r.cap))}%"></span>` : '';
+  const bar = `<div class="barwrap"><div class="bar">${segs(r)}${paceTick}${L.ticks}</div>${L.labels}</div>`;
+
+  let meta = '';
+  if (o.meta === 'chips')      meta = chips(r);
+  if (o.meta === 'vals')       meta = valsLine(r);
+  if (o.meta === 'collapse')   meta = quiet(r) ? `<span class="quiet">on pace · full season reachable</span>` : chips(r);
+
+  const railTxt = o.rail === 'vals'
+    ? `<b>${r.played}</b> → ${r.est}`
+    : (p.gone > 0 ? `<b>${p.gone} gone</b>` : `of ${capTxt(r)}`);
+  const rail = `<div class="rail ${p.gone > 0 ? 'bad' : ''}">${railTxt}</div>`;
+
+  if (o.narrow) return `<div class="row">
+      <div class="rowhead"><span class="slot">${r.slot}${r.slot === 'UTIL' ? ' <span style="font-weight:500;color:var(--ink3)">×3</span>' : ''}</span>${rail}</div>
+      ${bar}${meta ? `<div class="meta">${meta}</div>` : ''}
+    </div>`;
+  return `<div class="row"><div class="slot">${r.slot}</div>${bar}${rail}
+      ${meta ? `<div class="meta">${meta}</div>` : ''}</div>`;
+}
+
+function anatomy(withValues){
+  const r = { slot:'', played:48, est:66, max:68, cap:82, mult:1 };
+  const p = parts(r);
+  const c1 = pct(r.played,82)/2;
+  const c2 = pct(r.played,82) + pct(p.onTrack,82)/2;
+  const c3 = pct(r.max,82) - pct(p.possible,82)/2;
+  const c4 = 100 - pct(p.gone,82)/2;
+  const v = (lbl,val) => withValues ? `${lbl} <b>${val}</b>` : lbl;
+  return `<div class="anatomy">
+    <div class="hint">How to read a bar</div>
+    <div class="callouts">
+      <span class="co up" style="left:${c1}%">${v('played','48')}</span>
+      <span class="co up" style="left:${c3}%">${v('still possible','+2')}</span>
+    </div>
+    <div class="bar">${segs(r)}</div>
+    <div class="callouts">
+      <span class="co dn" style="left:${c2}%">${v('on track to add','+18')}</span>
+      <span class="co dn" style="left:${c4}%">${v('gone','14')}</span>
+    </div>
+    <div style="height:20px"></div>
+  </div>`;
+}
+
+function legend(kind){
+  const sw = (c,l) => `<span><i class="sw" style="background:var(--${c})"></i>${l}</span>`;
+  if (kind === 'none') return '';
+  if (kind === 'mono') return `<div class="dots">
+      ${sw('played','played')}${sw('mrest','not played yet')}
+      <span><i class="sw" style="background:var(--mgone)"></i><b style="color:var(--chip-rose-ink)">gone — can never be played</b></span>
+      <span><i class="sw" style="background:var(--marker);width:2px;height:12px;border-radius:1px"></i>NBA pace</span>
+    </div>`;
+  return `<div class="dots">${sw('played','Played')}${sw('ontrack','On track to add')}${sw('possible','Still possible')}${sw('gone','Gone')}
+    <span><i class="sw" style="background:var(--marker);width:2px;height:12px;border-radius:1px"></i>NBA pace</span></div>`;
+}
+
+function horizCard(o, narrow){
+  const oo = Object.assign({}, o, { narrow });
+  return `<div class="card ${o.mono ? 'mono' : ''}">
+    <h3>Slot pace</h3><p class="sub">NBA pace <b>60.0</b> GP/team · 20 days left</p>
+    ${o.anatomy ? anatomy(o.anatomyValues) : legend(o.legend)}
+    <div class="rows">${ROWS.map(r => rowHTML(r, oo)).join('')}</div>
+  </div>`;
+}
+
+function vertCard(o, narrow){
+  const paceP = pct(PACE, 82);          // same ratio for every column, incl. UTIL
+  const cols = ROWS.map(r => {
+    const p = parts(r);
+    const top = o.topValue === 'est'
+      ? `<div class="vtop">${r.est}<small>est</small></div>`
+      : `<div class="vtop">${r.played}<small>played</small></div>`;
+    return `<div class="vcol">
+      ${top}
+      <div class="vtrack" style="width:${narrow ? 34 : 46}px">
+        ${p.gone > 0 ? `<span class="vseg gone" style="height:${pct(p.gone,r.cap)}%"></span>` : ''}
+        <span class="vseg played" style="height:${pct(r.played,r.cap)}%"></span>
+        <span class="vseg ontrack" style="height:${pct(p.onTrack,r.cap)}%"></span>
+        <span class="vseg possible" style="height:${pct(p.possible,r.cap)}%"></span>
+      </div>
+      <div class="vslot">${r.slot}${r.slot === 'UTIL' ? '<small>×3 · /248</small>' : (p.gone > 0 ? `<small style="color:var(--bad)">${p.gone} gone</small>` : '<small>&nbsp;</small>')}</div>
+    </div>`;
+  }).join('');
+  return `<div class="card ${o.mono ? 'mono' : ''}">
+    <h3>Slot pace</h3><p class="sub">NBA pace <b>60.0</b> GP/team · 20 days left</p>
+    ${legend(o.legend)}
+    <div class="vwrap">
+      <div style="position:relative">
+        <div class="vcols">${cols}</div>
+        <div class="paceline" style="bottom:${(150 * paceP / 100) + 22}px">
+          <span class="tag">NBA pace 60</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+const VARIANTS = [
+  { id:'v0', kind:'h', title:'Baseline (what is in dev now)',
+    why:'Reference for every comparison below.',
+    diff:'Four colors, dot legend, full chip row on every one of the 8 rows, <b>cap 82</b> on the rail.',
+    o:{ legend:'dots', meta:'chips', rail:'cap' } },
+
+  { id:'r1', kind:'h', title:'1r · Anatomy legend, now carrying values',
+    why:'Your note: the legend is fine but should show numbers too.',
+    diff:'The sample bar callouts now read <b>played 48</b> / <b>on track to add +18</b> / <b>still possible +2</b> / <b>gone 14</b>, and each row keeps a plain value line instead of five chips. The legend teaches the shape <em>and</em> what the numbers mean, in one place.',
+    o:{ anatomy:true, anatomyValues:true, meta:'vals', rail:'cap' } },
+
+  { id:'r3', kind:'h', title:'3r · Two colors, not four (this time it is visible)',
+    why:'My earlier version changed one shade — invisible. This is the real version.',
+    diff:'Everything not yet played is a single <b>gray</b>: “on track” and “still possible” stop being separate colors. Blue = played, gray = not played, rose = gone. The projection moves to a <b>caret under the bar</b> (est) instead of being a colored band. Compare the PF and G rows against the baseline — they are the only colored thing on the card.',
+    o:{ legend:'mono', mono:true, meta:'vals', rail:'cap', lane:{ est:true } } },
+
+  { id:'r4', kind:'h', title:'4r · Chips only where something is wrong',
+    why:'You could not see this before because my old data had every row off pace.',
+    diff:'PG, SG and C are exactly on pace with a full season reachable — they collapse to one italic line. SF, PF, G, F and UTIL keep the chips. <b>Roughly 40% less to read on mobile.</b>',
+    o:{ legend:'dots', meta:'collapse', rail:'cap' } },
+
+  { id:'r7', kind:'h', title:'7r · Step markers with the overlap fixed',
+    why:'Yes — overlap was the whole problem. Two changes fix it.',
+    diff:'Markers now live in <b>their own lane under the bar</b>, so they never cross the fill. And labels closer than a threshold are <b>merged into one</b> — see PG, where “now 60” and “NBA 60” become a single tag instead of two colliding ones. Mobile uses a wider threshold, so it merges sooner.',
+    o:{ legend:'none', meta:'vals', rail:'vals', lane:{ now:true, est:true, pace:true } } },
+
+  { id:'va', kind:'v', title:'V-A · Vertical columns (same colors as today)',
+    why:'All 8 slots on one screen, no vertical scrolling on a phone.',
+    diff:'Each slot is a column filling from the bottom. The <b>NBA pace line runs across all 8 columns</b> — one dashed line, one label. Above/below that line is instantly “ahead / behind” for every slot at once, with no per-row marker and no subtraction. <b>Gone</b> sits as a rose cap at the top of the column, which reads as a lid you cannot get past.',
+    o:{ legend:'dots', topValue:'played' } },
+
+  { id:'vb', kind:'v', title:'V-B · Vertical, two-color',
+    why:'V-A with the 3r palette applied.',
+    diff:'Same columns, but only blue / gray / rose. The pace line does the comparing, so “on track” does not need its own color.',
+    o:{ legend:'mono', mono:true, topValue:'est' } },
+];
+
+document.getElementById('app').innerHTML = VARIANTS.map(v => `
+  <section id="${v.id}">
+    <h2>${v.title}</h2>
+    <p class="why">${v.why}</p>
+    <div class="diff"><b>What changed:</b> ${v.diff}</div>
+    <div class="frames">
+      <div class="frame phone"><div class="cap">Mobile · 390px</div>${v.kind === 'v' ? vertCard(v.o, true) : horizCard(v.o, true)}</div>
+      <div class="frame desk"><div class="cap">Desktop</div>${v.kind === 'v' ? vertCard(v.o, false) : horizCard(v.o, false)}</div>
+    </div>
+  </section>`).join('');
+
+window.only = id => { document.querySelectorAll('section').forEach(s => s.style.display = s.id === id ? '' : 'none'); scrollTo(0,0); return id; };
+document.getElementById('tog').onclick = () => document.body.classList.toggle('dark');
+</script>
+</body>
+</html>

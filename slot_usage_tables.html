@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot usage — tables</title>
+<style>
+  :root{
+    --card:#fff; --page:#f7f8fa; --ink:#0f172a; --ink2:#475569; --ink3:#94a3b8;
+    --hair:#eceff3; --hair2:#e2e8f0;
+    --fill:#dbeafe; --fill2:#bfdbfe; --ink-num:#0f172a;
+    --lost:#e11d48; --lostfill:#ffe4e6; --lostink:#9f1239;
+    --warn:#c2410c; --warnfill:#ffedd5;
+    --gapneutral:#f1f5f9; --gapline:#cbd5e1; --gaplinelost:#fda4af;
+    --good:#0f766e;
+  }
+  body.dark{
+    --card:#1b2430; --page:#111827; --ink:#f8fafc; --ink2:#cbd5e1; --ink3:#7c8ba1;
+    --hair:#2a3543; --hair2:#334155;
+    --fill:#22314a; --fill2:#2b3f61; --ink-num:#f8fafc;
+    --lost:#fb7185; --lostfill:#3a1523; --lostink:#fda4af;
+    --warn:#fdba74; --warnfill:#43200c;
+    --gapneutral:#243040; --gapline:#4b5563; --gaplinelost:#9f1239;
+    --good:#5eead4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  header.top{position:sticky;top:0;z-index:50;background:var(--card);border-bottom:1px solid var(--hair);
+    padding:12px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  header.top h1{margin:0;font-size:15px;font-weight:700}
+  button{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--hair2);
+    background:var(--card);color:var(--ink);cursor:pointer}
+  main{padding:18px;max-width:1200px;margin:0 auto}
+  section{margin:0 0 46px}
+  h2{font-size:16px;margin:0 0 6px;font-weight:700;letter-spacing:-.01em}
+  .why{color:var(--ink2);font-size:13px;margin:0 0 16px;max-width:70ch}
+  .why b{color:var(--ink)}
+  .frames{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+  .frame > .cap{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--ink3);margin-bottom:7px}
+  .phone{width:390px;flex:0 0 390px}
+  .desk{flex:1 1 580px;min-width:400px}
+
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:18px 16px 8px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .card .title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:0 2px 14px}
+  .card h3{margin:0;font-size:16px;font-weight:700;letter-spacing:-.01em}
+  .card .sub{font-size:11.5px;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .card .sub b{color:var(--ink2);font-weight:700}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  thead th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--ink3);text-align:right;padding:0 8px 7px;white-space:nowrap;border-bottom:1px solid var(--hair2)}
+  thead th:first-child{text-align:left;padding-left:2px}
+  thead th small{display:block;font-size:9px;letter-spacing:.02em;text-transform:none;
+    font-weight:600;color:var(--ink3);opacity:.85;margin-top:1px}
+  tbody td{padding:0;border-bottom:1px solid var(--hair)}
+  tbody tr:last-child td{border-bottom:0}
+  .slotcell{padding:9px 2px;font-size:12.5px;font-weight:800;letter-spacing:.03em;color:var(--ink2);
+    white-space:nowrap}
+  .slotcell em{display:block;font-style:normal;font-weight:600;font-size:9.5px;color:var(--ink3);
+    margin-top:1px}
+
+  /* a value cell: number in front, share-of-cap bar behind it */
+  /* the track is the cap; the empty part of it is the gap, tinted by what the gap means */
+  .v{position:relative;padding:7px 8px;text-align:right}
+  .v .trk{position:absolute;left:4px;right:4px;top:5px;bottom:5px;border-radius:5px;
+    background:var(--gapneutral);overflow:hidden}
+  .v .trk i{position:absolute;left:0;top:0;bottom:0;background:var(--fill);border-radius:5px 0 0 5px}
+  .v .n{position:relative;font-size:14.5px;font-weight:800;color:var(--ink-num);line-height:1.15}
+  .v .u{position:relative;display:block;font-size:9.5px;font-weight:600;color:var(--ink3);line-height:1.1;
+    margin-top:1px}
+  .v.lost .trk{background:var(--lostfill)}
+  .v.lost .n{color:var(--lost)}
+  .v.lost .u{color:var(--lost);opacity:.9}
+  .v.short .trk{background:var(--warnfill)}
+  .v.short .u{color:var(--warn)}
+  .v.behindtxt .u{color:var(--warn)}
+  /* boxed variant: the gap is outlined instead of tinted */
+  .v.boxed .trk{background:transparent}
+  .v.boxed .gapbox{position:absolute;top:0;bottom:0;right:0;border:1.5px dashed var(--gapline);
+    border-radius:4px}
+  .v.boxed.lost .gapbox{border-color:var(--gaplinelost);border-style:solid;
+    background:color-mix(in srgb, var(--lostfill) 70%, transparent)}
+  .v.boxed.short .gapbox{border-color:var(--warn);opacity:.55}
+  .gapkey{display:flex;flex-wrap:wrap;gap:14px;padding:10px 2px 2px;font-size:10.5px;color:var(--ink3)}
+  .gapkey span{display:inline-flex;align-items:center;gap:5px}
+  .gapkey i{width:22px;height:9px;border-radius:3px;display:inline-block}
+
+  .flagcell{text-align:right;padding:8px;white-space:nowrap}
+  .flag{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;
+    background:var(--lostfill);color:var(--lostink)}
+  .flag.warn{background:var(--warnfill);color:var(--warn)}
+  .flag.none{background:transparent;color:var(--ink3);font-weight:600}
+
+  tfoot td{padding:10px 2px 12px;font-size:11px;color:var(--ink3);border-top:1px solid var(--hair2)}
+
+  /* variant B — the original 3-row grid, refined */
+  .grid3{width:100%;border-collapse:separate;border-spacing:0}
+  .grid3 th.corner{width:76px}
+  .grid3 th.slot{font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--ink2);
+    text-align:center;padding:0 0 8px;border:0}
+  .grid3 th.slot small{display:block;font-size:8.5px;font-weight:600;color:var(--ink3)}
+  .grid3 td.rowlab{font-size:11px;font-weight:700;color:var(--ink2);padding:9px 8px 9px 2px;
+    white-space:nowrap;border-top:1px solid var(--hair)}
+  .grid3 td.rowlab small{display:block;font-size:9.5px;font-weight:600;color:var(--ink3);
+    text-transform:none;letter-spacing:0}
+  .grid3 td.c{text-align:center;padding:7px 3px;border-top:1px solid var(--hair);position:relative}
+  .grid3 td.c .n{font-size:13.5px;font-weight:800;color:var(--ink-num);line-height:1.15}
+  .grid3 td.c .n small{font-size:9.5px;font-weight:600;color:var(--ink3)}
+  .grid3 td.c.lost .n{color:var(--lost)}
+  .grid3 td.c.behind .n{color:var(--warn)}
+  .grid3 .minibar{height:3px;border-radius:2px;background:var(--hair2);margin:4px auto 0;overflow:hidden}
+  .grid3 .minibar i{display:block;height:100%;background:var(--fill2);opacity:.75}
+  .grid3 td.c.lost .minibar i{background:var(--lost);opacity:.55}
+
+  /* faithful replica of yesterday's grid (commit 34211e6) */
+  .old{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.1);padding:16px}
+  body.dark .old{background:#1f2937}
+  .old h4{margin:0;font-size:24px;font-weight:700;color:#111827}
+  body.dark .old h4{color:#f9fafb}
+  .old .cap2{font-size:12px;color:#6b7280;margin-top:4px}
+  .old .leg{font-size:12px;color:#4b5563;margin:16px 0}
+  .old .legrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:4px}
+  .old .legrow > b{width:40px;font-size:12px;font-weight:600;color:#6b7280}
+  .old .legrow span{display:inline-flex;align-items:center;gap:4px}
+  .old .legrow i{width:12px;height:12px;border-radius:2px;display:inline-block}
+  .old .scroll{overflow-x:auto}
+  .old table{border-collapse:collapse;min-width:100%}
+  .old th,.old td{border:1px solid #e5e7eb;padding:12px 16px;text-align:center;font-size:14px;
+    font-weight:500;color:#111827}
+  body.dark .old th,body.dark .old td{border-color:#4b5563;color:#f9fafb}
+  .old thead th{background:#f9fafb;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase}
+  body.dark .old thead th{background:#374151}
+  .old tbody th{background:#f9fafb;text-align:left;font-size:12px;font-weight:600;color:#4b5563;
+    white-space:nowrap}
+  body.dark .old tbody th{background:#374151;color:#d1d5db}
+  .old tbody th div{font-weight:400;color:#9ca3af;text-transform:none}
+  .old td .d{font-size:12px;font-weight:400;opacity:.8}
+  .old td .o{opacity:.5}
+  .g100{background:#dcfce7;color:#166534!important}
+  .y100{background:#fef9c3;color:#854d0e!important}
+  .o100{background:#ffedd5;color:#9a3412!important}
+  .r100{background:#fee2e2;color:#991b1b!important}
+  body.dark .g100{background:#052e16;color:#86efac!important}
+  body.dark .y100{background:#422006;color:#fde68a!important}
+  body.dark .o100{background:#431407;color:#fdba74!important}
+  body.dark .r100{background:#4c1d1d;color:#fca5a5!important}
+
+  .note{font-size:12.5px;color:var(--ink2);padding-left:13px;border-left:2px solid var(--hair2);
+    max-width:70ch}
+  .note b{color:var(--ink)}
+  .note + .note{margin-top:10px}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Slot usage — tables</h1>
+  <button id="tog">Toggle dark</button>
+</header>
+<main id="app"></main>
+
+<script>
+const PACE = 60, DAYS = 20;
+const ROWS = [
+  { slot:'PG',  played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'SG',  played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'SF',  played:57,  est:78,  max:82,  cap:82,  mult:1 },
+  { slot:'PF',  played:48,  est:66,  max:68,  cap:82,  mult:1 },
+  { slot:'C',   played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'G',   played:44,  est:60,  max:64,  cap:82,  mult:1 },
+  { slot:'F',   played:59,  est:81,  max:82,  cap:82,  mult:1 },
+  { slot:'UTIL',played:175, est:240, max:246, cap:248, mult:3 },
+];
+const pctOf = (v,cap) => Math.max(0, Math.min(100, (v/cap)*100));
+const gone  = r => Math.max(0, r.cap - r.max);
+const vs    = r => +((r.played - PACE * r.mult) / r.mult).toFixed(1);   // always per slot
+const capT  = r => r.cap === 248 ? '246+2' : String(r.cap);
+const BEHIND = r => vs(r) <= -3;
+
+/* ── A · slots as rows ─────────────────────────────────────────── */
+function tableA(narrow, style){
+  const boxed = style === 'box';
+  // one value cell: track = the cap, fill = the value, the remainder IS the gap
+  const vcell = (value, cap, cls, under) => {
+    const w = pctOf(value, cap);
+    return `<td class="v ${cls} ${boxed ? 'boxed' : ''}">
+      <span class="trk"><i style="width:${w}%"></i>
+        ${boxed && w < 99.5 ? `<span class="gapbox" style="left:${w}%"></span>` : ''}</span>
+      <span class="n">${value}</span><span class="u">${under}</span></td>`;
+  };
+
+  const body = ROWS.map(r => {
+    const lost = gone(r);
+    const shortBy = Math.max(0, r.cap - r.est);
+    const behind = BEHIND(r);
+    return `<tr>
+      <td class="slotcell">${r.slot}<em>/${capT(r)}</em></td>
+      ${vcell(r.played, r.cap, behind ? 'behindtxt' : '',
+        behind ? `${Math.abs(vs(r))} behind pace` : '&nbsp;')}
+      ${vcell(r.est, r.cap, shortBy > 0 ? 'short' : '', shortBy > 0 ? `${shortBy} short` : '&nbsp;')}
+      ${vcell(r.max, r.cap, lost ? 'lost' : '', lost ? `${lost} lost` : '&nbsp;')}
+    </tr>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="title"><h3>Slot usage</h3>
+      <span class="sub"><b>${DAYS}</b> game days left · NBA pace <b>60.0</b></span></div>
+    <table>
+      <thead><tr>
+        <th>Slot</th>
+        <th>Used<small>games played</small></th>
+        <th>Projected<small>season finish</small></th>
+        <th>Ceiling<small>most still possible</small></th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  </div>`;
+}
+
+/* ── B · the original 3-row grid, refined ──────────────────────── */
+function tableB(narrow){
+  const head = ROWS.map(r => `<th class="slot">${r.slot}${r.slot === 'UTIL' ? '<small>×3</small>' : '<small>&nbsp;</small>'}</th>`).join('');
+  const row = (label, sub, get) => `<tr>
+    <td class="rowlab">${label}<small>${sub}</small></td>
+    ${ROWS.map(r => {
+      const { n, u, cls, w } = get(r);
+      return `<td class="c ${cls}">
+        <div class="n">${n}${u ? `<small>${u}</small>` : ''}</div>
+        <div class="minibar" style="width:${narrow ? 22 : 34}px"><i style="width:${w}%"></i></div>
+      </td>`;
+    }).join('')}</tr>`;
+
+  return `<div class="card">
+    <div class="title"><h3>Slot usage</h3>
+      <span class="sub"><b>${DAYS}</b> game days left · NBA pace <b>60.0</b> · cap <b>82</b> per slot</span></div>
+    <table class="grid3">
+      <thead><tr><th class="corner"></th>${head}</tr></thead>
+      <tbody>
+        ${row('Used', 'games played', r => ({
+          n: r.played, u: '', cls: BEHIND(r) ? 'behind' : '', w: pctOf(r.played, r.cap) }))}
+        ${row('Projected', 'season finish', r => ({
+          n: r.est, u: '', cls: '', w: pctOf(r.est, r.cap) }))}
+        ${row('Ceiling', 'most still possible', r => ({
+          n: r.max, u: gone(r) ? `<br>−${gone(r)}` : '', cls: gone(r) ? 'lost' : '', w: pctOf(r.max, r.cap) }))}
+      </tbody>
+    </table>
+    <table><tfoot><tr><td>Red in <b style="color:var(--lost)">Ceiling</b> = games that can no longer be played. Amber in <b style="color:var(--warn)">Used</b> = 3+ games behind NBA pace.</td></tr></tfoot></table>
+  </div>`;
+}
+
+/* faithful rebuild of the grid as it was yesterday, same data, same tone rules */
+function oldGrid(){
+  const rateTone = r => { const d = Math.abs(vs(r)) / (PACE * r.mult) * 100;
+    return d < 5 ? 'g100' : d < 10 ? 'y100' : d < 15 ? 'o100' : 'r100'; };
+  const maxTone  = r => gone(r) > 0 ? 'r100' : 'g100';
+  const estTone  = r => { const e = r.est / r.mult;
+    return e >= 82 ? 'g100' : e >= 80 ? 'y100' : e >= 78 ? 'o100' : 'r100'; };
+  const delta = r => Math.abs(vs(r)) < 0.05 ? 'on pace'
+    : (vs(r) > 0 ? '+' : '−') + Math.abs(vs(r) / r.mult).toFixed(1);
+  const head = ROWS.map(r => `<th>${r.slot}${r.slot === 'UTIL' ? '<div style="font-weight:400;text-transform:none;color:#9ca3af">×3 slots</div>' : ''}</th>`).join('');
+  const sw = (c,l) => `<span><i class="${c}"></i>${l}</span>`;
+  return `<div class="old">
+    <h4>Slot Usage</h4>
+    <div class="cap2">Rate is per slot. Max and Est. are the whole column — UTIL cap (246+2).</div>
+    <div class="leg">
+      <div class="legrow"><b>Rate</b>${sw('g100','&lt;5%')}${sw('y100','5–10%')}${sw('o100','10–15%')}${sw('r100','15%+')}<span style="color:#9ca3af">off the NBA rate, either way</span></div>
+      <div class="legrow"><b>Max</b>${sw('g100','still reachable')}${sw('r100','gone')}</div>
+      <div class="legrow"><b>Est.</b>${sw('g100','82+')}${sw('y100','80–82')}${sw('o100','78–80')}${sw('r100','&lt;78')}<span style="color:#9ca3af">per slot</span></div>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th></th>${head}</tr></thead>
+      <tbody>
+        <tr><th>Rate<div>used · vs NBA</div></th>${ROWS.map(r => `<td class="${rateTone(r)}"><div>${(r.played / r.mult).toFixed(0)}</div><div class="d">${delta(r)}</div></td>`).join('')}</tr>
+        <tr><th>Max<div>still reachable</div></th>${ROWS.map(r => `<td class="${maxTone(r)}">${r.max}<span class="o">/${capT(r)}</span></td>`).join('')}</tr>
+        <tr><th>Est.<div>projected</div></th>${ROWS.map(r => `<td class="${estTone(r)}">${r.est}<span class="o">/${capT(r)}</span></td>`).join('')}</tr>
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+document.getElementById('app').innerHTML = `
+<section>
+  <h2>Yesterday's grid vs B — same data, same widths</h2>
+  <p class="why">Judge the UI question directly. Left is a faithful rebuild of what shipped yesterday, including the three-scale legend, the tinted cells, the <b>82/82</b> denominators and the sideways scroll on mobile. Right is B.</p>
+  <div class="frames">
+    <div class="frame phone"><div class="cap">Yesterday · 390px</div>${oldGrid()}</div>
+    <div class="frame phone"><div class="cap">B · 390px</div>${tableB(true)}</div>
+  </div>
+  <div class="frames" style="margin-top:20px">
+    <div class="frame desk"><div class="cap">Yesterday · desktop</div>${oldGrid()}</div>
+    <div class="frame desk"><div class="cap">B · desktop</div>${tableB(false)}</div>
+  </div>
+</section>
+
+<section>
+  <h2>A · filled gap, same on both widths</h2>
+  <p class="why">Final. Sub-text appears only when there is something to say: <b>12 behind pace</b>, <b>16 short</b>, <b>14 lost</b>. A slot that is on pace, projecting a full season, or has lost nothing says nothing at all — so the eye lands only on the exceptions. Numbers in <b>Used</b> stay one colour; UTIL is measured per slot, so it reads <b>1.7</b> rather than <b>5</b>.</p>
+  <div class="frames">
+    <div class="frame phone"><div class="cap">Mobile · 390px</div>${tableA(true,'fill')}</div>
+    <div class="frame desk"><div class="cap">Desktop</div>${tableA(false,'fill')}</div>
+  </div>
+</section>
+
+<section>
+  <h2>Yesterday's grid vs A — same data, same widths</h2>
+  <p class="why">Same fair test, this time against A (filled-gap version).</p>
+  <div class="frames">
+    <div class="frame phone"><div class="cap">Yesterday · 390px</div>${oldGrid()}</div>
+    <div class="frame phone"><div class="cap">A · 390px</div>${tableA(true,'fill')}</div>
+  </div>
+  <div class="frames" style="margin-top:20px">
+    <div class="frame desk"><div class="cap">Yesterday · desktop</div>${oldGrid()}</div>
+    <div class="frame desk"><div class="cap">A · desktop</div>${tableA(false,'fill')}</div>
+  </div>
+</section>
+
+<section>
+  <h2>A · reference</h2>
+  <p class="why">Every number is written in its own labelled column, so nothing sends you to a legend. The pale bar behind each number is <b>the same number again</b>, as a share of the cap — it makes the row scannable but carries no information the digits do not already give, so it never needs explaining. Column headers say what they mean in words: <b>Used / Projected / Ceiling</b>, each with a one-line gloss. Colour appears only when a value is bad, and the reason is written next to it (<b>14 lost</b>), never colour alone.</p>
+  <div class="frames">
+    <div class="frame phone"><div class="cap">Mobile · 390px</div>${tableA(true,'fill')}</div>
+    <div class="frame desk"><div class="cap">Desktop</div>${tableA(false,'fill')}</div>
+  </div>
+</section>
+
+<section>
+  <h2>B · Your original 3-row grid, rebuilt</h2>
+  <p class="why">Same shape you had before today — slots across the top, three measures down the side — with the parts that made it noisy removed. <b>82/82 became just 82</b>, since the cap is stated once in the header. Cells are no longer filled blocks of colour; the number carries the value and a 3px bar under it shows the share. Row labels are plain words with a gloss instead of <b>Rate / Max / Est.</b> plus an info icon. Colour only marks the two exceptions.</p>
+  <div class="frames">
+    <div class="frame phone"><div class="cap">Mobile · 390px</div>${tableB(true)}</div>
+    <div class="frame desk"><div class="cap">Desktop</div>${tableB(false)}</div>
+  </div>
+</section>
+
+<section>
+  <h2>Why these two, after the charts failed</h2>
+  <p class="note"><b>You were right that the charts lost information.</b> A bar encodes a value as a length, so the reader must decode it — against a legend, an axis, or a marker. A table cell just states the value. With 8 slots × 3 measures there is no length-comparison worth that cost: nobody needs to see that 60 and 57 differ by three pixels.</p>
+  <p class="note"><b>So the bar was demoted to background.</b> In both tables the bar is redundant with the digits on purpose. It gives the eye a shape to skim, and if it were removed nothing would be lost — that is the test for whether a visual is safe to include without a legend.</p>
+  <p class="note"><b>Colour now always comes with words.</b> Red never appears without <b>14 lost</b> next to it, amber never without <b>−16 vs pace</b>. Nothing is encoded in hue alone, which is also what makes it work for colour-blind readers.</p>
+  <p class="note"><b>A is better on mobile</b> — 8 rows read naturally on a phone and each row is self-contained. <b>B is better on desktop</b> and is what you already know. They can be the same component: rows on narrow screens, grid on wide.</p>
+</section>`;
+document.getElementById('tog').onclick = () => document.body.classList.toggle('dark');
+</script>
+</body>
+</html>

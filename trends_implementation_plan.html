@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trends — full implementation plan</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --grid:#f3f4f6; --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --up:#059669; --up-bg:#d1fae5; --down:#dc2626;
+  --warn:#b45309; --warn-bg:#fef3c7; --warn-bd:#fde68a;
+  --bad:#b91c1c; --bad-bg:#fee2e2; --bad-bd:#fecaca;
+  --ok-bg:#d1fae5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --grid:#273244; --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --up:#34d399; --up-bg:#064e3b; --down:#f87171;
+  --warn:#fcd34d; --warn-bg:#422006; --warn-bd:#713f12;
+  --bad:#fca5a5; --bad-bg:#450a0a; --bad-bd:#7f1d1d;
+  --ok-bg:#064e3b;
+}
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1);padding-bottom:70px}
+main{max-width:1080px;margin:0 auto;padding:22px 14px}
+h1{font-size:24px;font-weight:800;margin-bottom:6px}
+h2{font-size:17px;font-weight:800;margin:30px 0 10px;padding-top:16px;border-top:2px solid var(--border)}
+h3{font-size:14.5px;font-weight:800;margin:18px 0 7px}
+h4{font-size:12px;font-weight:800;margin:12px 0 5px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
+p,li{font-size:13.5px;color:var(--ink2);line-height:1.65}
+ul,ol{margin:6px 0 8px 20px}
+li{margin-bottom:3px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:var(--chip);padding:1px 5px;border-radius:4px;color:var(--ink1)}
+.sub{font-size:13.5px;color:var(--ink2);margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:16px;margin-bottom:14px}
+.note{border-left:3px solid var(--chip-on-ink);background:var(--chip);border-radius:0 8px 8px 0;padding:11px 13px;margin:11px 0;font-size:13px;color:var(--ink2)}
+.warn{border-left:3px solid var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd);border-left-width:3px;border-radius:0 8px 8px 0;padding:11px 13px;margin:11px 0;font-size:13px;color:var(--ink1)}
+.bad{border-left:3px solid var(--bad);background:var(--bad-bg);border:1px solid var(--bad-bd);border-left-width:3px;border-radius:0 8px 8px 0;padding:11px 13px;margin:11px 0;font-size:13px;color:var(--ink1)}
+.ok{border-left:3px solid var(--up);background:var(--ok-bg);border-radius:0 8px 8px 0;padding:11px 13px;margin:11px 0;font-size:13px;color:var(--ink1)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);border-bottom:1px solid var(--border);padding:7px 8px;white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--grid);color:var(--ink2);vertical-align:top}
+td b{color:var(--ink1)}
+.tw{overflow-x:auto;margin:8px 0}
+.phase{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:0;margin-bottom:16px;overflow:hidden}
+.phase>.head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;padding:11px 15px;background:var(--grid);border-bottom:1px solid var(--border)}
+.phase>.head .id{font-size:12px;font-weight:800;color:#fff;background:#2563eb;border-radius:6px;padding:2px 9px;letter-spacing:.03em}
+.phase>.head .id.fe{background:#7e22ce}
+.phase>.head .id.done{background:var(--up)}
+.phase>.head .ttl{font-size:15px;font-weight:800;color:var(--ink1)}
+.phase>.head .meta{margin-left:auto;font-size:11px;color:var(--ink3);font-weight:600}
+.phase>.body{padding:14px 15px}
+.tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:1px 8px;margin-right:8px;vertical-align:1px}
+.decided .tag,.ok .tag{color:var(--up);border:1px solid var(--up)}
+.warn .tag{color:var(--warn);border:1px solid var(--warn)}
+.bad .tag{color:var(--bad);border:1px solid var(--bad)}
+.decided{border-left:3px solid var(--up);background:var(--chip);border-radius:0 8px 8px 0;padding:11px 13px;margin:11px 0;font-size:13px;color:var(--ink2)}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;background:var(--chip);color:var(--ink3)}
+.badge.be{background:var(--chip-on);color:var(--chip-on-ink)}
+.badge.fe{background:#f3e8ff;color:#7e22ce}
+@media (prefers-color-scheme: dark){.badge.fe{background:#3b0764;color:#d8b4fe}}
+.toc{columns:2;column-gap:26px;font-size:13px}
+@media(max-width:640px){.toc{columns:1}}
+.toc a{color:var(--chip-on-ink);text-decoration:none;display:block;padding:2px 0}
+.toc a:hover{text-decoration:underline}
+.kv{display:grid;grid-template-columns:100px 1fr;gap:4px 12px;font-size:12.5px;margin-top:6px}
+.kv dt{font-weight:700;color:var(--ink3);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+.kv dd{color:var(--ink2);margin:0}
+.flow{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:var(--grid);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--ink2);white-space:pre;overflow-x:auto;line-height:1.7}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Trends — full implementation plan</h1>
+<p class="sub">Everything we agreed, in build order. Two user-facing features on one shared foundation. Companion design docs: <a href="trends_dynamic_range_plan.html">dynamic range</a> · <a href="player_page_trends_plan.html">player-page card</a>.</p>
+
+<div class="card">
+<h4>Contents</h4>
+<div class="toc">
+<a href="#scope">1 · What we are shipping</a>
+<a href="#decisions">2 · Decisions, locked</a>
+<a href="#cache">3 · The cache — in detail</a>
+<a href="#phases">4 · Phases</a>
+<a href="#order">5 · Order, branches, sequencing</a>
+<a href="#risks">6 · Risks that remain</a>
+<a href="#not">7 · What we are not doing</a>
+</div>
+</div>
+
+<h2 id="scope">1 · What we are shipping</h2>
+
+<div class="tw"><table>
+  <tr><th></th><th>Feature</th><th>User-visible result</th></tr>
+  <tr><td><b>A</b></td><td>Dynamic recency window on the Trends page</td><td>Presets 7/15/30 <i>plus</i> a 📆 custom start date. End always pinned to the latest game day.</td></tr>
+  <tr><td><b>B</b></td><td>Trends card on the player profile page</td><td>Game-by-game chart + summary tiles on <code>/player/:playerId</code>, loading independently of the rest of the page.</td></tr>
+</table></div>
+
+<p>Both sit on a shared backend foundation — bounded caching, request coalescing — and a shared frontend one — correct local-date helpers. That foundation is <b>worth shipping on its own merits</b>: it fixes a live memory risk and a live date bug that exist today, before either feature.</p>
+
+<h2 id="decisions">2 · Decisions, locked</h2>
+<div class="tw"><table>
+  <tr><th>Area</th><th>Decision</th></tr>
+  <tr><td>Window shape</td><td>Rolling only. End pinned to the anchor date. Never a free start/end pair.</td></tr>
+  <tr><td>Control</td><td>Presets + custom <b>start date</b>, reusing <code>DateRangePicker</code>. <b>Not</b> expanded presets — full dynamic.</td></tr>
+  <tr><td>Range</td><td>5 to 60 days, clamped server-side, 422 on out-of-range at the route.</td></tr>
+  <tr><td>Flags</td><td>Unflagged, inside the already-flagged <code>FF_TRENDS</code> page.</td></tr>
+  <tr><td>Timezone</td><td>Fix the real code — 4 live sites, central helpers.</td></tr>
+  <tr><td>Cache</td><td>Bound the existing cache. Add anchor to every key. Coalesce in-flight misses.</td></tr>
+  <tr><td>Player card — fetch</td><td>Fire on mount, non-blocking. No <code>IntersectionObserver</code>.</td></tr>
+  <tr><td>Player card — stats</td><td>Option A: window averages and Δ only. No role badge, no z. No new endpoint.</td></tr>
+  <tr><td>Player card — baseline</td><td><code>mode=form</code>, <code>baseline_seasons=0</code>.</td></tr>
+  <tr><td>Players list page</td><td>Untouched.</td></tr>
+  <tr><td>days ⇄ games</td><td>Deferred.</td></tr>
+</table></div>
+
+<h2 id="cache">3 · The cache — in detail</h2>
+
+<div class="note">
+<b>Clearing up the framing:</b> caching is not something we are adding. <code>TrendService</code> already caches, with a 6-hour TTL. The work is to <b>bound and correct</b> what is there.
+</div>
+
+<h3>3.1 What exists today</h3>
+<p>Five plain dicts on <code>TrendService</code>, each entry shaped <code>{'data': response, 'ts': datetime}</code>:</p>
+<div class="tw"><table>
+  <tr><th>Cache</th><th>Key today</th><th>Holds</th></tr>
+  <tr><td><code>_minutes_cache</code></td><td><code>window_days</code></td><td><code>MinutesResponse</code> — 527 KB each</td></tr>
+  <tr><td><code>_usage_cache</code></td><td><code>window_days</code></td><td><code>UsageResponse</code> — 528 KB each</td></tr>
+  <tr><td><code>_regression_cache</code></td><td><code>(window, baseline, mode)</code></td><td><code>RegressionResponse</code> — 217 KB each</td></tr>
+  <tr><td><code>_game_log_cache</code></td><td><code>(player, window, baseline, mode)</code></td><td><code>GameLogResponse</code> — 87 KB each</td></tr>
+  <tr><td><code>_league_cache</code></td><td><code>season</code></td><td>league pct/usg dict — small</td></tr>
+</table></div>
+<p class="sub" style="margin-top:4px">Sizes are measured RSS deltas against live Neon data, 411 qualifying players — not estimates.</p>
+
+<h3>3.2 Three defects</h3>
+
+<div class="bad">
+<b>① Nothing is ever evicted.</b> <code>_cache_valid</code> checks the TTL <i>when a key is read</i>. If key K is never requested again, K's entry is never examined and never removed. Expiry marks an entry stale; it does not free it. Memory therefore tracks <b>the number of distinct keys ever requested</b>, not the number currently useful. With today's three windows a long session over ~50 expanded players already reaches roughly <b>78 MB</b> of retained objects on a <b>512 MB</b> instance. At 56 windows the ceiling is absurd.
+</div>
+
+<div class="bad">
+<b>② The anchor is not in any key.</b> Every cached value is computed relative to <code>anchor_date</code> = <code>MAX(game_date)</code> from <code>fs_player_games</code>. When last night's ingest lands, the anchor moves — but the keys do not, so stale values keep serving until each entry's own TTL happens to lapse, each at a different wall-clock moment. Two users on adjacent windows can legitimately see different numbers for the same player.
+</div>
+
+<div class="bad">
+<b>③ <code>_league_cache</code> ignores an input it computes with.</b> <code>_get_league_refs(season, end)</code> aggregates up to <code>end</code>, but caches under <code>season</code> alone. The <code>end</code> argument is not part of the key at all, so once the anchor advances the method returns figures computed against the <i>old</i> end date and has no way to notice. Found while writing this plan; fixed by the same anchor-in-key change.
+</div>
+
+<h3>3.3 What we replace it with</h3>
+<p>A single small helper class used by all five caches — an <code>OrderedDict</code> with a maximum size and a per-entry expiry timestamp. No new dependency; <code>OrderedDict</code> is stdlib.</p>
+
+<div class="flow">get(key)
+  miss                -> return None
+  present but expired -> delete entry, return None
+  present and fresh   -> move_to_end(key)   # mark most-recently-used
+                         return value
+
+set(key, value)
+  sweep: drop every expired entry           # n <= 64, so a full pass is free
+  store (value, now + ttl); move_to_end(key)
+  while len(cache) > maxsize:
+      popitem(last=False)                   # evict least-recently-used</div>
+
+<h3>3.4 How entries actually get cleaned — three mechanisms</h3>
+<p>You asked how cleaning happens. Three, working together:</p>
+<div class="tw"><table>
+  <tr><th></th><th>Mechanism</th><th>When it fires</th><th>What it catches</th></tr>
+  <tr><td>1</td><td><b>Lazy expiry on read</b></td><td>Someone asks for that exact key</td><td>Stale value for a key still in use. Already how it works today.</td></tr>
+  <tr><td>2</td><td><b>Sweep on write</b></td><td>Any <code>set</code> on that cache</td><td>Expired entries nobody will ask for again — <b>the leak today</b>. Bounded at ≤64 entries, so the pass costs nothing.</td></tr>
+  <tr><td>3</td><td><b>LRU eviction</b></td><td><code>len &gt; maxsize</code></td><td>Entries that are still <i>fresh</i> but least recently used. This is the hard memory ceiling — the guarantee that does not depend on TTL at all.</td></tr>
+</table></div>
+
+<div class="ok">
+<b>Mechanism 3 is the one that makes this safe.</b> 1 and 2 depend on time passing and on traffic arriving. LRU is unconditional: the cache cannot exceed <code>maxsize</code> entries no matter what the request pattern is. That is what turns an unbounded structure into a fixed memory budget.
+</div>
+
+<h3>3.5 How long should the TTL be?</h3>
+<p><b>Keep 6 hours.</b> The reasoning changes once the anchor is in the key, and it is worth being explicit about why:</p>
+<ul>
+<li><b>Freshness is no longer the TTL's job.</b> The anchor is <code>MAX(game_date)</code>, itself cached 1 hour (<code>_SEASON_ANCHOR_TTL</code> in <code>player_service.py</code>). When the nightly ingest adds a new game date, the anchor moves within an hour, every cache key changes, and fresh values are computed on the next request. Old-anchor entries become unreachable and are cleaned by mechanisms 2 and 3.</li>
+<li><b>So what is the TTL still for?</b> The case the anchor does <i>not</i> cover: a backfill or correction to rows on a date that is already the anchor. Nothing about the key changes, so only the TTL forces a recompute. Six hours bounds that exposure.</li>
+<li><b>Why not shorten it?</b> A shorter TTL buys almost nothing — the anchor already handles the common case — and costs real latency, because a miss on the minutes endpoint is 4.4 seconds measured, on a free instance that may also be cold.</li>
+<li><b>Why not lengthen it?</b> Nothing to gain. LRU already bounds memory, and 6h keeps the backfill window tolerable.</li>
+</ul>
+<p>In short: <b>anchor-in-key handles correctness, LRU handles memory, and the 6h TTL is a backstop for silent data corrections.</b> Three jobs, three mechanisms, no overlap.</p>
+
+<h3>3.6 Caps and the resulting budget</h3>
+<div class="tw"><table>
+  <tr><th>Cache</th><th>Cap</th><th>Worst case</th><th>Why this number</th></tr>
+  <tr><td><code>_minutes_cache</code></td><td>8</td><td>4.2 MB</td><td>One user flipping through ~5 windows keeps them all warm.</td></tr>
+  <tr><td><code>_usage_cache</code></td><td>8</td><td>4.2 MB</td><td>Same.</td></tr>
+  <tr><td><code>_regression_cache</code></td><td>12</td><td>2.6 MB</td><td>Key multiplies by baseline and mode, so it needs more room per window.</td></tr>
+  <tr><td><code>_game_log_cache</code></td><td>64</td><td>5.6 MB</td><td>Busiest cache — every player-page view and every expanded trends row. Tunable; 128 would cost 11 MB.</td></tr>
+  <tr><td><code>_league_cache</code></td><td>4</td><td>&lt; 1 MB</td><td>Only varies by season and anchor.</td></tr>
+  <tr><td colspan="2"><b>Hard ceiling</b></td><td><b>≈ 17 MB</b></td><td>Constant, regardless of how many windows exist.</td></tr>
+</table></div>
+
+<div class="ok"><b>Net effect on your Render limit: strictly better than today.</b> Today's ceiling is unbounded and already reaches tens of MB in normal use. After this it is ~17 MB and cannot grow.</div>
+
+<h3 id="revised">3.7 REVISED — cache the inputs, not the responses</h3>
+
+<div class="bad">
+<span class="tag">Correction</span><b>Earlier timings in this plan were wrong.</b> The "4.4s cold / 0.5s warm" figures measured cache <i>hits</i>, not misses — <code>_normalize_window_days</code> snapped every supposedly-novel window back to 15, which was already cached. Corrected numbers below, measured against the DB directly with the snap bypassed.
+</div>
+
+<div class="tw"><table>
+  <tr><th>Work</th><th>Window-dependent?</th><th>Time</th><th>Size if cached</th></tr>
+  <tr><td><code>aggregate_shooting_by_player</code> season-to-date</td><td><b style="color:var(--up)">No</b></td><td>0.63s</td><td>0.07 MB</td></tr>
+  <tr><td><code>get_usage_components</code> full season</td><td><b style="color:var(--up)">No</b></td><td>0.90s</td><td>3.80 MB</td></tr>
+  <tr><td>prior-seasons baseline</td><td><b style="color:var(--up)">No</b></td><td>—</td><td>small</td></tr>
+  <tr><td>window aggregate</td><td>Yes</td><td>0.15s</td><td>—</td></tr>
+  <tr><td><code>get_games_since</code></td><td>Yes</td><td>0.14s</td><td>—</td></tr>
+  <tr><td><code>compute_minutes_movers</code></td><td>Yes</td><td>0.21s</td><td>—</td></tr>
+  <tr><td><code>compute_usage_role</code></td><td>Yes</td><td><b>1.93s</b></td><td>—</td></tr>
+</table></div>
+
+<div class="ok">
+<span class="tag">The insight</span><b>The expensive work is window-independent; the per-window work is cheap.</b> Caching finished responses per window — what the code does today — caches the cheap part and gets no sharing on the expensive part. Cache the <b>inputs</b> on <code>(season, anchor)</code> instead: ~4 MB, <b>1–2 entries</b>, reused by every window, preset or custom.
+<br><br>A novel window then costs only the remainder: <b>~0.50s for Minutes</b>, <b>~2.07s for Usage</b>. That is acceptable behind an explicit Apply click.
+</div>
+
+<h4>Consequences</h4>
+<div class="tw"><table>
+  <tr><th>Cache</th><th>Revised approach</th><th>Needs an LRU?</th></tr>
+  <tr><td>Window-independent inputs <i>(new)</i></td><td>Keyed <code>(season, anchor)</code></td><td><b>No</b> — 1–2 entries</td></tr>
+  <tr><td><code>_minutes_cache</code> / <code>_usage_cache</code> / <code>_regression_cache</code></td><td><b>Presets only.</b> Custom windows compute fresh and rely on the client cache.</td><td><b>No</b> — same key space as today</td></tr>
+  <tr><td><code>_league_cache</code></td><td>Keyed <code>(season, anchor)</code></td><td><b>No</b></td></tr>
+  <tr><td><code>_game_log_cache</code></td><td>Unchanged in kind — <b>still needs a cap</b></td><td><b>Yes</b>, cap 64</td></tr>
+</table></div>
+
+<div class="warn">
+<span class="tag">Simpler than proposed</span><b>Invalidate on anchor change; do not put the anchor in the key.</b> The anchor rotates daily, so anchor-in-key would mint fresh keys every day and orphan yesterday's — which is exactly what forced the LRU in the first place. Instead: store the current anchor on the service; when a request sees a different one, clear the caches and carry on. Key space stays tiny and self-cleaning, with no time dimension to manage.
+</div>
+
+<div class="warn">
+<span class="tag">Prerequisite</span><b><code>_game_log_cache</code> needs its cap regardless of any of this.</b> It is keyed by <i>player</i>, so it was never bounded by the window enum, and the player card firing on mount makes it the busiest cache in the service. This is a standalone fix that the dynamic-window question does not touch.
+</div>
+
+<div class="warn">
+<span class="tag">Frontend</span><b>The client cache has to be configured for "rely on the frontend" to be true.</b> <code>getTrendsMinutes</code>, <code>getTrendsUsage</code> and <code>getTrendsRegression</code> declare no <code>keepUnusedDataFor</code>, so they inherit RTK Query's default of <b>60 seconds</b> — a custom window would be re-fetched a minute after you stop looking at it. Raise them to 600s to match <code>getTrendGameLog</code>. One line each.
+</div>
+
+<h3>3.8 Why bound the count at all — and what it does for dynamic windows</h3>
+<p class="sub">Retained for the <code>_game_log_cache</code> case, which still needs a cap. The reasoning below applies to it; §3.7 supersedes it for the window-keyed caches.</p>
+
+<div class="ok">
+<span class="tag">The core point</span><b>The <code>(7, 15, 30)</code> enum has been acting as your cache bound.</b> Three legal windows meant <code>_minutes_cache</code> could never hold more than three entries — not by design, but as a side effect. That is why no eviction policy has ever been needed. <b>Dynamic windows delete that accidental bound, so an explicit one has to replace it.</b>
+</div>
+
+<div class="tw"><table>
+  <tr><th>Cache</th><th>Max entries today</th><th>Max entries at 56 windows</th><th>Memory unbounded</th></tr>
+  <tr><td><code>_minutes_cache</code></td><td>3</td><td>56</td><td>29 MB</td></tr>
+  <tr><td><code>_usage_cache</code></td><td>3</td><td>56</td><td>29 MB</td></tr>
+  <tr><td><code>_regression_cache</code></td><td>18</td><td>336</td><td>73 MB</td></tr>
+  <tr><td><code>_game_log_cache</code></td><td>18 × players</td><td>336 × players</td><td>effectively unbounded</td></tr>
+</table></div>
+<p class="sub" style="margin-top:2px">On a 512 MB instance.</p>
+
+<div class="note">
+<b><code>maxsize</code> counts entries, not bytes.</b> <code>maxsize = 8</code> means eight cached responses. The numbers in §3.6 were chosen by multiplying entries × measured bytes-per-entry to reach a memory budget — the cap is expressed in items, the <i>reason</i> for each cap is bytes.
+</div>
+
+<h4>What bounding actually buys — stated honestly</h4>
+<p>It does <b>not</b> make dynamic windows faster. It trades a small, occasional performance cost for a hard memory guarantee. A worked example, with the caps from §3.6:</p>
+
+<div class="flow">cap = 8 on _minutes_cache
+
+you       try 15d, 7d, 30d, then custom 21d, 10d, 45d   -> 6 entries, all warm
+teammate  tries 12d, 18d, 23d                           -> cache reaches 8, then
+                                                           evicts 45d (least recently used)
+anyone    asks for 45d again                            -> 4.4s recompute, not instant
+
+memory throughout: 8 x 527 KB = 4.2 MB, flat</div>
+
+<ul>
+<li><b>Unbounded:</b> always fast, memory grows with every distinct parameter set ever requested, can exhaust the instance.</li>
+<li><b>Bounded:</b> memory fixed at the cap, occasional recompute for parameters nobody is actively using.</li>
+</ul>
+<p>With roughly a dozen users the actively-used working set sits well below the caps, so evictions should be rare in practice. If they are not, each cap is a single constant to raise — the memory cost of doing so is exactly linear and known.</p>
+
+<h2 id="phases">4 · Phases</h2>
+
+<div class="phase">
+<div class="head"><span class="id fe">P0</span><span class="ttl">Local-date helpers</span><span class="meta">frontend · independent · ships alone</span></div>
+<div class="body">
+<dl class="kv">
+<dt>Why</dt><dd>Pre-existing bug in shipped pages, unrelated to trends. Doing it first means the later phases have correct primitives to build on.</dd>
+<dt>Bug</dt><dd><code>new Date().toISOString()</code> yields the <i>UTC</i> date. In UTC+2/+3 that is the previous day between local midnight and 02:00/03:00.</dd>
+</dl>
+<h4>Changes</h4>
+<ul>
+<li><code>utils/dateRange.ts</code> — add <code>toLocalIso(date)</code> building <code>YYYY-MM-DD</code> from <code>getFullYear/getMonth/getDate</code>, and <code>daysBetween(startIso, endIso)</code> operating on local midnights. Rewrite <code>todayIso()</code> on top of <code>toLocalIso</code>.</li>
+<li>Repoint the four sites: <code>utils/dateRange.ts</code>, <code>components/DateRangePicker.tsx</code>, <code>pages/Analytics.tsx</code> (<code>today</code> and <code>getDateNDaysAgo</code>), <code>pages/Rankings.tsx</code> (same pair).</li>
+</ul>
+<h4>Tests</h4>
+<ul><li>Vitest with <code>TZ</code> forced to a non-UTC zone: local midnight must not roll back a day; <code>daysBetween</code> must be exact across a DST boundary.</li></ul>
+<h4>Verify</h4>
+<ul><li>Analytics and Rankings preset buttons produce identical ranges outside 00:00–03:00 (no regression) and corrected ones inside it.</li></ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id">P1</span><span class="ttl">Hoist inputs, invalidate on anchor, cap the game-log cache</span><span class="meta">backend · blocker · ships alone</span></div>
+<div class="body">
+<dl class="kv">
+<dt>Why</dt><dd>Fixes the three defects in §3.2 <i>and</i> makes every window cheaper, per the revised §3.7. Required before any window-space expansion, and valuable without it.</dd>
+<dt>Shape</dt><dd>Cache the expensive window-independent inputs; leave the cheap per-window work uncached; cap only the one cache that is genuinely unbounded.</dd>
+</dl>
+<h4>Changes</h4>
+<ul>
+<li><b>(a) Hoist the window-independent frames</b> into caches keyed <code>(season, anchor)</code>: the season-to-date <code>aggregate_shooting_by_player</code> (0.63s, 0.07 MB), <code>get_usage_components</code> (0.90s, 3.80 MB), and the prior-seasons baseline. Every window reuses them. This is the single biggest win — it cuts ~1.5s off every miss.</li>
+<li><b>(b) Anchor-change invalidation.</b> Store the anchor on the service; when a request observes a different one, clear the caches. Replaces both anchor-in-key and TTL-driven cleanup for the small caches, and fixes defect ② and defect ③ (<code>_league_cache</code> ignoring <code>end</code>) at once.</li>
+<li><b>(c) Cap <code>_game_log_cache</code>.</b> TTL+LRU helper per §3.3, cap 64 (≈5.6 MB). This is the only cache keyed by player, so the only one the window enum never bounded.</li>
+<li><b>(d) Response caches stay preset-only.</b> <code>_minutes_cache</code> / <code>_usage_cache</code> / <code>_regression_cache</code> cache 7/15/30 as today. Custom windows skip the response cache and compute fresh.</li>
+<li>TTL stays 6h where it still applies, as the backstop for silent backfills (§3.5).</li>
+</ul>
+<h4>Tests</h4>
+<ul>
+<li>Hoisted frames are computed once and reused across several different windows (assert one DB call, not N).</li>
+<li>A changed anchor clears the caches and recomputes; <code>_get_league_refs</code> returns different results for two anchors.</li>
+<li><code>_game_log_cache</code>: eviction past <code>maxsize</code>, LRU ordering, TTL expiry on read, sweep on write.</li>
+<li>A custom (non-preset) window does not populate the response caches.</li>
+</ul>
+<h4>Verify</h4>
+<ul>
+<li>Request across 60 distinct window values; assert response-cache length stays at the preset count, <code>_game_log_cache</code> stays at its cap, and RSS plateaus rather than climbing.</li>
+<li>Time a novel window before and after the hoist — expect ~1.5s saved.</li>
+</ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id">P2</span><span class="ttl">In-flight request coalescing</span><span class="meta">backend</span></div>
+<div class="body">
+<dl class="kv">
+<dt>Why</dt><dd>More distinct windows means more simultaneous misses. Also matters for the player card, which fires on every profile view.</dd>
+</dl>
+<h4>Changes</h4>
+<ul><li>A <code>dict[key, asyncio.Future]</code> beside each cache. First caller creates the future and computes; concurrent callers on the same key await it instead of issuing their own query.</li></ul>
+<div class="warn">
+<span class="tag">The one gotcha</span><b>Clear the future in a <code>finally</code>, never only on success.</b> If a query raises and its future is left in the dict, every later caller awaits a permanently-failed future and the endpoint stays broken until the process restarts. Waiters receiving the exception is correct — they would each have failed anyway — but the slot must be freed either way.
+</div>
+<h4>Tests</h4>
+<ul>
+<li>N concurrent callers on one key produce exactly one DB call.</li>
+<li>A raising computation propagates to all waiters <b>and</b> clears the slot, so the next call retries cleanly.</li>
+</ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id">P3</span><span class="ttl">Clamp instead of snap</span><span class="meta">backend · small</span></div>
+<div class="body">
+<h4>Changes</h4>
+<ul>
+<li><code>VALID_RECENCY_WINDOWS_DAYS</code> → <code>MIN_RECENCY_WINDOW_DAYS = 5</code> / <code>MAX_RECENCY_WINDOW_DAYS = 60</code>. <code>_normalize_window_days</code> clamps rather than snapping to 15. Grep confirms it is the only consumer, called from all four service entry points.</li>
+<li><code>routes/trends.py</code> — <code>Query(DEFAULT, ge=5, le=60)</code> on all four routes so out-of-range input 422s at the edge instead of being silently rewritten.</li>
+</ul>
+<h4>Tests</h4>
+<ul><li>Clamping at both ends; a window outside the old triple is honoured, not snapped; route returns 422 for 0 and for 500.</li></ul>
+<div class="note"><b>Natural checkpoint.</b> After P3 the backend fully supports arbitrary windows. The frontend still shows three buttons. Everything after this is UI.</div>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id fe">P4</span><span class="ttl">Start-only date picker</span><span class="meta">frontend · needs P0 + P3</span></div>
+<div class="body">
+<h4>Changes</h4>
+<ul>
+<li><code>components/DateRangePicker.tsx</code> — optional <code>fixedEnd</code> prop. When present, the end input renders disabled at that value, end-related validation is skipped, and the Start label becomes "Window starts". Absent, behaviour is byte-identical for today's call sites.</li>
+<li><b>Raise <code>keepUnusedDataFor</code> to 600</b> on <code>getTrendsMinutes</code>, <code>getTrendsUsage</code> and <code>getTrendsRegression</code> in <code>store/api/fantasyApi.ts</code>. They currently declare none, so they inherit RTK Query's 60s default — and since custom windows are deliberately not cached server-side (§3.7), the client cache is what makes revisiting one instant. One line each.</li>
+<li><code>pages/Trends.tsx</code> — a 📆 Custom button beside the existing presets; on Apply, convert start → <code>window_days</code> with <code>daysBetween</code> from P0; show a <code>since Jan 17 · 21 days</code> chip. <code>usePersistedState('trends.windowDays')</code> keeps storing a plain number, so no storage migration.</li>
+<li><b>Anchor passed in explicitly</b> — never <code>new Date()</code>. Available as <code>window_start + window_days</code> on any trends payload, or from <code>useGetLeagueSummaryQuery</code>. Panel copy says "through Feb 7 (latest game day)", not "through today".</li>
+</ul>
+<h4>Verify</h4>
+<ul><li>Desktop and 390px, per the repo's mobile rule. Interactive reference: <a href="trends_dynamic_range_plan.html">§1 of the design doc</a>.</li></ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id fe">P5</span><span class="ttl">Short-window caution + tab de-emphasis</span><span class="meta">frontend · polish</span></div>
+<div class="body">
+<ul>
+<li>Live "N game nights" count beside the window control; caution block under 10 days, because <code>MIN_WINDOW_GP = 2</code> and <code>LOW_SAMPLE_GP = 3</code> are absolute counts and short windows make almost every row <span class="badge">partial</span>.</li>
+<li>On <b>Shooting · Season</b>, de-emphasise the control and retitle it "Activity window", with a tooltip stating it only filters by recent games played — on that tab the comparison is season vs prior seasons, so the window barely participates.</li>
+</ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id fe">S1</span><span class="ttl">Player card — shell, non-blocking</span><span class="meta">frontend · independent of P0–P5</span></div>
+<div class="body">
+<ul>
+<li>New <code>PlayerTrendsCard.tsx</code>, mounted below the Stats card in <code>PlayerProfile.tsx</code>. <b>The <code>bioLoading</code> / <code>bioError</code> early return is not touched.</b></li>
+<li><code>useGetTrendGameLogQuery({ playerId, windowDays, baselineSeasons: 0, mode: 'form' })</code> inside the card — independent loading and error state by construction.</li>
+<li><code>refetchOnFocus: false</code>; the server caches 6h so refocus refetching is pure cost.</li>
+<li>Fixed-height skeleton (~320px desktop, ~300px mobile) so content below does not shift when data lands.</li>
+<li>404 → "No game log this season" inside the card. Other errors → a retry line inside the card. Never a page-level <code>ErrorMessage</code>.</li>
+</ul>
+<h4>Verify</h4>
+<ul><li>Throttle the network; confirm bio and Stats paint fully while the card is still skeletal.</li></ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id fe">S2</span><span class="ttl">Player card — modes and chart</span><span class="meta">frontend</span></div>
+<div class="body">
+<ul>
+<li>Chips: Minutes · Usage · 3P% · FT% · FG%, passing <code>mode</code> and <code>stat</code> to the existing <code>TrendGameLogChart</code>, which needs no changes.</li>
+<li>Hide a shooting chip when the player has zero season attempts for that stat.</li>
+<li>Pass all three shooting stats as <code>qualifiedStats</code> so the chart's internal switcher stays consistent.</li>
+</ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id fe">S3</span><span class="ttl">Player card — summary tiles</span><span class="meta">frontend</span></div>
+<div class="body">
+<ul>
+<li>Shared helper: slice <code>games</code> by <code>game_date &gt;= window_start</code>; average <code>min</code> / <code>usg</code>; pool makes ÷ attempts for percentages.</li>
+<li>Four tiles — season value, window value, Δ, window start — each showing its game count.</li>
+<li>Under 3 games in the window: grey the Δ tile and show <span class="badge">partial</span>, matching <code>LOW_SAMPLE_GP</code>.</li>
+<li><b>No role badge, no z</b> — that is the option-A decision, and it is what keeps this phase backend-free.</li>
+</ul>
+</div>
+</div>
+
+<div class="phase">
+<div class="head"><span class="id fe">S4</span><span class="ttl">Player card — adopt the custom window</span><span class="meta">frontend · needs P4</span></div>
+<div class="body">
+<ul>
+<li>Swap the card's fixed 7/15/30 chips for the same presets + 📆 control shipped in P4, end pinned.</li>
+<li>Uses <code>toLocalIso</code> / <code>daysBetween</code> from P0 — no hand-rolled date maths in the card.</li>
+</ul>
+</div>
+</div>
+
+<h2 id="order">5 · Order, branches, sequencing</h2>
+
+<div class="flow">P0  frontend   fix/local-date-helpers        independent, ships alone
+P1  backend    fix/trend-cache-bounds        independent, ships alone   <-- do first
+P2  backend    fix/trend-cache-coalescing    after P1
+P3  backend    feat/trend-dynamic-window     after P1
+P4  frontend   feat/trend-window-picker      after P0 + P3
+P5  frontend   feat/trend-window-polish      after P4
+
+S1  frontend   feat/player-trends-card       independent  \  can run in
+S2  frontend   (same branch)                              |  parallel with
+S3  frontend   (same branch)                              /  P0-P3
+S4  frontend   (folds into P4's branch or follows it)</div>
+
+<ul>
+<li><b>P1 first, always.</b> It fixes a live memory risk and is a prerequisite for P3. Nothing else should land before it.</li>
+<li><b>P0 and S1–S3 are independent</b> of the backend track and of each other; either can go in parallel.</li>
+<li><b>S1–S3 can ship with fixed 7/15/30 presets</b> and adopt the picker later in S4. The player card does not have to wait for the dynamic-window work.</li>
+<li>Per <code>CLAUDE.md</code>: branch off fresh <code>dev</code>, PRs target <code>dev</code>, never <code>master</code>. The pre-push hook runs <code>tsc --noEmit</code> on frontend changes.</li>
+</ul>
+
+<h2 id="risks">6 · Risks that remain</h2>
+<div class="tw"><table>
+  <tr><th>Risk</th><th>Severity</th><th>Handling</th></tr>
+  <tr><td><code>_game_log_cache</code> cap of 64 proves too small once player pages fire on every view — thrashing, more misses</td><td>Low</td><td>Cap is one constant. 128 costs 11 MB. Watch and tune.</td></tr>
+  <tr><td>A 4.4s cold miss on a sleeping Render instance feels slow on the Trends page</td><td>Medium</td><td>Pre-existing; unchanged by this work. P2 stops it multiplying.</td></tr>
+  <tr><td>Users pick very short windows and read noise as signal</td><td>Low</td><td>P5 caution and game-night count.</td></tr>
+  <tr><td>Backfill on an existing date serves stale for up to 6h</td><td>Low</td><td>Accepted — that is precisely the TTL's remaining job.</td></tr>
+  <tr><td>Frontend test coverage for the new card and picker is thin</td><td>Low</td><td>Repo has vitest; add alongside P4 and S3.</td></tr>
+</table></div>
+
+<h2 id="not">7 · What we are not doing</h2>
+<ul>
+<li><b>No arbitrary start/end range</b> on trends. The end stays pinned to the anchor — otherwise the Form tab's table baseline (<code>season − window</code>) and its chart baseline (<code>game_date &lt; window_start</code>) diverge silently.</li>
+<li><b>No expanded-presets shortcut.</b> Ruled out; going to the full picker.</li>
+<li><b>No changes to the Players list page.</b> Its two-date custom range is correct there — it aggregates, it does not compare.</li>
+<li><b>No days ⇄ games toggle.</b> Needs a per-player window instead of one global date, touching every compute function. Separate feature.</li>
+<li><b>No new backend endpoint for the player card.</b> Option A derives everything from the existing game-log response.</li>
+<li><b>No role badge or z-score on the player card.</b> Same decision — avoids duplicating Python thresholds in TypeScript.</li>
+</ul>
+
+</main>
+</body>
+</html>

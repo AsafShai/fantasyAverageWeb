@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Time-Range Player Stats — Implementation Plan</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2b; --panel2:#1c2536; --line:#26304a;
+    --ink:#e7ecf5; --muted:#93a0ba; --dim:#6b7896;
+    --accent:#4f8cff; --accent2:#8b5cf6; --good:#38c98a; --warn:#f6b64b; --bad:#ef6a6a;
+    --chip:#212c42; --radius:12px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 96px}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}
+  h2{font-size:19px;margin:40px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+  h3{font-size:15px;margin:22px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  p{margin:10px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--panel2);border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cdd8ef}
+  .sub{color:var(--muted);margin:0 0 4px}
+  .flagpill{display:inline-block;font-family:var(--mono);font-size:12px;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;padding:4px 10px;border-radius:20px;margin-top:8px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  table.spec{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  table.spec th,table.spec td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.spec th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .tag{display:inline-block;font-size:11px;font-family:var(--mono);padding:2px 7px;border-radius:5px;background:var(--chip);border:1px solid var(--line);color:var(--muted)}
+  .tag.ok{color:var(--good);border-color:#2c5b47}.tag.no{color:var(--bad);border-color:#5b2c2c}.tag.warn{color:var(--warn);border-color:#5b4a2c}
+  ul{margin:8px 0;padding-left:20px}li{margin:5px 0}
+  .mockcap{font-size:12px;color:var(--dim);font-family:var(--mono);margin:16px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+  .mockcap b{color:var(--accent);font-weight:700}
+  .demo{background:#0c1019;border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  /* ---- selector mock ---- */
+  .selector{display:inline-grid;grid-template-columns:repeat(5,auto);gap:8px;background:var(--panel2);padding:8px;border-radius:12px}
+  .selector.mobile{grid-template-columns:repeat(3,1fr);max-width:330px}
+  .seg{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:default;border:1px solid transparent}
+  .seg.active{background:#0c1019;color:var(--accent);box-shadow:0 1px 0 #0006}
+  .seg.custom{border:1px dashed #3d4a66}
+  .rangelabel{display:inline-flex;align-items:center;gap:8px;background:var(--chip);border:1px solid var(--accent);color:#cdddff;border-radius:20px;padding:5px 12px;font-size:13px;font-family:var(--mono)}
+  .rangelabel .x{color:var(--dim);font-weight:700}
+  /* ---- date panel ---- */
+  .datepanel{margin-top:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;max-width:430px}
+  .drow{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .field .inp{background:#0c1019;border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--ink);font-family:var(--mono);font-size:13px;min-width:135px}
+  .btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;border:1px solid var(--line);cursor:default}
+  .btn.apply{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.clear{background:transparent;color:var(--muted)}
+  .hint{font-size:11px;color:var(--dim);margin-top:8px}
+  .errmsg{color:var(--bad);font-size:12px;margin-top:8px}
+  /* ---- stats table mock ---- */
+  table.stats{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+  table.stats th,table.stats td{padding:9px 8px;text-align:right;border-bottom:1px solid #1b2334;font-variant-numeric:tabular-nums}
+  table.stats th{color:var(--dim);font-size:11px;font-weight:600}
+  table.stats td.name,table.stats th.name{text-align:left}
+  table.stats td.name{font-weight:600}
+  table.stats td.pos,table.stats td.team{text-align:left;color:var(--dim);font-size:12px}
+  .row-zero td:not(.name):not(.pos):not(.team){color:var(--dim)}
+  .row-nodata td.nd{color:var(--warn);font-style:italic}
+  .cell-nd{position:relative;color:var(--warn);cursor:help;border-bottom:1px dotted var(--warn)}
+  .noteban{display:flex;gap:10px;align-items:flex-start;background:#241d10;border:1px solid #5b4a2c;border-radius:9px;padding:10px 12px;font-size:13px;color:#f4d9a0;margin:12px 0}
+  .noteban .ic{color:var(--warn);font-weight:700}
+  .noteban.info{background:#101d24;border-color:#2c4a5b;color:#a8d6e8}.noteban.info .ic{color:#5fb8d8}
+  .flow{display:flex;flex-direction:column;gap:0;font-family:var(--mono);font-size:12.5px}
+  .flow .step{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin:4px 0}
+  .flow .arrow{color:var(--dim);text-align:center;font-size:14px}
+  .flow .b-db{border-left:3px solid var(--accent)}
+  .flow .b-espn{border-left:3px solid var(--warn)}
+  .flow .b-nd{border-left:3px solid var(--bad)}
+  .files{font-family:var(--mono);font-size:12.5px}
+  .files .f{color:var(--accent)}
+  .lead{font-size:16px;color:var(--muted);max-width:75ch}
+  .ship{counter-reset:s;list-style:none;padding:0}
+  .ship li{counter-increment:s;position:relative;padding:12px 12px 12px 52px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:8px 0}
+  .ship li::before{content:counter(s);position:absolute;left:14px;top:12px;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:13px;display:grid;place-items:center}
+  .kv{display:grid;grid-template-columns:170px 1fr;gap:6px 14px;font-size:13.5px}
+  .kv .k{color:var(--muted)}
+  .foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Dynamic Time-Range Player Stats</h1>
+  <p class="sub">Implementation plan — keep the 4 preset windows, add arbitrary same-season date ranges, all backed by our stored daily box scores.</p>
+  <span class="flagpill">frontend flag · VITE_FF_CUSTOM_RANGE</span>
+
+  <p class="lead" style="margin-top:18px">Today the 4 windows come from ESPN precomputed splits. This moves <b>all</b> stat windows onto our <code>fs_player_games</code> table (Layer 1), keeps ESPN as a per-player fallback for the 4 presets only (Layer 2), and adds a custom date-range picker to the shared selector — which lights up Players, PlayerRankings, TeamDetail and Trade at once.</p>
+
+  <!-- ============ DECISIONS ============ -->
+  <h2>1 · Decisions locked (grill outcomes)</h2>
+  <table class="spec">
+    <tr><th>Topic</th><th>Decision</th></tr>
+    <tr><td>Range semantics</td><td>Calendar days (<code>game_date BETWEEN start AND end</code>) — matches ESPN preset meaning.</td></tr>
+    <tr><td>Join ESPN↔our data</td><td>Name-match (<code>normalize_player_name</code>) + miss-log + small manual override dict. <span class="tag">hybrid</span></td></tr>
+    <tr><td>Season scope</td><td>Current season only. Mirror the <code>start &lt; season_start → 422</code> guard from analytics/rankings + <code>WHERE season='2025-26'</code>.</td></tr>
+    <tr><td>Data source</td><td><b>Unify:</b> all 4 presets + custom aggregate from <code>fs_player_games</code>. ESPN split survives only as fallback + metadata.</td></tr>
+    <tr><td>Percentages</td><td><code>Σmakes / Σattempts</code> over window (never mean-of-ratios).</td></tr>
+    <tr><td>Storage filter</td><td>Loosen write to <code>MIN &gt; 0</code>; model re-filters <code>MIN ≥ 2</code> at read. <b>Not feature-flagged.</b></td></tr>
+    <tr><td>gp / zero window</td><td>gp = rows in window. Matched player, 0 games → all-<code>0.0</code> row (ESPN-style). Not "no data".</td></tr>
+    <tr><td>"No data"</td><td>Only for an <b>unmatched</b> player in a <b>custom</b> range (no ESPN split to fall back to).</td></tr>
+    <tr><td>Positions</td><td>Stay ESPN (<code>eligibleSlots</code>) — ride in on metadata call. No change.</td></tr>
+    <tr><td>Backfill</td><td>Not needed — offseason; fresh data inherits the new filter.</td></tr>
+  </table>
+
+  <!-- ============ ARCHITECTURE ============ -->
+  <h2>2 · Architecture — two layers, one aggregation path</h2>
+
+  <h3>Window → dates resolver (all 5 collapse here)</h3>
+  <table class="spec">
+    <tr><th>time_period</th><th>Resolves to (start, end)</th><th>ESPN call</th><th>Fallback if player missing</th></tr>
+    <tr><td><code>season</code></td><td><code>season_start … today</code></td><td><code>split 0</code> → metadata + stats</td><td><span class="tag ok">ESPN season</span></td></tr>
+    <tr><td><code>last_7</code></td><td><code>today-6 … today</code></td><td><code>split 1</code></td><td><span class="tag ok">ESPN last7</span></td></tr>
+    <tr><td><code>last_15</code></td><td><code>today-14 … today</code></td><td><code>split 2</code></td><td><span class="tag ok">ESPN last15</span></td></tr>
+    <tr><td><code>last_30</code></td><td><code>today-29 … today</code></td><td><code>split 3</code></td><td><span class="tag ok">ESPN last30</span></td></tr>
+    <tr><td><code>custom</code></td><td><code>start … end</code> (validated)</td><td><code>split 0</code> → <b>metadata only</b></td><td><span class="tag no">none → "no data"</span></td></tr>
+  </table>
+
+  <h3>Per-player resolution flow</h3>
+  <div class="panel">
+    <div class="flow">
+      <div class="step b-db">1 · Aggregate <code>fs_player_games</code> over [start,end], season-filtered, GROUP BY player_id (SQL sums)</div>
+      <div class="arrow">▼ join by normalize_player_name</div>
+      <div class="step b-db">2 · Matched + ≥1 game → <b>DB stats</b></div>
+      <div class="step b-db">2 · Matched + 0 games → <b>all 0.0 row, gp 0</b></div>
+      <div class="arrow">▼ unmatched?</div>
+      <div class="step b-espn">3a · preset window → <b>ESPN split value</b> for that player</div>
+      <div class="step b-nd">3b · custom window → <b>"no data"</b> cell</div>
+    </div>
+    <p class="hint">A single results table can be mixed-source: most rows from DB, a few ESPN-fallback. Accepted.</p>
+  </div>
+
+  <!-- ============ UI CASES ============ -->
+  <h2>3 · UI — every case rendered</h2>
+
+  <div class="mockcap">CASE A · <b>Selector, preset active</b> (desktop) — 5th chip added, flag ON</div>
+  <div class="demo">
+    <div class="selector">
+      <div class="seg active">📅 Full Season</div>
+      <div class="seg">🔥 Last 7</div>
+      <div class="seg">📊 Last 15</div>
+      <div class="seg">📈 Last 30</div>
+      <div class="seg custom">📆 Custom</div>
+    </div>
+  </div>
+
+  <div class="mockcap">CASE B · <b>Custom chip active → date panel open</b></div>
+  <div class="demo">
+    <div class="selector">
+      <div class="seg">📅 Full Season</div>
+      <div class="seg">🔥 Last 7</div>
+      <div class="seg">📊 Last 15</div>
+      <div class="seg">📈 Last 30</div>
+      <div class="seg active custom">📆 Custom</div>
+    </div>
+    <div class="datepanel">
+      <div class="drow">
+        <div class="field"><label>Start</label><div class="inp">2026-01-05</div></div>
+        <div class="field"><label>End</label><div class="inp">2026-02-10</div></div>
+        <div class="btn apply">Apply</div>
+        <div class="btn clear">Clear</div>
+      </div>
+      <div class="hint">min = season start (2025-10-22) · max = today · both required</div>
+    </div>
+  </div>
+
+  <div class="mockcap">CASE C · <b>Custom active — range label chip</b> shown next to selector</div>
+  <div class="demo">
+    <div class="selector" style="margin-right:10px">
+      <div class="seg">📅 Full Season</div><div class="seg">🔥 Last 7</div><div class="seg">📊 Last 15</div><div class="seg">📈 Last 30</div><div class="seg active custom">📆 Custom</div>
+    </div>
+    <div style="margin-top:10px"><span class="rangelabel">Jan 5 – Feb 10 <span class="x">✕</span></span></div>
+  </div>
+
+  <div class="mockcap">CASE D · <b>Validation error</b> (start before season / end in future / only one set)</div>
+  <div class="demo">
+    <div class="datepanel">
+      <div class="drow">
+        <div class="field"><label>Start</label><div class="inp" style="border-color:var(--bad)">2025-09-01</div></div>
+        <div class="field"><label>End</label><div class="inp">2026-02-10</div></div>
+        <div class="btn apply" style="opacity:.5">Apply</div>
+        <div class="btn clear">Clear</div>
+      </div>
+      <div class="errmsg">⚠ Start date cannot be before season start (2025-10-22)</div>
+    </div>
+  </div>
+
+  <div class="mockcap">CASE E · <b>Players table</b> — normal DB row, zero-game row, and no-data (custom) row together</div>
+  <div class="demo">
+    <table class="stats">
+      <tr><th class="name">Player</th><th>Pos</th><th>Team</th><th>PTS</th><th>FG%</th><th>FT%</th><th>3PM</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>GP</th></tr>
+      <tr><td class="name">Jaylon Tyson</td><td class="pos">SG</td><td class="team">CLE</td><td>26.9</td><td>49.3%</td><td>73.8%</td><td>2.0</td><td>5.1</td><td>2.2</td><td>0.8</td><td>0.4</td><td>21</td></tr>
+      <tr class="row-zero"><td class="name">Adama Sanogo</td><td class="pos">C</td><td class="team">FA</td><td>0.0</td><td>0.0%</td><td>0.0%</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0</td></tr>
+      <tr class="row-nodata"><td class="name">Nic Claxton</td><td class="pos">C</td><td class="team">BKN</td><td class="nd cell-nd" title="Not available for a custom range — try Last 7/15/30/Season" colspan="9" style="text-align:center">— no data for this range (unmatched) · try a fixed window —</td></tr>
+    </table>
+    <p class="hint">Row 1 = matched, has games. Row 2 = matched, 0 games in window → zeros + gp 0 (mirrors current ESPN behaviour). Row 3 = <b>unmatched + custom</b> → single "no data" span with tooltip.</p>
+  </div>
+
+  <div class="mockcap">CASE F · <b>Coverage mismatch note</b> — requested range wider than stored data</div>
+  <div class="demo">
+    <div class="noteban info"><span class="ic">ℹ</span><div>Showing <b>Oct 22 – Feb 10</b> — we only have box scores from <b>Nov 03</b> onward. Earliest games not included.</div></div>
+    <p class="hint">Backend echoes <code>actual_start / actual_end</code> (same mechanism the Analytics heatmap already uses); UI shows the note when it differs from requested.</p>
+  </div>
+
+  <div class="mockcap">CASE G · <b>PlayerRankings</b> — no-data players excluded from the ranking (not zeroed)</div>
+  <div class="demo">
+    <div class="noteban"><span class="ic">⚠</span><div>3 players have no data for <b>Jan 5 – Feb 10</b> and were excluded from z-score ranking: <span class="tag">Nic Claxton</span> <span class="tag">Cam Thomas</span> <span class="tag">A. Sanogo</span></div></div>
+    <p class="hint">Zeroing would rank them falsely last and drag z-score means. Ranker <b>drops</b> them; Players table <b>zeros/no-data</b> them. Deliberately different.</p>
+  </div>
+
+  <div class="mockcap">CASE H · <b>Mobile</b> (~390px) — selector wraps to 3 cols, panel stacks</div>
+  <div class="demo">
+    <div class="selector mobile">
+      <div class="seg active">📅 Season</div><div class="seg">🔥 L7</div><div class="seg">📊 L15</div>
+      <div class="seg">📈 L30</div><div class="seg custom">📆 Custom</div><div></div>
+    </div>
+    <div class="datepanel" style="margin-top:10px;max-width:100%">
+      <div class="drow" style="flex-direction:column;align-items:stretch">
+        <div class="field"><label>Start</label><div class="inp">2026-01-05</div></div>
+        <div class="field"><label>End</label><div class="inp">2026-02-10</div></div>
+        <div style="display:flex;gap:10px"><div class="btn apply" style="flex:1;text-align:center">Apply</div><div class="btn clear" style="flex:1;text-align:center">Clear</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BACKEND ============ -->
+  <h2>4 · Backend plan (Layer 1 + Layer 2)</h2>
+  <div class="panel">
+    <div class="kv">
+      <div class="k"><span class="files f">models/player.py</span></div><div>Add <code>CUSTOM = "custom"</code> to <code>StatTimePeriod</code>. Add helper <code>resolve_window(period, start, end, season_start) → (start_date, end_date)</code>. Keep <code>to_stat_split_id</code> (fallback key; custom → 0 for metadata only).</div>
+      <div class="k"><span class="files f">routes/players.py</span></div><div>Add optional <code>start</code>/<code>end</code> query params. Validate exactly like <code>routes/analytics.py</code>: both-or-neither, <code>start&lt;end</code>, <code>start≥season_start</code>, <code>end≤today</code>, <code>custom</code> requires both → 422.</div>
+      <div class="k"><span class="files f">services/player_service.py</span></div><div>Resolve window → call new aggregation → join ESPN metadata by normalized name → apply fallback rules → build <code>PaginatedPlayers</code> (shape unchanged). Add <code>actual_start/actual_end</code> to response for the coverage note.</div>
+      <div class="k"><span class="files f">services/team_service.py</span></div><div>Twin path — same resolve→aggregate→fallback for TeamDetail's time_period.</div>
+      <div class="k"><span class="files f">services/db_service.py</span></div><div>New <code>aggregate_player_games(start, end, season) → DataFrame</code>: <code>GROUP BY player_id</code>, <code>SUM</code> counting stats, <code>SUM(makes)/SUM(attempts)</code> for FG%/FT%, <code>COUNT(*)</code> gp, filter <code>min &gt; 0</code>. Aggregate in SQL — return ~500 rows, not raw.</div>
+      <div class="k"><span class="files f">migrations/…sql</span></div><div>New composite index <code>(season, game_date)</code> on <code>fs_player_games</code>. Manual apply (your convention).</div>
+      <div class="k">override dict</div><div>Small ESPN→NBA name override map + a miss-log line so the tail is patchable without blocking launch.</div>
+    </div>
+  </div>
+
+  <!-- ============ STORAGE ============ -->
+  <h2>5 · Storage / model change (unconditional — ships before next season)</h2>
+  <div class="panel">
+    <div class="kv">
+      <div class="k"><span class="files f">serving/nightly.py</span></div><div>Two write filters <code>MIN ≥ MIN_MINUTES</code> → <code>MIN &gt; 0</code>: <code>fetch_night()</code> (daily append) &amp; <code>bootstrap_frames()</code> (seed). Table now stores every game actually played.</div>
+      <div class="k"><span class="files f">db_service.get_fs_rows_before</span></div><div>Add <code>WHERE min &gt;= 2</code> at this single model-read boundary → model vectors/training behave <b>exactly</b> as today.</div>
+      <div class="k">season simulator</div><div><b>Verify</b> the <code>ingest_prederived</code> slice source (<code>feature_store.py:150</code>) applies the same <code>≥2</code> filter, since its frames now carry <code>&gt;0</code> rows.</div>
+    </div>
+    <div class="noteban info"><span class="ic">ℹ</span><div>Why safe: serving gates on <code>MIN_INFERENCE_GAMES</code> (a game <b>count</b>), not per-game minutes. The <code>≥2</code> filter is the model's concern, moved to read-time. Storage becomes raw truth → our gp matches ESPN's gp.</div></div>
+  </div>
+
+  <!-- ============ FRONTEND ============ -->
+  <h2>6 · Frontend plan</h2>
+  <div class="panel">
+    <div class="kv">
+      <div class="k"><span class="files f">types/api.ts</span></div><div><code>TimePeriod</code> += <code>'custom'</code>. Query args += optional <code>start</code>/<code>end</code>.</div>
+      <div class="k"><span class="files f">components/DateRangePicker.tsx</span></div><div><b>New shared widget</b>, logic extracted from <code>Analytics.tsx</code> (validate, applied vs draft, clear, min/max). Reused by the selector; Analytics may retrofit to it later as cleanup (optional, not required).</div>
+      <div class="k"><span class="files f">TimePeriodSelector.tsx</span></div><div>Add "Custom 📆" chip behind <code>VITE_FF_CUSTOM_RANGE</code>; embed <code>DateRangePicker</code> + active-range label. One component → both render sites stay in sync.</div>
+      <div class="k"><span class="files f">store/api/fantasyApi.ts</span></div><div><code>useGetAllPlayersQuery</code> passes <code>start/end</code>; RTK cache key includes them.</div>
+      <div class="k">per-page handling</div><div><b>Players/TeamDetail:</b> zero-row / "no data" cell. <b>PlayerRankings:</b> exclude no-data players + show excluded note. <b>Trade:</b> verify custom doesn't break valuation; gate custom off there if odd.</div>
+      <div class="k"><span class="files f">config/featureFlags.ts</span></div><div>Add <code>VITE_FF_CUSTOM_RANGE</code>.</div>
+    </div>
+  </div>
+
+  <!-- ============ SHIP ORDER ============ -->
+  <h2>7 · Ship order</h2>
+  <ol class="ship">
+    <li><b>Storage + model filter</b> (unflagged infra). <code>MIN&gt;0</code> write, <code>≥2</code> model-read, sim verify. Must land in offseason before collection resumes. Independent of the UI.</li>
+    <li><b>Backend custom path</b> — enum, resolver, aggregation query, composite index, fallback + coverage echo. Backend can be always-on (harmless when unused).</li>
+    <li><b>Frontend, flagged</b> — <code>DateRangePicker</code>, selector chip, per-page handling, <code>VITE_FF_CUSTOM_RANGE</code>. Flip flag on when verified.</li>
+  </ol>
+
+  <!-- ============ OPEN ============ -->
+  <h2>8 · Open verification / risks</h2>
+  <ul>
+    <li><span class="tag warn">verify</span> Season simulator slice point applies <code>≥2</code> after storage loosens (only spot the write-filter move could leak into the model).</li>
+    <li><span class="tag warn">verify</span> Trade page data path — does it consume <code>getAllPlayers(time_period)</code>? If custom valuation is weird, gate the chip off there.</li>
+    <li><span class="tag warn">watch</span> Name-match tail (Nic/Nicolas class) — seed override dict from the miss-log after first live run.</li>
+    <li><span class="tag">scale</span> Neon cold start (~1–3s first hit after idle) is the only user-visible latency add; warm GROUP BY is &lt;50ms. Warming cron deferred.</li>
+  </ul>
+
+  <div class="foot">Plan artifact · no implementation code per project rules · mockups are visual spec only. Approve case-by-case or as a whole.</div>
+
+</div>
+</body>
+</html>

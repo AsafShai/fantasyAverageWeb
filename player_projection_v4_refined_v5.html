@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>V4 refined — shot volume, integer toggle, no mobile scroll</title>
+<style>
+  :root{
+    --page:#1e293b; --card:#111827; --card2:#1f2937; --line:#374151; --line2:#1f2937;
+    --txt:#f3f4f6; --muted:#9ca3af; --dim:#6b7280; --blue:#2563eb; --blue2:#3b82f6;
+    --green:#10b981; --red:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--txt);
+    font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;padding:0 0 90px}
+  .band{background:#0f172a;padding:24px 16px 18px;border-bottom:1px solid var(--line)}
+  .inner,.opt{max-width:1060px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 6px}
+  .lede{color:var(--muted);margin:0;max-width:850px;font-size:13px}
+  .opt{padding:32px 16px 0}
+  .optHead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .optHead h2{font-size:16px;margin:0}
+  .pill{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--blue2);
+    border:1px solid var(--blue);border-radius:999px;padding:2px 8px}
+  .why{color:var(--muted);font-size:12.5px;margin:0 0 12px;max-width:850px}
+  .verdict{font-size:12px;color:var(--muted);margin-top:10px;padding-left:12px;border-left:2px solid var(--line)}
+  .verdict b{color:#d1d5db}
+  .cap{font-size:10.5px;color:var(--dim);margin:13px 0 5px;text-transform:uppercase;letter-spacing:.07em}
+  .measure{font-size:11px;color:var(--dim);margin-top:5px;font-variant-numeric:tabular-nums}
+  .ok{color:var(--green)} .bad{color:var(--red)}
+
+  .demo{border:1px dashed var(--line);border-radius:9px;padding:11px;background:#172033;container-type:inline-size}
+  .w1000{max-width:1000px} .w640{max-width:640px} .w390{max-width:390px}
+
+  .strip{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .ctrlbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding-bottom:8px}
+  .badge{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:#bfdbfe;background:rgba(37,99,235,.22);border:1px solid #1d4ed8;border-radius:4px;padding:2px 6px;flex:none}
+  .vs{font-size:12.5px;font-weight:600;white-space:nowrap}
+  .vs em{font-style:normal;color:var(--muted);font-weight:400}
+  .lab{font-size:11px;color:var(--muted);white-space:nowrap}
+  .mval{font-weight:700;font-size:13px;min-width:20px;text-align:right;font-variant-numeric:tabular-nums}
+  .rst{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 7px;flex:none}
+  input[type=range]{accent-color:var(--blue);height:3px;min-width:0;flex:1 1 120px;max-width:240px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:none}
+  .seg span{padding:3px 8px;font-size:11px;color:var(--muted);white-space:nowrap}
+  .seg span.on{background:var(--blue);color:#fff;font-weight:600}
+  .pushright{margin-left:auto}
+
+  table.t{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:fixed}
+  table.t th{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;
+    padding:4px 2px;text-align:center}
+  table.t td{padding:6px 2px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+  table.t tr.proj{background:rgba(37,99,235,.13)}
+  table.t tr.proj td{color:#dbeafe}
+  .lead{text-align:left !important;font-weight:600;white-space:nowrap;width:130px}
+  .frac{display:block;font-size:8.5px;font-weight:400;color:var(--dim);line-height:1.1;margin-top:1px}
+  .wrapx{overflow-x:auto}
+
+  /* label cell + explicit shooting columns disappear on narrow containers */
+  @container (max-width:700px){
+    .hideNarrow{display:none}
+    table.t{font-size:12px}
+    table.t td{padding:6px 1px}
+    table.t th{padding:4px 1px;font-size:8.5px}
+  }
+  @container (min-width:701px){ .showNarrow{display:none} }
+</style>
+</head>
+<body>
+
+<div class="band"><div class="inner">
+  <h1>V4 refined — shot volume in, label cell out on mobile, integer toggle added</h1>
+  <p class="lede">Three things you asked for. The <b>label cell drops below 700px</b> (the header line already says who and when, so repeating it in the row was pure width). <b>Shot volume</b> appears as the made/attempted fraction under each percentage — the same treatment the Projections page already uses — so it costs zero extra columns. <b>Integer / decimal</b> is a toggle in the control bar. Each block below reports its measured scroll width so you can see whether horizontal scrolling actually disappeared.</p>
+</div></div>
+
+<!-- ============ A ============ -->
+<div class="opt">
+  <div class="optHead"><h2>A — Fraction under the percentage</h2><span class="pill">no extra columns</span></div>
+  <p class="why">Nine columns at every width: MIN, the six counting stats, FG%, FT%. Volume rides underneath the percentages as <code>5/11</code> and <code>2/2</code>, so you get shot volume without paying a single column for it. Label cell present on desktop, gone on mobile.</p>
+
+  <div class="cap">1000px · whole numbers</div>
+  <div class="demo w1000" id="a1">
+    <div class="strip">
+      <div class="ctrlbar">
+        <span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu, in 2 days</em></span>
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+        <span class="seg pushright"><span class="on">Whole</span><span>Decimal</span></span>
+      </div>
+      <table class="t">
+        <colgroup><col class="lead"><col span="9"></colgroup>
+        <tr><th class="lead hideNarrow"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr class="proj"><td class="lead hideNarrow">Projected @ ORL</td><td>31</td><td>14</td><td>4</td><td>4</td><td>1</td><td>1</td><td>2</td><td>45%<span class="frac">5/11</span></td><td>100%<span class="frac">2/2</span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="measure" id="m-a1">measuring…</div>
+
+  <div class="cap">1000px · decimals</div>
+  <div class="demo w1000" id="a2">
+    <div class="strip">
+      <div class="ctrlbar">
+        <span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu, in 2 days</em></span>
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+        <span class="seg pushright"><span>Whole</span><span class="on">Decimal</span></span>
+      </div>
+      <table class="t">
+        <colgroup><col class="lead"><col span="9"></colgroup>
+        <tr><th class="lead hideNarrow"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr class="proj"><td class="lead hideNarrow">Projected @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td><td>42.8%<span class="frac">4.7/10.9</span></td><td>89.3%<span class="frac">1.7/1.9</span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="measure" id="m-a2">measuring…</div>
+
+  <div class="cap">390px · whole numbers — label cell dropped</div>
+  <div class="demo w390" id="a3">
+    <div class="strip">
+      <div class="ctrlbar">
+        <span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu</em></span>
+        <span class="seg pushright"><span class="on">Whole</span><span>Dec</span></span>
+      </div>
+      <div class="ctrlbar" style="padding-bottom:8px">
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+      </div>
+      <table class="t">
+        <tr><th class="lead hideNarrow"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr class="proj"><td class="lead hideNarrow">Projected @ ORL</td><td>31</td><td>14</td><td>4</td><td>4</td><td>1</td><td>1</td><td>2</td><td>45%<span class="frac">5/11</span></td><td>100%<span class="frac">2/2</span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="measure" id="m-a3">measuring…</div>
+
+  <div class="cap">390px · decimals — the widest case</div>
+  <div class="demo w390" id="a4">
+    <div class="strip">
+      <div class="ctrlbar">
+        <span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu</em></span>
+        <span class="seg pushright"><span>Whole</span><span class="on">Dec</span></span>
+      </div>
+      <div class="ctrlbar" style="padding-bottom:8px">
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+      </div>
+      <table class="t">
+        <tr><th class="lead hideNarrow"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr class="proj"><td class="lead hideNarrow">Projected @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td><td>42.8%<span class="frac">4.7/10.9</span></td><td>89.3%<span class="frac">1.7/1.9</span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="measure" id="m-a4">measuring…</div>
+  <p class="verdict"><b>Trade:</b> the fraction is small type. It's the same size the Projections page already uses, so it's not a new precedent — but it is the least legible element here.</p>
+</div>
+
+<!-- ============ B ============ -->
+<div class="opt">
+  <div class="optHead"><h2>B — Explicit FGM / FGA / FTM / FTA columns on desktop</h2></div>
+  <p class="why">Full volume columns where there's room; below 700px they collapse into the fraction-under-percentage form from A. Best of both — no small type on desktop, no scroll on a phone.</p>
+
+  <div class="cap">1000px · decimals</div>
+  <div class="demo w1000" id="b1">
+    <div class="strip">
+      <div class="ctrlbar">
+        <span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu, in 2 days</em></span>
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+        <span class="seg pushright"><span>Whole</span><span class="on">Decimal</span></span>
+      </div>
+      <table class="t">
+        <tr>
+          <th class="lead hideNarrow"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th>
+          <th class="hideNarrow">FGM</th><th class="hideNarrow">FGA</th><th>FG%</th>
+          <th class="hideNarrow">FTM</th><th class="hideNarrow">FTA</th><th>FT%</th>
+        </tr>
+        <tr class="proj">
+          <td class="lead hideNarrow">Projected @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td>
+          <td class="hideNarrow">4.7</td><td class="hideNarrow">10.9</td><td>42.8%</td>
+          <td class="hideNarrow">1.7</td><td class="hideNarrow">1.9</td><td>89.3%</td>
+        </tr>
+      </table>
+      <div style="font-size:10.5px;color:var(--dim);margin-top:5px">Season line for reference: 5.7 / 14.4 · 39.4% &nbsp;·&nbsp; 2.4 / 2.6 · 90.2%</div>
+    </div>
+  </div>
+  <div class="measure" id="m-b1">measuring…</div>
+
+  <div class="cap">390px · decimals — volume columns collapse to fractions</div>
+  <div class="demo w390" id="b2">
+    <div class="strip">
+      <div class="ctrlbar">
+        <span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu</em></span>
+        <span class="seg pushright"><span>Whole</span><span class="on">Dec</span></span>
+      </div>
+      <div class="ctrlbar" style="padding-bottom:8px">
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+      </div>
+      <table class="t">
+        <tr>
+          <th class="lead hideNarrow"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th>
+          <th class="hideNarrow">FGM</th><th class="hideNarrow">FGA</th><th>FG%</th>
+          <th class="hideNarrow">FTM</th><th class="hideNarrow">FTA</th><th>FT%</th>
+        </tr>
+        <tr class="proj">
+          <td class="lead hideNarrow">Projected @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td>
+          <td class="hideNarrow">4.7</td><td class="hideNarrow">10.9</td><td>42.8%<span class="frac">4.7/10.9</span></td>
+          <td class="hideNarrow">1.7</td><td class="hideNarrow">1.9</td><td>89.3%<span class="frac">1.7/1.9</span></td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <div class="measure" id="m-b2">measuring…</div>
+  <p class="verdict"><b>Trade:</b> desktop and mobile show the same data in two different shapes — more CSS, but each width gets the right form.</p>
+</div>
+
+<!-- ============ C ============ -->
+<div class="opt">
+  <div class="optHead"><h2>C — Two rows on mobile instead of narrower columns</h2></div>
+  <p class="why">If the fraction type in A is too small, split instead: counting stats on one row, shooting on a second row with full-size numbers. Nothing shrinks, nothing scrolls, it just gets one row taller.</p>
+
+  <div class="cap">390px · decimals</div>
+  <div class="demo w390" id="c1">
+    <div class="strip">
+      <div class="ctrlbar">
+        <span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu</em></span>
+        <span class="seg pushright"><span>Whole</span><span class="on">Dec</span></span>
+      </div>
+      <div class="ctrlbar" style="padding-bottom:8px">
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+      </div>
+      <table class="t" style="margin-bottom:6px">
+        <tr><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th></tr>
+        <tr class="proj"><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td></tr>
+      </table>
+      <table class="t">
+        <tr><th>FGM</th><th>FGA</th><th>FG%</th><th>FTM</th><th>FTA</th><th>FT%</th></tr>
+        <tr class="proj"><td>4.7</td><td>10.9</td><td>42.8%</td><td>1.7</td><td>1.9</td><td>89.3%</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="measure" id="m-c1">measuring…</div>
+  <p class="verdict"><b>Trade:</b> two extra lines of height on mobile, but every number is full size and shot volume gets real columns.</p>
+</div>
+
+<script>
+  function report(id){
+    var d=document.getElementById(id);
+    var t=d.querySelector('table.t');
+    var w=Math.round(d.getBoundingClientRect().width);
+    var over=t.scrollWidth-t.clientWidth;
+    var h=Math.round(d.querySelector('.strip').getBoundingClientRect().height);
+    var el=document.getElementById('m-'+id);
+    el.innerHTML='container '+w+'px · strip height '+h+'px · table overflow '+
+      (over>0 ? '<span class="bad">'+over+'px → HORIZONTAL SCROLL</span>'
+              : '<span class="ok">0px → no scroll</span>');
+  }
+  ['a1','a2','a3','a4','b1','b2','c1'].forEach(report);
+</script>
+</body>
+</html>

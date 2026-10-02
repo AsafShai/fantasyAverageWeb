@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navbar Reorg v3 — Domain Grouping</title>
+<style>
+  :root {
+    --blue:#2563eb; --purple:#9333ea; --gray-600:#4b5563; --gray-100:#f3f4f6;
+    --border:#e5e7eb; --green:#16a34a; --red:#dc2626; --amber:#d97706; --ink:#1f2937; --page:#fafafa;
+  }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,sans-serif; max-width:1060px; margin:0 auto; padding:24px 18px 60px;
+         color:var(--ink); line-height:1.5; background:var(--page); }
+  h1 { background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text;
+       color:transparent; font-size:27px; margin-bottom:4px; }
+  h2 { border-bottom:2px solid var(--border); padding-bottom:6px; margin-top:36px; font-size:19px; }
+  .sub { color:#6b7280; font-size:14px; margin-top:0; }
+
+  /* rings */
+  .rings { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0; }
+  .ring { flex:1; min-width:230px; background:#fff; border:1px solid var(--border); border-left:5px solid; border-radius:10px; padding:12px 14px; }
+  .ring.r1 { border-left-color:var(--blue); }
+  .ring.r2 { border-left-color:var(--purple); }
+  .ring.r3 { border-left-color:var(--amber); }
+  .ring h4 { margin:0 0 2px; font-size:15px; }
+  .ring .scope { font-size:12px; color:#6b7280; margin-bottom:8px; }
+  .ring ul { margin:0; padding-left:18px; font-size:13px; color:var(--gray-600); }
+  .ring li { padding:1px 0; }
+
+  .optbar { display:flex; gap:8px; flex-wrap:wrap; margin:18px 0 6px; }
+  .optbtn { font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px; background:#e5e7eb;
+            color:var(--gray-600); cursor:pointer; border:1px solid transparent; user-select:none; }
+  .optbtn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .optbtn .rec { font-size:10px; opacity:.85; margin-left:5px; }
+
+  .optcard { background:#fff; border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-top:12px; }
+  .optcard h3 { margin:0 0 4px; font-size:16px; }
+  .optcard p.why { margin:4px 0 0; font-size:13.5px; color:var(--gray-600); }
+  .metrics { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .metric { background:var(--gray-100); border-radius:8px; padding:6px 10px; font-size:11.5px; color:#6b7280; }
+  .metric b { display:block; font-size:16px; color:var(--blue); }
+  .metric.warn b { color:var(--red); }
+  .pro, .con { font-size:13px; margin:3px 0; }
+  .pro::before { content:"+ "; color:var(--green); font-weight:700; }
+  .con::before { content:"- "; color:var(--red); font-weight:700; }
+
+  .navmock { background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.06);
+             padding:10px 12px; display:flex; align-items:center; gap:6px; margin:14px 0 0; flex-wrap:wrap; }
+  .brand { font-weight:700; background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text;
+           background-clip:text; color:transparent; white-space:nowrap; margin-right:6px; cursor:pointer; font-size:14px; }
+  .navitem { font-size:13px; padding:6px 9px; border-radius:6px; color:var(--gray-600); white-space:nowrap;
+             position:relative; cursor:pointer; }
+  .navitem:hover { background:var(--gray-100); }
+  .navitem.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .navitem.group.open .dropdown { display:block; }
+  .dropdown { display:none; position:absolute; top:100%; left:0; margin-top:4px; background:#fff; border:1px solid var(--border);
+              border-radius:6px; box-shadow:0 6px 14px rgba(0,0,0,.12); padding:5px; min-width:170px; z-index:10; }
+  .dropdown div { padding:7px 9px; font-size:12.5px; border-radius:4px; color:var(--gray-600); white-space:nowrap; }
+  .dropdown div:hover { background:var(--gray-100); }
+  .dropdown div.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .dropdown .sep { padding:4px 9px 2px; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#9ca3af;
+                   border-top:1px solid var(--border); margin-top:4px; pointer-events:none; }
+  .dropdown .sep.first { border-top:none; margin-top:0; }
+  .caret { font-size:9px; opacity:.6; margin-left:3px; }
+  .flagged { opacity:.55; }
+
+  .widthbar { display:flex; gap:6px; margin:12px 0 0; align-items:center; flex-wrap:wrap; }
+  .widthbar span.lbl { font-size:12px; color:#6b7280; margin-right:4px; }
+  .wbtn { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .wbtn.active { background:var(--ink); color:#fff; }
+  .navmock.compressed .navitem .txt { display:none; }
+  .navmock.compressed .navitem { padding:6px 8px; font-size:17px; }
+
+  .preview { margin-top:10px; padding:9px 13px; background:var(--gray-100); border-radius:8px; font-size:13px; }
+  .preview b { color:var(--blue); }
+  .preview .path { color:#6b7280; font-size:12px; }
+
+  .flexrow { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .mobilewrap { width:300px; border:1px solid var(--border); border-radius:14px; padding:10px; background:#fff;
+                box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .mobrow { display:flex; align-items:center; justify-content:space-between; padding:9px 11px; border-radius:6px;
+            font-size:13px; color:var(--gray-600); cursor:pointer; }
+  .mobrow:hover { background:var(--gray-100); }
+  .mobrow.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .mobrow.grp { border:1px dashed var(--border); font-weight:600; margin:2px 0; }
+  .mobrow.grp.open { background:#eff6ff; color:var(--blue); border-color:var(--blue); }
+  .mobrow.grp .caret { transition:transform .15s ease; display:inline-block; }
+  .mobrow.grp.open .caret { transform:rotate(180deg); }
+  .mobsubwrap { overflow:hidden; max-height:0; transition:max-height .18s ease; background:#fafafa; border-radius:6px; }
+  .mobsubwrap.open { max-height:320px; }
+  .mobsub { padding:8px 11px 8px 30px; font-size:12.5px; color:#6b7280; cursor:pointer; border-radius:6px; }
+  .mobsub:hover { background:var(--gray-100); }
+  .mobsub.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .mobsep { padding:5px 11px 2px 22px; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#9ca3af; }
+
+  .note { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:13.5px; margin:14px 0; }
+  .note.blue { background:#eff6ff; border-color:#bfdbfe; }
+  code { background:var(--gray-100); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; background:#fff; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--gray-100); }
+  td.num { text-align:center; font-weight:600; }
+  .c1 { color:var(--green); } .c2 { color:var(--amber); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:600; }
+  .keep { background:#dcfce7; color:var(--green); }
+  .move { background:#fef3c7; color:var(--amber); }
+  .new  { background:#e0e7ff; color:#4338ca; }
+  .gone { background:#fee2e2; color:var(--red); }
+  .togglerow { display:flex; gap:8px; align-items:center; margin:10px 0; font-size:12.5px; color:#6b7280; flex-wrap:wrap; }
+  .switch { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .switch.on { background:#4338ca; color:#fff; }
+</style>
+</head>
+<body>
+
+<h1>Navbar Reorg v3 — domain grouping</h1>
+<p class="sub">Intent-based grouping (Analysis / Tools) rejected. This version groups by <b>what the data is about</b>. 13 destinations, all flags on.</p>
+
+<h2>The domain model — three concentric rings</h2>
+<p style="font-size:13.5px;margin-bottom:4px;">Every page in the app is about exactly one of these. Ordered by how close it is to you.</p>
+<div class="rings">
+  <div class="ring r1">
+    <h4>👥 My League</h4>
+    <div class="scope">the 12 teams, our roto race</div>
+    <ul><li>Teams</li><li>League Rankings</li><li>Analytics</li><li>Draft Report</li><li>Estimator</li><li>Trade</li></ul>
+  </div>
+  <div class="ring r2">
+    <h4>⛹️ Players</h4>
+    <div class="scope">the talent pool, rostered or not</div>
+    <ul><li>Players</li><li>Player Rankings</li><li>Trends</li><li>Projections</li><li>Feature Store <i>(dev)</i></li></ul>
+  </div>
+  <div class="ring r3">
+    <h4>🏀 NBA</h4>
+    <div class="scope">the real world, reference data</div>
+    <ul><li>NBA Teams (depth charts)</li><li>Injuries</li></ul>
+  </div>
+</div>
+<div class="note"><b>Tools disappears.</b> Estimator and Trade are about your league. Projections is about players. "Tool-ness" was never a domain — that's exactly why the drawer rotted into a dumping ground for Trends and Draft Report.</div>
+<div class="note"><b>Two real tensions</b> the options below trade against each other: (1) <b>My League holds 6 items</b> — a big drawer is a junk drawer again unless it's subdivided or thinned. (2) <b>League Rankings and Teams are your most-used pages</b> — burying them behind a group is the most expensive click cost in the nav. Pure domain purity costs you exactly there.</div>
+
+<h2>1. Pick an option</h2>
+<div class="optbar">
+  <span class="optbtn active" data-opt="D" onclick="setOpt('D')">D — Domain + hot page flat <span class="rec">★ rec</span></span>
+  <span class="optbtn" data-opt="E" onclick="setOpt('E')">E — Pure 3 rings</span>
+  <span class="optbtn" data-opt="F" onclick="setOpt('F')">F — Rings + labeled sections</span>
+</div>
+
+<div class="optcard" id="optcard"></div>
+
+<div class="togglerow">
+  <span class="switch on" id="fsSwitch" onclick="toggleFS()">🗄️ Feature Store (dev build)</span>
+  <span>dev-only entry inside Players</span>
+</div>
+
+<h2>2. Desktop nav</h2>
+<div class="widthbar">
+  <span class="lbl">width:</span>
+  <span class="wbtn active" id="wXl" onclick="setWidth('xl')">≥ xl (icon + label)</span>
+  <span class="wbtn" id="wMd" onclick="setWidth('md')">md–xl (icon only)</span>
+</div>
+<div class="navmock" id="nav"></div>
+<div class="preview" id="prev">Now viewing: <b>Teams</b></div>
+<p style="font-size:12.5px;color:#6b7280;">Click a group to open, click an item to select. Logo = Dashboard <code>/</code>.</p>
+
+<h2>3. Mobile (hamburger)</h2>
+<div class="flexrow">
+  <div class="mobilewrap" id="mob"></div>
+  <div style="flex:1; min-width:240px;">
+    <div class="preview" id="prevMob">Now viewing: <b>Teams</b></div>
+    <p style="font-size:13px;color:var(--gray-600);">Groups are tap-to-expand accordions — the pattern <code>ReorgLayout</code> already implements for Tools. More groups means the single <code>toolsOpen</code> boolean becomes <code>openGroup: string | null</code> so opening one closes the others.</p>
+  </div>
+</div>
+
+<h2>4. Click cost — the thing that decides this</h2>
+<p style="font-size:13px;color:var(--gray-600);margin-top:0;">Assumption I'm making, correct me: League Rankings, Teams and Players are your highest-traffic pages. Everything else is occasional.</p>
+<table id="clicktable"></table>
+
+<h2>5. What changes in code</h2>
+<table id="difftable"></table>
+
+<h2>6. Where future pages land</h2>
+<table>
+  <tr><th>Planned page</th><th>Domain</th><th>Lands in</th></tr>
+  <tr><td>Standings Race (<code>standings_race_plan.md</code>)</td><td>My League</td><td>My League ▾</td></tr>
+  <tr><td>Streaming Planner (<code>streaming_planner_plan.md</code>)</td><td>Players</td><td>Players ▾</td></tr>
+  <tr><td>Slot Estimator (<code>slot_estimator_plan.html</code>)</td><td>My League</td><td>My League ▾</td></tr>
+  <tr><td>Player Dynamic Range (<code>player_dynamic_range_plan.html</code>)</td><td>Players</td><td>Players ▾</td></tr>
+</table>
+<p style="font-size:13px;color:var(--gray-600);">Every planned page has an unambiguous home — no judgment call, no re-litigating. That's the payoff of domain over intent. But note all four land in the two drawers that are already the biggest: <b>My League goes to 8, Players to 6-7</b>. Option F's labeled sections are what keeps that readable.</p>
+
+<div class="note blue">
+  <b>My call: D.</b> Domain grouping everywhere, except League Rankings stays a flat top-level link because it's the page you open most and a domain drawer would tax it every single time. Injuries and NBA stay flat too — a 2-item dropdown spends a click to save one slot in a nav that has room. Group them the day a third NBA page exists. <b>If you want zero exceptions and a rule you never argue with, take E.</b> If you expect the 4 planned pages to land soon, take F now instead of migrating to it later.
+</div>
+
+<script>
+var FS = true;
+var cur = 'D';
+var curPage = 'Teams';
+var openGroup = null;
+var mobOpenGroup = null;
+
+var LEAGUE = [
+  {p:"Teams", i:"👥"},
+  {p:"League Rankings", i:"🏆"},
+  {p:"Analytics", i:"📈"},
+  {p:"Draft Report", i:"📝", flag:true},
+  {p:"Estimator", i:"🔮"},
+  {p:"Trade", i:"🔄"}
+];
+var PLAYERS = [
+  {p:"Players", i:"⛹️"},
+  {p:"Player Rankings", i:"📋", flag:true},
+  {p:"Trends", i:"📉", flag:true},
+  {p:"Projections", i:"🔭", flag:true},
+  {p:"Feature Store", i:"🗄️", fs:true}
+];
+var NBA = [
+  {p:"NBA Teams", i:"🏀"},
+  {p:"Injuries", i:"🩺"}
+];
+
+var OPTIONS = {
+  D: {
+    title: "D — Domain groups, hottest page stays flat (recommended)",
+    why: "Rings applied everywhere, with two deliberate exceptions: League Rankings stays a flat link because it's the most-opened page in the app, and the 2-item NBA ring stays as two flat links because a dropdown for two entries spends a click to save one slot.",
+    pros: ["Most-used page stays 1 click",
+           "My League drawer drops to 5 — no junk drawer",
+           "Every future page still has an unambiguous home",
+           "Only 2 new dropdowns to build, NBA needs none"],
+    cons: ["Two exceptions to the rule — League Rankings is in the My League domain but not in its drawer",
+           "Teams drops to 2 clicks",
+           "NBA + Injuries visibly unrelated to each other while sitting side by side"],
+    nav: [
+      { p:"League Rankings", i:"🏆", flat:true },
+      { g:"My League", i:"👥", kids: LEAGUE.filter(function(x){ return x.p !== "League Rankings"; }) },
+      { g:"Players", i:"⛹️", kids: PLAYERS },
+      { p:"Injuries", i:"🩺", flat:true },
+      { p:"NBA Teams", i:"🏀", flat:true }
+    ],
+    diff: [
+      ["<span class='tag gone'>delete</span> Tools group", "<code>toolsItems</code> array and its group config go away entirely. Keyboard/ARIA/hover code is kept and reused — it becomes generic instead of Tools-specific."],
+      ["<span class='tag new'>new</span> My League group", "Teams, Analytics, Draft Report, Estimator, Trade. League Rankings deliberately excluded — stays flat."],
+      ["<span class='tag new'>new</span> Players group", "Players, Player Rankings, Trends, Projections (+ Feature Store dev)."],
+      ["<span class='tag keep'>keep</span> Injuries, NBA Teams", "Both stay flat top-level links. \"NBA\" label spelled out to \"NBA Teams\" so it reads as depth charts, not as a group header."],
+      ["<span class='tag move'>refactor</span> ReorgLayout", "Group config becomes an array of <code>{label, icon, items[]}</code>; <code>toolsOpen</code> boolean becomes <code>openGroup: string | null</code> (desktop) and <code>mobileOpenGroup</code> (mobile) so opening one closes the other. Hover, Escape, Arrow-Down, Tab-out logic keyed by group id."],
+      ["<span class='tag keep'>keep</span> all routes + flags", "Zero route changes. Flag gating moves from the flat array into each group's items array."]
+    ]
+  },
+  E: {
+    title: "E — Pure three rings, no exceptions",
+    why: "Every page lives in its domain drawer. Three top-level groups, nothing flat. The most teachable nav possible — you can explain it in one sentence and never make another placement decision.",
+    pros: ["One rule, zero exceptions — never re-litigate a placement",
+           "Tiny nav bar, tons of headroom at md–xl icon-only width",
+           "Domain ordering (league → players → NBA) matches how a manager actually thinks"],
+    cons: ["EVERY page is 2 clicks, including the ones you open constantly",
+           "My League drawer holds 6 now and 8 once the planned pages land",
+           "3-item nav looks sparse — hides how much the app actually does",
+           "2-item NBA drawer is a dropdown that barely earns its existence"],
+    nav: [
+      { g:"My League", i:"👥", kids: LEAGUE },
+      { g:"Players", i:"⛹️", kids: PLAYERS },
+      { g:"NBA", i:"🏀", kids: NBA }
+    ],
+    diff: [
+      ["<span class='tag gone'>delete</span> Tools group", "Same as D — config removed, generic dropdown machinery kept."],
+      ["<span class='tag new'>new</span> 3 groups", "My League (6), Players (4+dev), NBA (2). No flat links at all besides the logo."],
+      ["<span class='tag move'>refactor</span> ReorgLayout", "Same keyed-state refactor as D. Simpler render — the nav is a single <code>groups.map()</code> with no flat-link branch."],
+      ["<span class='tag move'>watch</span> drawer growth", "My League hits 8 items once Standings Race and Slot Estimator land. Revisit with F's section labels at that point."],
+      ["<span class='tag keep'>keep</span> all routes + flags", "Zero route changes."]
+    ]
+  },
+  F: {
+    title: "F — Three rings with labeled sections inside",
+    why: "Same three domains as E, but each drawer is internally divided with small uppercase section labels, so a 6-8 item drawer still scans instantly. Solves the 'My League is a junk drawer' problem without adding nav depth.",
+    pros: ["Handles drawer growth — a labeled 8-item drawer beats an unlabeled 5-item one",
+           "Still one rule, zero exceptions",
+           "Sections give a second, finer axis (view vs simulate) without a second click",
+           "The 4 planned pages slot in without any restructure"],
+    cons: ["Every page still 2 clicks, same as E",
+           "Section labels are more markup + a mobile height check (drawer gets tall on a 390px screen)",
+           "Two axes at once (domain then activity) is more model than a 13-page app may need"],
+    nav: [
+      { g:"My League", i:"👥", kids: [
+        {sec:"Standings"}, {p:"League Rankings", i:"🏆"}, {p:"Teams", i:"👥"}, {p:"Analytics", i:"📈"},
+        {sec:"Simulate"}, {p:"Estimator", i:"🔮"}, {p:"Trade", i:"🔄"},
+        {sec:"History"}, {p:"Draft Report", i:"📝", flag:true}
+      ]},
+      { g:"Players", i:"⛹️", kids: [
+        {sec:"Browse"}, {p:"Players", i:"⛹️"}, {p:"Player Rankings", i:"📋", flag:true},
+        {sec:"Forecast"}, {p:"Trends", i:"📉", flag:true}, {p:"Projections", i:"🔭", flag:true},
+        {p:"Feature Store", i:"🗄️", fs:true}
+      ]},
+      { g:"NBA", i:"🏀", kids: NBA }
+    ],
+    diff: [
+      ["<span class='tag gone'>delete</span> Tools group", "Same as D and E."],
+      ["<span class='tag new'>new</span> 3 groups + sections", "Group item arrays gain optional <code>{section: string}</code> divider entries; the dropdown renderer emits a non-interactive label row for those, skipping them in keyboard navigation."],
+      ["<span class='tag move'>refactor</span> ReorgLayout", "Keyed-group state as in D, plus the renderer must skip section rows when computing Arrow-Down / first-focusable target."],
+      ["<span class='tag move'>verify</span> mobile height", "My League accordion is 7 rows + 3 labels. Check it doesn't push NBA off-screen at 390px — may need the accordion to scroll internally."],
+      ["<span class='tag keep'>keep</span> all routes + flags", "Zero route changes."]
+    ]
+  }
+};
+
+function visibleKids(kids) {
+  return kids.filter(function(k){ return !k.fs || FS; });
+}
+function pageKids(kids) {
+  return visibleKids(kids).filter(function(k){ return k.p; });
+}
+function clicksTo(page) {
+  var o = OPTIONS[cur];
+  for (var i = 0; i < o.nav.length; i++) {
+    var n = o.nav[i];
+    if (n.p === page) return 1;
+    if (n.g && pageKids(n.kids).some(function(k){ return k.p === page; })) return 2;
+  }
+  return 2;
+}
+function pathTo(page) {
+  var o = OPTIONS[cur];
+  for (var i = 0; i < o.nav.length; i++) {
+    var n = o.nav[i];
+    if (n.p === page) return page;
+    if (n.g && pageKids(n.kids).some(function(k){ return k.p === page; })) return n.g + " ▸ " + page;
+  }
+  return page;
+}
+
+function renderCard() {
+  var o = OPTIONS[cur];
+  var groups = o.nav.filter(function(n){ return n.g; });
+  var flats = o.nav.filter(function(n){ return n.p; });
+  var biggest = 0;
+  groups.forEach(function(g){ biggest = Math.max(biggest, pageKids(g.kids).length); });
+  var oneClick = flats.length;
+
+  var html = '<h3>' + o.title + '</h3><p class="why">' + o.why + '</p><div class="metrics">';
+  html += '<div class="metric">top-level items<b>' + o.nav.length + '</b></div>';
+  html += '<div class="metric">dropdowns<b>' + groups.length + '</b></div>';
+  html += '<div class="metric' + (biggest > 5 ? ' warn' : '') + '">biggest drawer<b>' + biggest + '</b></div>';
+  html += '<div class="metric">pages at 1 click<b>' + oneClick + ' / 13</b></div>';
+  html += '</div><div style="margin-top:10px;">';
+  o.pros.forEach(function(p){ html += '<div class="pro">' + p + '</div>'; });
+  o.cons.forEach(function(c){ html += '<div class="con">' + c + '</div>'; });
+  html += '</div>';
+  document.getElementById('optcard').innerHTML = html;
+}
+
+function renderNav() {
+  var o = OPTIONS[cur];
+  var html = '<span class="brand" data-page="Dashboard (home)">🏀 Fantasy League</span>';
+  o.nav.forEach(function(n) {
+    if (n.g) {
+      var kids = visibleKids(n.kids);
+      var groupActive = kids.some(function(k){ return k.p === curPage; });
+      html += '<span class="navitem group' + (groupActive ? ' active' : '') + (openGroup === n.g ? ' open' : '') +
+              '" data-group="' + n.g + '">' + n.i + ' <span class="txt">' + n.g + '</span><span class="caret">▾</span><div class="dropdown">';
+      var firstSec = true;
+      kids.forEach(function(k) {
+        if (k.sec) { html += '<div class="sep' + (firstSec ? ' first' : '') + '">' + k.sec + '</div>'; firstSec = false; return; }
+        html += '<div data-page="' + k.p + '" class="' + (k.p === curPage ? 'active ' : '') + (k.fs ? 'flagged' : '') + '">' +
+                k.i + ' ' + k.p + (k.fs ? ' <span style="font-size:10px;">(dev)</span>' : '') + '</div>';
+      });
+      html += '</div></span>';
+    } else {
+      html += '<span class="navitem' + (n.p === curPage ? ' active' : '') + '" data-page="' + n.p + '" title="' + n.p + '">' +
+              n.i + ' <span class="txt">' + n.p + '</span></span>';
+    }
+  });
+  var nav = document.getElementById('nav');
+  nav.innerHTML = html;
+  wireNav(nav);
+}
+
+function renderMob() {
+  var o = OPTIONS[cur];
+  var html = '';
+  o.nav.forEach(function(n) {
+    if (n.g) {
+      var kids = visibleKids(n.kids);
+      var groupActive = kids.some(function(k){ return k.p === curPage; });
+      var isOpen = mobOpenGroup === n.g;
+      html += '<div class="mobrow grp' + (groupActive ? ' active' : '') + (isOpen ? ' open' : '') +
+              '" data-group="' + n.g + '"><span>' + n.i + ' ' + n.g + '</span><span class="caret">▾</span></div>';
+      html += '<div class="mobsubwrap' + (isOpen ? ' open' : '') + '">';
+      kids.forEach(function(k) {
+        if (k.sec) { html += '<div class="mobsep">' + k.sec + '</div>'; return; }
+        html += '<div class="mobsub' + (k.p === curPage ? ' active' : '') + (k.fs ? ' flagged' : '') +
+                '" data-page="' + k.p + '">' + k.i + ' ' + k.p + (k.fs ? ' (dev)' : '') + '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="mobrow' + (n.p === curPage ? ' active' : '') + '" data-page="' + n.p + '">' + n.i + ' ' + n.p + '</div>';
+    }
+  });
+  var mob = document.getElementById('mob');
+  mob.innerHTML = html;
+  wireMob(mob);
+}
+
+function wireNav(nav) {
+  nav.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      curPage = el.getAttribute('data-page');
+      openGroup = null;
+      renderNav(); renderMob(); setPreview();
+    });
+  });
+  nav.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      if (e.target.closest('.dropdown')) return;
+      e.stopPropagation();
+      var g = el.getAttribute('data-group');
+      openGroup = (openGroup === g) ? null : g;
+      renderNav();
+    });
+  });
+}
+
+function wireMob(mob) {
+  mob.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      curPage = el.getAttribute('data-page');
+      renderNav(); renderMob(); setPreview();
+    });
+  });
+  mob.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var g = el.getAttribute('data-group');
+      mobOpenGroup = (mobOpenGroup === g) ? null : g;
+      renderMob();
+    });
+  });
+}
+
+function setPreview() {
+  var txt = 'Now viewing: <b>' + curPage + '</b> <span class="path">— ' + pathTo(curPage) + '</span>';
+  document.getElementById('prev').innerHTML = txt;
+  document.getElementById('prevMob').innerHTML = txt;
+}
+
+function renderClicks() {
+  var pages = ["League Rankings","Teams","Players","Player Rankings","Analytics","Trends",
+               "Projections","Estimator","Trade","Draft Report","Injuries","NBA Teams"];
+  var rows = '<tr><th>Page</th><th style="width:14%;text-align:center;">Clicks</th><th>Path</th></tr>';
+  pages.forEach(function(p) {
+    var c = clicksTo(p);
+    rows += '<tr><td>' + p + '</td><td class="num ' + (c === 1 ? 'c1' : 'c2') + '">' + c + '</td><td style="color:#6b7280;">' + pathTo(p) + '</td></tr>';
+  });
+  document.getElementById('clicktable').innerHTML = rows;
+}
+
+function renderDiff() {
+  var rows = '<tr><th style="width:26%;">Change</th><th>Detail</th></tr>';
+  OPTIONS[cur].diff.forEach(function(d) { rows += '<tr><td>' + d[0] + '</td><td>' + d[1] + '</td></tr>'; });
+  document.getElementById('difftable').innerHTML = rows;
+}
+
+function setOpt(o) {
+  cur = o; openGroup = null; mobOpenGroup = null;
+  document.querySelectorAll('.optbtn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-opt') === o);
+  });
+  renderCard(); renderNav(); renderMob(); renderClicks(); renderDiff(); setPreview();
+}
+function setWidth(w) {
+  document.getElementById('nav').classList.toggle('compressed', w === 'md');
+  document.getElementById('wMd').classList.toggle('active', w === 'md');
+  document.getElementById('wXl').classList.toggle('active', w === 'xl');
+}
+function toggleFS() {
+  FS = !FS;
+  document.getElementById('fsSwitch').classList.toggle('on', FS);
+  renderCard(); renderNav(); renderMob(); renderClicks();
+}
+document.addEventListener('click', function() {
+  if (openGroup !== null) { openGroup = null; renderNav(); }
+});
+
+setOpt('D');
+</script>
+</body>
+</html>

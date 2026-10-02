@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NBA Pace Marker — Variants</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --used:#2563eb; --usedsoft:rgba(37,99,235,.18);
+  --par:#94a3b8; --parfill:#cbd5e1;
+  --gone:#fecaca; --gone-ink:#b91c1c;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+  --stripe:rgba(17,24,39,.16);
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --used:#60a5fa; --usedsoft:rgba(96,165,250,.2);
+  --par:#64748b; --parfill:#475569;
+  --gone:#450a0a; --gone-ink:#fca5a5;
+  --ok:#4ade80; --ok-bg:#052e16; --warn:#fbbf24; --warn-bg:#451a03; --bad:#f87171; --bad-bg:#450a0a;
+  --stripe:rgba(249,250,251,.18);
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1);padding:18px 12px 48px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+h2{font-size:15px;font-weight:800}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:16px;line-height:1.6}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:16px}
+.cardhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.tag{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.flat{background:var(--chip);color:var(--ink2)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.why{font-size:11.5px;color:var(--ink3);line-height:1.65;margin-top:12px}
+.why b{color:var(--ink2)}
+.split{display:grid;grid-template-columns:1fr 400px;gap:14px;align-items:start}
+@media(max-width:940px){.split{grid-template-columns:1fr}}
+.pane{border:1px dashed var(--border);border-radius:10px;padding:10px;overflow:hidden}
+.pane .lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+.mob{width:375px;max-width:100%}
+button.theme{position:fixed;top:12px;right:12px;border:1px solid var(--border);background:var(--card);border-radius:8px;font-size:15px;cursor:pointer;padding:6px 9px;z-index:9}
+
+.row{padding:8px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:none}
+.top{display:flex;align-items:center;gap:8px}
+.slot{font-weight:800;font-size:12.5px;width:34px;flex:0 0 34px}
+.capn{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.track{position:relative;height:16px;border-radius:8px;background:var(--chip);overflow:visible;flex:1}
+.inner{position:absolute;inset:0;border-radius:8px;overflow:hidden}
+.fill{position:absolute;left:0;top:0;bottom:0;background:var(--used)}
+.gapproj{position:absolute;top:0;bottom:0;background:var(--usedsoft)}
+.dead{position:absolute;top:0;bottom:0;right:0;background:var(--gone);opacity:.8}
+.tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink1);border-radius:1px}
+.nums{display:flex;flex-wrap:wrap;gap:4px;padding-left:42px;margin-top:6px}
+.n{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--chip);color:var(--ink2)}
+.n b{font-variant-numeric:tabular-nums}
+.n.used{background:var(--usedsoft);color:var(--used)}
+.n.ok{background:var(--ok-bg);color:var(--ok)}
+.n.warn{background:var(--warn-bg);color:var(--warn)}
+.n.bad{background:var(--bad-bg);color:var(--bad)}
+.n.gone{background:var(--gone);color:var(--gone-ink)}
+.n.behind{background:var(--chip);color:var(--ink1);border:1px solid var(--par)}
+
+/* V1 caret */
+.v1 .row{padding-top:14px}
+.v1 .par{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--ink1);border-radius:1px}
+.v1 .caret{position:absolute;top:-11px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--ink1)}
+.v1 .paceLab{position:absolute;top:-24px;transform:translateX(-50%);font-size:9px;font-weight:800;letter-spacing:.04em;color:var(--ink1);white-space:nowrap;text-transform:uppercase}
+
+/* V2 striped shortfall */
+.v2 .short{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(-45deg,var(--stripe) 0 3px,transparent 3px 6px);border-right:2px solid var(--ink1)}
+.v2 .ahead{position:absolute;top:0;bottom:0;background:var(--used);opacity:.55;border-left:2px solid var(--ink1)}
+
+/* V3 par track */
+.v3 .partrack{position:absolute;left:0;top:0;bottom:0;background:var(--parfill)}
+.v3 .paredge{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink1);border-radius:1px}
+
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--ink2);margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+.meaning{display:flex;flex-wrap:wrap;gap:5px 14px;font-size:11px;color:var(--ink2);margin-top:10px}
+.meaning div{display:flex;align-items:baseline;gap:5px}
+.meaning b{color:var(--ink1);font-weight:800}
+.meaning em{font-style:normal;color:var(--ink3)}
+.hh{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.hh div{font-size:11.5px;background:var(--chip);border-radius:7px;padding:5px 10px;color:var(--ink2)}
+.hh b{color:var(--ink1);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<button class="theme" id="theme">🌙</button>
+<div class="wrap">
+  <h1>Making NBA pace actually visible</h1>
+  <div class="sub">
+    You're right — a 2px dashed line inside a 15px track carries too much meaning for how quiet it is. Same scenario in all three: <b>NBA pace 68.4 GP/team</b>, so a perfectly-used 82-slot would sit at 68.4 today and UTIL at 205.2.
+    <b>C is 16.4 games behind pace, F is 10.4 behind, SG is 2.6 ahead.</b> Whichever variant you pick, those three facts should be obvious without reading a number.
+  </div>
+  <div class="hh" id="hh"></div>
+
+  <div class="card">
+    <div class="cardhead"><h2>1 · Solid marker + caret + label</h2><span class="tag flat">most literal</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab">Desktop</div><div class="v1" id="v1a"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="v1" id="v1b"></div></div></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--used)"></i>used</span>
+      <span><i style="background:var(--usedsoft)"></i>projected gain</span>
+      <span><i style="background:var(--gone)"></i>unreachable</span>
+      <span><i style="background:var(--ink1);width:3px;height:13px;border-radius:0"></i>NBA pace ▾</span>
+    </div>
+    <div class="why"><b>What changed:</b> dashed → solid, taller than the track, plus a downward caret and a one-time "NBA PACE" label on the top row. <b>Cost:</b> needs ~14px of headroom per row for the caret, and when the pace marker and the est. tick land close together (PG here: 83.4% vs 96.3%) two near-identical black lines compete. Reads well, but it is still asking a thin line to do the work.</div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h2>2 · Shade the gap itself</h2><span class="tag ok">recommended</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab">Desktop</div><div class="v2" id="v2a"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="v2" id="v2b"></div></div></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--used)"></i>used</span>
+      <span><i style="background:repeating-linear-gradient(-45deg,var(--stripe) 0 3px,transparent 3px 6px);border:1px solid var(--border)"></i>behind pace — games a fully-used slot would already have</span>
+      <span><i style="background:var(--used);opacity:.55"></i>ahead of pace</span>
+      <span><i style="background:var(--gone)"></i>unreachable</span>
+    </div>
+    <div class="why">
+      <b>Why this one.</b> The thing you care about is the <i>gap</i>, not the line — so draw the gap. The hatched band runs from where you are to where pace sits, and its width is the deficit at a glance: C's band is unmissable, F's is clearly smaller, SG has none because it is ahead (shown instead as a lighter blue overrun past the pace boundary).<br><br>
+      <b>No new colour.</b> Stripes are neutral ink at 16% — they read as "missing" without introducing a third hue next to blue and red. <b>No extra height:</b> everything lives inside the existing 16px track, so the card stays at its current size.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h2>3 · Pace as track territory</h2><span class="tag warn">cleanest, most abstract</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab">Desktop</div><div class="v3" id="v3a"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="v3" id="v3b"></div></div></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--used)"></i>used</span>
+      <span><i style="background:var(--parfill)"></i>pace territory — what a fully-used slot would hold today</span>
+      <span><i style="background:var(--chip)"></i>rest of the cap</span>
+      <span><i style="background:var(--gone)"></i>unreachable</span>
+    </div>
+    <div class="why"><b>How it reads:</b> the darker grey runs 0 → pace. Blue sits on top, so a slot behind pace leaves visible grey sticking out past the blue, and a slot ahead has blue overshooting the grey entirely. <b>Trade-off:</b> quietest of the three and needs zero extra height, but "grey I can still see" is a subtler cue than a hatched band, and it collides visually with the light-grey "rest of cap" unless the two greys stay well separated — which constrains the palette in dark mode.</div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h2>Optional on any of the three: a delta chip</h2></div>
+    <div class="split">
+      <div class="pane"><div class="lab">With <code>vs pace</code> chip</div><div class="v2" id="v4a"></div></div>
+      <div class="pane"><div class="lab">375px</div><div class="mob"><div class="v2" id="v4b"></div></div></div>
+    </div>
+    <div class="why">
+      One extra chip, <code>vs pace −16</code>, only on slots that are actually off pace. This is not the old <code>Rate</code> row returning — that printed a delta in all eight cells and forced two lines per cell. Here it is one chip in a row that already exists, and it stays silent when a slot is on pace, so the page only spends ink where something is wrong.<br><br>
+      Say if you want it; the bar treatment works with or without.
+    </div>
+  </div>
+</div>
+
+<script>
+const DL=22, NBA_PACE=68.4;
+const S=[{n:'PG',cap:82,used:68,est:79},{n:'SG',cap:82,used:71,est:82},{n:'SF',cap:82,used:66,est:77},
+{n:'PF',cap:82,used:69,est:80},{n:'C',cap:82,used:52,est:62},{n:'G',cap:82,used:70,est:81},
+{n:'F',cap:82,used:58,est:68},{n:'UTIL',cap:248,used:210,est:244}].map(s=>{
+  const pd=s.n==='UTIL'?3:1;
+  s.max=Math.min(s.cap,s.used+DL*pd); s.gone=s.cap-s.max; s.par=NBA_PACE*pd;
+  s.delta=+(s.used-s.par).toFixed(1);
+  s.tone=s.est>=s.cap-1?'ok':s.est>=s.cap*0.93?'warn':'bad';
+  return s;});
+const pc=(v,c)=>(v/c*100).toFixed(2)+'%';
+
+function chips(s,delta){
+  return `<div class="nums">
+    <span class="n used">used <b>${s.used}</b></span>
+    <span class="n ${s.tone}">est <b>${s.est}</b></span>
+    <span class="n ${s.gone>0?'gone':''}">max <b>${s.max}</b></span>
+    <span class="n">cap <b>${s.cap}</b></span>
+    ${delta&&Math.abs(s.delta)>=1?`<span class="n behind">vs pace <b>${s.delta>0?'+':''}${s.delta}</b></span>`:''}
+  </div>`;
+}
+const common=s=>`
+  <span class="fill" style="width:${pc(s.used,s.cap)}"></span>
+  <span class="gapproj" style="left:${pc(s.used,s.cap)};width:${pc(Math.max(0,s.est-s.used),s.cap)}"></span>
+  ${s.gone>0?`<span class="dead" style="width:${pc(s.gone,s.cap)}"></span>`:''}`;
+
+function v1(el){
+  el.innerHTML=S.map((s,i)=>`<div class="row"><div class="top">
+    <span class="slot">${s.n}</span>
+    <span class="track"><span class="inner">${common(s)}</span>
+      <span class="par" style="left:${pc(s.par,s.cap)}"></span>
+      <span class="caret" style="left:${pc(s.par,s.cap)}"></span>
+      ${i===0?`<span class="paceLab" style="left:${pc(s.par,s.cap)}">NBA pace</span>`:''}
+      <span class="tick" style="left:${pc(s.est,s.cap)}"></span>
+    </span><span class="capn">/${s.cap}</span></div>${chips(s,false)}</div>`).join('');
+}
+function v2(el,delta){
+  el.innerHTML=S.map(s=>{
+    const behind=s.used<s.par;
+    const band=behind
+      ? `<span class="short" style="left:${pc(s.used,s.cap)};width:${pc(s.par-s.used,s.cap)}"></span>`
+      : `<span class="ahead" style="left:${pc(s.par,s.cap)};width:${pc(s.used-s.par,s.cap)}"></span>`;
+    return `<div class="row"><div class="top">
+      <span class="slot">${s.n}</span>
+      <span class="track"><span class="inner">
+        <span class="fill" style="width:${pc(s.used,s.cap)}"></span>
+        ${band}
+        <span class="gapproj" style="left:${pc(Math.max(s.used,s.par),s.cap)};width:${pc(Math.max(0,s.est-Math.max(s.used,s.par)),s.cap)}"></span>
+        ${s.gone>0?`<span class="dead" style="width:${pc(s.gone,s.cap)}"></span>`:''}
+      </span><span class="tick" style="left:${pc(s.est,s.cap)}"></span>
+      </span><span class="capn">/${s.cap}</span></div>${chips(s,delta)}</div>`;}).join('');
+}
+function v3(el){
+  el.innerHTML=S.map(s=>`<div class="row"><div class="top">
+    <span class="slot">${s.n}</span>
+    <span class="track"><span class="inner">
+      <span class="partrack" style="width:${pc(s.par,s.cap)}"></span>
+      ${common(s)}
+    </span><span class="paredge" style="left:${pc(s.par,s.cap)}"></span>
+    <span class="tick" style="left:${pc(s.est,s.cap)}"></span>
+    </span><span class="capn">/${s.cap}</span></div>${chips(s,false)}</div>`).join('');
+}
+v1(document.getElementById('v1a'));v1(document.getElementById('v1b'));
+v2(document.getElementById('v2a'),false);v2(document.getElementById('v2b'),false);
+v3(document.getElementById('v3a'));v3(document.getElementById('v3b'));
+v2(document.getElementById('v4a'),true);v2(document.getElementById('v4b'),true);
+
+document.getElementById('hh').innerHTML=S.filter(s=>Math.abs(s.delta)>=1)
+  .sort((a,b)=>a.delta-b.delta)
+  .map(s=>`<div>${s.n}: <b style="color:${s.delta<0?'var(--bad)':'var(--ok)'}">${s.delta>0?'+':''}${s.delta}</b> vs pace</div>`).join('');
+
+document.getElementById('theme').onclick=()=>{
+  document.body.classList.toggle('dark');
+  document.getElementById('theme').textContent=document.body.classList.contains('dark')?'☀️':'🌙';};
+</script>
+</body>
+</html>

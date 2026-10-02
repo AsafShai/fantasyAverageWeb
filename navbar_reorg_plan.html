@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Navbar Reorg Plan</title>
+<style>
+  :root {
+    --blue: #2563eb; --purple: #9333ea; --gray-600:#4b5563; --gray-100:#f3f4f6;
+    --border:#e5e7eb; --green:#16a34a; --red:#dc2626; --amber:#d97706;
+  }
+  body { font-family: system-ui, sans-serif; max-width: 980px; margin: 0 auto; padding: 24px; color:#1f2937; line-height:1.5; }
+  h1 { background: linear-gradient(90deg, var(--blue), var(--purple)); -webkit-background-clip:text; background-clip:text; color:transparent; font-size:28px; }
+  h2 { border-bottom: 2px solid var(--border); padding-bottom:6px; margin-top:40px; }
+  table { width:100%; border-collapse: collapse; margin: 12px 0; font-size:14px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background: var(--gray-100); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+  .keep { background:#dcfce7; color:var(--green); }
+  .drop { background:#fee2e2; color:var(--red); }
+  .move { background:#fef3c7; color:var(--amber); }
+  .flag { background:#e0e7ff; color:#4338ca; }
+
+  /* nav mockup */
+  .navmock { background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.06); padding:10px 14px; display:flex; align-items:center; gap:10px; margin:14px 0; flex-wrap:wrap; }
+  .brand { font-weight:700; background: linear-gradient(90deg, var(--blue), var(--purple)); -webkit-background-clip:text; background-clip:text; color:transparent; white-space:nowrap; margin-right:8px; cursor:pointer; }
+  .navitem { font-size:13px; padding:6px 10px; border-radius:6px; color:var(--gray-600); white-space:nowrap; position:relative; cursor:default; }
+  .navitem.active { background:#dbeafe; color:var(--blue); }
+  .navitem.grouphover:hover .dropdown { display:block; }
+  .dropdown { display:none; position:absolute; top:100%; left:0; background:#fff; border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 10px rgba(0,0,0,.1); padding:6px; min-width:150px; z-index:10; }
+  .dropdown div { padding:6px 8px; font-size:12.5px; border-radius:4px; color:var(--gray-600); }
+  .dropdown div:hover { background:var(--gray-100); }
+  .caret { font-size:9px; opacity:.6; margin-left:3px; }
+
+  .mobilewrap { width:320px; border:1px solid var(--border); border-radius:16px; padding:10px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .mobilerow { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:6px; font-size:13px; color:var(--gray-600); cursor:pointer; }
+  .mobilerow.active { background:#dbeafe; color:var(--blue); }
+  .mobilesub { padding-left:24px; font-size:12px; color:#6b7280; cursor:pointer; border-radius:6px; padding-top:8px; padding-bottom:8px; }
+  .mobilesub.active { background:#dbeafe; color:var(--blue); }
+  .mobilesub-wrap { overflow:hidden; max-height:0; transition:max-height .15s ease; background:#fafafa; border-radius:6px; margin:0 0 2px 0; }
+  .mobilesub-wrap.open { max-height:220px; }
+  .flexrow { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  .note { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:13.5px; margin:14px 0; }
+  .q { background:#eff6ff; border-left:4px solid var(--blue); padding:10px 14px; margin:10px 0; font-size:14px; }
+  code { background:var(--gray-100); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  .navitem { cursor:pointer; }
+  .navitem.grouphover.open .dropdown { display:block; }
+  .preview { margin-top:10px; padding:10px 14px; background:var(--gray-100); border-radius:8px; font-size:13px; }
+  .preview b { color:var(--blue); }
+  .tabbar { display:flex; gap:6px; margin-top:6px; }
+  .tabbtn { font-size:12px; padding:4px 10px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .tabbtn.active { background:var(--blue); color:#fff; }
+  .dev-only { display:none; }
+  .dev-mode .dev-only { display:block; }
+  .mobGroupToggle { border:1px dashed var(--border); font-weight:600; }
+  .mobGroupToggle .caret { transition:transform .15s ease; display:inline-block; }
+  .mobGroupToggle.open { background:#eff6ff; color:var(--blue); border-color:var(--blue); }
+  .mobGroupToggle.open .caret { transform:rotate(180deg); }
+</style>
+</head>
+<body>
+
+<h1>Navbar Reorg Plan</h1>
+<p>Scratch planning doc — not implementation. All decisions below are locked, nothing open.</p>
+
+<h2>1. Current state</h2>
+<table>
+<tr><th>Prod today</th><th>Flagged (off in prod)</th></tr>
+<tr><td>Dashboard, Teams, Rankings, Shots, Analytics, Estimator, Players, Injuries, Trade, NBA &nbsp;(10)</td>
+<td>Feature Store, Player Rankings, Projections &nbsp;(3 — become live later, ceiling = 13)</td></tr>
+</table>
+<div class="note">Simulation checked on <code>origin/dev</code> — already deleted (no flag/route/file left). No action needed there.</div>
+
+<h2>2. Decisions locked so far</h2>
+<table>
+<tr><th>Page</th><th>Decision</th><th>Why</th></tr>
+<tr><td>Dashboard</td><td><span class="tag drop">drop from nav</span></td><td>Reachable via logo/app-name click instead — frees a slot for free</td></tr>
+<tr><td>Shots</td><td><span class="tag move">merges into the Analytics page</span> as a 3rd section, all columns kept</td><td><b>Simplified — final call:</b> no dropdown needed. Analytics already stacks 2 sections (Heatmap + Rankings Over Time) on one page today without any nav grouping; Shots becomes a 3rd section the same way. No columns trimmed.</td></tr>
+<tr><td>Analytics</td><td><span class="tag keep">stays a single top-level link</span>, page grows to 3 sections: Heatmap, Rankings Over Time, Shooting Stats (was Shots) — switched via <span class="tag move">sticky sub-tabs</span>, not plain scroll-stack</td><td>Follows the pattern the page already uses for nav item count (no 3rd hover-group, no route-splitting). But 3 full sections on one page via plain scroll risks mobile scroll fatigue with no way to jump — reused the same tab-toggle pattern already in this doc (<code>.tabbtn</code>) as in-page sub-tabs so switching sections is instant, no scrolling required.</td></tr>
+<tr><td>Rankings / Player Rankings</td><td><span class="tag keep">both stay flat, top-level</span> — no group. "Rankings" renamed to "League Rankings" label only, route unchanged</td><td><b>Reversed the group call:</b> Rankings is a top-traffic page — grouping it cost a click (hover/tap-to-expand) on the single most-used view for zero real benefit. Nav has room (8 items flat comfortably fits, prod had 10 today) so no need to spend click-depth to save one slot.</td></tr>
+<tr><td>Tools group header</td><td><span class="tag move">gets an icon (🛠️), same icon-only compressed behavior as every other item</span> — caret stays visible at all widths</td><td>Fixes the inconsistency where every other nav item collapses to icon-only between <code>md</code> and <code>xl</code>, but a text-only group header didn't have that mode defined. Icon + always-visible caret marks it as a dropdown at any width, same footprint as a plain link.</td></tr>
+<tr><td>Tools group interaction</td><td><span class="tag move">real <code>&lt;button&gt;</code> trigger</span>, <code>aria-haspopup</code>/<code>aria-expanded</code>, Enter/Space toggles, Escape closes + refocuses trigger, Arrow-Down opens and focuses first item, Tab-out closes</td><td>Hover-only had no keyboard path — this is a new interaction paradigm for this nav (no dropdowns existed before). Treated as a simple disclosure widget (button + list of links), not a full ARIA menu — matches the actual complexity here without over-building.</td></tr>
+<tr><td>Teams / NBA</td><td><span class="tag keep">both stay separate, top-level</span></td><td>Confirmed unrelated — fantasy rosters vs real NBA depth charts</td></tr>
+<tr><td>Estimator, Trade, Projections</td><td><span class="tag move">group under "Tools" hover-menu</span></td><td>Player Rankings moved out to the Rankings group instead — Tools now holds Estimator, Trade, Projections (+ Feature Store, dev-only)</td></tr>
+<tr><td>Injuries</td><td><span class="tag keep">top-level</span>, not under NBA</td><td><b>Locked:</b> it's a leaguewide report — all NBA players' injury status, pulled from the official NBA report and refreshed every 15 min, not scoped to your own team or roster. Nesting it under NBA (which is scoped to one team's depth chart at a time) would add friction to its actual use: a quick leaguewide scan.</td></tr>
+<tr><td>Feature Store</td><td><span class="tag flag">joins Tools too, dev-build only</span></td><td>Related to Tools conceptually, but only ever rendered when <code>VITE_FF_FEATURE_STORE=true</code> — never appears in the prod dropdown</td></tr>
+</table>
+
+<h2>3. Final landed structure (all flags on)</h2>
+<p>One hover/tap dropdown now — Tools (Estimator, Trade, Projections, Feature Store). League Rankings and Player Rankings are flat top-level links, not grouped — keeps the primary Rankings page at 1 click. Analytics stays a plain link — Shots merges into it as a sub-tabbed section instead of a nav entry. Player Rankings shown here since this section assumes all flags on. Toggle below to see prod (no Feature Store) vs dev (Feature Store included) builds — a separate flag from Player Rankings.</p>
+
+<div style="margin:10px 0;">
+  <span class="tabbtn active" id="buildProd" onclick="setBuild('prod')">Prod build</span>
+  <span class="tabbtn" id="buildDev" onclick="setBuild('dev')">Dev build</span>
+</div>
+
+<div class="navmock" id="navFinal">
+  <span class="brand" data-page="Dashboard (home)">🏀 Fantasy League</span>
+  <span class="navitem active" data-page="Teams">Teams</span>
+  <span class="navitem" data-page="League Rankings">🏆 League Rankings</span>
+  <span class="navitem" data-page="Player Rankings">📋 Player Rankings</span>
+  <span class="navitem" data-page="Analytics">Analytics</span>
+  <span class="navitem" data-page="Players">Players</span>
+  <span class="navitem grouphover" id="toolsGroup">🛠️ Tools <span class="caret">▾</span>
+    <div class="dropdown" id="toolsDropdown">
+      <div data-page="Projections">🔭 Projections</div>
+      <div data-page="Estimator">🔮 Estimator</div>
+      <div data-page="Trade">🔄 Trade</div>
+      <div data-page="Feature Store" class="dev-only">🗄️ Feature Store</div>
+    </div>
+  </span>
+  <span class="navitem" data-page="Injuries">Injuries</span>
+  <span class="navitem" data-page="NBA">NBA</span>
+</div>
+<div class="preview" id="previewFinal">Now viewing: <b>Teams</b></div>
+<p style="font-size:13px;">8 top-level items shown here (all flags on). Ships as 7 until <code>VITE_SHOW_PLAYER_RANKINGS</code> flips — independent of the prod/dev toggle above, which only controls Feature Store. Only Tools hides behind a dropdown; League Rankings and Player Rankings stay flat for 1-click access. Tools absorbs future tool growth via its dropdown; Analytics absorbs growth via in-page sub-tabs instead of new nav entries. <i>Click a group to open on tap; click an item inside to select it.</i></p>
+
+<h2>4. Mobile equivalent (hamburger — hover doesn't exist on touch)</h2>
+<div style="margin:10px 0;">
+  <span class="tabbtn active" id="buildProdMob" onclick="setBuildMob('prod')">Prod build</span>
+  <span class="tabbtn" id="buildDevMob" onclick="setBuildMob('dev')">Dev build</span>
+</div>
+<div class="mobilewrap" id="mobFinal">
+  <div class="mobilerow active" data-page="Teams">👥 Teams</div>
+  <div class="mobilerow" data-page="League Rankings">🏆 League Rankings</div>
+  <div class="mobilerow" data-page="Player Rankings">📋 Player Rankings</div>
+  <div class="mobilerow" data-page="Analytics">📈 Analytics</div>
+  <div class="mobilerow" data-page="Players">⛹️ Players</div>
+  <div class="mobilerow mobGroupToggle" data-target="mobToolsSub">🛠️ Tools <span class="caret">▾</span></div>
+  <div class="mobilesub-wrap" id="mobToolsSub">
+    <div class="mobilesub" data-page="Projections">🔭 Projections</div>
+    <div class="mobilesub" data-page="Estimator">🔮 Estimator</div>
+    <div class="mobilesub" data-page="Trade">🔄 Trade</div>
+    <div class="mobilesub dev-only" data-page="Feature Store">🗄️ Feature Store</div>
+  </div>
+  <div class="mobilerow" data-page="Injuries">🩺 Injuries</div>
+  <div class="mobilerow" data-page="NBA">🏀 NBA</div>
+</div>
+<div class="preview" id="previewMobFinal">Now viewing: <b>Teams</b></div>
+
+<h2>5. Migration notes</h2>
+<table>
+<tr><td>Dashboard</td><td>Remove nav entry; keep <code>/</code> route; make logo/app-name a <code>Link to="/"</code>.</td></tr>
+<tr><td>Analytics page</td><td>Nav item unchanged — still a single link to <code>/analytics</code>. Add Shots' table as a 3rd section on that page, all columns kept, section heading stays "League Shooting Statistics" (existing text, unchanged). Sections switched via sticky in-page sub-tabs (Heatmap / Rankings Over Time / Shooting Stats), not plain scroll-stack — reuses the <code>.tabbtn</code> pattern already on this page's design. Remove/redirect the standalone <code>/shots</code> route. Rankings Over Time stays here only, not duplicated elsewhere.</td></tr>
+<tr><td>Rankings / Player Rankings</td><td>Both stay flat top-level links, no dropdown. "Rankings" nav label renamed to "League Rankings" (existing <code>/rankings</code> route, label only). "Player Rankings" (flag, existing <code>/player-rankings</code> route) sits next to it as its own top-level item. Routes unchanged.</td></tr>
+<tr><td>Tools group</td><td>New hover-dropdown nav component + mobile accordion variant. Order: Projections, Estimator, Trade (+ Feature Store, dev-build only). Routes unchanged for all. Trigger gets its own icon (🛠️) and stays icon-only between <code>md</code>/<code>xl</code> like every other item, caret always visible. Built as a real <code>&lt;button&gt;</code> with <code>aria-haspopup</code>/<code>aria-expanded</code>; Enter/Space toggles, Escape closes and refocuses the trigger, Arrow-Down opens and focuses the first item, Tab-out closes it.</td></tr>
+<tr><td>Player Rankings / Projections</td><td>Stay flag-gated. Player Rankings renders inside the Rankings dropdown; Projections renders inside the Tools dropdown, whenever each flag is on.</td></tr>
+<tr><td>Feature Store</td><td>Stays flag-gated inside Tools dropdown; flag is <code>false</code> in prod builds so it never appears for real users.</td></tr>
+<tr><td>Whole reorg</td><td>Gated behind one new flag, <code>VITE_FF_NAV_REORG</code>. Off → current flat nav renders unchanged (existing <code>navItems</code> array in <code>Layout.tsx</code> untouched). On → grouped/reordered nav renders instead, as a separate render branch, same component, no route changes either way. Vite bakes <code>VITE_*</code> at build time (same as the other flags here) — flipping it for season start means setting the env var on Render and redeploying, not a live runtime toggle.</td></tr>
+</table>
+
+<div class="note"><b>Checked: is Shots redundant with another page?</b> Partially — <code>Rankings.tsx</code> already shows FG% and FT% per team (roto columns, sortable, ranked), duplicating two of Shots' seven columns. But per your call, keep all of them: FG%/FT% in Rankings show your <i>rank</i> in that category, while Shots shows the raw makes/attempts — you need that detail to judge how close you are to passing the team above you (small-sample % swings look different once you see the volume behind them). No trimming.</div>
+
+<h2>Grill questions</h2>
+<p style="font-size:13px; color:#6b7280;">None open — all resolved. Plan is locked pending your go-ahead to implement.</p>
+<script>
+function renderPreview(el, page) {
+  el.innerHTML = 'Now viewing: <b>' + page + '</b>';
+}
+
+function wireDesktopNav(navId, previewId) {
+  var nav = document.getElementById(navId);
+  var preview = document.getElementById(previewId);
+  nav.querySelectorAll('[data-page]').forEach(function(item) {
+    item.addEventListener('click', function(e) {
+      e.stopPropagation();
+      nav.querySelectorAll('.navitem').forEach(function(n) { n.classList.remove('active'); });
+      var topItem = item.closest('.navitem');
+      if (topItem) topItem.classList.add('active');
+      renderPreview(preview, item.getAttribute('data-page'));
+      nav.querySelectorAll('.grouphover').forEach(function(g) { g.classList.remove('open'); });
+    });
+  });
+}
+wireDesktopNav('navFinal', 'previewFinal');
+
+document.querySelectorAll('.grouphover').forEach(function(group) {
+  group.addEventListener('click', function(e) {
+    if (e.target === group || e.target.classList.contains('caret')) {
+      e.stopPropagation();
+      document.querySelectorAll('.grouphover').forEach(function(g) { if (g !== group) g.classList.remove('open'); });
+      group.classList.toggle('open');
+    }
+  });
+});
+document.addEventListener('click', function() {
+  document.querySelectorAll('.grouphover').forEach(function(g) { g.classList.remove('open'); });
+});
+
+function wireMobileNav(wrapId, previewId) {
+  var wrap = document.getElementById(wrapId);
+  var preview = document.getElementById(previewId);
+  wrap.querySelectorAll('[data-page]').forEach(function(item) {
+    item.addEventListener('click', function() {
+      wrap.querySelectorAll('.mobilerow, .mobilesub').forEach(function(n) { n.classList.remove('active'); });
+      item.classList.add('active');
+      renderPreview(preview, item.getAttribute('data-page'));
+    });
+  });
+}
+wireMobileNav('mobFinal', 'previewMobFinal');
+
+document.querySelectorAll('.mobGroupToggle').forEach(function(toggle) {
+  toggle.addEventListener('click', function() {
+    var sub = document.getElementById(toggle.getAttribute('data-target'));
+    sub.classList.toggle('open');
+    toggle.classList.toggle('open');
+  });
+});
+
+function setBuild(mode) {
+  document.getElementById('navFinal').classList.toggle('dev-mode', mode === 'dev');
+  document.getElementById('buildProd').classList.toggle('active', mode === 'prod');
+  document.getElementById('buildDev').classList.toggle('active', mode === 'dev');
+}
+function setBuildMob(mode) {
+  document.getElementById('mobFinal').classList.toggle('dev-mode', mode === 'dev');
+  document.getElementById('buildProdMob').classList.toggle('active', mode === 'prod');
+  document.getElementById('buildDevMob').classList.toggle('active', mode === 'dev');
+}
+</script>
+</body>
+</html>

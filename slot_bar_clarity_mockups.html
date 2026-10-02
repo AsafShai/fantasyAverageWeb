@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot pace — clarity mockups</title>
+<style>
+  :root{
+    --card:#fff; --page:#f9fafb; --ink:#111827; --ink2:#4b5563; --ink3:#6b7280;
+    --track:#f9fafb; --border:#d1d5db; --hair:#e5e7eb;
+    --played:#60a5fa; --ontrack:#bfdbfe; --possible:#f3f4f6; --gone:#fecdd3;
+    --mono-played:#60a5fa; --mono-ontrack:#dbeafe; --mono-possible:#f3f4f6;
+    --marker:#64748b; --ring:#fff;
+    --chip:#eff6ff; --chip-ink:#1e40af; --chip-gray:#f3f4f6; --chip-gray-ink:#4b5563;
+    --chip-rose:#ffe4e6; --chip-rose-ink:#9f1239;
+  }
+  body.dark{
+    --card:#1f2937; --page:#111827; --ink:#f9fafb; --ink2:#d1d5db; --ink3:#9ca3af;
+    --track:#374151; --border:#4b5563; --hair:#374151;
+    --played:#3b82f6; --ontrack:#1e40af; --possible:#4b5563; --gone:#881337;
+    --mono-played:#3b82f6; --mono-ontrack:#1e3a8a; --mono-possible:#4b5563;
+    --marker:#cbd5e1; --ring:#1f2937;
+    --chip:#2d3748; --chip-ink:#93c5fd; --chip-gray:#374151; --chip-gray-ink:#d1d5db;
+    --chip-rose:#4c0519; --chip-rose-ink:#fda4af;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header.top{position:sticky;top:0;z-index:50;background:var(--card);border-bottom:1px solid var(--hair);
+    padding:12px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  header.top h1{margin:0;font-size:16px}
+  button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card);color:var(--ink);cursor:pointer}
+  main{padding:16px;max-width:1200px;margin:0 auto}
+  section{margin:0 0 40px}
+  h2{font-size:17px;margin:0 0 4px}
+  .why{color:var(--ink3);font-size:13px;margin:0 0 14px;max-width:60ch}
+  .why b{color:var(--ink2)}
+  .frames{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  .frame{flex:0 0 auto}
+  .frame.desk{flex:1 1 520px;min-width:340px}
+  .frame > .cap{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink3);margin-bottom:6px}
+  .phone{width:390px}
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:14px}
+  .card h3{margin:0;font-size:18px}
+  .sub{color:var(--ink3);font-size:11.5px;margin:3px 0 0}
+
+  /* legend */
+  .dots{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 4px;font-size:11px;color:var(--ink3)}
+  .dots span{display:inline-flex;align-items:center;gap:4px}
+  .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  /* anatomy legend */
+  .anatomy{margin:12px 0 6px;padding:10px 10px 6px;border:1px dashed var(--border);border-radius:10px}
+  .anatomy .hint{font-size:10.5px;color:var(--ink3);margin:0 0 20px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.04em}
+  .anatomy .bar{margin-bottom:4px}
+  .callouts{position:relative;height:0}
+  .co{position:absolute;font-size:10px;color:var(--ink2);white-space:nowrap;transform:translateX(-50%)}
+  .co::before{content:"";position:absolute;left:50%;width:1px;background:var(--border)}
+  .co.up{bottom:6px}.co.up::before{top:100%;height:8px}
+  .co.dn{top:6px}.co.dn::before{bottom:100%;height:8px}
+
+  /* rows */
+  .rows{margin-top:14px;display:flex;flex-direction:column;gap:12px}
+  .row{display:grid;grid-template-columns:1fr;gap:5px}
+  .desk .row{grid-template-columns:44px minmax(0,1fr) 84px;align-items:center;gap:10px}
+  .slot{font-size:11.5px;font-weight:800;letter-spacing:.05em;color:var(--ink2)}
+  .rail{font-size:11px;color:var(--ink3);text-align:right}
+  .rail.verdict{font-weight:700}
+  .rail.bad{color:#e11d48}
+  body.dark .rail.bad{color:#fb7185}
+  .phone .row{grid-template-columns:1fr}
+  .phone .rowhead{display:flex;justify-content:space-between;align-items:baseline}
+
+  .barwrap{position:relative}
+  .bar{position:relative;display:flex;height:18px;border:1px solid var(--border);
+    border-radius:999px;background:var(--track);overflow:visible}
+  .bar.tall{height:24px}
+  .seg{height:100%;min-width:2px;position:relative;display:flex;align-items:center;
+    justify-content:center;font-size:10px;font-weight:800;color:#1e3a8a;overflow:hidden}
+  body.dark .seg{color:#dbeafe}
+  .seg:first-child{border-radius:999px 0 0 999px}
+  .seg:last-child{border-radius:0 999px 999px 0}
+  .seg.played{background:var(--played)}
+  .seg.ontrack{background:var(--ontrack)}
+  .seg.possible{background:var(--possible)}
+  .seg.gone{background:var(--gone);color:#9f1239}
+  body.dark .seg.gone{color:#fecdd3}
+  .mono .seg.played{background:var(--mono-played)}
+  .mono .seg.ontrack{background:var(--mono-ontrack)}
+  .mono .seg.possible{background:var(--mono-possible)}
+
+  /* markers */
+  .mk{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--marker);
+    box-shadow:0 0 0 1.5px var(--ring);border-radius:2px;transform:translateX(-1px)}
+  .mk::after{content:"";position:absolute;left:-2.5px;top:-4px;width:7px;height:7px;border-radius:50%;
+    background:var(--marker);box-shadow:0 0 0 1.5px var(--ring)}
+  .mk.soft{background:var(--border);opacity:.9}
+  .mk.soft::after{background:var(--border)}
+  .mklab{position:absolute;bottom:calc(100% + 7px);transform:translateX(-50%);white-space:nowrap;
+    font-size:9.5px;font-weight:700;color:var(--ink2);background:var(--chip-gray);
+    padding:1px 5px;border-radius:5px}
+  .mklab.below{bottom:auto;top:calc(100% + 7px)}
+  .zone{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,
+    rgba(148,163,184,.20) 0 4px, rgba(148,163,184,0) 4px 8px);pointer-events:none}
+  .marklane{position:relative;height:14px}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:5px;
+    font-size:10px;font-weight:800;background:var(--chip-gray);color:var(--chip-gray-ink)}
+  .chip.blue{background:var(--chip);color:var(--chip-ink)}
+  .chip.rose{background:var(--chip-rose);color:var(--chip-rose-ink)}
+  .chip .dot{width:8px;height:8px;border-radius:3px}
+  .sentence{font-size:11px;color:var(--ink3)}
+  .sentence b{color:var(--ink2)}
+  .verdictpill{font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;
+    background:var(--chip-gray);color:var(--chip-gray-ink)}
+  .verdictpill.bad{background:var(--chip-rose);color:var(--chip-rose-ink)}
+  .note{font-size:12px;color:var(--ink3);margin-top:10px;padding-left:14px;border-left:2px solid var(--hair)}
+  .note b{color:var(--ink2)}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Slot pace — clarity mockups</h1>
+  <button id="tog">Toggle dark</button>
+</header>
+<main id="app"></main>
+
+<script>
+const CAP = 82;
+// Late-season scenario: pace 74 GP/team, 12 game days left. Includes on-pace, behind, and "gone" rows.
+const PACE = 74;
+const ROWS = [
+  { slot:'PG',  played:74,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'SG',  played:70,  est:81,  max:82,  cap:82,  mult:1 },
+  { slot:'PF',  played:62,  est:72,  max:74,  cap:82,  mult:1 },
+  { slot:'G',   played:55,  est:64,  max:67,  cap:82,  mult:1 },
+  { slot:'UTIL',played:219, est:243, max:246, cap:248, mult:3 },
+];
+
+const pct = (v, cap) => (v / cap) * 100;
+
+function parts(r){
+  const onTrack  = Math.max(0, r.est - r.played);
+  const possible = Math.max(0, r.max - Math.max(r.played, r.est));
+  const gone     = Math.max(0, r.cap - r.max);
+  return { onTrack, possible, gone };
+}
+function paceFor(r){ return PACE * r.mult; }
+function vsPace(r){ return +(r.played - paceFor(r)).toFixed(1); }
+
+function segHTML(r, o){
+  const p = parts(r);
+  const defs = [
+    ['played',   r.played,  o.labels ? `${r.played} played` : ''],
+    ['ontrack',  p.onTrack, o.labels ? `+${p.onTrack.toFixed(0)} on track` : ''],
+    ['possible', p.possible,o.labels ? `+${p.possible.toFixed(0)} possible` : ''],
+    ['gone',     p.gone,    o.labels ? `${p.gone.toFixed(0)} gone` : ''],
+  ];
+  return defs.filter(d => d[1] > 0).map(([cls, val, label]) => {
+    const w = pct(val, r.cap);
+    // only label a segment wide enough to hold the text
+    const show = label && w > (o.narrow ? 26 : 13) ? label : '';
+    return `<span class="seg ${cls}" style="width:${w}%">${show}</span>`;
+  }).join('');
+}
+
+function markersHTML(r, o){
+  let h = '';
+  const paceP = Math.min(100, pct(paceFor(r), r.cap));
+  if (o.marker === 'pace' || o.marker === 'zone'){
+    h += `<span class="mk" style="left:${paceP}%"></span>`;
+    if (o.paceLabel) h += `<span class="mklab" style="left:${paceP}%">NBA ${paceFor(r).toFixed(0)}</span>`;
+  }
+  if (o.marker === 'zone'){
+    const from = Math.min(pct(r.played, r.cap), paceP);
+    h += `<span class="zone" style="left:${from}%;width:${Math.max(0, paceP - from)}%"></span>`;
+  }
+  if (o.marker === 'steps'){
+    const steps = [
+      ['now',  r.played, false],
+      ['est',  r.est,    true ],
+      ['max',  r.max,    false],
+    ];
+    steps.forEach(([name, val, below], i) => {
+      const L = Math.min(100, pct(val, r.cap));
+      const soft = name !== 'now' ? ' soft' : '';
+      if (o.narrow && name === 'max') return;   // mobile: drop the third tick
+      h += `<span class="mk${soft}" style="left:${L}%"></span>`;
+      h += `<span class="mklab${below ? ' below' : ''}" style="left:${L}%">${name} ${val}</span>`;
+    });
+    h += `<span class="mk soft" style="left:${paceP}%"></span>`;
+  }
+  return h;
+}
+
+function chipsHTML(r, o){
+  const p = parts(r);
+  const off = Math.abs(vsPace(r)) >= 1;
+  if (o.chips === 'none') return '';
+  if (o.chips === 'exception' && !off && p.gone === 0) return '';
+  if (o.chips === 'sentence'){
+    return `<div class="sentence"><b>${r.played}</b> played · projected <b>${r.est}</b> of ${r.cap}` +
+      (p.gone > 0 ? ` · <b>${p.gone} can no longer be played</b>` : ' · full season still reachable') + `</div>`;
+  }
+  const d = c => `<span class="dot" style="background:var(--${c})"></span>`;
+  return `<div class="chips">
+    <span class="chip blue">${d('played')}played <b>${r.played}</b></span>
+    <span class="chip blue">${d('ontrack')}estimated <b>${r.est}</b></span>
+    <span class="chip">${d('possible')}max reachable <b>${r.max}</b></span>
+    ${p.gone > 0 ? `<span class="chip rose">${d('gone')}gone <b>${p.gone}</b></span>` : ''}
+    <span class="chip">vs pace <b>${vsPace(r) > 0 ? '+' : ''}${vsPace(r).toFixed(1)}</b></span>
+  </div>`;
+}
+
+function railHTML(r, o){
+  const p = parts(r);
+  if (o.rail === 'verdict'){
+    const bad = p.gone > 0;
+    return `<div class="rail verdict ${bad ? 'bad' : ''}">${bad ? `${p.gone} gone` : (Math.abs(vsPace(r)) < 1 ? 'on pace' : `${vsPace(r) > 0 ? '+' : ''}${vsPace(r).toFixed(0)}`)}</div>`;
+  }
+  if (o.rail === 'arrow') return `<div class="rail"><b>${r.played}</b> → ${r.est}</div>`;
+  return `<div class="rail">cap ${r.cap === 248 ? '(246+2)' : r.cap}</div>`;
+}
+
+function rowHTML(r, o){
+  const p = parts(r);
+  const bad = p.gone > 0;
+  const pill = o.rail === 'pill'
+    ? `<span class="verdictpill ${bad ? 'bad' : ''}">${bad ? `${p.gone} gone` : 'on pace'}</span>` : '';
+  const bar = `<div class="barwrap">
+      ${o.marker === 'steps' ? '<div class="marklane"></div>' : ''}
+      <div class="bar ${o.labels ? 'tall' : ''}">${segHTML(r, o)}${markersHTML(r, o)}</div>
+    </div>`;
+  if (o.narrow){
+    return `<div class="row">
+      <div class="rowhead"><span class="slot">${r.slot}${r.slot === 'UTIL' ? ' <span style="font-weight:500;color:var(--ink3)">×3</span>' : ''}</span>
+        ${o.rail === 'pill' ? pill : railHTML(r, o)}</div>
+      ${bar}${chipsHTML(r, o)}
+    </div>`;
+  }
+  return `<div class="row">
+    <div class="slot">${r.slot}</div>
+    ${bar}
+    ${o.rail === 'pill' ? `<div class="rail">${pill}</div>` : railHTML(r, o)}
+    <div></div><div>${chipsHTML(r, o)}</div><div></div>
+  </div>`;
+}
+
+function legendHTML(o){
+  if (o.legend === 'none') return '';
+  const sw = (c, l) => `<span><i class="sw" style="background:var(--${c})"></i>${l}</span>`;
+  if (o.legend === 'anatomy'){
+    const r = { slot:'', played:62, est:72, max:74, cap:82, mult:1 };
+    const p = parts(r);
+    const e1 = pct(r.played, 82) / 2;
+    const e2 = pct(r.played, 82) + pct(p.onTrack, 82) / 2;
+    const e3 = pct(r.max, 82) - pct(p.possible, 82) / 2;
+    const e4 = 100 - pct(p.gone, 82) / 2;
+    return `<div class="anatomy">
+      <div class="hint">How to read a bar</div>
+      <div class="callouts">
+        <span class="co up" style="left:${e1}%">played</span>
+        <span class="co up" style="left:${e3}%">still possible</span>
+      </div>
+      <div class="bar">${segHTML(r, { labels:false })}</div>
+      <div class="callouts">
+        <span class="co dn" style="left:${e2}%">on track to add</span>
+        <span class="co dn" style="left:${e4}%">gone</span>
+      </div>
+      <div style="height:22px"></div>
+    </div>`;
+  }
+  if (o.legend === 'exception'){
+    return `<div class="dots" style="margin-top:12px">
+      <span><i class="sw" style="background:var(--played)"></i>played</span>
+      <span><i class="sw" style="background:var(--ontrack)"></i>projected to add</span>
+      <span><i class="sw" style="background:var(--gone)"></i><b style="color:var(--chip-rose-ink)">gone — cannot be played</b></span>
+    </div>`;
+  }
+  return `<div class="dots">
+    ${sw('played','Played')}${sw('ontrack','On track to add')}${sw('possible','Still possible')}${sw('gone','Gone')}
+    <span><i class="sw" style="background:var(--marker);width:2px;height:12px;border-radius:1px"></i>NBA pace marker</span>
+  </div>`;
+}
+
+function cardHTML(o, narrow){
+  const oo = Object.assign({}, o, { narrow });
+  return `<div class="card ${o.mono ? 'mono' : ''}">
+    <h3>Slot pace</h3>
+    <p class="sub">NBA pace <b>74.0</b> GP/team · 12 days left</p>
+    ${legendHTML(oo)}
+    <div class="rows">${ROWS.map(r => rowHTML(r, oo)).join('')}</div>
+  </div>`;
+}
+
+const VARIANTS = [
+  { id:'v0', title:'Current (baseline)',
+    why:'Four equal-weight colors, a legend at the top, a chip row repeating every number, and <b>cap 82</b> on the right rail — the same value on 7 of 8 rows.',
+    o:{ legend:'dots', marker:'pace', paceLabel:false, chips:'all', rail:'cap' } },
+
+  { id:'v1', title:'1 · Legend becomes an annotated example bar',
+    why:'One dashed sample bar at the top labels its own segments in place. The reader learns the anatomy once, in the same shape as the rows below — no color→word translation.',
+    o:{ legend:'anatomy', marker:'pace', chips:'all', rail:'cap' } },
+
+  { id:'v2', title:'2 · Labels inside the segments',
+    why:'Any segment wide enough writes its own number. Bar height goes 18→24px to fit text. Narrow segments stay bare (tooltip). Mobile raises the width threshold so only the dominant segment labels itself.',
+    o:{ legend:'none', labels:true, marker:'pace', chips:'none', rail:'arrow' } },
+
+  { id:'v3', title:'3 · Color only where action is needed',
+    why:'Three of the four colors mean “normal”. Default rows go near-monochrome; rose is reserved for <b>gone</b>. Color then reads as “look here”. Legend shrinks to three entries.',
+    o:{ legend:'exception', mono:true, marker:'pace', chips:'all', rail:'cap' } },
+
+  { id:'v4', title:'4 · Chips only on exception rows',
+    why:'Quiet rows collapse to bar + rail. Only rows off pace or with games gone keep the chip row. Big vertical saving on mobile — but rows now differ in height.',
+    o:{ legend:'dots', marker:'pace', chips:'exception', rail:'arrow' } },
+
+  { id:'v5', title:'5 · Right rail carries the verdict',
+    why:'<b>cap 82</b> replaced by the row’s conclusion: <b>on pace</b>, <b>−19</b>, or <b>15 gone</b>. Gives a scannable column. On mobile it sits next to the slot label, so it is read before the bar.',
+    o:{ legend:'dots', marker:'pace', chips:'sentence', rail:'verdict' } },
+
+  { id:'v6', title:'6 · Pace marker explained, behind-pace zone shaded',
+    why:'The tick is labelled on every row instead of a single floating tag, and the gap between “where you are” and “where NBA pace is” gets a hatched zone — the deficit becomes an area, not a mental subtraction.',
+    o:{ legend:'dots', marker:'zone', paceLabel:true, chips:'sentence', rail:'verdict' } },
+
+  { id:'v7', title:'7 · Your idea — a marker at each step',
+    why:'Ticks at <b>now</b>, <b>est</b> and <b>max</b>, each labelled on the bar. Colors become secondary; the reader follows three named positions left to right. Mobile drops the <b>max</b> tick to avoid label collision.',
+    o:{ legend:'none', marker:'steps', chips:'none', rail:'verdict' } },
+
+  { id:'v8', title:'Combined pick — 1 + 3 + 7 (light touch)',
+    why:'Anatomy legend teaches the shape once, monochrome default keeps rose meaningful, step ticks name the three positions, verdict rail gives the scannable column. Chips only where something is wrong.',
+    o:{ legend:'anatomy', mono:true, marker:'steps', chips:'exception', rail:'verdict' } },
+];
+
+document.getElementById('app').innerHTML = VARIANTS.map(v => `
+  <section id="${v.id}">
+    <h2>${v.title}</h2>
+    <p class="why">${v.why}</p>
+    <div class="frames">
+      <div class="frame phone"><div class="cap">Mobile · 390px</div>${cardHTML(v.o, true)}</div>
+      <div class="frame desk"><div class="cap">Desktop</div>${cardHTML(v.o, false)}</div>
+    </div>
+  </section>`).join('');
+
+document.getElementById('tog').onclick = () => document.body.classList.toggle('dark');
+</script>
+</body>
+</html>

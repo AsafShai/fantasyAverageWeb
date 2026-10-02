@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Season Schedule (Fantasy Lens) — Mockup</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --off:#fef9c3; --off-ink:#a16207;
+  --bad:#dc2626; --bad-bg:#fee2e2; --good:#16a34a; --good-bg:#dcfce7;
+  --warn:#d97706; --warn-bg:#fef3c7;
+  --heat:37,99,235;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --off:#422006; --off-ink:#fbbf24;
+  --bad:#f87171; --bad-bg:#450a0a; --good:#4ade80; --good-bg:#052e16;
+  --warn:#fbbf24; --warn-bg:#451a03;
+  --heat:96,165,250;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1)}
+nav{position:sticky;top:0;z-index:40;background:var(--card);box-shadow:0 4px 10px rgba(0,0,0,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:8px 14px;overflow-x:auto}
+nav .brand{font-weight:800;font-size:13px;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;margin-right:8px}
+nav a{display:inline-flex;align-items:center;gap:4px;padding:6px 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2);text-decoration:none;white-space:nowrap}
+nav a.active{background:var(--chip-on);color:var(--chip-on-ink)}
+nav .spacer{flex:1}
+nav button{border:none;background:none;font-size:14px;cursor:pointer;padding:6px}
+main{max-width:1140px;margin:0 auto;padding:18px 12px 48px}
+h1{font-size:20px;font-weight:800;margin-bottom:2px}
+h2{font-size:14px;font-weight:700;margin-bottom:2px}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.cardhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.hint{font-size:11.5px;color:var(--ink3);font-weight:400}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.group{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;flex-wrap:wrap}
+.group button{border:none;background:none;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+select{background:var(--chip);border:1px solid var(--border);color:var(--ink1);border-radius:8px;padding:6px 8px;font-size:12px;font-weight:600;max-width:100%}
+.gridwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:11.5px}
+th,td{border:1px solid var(--border);padding:4px 6px;text-align:center;white-space:nowrap}
+th{background:var(--chip);color:var(--ink2);font-size:10.5px;position:sticky;top:0;z-index:1}
+th.off{background:var(--off);color:var(--off-ink)}
+td.abbr,th.abbr{font-weight:800;position:sticky;left:0;background:var(--card);z-index:2;text-align:left}
+th.abbr{background:var(--chip);z-index:3}
+td.off{background:var(--off)}
+td.num{font-variant-numeric:tabular-nums}
+td.l{text-align:left}
+.pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.good{background:var(--good-bg);color:var(--good)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.flat{background:var(--chip);color:var(--ink2)}
+.note{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.5}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--chip)}
+.kpi .lab{font-size:10.5px;color:var(--ink2);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.kpi .val{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.25}
+.kpi .cap{font-size:11px;color:var(--ink3)}
+.bars{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.barrow{display:grid;grid-template-columns:42px 1fr 96px;gap:8px;align-items:center;font-size:11.5px}
+.barrow .nm{font-weight:700}
+.track{position:relative;height:14px;border-radius:7px;background:var(--chip);overflow:hidden}
+.fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px}
+.proj{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink1);opacity:.55}
+.barrow .rt{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.cov{display:flex;gap:3px;align-items:flex-end;overflow-x:auto;padding-bottom:4px}
+.covday{flex:0 0 44px;text-align:center}
+.covbar{height:88px;display:flex;flex-direction:column;justify-content:flex-end;position:relative}
+.covbar .seg{background:rgba(var(--heat),.85);border-radius:3px 3px 0 0}
+.covbar .over{background:var(--bad)}
+.covbar .slotline{position:absolute;left:-2px;right:-2px;border-top:2px dashed var(--ink3)}
+.covday .d{font-size:9.5px;color:var(--ink3);margin-top:3px;line-height:1.3}
+.covday .n{font-size:11px;font-weight:800}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--ink2);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.tabs{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;margin-bottom:14px;overflow-x:auto}
+.tabs button{border:none;background:none;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.tabs button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.panel{display:none}
+.panel.on{display:block}
+.callout{border-left:3px solid var(--chip-on-ink);background:var(--chip);border-radius:0 8px 8px 0;padding:9px 12px;font-size:12px;color:var(--ink2);line-height:1.55;margin-bottom:12px}
+.callout b{color:var(--ink1)}
+@media(max-width:640px){
+  .barrow{grid-template-columns:36px 1fr 78px;font-size:11px}
+  h1{font-size:17px}
+  td,th{padding:3px 4px;font-size:10.5px}
+}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏀 Fantasy League</span>
+  <a>📊 Dashboard</a><a>👥 Teams</a><a>🏆 Rankings</a><a>⛹️ Players</a>
+  <a class="active">🏀 NBA ▾</a><a>🩺 Injuries</a>
+  <span class="spacer"></span>
+  <button id="theme">🌙</button>
+</nav>
+<main>
+  <h1>📅 Season Schedule <span style="font-weight:500;color:var(--ink3);font-size:14px">— fantasy lens</span></h1>
+  <div class="sub">NBA schedule read through this league's rules: <b>822-game cap</b> (82 per PG/SG/SF/PF/C/G/F, 248 UTIL), 10 active slots, daily lineups, season-long roto.</div>
+
+  <div class="callout">
+    <b>Why this page is not just a schedule.</b> With a games cap, more NBA games is <i>not</i> automatically more stats — your ceiling is 822 slot-games, not 82×13.
+    The schedule only matters where it makes cap <b>unreachable</b> (too few players playing on a given night) or <b>wasted</b> (more players than slots, so a game gets burned on your worst option).
+    Every view here answers one of those two.
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-p="cap" class="on">① Cap reality</button>
+    <button data-p="cov">② Roster coverage</button>
+    <button data-p="season">③ Season grid</button>
+    <button data-p="teams">④ NBA team profiles</button>
+  </div>
+
+  <!-- ============ 1. CAP ============ -->
+  <section class="panel on" id="p-cap">
+    <div class="card">
+      <div class="cardhead"><h2>Cap pace — Asaf's Astounding Team</h2><span class="hint">as of Jan 14 · 47 of 170 NBA game days elapsed</span></div>
+      <div class="kpis">
+        <div class="kpi"><div class="lab">Games used</div><div class="val">231 <span style="font-size:12px;color:var(--ink3)">/ 822</span></div><div class="cap">28.1% of cap</div></div>
+        <div class="kpi"><div class="lab">Season elapsed</div><div class="val">27.6%</div><div class="cap">47 / 170 game days</div></div>
+        <div class="kpi"><div class="lab">Projected finish</div><div class="val" style="color:var(--warn)">795</div><div class="cap">27 games short of cap</div></div>
+        <div class="kpi"><div class="lab">Cost of the shortfall</div><div class="val" style="color:var(--bad)">≈ −1.4</div><div class="cap">roto points vs. filling cap</div></div>
+      </div>
+      <div class="note">Projection = <code>team_slot_pace</code> × remaining NBA game days (existing service). The last KPI is the actual decision driver: does the gap matter?</div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead"><h2>Where the cap leaks</h2><span class="hint">bar = used · marker = pace-projected finish · track = cap</span></div>
+      <div class="bars" id="slotbars"></div>
+      <div class="legend">
+        <span><i style="background:rgba(var(--heat),.85)"></i>used</span>
+        <span><i style="background:var(--good)"></i>on pace to fill</span>
+        <span><i style="background:var(--warn)"></i>will fall short</span>
+        <span><i style="background:var(--ink3)"></i>projected finish marker</span>
+      </div>
+      <div class="note">Slot-level, not team-level, because that is where cap actually leaks. Here <b>C</b> and <b>F</b> run dry (thin bench at those positions), while <b>UTIL</b> caps out early — telling you to add a center, not a scorer.</div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead"><h2>Cap efficiency — is each spent game worth it?</h2><span class="hint">roto value added per slot-game</span></div>
+      <div class="gridwrap"><table>
+        <thead><tr><th class="abbr">Player</th><th>Slot</th><th>Games<br>used</th><th>Value /<br>game</th><th>Season<br>games left</th><th>Verdict</th></tr></thead>
+        <tbody id="eff"></tbody>
+      </table></div>
+      <div class="note">Under a cap, a low-value starter is worse than an empty slot only if a better option exists on that night — so the verdict column is schedule-aware, not just rate-based.</div>
+    </div>
+  </section>
+
+  <!-- ============ 2. COVERAGE ============ -->
+  <section class="panel" id="p-cov">
+    <div class="card">
+      <div class="controls">
+        <select><option>Asaf's Astounding Team</option><option>(any league team — dropdown)</option></select>
+        <div class="group" id="hz">
+          <button data-h="14" class="on">Next 14 days</button>
+          <button data-h="30">Next 30 days</button>
+        </div>
+      </div>
+      <div class="cardhead"><h2>Daily roster coverage vs. 10 active slots</h2><span class="hint">dashed line = 10 slots</span></div>
+      <div class="cov" id="cov"></div>
+      <div class="legend">
+        <span><i style="background:rgba(var(--heat),.85)"></i>players playing (fit in slots)</span>
+        <span><i style="background:var(--bad)"></i>overflow — games you cannot start</span>
+        <span><i style="border-top:2px dashed var(--ink3);height:0;width:14px"></i>10 active slots</span>
+        <span><i style="background:var(--off)"></i>NBA off-night (≤5 games)</span>
+      </div>
+      <div class="note">Two failure modes, both visible at a glance: <b>thin nights</b> (bar well under 10 → cap you will never recover) and <b>overflow nights</b> (red → a healthy player's game is lost, and it is usually your best player who sits if you set lineups late).</div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead"><h2>Fix list</h2><span class="hint">generated from the two failure modes above</span></div>
+      <div class="gridwrap"><table>
+        <thead><tr><th class="abbr">Date</th><th>Issue</th><th>Detail</th><th>Suggested action</th></tr></thead>
+        <tbody id="fix"></tbody>
+      </table></div>
+      <div class="note">Free-agent suggestions filter to players whose NBA team plays on <i>that</i> night and who fill the slot that is running dry (from panel ①). Same data the parked <code>streaming_planner_plan.md</code> wanted, aimed at cap-filling rather than weekly streaming.</div>
+    </div>
+  </section>
+
+  <!-- ============ 3. SEASON GRID ============ -->
+  <section class="panel" id="p-season">
+    <div class="card">
+      <div class="controls">
+        <div class="group" id="metric">
+          <button data-m="games" class="on">Games / month</button>
+          <button data-m="b2b">Back-to-backs</button>
+          <button data-m="rest">Avg rest days</button>
+        </div>
+        <select id="hl">
+          <option value="all">Highlight: all 30 NBA teams</option>
+          <option value="mine">Highlight: teams I roster from</option>
+        </select>
+      </div>
+      <div class="cardhead"><h2>Full season — 30 NBA teams × month</h2><span class="hint">heat = value of the selected metric</span></div>
+      <div class="gridwrap"><table id="seasontbl"></table></div>
+      <div class="note">
+        This is the "full season schedule" view, but the useful columns are the right-hand ones, not the calendar: <b>Rem</b> (games left), <b>Apr</b> (rest/tank-risk window), and <b>Dense</b> (share of games landing on nights when the rest of your roster also plays — the collision risk that turns into overflow in panel ②).
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. TEAM PROFILES ============ -->
+  <section class="panel" id="p-teams">
+    <div class="card">
+      <div class="controls">
+        <select id="teamsel"></select>
+      </div>
+      <div class="cardhead"><h2 id="teamname">—</h2><span class="hint">every remaining game, fantasy-annotated</span></div>
+      <div class="kpis" id="teamkpi"></div>
+      <div class="gridwrap" style="margin-top:12px"><table>
+        <thead><tr><th class="abbr">Date</th><th>Opp</th><th>Rest</th><th>Slate<br>size</th><th>Opp def<br>rank</th><th>Fantasy note</th></tr></thead>
+        <tbody id="teamgames"></tbody>
+      </table></div>
+      <div class="note">Opponent defensive rank comes from the existing <code>NbaMatchupService</code>. "Slate size" is the league-wide game count that night — small slates are where a bench add actually gets started.</div>
+    </div>
+  </section>
+
+  <div class="card">
+    <div class="cardhead"><h2>What I'd actually build</h2></div>
+    <div class="note" style="font-size:12px;color:var(--ink2);line-height:1.65">
+      <b>Backend</b> — one new <code>schedule_service.py</code>: forward NBA schedule (nba_api <code>scheduleleaguev2</code>, cached daily) + <code>fs_team_games</code> for played games; derives per-day slate size, per-team rest/B2B, and per-fantasy-team daily coverage. Reuses <code>team_slot_pace</code>, <code>SLOT_CAPS</code>, <code>NbaMatchupService</code> — no new data source beyond the forward schedule.<br>
+      <b>Route</b> — <code>GET /api/nba/schedule?team_id=&horizon=</code> returning the four panels' payloads.<br>
+      <b>Frontend</b> — <code>SeasonSchedule.tsx</code> under the NBA nav group, behind <code>VITE_FF_SEASON_SCHEDULE</code>. Sticky first column, horizontal scroll, month/team columns hidden below <code>sm</code>.<br>
+      <b>Cut if scope is tight</b> — panels ③ and ④ are nice-to-have reference. Panels ① and ② are the ones that change a decision.
+    </div>
+  </div>
+
+  <div class="note" style="text-align:center">Mockup — illustrative numbers, plausible synthetic schedule. Real names/values wire in from existing services.</div>
+</main>
+
+<script>
+const TEAMS = ['ATL','BOS','BKN','CHA','CHI','CLE','DAL','DEN','DET','GSW','HOU','IND','LAC','LAL','MEM','MIA','MIL','MIN','NOP','NYK','OKC','ORL','PHI','PHX','POR','SAC','SAS','TOR','UTA','WAS'];
+const MONTHS = ['Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
+const MINE = ['DEN','OKC','MEM','SAC','ATL','ORL','IND','HOU'];
+
+let seed = 20262027;
+function rnd(){ seed = (seed*1664525 + 1013904223) % 4294967296; return seed/4294967296; }
+
+const TEAMDATA = TEAMS.map(ab=>{
+  const games = [7, 14+Math.round(rnd()*3), 15+Math.round(rnd()*3), 14+Math.round(rnd()*3), 12+Math.round(rnd()*2), 15+Math.round(rnd()*3), 8+Math.round(rnd()*3)];
+  const total = games.reduce((a,b)=>a+b,0);
+  const scale = 82/total;
+  const g = games.map(x=>Math.round(x*scale));
+  const diff = 82 - g.reduce((a,b)=>a+b,0); g[3]+=diff;
+  const b2b = g.map(x=>Math.round(x*(0.14+rnd()*0.12)));
+  const rest = g.map(()=> +(1.3+rnd()*0.9).toFixed(1));
+  return {ab, g, b2b, rest, rem: 82 - (g[0]+g[1]+g[2]+Math.round(g[3]*0.45)), dense: Math.round(28+rnd()*44)};
+});
+
+/* ---------- 1. cap ---------- */
+const SLOTS = [
+  {n:'PG', cap:82, used:24, proj:80},
+  {n:'SG', cap:82, used:25, proj:82},
+  {n:'SF', cap:82, used:23, proj:79},
+  {n:'PF', cap:82, used:24, proj:81},
+  {n:'C',  cap:82, used:17, proj:60},
+  {n:'G',  cap:82, used:24, proj:80},
+  {n:'F',  cap:82, used:19, proj:67},
+  {n:'UTIL',cap:248, used:75, proj:248}
+];
+document.getElementById('slotbars').innerHTML = SLOTS.map(s=>{
+  const short = s.proj < s.cap - 3;
+  const col = short ? 'var(--warn)' : 'var(--good)';
+  return `<div class="barrow">
+    <span class="nm">${s.n}</span>
+    <span class="track">
+      <span class="fill" style="width:${(s.used/s.cap*100).toFixed(1)}%;background:rgba(var(--heat),.85)"></span>
+      <span class="proj" style="left:${(s.proj/s.cap*100).toFixed(1)}%"></span>
+    </span>
+    <span class="rt">${s.used}/${s.cap} <span class="pill ${short?'warn':'good'}">→${s.proj}</span></span>
+  </div>`;
+}).join('');
+
+const EFF = [
+  ['Nikola Jokić','C',22,'9.4','58',['good','core — never sit']],
+  ['Alperen Şengün','C',19,'6.1','60',['good','core']],
+  ['Scoot Henderson','G',18,'1.2','61',['bad','burning G cap — drop']],
+  ['Jalen Suggs','F',14,'2.8','55',['warn','only on thin nights']],
+  ['Onyeka Okongwu','C',11,'4.0','59',['good','start over Suggs']],
+  ['Bench streamer slot','UTIL',9,'0.9','—',['warn','UTIL nearly capped — stop']]
+];
+document.getElementById('eff').innerHTML = EFF.map(r=>
+  `<tr><td class="abbr">${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td><td><span class="pill ${r[5][0]}">${r[5][1]}</span></td></tr>`
+).join('');
+
+/* ---------- 2. coverage ---------- */
+const DAYNAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function buildCov(days){
+  let h='';
+  for(let i=0;i<days;i++){
+    const d=new Date(2026,0,15+i);
+    const slate = [4,11,3,9,6,12,8,5,10,2,13,7,9,4][i%14];
+    const playing = Math.max(2, Math.min(13, Math.round(slate*0.42 + (rnd()*2-1))));
+    const fit=Math.min(10,playing), over=Math.max(0,playing-10);
+    const off = slate<=5;
+    h+=`<div class="covday">
+      <div class="covbar">
+        <div class="slotline" style="bottom:${10/13*88}px"></div>
+        ${over?`<div class="seg over" style="height:${over/13*88}px" title="${over} overflow"></div>`:''}
+        <div class="seg" style="height:${fit/13*88}px"></div>
+      </div>
+      <div class="n" style="color:${over?'var(--bad)':fit<6?'var(--warn)':'var(--ink1)'}">${playing}</div>
+      <div class="d" style="${off?'background:var(--off);color:var(--off-ink);border-radius:4px':''}">${DAYNAMES[d.getDay()]}<br>${d.getMonth()+1}/${d.getDate()}<br>${slate}g</div>
+    </div>`;
+  }
+  document.getElementById('cov').innerHTML=h;
+}
+buildCov(14);
+document.querySelectorAll('#hz button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#hz button').forEach(x=>x.className=''); b.className='on'; seed=20262027; buildCov(+b.dataset.h);
+});
+
+const FIX=[
+  ['Fri 1/16','warn','Thin night','2 players active · 12-game slate','Add a C playing 1/16 — C slot is 22 games behind pace'],
+  ['Sun 1/18','bad','Overflow','12 players active · 2 games unstartable','Bench Henderson (1.2 val/g), not Okongwu'],
+  ['Tue 1/20','warn','Off-night','3 NBA games · 1 player active','FA pool: 4 rostered-elsewhere-caliber Cs play tonight'],
+  ['Thu 1/22','bad','Overflow','11 active · Jokić would sit under auto-lineup','Set lineup manually — biggest single loss on the board'],
+  ['Sat 1/24','warn','Thin night','4 players active','Cheap add covers this + the 1/27 gap']
+];
+document.getElementById('fix').innerHTML=FIX.map(r=>
+  `<tr><td class="abbr">${r[0]}</td><td><span class="pill ${r[1]}">${r[2]}</span></td><td class="l">${r[3]}</td><td class="l">${r[4]}</td></tr>`
+).join('');
+
+/* ---------- 3. season grid ---------- */
+let metric='games', hl='all';
+function heat(v,min,max){ const t=Math.max(0,Math.min(1,(v-min)/(max-min||1))); return `background:rgba(var(--heat),${(0.05+t*0.42).toFixed(2)})`; }
+function buildSeason(){
+  const vals = TEAMDATA.flatMap(t=> metric==='games'?t.g : metric==='b2b'?t.b2b : t.rest);
+  const min=Math.min(...vals), max=Math.max(...vals);
+  let h='<thead><tr><th class="abbr">Team</th>'+MONTHS.map(m=>`<th>${m}</th>`).join('')
+      +'<th>Rem</th><th>B2B<br>left</th><th>Dense<br>%</th><th>Fantasy read</th></tr></thead><tbody>';
+  TEAMDATA.forEach(t=>{
+    const dim = hl==='mine' && !MINE.includes(t.ab);
+    const arr = metric==='games'?t.g : metric==='b2b'?t.b2b : t.rest;
+    h+=`<tr style="${dim?'opacity:.32':''}"><td class="abbr">${t.ab}</td>`;
+    arr.forEach((v,i)=> h+=`<td class="num" style="${heat(v,min,max)}${i===6?';border-left:2px solid var(--ink3)':''}">${v}</td>`);
+    const read = t.dense>60 ? ['bad','collides with my roster'] : t.dense<38 ? ['good','fills my empty nights'] : ['flat','neutral'];
+    h+=`<td class="num" style="font-weight:800">${t.rem}</td><td class="num">${t.b2b[4]+t.b2b[5]+t.b2b[6]}</td><td class="num">${t.dense}</td>`
+      +`<td><span class="pill ${read[0]}">${read[1]}</span></td></tr>`;
+  });
+  document.getElementById('seasontbl').innerHTML=h+'</tbody>';
+}
+buildSeason();
+document.querySelectorAll('#metric button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#metric button').forEach(x=>x.className=''); b.className='on'; metric=b.dataset.m; buildSeason();
+});
+document.getElementById('hl').onchange=e=>{ hl=e.target.value; buildSeason(); };
+
+/* ---------- 4. team profiles ---------- */
+const sel=document.getElementById('teamsel');
+sel.innerHTML=TEAMS.map(t=>`<option${t==='DEN'?' selected':''}>${t}</option>`).join('');
+const NOTES=[['good','small slate — bench adds start'],['flat',''],['bad','2nd of a back-to-back — rest risk'],['good','bottom-5 defense'],['flat',''],['warn','collides with 9 of my players']];
+function buildTeam(){
+  const ab=sel.value, t=TEAMDATA.find(x=>x.ab===ab);
+  document.getElementById('teamname').textContent=ab+' — remaining schedule';
+  document.getElementById('teamkpi').innerHTML=`
+    <div class="kpi"><div class="lab">Games left</div><div class="val">${t.rem}</div><div class="cap">of 82</div></div>
+    <div class="kpi"><div class="lab">B2B left</div><div class="val">${t.b2b[4]+t.b2b[5]+t.b2b[6]}</div><div class="cap">rest-risk games</div></div>
+    <div class="kpi"><div class="lab">Off-night games</div><div class="val">${Math.round(t.rem*0.17)}</div><div class="cap">on ≤5-game slates</div></div>
+    <div class="kpi"><div class="lab">Roster collision</div><div class="val" style="color:${t.dense>60?'var(--bad)':'var(--good)'}">${t.dense}%</div><div class="cap">nights I'm already full</div></div>`;
+  let h='';
+  for(let i=0;i<10;i++){
+    const d=new Date(2026,0,16+i*2);
+    const opp=TEAMS[(i*7+3)%30], slate=[3,11,5,9,12,4,8,13,6,10][i];
+    const n=NOTES[i%NOTES.length];
+    h+=`<tr><td class="abbr">${d.getMonth()+1}/${d.getDate()}</td><td>${i%2?'@ ':'vs '}${opp}</td><td class="num">${[0,1,2,1,3,1,0,2,1,1][i]}</td>`
+      +`<td class="num" style="${slate<=5?'background:var(--off)':''}">${slate}</td><td class="num">${1+((i*5)%30)}</td>`
+      +`<td class="l">${n[1]?`<span class="pill ${n[0]}">${n[1]}</span>`:'<span style="color:var(--ink3)">—</span>'}</td></tr>`;
+  }
+  document.getElementById('teamgames').innerHTML=h;
+}
+buildTeam(); sel.onchange=buildTeam;
+
+/* ---------- chrome ---------- */
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.className='');
+  b.className='on';
+  document.querySelectorAll('.panel').forEach(p=>p.className='panel');
+  document.getElementById('p-'+b.dataset.p).className='panel on';
+});
+document.getElementById('theme').onclick=()=>{
+  document.body.classList.toggle('dark');
+  document.getElementById('theme').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+};
+</script>
+</body>
+</html>

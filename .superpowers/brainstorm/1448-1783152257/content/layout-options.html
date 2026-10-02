@@ -1,0 +1,93 @@
+<h2>Matchup grid redesign — pick a direction</h2>
+<p class="subtitle">Same data (Jaylen Brown vs MIA), rendered in LIGHT mode since that's where it broke. Click the one that reads best.</p>
+
+<div class="options" style="flex-direction:column;gap:24px;">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)" style="display:block;">
+    <div style="display:flex;gap:10px;align-items:baseline;"><div class="letter">A</div><h3 style="margin:0;">Fixed-grid card — same box, aligned rows, opp value shown</h3></div>
+    <p>Keeps the one-box-per-stat idea, but every cell reserves the same two rows (even PACE/FT%), adds the opponent's actual per-game number next to the rank, and swaps the dark-only palette for a light/dark pair.</p>
+    <div class="mockup">
+      <div class="mockup-body" style="background:#f8f9fa;padding:16px;border-radius:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;font-family:system-ui;">
+          <!-- PTS: strong def (red) -->
+          <div style="background:#fde8e8;border:1px solid #f5b5b5;border-radius:6px;padding:8px 12px;min-width:78px;text-align:center;">
+            <div style="font-size:11px;color:#666;">PTS</div>
+            <div style="font-size:10px;color:#b91c1c;margin-top:4px;">OPP #1</div>
+            <div style="font-size:11px;color:#999;">118.5/gm</div>
+            <div style="border-top:1px solid #e5b5b5;margin-top:4px;padding-top:4px;">
+              <div style="font-size:10px;color:#999;">PROJ</div>
+              <div style="font-size:15px;font-weight:700;color:#222;">17</div>
+            </div>
+          </div>
+          <!-- 3PM: weak def (green) -->
+          <div style="background:#e6f7ec;border:1px solid #a7e5bf;border-radius:6px;padding:8px 12px;min-width:78px;text-align:center;">
+            <div style="font-size:11px;color:#666;">3PM</div>
+            <div style="font-size:10px;color:#15803d;margin-top:4px;">OPP #22</div>
+            <div style="font-size:11px;color:#999;">14.0/gm</div>
+            <div style="border-top:1px solid #a7e5bf;margin-top:4px;padding-top:4px;">
+              <div style="font-size:10px;color:#999;">PROJ</div>
+              <div style="font-size:15px;font-weight:700;color:#222;">2</div>
+            </div>
+          </div>
+          <!-- FT%: no opp rank -->
+          <div style="background:#fdf6e3;border:1px solid #f0dca0;border-radius:6px;padding:8px 12px;min-width:78px;text-align:center;">
+            <div style="font-size:11px;color:#666;">FT%</div>
+            <div style="font-size:10px;color:transparent;margin-top:4px;">.</div>
+            <div style="font-size:11px;color:transparent;">.</div>
+            <div style="border-top:1px solid #f0dca0;margin-top:4px;padding-top:4px;">
+              <div style="font-size:10px;color:#999;">PROJ</div>
+              <div style="font-size:15px;font-weight:700;color:#222;">75%</div>
+            </div>
+          </div>
+          <!-- PACE: relabeled, no PROJ word -->
+          <div style="background:#e6f7ec;border:1px solid #a7e5bf;border-radius:6px;padding:8px 12px;min-width:78px;text-align:center;">
+            <div style="font-size:11px;color:#666;">PACE</div>
+            <div style="font-size:10px;color:transparent;margin-top:4px;">.</div>
+            <div style="font-size:11px;color:transparent;">.</div>
+            <div style="border-top:1px solid #a7e5bf;margin-top:4px;padding-top:4px;">
+              <div style="font-size:10px;color:#999;">TEAM</div>
+              <div style="font-size:15px;font-weight:700;color:#222;">Fast</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)" style="display:block;">
+    <div style="display:flex;gap:10px;align-items:baseline;"><div class="letter">B</div><h3 style="margin:0;">Compact row list — one line per stat, no color cards</h3></div>
+    <p>Drops the colored-box grid entirely. Each stat is one row: category, opponent rank + actual value (colored text only, no background fill), an arrow, then the projection. Reads like a spec sheet. Narrower — fits mobile without wrapping.</p>
+    <div class="mockup">
+      <div class="mockup-body" style="background:#f8f9fa;padding:16px;border-radius:8px;font-family:system-ui;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:5px 8px;color:#555;width:50px;">PTS</td><td style="padding:5px 8px;color:#b91c1c;font-weight:600;">#1 opp</td><td style="padding:5px 8px;color:#999;">118.5/gm</td><td style="padding:5px 8px;text-align:right;color:#999;">proj</td><td style="padding:5px 8px;text-align:right;font-weight:700;">17</td></tr>
+          <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:5px 8px;color:#555;">3PM</td><td style="padding:5px 8px;color:#15803d;font-weight:600;">#22 opp</td><td style="padding:5px 8px;color:#999;">14.0/gm</td><td style="padding:5px 8px;text-align:right;color:#999;">proj</td><td style="padding:5px 8px;text-align:right;font-weight:700;">2</td></tr>
+          <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:5px 8px;color:#555;">FT%</td><td style="padding:5px 8px;color:#bbb;" colspan="2">—</td><td style="padding:5px 8px;text-align:right;color:#999;">proj</td><td style="padding:5px 8px;text-align:right;font-weight:700;">75%</td></tr>
+          <tr><td style="padding:5px 8px;color:#555;">PACE</td><td style="padding:5px 8px;color:#15803d;font-weight:600;" colspan="2">Fast (95.6 vs 100.2 avg)</td><td colspan="2"></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)" style="display:block;">
+    <div style="display:flex;gap:10px;align-items:baseline;"><div class="letter">C</div><h3 style="margin:0;">Two mini-grids — defense rank strip + projection strip, stacked</h3></div>
+    <p>Back to two grids, but both compact one-line strips (not boxes), stacked with a small heading each, so alignment never breaks and colors only tint text, not backgrounds. Closer to what you had before the "unified box" merge, minus the dot-alignment problem (dot stays in the collapsed badge, not here).</p>
+    <div class="mockup">
+      <div class="mockup-body" style="background:#f8f9fa;padding:16px;border-radius:8px;font-family:system-ui;">
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">OPPONENT DEFENSE (rank / allows per game)</div>
+        <div style="display:flex;gap:14px;font-size:13px;margin-bottom:12px;">
+          <span><b style="color:#b91c1c;">PTS #1</b> <span style="color:#999;">118.5</span></span>
+          <span><b style="color:#666;">REB #6</b> <span style="color:#999;">46.4</span></span>
+          <span><b style="color:#15803d;">3PM #22</b> <span style="color:#999;">14.0</span></span>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">TONIGHT'S PROJECTION</div>
+        <div style="display:flex;gap:14px;font-size:14px;font-weight:700;">
+          <span>PTS 17</span><span>REB 10</span><span>3PM 2</span><span>FT% 75%</span><span style="color:#15803d;">Fast pace</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="label" style="margin-top:16px;">Other issues to fix regardless of layout choice: percent/decimal stats capped at 2 decimals max; table width trimmed (fewer/collapsible columns on narrow screens).</p>

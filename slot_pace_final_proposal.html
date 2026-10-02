@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot pace — final proposal</title>
+<style>
+  :root{
+    --card:#fff; --page:#f9fafb; --ink:#111827; --ink2:#4b5563; --ink3:#6b7280;
+    --track:#f3f4f6; --border:#e5e7eb; --hair:#e5e7eb;
+    --played:#60a5fa; --rest:#e5e7eb; --gone:#fda4af;
+    --pace:#64748b; --est:#1e3a8a;
+    --chip:#f3f4f6; --chip-ink:#4b5563; --bad:#e11d48; --badbg:#ffe4e6;
+    --warnbg:#fff7ed; --warnink:#c2410c;
+    --old-played:#60a5fa; --old-ontrack:#bfdbfe; --old-possible:#f3f4f6; --old-gone:#fecdd3;
+  }
+  body.dark{
+    --card:#1f2937; --page:#111827; --ink:#f9fafb; --ink2:#d1d5db; --ink3:#9ca3af;
+    --track:#374151; --border:#4b5563; --hair:#374151;
+    --played:#3b82f6; --rest:#4b5563; --gone:#9f1239;
+    --pace:#cbd5e1; --est:#bfdbfe;
+    --chip:#374151; --chip-ink:#d1d5db; --bad:#fb7185; --badbg:#4c0519;
+    --warnbg:#431407; --warnink:#fdba74;
+    --old-played:#3b82f6; --old-ontrack:#1e40af; --old-possible:#4b5563; --old-gone:#881337;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header.top{position:sticky;top:0;z-index:50;background:var(--card);border-bottom:1px solid var(--hair);
+    padding:12px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  header.top h1{margin:0;font-size:16px}
+  button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card);color:var(--ink);cursor:pointer}
+  main{padding:16px;max-width:1180px;margin:0 auto}
+  section{margin:0 0 42px}
+  h2{font-size:17px;margin:0 0 6px}
+  .why{color:var(--ink3);font-size:13px;margin:0 0 14px;max-width:66ch}
+  .why b{color:var(--ink2)}
+  .frames{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+  .frame > .cap{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink3);margin-bottom:6px}
+  .phone{width:390px;flex:0 0 390px}
+  .desk{flex:1 1 560px;min-width:380px}
+
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:16px}
+  .card h3{margin:0;font-size:19px;font-weight:800}
+  .sub{color:var(--ink3);font-size:11.5px;margin:3px 0 0}
+  .sub b{color:var(--ink2)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:9px;margin:11px 0 0;font-size:10.5px;color:var(--ink3)}
+  .legend span{display:inline-flex;align-items:center;gap:4px}
+  .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .sw.line{width:16px;height:0;border-top:2px dashed var(--pace);border-radius:0}
+  .legend .warn{color:var(--bad);font-weight:700}
+
+  .chart{position:relative;margin-top:16px;padding-top:30px}
+  /* every row is the same 8-column grid, so nothing can shift a column out of line */
+  .grid{display:grid;grid-template-columns:repeat(8,1fr) var(--gut);gap:var(--gap);align-items:end}
+  .grid::after{content:""}
+  .cell{min-width:0;text-align:center;display:flex;flex-direction:column;align-items:center;
+    justify-content:flex-end}
+  .trackrow{position:relative}
+  .col{flex:1 1 0;min-width:0;text-align:center;position:relative}
+  .num{font-size:13px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+  .num small{display:block;font-size:9px;font-weight:600;color:var(--ink3);
+    font-variant-numeric:tabular-nums;margin-top:1px}
+  .num .of{font-size:9.5px;font-weight:700;color:var(--ink3)}
+  .pacetag{position:absolute;top:0;transform:translateY(-50%);text-align:left;
+    font-size:8.5px;font-weight:700;color:var(--ink3);line-height:1.05}
+  .chart.narrow .label small{font-size:8px}
+  .chart.narrow .pacetag{font-size:8px}
+  .pacetag b{display:block;font-size:12px;font-weight:800;color:var(--ink2);
+    font-variant-numeric:tabular-nums}
+  .track{position:relative;margin:5px auto 0;border-radius:6px;background:var(--track);
+    overflow:hidden;cursor:default;box-shadow:inset 0 2px 0 0 var(--border)}
+  .fill{position:absolute;left:0;right:0;bottom:0;background:var(--played);
+    border-radius:0 0 6px 6px;transition:height .2s}
+  .goneband{position:absolute;left:0;right:0;top:0;background:var(--gone)}
+  .esttick{position:absolute;left:0;right:0;border-top:2px dotted var(--est);opacity:.65}
+  .label{font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--ink2);margin-top:6px}
+  .label small{display:block;font-weight:700;font-size:9px;color:var(--ink3);margin-top:1px;
+    white-space:nowrap}
+  .label small.bad{color:var(--bad)}
+  .paceline{position:absolute;left:0;right:calc(var(--gut) + var(--gap));
+    border-top:2px dashed var(--pace);pointer-events:none;z-index:3}
+  .footnote{margin-top:12px;font-size:10.5px;color:var(--ink3);display:flex;justify-content:space-between;gap:10px}
+
+  /* desktop extras */
+  .col.wide .num{font-size:15px}
+  .deltarow{display:grid;grid-template-columns:repeat(8,1fr) var(--gut);gap:var(--gap);margin-top:9px}
+  .delta{text-align:center;font-size:10px;font-weight:800;padding:2px 0;border-radius:5px;
+    background:var(--chip);color:var(--chip-ink);font-variant-numeric:tabular-nums}
+  .delta.behind{background:var(--warnbg);color:var(--warnink)}
+  .delta.ok{opacity:.55}
+  .deltakey{font-size:9px;font-weight:700;color:var(--ink3);align-self:center;padding-left:5px}
+
+  /* old bars for the comparison block */
+  .rows{margin-top:12px;display:flex;flex-direction:column;gap:11px}
+  .orow{display:grid;grid-template-columns:1fr;gap:4px}
+  .ohead{display:flex;justify-content:space-between;font-size:11px}
+  .oslot{font-weight:800;letter-spacing:.05em;color:var(--ink2);font-size:11.5px}
+  .obar{display:flex;height:18px;border:1px solid var(--border);border-radius:999px;
+    background:var(--track);position:relative}
+  .oseg{height:100%}
+  .oseg:first-child{border-radius:999px 0 0 999px}
+  .oseg:last-child{border-radius:0 999px 999px 0}
+  .ochips{display:flex;flex-wrap:wrap;gap:5px}
+  .ochip{font-size:10px;font-weight:800;padding:2px 6px;border-radius:5px;background:var(--chip);
+    color:var(--chip-ink)}
+  .verdict{font-size:12px;color:var(--ink3);margin-top:10px;padding-left:12px;
+    border-left:2px solid var(--hair)}
+  .verdict b{color:var(--ink2)}
+  table.spec{border-collapse:collapse;font-size:12.5px;margin-top:8px;width:100%;max-width:760px}
+  table.spec td,table.spec th{border-bottom:1px solid var(--hair);padding:6px 8px;text-align:left;
+    vertical-align:top}
+  table.spec th{color:var(--ink3);font-weight:700;font-size:11px;text-transform:uppercase;
+    letter-spacing:.04em}
+  table.spec b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Slot pace — final proposal</h1>
+  <button id="tog">Toggle dark</button>
+</header>
+<main id="app"></main>
+
+<script>
+const PACE = 60, DAYS = 20;
+const ROWS = [
+  { slot:'PG',  played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'SG',  played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'SF',  played:57,  est:78,  max:82,  cap:82,  mult:1 },
+  { slot:'PF',  played:48,  est:66,  max:68,  cap:82,  mult:1 },
+  { slot:'C',   played:60,  est:82,  max:82,  cap:82,  mult:1 },
+  { slot:'G',   played:44,  est:60,  max:64,  cap:82,  mult:1 },
+  { slot:'F',   played:59,  est:81,  max:82,  cap:82,  mult:1 },
+  { slot:'UTIL',played:175, est:240, max:246, cap:248, mult:3 },
+];
+const pct  = (v,cap) => (v/cap)*100;
+const gone = r => Math.max(0, r.cap - r.max);
+const paceFor = r => PACE * r.mult;
+const vs   = r => +(r.played - paceFor(r)).toFixed(1);
+const capTxt = r => r.cap === 248 ? '246+2' : r.cap;
+
+function chart(narrow){
+  const H = narrow ? 148 : 172;
+  const W = narrow ? 30 : 52;
+  const GUT = narrow ? 42 : 62;
+  const paceP = pct(PACE, 82);                       // identical ratio for every column
+  const tip = r => `${r.slot}: ${r.played} played of ${capTxt(r)} · projected ${r.est} · max reachable ${r.max}` +
+                   (gone(r) ? ` · ${gone(r)} gone` : '');
+  const cell = inner => `<div class="cell">${inner}</div>`;
+
+  const numRow = ROWS.map(r => cell(
+    `<div class="num">${r.played}${narrow ? '' : `<span class="of">/${capTxt(r)}</span>`}<small>est ${r.est}</small></div>`)).join('');
+
+  const trackRow = ROWS.map(r => {
+    const g = pct(gone(r), r.cap);
+    return cell(`<div class="track" title="${tip(r)}" style="height:${H}px;width:${W}px">
+      ${g > 0 ? `<span class="goneband" style="height:${g}%"></span>` : ''}
+      <span class="fill" style="height:${pct(r.played, r.cap)}%"></span>
+      <span class="esttick" style="bottom:${pct(r.est, r.cap)}%"></span>
+    </div>`);
+  }).join('');
+
+  const labelRow = ROWS.map(r => cell(
+    `<div class="label">${r.slot}<small class="${gone(r) ? 'bad' : ''}">${
+      gone(r) ? `${gone(r)} gone` : (r.slot === 'UTIL' ? '×3' : '&nbsp;')}</small></div>`)).join('');
+
+  const deltas = narrow ? '' : `<div class="deltarow">${ROWS.map(r => {
+    const d = vs(r);
+    return `<div class="delta ${Math.abs(d) < 1 ? 'ok' : (d < 0 ? 'behind' : '')}">${
+      Math.abs(d) < 1 ? 'on pace' : (d > 0 ? '+' : '') + d.toFixed(0)}</div>`;
+  }).join('')}<div class="deltakey">vs&nbsp;pace</div></div>`;
+
+  const bottom = H * paceP / 100;   // measured inside the track row only
+  return `<div class="card">
+    <h3>Slot pace</h3>
+    <p class="sub">Games used per roster slot, out of <b>82</b> (<b>UTIL 246+2</b>). NBA pace <b>60.0</b> GP/team · ${DAYS} game days left.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--played)"></i>played</span>
+      <span><i class="sw" style="background:var(--rest)"></i>not played yet</span>
+      <span><i class="sw" style="background:var(--gone)"></i><b class="warn">gone — can never be played</b></span>
+      <span><i class="sw" style="border-top:2px dotted var(--est);height:0;width:16px;border-radius:0"></i>projection</span>
+      <span><i class="sw" style="box-shadow:inset 0 2px 0 0 var(--border);background:var(--track)"></i>top of column = cap</span>
+    </div>
+    <div class="chart ${narrow ? 'narrow' : ''}" style="--gap:${narrow ? 5 : 6}px;--gut:${GUT}px">
+      <div class="grid">${numRow}</div>
+      <div class="grid trackrow">
+        ${trackRow}
+        <div class="paceline" style="bottom:${bottom}px">
+          <span class="pacetag" style="left:100%;width:${GUT}px;padding-left:5px">NBA pace<b>60</b></span>
+        </div>
+      </div>
+      <div class="grid">${labelRow}</div>
+      ${deltas}
+    </div>
+    <div class="footnote"><span>Above the dashed line = ahead of NBA pace.</span>
+      <span>${narrow ? 'Tap a column for detail' : 'Row below = games ahead / behind pace'}</span></div>
+  </div>`;
+}
+
+function oldCard(){
+  const rows = ROWS.map(r => {
+    const onTrack = Math.max(0, r.est - r.played);
+    const possible = Math.max(0, r.max - Math.max(r.played, r.est));
+    const g = gone(r);
+    const seg = (c,v) => v > 0 ? `<span class="oseg" style="width:${pct(v,r.cap)}%;background:var(--old-${c})"></span>` : '';
+    return `<div class="orow">
+      <div class="ohead"><span class="oslot">${r.slot}</span><span style="color:var(--ink3)">cap ${capTxt(r)}</span></div>
+      <div class="obar">${seg('played',r.played)}${seg('ontrack',onTrack)}${seg('possible',possible)}${seg('gone',g)}</div>
+      <div class="ochips"><span class="ochip">played ${r.played}</span><span class="ochip">estimated ${r.est}</span>
+        <span class="ochip">max reachable ${r.max}</span>${g ? `<span class="ochip" style="background:var(--badbg);color:var(--bad)">gone ${g}</span>` : ''}
+        <span class="ochip">vs pace ${vs(r) > 0 ? '+' : ''}${vs(r).toFixed(1)}</span></div>
+    </div>`;
+  }).join('');
+  return `<div class="card"><h3>Slot pace</h3>
+    <p class="sub">NBA pace <b>60.0</b> GP/team · ${DAYS} days left</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--old-played)"></i>Played</span>
+      <span><i class="sw" style="background:var(--old-ontrack)"></i>On track to add</span>
+      <span><i class="sw" style="background:var(--old-possible)"></i>Still possible</span>
+      <span><i class="sw" style="background:var(--old-gone)"></i>Gone</span>
+      <span><i class="sw" style="background:var(--pace);width:2px;height:12px;border-radius:1px"></i>NBA pace</span>
+    </div>
+    <div class="rows">${rows}</div></div>`;
+}
+
+document.getElementById('app').innerHTML = `
+<section>
+  <h2>The proposal — one component, two widths</h2>
+  <p class="why">Same layout on both. Not a separate mobile design: the columns simply get wider on desktop and gain one extra row of numbers. Mobile is the primary case, so it is the one that stays complete when everything else is cut.</p>
+  <div class="frames">
+    <div class="frame phone"><div class="cap">Mobile · 390px</div>${chart(true)}</div>
+    <div class="frame desk"><div class="cap">Desktop</div>${chart(false)}</div>
+  </div>
+  <table class="spec">
+    <tr><th style="width:26%">Element</th><th style="width:37%">Mobile</th><th>Desktop</th></tr>
+    <tr><td><b>Column width</b></td><td>34px, 8 across, no scroll</td><td>52px</td></tr>
+    <tr><td><b>Track height</b></td><td>148px</td><td>172px</td></tr>
+    <tr><td><b>Number on top</b></td><td>played, with <b>est</b> underneath</td><td>same, one size larger</td></tr>
+    <tr><td><b>Ahead / behind row</b></td><td>hidden — the dashed line already says it</td><td>shown: <b>on pace</b> / <b>−16</b> per column</td></tr>
+    <tr><td><b>Detail</b></td><td>tap a column</td><td>hover a column</td></tr>
+    <tr><td><b>gone</b></td><td colspan="2">rose lid at the top of the column + red caption under the slot name, both widths</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Why this shape</h2>
+  <div class="verdict">
+    <p style="margin:0 0 8px"><b>One dashed line replaces eight markers.</b> NBA pace is the same ratio for every slot, so it draws as a single line across the whole chart. Ahead or behind becomes a position, not a subtraction — and it needs no legend lookup at all.</p>
+    <p style="margin:0 0 8px"><b>Three colors, one of them an alarm.</b> Blue played, gray not played, rose gone. “On track” and “still possible” stop being separate colors and become the dotted projection tick, so rose is the only thing that ever shouts.</p>
+    <p style="margin:0 0 8px"><b>gone reads as a ceiling.</b> Sitting at the top of the column, it is visibly a lid the fill can never reach. In the horizontal bars it was just another segment in a queue.</p>
+    <p style="margin:0"><b>Height.</b> ~360px against 758px today — the whole card fits one phone screen instead of scrolling past PF to reach UTIL.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Side by side at 390px — today vs proposed</h2>
+  <p class="why">Same data in both.</p>
+  <div class="frames">
+    <div class="frame phone"><div class="cap">Today · 758px tall</div>${oldCard()}</div>
+    <div class="frame phone"><div class="cap">Proposed · ~360px tall</div>${chart(true)}</div>
+  </div>
+</section>
+
+<section>
+  <h2>Known gaps to settle before building</h2>
+  <div class="verdict">
+    <p style="margin:0 0 6px"><b>1.</b> UTIL is normalised to its own cap (246+2), so its column is comparable to the rest — but its raw number (175) is on a different scale to the others. Acceptable, or show <b>58.3</b> (per-slot average) instead?</p>
+    <p style="margin:0 0 6px"><b>2.</b> Tap-for-detail on mobile needs the existing InfoTip pattern rather than a native title tooltip.</p>
+    <p style="margin:0"><b>3.</b> Very early season (pace &lt; 10) — every column is a stub and the pace line sits on the floor. Probably keep the current rule and grey the whole card out.</p>
+  </div>
+</section>`;
+
+document.getElementById('tog').onclick = () => document.body.classList.toggle('dark');
+</script>
+</body>
+</html>

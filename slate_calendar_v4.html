@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate Calendar v4</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --used:#2563eb; --usedhi:#1e3a8a; --heat:37,99,235; --axis:#475569;
+  --dot:#2563eb; --dotoff:#e5e7eb; --b2b:#f59e0b;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --used:#60a5fa; --usedhi:#bfdbfe; --heat:96,165,250; --axis:#94a3b8;
+  --dot:#60a5fa; --dotoff:#374151; --b2b:#fbbf24;
+  --ok:#4ade80; --ok-bg:#052e16; --warn:#fbbf24; --warn-bg:#451a03; --bad:#f87171; --bad-bg:#450a0a;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1)}
+nav{position:sticky;top:0;z-index:40;background:var(--card);box-shadow:0 4px 10px rgba(0,0,0,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:8px 14px;overflow-x:auto}
+nav .brand{font-weight:800;font-size:13px;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;margin-right:8px}
+nav a{padding:6px 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2);white-space:nowrap}
+nav a.active{background:var(--chip-on);color:var(--chip-on-ink)}
+nav .spacer{flex:1}
+nav button{border:none;background:none;font-size:14px;cursor:pointer;padding:6px}
+main{max-width:1140px;margin:0 auto;padding:18px 12px 48px}
+h1{font-size:20px;font-weight:800;margin-bottom:2px}
+h2{font-size:14.5px;font-weight:800}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.6}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.cardhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.hint{font-size:11.5px;color:var(--ink3);font-weight:400}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.group{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;flex-wrap:wrap}
+.group button{border:none;background:none;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.through{display:flex;align-items:center;gap:6px;background:var(--chip);padding:4px 8px;border-radius:8px;font-size:12px;font-weight:600;color:var(--ink2)}
+.through input{border:1px solid var(--border);background:var(--card);color:var(--ink1);border-radius:6px;
+  padding:4px 6px;font:inherit;font-size:11.5px;font-weight:700;color-scheme:light}
+.dark .through input{color-scheme:dark}
+.tabs{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;margin-bottom:14px;overflow-x:auto}
+.tabs button{border:none;background:none;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.tabs button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.panel{display:none}.panel.on{display:block}
+.pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.good{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.flat{background:var(--chip);color:var(--ink2)}
+.note{font-size:11.5px;color:var(--ink3);margin-top:9px;line-height:1.6}
+.note b{color:var(--ink2)}
+.legend{display:flex;flex-wrap:wrap;gap:11px;font-size:11px;color:var(--ink2);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.where{font-size:11px;font-weight:700;color:var(--chip-on-ink);background:var(--chip-on);border-radius:6px;padding:3px 9px;display:inline-block;margin-bottom:10px}
+.callout{border-left:3px solid var(--chip-on-ink);background:var(--chip);border-radius:0 8px 8px 0;padding:10px 12px;font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:12px}
+.callout b{color:var(--ink1)}
+.callout.warnc{border-left-color:var(--warn)}
+.callout.cut{border-left-color:var(--bad)}
+.it{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:var(--ink3);color:var(--card);font-size:9px;font-weight:800;cursor:help;margin-left:3px;vertical-align:1px;position:relative}
+.it:hover::after,.it:focus::after{content:attr(data-tip);position:absolute;bottom:130%;left:50%;transform:translateX(-50%);background:var(--ink1);color:var(--card);font-size:11px;font-weight:500;line-height:1.45;padding:7px 9px;border-radius:7px;width:235px;white-space:normal;text-align:left;z-index:30;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+
+/* ---------- tracing banner ---------- */
+.trace{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--chip-on);border:1px solid var(--chip-on-ink);
+  border-radius:8px;padding:6px 10px;margin-bottom:11px;font-size:12px;font-weight:600;color:var(--chip-on-ink)}
+.trace .x{margin-left:auto;border:none;background:var(--card);color:var(--chip-on-ink);border-radius:6px;
+  padding:3px 9px;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.trace .x:hover{background:var(--card);text-decoration:underline}
+
+/* ---------- team button: the click target ---------- */
+.tb{border:1px solid var(--border);background:var(--card);color:var(--ink1);border-radius:5px;
+    padding:3px 7px;font:inherit;font-size:10.5px;font-weight:800;font-variant-numeric:tabular-nums;
+    cursor:pointer;letter-spacing:.02em;line-height:1.3;transition:background .1s,border-color .1s}
+.tb:hover{background:var(--chip-on);border-color:var(--chip-on-ink);color:var(--chip-on-ink)}
+.tb:focus-visible{outline:2px solid var(--chip-on-ink);outline-offset:1px}
+.tb.on{background:var(--chip-on-ink);border-color:var(--chip-on-ink);color:#fff}
+.dark .tb.on{color:#0b1220}
+.mus{display:flex;flex-wrap:wrap;gap:8px}
+.mu{display:inline-flex;align-items:center;gap:4px;background:var(--chip);border-radius:8px;padding:3px 5px}
+.mu em{font-style:normal;color:var(--ink3);font-weight:800;font-size:10px;padding:0 1px}
+
+/* ---------- strip ---------- */
+.stripwrap{position:relative}
+.strip{display:flex;gap:3px;align-items:flex-end;overflow-x:auto;padding-bottom:4px}
+.sday{flex:1 1 0;min-width:42px;text-align:center;cursor:pointer;border:none;background:none;padding:0;font:inherit;color:inherit}
+.sbar{height:110px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:4px;padding:2px;position:relative}
+.sday:hover .sbar{background:var(--chip)}
+.sday.sel .sbar{background:var(--chip-on);box-shadow:inset 0 0 0 1px var(--chip-on-ink)}
+.sfill{background:var(--used);border-radius:3px 3px 0 0;transition:height .15s}
+.sday.hv .sfill{background:var(--usedhi)}
+.sday.tm .sfill{box-shadow:inset 0 0 0 2px var(--ink1)}
+.sday.tmno .sfill{opacity:.2}
+.sday.off .sbar::after{content:'';position:absolute;left:22%;right:22%;bottom:3px;border-top:2px dotted var(--ink3)}
+.sday .n{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}
+.sday.hv .n{color:var(--usedhi)}
+.sday.off .n{color:var(--ink3)}
+.sday .d{font-size:9.5px;color:var(--ink3);line-height:1.35;margin-top:1px}
+.sday.sel .d{color:var(--chip-on-ink);font-weight:700}
+.thr{position:absolute;left:0;right:0;border-top:1.5px dashed var(--axis);pointer-events:none;z-index:5}
+.thr span{position:absolute;right:0;top:-15px;font-size:9.5px;font-weight:800;color:var(--axis);background:var(--card);padding:0 4px}
+
+.detail{margin-top:12px;border-top:1px solid var(--border);padding-top:11px}
+.detail .dh{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:9px}
+.detail .dh h3{font-size:13px;font-weight:800;margin:0}
+
+/* ---------- team grid ---------- */
+.tgwrap{overflow:auto;border:1px solid var(--border);border-radius:9px;max-height:470px}
+table.tg{border-collapse:separate;border-spacing:0;width:100%;font-size:11.5px}
+table.tg th,table.tg td{padding:3px 5px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border)}
+table.tg thead th{position:sticky;top:0;z-index:6;background:var(--chip);color:var(--ink2);font-size:10px;
+  text-transform:uppercase;letter-spacing:.03em;cursor:pointer;user-select:none;padding:6px 5px}
+table.tg thead th:hover{color:var(--chip-on-ink)}
+table.tg thead th.sorted{color:var(--chip-on-ink)}
+table.tg th.tmc,table.tg td.tmc{position:sticky;left:0;z-index:4;background:var(--card);text-align:left;
+  width:58px;min-width:58px;padding:2px 6px}
+table.tg th.c1,table.tg td.c1{position:sticky;left:58px;z-index:4;background:var(--card);width:30px;min-width:30px}
+table.tg th.c2,table.tg td.c2{position:sticky;left:88px;z-index:4;background:var(--card);width:36px;min-width:36px}
+table.tg th.c3,table.tg td.c3{position:sticky;left:124px;z-index:4;background:var(--card);width:36px;min-width:36px}
+table.tg th.c4,table.tg td.c4{position:sticky;left:160px;z-index:4;background:var(--card);width:54px;min-width:54px;
+  border-right:2px solid var(--border)}
+table.tg thead th.tmc,table.tg thead th.c1,table.tg thead th.c2,
+table.tg thead th.c3,table.tg thead th.c4{z-index:8;background:var(--chip)}
+table.tg tbody tr:hover td{background:var(--chip)}
+table.tg tbody tr.on td{background:var(--chip-on)}
+table.tg tbody tr.dim td .dot.p{opacity:.3}
+table.tg tbody tr.dim td{color:var(--ink3)}
+td.num{font-variant-numeric:tabular-nums;font-weight:700}
+td.dl{padding:3px 1px}
+.dot{width:11px;height:11px;border-radius:3px;background:var(--dotoff);display:inline-block}
+.dot.p{background:var(--dot)}
+.dot.p.b{background:var(--b2b)}
+.dot.na{background:none;box-shadow:inset 0 0 0 1px var(--border)}
+td.colsel{background:rgba(var(--heat),.10)}
+th.colsel{color:var(--chip-on-ink)}
+th.dark{color:var(--ink3);background:var(--border)}
+.delta{font-weight:800;font-variant-numeric:tabular-nums}
+.delta.up{color:var(--ok)}
+.delta.dn{color:var(--bad)}
+.delta.z{color:var(--ink3)}
+
+@media(max-width:640px){
+  h1{font-size:17px}
+  .strip{gap:2px}.sday{min-width:34px}
+  table.tg{font-size:10.5px}
+  .dot{width:9px;height:9px}
+  .through{width:100%;justify-content:space-between}
+  /* the pinned block is 214px of a 375px screen — that leaves the dot grid,
+     which is the point of the table, about five columns. Drop the two detail
+     columns and pin only Team + G + Delta. */
+  table.tg th.c3,table.tg td.c3,table.tg th.c4,table.tg td.c4{display:none}
+  table.tg th.c2,table.tg td.c2{border-right:2px solid var(--border)}
+  table.tg th.tmc,table.tg td.tmc{width:50px;min-width:50px;padding:2px 4px}
+  table.tg th.c1,table.tg td.c1{left:50px;width:26px;min-width:26px}
+  table.tg th.c2,table.tg td.c2{left:76px;width:32px;min-width:32px}
+  .tb{font-size:10px;padding:3px 5px}
+}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏀 Fantasy League</span>
+  <a>📊 Dashboard</a><a>👥 Teams</a><a>🏆 Rankings</a><a>⛹️ Players</a><a class="active">🏀 NBA ▾</a><a>🩺 Injuries</a>
+  <span class="spacer"></span><button id="theme">🌙</button>
+</nav>
+<main>
+  <h1>📅 Slate calendar v4 — one rendering, any window</h1>
+  <div class="sub">
+    Real published <b>2026-27</b> schedule. "Today" is <b>Tue Jan 5 2027</b>; the window runs to any date up to
+    <b>Sun Apr 11</b> — the last day the schedule knows about. Fixed from v3: <b>no more mode switching</b>.
+    Every window draws one bar per night and one dot per night at the same size, however long it is —
+    long windows simply scroll sideways.
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-p="a" class="on">Ⓐ The card</button>
+    <button data-p="why">Ⓑ What changed & why</button>
+  </div>
+
+  <section class="panel on" id="p-a">
+    <span class="where">Schedule page — new card above the season grid</span>
+
+    <div class="card">
+      <div class="controls">
+        <div class="group" id="hz">
+          <button data-h="7">7 days</button>
+          <button data-h="14" class="on">14 days</button>
+          <button data-h="28">28 days</button>
+          <button data-h="rest">Rest of season</button>
+        </div>
+        <label class="through">through
+          <input type="date" id="thru">
+        </label>
+        <span class="hint" id="selinfo"></span>
+      </div>
+
+      <div id="tracebar"></div>
+
+      <div class="cardhead">
+        <h2>Games per night<span class="it" data-tip="Count of NBA games league-wide on that date. 15 is the theoretical max; a real night runs 2-13. Dotted baseline = no games at all.">i</span></h2>
+        <span class="hint" id="hintA"></span>
+      </div>
+
+      <div class="stripwrap"><div class="strip" id="strip"></div></div>
+      <div class="legend">
+        <span><i style="background:var(--used)"></i>games that night</span>
+        <span><i style="background:var(--usedhi)"></i>high-volume night (10+)</span>
+        <span><i style="background:none;border-top:1.5px dashed var(--axis);height:0;width:14px;border-radius:0"></i>the 10-game line</span>
+        <span><i style="background:none;border-top:2px dotted var(--ink3);height:0;width:14px;border-radius:0"></i>no games</span>
+      </div>
+
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <h2>Who plays when<span class="it" data-tip="One row per NBA team, one cell per night. Filled = plays. Click a team name to trace its nights on the strip above.">i</span></h2>
+        <span class="hint" id="gridhint"></span>
+      </div>
+      <div class="tgwrap"><table class="tg" id="tg"></table></div>
+      <div class="legend" id="gridlegend"></div>
+      <div class="note">
+        <b>G</b> = games in the window. <b>Δ</b> = whole games above or below the count most teams have; <b>—</b> means ordinary.
+        <b>B2B</b> = back-to-backs inside the window. <b>Next</b> = first game from today.
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-why">
+    <div class="card">
+      <div class="cardhead"><h2>Picking a team is now a button</h2><span class="pill good">fixed</span></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        <b>What was wrong.</b> In v2 the whole <code>POR @ NOP</code> chip was one click target, and it <i>guessed</i> which team you meant —
+        clicking cycled POR → NOP → off depending on what was already selected. Two teams, one target, hidden state machine.
+        Nothing about the chip said it was clickable either: no border, no hover affordance, same flat grey as every other label on the page.<br><br>
+        <b>What it is now.</b> Each abbreviation is its own <code>&lt;button&gt;</code> with a border, a hover state and a focus ring —
+        it looks like a control because it is one. The <code>@</code> between them is plain text and not clickable, so the two targets are
+        visually separated rather than sharing a box. Clicking POR selects POR. Clicking it again clears. No guessing.<br><br>
+        <b>Same treatment in the grid.</b> The team column was a bare sticky cell you were expected to discover was clickable from a caption.
+        It is the same button component now, so the two places you can pick a team look identical and behave identically.<br><br>
+        <b>And the selection is now visible as state.</b> A banner names the traced team and carries an explicit <b>Clear</b> —
+        in v2 the only way out was to remember to click the same row again.
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Dynamic windows — yes, with one real limit</h2><span class="pill flat">today → any date</span></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        <b>Worth adding.</b> The fixed 14/28 presets answered "the next fortnight" and nothing else, but the questions people actually
+        have are dated: through the end of the month, through the deadline, through the last day. A date input answers all of them
+        and the presets stay as shortcuts.<br><br>
+        <b>The cap is the schedule, not a preference.</b> Max selectable date is the <b>last day the schedule has</b> —
+        <code>calendar_days[last].date</code>, Apr 11 here. That is the same bound ESPN's whitelist calendar gives, because both come from the
+        published schedule; the frontend should read it off the payload rather than hardcode a season end, so it stays correct when the
+        NBA Cup games get filled in and the range grows.<br><br>
+        <b>Long windows just scroll — reverted from v3.</b> v3 had the strip thin its bars and drop labels past 21 days,
+        and the grid swap dots for weekly counts past 35. Both are gone. Every window now renders identically:
+        one bar per night at a fixed width, one dot per night, and the block scrolls sideways.<br><br>
+        <b>Empty stretches are now drawn.</b> The All-Star break (Feb 19-24 this season) is six consecutive zero-game days.
+        A zero-height bar reads as a rendering bug, so those nights get a dotted baseline and a greyed count.
+        Pick "Rest of season" to see it.
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Why the two "smart" modes were removed</h2><span class="pill good">v4</span></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        <b>They solved a problem that was already solved.</b> Both existed to avoid a horizontal scrollbar —
+        but this table was always going to scroll sideways, and the codebase's own rule for wide tables is
+        <i>scroll with a sticky anchor column</i>, which the grid already had. The team name stays pinned while the
+        nights scroll past it, so 97 columns are no worse to read than 28; there is just more of them.<br><br>
+        <b>What they cost.</b> Two extra rendering paths, two extra legends, two threshold constants, and a card that
+        looked like a different feature depending on the window length. A 14-day view and a rest-of-season view should be
+        the same thing at two lengths — if they render differently, you have to re-learn the chart every time you change the range.<br><br>
+        <b>The weekly grid also quietly destroyed the point.</b> "Who plays when" is a question about <i>nights</i>.
+        Bucketing to "4 games that week" cannot answer whether a team plays on the Thursday you are trying to fill,
+        which is the only reason to open the grid. It answered a question nobody asked in order to fit a narrower box.<br><br>
+        <b>The honest cost of scrolling:</b> at rest-of-season the grid is ~1500px wide, so comparing the first week to the last
+        means scrolling rather than glancing. That is a real loss — and still cheaper than two modes.
+        The strip above stays a fixed-height overview, so the shape of the whole window is never more than one glance away.
+      </div>
+    </div>
+    <div class="callout warnc">
+      <b>Δ gets stronger as the window grows — and that is the argument for the date picker.</b>
+      Over 7 days every team plays 3 or 4 games and the column is noise. Over the rest of the season the spread is wide enough
+      to actually rank. The preset that was hardest to justify in v2 is the one the custom range fixes.
+    </div>
+    <div class="callout">
+      <b>Still frontend-only.</b> Every number here comes from the one cached <code>/api/nba/schedule</code> payload:
+      <code>calendar_days[]</code> for the strip, per-team <code>games[]</code> for the dots, counts, B2Bs and matchups.
+      Changing the window refetches nothing — it re-slices an array already in memory.
+    </div>
+  </section>
+</main>
+
+<script>
+const DAYS = [{"date":"2027-01-05","n":9,"hv":false,"g":[["ATL","CHA"],["DET","SAC"],["LAC","ORL"],["LAL","WAS"],["MEM","MIA"],["MIL","CHI"],["MIN","HOU"],["PHO","DEN"],["TOR","CLE"]]},{"date":"2027-01-06","n":5,"hv":false,"g":[["IND","SAS"],["NYK","GSW"],["OKC","PHL"],["POR","NOP"],["UTA","BKN"]]},{"date":"2027-01-07","n":12,"hv":true,"g":[["BOS","LAL"],["CHI","SAC"],["CLE","ORL"],["DEN","CHA"],["DET","GSW"],["IND","ATL"],["LAC","MIL"],["MEM","HOU"],["MIA","BKN"],["MIN","TOR"],["OKC","WAS"],["POR","DAL"]]},{"date":"2027-01-08","n":8,"hv":false,"g":[["DET","LAL"],["MEM","SAS"],["MIA","PHL"],["MIN","WAS"],["NYK","SAC"],["ORL","NOP"],["PHO","DAL"],["UTA","TOR"]]},{"date":"2027-01-09","n":6,"hv":false,"g":[["BOS","LAC"],["CHA","POR"],["CHI","GSW"],["DEN","CLE"],["HOU","BKN"],["MIL","IND"]]},{"date":"2027-01-10","n":8,"hv":false,"g":[["CHA","SAC"],["CHI","PHO"],["DAL","MEM"],["NOP","MIA"],["OKC","ORL"],["PHL","TOR"],["SAS","ATL"],["UTA","DET"]]},{"date":"2027-01-11","n":6,"hv":false,"g":[["ATL","WAS"],["BKN","IND"],["CLE","MIN"],["DEN","NYK"],["HOU","BOS"],["LAL","LAC"]]},{"date":"2027-01-12","n":8,"hv":false,"g":[["BKN","MIA"],["CHI","UTA"],["DAL","MEM"],["DEN","MIL"],["DET","TOR"],["ORL","POR"],["SAC","GSW"],["WAS","PHL"]]},{"date":"2027-01-13","n":7,"hv":false,"g":[["CHA","GSW"],["CLE","ATL"],["HOU","OKC"],["LAL","POR"],["MIL","IND"],["NYK","BOS"],["PHO","TOR"]]},{"date":"2027-01-14","n":9,"hv":false,"g":[["BKN","PHL"],["CHA","UTA"],["DAL","DET"],["LAC","SAC"],["MEM","DEN"],["MIA","NYK"],["MIN","CHI"],["NOP","SAS"],["ORL","LAL"]]},{"date":"2027-01-15","n":8,"hv":false,"g":[["CLE","MIL"],["GSW","ATL"],["MIA","TOR"],["ORL","LAC"],["PHO","IND"],["SAC","POR"],["UTA","OKC"],["WAS","HOU"]]},{"date":"2027-01-16","n":6,"hv":false,"g":[["BKN","BOS"],["CHA","DEN"],["CLE","MEM"],["DAL","NYK"],["DET","HOU"],["MIN","PHL"]]},{"date":"2027-01-17","n":8,"hv":false,"g":[["GSW","MIA"],["IND","WAS"],["MIL","LAL"],["ORL","DEN"],["POR","OKC"],["SAC","UTA"],["SAS","NOP"],["TOR","CHI"]]},{"date":"2027-01-18","n":7,"hv":false,"g":[["BOS","WAS"],["DET","CLE"],["HOU","MEM"],["MIN","NYK"],["OKC","DAL"],["PHL","ATL"],["PHO","LAC"]]},{"date":"2027-01-19","n":7,"hv":false,"g":[["CHA","DAL"],["CHI","TOR"],["GSW","ORL"],["IND","PHL"],["LAL","SAC"],["POR","MIA"],["UTA","DEN"]]},{"date":"2027-01-20","n":10,"hv":true,"g":[["CHI","BKN"],["HOU","MIN"],["IND","BOS"],["LAC","UTA"],["MEM","PHO"],["MIA","SAS"],["MIL","SAC"],["OKC","NOP"],["POR","ATL"],["TOR","NYK"]]},{"date":"2027-01-21","n":4,"hv":false,"g":[["CLE","BKN"],["LAL","GSW"],["PHL","BOS"],["WAS","DEN"]]},{"date":"2027-01-22","n":11,"hv":true,"g":[["DAL","NOP"],["HOU","CHA"],["IND","DET"],["MEM","OKC"],["MIL","GSW"],["MIN","SAS"],["NYK","ATL"],["POR","ORL"],["SAC","LAL"],["UTA","PHO"],["WAS","LAC"]]},{"date":"2027-01-23","n":6,"hv":false,"g":[["ATL","MIA"],["CHA","BOS"],["CLE","DAL"],["MIL","DEN"],["PHL","CHI"],["TOR","BKN"]]},{"date":"2027-01-24","n":7,"hv":false,"g":[["HOU","ORL"],["LAC","NYK"],["MIN","DET"],["OKC","GSW"],["POR","SAS"],["UTA","PHO"],["WAS","LAL"]]},{"date":"2027-01-25","n":8,"hv":false,"g":[["CLE","NOP"],["DAL","CHI"],["LAC","PHL"],["MIA","BKN"],["MIN","MEM"],["ORL","CHA"],["SAC","DEN"],["TOR","BOS"]]},{"date":"2027-01-26","n":7,"hv":false,"g":[["ATL","DET"],["CHI","IND"],["HOU","SAS"],["MIL","UTA"],["OKC","LAL"],["PHO","NYK"],["WAS","POR"]]},{"date":"2027-01-27","n":9,"hv":false,"g":[["CHA","SAS"],["DAL","TOR"],["DEN","MIN"],["DET","CLE"],["GSW","POR"],["LAC","BOS"],["NOP","HOU"],["PHO","BKN"],["SAC","PHL"]]},{"date":"2027-01-28","n":8,"hv":false,"g":[["ATL","NYK"],["CHI","ORL"],["GSW","UTA"],["LAL","IND"],["MEM","OKC"],["MIA","MIL"],["PHL","NOP"],["SAC","WAS"]]},{"date":"2027-01-29","n":6,"hv":false,"g":[["CHA","MIN"],["CLE","TOR"],["DET","DAL"],["LAC","BKN"],["ORL","HOU"],["PHO","BOS"]]},{"date":"2027-01-30","n":8,"hv":false,"g":[["ATL","MIL"],["DEN","OKC"],["LAL","NYK"],["MEM","UTA"],["NOP","CLE"],["PHL","MIA"],["SAS","GSW"],["WAS","IND"]]},{"date":"2027-01-31","n":8,"hv":false,"g":[["BKN","ORL"],["BOS","TOR"],["CHI","OKC"],["HOU","DAL"],["LAL","CHA"],["PHO","MIN"],["POR","DEN"],["SAC","DET"]]},{"date":"2027-02-01","n":7,"hv":false,"g":[["CLE","UTA"],["MEM","MIL"],["MIA","IND"],["NOP","PHL"],["NYK","BKN"],["SAS","GSW"],["WAS","ATL"]]},{"date":"2027-02-02","n":8,"hv":false,"g":[["CHA","MIA"],["CHI","DET"],["LAL","BOS"],["MIN","POR"],["NOP","ORL"],["OKC","DEN"],["SAS","LAC"],["TOR","DAL"]]},{"date":"2027-02-03","n":6,"hv":false,"g":[["ATL","IND"],["CLE","PHO"],["GSW","LAC"],["NYK","DET"],["PHL","MEM"],["UTA","HOU"]]},{"date":"2027-02-04","n":10,"hv":true,"g":[["BOS","CHA"],["CLE","POR"],["DAL","DEN"],["LAL","BKN"],["MIL","MIA"],["MIN","SAC"],["NOP","WAS"],["OKC","CHI"],["ORL","SAS"],["TOR","NYK"]]},{"date":"2027-02-05","n":6,"hv":false,"g":[["BOS","ATL"],["DET","PHL"],["GSW","CHA"],["HOU","PHO"],["IND","OKC"],["LAC","DEN"]]},{"date":"2027-02-06","n":9,"hv":false,"g":[["LAL","SAS"],["MIA","MIN"],["MIL","TOR"],["NOP","CHI"],["ORL","CLE"],["PHO","SAC"],["POR","MEM"],["UTA","DAL"],["WAS","BKN"]]},{"date":"2027-02-07","n":8,"hv":false,"g":[["BOS","PHL"],["CHA","TOR"],["DEN","ATL"],["GSW","DET"],["HOU","SAC"],["LAC","DAL"],["NYK","OKC"],["UTA","MIN"]]},{"date":"2027-02-08","n":7,"hv":false,"g":[["BKN","PHL"],["CHI","WAS"],["LAL","PHO"],["MIA","ATL"],["NOP","IND"],["ORL","MIL"],["POR","MEM"]]},{"date":"2027-02-09","n":10,"hv":true,"g":[["CHA","NYK"],["DEN","BOS"],["DET","LAC"],["GSW","CHI"],["HOU","UTA"],["MIN","BKN"],["POR","OKC"],["SAC","MIL"],["SAS","DAL"],["TOR","CLE"]]},{"date":"2027-02-10","n":7,"hv":false,"g":[["CLE","IND"],["DET","PHO"],["GSW","BOS"],["LAC","LAL"],["MIA","WAS"],["NOP","ATL"],["ORL","MEM"]]},{"date":"2027-02-11","n":7,"hv":false,"g":[["CHI","DEN"],["MIL","CHA"],["NYK","PHL"],["POR","DAL"],["SAC","HOU"],["SAS","OKC"],["UTA","IND"]]},{"date":"2027-02-12","n":8,"hv":false,"g":[["BKN","WAS"],["CLE","TOR"],["DEN","LAL"],["HOU","NOP"],["LAC","MEM"],["MIA","ORL"],["MIN","BOS"],["PHO","ATL"]]},{"date":"2027-02-13","n":7,"hv":false,"g":[["DAL","CHA"],["DET","POR"],["GSW","NYK"],["MIL","WAS"],["PHL","OKC"],["SAC","IND"],["SAS","ORL"]]},{"date":"2027-02-14","n":7,"hv":false,"g":[["BKN","MIA"],["CHI","POR"],["DEN","HOU"],["LAC","NOP"],["PHO","CLE"],["SAC","ATL"],["TOR","BOS"]]},{"date":"2027-02-15","n":8,"hv":false,"g":[["DET","UTA"],["IND","GSW"],["MIN","CHA"],["NYK","MEM"],["ORL","OKC"],["PHL","DAL"],["PHO","WAS"],["SAS","MIA"]]},{"date":"2027-02-16","n":5,"hv":false,"g":[["CHI","LAL"],["HOU","LAC"],["MIL","CLE"],["NOP","POR"],["TOR","ATL"]]},{"date":"2027-02-17","n":13,"hv":true,"g":[["ATL","BKN"],["BOS","OKC"],["CHI","LAC"],["DAL","ORL"],["IND","SAC"],["MIA","WAS"],["MIL","CLE"],["NOP","GSW"],["NYK","DET"],["PHO","PHL"],["SAS","MEM"],["TOR","CHA"],["UTA","DEN"]]},{"date":"2027-02-18","n":4,"hv":false,"g":[["BOS","MEM"],["HOU","LAL"],["IND","POR"],["SAS","MIN"]]},{"date":"2027-02-19","n":0,"hv":false,"g":[]},{"date":"2027-02-20","n":0,"hv":false,"g":[]},{"date":"2027-02-21","n":0,"hv":false,"g":[]},{"date":"2027-02-22","n":0,"hv":false,"g":[]},{"date":"2027-02-23","n":0,"hv":false,"g":[]},{"date":"2027-02-24","n":0,"hv":false,"g":[]},{"date":"2027-02-25","n":10,"hv":true,"g":[["ATL","CHI"],["CHA","ORL"],["DAL","GSW"],["MIA","DET"],["OKC","NYK"],["PHL","BKN"],["PHO","NOP"],["SAC","CLE"],["UTA","LAC"],["WAS","MIL"]]},{"date":"2027-02-26","n":7,"hv":false,"g":[["ATL","TOR"],["CHA","HOU"],["CLE","BOS"],["DAL","POR"],["IND","MIN"],["LAL","DEN"],["MEM","SAS"]]},{"date":"2027-02-27","n":6,"hv":false,"g":[["BKN","CHI"],["NOP","PHO"],["OKC","DET"],["PHL","NYK"],["SAC","MEM"],["WAS","UTA"]]},{"date":"2027-02-28","n":9,"hv":false,"g":[["ATL","ORL"],["BOS","MIN"],["DEN","SAS"],["LAL","DAL"],["MIA","HOU"],["MIL","NYK"],["POR","LAC"],["SAC","CHA"],["TOR","IND"]]},{"date":"2027-03-01","n":6,"hv":false,"g":[["BKN","DEN"],["CHI","DET"],["GSW","HOU"],["PHL","CLE"],["UTA","NOP"],["WAS","PHO"]]},{"date":"2027-03-02","n":9,"hv":false,"g":[["BOS","IND"],["DET","MIL"],["GSW","DAL"],["LAC","POR"],["LAL","ORL"],["MEM","NYK"],["MIN","OKC"],["TOR","MIA"],["WAS","SAC"]]},{"date":"2027-03-03","n":7,"hv":false,"g":[["BKN","PHO"],["CHA","PHL"],["CHI","ATL"],["NOP","HOU"],["SAS","DEN"],["TOR","MIA"],["UTA","MIL"]]},{"date":"2027-03-04","n":8,"hv":false,"g":[["BKN","LAC"],["IND","ORL"],["LAL","PHL"],["MEM","ATL"],["NYK","DAL"],["OKC","SAC"],["POR","CLE"],["WAS","GSW"]]},{"date":"2027-03-05","n":6,"hv":false,"g":[["BOS","DET"],["MIL","NOP"],["MIN","PHO"],["POR","TOR"],["SAS","HOU"],["UTA","ORL"]]},{"date":"2027-03-06","n":7,"hv":false,"g":[["ATL","CLE"],["CHA","CHI"],["IND","MIA"],["LAC","SAC"],["NOP","MEM"],["OKC","LAL"],["UTA","WAS"]]},{"date":"2027-03-07","n":6,"hv":false,"g":[["BKN","LAL"],["HOU","GSW"],["MIN","DEN"],["NYK","SAS"],["PHL","BOS"],["POR","CHI"]]},{"date":"2027-03-08","n":8,"hv":false,"g":[["ATL","MEM"],["CHA","IND"],["DAL","OKC"],["DEN","SAC"],["HOU","LAC"],["NOP","MIN"],["PHO","MIA"],["UTA","PHL"]]},{"date":"2027-03-09","n":7,"hv":false,"g":[["BOS","CHI"],["CLE","DET"],["MEM","DAL"],["MIL","BKN"],["PHO","ORL"],["POR","GSW"],["WAS","SAS"]]},{"date":"2027-03-10","n":8,"hv":false,"g":[["ATL","MIN"],["DEN","POR"],["GSW","SAC"],["HOU","UTA"],["NOP","CHA"],["NYK","LAC"],["OKC","TOR"],["ORL","MIA"]]},{"date":"2027-03-11","n":9,"hv":false,"g":[["BKN","ATL"],["CLE","LAC"],["IND","CHA"],["MEM","BOS"],["MIL","DET"],["NYK","LAL"],["PHL","SAS"],["PHO","CHI"],["WAS","DAL"]]},{"date":"2027-03-12","n":6,"hv":false,"g":[["CLE","LAL"],["GSW","DEN"],["MIA","MIL"],["OKC","BOS"],["SAC","UTA"],["TOR","NOP"]]},{"date":"2027-03-13","n":8,"hv":false,"g":[["BKN","DET"],["IND","HOU"],["LAC","POR"],["MEM","CHI"],["NOP","DAL"],["ORL","ATL"],["PHL","MIN"],["PHO","CHA"]]},{"date":"2027-03-14","n":7,"hv":false,"g":[["BOS","NYK"],["CLE","SAC"],["DET","TOR"],["GSW","LAL"],["MIA","DEN"],["SAS","OKC"],["WAS","MIN"]]},{"date":"2027-03-15","n":5,"hv":false,"g":[["ATL","DAL"],["IND","BKN"],["ORL","CHI"],["PHO","MEM"],["TOR","PHL"]]},{"date":"2027-03-16","n":10,"hv":true,"g":[["CHA","OKC"],["CLE","GSW"],["DEN","LAC"],["DET","IND"],["LAL","POR"],["MIN","NOP"],["NYK","WAS"],["ORL","MIL"],["SAC","BOS"],["SAS","HOU"]]},{"date":"2027-03-17","n":8,"hv":false,"g":[["ATL","UTA"],["BKN","HOU"],["CHI","PHL"],["DAL","OKC"],["MEM","GSW"],["MIA","POR"],["PHO","LAL"],["SAC","NYK"]]},{"date":"2027-03-18","n":9,"hv":false,"g":[["BKN","SAS"],["CHA","NOP"],["CLE","DEN"],["DET","MIL"],["MEM","LAC"],["MIN","UTA"],["ORL","BOS"],["PHL","WAS"],["TOR","IND"]]},{"date":"2027-03-19","n":6,"hv":false,"g":[["ATL","LAL"],["DAL","SAS"],["HOU","NOP"],["MIA","PHO"],["POR","GSW"],["SAC","TOR"]]},{"date":"2027-03-20","n":7,"hv":false,"g":[["ATL","LAC"],["CHA","DET"],["CHI","CLE"],["DEN","ORL"],["IND","MIL"],["OKC","MEM"],["WAS","NYK"]]},{"date":"2027-03-21","n":7,"hv":false,"g":[["DAL","LAL"],["DEN","MIA"],["NOP","BOS"],["POR","PHO"],["SAC","BKN"],["SAS","PHL"],["TOR","UTA"]]},{"date":"2027-03-22","n":8,"hv":false,"g":[["ATL","GSW"],["CHA","MEM"],["DAL","LAC"],["DET","MIN"],["HOU","CLE"],["IND","ORL"],["SAC","CHI"],["WAS","MIL"]]},{"date":"2027-03-23","n":6,"hv":false,"g":[["BOS","BKN"],["LAL","MIA"],["NOP","NYK"],["OKC","PHO"],["PHL","UTA"],["TOR","POR"]]},{"date":"2027-03-24","n":11,"hv":true,"g":[["ATL","SAC"],["DAL","MIN"],["DEN","WAS"],["DET","CHA"],["HOU","NYK"],["MEM","IND"],["MIL","LAC"],["OKC","PHO"],["ORL","CHI"],["PHL","GSW"],["SAS","BOS"]]},{"date":"2027-03-25","n":7,"hv":false,"g":[["CHI","MEM"],["DEN","BKN"],["HOU","DET"],["LAL","CLE"],["SAS","IND"],["TOR","GSW"],["UTA","MIA"]]},{"date":"2027-03-26","n":6,"hv":false,"g":[["LAC","OKC"],["MIL","PHO"],["NOP","DAL"],["NYK","CHA"],["ORL","MIN"],["PHL","POR"]]},{"date":"2027-03-27","n":7,"hv":false,"g":[["BOS","MIA"],["GSW","WAS"],["LAC","CHI"],["MIL","POR"],["SAS","DET"],["TOR","SAC"],["UTA","ATL"]]},{"date":"2027-03-28","n":9,"hv":false,"g":[["BOS","NOP"],["DAL","WAS"],["LAL","HOU"],["MEM","BKN"],["NYK","ORL"],["OKC","MIN"],["PHL","DEN"],["TOR","PHO"],["UTA","CHA"]]},{"date":"2027-03-29","n":8,"hv":false,"g":[["DAL","MIL"],["DEN","SAC"],["GSW","BKN"],["IND","CHI"],["LAC","DET"],["MIA","CLE"],["MIN","ATL"],["PHO","SAS"]]},{"date":"2027-03-30","n":6,"hv":false,"g":[["BOS","IND"],["HOU","POR"],["LAL","MEM"],["MIA","CHA"],["NYK","ORL"],["OKC","UTA"]]},{"date":"2027-03-31","n":10,"hv":true,"g":[["CHI","WAS"],["CLE","BKN"],["DEN","DAL"],["GSW","PHL"],["HOU","POR"],["LAC","ATL"],["NOP","MIL"],["PHO","SAS"],["SAC","MIN"],["TOR","DET"]]},{"date":"2027-04-01","n":4,"hv":false,"g":[["BOS","CLE"],["CHA","NYK"],["LAL","OKC"],["ORL","IND"]]},{"date":"2027-04-02","n":12,"hv":true,"g":[["ATL","TOR"],["CHA","MIL"],["DEN","PHO"],["DET","CHI"],["GSW","MIN"],["MEM","HOU"],["MIA","BOS"],["NYK","BKN"],["PHL","WAS"],["SAC","DAL"],["SAS","LAC"],["UTA","POR"]]},{"date":"2027-04-03","n":2,"hv":false,"g":[["NOP","OKC"],["WAS","ORL"]]},{"date":"2027-04-04","n":13,"hv":true,"g":[["ATL","PHL"],["BKN","MIL"],["BOS","NYK"],["CHA","CLE"],["CHI","HOU"],["GSW","SAC"],["IND","TOR"],["MEM","DEN"],["MIA","DET"],["MIN","DAL"],["PHO","LAC"],["POR","UTA"],["SAS","LAL"]]},{"date":"2027-04-05","n":3,"hv":false,"g":[["BKN","CLE"],["MIA","ORL"],["WAS","NOP"]]},{"date":"2027-04-06","n":11,"hv":true,"g":[["CHI","MIL"],["DAL","LAL"],["DET","MEM"],["IND","CHA"],["MIN","LAC"],["NOP","DEN"],["NYK","ATL"],["OKC","UTA"],["PHL","TOR"],["PHO","GSW"],["SAC","SAS"]]},{"date":"2027-04-07","n":9,"hv":false,"g":[["BKN","TOR"],["BOS","ORL"],["CHA","CHI"],["CLE","SAS"],["DAL","POR"],["IND","DET"],["MIN","LAL"],["SAC","HOU"],["WAS","MEM"]]},{"date":"2027-04-08","n":5,"hv":false,"g":[["GSW","OKC"],["LAC","DEN"],["NOP","UTA"],["NYK","MIL"],["PHL","MIA"]]},{"date":"2027-04-09","n":14,"hv":true,"g":[["BKN","CHA"],["BOS","ATL"],["CLE","IND"],["DAL","SAC"],["DEN","SAS"],["DET","NYK"],["GSW","OKC"],["LAC","UTA"],["MEM","PHO"],["MIL","CHI"],["MIN","LAL"],["POR","HOU"],["TOR","ORL"],["WAS","MIA"]]},{"date":"2027-04-10","n":0,"hv":false,"g":[]},{"date":"2027-04-11","n":15,"hv":true,"g":[["ATL","CLE"],["CHA","PHL"],["CHI","NOP"],["DET","WAS"],["HOU","MIN"],["IND","NYK"],["MEM","DAL"],["MIL","BOS"],["OKC","DEN"],["ORL","MIA"],["PHO","LAL"],["POR","SAS"],["SAC","LAC"],["TOR","BKN"],["UTA","GSW"]]}];
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const HV = 10;
+
+function d(iso){ const [y,m,dd]=iso.split('-').map(Number); return new Date(y,m-1,dd); }
+function fmt(iso){ const x=d(iso); return DOW[x.getDay()]+' '+MON[x.getMonth()]+' '+x.getDate(); }
+function short(iso){ const x=d(iso); return (x.getMonth()+1)+'/'+x.getDate(); }
+
+let horizon = 14, selDay = 0, selTeam = null, sortKey = 'delta', sortDir = -1;
+
+const thru = document.getElementById('thru');
+thru.min = DAYS[1].date;
+thru.max = DAYS[DAYS.length-1].date;
+
+function windowDays(){ return DAYS.slice(0, horizon); }
+function syncThru(){ thru.value = DAYS[horizon-1].date; }
+
+function teamRows(){
+  const days = windowDays();
+  const teams = {};
+  days.forEach((day,i) => day.g.forEach(pair => pair.forEach(t => {
+    (teams[t] = teams[t] || {abbr:t, plays:new Array(days.length).fill(false)}).plays[i] = true;
+  })));
+  const rows = Object.values(teams);
+  rows.forEach(r => {
+    r.g = r.plays.filter(Boolean).length;
+    r.b2b = r.plays.filter((p,i) => p && i>0 && r.plays[i-1]).length;
+    r.next = r.plays.indexOf(true);
+  });
+  const counts = {};
+  rows.forEach(r => counts[r.g] = (counts[r.g]||0)+1);
+  const modal = +Object.keys(counts).reduce((a,b) => counts[b] > counts[a] ? b : a);
+  rows.forEach(r => r.delta = r.g - modal);
+  return {rows, modal, counts};
+}
+
+function teamBtn(abbr, extra){
+  return `<button class="tb ${abbr===selTeam?'on':''} ${extra||''}" data-t="${abbr}">${abbr}</button>`;
+}
+function wireTeamBtns(root){
+  root.querySelectorAll('.tb').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    selTeam = (selTeam === b.dataset.t) ? null : b.dataset.t;
+    render();
+  });
+}
+
+function renderTrace(){
+  const el = document.getElementById('tracebar');
+  if(!selTeam){ el.innerHTML = ''; return; }
+  const days = windowDays();
+  const n = days.filter(x => x.g.some(p => p.includes(selTeam))).length;
+  el.innerHTML = `<div class="trace">
+    <span>Tracing <b>${selTeam}</b> — ${n} game${n===1?'':'s'} in this window, highlighted on the strip</span>
+    <button class="x" id="clr">Clear</button></div>`;
+  document.getElementById('clr').onclick = () => { selTeam = null; render(); };
+}
+
+function renderStrip(){
+  const days = windowDays();
+  const max = Math.max(...days.map(x => x.n), 1);
+  const total = days.reduce((s,x) => s+x.n, 0);
+  const hvN = days.filter(x => x.n >= HV).length;
+  const dark = days.filter(x => x.n === 0).length;
+  document.getElementById('hintA').innerHTML =
+    `${total} games over ${days.length} nights · ${hvN} at 10+` + (dark ? ` · ${dark} with no games` : '');
+
+  const strip = document.getElementById('strip');
+  strip.innerHTML = days.map((x,i) => {
+    const plays = selTeam ? x.g.some(p => p.includes(selTeam)) : null;
+    const cls = [
+      x.n>=HV ? 'hv' : '', x.n===0 ? 'off' : '', i===selDay ? 'sel' : '',
+      plays===true ? 'tm' : (plays===false ? 'tmno' : '')
+    ].join(' ');
+    const lab = DOW[d(x.date).getDay()] + '<br>' + short(x.date);
+    return `<button class="sday ${cls}" data-i="${i}" title="${fmt(x.date)} — ${x.n} game${x.n===1?'':'s'}">
+      <span class="sbar"><span class="sfill" style="height:${Math.round(x.n/max*100)}%"></span></span>
+      <span class="n">${x.n}</span><span class="d">${lab}</span></button>`;
+  }).join('');
+
+  document.querySelectorAll('.stripwrap .thr').forEach(n => n.remove());
+  if(max >= HV){
+    const inner = 110 - 4;
+    const rule = document.createElement('div');
+    rule.className = 'thr';
+    rule.style.top = (2 + inner*(1 - HV/max)).toFixed(1) + 'px';
+    rule.innerHTML = '<span>10 games</span>';
+    document.querySelector('.stripwrap').appendChild(rule);
+  }
+  strip.querySelectorAll('.sday').forEach(b =>
+    b.onclick = () => { selDay = +b.dataset.i; render(); });
+}
+
+function renderDetail(){
+  const days = windowDays();
+  if(selDay >= days.length) selDay = 0;
+  const s = days[selDay];
+  const el = document.getElementById('detail');
+  el.innerHTML = `
+    <div class="dh"><h3>${fmt(s.date)}</h3>
+      <span class="pill ${s.n>=HV?'warn':(s.n===0?'flat':'flat')}">${s.n===0 ? 'no games' : s.n+' game'+(s.n===1?'':'s')}${s.n>=HV?' · high volume':''}</span>
+      <span class="hint">${s.n===0 ? 'every team is off' : s.n*2+' of 30 teams active · click any team to trace it'}</span>
+    </div>
+    <div class="mus">${s.g.map(([a,h]) =>
+      `<span class="mu">${teamBtn(a)}<em>@</em>${teamBtn(h)}</span>`).join('')}</div>`;
+  wireTeamBtns(el);
+}
+
+function renderGrid(){
+  const days = windowDays();
+  const {rows, modal, counts} = teamRows();
+
+  const cmp = {
+    abbr:(a,b) => a.abbr<b.abbr?-1:1, g:(a,b) => a.g-b.g,
+    delta:(a,b) => a.delta-b.delta, b2b:(a,b) => a.b2b-b.b2b, next:(a,b) => b.next-a.next,
+  }[sortKey];
+  rows.sort((a,b) => cmp(a,b)*sortDir || (a.abbr<b.abbr?-1:1));
+
+  const sc = k => sortKey===k ? 'sorted' : '';
+  const ar = k => sortKey===k ? (sortDir>0?' ▲':' ▼') : '';
+
+  const colHead = days.map((x,i) => `<th class="${i===selDay?'colsel':''} ${x.n===0?'dark':''}" title="${fmt(x.date)}">
+    ${DOW[d(x.date).getDay()][0]}<br>${d(x.date).getDate()}</th>`).join('');
+  const colCells = r => r.plays.map((p,i) => {
+    const off = days[i].n === 0;
+    const b = p && i>0 && r.plays[i-1];
+    return `<td class="dl ${i===selDay?'colsel':''}"><span class="dot ${p?'p':''} ${b?'b':''} ${off?'na':''}"></span></td>`;
+  }).join('');
+
+  const head = `<thead><tr>
+    <th class="tmc ${sc('abbr')}" data-k="abbr">Team${ar('abbr')}</th>
+    <th class="c1 ${sc('g')}" data-k="g">G${ar('g')}</th>
+    <th class="c2 ${sc('delta')}" data-k="delta">Δ${ar('delta')}</th>
+    <th class="c3 ${sc('b2b')}" data-k="b2b">B2B${ar('b2b')}</th>
+    <th class="c4 ${sc('next')}" data-k="next">Next${ar('next')}</th>
+    ${colHead}</tr></thead>`;
+
+  const body = '<tbody>' + rows.map(r => {
+    const dv = r.delta;
+    const dcls = dv===0 ? 'z' : (dv>0 ? 'up' : 'dn');
+    const dtxt = dv===0 ? '—' : (dv>0?'+':'')+dv;
+    return `<tr class="${r.abbr===selTeam?'on':''} ${selTeam && r.abbr!==selTeam ? 'dim':''}">
+      <td class="tmc">${teamBtn(r.abbr)}</td>
+      <td class="c1 num">${r.g}</td>
+      <td class="c2 num"><span class="delta ${dcls}">${dtxt}</span></td>
+      <td class="c3 num" style="color:var(--ink2)">${r.b2b}</td>
+      <td class="c4" style="font-size:10.5px;color:var(--ink3)">${r.next<0 ? '—' : DOW[d(days[r.next].date).getDay()]+' '+short(days[r.next].date)}</td>
+      ${colCells(r)}
+    </tr>`;
+  }).join('') + '</tbody>';
+
+  const t = document.getElementById('tg');
+  t.innerHTML = head + body;
+  t.querySelectorAll('thead th[data-k]').forEach(th => th.onclick = () => {
+    if(sortKey === th.dataset.k) sortDir *= -1;
+    else { sortKey = th.dataset.k; sortDir = (sortKey==='abbr'||sortKey==='next') ? 1 : -1; }
+    render();
+  });
+  wireTeamBtns(t);
+
+  document.getElementById('gridhint').innerHTML =
+    `click a team name to trace it on the strip · click a column header to sort`
+    + (days.length > 21 ? ` · scroll sideways for the rest of the window` : '');
+  document.getElementById('gridlegend').innerHTML =
+    `<span><i style="background:var(--dot)"></i>plays</span>
+     <span><i style="background:var(--b2b)"></i>second night of a back-to-back</span>
+     <span><i style="background:var(--dotoff)"></i>off</span>
+     <span><i style="background:none;box-shadow:inset 0 0 0 1px var(--border)"></i>league-wide dark night</span>`;
+
+  const spread = Object.keys(counts).map(Number).sort((a,b)=>a-b);
+  document.getElementById('selinfo').innerHTML =
+    `${days.length} nights · teams play <b>${spread[0]}–${spread[spread.length-1]}</b> games · ${counts[modal]} of 30 at <b>${modal}</b>`;
+}
+
+function render(){ renderTrace(); renderStrip(); renderDetail(); renderGrid(); }
+
+document.getElementById('hz').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  horizon = b.dataset.h === 'rest' ? DAYS.length : +b.dataset.h;
+  selDay = 0;
+  document.querySelectorAll('#hz button').forEach(x => x.classList.toggle('on', x===b));
+  syncThru(); render();
+};
+thru.onchange = () => {
+  const i = DAYS.findIndex(x => x.date === thru.value);
+  if(i < 0){ syncThru(); return; }
+  horizon = i + 1; selDay = 0;
+  document.querySelectorAll('#hz button').forEach(x =>
+    x.classList.toggle('on', x.dataset.h === 'rest' ? horizon === DAYS.length : +x.dataset.h === horizon));
+  render();
+};
+document.getElementById('tabs').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x===b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id==='p-'+b.dataset.p));
+};
+document.getElementById('theme').onclick = e => {
+  document.body.classList.toggle('dark');
+  e.target.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+};
+
+syncThru(); render();
+</script>
+</body>
+</html>

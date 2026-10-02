@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Projection strip — fluid variants (round 4)</title>
+<style>
+  :root{
+    --page:#1e293b; --card:#111827; --card2:#1f2937; --line:#374151; --line2:#1f2937;
+    --txt:#f3f4f6; --muted:#9ca3af; --dim:#6b7280; --blue:#2563eb; --blue2:#3b82f6;
+    --green:#10b981; --red:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--txt);
+    font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;padding:0 0 90px}
+  .band{background:#0f172a;padding:24px 16px 18px;border-bottom:1px solid var(--line)}
+  .inner,.opt{max-width:1060px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 6px}
+  .lede{color:var(--muted);margin:0;max-width:840px;font-size:13px}
+  .opt{padding:32px 16px 0}
+  .optHead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .optHead h2{font-size:16px;margin:0}
+  .pill{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--blue2);
+    border:1px solid var(--blue);border-radius:999px;padding:2px 8px}
+  .why{color:var(--muted);font-size:12.5px;margin:0 0 12px;max-width:840px}
+  .verdict{font-size:12px;color:var(--muted);margin-top:10px;padding-left:12px;border-left:2px solid var(--line)}
+  .verdict b{color:#d1d5db}
+  .cap{font-size:10.5px;color:var(--dim);margin:12px 0 5px;text-transform:uppercase;letter-spacing:.07em}
+
+  /* width harness — real container widths, container queries inside */
+  .demo{border:1px dashed var(--line);border-radius:9px;padding:11px;background:#172033;
+        container-type:inline-size}
+  .w1000{max-width:1000px} .w640{max-width:640px} .w390{max-width:390px}
+
+  /* ---------- shared strip atoms ---------- */
+  .strip{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .tagline{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .badge{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:#bfdbfe;background:rgba(37,99,235,.22);border:1px solid #1d4ed8;border-radius:4px;padding:2px 6px}
+  .vs{font-size:12.5px;font-weight:600;white-space:nowrap}
+  .vs em{font-style:normal;color:var(--muted);font-weight:400}
+  .lab{font-size:11px;color:var(--muted);white-space:nowrap}
+  .mval{font-weight:700;font-size:13px;min-width:20px;text-align:right;font-variant-numeric:tabular-nums}
+  .rst{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 7px;flex:none}
+  .vbar{width:1px;align-self:stretch;background:var(--line);flex:none}
+  input[type=range]{accent-color:var(--blue);height:3px;min-width:0}
+
+  /* numbers: auto-fit grid = truly fluid, no fixed widths anywhere */
+  .nums{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px 8px;flex:1 1 360px;min-width:0}
+  @container (max-width:700px){ .nums{grid-template-columns:repeat(4,minmax(0,1fr))} }
+  .n{display:flex;flex-direction:column;align-items:center;line-height:1.15}
+  .n b{font-size:14px;font-variant-numeric:tabular-nums}
+  .n span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .nums.row{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:space-between}
+  .nums.row .n{flex-direction:row;align-items:baseline;gap:3px}
+  .nums.row .n span{font-size:10px}
+
+  /* ---------- V1 ---------- */
+  .v1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .v1 .ctrl{display:flex;align-items:center;gap:8px;flex:1 1 190px;min-width:150px}
+  .v1 .ctrl input{flex:1 1 auto}
+  @container (max-width:700px){ .v1 .vbar{display:none} .v1 .ctrl{flex-basis:100%} }
+
+  /* ---------- V2 ---------- */
+  .v2 .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+  .v2 .ctrl{display:flex;align-items:center;gap:8px;flex:1 1 200px;min-width:150px;margin-left:auto}
+  .v2 .ctrl input{flex:1 1 auto}
+  .v2 .nums{flex:none}
+
+  /* ---------- V3 ---------- */
+  .v3{display:grid;grid-template-columns:minmax(140px,auto) 1fr;gap:10px 14px;align-items:center}
+  .v3 .left{min-width:0}
+  .v3 .ctrl{display:flex;align-items:center;gap:8px;margin-top:5px}
+  .v3 .ctrl input{flex:1 1 auto}
+  @container (max-width:640px){ .v3{grid-template-columns:1fr} }
+
+  /* ---------- V4 (table-row dialect) ---------- */
+  .v4{border-collapse:collapse;width:100%;font-size:12.5px}
+  .v4 th{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:4px 3px;text-align:center}
+  .v4 td{padding:7px 3px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+  .v4 .lead{text-align:left;font-weight:600;white-space:nowrap}
+  .v4 tr.proj{background:rgba(37,99,235,.13)}
+  .v4 tr.proj td{color:#dbeafe}
+  .v4wrap{overflow-x:auto}
+  .v4ctrl{display:flex;align-items:center;gap:9px;padding-bottom:8px;flex-wrap:wrap}
+  .v4ctrl input{flex:1 1 160px;max-width:260px}
+
+  .mini{font-size:11px;color:var(--dim);margin-top:6px}
+  .mini b{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="band"><div class="inner">
+  <h1>Round 4 — the strip, made fluid and self-labelling</h1>
+  <p class="lede">Fixing your three points: <b>nothing is a fixed pixel width</b> (slider is <code>flex:1</code>, the values are an auto-fit grid that redistributes at any width), every variant <b>says it's a projection</b>, and each is rendered at three real container widths so you can see the mobile reflow instead of trusting a media query. Real data: 13.7 / 3.8 / 4.2 at his default 31 minutes.</p>
+</div></div>
+
+<!-- ============ V1 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>V1 — Badge + one fluid row</h2><span class="pill">closest to shape 2</span></div>
+  <p class="why">A <span class="badge">Projected</span> badge leads the row, so the label is impossible to miss and costs no vertical space. Slider grows to fill whatever room is left; values sit in an auto-fit grid. Under 700px the slider takes its own full-width line and the values reflow to a grid — nothing is ever cramped.</p>
+
+  <div class="cap">1000px</div>
+  <div class="demo w1000">
+    <div class="strip v1">
+      <span class="tagline"><span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu</em></span></span>
+      <span class="vbar"></span>
+      <span class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></span>
+      <span class="vbar"></span>
+      <span class="nums">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </span>
+    </div>
+  </div>
+
+  <div class="cap">640px</div>
+  <div class="demo w640">
+    <div class="strip v1">
+      <span class="tagline"><span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu</em></span></span>
+      <span class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></span>
+      <span class="nums">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </span>
+    </div>
+  </div>
+
+  <div class="cap">390px — phone</div>
+  <div class="demo w390">
+    <div class="strip v1">
+      <span class="tagline"><span class="badge">Projected</span><span class="vs">@ ORL <em>· Thu</em></span></span>
+      <span class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></span>
+      <span class="nums">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </span>
+    </div>
+  </div>
+  <p class="verdict"><b>Phone:</b> three stacked lines — matchup, full-width slider, 4×2 value grid. <b>Cost:</b> the badge repeats information the values already imply on desktop.</p>
+</div>
+
+<!-- ============ V2 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>V2 — Titled row: "Projected next game"</h2></div>
+  <p class="why">Instead of a badge, a plain title states what it is in words, with the slider pushed to the right of that same line. Values then span the full width evenly. Reads like a section header, matching how Stats and Trends label themselves.</p>
+
+  <div class="cap">1000px</div>
+  <div class="demo w1000">
+    <div class="strip v2">
+      <div class="top">
+        <span class="vs">Projected next game <em>· @ ORL · Thu, in 2 days</em></span>
+        <span class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></span>
+      </div>
+      <div class="nums row">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">640px</div>
+  <div class="demo w640">
+    <div class="strip v2">
+      <div class="top">
+        <span class="vs">Projected next game <em>· @ ORL · Thu</em></span>
+        <span class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></span>
+      </div>
+      <div class="nums row">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">390px — phone</div>
+  <div class="demo w390">
+    <div class="strip v2">
+      <div class="top">
+        <span class="vs">Projected next game <em>· @ ORL · Thu</em></span>
+        <span class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></span>
+      </div>
+      <div class="nums row">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Phone:</b> title, slider under it, values in two justified rows. <b>Cost:</b> always two lines tall, even on a wide screen.</p>
+</div>
+
+<!-- ============ V3 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>V3 — Label block left, values fill the rest</h2></div>
+  <p class="why">A two-line label on the left (<em>Projected next game</em> / <em>@ ORL · Thu</em>) with the slider directly beneath it, and the values taking every remaining pixel in an auto-fit grid. The grid is the fluid part: it fits 8 across when wide, 4 across when narrow, without a single hard-coded breakpoint on the values themselves.</p>
+
+  <div class="cap">1000px</div>
+  <div class="demo w1000">
+    <div class="strip v3">
+      <div class="left">
+        <div class="vs">Projected next game</div>
+        <div class="lab">@ ORL · Thu, in 2 days</div>
+        <div class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></div>
+      </div>
+      <div class="nums">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">640px</div>
+  <div class="demo w640">
+    <div class="strip v3">
+      <div class="left">
+        <div class="vs">Projected next game</div>
+        <div class="lab">@ ORL · Thu</div>
+        <div class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></div>
+      </div>
+      <div class="nums">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">390px — phone</div>
+  <div class="demo w390">
+    <div class="strip v3">
+      <div class="left">
+        <div class="vs">Projected next game</div>
+        <div class="lab">@ ORL · Thu</div>
+        <div class="ctrl"><span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span></div>
+      </div>
+      <div class="nums">
+        <span class="n"><b>13.7</b><span>PTS</span></span><span class="n"><b>3.8</b><span>REB</span></span>
+        <span class="n"><b>4.2</b><span>AST</span></span><span class="n"><b>2.7</b><span>3PM</span></span>
+        <span class="n"><b>1.0</b><span>STL</span></span><span class="n"><b>0.9</b><span>BLK</span></span>
+        <span class="n"><b>42.8%</b><span>FG</span></span><span class="n"><b>89.3%</b><span>FT</span></span>
+      </div>
+    </div>
+  </div>
+  <p class="verdict"><b>Phone:</b> label + slider block, then the value grid underneath. <b>Cost:</b> tallest of the four on desktop.</p>
+</div>
+
+<!-- ============ V4 ============ -->
+<div class="opt">
+  <div class="optHead"><h2>V4 — Same dialect as the Stats table</h2><span class="pill">no new vocabulary</span></div>
+  <p class="why">Column headers and a highlighted row, exactly like Stats — so the row label ("Projected @ ORL") is what tells you it's a projection, and the numbers line up under headers you already read elsewhere. Slider sits above, full-width and fluid. Scrolls sideways on a phone like every other wide table in the app, which is the behaviour your other tables already have.</p>
+
+  <div class="cap">1000px</div>
+  <div class="demo w1000">
+    <div class="strip">
+      <div class="v4ctrl">
+        <span class="badge">Projected</span>
+        <span class="vs">@ ORL <em>· Thu, in 2 days</em></span>
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+      </div>
+      <div class="v4wrap"><table class="v4">
+        <tr><th class="lead"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr class="proj"><td class="lead">Projected @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td><td>42.8%</td><td>89.3%</td></tr>
+      </table></div>
+      <div class="mini">Same columns as <b>Stats</b> above — read straight down to compare against his season line.</div>
+    </div>
+  </div>
+
+  <div class="cap">640px</div>
+  <div class="demo w640">
+    <div class="strip">
+      <div class="v4ctrl">
+        <span class="badge">Projected</span>
+        <span class="vs">@ ORL <em>· Thu</em></span>
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+      </div>
+      <div class="v4wrap"><table class="v4">
+        <tr><th class="lead"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr class="proj"><td class="lead">Projected @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td><td>42.8%</td><td>89.3%</td></tr>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="cap">390px — phone (table scrolls sideways, label column stays)</div>
+  <div class="demo w390">
+    <div class="strip">
+      <div class="v4ctrl">
+        <span class="badge">Projected</span>
+        <span class="vs">@ ORL <em>· Thu</em></span>
+        <span class="lab">MIN</span><input type="range" min="0" max="48" value="31"><span class="mval">31</span><span class="rst">↺</span>
+      </div>
+      <div class="v4wrap"><table class="v4">
+        <tr><th class="lead"></th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th></tr>
+        <tr class="proj"><td class="lead">Projected @ ORL</td><td>31</td><td>13.7</td><td>3.8</td><td>4.2</td><td>1.0</td><td>0.9</td><td>2.7</td><td>42.8%</td><td>89.3%</td></tr>
+      </table></div>
+    </div>
+  </div>
+  <p class="verdict"><b>Phone:</b> horizontal scroll, same as your other wide tables. <b>Cost:</b> sideways scrolling is the thing your UI rules try to minimise — but here it's one row, not twenty.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trends — Mockup</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --grid:#f3f4f6; --axis:#d1d5db; --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --dim:#d1d5db; --tooltip-bg:rgba(255,255,255,.97);
+  --up:#059669; --up-bg:#d1fae5; --down:#dc2626; --down-bg:#fee2e2;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --grid:#273244; --axis:#4b5563; --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --dim:#374151; --tooltip-bg:rgba(31,41,55,.97);
+  --up:#34d399; --up-bg:#064e3b; --down:#f87171; --down-bg:#7f1d1d;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1)}
+nav{position:sticky;top:0;z-index:40;background:var(--card);box-shadow:0 4px 10px rgba(0,0,0,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:8px 14px;overflow-x:auto}
+nav .brand{font-weight:800;font-size:13px;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;margin-right:8px}
+nav a{display:inline-flex;align-items:center;gap:4px;padding:6px 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2);text-decoration:none;white-space:nowrap}
+nav a.active{background:var(--chip-on);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+nav .spacer{flex:1}
+nav button{border:none;background:none;font-size:14px;cursor:pointer;padding:6px;border-radius:6px}
+nav .flag{font-size:10px;font-weight:700;color:#9333ea;background:#f3e8ff;border:1px solid #e9d5ff;border-radius:5px;padding:2px 6px;white-space:nowrap}
+.dark nav .flag{color:#d8b4fe;background:#3b0764;border-color:#581c87}
+main{max-width:1180px;margin:0 auto;padding:18px 12px 40px}
+h1{font-size:20px;font-weight:800;margin-bottom:2px}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.group{display:flex;flex-wrap:wrap;gap:4px;background:var(--chip);padding:3px;border-radius:8px}
+.group button{border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.variant-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--ink3);margin-bottom:10px}
+select, input[type=text]{border:1px solid var(--border);background:var(--card);color:var(--ink1);border-radius:6px;padding:5px 8px;font-size:12px}
+label.chk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);background:var(--chip);padding:5px 10px;border-radius:8px;cursor:pointer}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.badge.role-up{background:var(--up-bg);color:var(--up)}
+.badge.role-down{background:var(--down-bg);color:var(--down)}
+.badge.fa{background:var(--chip-on);color:var(--chip-on-ink)}
+.badge.low{background:var(--chip);color:var(--ink3);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.02em;color:var(--ink3);border-bottom:1px solid var(--border);padding:6px 8px;white-space:nowrap;user-select:none}
+thead th[data-sort]{cursor:pointer}
+thead th[data-sort]:hover{color:var(--ink1)}
+tbody td{padding:7px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
+tbody tr:hover{background:var(--grid)}
+td.player{position:sticky;left:0;background:var(--card);font-weight:700;color:var(--ink1)}
+tbody tr:hover td.player{background:var(--grid)}
+.tw{overflow-x:auto;border-radius:8px}
+.up{color:var(--up);font-weight:700}
+.down{color:var(--down);font-weight:700}
+.pill-delta{display:inline-block;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px}
+.pill-delta.up{background:var(--up-bg);color:var(--up)}
+.pill-delta.down{background:var(--down-bg);color:var(--down)}
+.bar-wrap{display:flex;align-items:center;gap:6px}
+.bar-track{width:60px;height:6px;background:var(--grid);border-radius:3px;position:relative;overflow:hidden}
+.bar-fill{position:absolute;top:0;bottom:0;border-radius:3px}
+.bar-fill.up{background:var(--up);left:50%}
+.bar-fill.down{background:var(--down);right:50%}
+.bar-val{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.section{display:none}
+.section.on{display:block}
+.pos{color:var(--ink3);font-weight:500}
+tr.subrow td{background:var(--grid)}
+tr.subrow:hover td{background:var(--grid)}
+td.pos.subrow-stat{padding-left:20px}
+td.pos.subrow-stat::before{content:"↳ ";color:var(--ink3)}
+td.player[rowspan]{vertical-align:top}
+.note{font-size:11px;color:var(--ink3);margin-top:10px}
+.dim{color:var(--ink3)}
+@media(max-width:640px){
+  main{padding:12px 8px 30px} h1{font-size:17px}
+  th.hide-mobile, td.hide-mobile{display:none}
+}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏀 Fantasy League</span>
+  <a>📊 Dashboard</a><a>👥 Teams</a><a>🏆 Rankings</a><a>📈 Analytics</a><a class="active">📈 Trends</a><span class="flag">FF_TRENDS</span><a>🔮 Estimator</a><a>⛹️ Players</a><a>🩺 Injuries</a>
+  <span class="spacer"></span>
+  <button id="theme" title="Toggle dark mode">🌙</button>
+</nav>
+<main>
+  <h1>📈 Trends</h1>
+  <div class="sub">Whose situation just changed — minutes, usage, shooting regression. Gated behind <code>VITE_FF_TRENDS</code> (default off).</div>
+
+  <div class="card">
+    <div class="variant-strip">
+      Δ-column style (mockup only, pick one):
+      <div class="group" id="variantGroup">
+        <button data-v="a">A · Colored text</button>
+        <button class="on" data-v="b">B · Pill badge</button>
+        <button data-v="c">C · Mini bar</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="group" id="tabGroup">
+        <button class="on" data-tab="minutes">Minutes Movers</button>
+        <button data-tab="usage">Usage &amp; Role</button>
+        <button data-tab="regression">Shooting Regression</button>
+      </div>
+      <input type="text" id="nameFilter" placeholder="Search player…" style="min-width:150px">
+      <span class="spacer" style="flex:1"></span>
+      <label class="chk"><input type="checkbox" id="faOnly"> FA only</label>
+      <select id="posFilter">
+        <option value="all">All positions</option>
+        <option>PG</option><option>SG</option><option>SF</option><option>PF</option><option>C</option>
+      </select>
+      <select id="g15Filter" title="Games played in the last 15 days — filters out inactive/injured players regardless of season total">
+        <option value="1">≥1 game (15d)</option>
+        <option value="3" selected>≥3 games (15d)</option>
+        <option value="5">≥5 games (15d)</option>
+      </select>
+    </div>
+
+    <!-- MINUTES -->
+    <div class="section on" id="sec-minutes">
+      <div class="tw"><table>
+        <thead><tr>
+          <th data-sort="p">Player</th><th class="hide-mobile" data-sort="t">Team</th><th class="hide-mobile" data-sort="pos">Pos</th>
+          <th data-sort="season">Season MPG</th><th data-sort="l5">L5 MPG</th><th data-sort="d">Δ MPG</th>
+          <th class="hide-mobile" data-sort="gp">GP</th><th class="hide-mobile" data-sort="g15">G(15d)</th><th>Status</th>
+        </tr></thead>
+        <tbody id="tbl-minutes"></tbody>
+      </table></div>
+    </div>
+
+    <!-- USAGE -->
+    <div class="section" id="sec-usage">
+      <div class="sub" style="margin-bottom:8px">
+        <b>Role ↑/↓</b> = minutes AND usage moved together (≥4 MPG and ≥2pp usage). <b>Minutes ↑/↓</b> = minutes moved, usage didn't.
+        <b>Usage ↑/↓</b> = usage moved on flat minutes (more/fewer shots per minute played). Δ USG / Δ MPG columns show the raw numbers behind each label.
+      </div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th data-sort="p">Player</th><th class="hide-mobile" data-sort="t">Team</th>
+          <th data-sort="season">Season USG%</th><th data-sort="l5">L5 USG%</th><th data-sort="d">Δ USG</th>
+          <th class="hide-mobile" data-sort="dmpg">Δ MPG</th><th class="hide-mobile" data-sort="g15">G(15d)</th><th>Role</th><th>Status</th>
+        </tr></thead>
+        <tbody id="tbl-usage"></tbody>
+      </table></div>
+    </div>
+
+    <!-- REGRESSION -->
+    <div class="section" id="sec-regression">
+      <div class="controls" style="margin-bottom:8px">
+        <select id="regStat">
+          <option value="all">All stats</option>
+          <option value="3P%">3P%</option>
+          <option value="FT%">FT%</option>
+          <option value="FG%">FG%</option>
+        </select>
+      </div>
+      <div class="sub" style="margin-bottom:8px">
+        Filter: fantasy-relevant swing ≥ 0.35 makes/g-equivalent (attempts/g × |dev|), provisional threshold — weights volume so a big pp swing on a tiny sample doesn't outrank a smaller swing on heavy usage. Grouped by player: worst-offending stat surfaces first, other qualifying stats nest underneath.
+      </div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th data-sort="p">Player</th><th class="hide-mobile" data-sort="t">Team</th><th class="hide-mobile" data-sort="g15">G(15d)</th><th data-sort="stat">Stat</th>
+          <th data-sort="cur">Current%</th><th data-sort="base">Baseline%</th><th data-sort="dev">Dev vs own history (pp)</th>
+          <th class="hide-mobile" data-sort="att">Att/g</th><th data-sort="drift">If reverts to baseline</th><th>Status</th>
+        </tr></thead>
+        <tbody id="tbl-regression"></tbody>
+      </table></div>
+      <div class="note">Buy-low = negative dev (cold vs own last-2-season history). Sell-high = positive dev (hot vs own history).</div>
+    </div>
+
+    <div class="note">Player names/numbers are placeholder mock data — not live stats. Real data source: <code>fs_player_games</code> / <code>fs_team_games</code> per <code>trends_page_plan.md</code>.</div>
+  </div>
+</main>
+
+<script>
+const minutes = [
+  {p:"Jalen Duren",t:"DET",pos:"C",season:28.4,l5:34.2,gp:52,g15:6,fa:false,team:"Team Rocket"},
+  {p:"Ayo Dosunmu",t:"CHI",pos:"PG",season:24.1,l5:31.8,gp:48,g15:7,fa:true},
+  {p:"GG Jackson",t:"MEM",pos:"PF",season:22.7,l5:29.4,gp:45,g15:6,fa:true},
+  {p:"Jaden McDaniels",t:"MIN",pos:"SF",season:31.2,l5:26.8,gp:55,g15:7,fa:false,team:"Hoop Dreams"},
+  {p:"Onyeka Okongwu",t:"ATL",pos:"C",season:26.9,l5:21.3,gp:50,g15:2,fa:true},
+  {p:"Tyus Jones",t:"WAS",pos:"PG",season:29.5,l5:34.0,gp:44,g15:5,fa:true},
+];
+const usage = [
+  {p:"Ayo Dosunmu",t:"CHI",pos:"PG",season:18.2,l5:24.6,dmpg:7.7,gp:48,g15:7,fa:true},
+  {p:"GG Jackson",t:"MEM",pos:"PF",season:21.5,l5:27.1,dmpg:6.7,gp:45,g15:6,fa:true},
+  {p:"Coby White",t:"CHI",pos:"SG",season:26.8,l5:24.9,dmpg:0.4,gp:50,g15:7,fa:false,team:"Team Rocket"},
+  {p:"Jaden McDaniels",t:"MIN",pos:"SF",season:16.9,l5:13.8,dmpg:-4.4,gp:55,g15:7,fa:false,team:"Hoop Dreams"},
+  {p:"Onyeka Okongwu",t:"ATL",pos:"C",season:17.4,l5:20.1,dmpg:-5.6,gp:50,g15:2,fa:true},
+];
+const regression = [
+  {p:"Klay Thompson",t:"DAL",pos:"SG",stat:"3P%",cur:33.1,base:41.2,att:8.4,gp:50,g15:6,fa:false,team:"Splash Zone"},
+  {p:"Klay Thompson",t:"DAL",pos:"SG",stat:"FT%",cur:78.0,base:92.1,att:2.1,gp:50,g15:6,fa:false,team:"Splash Zone"},
+  {p:"Bones Hyland",t:"LAC",pos:"PG",stat:"3P%",cur:44.8,base:35.6,att:6.1,gp:42,g15:5,fa:true},
+  {p:"Jalen Suggs",t:"ORL",pos:"PG",stat:"FT%",cur:71.2,base:79.8,att:4.2,gp:48,g15:7,fa:false,team:"Magic Kingdom"},
+  {p:"Walker Kessler",t:"UTA",pos:"C",stat:"FT%",cur:81.4,base:63.5,att:3.8,gp:52,g15:1,fa:true},
+  {p:"Deandre Ayton",t:"POR",pos:"C",stat:"FG%",cur:51.3,base:58.7,att:11.6,gp:44,g15:6,fa:true},
+  {p:"Coby White",t:"CHI",pos:"SG",stat:"3P%",cur:37.8,base:36.9,att:7.2,gp:50,g15:7,fa:false,team:"Team Rocket"},
+  {p:"Nikola Vucevic",t:"CHI",pos:"C",stat:"FG%",cur:54.8,base:58.0,att:14.2,gp:46,g15:7,fa:false,team:"Hoop Dreams"},
+];
+
+function statusBadge(row){
+  return row.fa ? '<span class="badge fa">FA</span>' : `<span class="dim">${row.team}</span>`;
+}
+function deltaCell(val, unit, variant, maxAbs){
+  const isUp = val >= 0;
+  const sign = isUp ? '+' : '';
+  const text = `${sign}${val.toFixed(1)}${unit}`;
+  if(variant==='a'){
+    return `<span class="${isUp?'up':'down'}">${isUp?'▲':'▼'} ${text}</span>`;
+  }
+  if(variant==='b'){
+    return `<span class="pill-delta ${isUp?'up':'down'}">${isUp?'▲':'▼'} ${text}</span>`;
+  }
+  const pct = Math.min(100, Math.abs(val)/maxAbs*100);
+  return `<div class="bar-wrap"><div class="bar-track"><div class="bar-fill ${isUp?'up':'down'}" style="width:${pct/2}%"></div></div><span class="bar-val ${isUp?'up':'down'}">${text}</span></div>`;
+}
+function emptyRow(n){
+  return `<tr><td colspan="${n}" class="dim" style="text-align:center;padding:16px">No players match current filters.</td></tr>`;
+}
+function updateSortIndicators(sectionId, sortState){
+  document.querySelectorAll('#'+sectionId+' th[data-sort]').forEach(th=>{
+    th.textContent = th.textContent.replace(/ [▲▼]$/,'');
+    if(th.dataset.sort===sortState.col) th.textContent += sortState.dir==='asc' ? ' ▲' : ' ▼';
+  });
+}
+function wireSort(sectionId, sortState, renderFn){
+  document.querySelectorAll('#'+sectionId+' th[data-sort]').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const col = th.dataset.sort;
+      if(sortState.col===col) sortState.dir = sortState.dir==='asc' ? 'desc' : 'asc';
+      else { sortState.col = col; sortState.dir = 'desc'; }
+      renderFn();
+    });
+  });
+}
+
+let variant='b';
+let nameFilter='';
+let faOnly=false;
+let posFilter='all';
+let minG15=3;
+
+function passesShared(r){
+  if(faOnly && !r.fa) return false;
+  if(posFilter!=='all' && r.pos!==posFilter) return false;
+  if(r.g15!==undefined && r.g15<minG15) return false;
+  if(nameFilter.trim() && !r.p.toLowerCase().includes(nameFilter.trim().toLowerCase())) return false;
+  return true;
+}
+
+let minSort={col:'d',dir:'desc'};
+const MIN_SORT_VAL = { p:r=>r.p, t:r=>r.t, pos:r=>r.pos, season:r=>r.season, l5:r=>r.l5, d:r=>r.l5-r.season, gp:r=>r.gp, g15:r=>r.g15 };
+function renderMinutes(){
+  let rows = minutes.filter(passesShared);
+  const getVal = MIN_SORT_VAL[minSort.col] || MIN_SORT_VAL.d;
+  rows = [...rows].sort((a,b)=>{
+    const av=getVal(a), bv=getVal(b);
+    const cmp = typeof av==='string' ? av.localeCompare(bv) : av-bv;
+    return minSort.dir==='asc' ? cmp : -cmp;
+  });
+  updateSortIndicators('sec-minutes', minSort);
+  if(rows.length===0){ document.getElementById('tbl-minutes').innerHTML = emptyRow(9); return; }
+  const maxAbs = Math.max(...rows.map(r=>Math.abs(r.l5-r.season)));
+  document.getElementById('tbl-minutes').innerHTML = rows.map(r=>{
+    const d = r.l5-r.season;
+    return `<tr>
+      <td class="player">${r.p} ${r.gp<15?'<span class="badge low">L5</span>':''}</td>
+      <td class="hide-mobile">${r.t}</td><td class="hide-mobile pos">${r.pos}</td>
+      <td>${r.season.toFixed(1)}</td><td>${r.l5.toFixed(1)}</td>
+      <td>${deltaCell(d,'',variant,maxAbs)}</td>
+      <td class="hide-mobile">${r.gp}</td><td class="hide-mobile">${r.g15}</td><td>${statusBadge(r)}</td>
+    </tr>`;
+  }).join('');
+}
+
+let usgSort={col:'d',dir:'desc'};
+const USG_SORT_VAL = { p:r=>r.p, t:r=>r.t, season:r=>r.season, l5:r=>r.l5, d:r=>r.l5-r.season, dmpg:r=>r.dmpg, g15:r=>r.g15 };
+function renderUsage(){
+  let rows = usage.filter(passesShared);
+  const getVal = USG_SORT_VAL[usgSort.col] || USG_SORT_VAL.d;
+  rows = [...rows].sort((a,b)=>{
+    const av=getVal(a), bv=getVal(b);
+    const cmp = typeof av==='string' ? av.localeCompare(bv) : av-bv;
+    return usgSort.dir==='asc' ? cmp : -cmp;
+  });
+  updateSortIndicators('sec-usage', usgSort);
+  if(rows.length===0){ document.getElementById('tbl-usage').innerHTML = emptyRow(9); return; }
+  const maxAbs = Math.max(...rows.map(r=>Math.abs(r.l5-r.season)));
+  document.getElementById('tbl-usage').innerHTML = rows.map(r=>{
+    const d = r.l5-r.season;
+    const dmpgTxt = `${r.dmpg>=0?'+':''}${r.dmpg.toFixed(1)}mpg`;
+    let label='', cls='';
+    if(d>=2 && r.dmpg>=4){label='Role ↑';cls='role-up';}
+    else if(r.dmpg>=4){label='Minutes ↑';cls='role-up';}
+    else if(d>=3){label='Usage ↑';cls='role-up';}
+    else if(d<=-2 && r.dmpg<=-4){label='Role ↓';cls='role-down';}
+    else if(r.dmpg<=-4){label='Minutes ↓';cls='role-down';}
+    else if(d<=-3){label='Usage ↓';cls='role-down';}
+    const role = label ? `<span class="badge ${cls}">${label}</span>` : '<span class="dim">—</span>';
+    return `<tr>
+      <td class="player">${r.p}</td><td class="hide-mobile">${r.t}</td>
+      <td>${r.season.toFixed(1)}%</td><td>${r.l5.toFixed(1)}%</td>
+      <td>${deltaCell(d,'pp',variant,maxAbs)}</td>
+      <td class="hide-mobile">${dmpgTxt}</td><td class="hide-mobile">${r.g15}</td>
+      <td>${role}</td><td>${statusBadge(r)}</td>
+    </tr>`;
+  }).join('');
+}
+
+const REG_DRIFT_THRESHOLD = 0.35; // makes/g-equivalent swing, provisional
+let regStatFilter='all';
+let regSort={col:'dev',dir:'desc'};
+
+function driftScore(r){ return r.att * Math.abs(r.cur-r.base) / 100; }
+const REG_SORT_VAL = {
+  p:r=>r.p, t:r=>r.t, g15:r=>r.g15, stat:r=>r.stat, cur:r=>r.cur, base:r=>r.base,
+  dev:r=>r.cur-r.base, att:r=>r.att, drift:r=>driftScore(r),
+};
+
+function regressionRowHtml(r, maxAbs, showIdentity, rowspan){
+  const dev = r.cur-r.base;
+  const drift = r.stat==='3P%' ? `${(r.att*(-dev)/100).toFixed(2)} 3PM/g` : `${Math.abs(dev).toFixed(1)}pp on ${r.att}/g`;
+  const rs = rowspan && rowspan>1 ? ` rowspan="${rowspan}"` : '';
+  const identityCells = showIdentity
+    ? `<td class="player"${rs}>${r.p}</td>
+       <td class="hide-mobile"${rs}>${r.t}</td>
+       <td class="hide-mobile"${rs}>${r.g15}</td>`
+    : '';
+  const statusCell = showIdentity ? `<td${rs}>${statusBadge(r)}</td>` : '';
+  const classAttr = showIdentity ? '' : ' class="subrow"';
+  return `<tr${classAttr}>
+    ${identityCells}
+    <td class="pos${showIdentity?'':' subrow-stat'}">${r.stat}</td>
+    <td>${r.cur.toFixed(1)}%</td><td>${r.base.toFixed(1)}%</td>
+    <td>${deltaCell(dev,'pp',variant,maxAbs)}</td>
+    <td class="hide-mobile">${r.att}</td><td class="dim">${drift}</td>
+    ${statusCell}
+  </tr>`;
+}
+
+function groupExtremeRow(rows, col){
+  const getVal = REG_SORT_VAL[col] || REG_SORT_VAL.dev;
+  return rows.reduce((best,r)=> Math.abs(getVal(r)) > Math.abs(getVal(best)) ? r : best, rows[0]);
+}
+
+function renderRegression(){
+  let rows = regression.filter(r=>driftScore(r)>=REG_DRIFT_THRESHOLD);
+  if(regStatFilter!=='all') rows = rows.filter(r=>r.stat===regStatFilter);
+  rows = rows.filter(passesShared);
+
+  const tbody = document.getElementById('tbl-regression');
+  if(rows.length===0){
+    tbody.innerHTML = emptyRow(10);
+    updateSortIndicators('sec-regression', regSort);
+    return;
+  }
+  const maxAbs = Math.max(...rows.map(r=>Math.abs(r.cur-r.base)));
+
+  const groups = new Map();
+  rows.forEach(r=>{
+    if(!groups.has(r.p)) groups.set(r.p, []);
+    groups.get(r.p).push(r);
+  });
+  const getVal = REG_SORT_VAL[regSort.col] || REG_SORT_VAL.dev;
+  let groupList = [...groups.values()].map(gr=>{
+    const sub = [...gr].sort((a,b)=>Math.abs(REG_SORT_VAL.dev(b)) - Math.abs(REG_SORT_VAL.dev(a)));
+    const keyRow = (regSort.col==='p' || regSort.col==='t' || regSort.col==='g15') ? gr[0] : groupExtremeRow(gr, regSort.col);
+    return {sub, key: getVal(keyRow)};
+  });
+  groupList.sort((a,b)=>{
+    const cmp = typeof a.key==='string' ? a.key.localeCompare(b.key) : a.key-b.key;
+    return regSort.dir==='asc' ? cmp : -cmp;
+  });
+  tbody.innerHTML = groupList.map(({sub})=>
+    sub.map((r,i)=>regressionRowHtml(r, maxAbs, i===0, sub.length)).join('')
+  ).join('');
+
+  updateSortIndicators('sec-regression', regSort);
+}
+
+function renderAll(){ renderMinutes(); renderUsage(); renderRegression(); }
+
+document.getElementById('variantGroup').addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#variantGroup button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on'); variant = btn.dataset.v; renderAll();
+});
+document.getElementById('tabGroup').addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#tabGroup button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('on'));
+  document.getElementById('sec-'+btn.dataset.tab).classList.add('on');
+});
+document.getElementById('regStat').addEventListener('change', e=>{ regStatFilter = e.target.value; renderRegression(); });
+
+document.getElementById('nameFilter').addEventListener('input', e=>{ nameFilter = e.target.value; renderAll(); });
+document.getElementById('faOnly').addEventListener('change', e=>{ faOnly = e.target.checked; renderAll(); });
+document.getElementById('posFilter').addEventListener('change', e=>{ posFilter = e.target.value; renderAll(); });
+document.getElementById('g15Filter').addEventListener('change', e=>{ minG15 = Number(e.target.value); renderAll(); });
+
+wireSort('sec-minutes', minSort, renderMinutes);
+wireSort('sec-usage', usgSort, renderUsage);
+wireSort('sec-regression', regSort, renderRegression);
+
+document.getElementById('theme').addEventListener('click', ()=>document.body.classList.toggle('dark'));
+
+renderAll();
+</script>
+</body>
+</html>

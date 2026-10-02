@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Slot Games Estimator — Plan</title>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" crossorigin="anonymous"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 48px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.6; }
+    h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
+    h2 { margin-top: 40px; color: #222; }
+    h3 { color: #444; margin-top: 28px; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+    pre { background: #f0f0f0; padding: 16px; border-radius: 6px; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+    th { background: #f5f5f5; }
+    .math-block { margin: 20px 0; padding: 12px 20px; background: #fafafa; border-left: 3px solid #888; border-radius: 0 4px 4px 0; }
+    .note { background: #fffbe6; border-left: 3px solid #f0b429; padding: 10px 16px; border-radius: 0 4px 4px 0; margin: 16px 0; }
+    .file { font-weight: bold; font-family: monospace; background: #e8f4fd; padding: 2px 8px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<h1>Slot Games Estimator — Implementation Plan</h1>
+
+<h2>1. File</h2>
+<p><span class="file">backend/app/services/slot_games_estimator.py</span> — class <code>SlotGamesEstimator</code></p>
+
+<h2>2. Constants</h2>
+<table>
+  <tr><th>Slot</th><th>Cap (max games)</th></tr>
+  <tr><td>PG, SG, SF, PF, C, G, F</td><td>82</td></tr>
+  <tr><td>UTIL</td><td>248 &nbsp;(82 × 3 + 2)</td></tr>
+</table>
+<p class="note">UTIL cap already encodes 3 stacked slots — no special handling needed in the formula.</p>
+
+<h2>3. Inputs</h2>
+<p>Accepts the DataFrame produced by <code>get_team_slot_pace_df()</code> directly.</p>
+<p>League-wide scalars read from the first row (same for all teams):</p>
+<ul>
+  <li>\( p \) — <code>nba_avg_pace</code>: average games played per NBA team so far</li>
+  <li>\( d \) — <code>nba_game_days_remaining</code>: game days left in regular season</li>
+</ul>
+<p>Per team × slot:</p>
+<ul>
+  <li>\( g \) — games used in this slot so far this season</li>
+</ul>
+
+<h2>4. Weights</h2>
+<p>The weight signal is how far through the NBA season we are by games played:</p>
+
+<div class="math-block">
+  \[
+    w_2 = \frac{p}{82}, \qquad w_1 = 1 - w_2
+  \]
+</div>
+
+<table>
+  <tr><th>Season phase</th><th>\(p\)</th><th>\(w_1\) (method 1)</th><th>\(w_2\) (method 2)</th></tr>
+  <tr><td>Early</td><td>small</td><td>≈ 1</td><td>≈ 0</td></tr>
+  <tr><td>Late</td><td>→ 82</td><td>≈ 0</td><td>≈ 1</td></tr>
+</table>
+
+<h2>5. Projection Formulas</h2>
+
+<h3>Method 1 — Season-pace extrapolation</h3>
+<p>Extrapolate current slot usage to a full 82-game season at current NBA pace:</p>
+
+<div class="math-block">
+  \[
+    M_1 = \min\!\left( g \cdot \frac{82}{p},\ \text{cap} \right)
+  \]
+</div>
+
+<h3>Method 2 — Days-remaining projection</h3>
+<p>Project remaining games from actual days left, then add what's already played:</p>
+
+<div class="math-block">
+  \[
+    M_2 = \min\!\left( g + \frac{g}{p} \cdot d,\ \text{cap} \right)
+  \]
+</div>
+
+<h3>Blended projection per slot</h3>
+
+<div class="math-block">
+  \[
+    \hat{g}_{\text{slot}} = w_1 \cdot M_1 + w_2 \cdot M_2
+  \]
+</div>
+
+<h3>Total projected games per team</h3>
+
+<div class="math-block">
+  \[
+    \hat{G}_{\text{total}} = \sum_{\text{slot} \in \{PG, SG, SF, PF, C, G, F, UTIL\}} \hat{g}_{\text{slot}}
+  \]
+</div>
+
+<h2>6. Edge Cases</h2>
+<ul>
+  <li><strong>\( p = 0 \)</strong>: guard with early return — return zeros for all slots.</li>
+  <li><strong>\( g = 0 \)</strong> for a slot: projection is 0 (team never used that slot). No division issue.</li>
+  <li><strong>Cap already reached</strong>: both methods clamp to cap → blended result = cap.</li>
+</ul>
+
+<h2>7. Output Shape</h2>
+<p>One row per fantasy team:</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>team_id</code></td><td>int</td><td>ESPN fantasy team ID</td></tr>
+  <tr><td><code>team_name</code></td><td>str</td><td>Fantasy team name</td></tr>
+  <tr><td><code>proj_PG</code> … <code>proj_UTIL</code></td><td>float</td><td>Projected season-end games per slot</td></tr>
+  <tr><td><code>proj_total</code></td><td>float</td><td>Sum of all 8 slot projections</td></tr>
+</table>
+
+<h2>8. Tests</h2>
+<p>File: <span class="file">backend/tests/test_slot_games_estimator.py</span></p>
+<table>
+  <tr><th>Test</th><th>What it verifies</th></tr>
+  <tr><td>Early season (low \(p\))</td><td>\(w_1 \approx 1\) → result ≈ \(g \cdot 82/p\)</td></tr>
+  <tr><td>Late season (\(p\) near 82)</td><td>\(w_2 \approx 1\) → result ≈ \(g + g/p \cdot d\)</td></tr>
+  <tr><td>Cap enforcement</td><td>No slot projection exceeds its cap</td></tr>
+  <tr><td><code>proj_total</code> integrity</td><td>Equals sum of 8 slot columns</td></tr>
+  <tr><td>Zero guard (\(p = 0\))</td><td>No ZeroDivisionError; all projections = 0</td></tr>
+  <tr><td>Slot already at cap</td><td>Blended result == cap exactly</td></tr>
+</table>
+
+</body>
+</html>

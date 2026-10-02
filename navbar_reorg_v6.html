@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navbar Reorg v6 — Names &amp; Trade</title>
+<style>
+  :root {
+    --blue:#2563eb; --purple:#9333ea; --gray-600:#4b5563; --gray-100:#f3f4f6;
+    --border:#e5e7eb; --green:#16a34a; --red:#dc2626; --amber:#d97706; --ink:#1f2937; --page:#fafafa;
+  }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,sans-serif; max-width:1060px; margin:0 auto; padding:24px 18px 60px;
+         color:var(--ink); line-height:1.5; background:var(--page); }
+  h1 { background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text;
+       color:transparent; font-size:27px; margin-bottom:4px; }
+  h2 { border-bottom:2px solid var(--border); padding-bottom:6px; margin-top:34px; font-size:19px; }
+  .sub { color:#6b7280; font-size:14px; margin-top:0; }
+
+  .navmock { background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.06);
+             padding:10px 12px; display:flex; align-items:center; gap:6px; margin:14px 0 0; flex-wrap:wrap; }
+  .brand { font-weight:700; background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text;
+           background-clip:text; color:transparent; white-space:nowrap; margin-right:6px; cursor:pointer; font-size:14px; }
+  .navitem { font-size:13px; padding:6px 9px; border-radius:6px; color:var(--gray-600); white-space:nowrap;
+             position:relative; cursor:pointer; }
+  .navitem:hover { background:var(--gray-100); }
+  .navitem.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .navitem.group.open .dropdown { display:block; }
+  .dropdown { display:none; position:absolute; top:100%; left:0; margin-top:4px; background:#fff; border:1px solid var(--border);
+              border-radius:6px; box-shadow:0 6px 14px rgba(0,0,0,.12); padding:5px; min-width:178px; z-index:10; }
+  .dropdown div { padding:7px 9px; font-size:12.5px; border-radius:4px; color:var(--gray-600); white-space:nowrap; }
+  .dropdown div:hover { background:var(--gray-100); }
+  .dropdown div.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .caret { font-size:9px; opacity:.6; margin-left:3px; }
+  .flagged { opacity:.55; }
+  .navmock.compressed .navitem .txt { display:none; }
+  .navmock.compressed .navitem { padding:6px 8px; font-size:17px; }
+
+  .widthbar { display:flex; gap:6px; margin:12px 0 0; align-items:center; flex-wrap:wrap; }
+  .widthbar span.lbl { font-size:12px; color:#6b7280; margin-right:4px; }
+  .wbtn { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .wbtn.active { background:var(--ink); color:#fff; }
+
+  .preview { margin-top:10px; padding:9px 13px; background:var(--gray-100); border-radius:8px; font-size:13px; }
+  .preview b { color:var(--blue); }
+  .preview .path { color:#6b7280; font-size:12px; }
+
+  /* name composer */
+  .composer { background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px 14px 14px; margin-top:12px; }
+  .namerow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:9px 0; border-bottom:1px solid var(--border); }
+  .namerow:last-child { border-bottom:none; }
+  .namerow .who { width:150px; font-size:12px; color:#6b7280; flex-shrink:0; }
+  .namerow .who b { display:block; color:var(--ink); font-size:12.5px; }
+  .nbtn { font-size:12.5px; padding:5px 11px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .nbtn.active { background:var(--blue); color:#fff; }
+  .presetbar { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 4px; align-items:center; }
+  .pbtn { font-size:12.5px; font-weight:600; padding:6px 13px; border-radius:8px; background:#ede9fe; color:#5b21b6; cursor:pointer; }
+  .pbtn:hover { background:#ddd6fe; }
+
+  .tradebar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  .tbtn { font-size:12.5px; padding:6px 12px; border-radius:8px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .tbtn.active { background:var(--amber); color:#fff; }
+
+  .flexrow { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .mobilewrap { width:300px; border:1px solid var(--border); border-radius:14px; padding:10px; background:#fff;
+                box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .mobrow { display:flex; align-items:center; justify-content:space-between; padding:9px 11px; border-radius:6px;
+            font-size:13px; color:var(--gray-600); cursor:pointer; }
+  .mobrow:hover { background:var(--gray-100); }
+  .mobrow.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .mobrow.grp { border:1px dashed var(--border); font-weight:600; margin:2px 0; }
+  .mobrow.grp.open { background:#eff6ff; color:var(--blue); border-color:var(--blue); }
+  .mobrow.grp .caret { transition:transform .15s ease; display:inline-block; }
+  .mobrow.grp.open .caret { transform:rotate(180deg); }
+  .mobsubwrap { overflow:hidden; max-height:0; transition:max-height .18s ease; background:#fafafa; border-radius:6px; }
+  .mobsubwrap.open { max-height:340px; }
+  .mobsub { padding:8px 11px 8px 30px; font-size:12.5px; color:#6b7280; cursor:pointer; border-radius:6px; }
+  .mobsub:hover { background:var(--gray-100); }
+  .mobsub.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+
+  .note { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:13.5px; margin:14px 0; }
+  .note.blue { background:#eff6ff; border-color:#bfdbfe; }
+  .note.red { background:#fef2f2; border-color:#fecaca; }
+  .note.green { background:#f0fdf4; border-color:#bbf7d0; }
+  code { background:var(--gray-100); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; background:#fff; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--gray-100); }
+  .yes { color:var(--green); font-weight:700; }
+  .no { color:var(--red); font-weight:700; }
+  td.ctr { text-align:center; }
+  .metrics { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .metric { background:var(--gray-100); border-radius:8px; padding:6px 10px; font-size:11.5px; color:#6b7280; }
+  .metric b { display:block; font-size:16px; color:var(--blue); }
+  .metric.warn b { color:var(--amber); }
+  .togglerow { display:flex; gap:8px; align-items:center; margin:10px 0; font-size:12.5px; color:#6b7280; flex-wrap:wrap; }
+  .switch { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .switch.on { background:#4338ca; color:#fff; }
+</style>
+</head>
+<body>
+
+<h1>Navbar Reorg v6 — pick the names, place Trade</h1>
+<p class="sub">Structure from v5 option I is unchanged. Two things are open and both are yours to set: what the groups are called, and where Trade lives.</p>
+
+<div class="note red">
+  <b>Correction on Trade.</b> I placed it in Forecast assuming it evaluates a hypothetical. It doesn't predict anything — <code>Trade/index.tsx</code> renders <b>🔄 Trade Analyzer</b> with a <code>TimePeriodSelector</code>, and every number is production already recorded over a window you choose. Compare the genuine model pages: Estimator returns <code>TeamRankProbability</code>, Projections returns a predicted line. Trade returns past stats in two columns. Your doubt was correct.
+</div>
+<div class="note green">
+  <b>Found while checking:</b> <code>pages/StandingsRace.tsx</code> already exists and runs on <code>useGetRankingsOverTimeQuery</code> — built, but never routed in <code>App.tsx</code>. It's an over-time page by the predicate. Worth routing as part of this reorg rather than leaving it stranded.
+</div>
+
+<h2>1. Where does Trade go?</h2>
+<div class="tradebar">
+  <span class="tbtn active" data-trade="players" onclick="setTrade('players')">Players group</span>
+  <span class="tbtn" data-trade="forecast" onclick="setTrade('forecast')">Forecast group</span>
+  <span class="tbtn" data-trade="league" onclick="setTrade('league')">My League group</span>
+</div>
+<table>
+  <tr><th style="width:22%;">Placement</th><th>Case for</th><th>Case against</th></tr>
+  <tr><td><b>Players</b></td>
+      <td>You operate on players — pick names, compare production. Its second mode is your team vs free agents, which is waiver-wire scouting, the same job as browsing Players.</td>
+      <td>A team-for-team trade is a league transaction, not player browsing.</td></tr>
+  <tr><td><b>Forecast</b></td>
+      <td>It's a decision workspace, same moment as Streaming Planner and Slot Estimator — you're deciding a move.</td>
+      <td>Breaks the predicate. Nothing in the page is model output, so the drawer stops meaning "model-driven" and starts meaning "stuff you decide with" — the vague kind of category that rotted Tools.</td></tr>
+  <tr><td><b>My League</b></td>
+      <td>Trades happen between the 12 teams. Team A / Team B are league teams.</td>
+      <td>Half the page is free agents, who aren't in your league at all. And My League otherwise holds current-state views, not workspaces.</td></tr>
+</table>
+<p style="font-size:13px;color:var(--gray-600);margin-top:0;"><b>Where I'd land: Players.</b> The predicate settles Forecast (no model output, so no). Between Players and My League, Players wins on what you actually manipulate — you select players and compare their stats, exactly like the Players page, just two columns instead of one.</p>
+
+<h2>2. Name the groups</h2>
+<div class="presetbar">
+  <span style="font-size:12px;color:#6b7280;">start from:</span>
+  <span class="pbtn" onclick="applyPreset('plain')">Plain nouns</span>
+  <span class="pbtn" onclick="applyPreset('manager')">Manager's words</span>
+  <span class="pbtn" onclick="applyPreset('short')">Shortest</span>
+  <span class="pbtn" onclick="applyPreset('v5')">v5 originals</span>
+</div>
+<div class="composer" id="composer"></div>
+<div class="note">
+  <b>I over-constrained this last round.</b> I argued the label had to state the rule so the drawer could refuse new pages — that's what produced "Over Time", which is a definition wearing a nav item's clothes. The rule belongs in the design doc. The label only has to be recognizable at a glance. Mix any row freely; nothing below is locked to a preset.
+</div>
+
+<h2>3. Result</h2>
+<div class="widthbar">
+  <span class="lbl">width:</span>
+  <span class="wbtn active" id="wXl" onclick="setWidth('xl')">≥ xl (icon + label)</span>
+  <span class="wbtn" id="wMd" onclick="setWidth('md')">md–xl (icon only)</span>
+</div>
+<div class="navmock" id="nav"></div>
+<div class="preview" id="prev">Now viewing: <b>Teams</b></div>
+<div class="metrics" id="metrics"></div>
+<div class="togglerow">
+  <span class="switch on" id="fsSwitch" onclick="toggleFS()">🗄️ Feature Store (dev build)</span>
+  <span class="switch on" id="srSwitch" onclick="toggleSR()">🏁 Standings Race (route it)</span>
+</div>
+
+<h2>4. Mobile</h2>
+<div class="flexrow">
+  <div class="mobilewrap" id="mob"></div>
+  <div style="flex:1; min-width:240px;">
+    <div class="preview" id="prevMob">Now viewing: <b>Teams</b></div>
+    <p style="font-size:13px;color:var(--gray-600);">All accordions, no direct links. Two taps to anywhere, uniformly.</p>
+  </div>
+</div>
+
+<h2>5. The placement rule (goes in the doc, not the nav)</h2>
+<table>
+  <tr><th style="width:22%;">Group</th><th>Admits a page when…</th><th>Rejects</th></tr>
+  <tr><td id="ruleLeague"></td><td>it shows the current state of the 12 teams in your league</td><td>Trade (half free agents), League Analytics (time series)</td></tr>
+  <tr><td id="rulePlayers"></td><td>it shows or compares individual players' recorded production</td><td>Projections (model output), Player Trends (time series)</td></tr>
+  <tr><td id="rulePast"></td><td>it shows change across a time window you can set</td><td>Draft Report (single past event), Player Rankings (one snapshot)</td></tr>
+  <tr><td id="ruleFuture"></td><td>its numbers come out of a model, not out of a box score</td><td>Trade (historical stats), Player Rankings (weighted past production)</td></tr>
+  <tr><td id="ruleNba"></td><td>it's real-NBA reference data, not scoped to your league</td><td>anything roto-scored</td></tr>
+</table>
+<p style="font-size:13px;color:var(--gray-600);margin-top:0;">Each rule has a stated rejection. That's what stops the next page from being dumped in — not the label.</p>
+
+<h2>6. Every page placed</h2>
+<table id="placetable"></table>
+
+<div class="note blue" id="verdict"></div>
+
+<script>
+var FS = true, SR = true;
+var tradeAt = 'players';
+var curPage = 'Teams';
+var openGroup = null, mobOpenGroup = null;
+
+var CHOICES = {
+  league:  [["My League","👥"],["League","🏆"],["Standings","🏆"],["My Teams","👥"]],
+  players: [["Players","⛹️"],["Scouting","🔍"],["Player Pool","⛹️"],["Roster","📋"]],
+  past:    [["Trends","📉"],["Form","📉"],["Movement","📊"],["Over Time","📉"]],
+  future:  [["Projections","🔭"],["Outlook","🔮"],["Predictions","🔮"],["Forecast","🔮"]],
+  nba:     [["NBA","🏀"],["Around NBA","🏀"],["League Info","🏀"],["Real NBA","🏀"]]
+};
+var PRESETS = {
+  plain:   { league:"League",   players:"Players",  past:"Trends",    future:"Projections", nba:"NBA" },
+  manager: { league:"Standings",players:"Scouting", past:"Form",      future:"Outlook",     nba:"Around NBA" },
+  short:   { league:"League",   players:"Players",  past:"Form",      future:"Outlook",     nba:"NBA" },
+  v5:      { league:"My League",players:"Players",  past:"Over Time", future:"Forecast",    nba:"NBA" }
+};
+var picked = { league:"League", players:"Players", past:"Trends", future:"Projections", nba:"NBA" };
+
+function nameOf(k) { return picked[k]; }
+function iconOf(k) {
+  var list = CHOICES[k];
+  for (var i = 0; i < list.length; i++) if (list[i][0] === picked[k]) return list[i][1];
+  return list[0][1];
+}
+
+function buildNav() {
+  var league = [ {p:"League Rankings", i:"🏆"}, {p:"Teams", i:"👥"}, {p:"Draft Report", i:"📝", flag:true} ];
+  var players = [ {p:"Players", i:"⛹️"}, {p:"Player Rankings", i:"📋", flag:true} ];
+  var past = [ {p:"League Analytics", i:"📈"}, {p:"Player Trends", i:"📉", flag:true} ];
+  if (SR) past.push({p:"Standings Race", i:"🏁", sr:true});
+  var future = [ {p:"Projections", i:"🔭", flag:true}, {p:"Estimator", i:"🔮"}, {p:"Feature Store", i:"🗄️", fs:true} ];
+  var trade = {p:"Trade Analyzer", i:"🔄"};
+  if (tradeAt === 'players') players.push(trade);
+  else if (tradeAt === 'forecast') future.splice(2, 0, trade);
+  else league.push(trade);
+
+  return [
+    { key:"league",  g:nameOf("league"),  i:iconOf("league"),  kids:league },
+    { key:"players", g:nameOf("players"), i:iconOf("players"), kids:players },
+    { key:"past",    g:nameOf("past"),    i:iconOf("past"),    kids:past },
+    { key:"future",  g:nameOf("future"),  i:iconOf("future"),  kids:future },
+    { key:"nba",     g:nameOf("nba"),     i:iconOf("nba"),     kids:[ {p:"NBA Teams", i:"🏀"}, {p:"Injuries", i:"🩺"} ] }
+  ];
+}
+var NAV = buildNav();
+
+function visible(kids) { return kids.filter(function(k){ return (!k.fs || FS) && (!k.sr || SR); }); }
+function pathTo(page) {
+  for (var i = 0; i < NAV.length; i++)
+    if (visible(NAV[i].kids).some(function(k){ return k.p === page; })) return NAV[i].g + " ▸ " + page;
+  return page;
+}
+
+function renderComposer() {
+  var labels = {
+    league:  ["Current league state", "Rankings, Teams, Draft Report"],
+    players: ["Player data", "Players, Player Rankings"],
+    past:    ["Change over a window", "League Analytics, Player Trends"],
+    future:  ["Model output", "Projections, Estimator"],
+    nba:     ["Real NBA reference", "NBA Teams, Injuries"]
+  };
+  var html = '';
+  Object.keys(CHOICES).forEach(function(k) {
+    html += '<div class="namerow"><div class="who"><b>' + labels[k][0] + '</b>' + labels[k][1] + '</div>';
+    CHOICES[k].forEach(function(c) {
+      html += '<span class="nbtn' + (picked[k] === c[0] ? ' active' : '') + '" onclick="pick(\'' + k + '\',\'' + c[0] + '\')">' +
+              c[1] + ' ' + c[0] + '</span>';
+    });
+    html += '</div>';
+  });
+  document.getElementById('composer').innerHTML = html;
+}
+
+function renderNav() {
+  var html = '<span class="brand" data-page="Dashboard (home)">🏀 Fantasy League</span>';
+  NAV.forEach(function(n) {
+    var kids = visible(n.kids);
+    var act = kids.some(function(k){ return k.p === curPage; });
+    html += '<span class="navitem group' + (act ? ' active' : '') + (openGroup === n.g ? ' open' : '') +
+            '" data-group="' + n.g + '">' + n.i + ' <span class="txt">' + n.g + '</span><span class="caret">▾</span><div class="dropdown">';
+    kids.forEach(function(k) {
+      html += '<div data-page="' + k.p + '" class="' + (k.p === curPage ? 'active ' : '') + (k.fs ? 'flagged' : '') + '">' +
+              k.i + ' ' + k.p + (k.fs ? ' <span style="font-size:10px;">(dev)</span>' : '') + '</div>';
+    });
+    html += '</div></span>';
+  });
+  var nav = document.getElementById('nav');
+  nav.innerHTML = html;
+  nav.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation(); curPage = el.getAttribute('data-page'); openGroup = null; redraw();
+    });
+  });
+  nav.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      if (e.target.closest('.dropdown')) return;
+      e.stopPropagation();
+      var g = el.getAttribute('data-group');
+      openGroup = (openGroup === g) ? null : g;
+      renderNav();
+    });
+  });
+}
+
+function renderMob() {
+  var html = '';
+  NAV.forEach(function(n) {
+    var kids = visible(n.kids);
+    var act = kids.some(function(k){ return k.p === curPage; });
+    var isOpen = mobOpenGroup === n.g;
+    html += '<div class="mobrow grp' + (act ? ' active' : '') + (isOpen ? ' open' : '') + '" data-group="' + n.g +
+            '"><span>' + n.i + ' ' + n.g + '</span><span class="caret">▾</span></div><div class="mobsubwrap' + (isOpen ? ' open' : '') + '">';
+    kids.forEach(function(k) {
+      html += '<div class="mobsub' + (k.p === curPage ? ' active' : '') + (k.fs ? ' flagged' : '') + '" data-page="' + k.p + '">' +
+              k.i + ' ' + k.p + (k.fs ? ' (dev)' : '') + '</div>';
+    });
+    html += '</div>';
+  });
+  var mob = document.getElementById('mob');
+  mob.innerHTML = html;
+  mob.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function() { curPage = el.getAttribute('data-page'); redraw(); });
+  });
+  mob.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var g = el.getAttribute('data-group');
+      mobOpenGroup = (mobOpenGroup === g) ? null : g;
+      renderMob();
+    });
+  });
+}
+
+function renderMeta() {
+  var biggest = 0, thin = 0, total = 0;
+  NAV.forEach(function(n) {
+    var c = visible(n.kids).length;
+    total += c;
+    biggest = Math.max(biggest, c);
+    if (c <= 2) thin++;
+  });
+  document.getElementById('metrics').innerHTML =
+    '<div class="metric">doors<b>' + NAV.length + '</b></div>' +
+    '<div class="metric">pages<b>' + total + '</b></div>' +
+    '<div class="metric' + (biggest > 5 ? ' warn' : '') + '">biggest drawer<b>' + biggest + '</b></div>' +
+    '<div class="metric' + (thin > 2 ? ' warn' : '') + '">drawers with ≤2<b>' + thin + '</b></div>';
+
+  document.getElementById('ruleLeague').innerHTML  = '<b>' + iconOf('league')  + ' ' + nameOf('league')  + '</b>';
+  document.getElementById('rulePlayers').innerHTML = '<b>' + iconOf('players') + ' ' + nameOf('players') + '</b>';
+  document.getElementById('rulePast').innerHTML    = '<b>' + iconOf('past')    + ' ' + nameOf('past')    + '</b>';
+  document.getElementById('ruleFuture').innerHTML  = '<b>' + iconOf('future')  + ' ' + nameOf('future')  + '</b>';
+  document.getElementById('ruleNba').innerHTML     = '<b>' + iconOf('nba')     + ' ' + nameOf('nba')     + '</b>';
+
+  var pages = [
+    ["League Rankings","/rankings","current league state"],
+    ["Teams","/teams","current league state"],
+    ["Draft Report","/draft-report","single past event, no series"],
+    ["Players","/players","player production"],
+    ["Player Rankings","/player-rankings","one weighted snapshot"],
+    ["Trade Analyzer","/trade","compares recorded production, no model"],
+    ["League Analytics","/analytics","date range + rankings over time"],
+    ["Player Trends","/trends","game-log window + baseline seasons"],
+    ["Standings Race","(unrouted)","standings across the season"],
+    ["Projections","/projections","model output — tonight's line"],
+    ["Estimator","/estimator","model output — TeamRankProbability"],
+    ["Feature Store","/feature-store","the model's input store (dev)"],
+    ["NBA Teams","/nba-teams","real NBA depth charts"],
+    ["Injuries","/injuries","official NBA injury report"]
+  ];
+  var rows = '<tr><th>Page</th><th>Route</th><th>Why it lands there</th><th>Lands in</th></tr>';
+  pages.forEach(function(p) {
+    if (p[0] === "Feature Store" && !FS) return;
+    if (p[0] === "Standings Race" && !SR) return;
+    rows += '<tr><td>' + p[0] + '</td><td><code>' + p[1] + '</code></td><td style="color:#6b7280;">' + p[2] +
+            '</td><td><b>' + pathTo(p[0]).split(' ▸ ')[0] + '</b></td></tr>';
+  });
+  document.getElementById('placetable').innerHTML = rows;
+
+  var tradeWord = { players: nameOf('players'), forecast: nameOf('future'), league: nameOf('league') }[tradeAt];
+  document.getElementById('verdict').innerHTML =
+    '<b>Current pick:</b> ' + NAV.map(function(n){ return n.i + ' ' + n.g; }).join(' · ') +
+    ', Trade Analyzer in <b>' + tradeWord + '</b>.' +
+    '<br><br><b>What I\'d take:</b> Trade in ' + (tradeAt === 'players' ? 'Players — matches what the page manipulates' : 'Players rather than ' + tradeWord + ', since the page manipulates players and produces no model output') +
+    '. On names, any preset works — the rule lives in section 5, not in the label, so pick whichever reads fastest to you.' +
+    '<br><br>Say the word and I\'ll write the design doc against whatever is selected above.';
+}
+
+function redraw() {
+  NAV = buildNav();
+  renderComposer(); renderNav(); renderMob(); renderMeta();
+  var txt = 'Now viewing: <b>' + curPage + '</b> <span class="path">— ' + pathTo(curPage) + '</span>';
+  document.getElementById('prev').innerHTML = txt;
+  document.getElementById('prevMob').innerHTML = txt;
+}
+
+function pick(k, v) { picked[k] = v; openGroup = null; mobOpenGroup = null; redraw(); }
+function applyPreset(p) { picked = Object.assign({}, PRESETS[p]); openGroup = null; mobOpenGroup = null; redraw(); }
+function setTrade(t) {
+  tradeAt = t;
+  document.querySelectorAll('[data-trade]').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-trade') === t);
+  });
+  redraw();
+}
+function setWidth(w) {
+  document.getElementById('nav').classList.toggle('compressed', w === 'md');
+  document.getElementById('wMd').classList.toggle('active', w === 'md');
+  document.getElementById('wXl').classList.toggle('active', w === 'xl');
+}
+function toggleFS() { FS = !FS; document.getElementById('fsSwitch').classList.toggle('on', FS); redraw(); }
+function toggleSR() { SR = !SR; document.getElementById('srSwitch').classList.toggle('on', SR); redraw(); }
+document.addEventListener('click', function() { if (openGroup !== null) { openGroup = null; renderNav(); } });
+
+redraw();
+</script>
+</body>
+</html>

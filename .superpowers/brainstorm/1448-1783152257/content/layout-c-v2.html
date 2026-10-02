@@ -1,0 +1,40 @@
+<h2>Layout C, refined</h2>
+<p class="subtitle">Pace moved into the defense strip (it's the opponent's tempo, not the player's own team — found and will fix that bug in the data too). Minutes slider kept below, now 0–48.</p>
+
+<div class="mockup">
+  <div class="mockup-body" style="background:#f8f9fa;padding:16px;border-radius:8px;font-family:system-ui;max-width:520px;">
+    <div style="font-size:11px;color:#888;margin-bottom:4px;">OPPONENT (MIA) DEFENSE — rank (of 30) / allows per game</div>
+    <div style="display:flex;gap:14px;font-size:13px;margin-bottom:12px;flex-wrap:wrap;">
+      <span><b style="color:#b91c1c;">PTS #1</b> <span style="color:#999;">118.5</span></span>
+      <span><b style="color:#666;">REB #6</b> <span style="color:#999;">46.4</span></span>
+      <span><b style="color:#666;">AST #4</b> <span style="color:#999;">27.5</span></span>
+      <span><b style="color:#b91c1c;">STL #1</b> <span style="color:#999;">7.9</span></span>
+      <span><b style="color:#666;">BLK #2</b> <span style="color:#999;">4.9</span></span>
+      <span><b style="color:#15803d;">3PM #22</b> <span style="color:#999;">14.0</span></span>
+      <span><b style="color:#666;">FG% #2</b> <span style="color:#999;">46.5%</span></span>
+      <span><b style="color:#c07a00;">PACE Fast</b> <span style="color:#999;">95.6 vs 100.2 avg</span></span>
+    </div>
+    <div style="font-size:11px;color:#888;margin-bottom:4px;">TONIGHT'S PROJECTION</div>
+    <div style="display:flex;gap:14px;font-size:14px;font-weight:700;margin-bottom:14px;flex-wrap:wrap;">
+      <span>PTS 17</span><span>REB 10</span><span>AST 4</span><span>STL 1</span><span>BLK 1</span><span>3PM 2</span>
+      <span>FG% 43% <span style="font-weight:400;color:#999;font-size:11px;">6/14</span></span>
+      <span>FT% 75% <span style="font-weight:400;color:#999;font-size:11px;">3/4</span></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;border-top:1px dashed #ddd;padding-top:10px;">
+      <span style="font-size:12px;color:#888;">Minutes</span>
+      <input type="range" min="0" max="48" value="33" style="width:160px;">
+      <span style="font-size:13px;font-weight:600;">33</span>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:20px;">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>Looks right — build it</h3></div>
+  </div>
+  <div class="option" data-choice="tweak" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content"><h3>Still needs changes</h3></div>
+  </div>
+</div>

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Draft — interactive demo</title>
+<style>
+:root{
+  --bg:#0b1020;--panel:#121a2f;--panel2:#18223d;--line:#26314f;--text:#e7ecf7;--muted:#8d99b8;
+  --accent:#3b82f6;--accent2:#60a5fa;--warn:#f59e0b;--bad:#ef4444;--good:#22c55e;
+  --PG:#3b82f6;--SG:#8b5cf6;--SF:#10b981;--PF:#f59e0b;--C:#ef4444;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+button{font:inherit;cursor:pointer}
+.top{position:sticky;top:0;z-index:20;background:#070b16;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.top .grp{display:flex;gap:4px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px}
+.top .grp span{color:var(--muted);font-size:11px;padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
+.top button{background:transparent;border:0;color:var(--muted);padding:5px 9px;border-radius:6px;font-weight:600;font-size:12px}
+.top button.on{background:var(--accent);color:#fff}
+.top input[type=range]{width:90px}
+.wrap{padding:10px 12px;display:grid;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.card h3{margin:0;padding:8px 12px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.card h3 .sub{font-weight:500;text-transform:none;letter-spacing:0}
+
+/* layouts */
+.wrap[data-layout=broadcast]{grid-template-columns:1fr;grid-template-areas:"hero" "ticker" "main" "side"}
+.wrap[data-layout=board]{grid-template-columns:1fr;grid-template-areas:"ticker" "main" "hero" "side"}
+.wrap[data-layout=analyst]{grid-template-columns:1fr;grid-template-areas:"hero" "ticker" "side" "main"}
+@media(min-width:1024px){
+  .wrap[data-layout=broadcast]{grid-template-columns:2fr 1fr;grid-template-areas:"hero hero" "ticker ticker" "main side"}
+  .wrap[data-layout=board]{grid-template-columns:3fr 1fr;grid-template-areas:"ticker ticker" "main hero" "main side"}
+  .wrap[data-layout=analyst]{grid-template-columns:1fr 1fr 1fr;grid-template-areas:"hero hero hero" "ticker ticker ticker" "main side side"}
+}
+#hero{grid-area:hero}#ticker{grid-area:ticker}#main{grid-area:main}#side{grid-area:side;display:grid;gap:10px;align-content:start}
+.wrap[data-layout=board] #hero .hero{grid-template-columns:1fr}
+.wrap[data-layout=board] #hero .ring{width:96px;height:96px}
+.wrap[data-layout=board] #hero .big{font-size:26px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding:14px 16px;background:linear-gradient(120deg,#0f1a3a,#121a2f 60%)}
+@media(max-width:700px){.hero{grid-template-columns:1fr;text-align:center}.hero .nextup{justify-content:center}}
+.ring{position:relative;width:132px;height:132px;margin:auto}
+.ring svg{transform:rotate(-90deg);width:100%;height:100%}
+.ring circle{fill:none;stroke-width:9;stroke-linecap:round}
+.ring .bgc{stroke:#243055}.ring .fg{stroke:var(--accent2);transition:stroke-dashoffset .9s linear,stroke .3s}
+.ring .fg.warn{stroke:var(--warn)}.ring .fg.bad{stroke:var(--bad)}
+.ring .lbl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .lbl b{font-size:34px;font-variant-numeric:tabular-nums;line-height:1}
+.ring .lbl small{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.otc .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.otc .big{font-size:30px;font-weight:800;line-height:1.1;display:flex;align-items:center;gap:10px}
+@media(max-width:700px){.otc .big{justify-content:center}}
+.otc .big img{width:38px;height:38px;border-radius:50%;background:#fff;object-fit:cover}
+.otc .owner{color:var(--muted);font-size:13px;margin-top:2px}
+.otc .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12px;color:var(--muted)}
+.otc .meta b{color:var(--text)}
+.nextup{display:flex;gap:6px;flex-wrap:wrap}
+.nextup .chip{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-width:88px}
+.nextup .chip small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase}
+.nextup .chip b{font-size:12px}
+.lastpick{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:200px}
+.lastpick .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.lastpick .n{font-weight:700;font-size:15px}
+.lastpick .t{color:var(--muted);font-size:12px}
+.flash{animation:flash 1.2s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(96,165,250,.9)}100%{box-shadow:0 0 0 18px rgba(96,165,250,0)}}
+.lobby{padding:24px 16px;text-align:center}
+.lobby .cd{font-size:44px;font-weight:800;font-variant-numeric:tabular-nums}
+.lobby .order{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:14px}
+.lobby .order div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12px}
+.lobby .order div b{display:block;font-size:16px}
+
+/* ticker */
+.tk{display:flex;overflow-x:auto;scroll-behavior:smooth}
+.tk .c{flex:0 0 118px;padding:6px 8px;border-right:1px solid var(--line);min-height:56px}
+.tk .c small{display:block;font-size:10px;color:var(--muted);text-transform:uppercase}
+.tk .c b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk .c i{display:block;font-style:normal;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk .c.now{background:var(--accent);color:#fff}.tk .c.now small,.tk .c.now i{color:#dbeafe}
+.tk .r{flex:0 0 40px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--muted);border-right:1px solid var(--line);background:#0e1529}
+
+/* tabs */
+.tabs{display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{background:transparent;border:0;color:var(--muted);padding:8px 12px;font-weight:600;font-size:13px;border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button.on{color:var(--text);border-color:var(--accent)}
+.pane{display:none;padding:10px}.pane.on{display:block}
+
+/* board grid */
+.board{overflow:auto;max-height:70vh}
+.board table{border-collapse:separate;border-spacing:3px;min-width:900px}
+.board th{position:sticky;top:0;background:var(--panel);font-size:10px;color:var(--muted);padding:4px 2px;text-transform:uppercase;z-index:2}
+.board th img{width:22px;height:22px;border-radius:50%;background:#fff;display:block;margin:0 auto 2px}
+.board td{width:110px;height:44px;vertical-align:top;border-radius:6px;background:var(--panel2);padding:4px 6px;font-size:11px;position:relative;border-left:3px solid transparent}
+.board td.rn{width:34px;min-width:34px;background:transparent;color:var(--muted);font-weight:800;text-align:center;vertical-align:middle;position:sticky;left:0;z-index:1}
+.board td b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.board td small{color:var(--muted);font-size:10px}
+.board td.now{outline:2px solid var(--accent2);animation:pulse 1.4s infinite}
+.board td.new{animation:flash 1.2s ease-out}
+.board td .tag{position:absolute;right:4px;top:4px;font-size:9px;font-weight:800;padding:1px 4px;border-radius:4px}
+.board td.p-PG{border-left-color:var(--PG)}.board td.p-SG{border-left-color:var(--SG)}.board td.p-SF{border-left-color:var(--SF)}.board td.p-PF{border-left-color:var(--PF)}.board td.p-C{border-left-color:var(--C)}
+@keyframes pulse{0%,100%{outline-color:var(--accent2)}50%{outline-color:transparent}}
+.tag.steal{background:#14532d;color:#86efac}.tag.reach{background:#7f1d1d;color:#fca5a5}.tag.auto{background:#374151;color:#d1d5db}.tag.inj{background:#78350f;color:#fcd34d}
+
+/* feed */
+.feed{display:grid;gap:6px;max-height:70vh;overflow:auto}
+.feed .row{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;background:var(--panel2);border-radius:8px;padding:6px 10px}
+.feed .row .pk{font-weight:800;color:var(--muted);font-size:12px}.feed .row .pk b{display:block;color:var(--text);font-size:14px}
+.feed .row .nm{font-weight:700}.feed .row .tm{color:var(--muted);font-size:12px}
+.feed .row .rt{text-align:right;font-size:11px;color:var(--muted)}
+.feed .row .rt b{display:block;font-size:12px}
+.pos{display:inline-block;font-size:9px;font-weight:800;padding:1px 4px;border-radius:3px;color:#fff;margin-left:4px;vertical-align:middle}
+.pos.PG{background:var(--PG)}.pos.SG{background:var(--SG)}.pos.SF{background:var(--SF)}.pos.PF{background:var(--PF)}.pos.C{background:var(--C)}
+
+/* teams */
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.team{background:var(--panel2);border-radius:10px;padding:8px 10px;border:1px solid var(--line)}
+.team.now{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(96,165,250,.3)}
+.team .hd{display:flex;align-items:center;gap:8px}.team .hd img{width:26px;height:26px;border-radius:50%;background:#fff}
+.team .hd b{font-size:13px;display:block}.team .hd small{color:var(--muted)}
+.team .bars{display:flex;gap:3px;margin:8px 0 6px}
+.team .bars div{flex:1;height:6px;border-radius:3px;background:#243055;position:relative}
+.team .bars div i{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.team .bars div span{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:9px;color:var(--muted)}
+.team ol{margin:16px 0 0;padding:0;list-style:none;font-size:11px;color:var(--muted)}
+.team ol li{display:flex;justify-content:space-between;padding:1px 0}
+.team ol li b{color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.team .grade{margin-left:auto;font-weight:800;font-size:14px;padding:2px 8px;border-radius:6px;background:#243055}
+
+/* side widgets */
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px;padding:10px}
+.kv div{background:var(--panel2);border-radius:8px;padding:8px}
+.kv small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.kv b{font-size:18px;font-variant-numeric:tabular-nums}
+.list{padding:6px 10px;display:grid;gap:4px}
+.list .li{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 6px;border-radius:6px;background:var(--panel2)}
+.list .li .n{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list .li .v{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px}
+.alert{margin:8px 10px;background:#3b2a05;border:1px solid #92400e;color:#fde68a;border-radius:8px;padding:8px 10px;font-size:12px}
+.alert.blue{background:#0c2a5a;border-color:#1d4ed8;color:#bfdbfe}
+.runbar{display:flex;gap:2px;padding:0 10px 10px}.runbar i{flex:1;height:14px;border-radius:2px;opacity:.9}
+.hbar{display:grid;gap:5px;padding:6px 10px}
+.hbar .h{display:grid;grid-template-columns:60px 1fr 40px;gap:8px;align-items:center;font-size:11px}
+.hbar .h i{height:8px;border-radius:4px;background:var(--accent);display:block}
+.hbar .h span{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.toasts{position:fixed;right:12px;bottom:12px;display:grid;gap:6px;z-index:30;max-width:280px}
+.toast{background:#0c2a5a;border:1px solid #1d4ed8;border-radius:10px;padding:8px 10px;font-size:12px;animation:in .25s ease-out}
+.toast b{display:block;font-size:13px}
+@keyframes in{from{transform:translateY(10px);opacity:0}}
+.note{color:var(--muted);font-size:11px;padding:6px 10px}
+.done{padding:18px;text-align:center}
+.done .big{font-size:26px;font-weight:800}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="grp"><span>Phase</span><button data-phase="lobby">Lobby</button><button data-phase="live" class="on">Live</button><button data-phase="done">Done</button></div>
+  <div class="grp"><span>Layout</span><button data-layout="broadcast" class="on">A · Broadcast</button><button data-layout="board">B · Board-first</button><button data-layout="analyst">C · Analyst</button></div>
+  <div class="grp"><span>Sim</span><button id="play">⏸ Pause</button><button id="step">Step ▶</button><button id="reset">↺</button><span>speed</span><input id="speed" type="range" min="1" max="30" value="10"><span id="speedv">10×</span></div>
+  <div class="grp"><span>Poll</span><input id="poll" type="range" min="2" max="15" value="5"><span id="pollv">5s</span></div>
+  <div class="grp"><span>Clock</span><button data-clock="derived" class="on">Derived</button><button data-clock="pace">Pace only</button></div>
+</div>
+
+<div class="wrap" data-layout="broadcast">
+  <div id="hero" class="card"></div>
+  <div id="ticker" class="card"><div class="tk" id="tk"></div></div>
+  <div id="main" class="card">
+    <div class="tabs">
+      <button data-tab="board" class="on">Draft board</button>
+      <button data-tab="feed">Pick feed</button>
+      <button data-tab="teams">Teams</button>
+      <button data-tab="trends">Trends</button>
+    </div>
+    <div class="pane on" data-pane="board"><div class="board" id="board"></div></div>
+    <div class="pane" data-pane="feed"><div class="feed" id="feed"></div></div>
+    <div class="pane" data-pane="teams"><div class="teams" id="teams"></div></div>
+    <div class="pane" data-pane="trends" id="trends"></div>
+  </div>
+  <div id="side"></div>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script id="data" type="application/json">{"teams":{"1":{"abbrev":"ASAF","name":"Asaf's Astounding Team","logo":"https://mystique-api.fantasy.espn.com/apis/v1/domains/lm/images/6c931e60-a14d-11f0-b1c3-bf61c28fbeb9","owner":"Asaf"},"2":{"abbrev":"AAT","name":"Alon's Angry Team","logo":"https://g.espncdn.com/lm-static/logo-packs/core/Sneakerhead-ESPN/sneakerhead-07.svg","owner":"Alon"},"3":{"abbrev":"OOT","name":"Oriel's Otherworldly Team","logo":"https://g.espncdn.com/lm-static/fba/images/default_logos/20.svg","owner":"Oriel"},"4":{"abbrev":"CADE","name":"DORTAHTIT","logo":"https://g.espncdn.com/lm-static/logo-packs/core/AnimalHeads/animal_heads-5.svg","owner":"Dor"},"5":{"abbrev":"GPT","name":"Chat GPT","logo":"https://g.espncdn.com/lm-static/logo-packs/core/DIS_Avengers_EndGame/DIS_Avengers_EndGame_Hulk.svg","owner":"Eitam"},"6":{"abbrev":"RRT","name":"Roy's Rowdy Team","logo":"https://g.espncdn.com/lm-static/logo-packs/core/Mascots/mascots-5.svg","owner":"Roy"},"7":{"abbrev":"KD","name":"The Real KD","logo":"https://g.espncdn.com/lm-static/logo-packs/fba/AtTheArena-RobbHarskamp/Basketball_At_The_Arena-07.svg","owner":"Kedem"},"8":{"abbrev":"DOR","name":"50 Shades of Shai","logo":"https://mystique-api.fantasy.espn.com/apis/v1/domains/lm/images/41c12ca0-a377-11f0-b1c3-bf61c28fbeb9","owner":"Dor"},"9":{"abbrev":"KHT","name":"Khachapuri’s Team","logo":"https://g.espncdn.com/lm-static/logo-packs/core/AnimalHeads/animal_heads-14.svg","owner":"Idan"},"10":{"abbrev":"AMI","name":"Amihai's Awesome Team 🏆","logo":"https://g.espncdn.com/lm-static/fba/images/default_logos/5.svg","owner":"Amihai"},"11":{"abbrev":"HHT","name":"Trust the process","logo":"https://g.espncdn.com/lm-static/logo-packs/core/AnimalHeads/animal_heads-15.svg","owner":"HANAN"},"12":{"abbrev":"BBT","name":"Barak's Best Team🏀","logo":"https://g.espncdn.com/lm-static/logo-packs/fba/AtTheArena-RobbHarskamp/Basketball_At_The_Arena-01.svg","owner":"Barak"}},"pickOrder":[7,11,9,6,10,1,4,5,12,3,8,2],"timePerSelection":90,"picks":[{"pick":1,"round":1,"rp":1,"team":2,"auto":0,"slot":"C","pid":3112335,"name":"Nikola Jokic","pos":["C"],"adp":1.78,"rank":1,"pro":7,"inj":"ACTIVE"},{"pick":2,"round":1,"rp":2,"team":8,"auto":0,"slot":"PG","pid":4278073,"name":"Shai Gilgeous-Alexander","pos":["PG"],"adp":2.97,"rank":3,"pro":25,"inj":"ACTIVE"},{"pick":3,"round":1,"rp":3,"team":3,"auto":0,"slot":"C","pid":5104157,"name":"Victor Wembanyama","pos":["C"],"adp":2.95,"rank":2,"pro":24,"inj":"ACTIVE"},{"pick":4,"round":1,"rp":4,"team":12,"auto":0,"slot":"PG","pid":3945274,"name":"Luka Doncic","pos":["PG"],"adp":4.61,"rank":4,"pro":13,"inj":"ACTIVE"},{"pick":5,"round":1,"rp":5,"team":5,"auto":0,"slot":"SG","pid":4594268,"name":"Anthony Edwards","pos":["SG","SF"],"adp":6.75,"rank":5,"pro":16,"inj":"ACTIVE"},{"pick":6,"round":1,"rp":6,"team":4,"auto":0,"slot":"PG","pid":4432166,"name":"Cade Cunningham","pos":["PG","SG"],"adp":8.37,"rank":11,"pro":8,"inj":"ACTIVE"},{"pick":7,"round":1,"rp":7,"team":1,"auto":0,"slot":"PG","pid":3992,"name":"James Harden","pos":["PG","SG"],"adp":18.19,"rank":25,"pro":5,"inj":"ACTIVE"},{"pick":8,"round":1,"rp":8,"team":10,"auto":0,"slot":"PF","pid":3032977,"name":"Giannis Antetokounmpo","pos":["PF","C"],"adp":5.25,"rank":20,"pro":15,"inj":"DAY_TO_DAY"},{"pick":9,"round":1,"rp":9,"team":6,"auto":0,"slot":"PG","pid":4277905,"name":"Trae Young","pos":["PG"],"adp":21.98,"rank":47,"pro":27,"inj":"DAY_TO_DAY"},{"pick":10,"round":1,"rp":10,"team":9,"auto":0,"slot":"PG","pid":3136193,"name":"Devin Booker","pos":["PG","SG"],"adp":19.91,"rank":40,"pro":21,"inj":"ACTIVE"},{"pick":11,"round":1,"rp":11,"team":11,"auto":0,"slot":"C","pid":6583,"name":"Anthony Davis","pos":["PF","C"],"adp":13.8,"rank":14,"pro":27,"inj":"DAY_TO_DAY"},{"pick":12,"round":1,"rp":12,"team":7,"auto":0,"slot":"C","pid":3136195,"name":"Karl-Anthony Towns","pos":["PF","C"],"adp":14.96,"rank":19,"pro":18,"inj":"ACTIVE"},{"pick":13,"round":2,"rp":1,"team":7,"auto":0,"slot":"PG","pid":3975,"name":"Stephen Curry","pos":["PG"],"adp":20.47,"rank":33,"pro":9,"inj":"ACTIVE"},{"pick":14,"round":2,"rp":2,"team":11,"auto":0,"slot":"PG","pid":4431678,"name":"Tyrese Maxey","pos":["PG","SG"],"adp":17.29,"rank":6,"pro":20,"inj":"ACTIVE"},{"pick":15,"round":2,"rp":3,"team":9,"auto":0,"slot":"PF","pid":3202,"name":"Kevin Durant","pos":["SF","PF"],"adp":25.86,"rank":28,"pro":10,"inj":"DAY_TO_DAY"},{"pick":16,"round":2,"rp":4,"team":6,"auto":0,"slot":"C","pid":3155942,"name":"Domantas Sabonis","pos":["PF","C"],"adp":19.03,"rank":32,"pro":23,"inj":"DAY_TO_DAY"},{"pick":17,"round":2,"rp":5,"team":10,"auto":0,"slot":"SF","pid":5041939,"name":"Cooper Flagg","pos":["PG","SF","PF"],"adp":23.49,"rank":17,"pro":6,"inj":"ACTIVE"},{"pick":18,"round":2,"rp":6,"team":1,"auto":0,"slot":"PF","pid":4432158,"name":"Evan Mobley","pos":["PF","C"],"adp":34.13,"rank":27,"pro":5,"inj":"ACTIVE"},{"pick":19,"round":2,"rp":7,"team":4,"auto":0,"slot":"SF","pid":4684740,"name":"Amen Thompson","pos":["SG","SF","PF"],"adp":19.38,"rank":13,"pro":10,"inj":"ACTIVE"},{"pick":20,"round":2,"rp":8,"team":5,"auto":0,"slot":"PF","pid":4593803,"name":"Jalen Williams","pos":["SF","PF","C"],"adp":31.85,"rank":35,"pro":25,"inj":"DAY_TO_DAY"},{"pick":21,"round":2,"rp":9,"team":12,"auto":0,"slot":"C","pid":4871144,"name":"Alperen Sengun","pos":["C"],"adp":31.79,"rank":29,"pro":10,"inj":"ACTIVE"},{"pick":22,"round":2,"rp":10,"team":3,"auto":0,"slot":"PG","pid":3934672,"name":"Jalen Brunson","pos":["PG"],"adp":20.75,"rank":30,"pro":18,"inj":"DAY_TO_DAY"},{"pick":23,"round":2,"rp":11,"team":8,"auto":0,"slot":"PF","pid":4701230,"name":"Jalen Johnson","pos":["PF"],"adp":33.78,"rank":9,"pro":1,"inj":"ACTIVE"},{"pick":24,"round":2,"rp":12,"team":2,"auto":0,"slot":"SF","pid":4433134,"name":"Scottie Barnes","pos":["SG","SF","PF"],"adp":29.96,"rank":10,"pro":28,"inj":"ACTIVE"},{"pick":25,"round":3,"rp":1,"team":7,"auto":0,"slot":"SG","pid":3078576,"name":"Derrick White","pos":["PG","SG"],"adp":54.76,"rank":16,"pro":2,"inj":"ACTIVE"},{"pick":26,"round":3,"rp":2,"team":11,"auto":0,"slot":"G","pid":4432816,"name":"LaMelo Ball","pos":["PG"],"adp":31.05,"rank":22,"pro":30,"inj":"ACTIVE"},{"pick":27,"round":3,"rp":3,"team":9,"auto":0,"slot":"C","pid":4433255,"name":"Chet Holmgren","pos":["PF","C"],"adp":46.63,"rank":51,"pro":25,"inj":"ACTIVE"},{"pick":28,"round":3,"rp":4,"team":6,"auto":0,"slot":"SF","pid":3917376,"name":"Jaylen Brown","pos":["SG","SF"],"adp":19.25,"rank":62,"pro":2,"inj":"ACTIVE"},{"pick":29,"round":3,"rp":5,"team":10,"auto":0,"slot":"PG","pid":4279888,"name":"Ja Morant","pos":["PG"],"adp":47.51,"rank":133,"pro":29,"inj":"DAY_TO_DAY"},{"pick":30,"round":3,"rp":6,"team":1,"auto":0,"slot":"SG","pid":4871145,"name":"Josh Giddey","pos":["PG","SG","SF"],"adp":31.11,"rank":36,"pro":4,"inj":"DAY_TO_DAY"},{"pick":31,"round":3,"rp":7,"team":4,"auto":0,"slot":"C","pid":4066261,"name":"Bam Adebayo","pos":["PF","C"],"adp":30.18,"rank":15,"pro":14,"inj":"DAY_TO_DAY"},{"pick":32,"round":3,"rp":8,"team":5,"auto":0,"slot":"PG","pid":3908809,"name":"Donovan Mitchell","pos":["PG","SG"],"adp":21.92,"rank":7,"pro":5,"inj":"ACTIVE"},{"pick":33,"round":3,"rp":9,"team":12,"auto":0,"slot":"PF","pid":3149673,"name":"Pascal Siakam","pos":["PF"],"adp":23.88,"rank":24,"pro":11,"inj":"ACTIVE"},{"pick":34,"round":3,"rp":10,"team":3,"auto":0,"slot":"SF","pid":4566434,"name":"Franz Wagner","pos":["SF","PF"],"adp":52.48,"rank":65,"pro":19,"inj":"DAY_TO_DAY"},{"pick":35,"round":3,"rp":11,"team":8,"auto":0,"slot":"C","pid":3133628,"name":"Myles Turner","pos":["C"],"adp":77.89,"rank":92,"pro":15,"inj":"ACTIVE"},{"pick":36,"round":3,"rp":12,"team":2,"auto":0,"slot":"PG","pid":3936299,"name":"Jamal Murray","pos":["PG"],"adp":36.71,"rank":21,"pro":7,"inj":"ACTIVE"},{"pick":37,"round":4,"rp":1,"team":2,"auto":0,"slot":"UTIL","pid":4017837,"name":"Ivica Zubac","pos":["C"],"adp":40.75,"rank":81,"pro":11,"inj":"ACTIVE"},{"pick":38,"round":4,"rp":2,"team":8,"auto":0,"slot":"SF","pid":4683021,"name":"Deni Avdija","pos":["SG","SF","PF"],"adp":65.75,"rank":60,"pro":22,"inj":"ACTIVE"},{"pick":39,"round":4,"rp":3,"team":3,"auto":0,"slot":"PF","pid":4432573,"name":"Paolo Banchero","pos":["SF","PF"],"adp":38.11,"rank":75,"pro":19,"inj":"ACTIVE"},{"pick":40,"round":4,"rp":4,"team":12,"auto":0,"slot":"F","pid":4395628,"name":"Zion Williamson","pos":["PF"],"adp":44.8,"rank":95,"pro":3,"inj":"ACTIVE"},{"pick":41,"round":4,"rp":5,"team":5,"auto":0,"slot":"G","pid":4869342,"name":"Dyson Daniels","pos":["PG","SG"],"adp":61.34,"rank":38,"pro":1,"inj":"ACTIVE"},{"pick":42,"round":4,"rp":6,"team":4,"auto":0,"slot":"SG","pid":4066320,"name":"Desmond Bane","pos":["SG","SF"],"adp":49.89,"rank":41,"pro":19,"inj":"ACTIVE"},{"pick":43,"round":4,"rp":7,"team":1,"auto":0,"slot":"SF","pid":4066457,"name":"Austin Reaves","pos":["PG","SG","SF"],"adp":52.43,"rank":50,"pro":13,"inj":"ACTIVE"},{"pick":44,"round":4,"rp":8,"team":10,"auto":0,"slot":"SG","pid":3062679,"name":"Josh Hart","pos":["SG","SF"],"adp":59.54,"rank":97,"pro":18,"inj":"ACTIVE"},{"pick":45,"round":4,"rp":9,"team":6,"auto":0,"slot":"UTIL","pid":6478,"name":"Nikola Vucevic","pos":["C"],"adp":51.84,"rank":103,"pro":2,"inj":"ACTIVE"},{"pick":46,"round":4,"rp":10,"team":9,"auto":0,"slot":"SF","pid":4397688,"name":"Trey Murphy III","pos":["SG","SF"],"adp":76.85,"rank":45,"pro":3,"inj":"ACTIVE"},{"pick":47,"round":4,"rp":11,"team":11,"auto":0,"slot":"SF","pid":4278104,"name":"Michael Porter Jr.","pos":["SF","PF"],"adp":63.69,"rank":42,"pro":17,"inj":"ACTIVE"},{"pick":48,"round":4,"rp":12,"team":7,"auto":0,"slot":"UTIL","pid":3059318,"name":"Joel Embiid","pos":["C"],"adp":53.22,"rank":88,"pro":20,"inj":"ACTIVE"},{"pick":49,"round":5,"rp":1,"team":7,"auto":0,"slot":"G","pid":4395712,"name":"Andrew Nembhard","pos":["PG","SG"],"adp":112.34,"rank":148,"pro":11,"inj":"ACTIVE"},{"pick":50,"round":5,"rp":2,"team":11,"auto":0,"slot":"SG","pid":3064440,"name":"Zach LaVine","pos":["SG","SF"],"adp":91.63,"rank":157,"pro":23,"inj":"DAY_TO_DAY"},{"pick":51,"round":5,"rp":3,"team":9,"auto":0,"slot":"SG","pid":6430,"name":"Jimmy Butler III","pos":["SG","SF","PF"],"adp":85.15,"rank":213,"pro":9,"inj":"OUT"},{"pick":52,"round":5,"rp":4,"team":6,"auto":0,"slot":"PF","pid":1966,"name":"LeBron James","pos":["SF","PF"],"adp":15.06,"rank":73,"pro":13,"inj":"ACTIVE"},{"pick":53,"round":5,"rp":5,"team":10,"auto":0,"slot":"F","pid":4066336,"name":"Lauri Markkanen","pos":["SF","PF"],"adp":87.02,"rank":34,"pro":26,"inj":"ACTIVE"},{"pick":54,"round":5,"rp":6,"team":1,"auto":0,"slot":"F","pid":6450,"name":"Kawhi Leonard","pos":["SF","PF"],"adp":49.59,"rank":18,"pro":12,"inj":"ACTIVE"},{"pick":55,"round":5,"rp":7,"team":4,"auto":0,"slot":"PF","pid":4277961,"name":"Jaren Jackson Jr.","pos":["PF","C"],"adp":75.43,"rank":71,"pro":26,"inj":"DAY_TO_DAY"},{"pick":56,"round":5,"rp":8,"team":5,"auto":0,"slot":"C","pid":4433136,"name":"Walker Kessler","pos":["C"],"adp":79.51,"rank":46,"pro":26,"inj":"ACTIVE"},{"pick":57,"round":5,"rp":9,"team":12,"auto":0,"slot":"UTIL","pid":3102531,"name":"Kristaps Porzingis","pos":["PF","C"],"adp":100.93,"rank":80,"pro":9,"inj":"ACTIVE"},{"pick":58,"round":5,"rp":10,"team":3,"auto":0,"slot":"G","pid":4066259,"name":"De'Aaron Fox","pos":["PG"],"adp":41.84,"rank":52,"pro":24,"inj":"ACTIVE"},{"pick":59,"round":5,"rp":11,"team":8,"auto":0,"slot":"SG","pid":4433287,"name":"Brandon Miller","pos":["SG","SF"],"adp":104.59,"rank":54,"pro":30,"inj":"DAY_TO_DAY"},{"pick":60,"round":5,"rp":12,"team":2,"auto":0,"slot":"SG","pid":4395651,"name":"Coby White","pos":["PG","SG"],"adp":64.05,"rank":106,"pro":30,"inj":"ACTIVE"},{"pick":61,"round":6,"rp":1,"team":2,"auto":0,"slot":"UTIL","pid":3134908,"name":"Jakob Poeltl","pos":["C"],"adp":95.14,"rank":116,"pro":28,"inj":"ACTIVE"},{"pick":62,"round":6,"rp":2,"team":8,"auto":0,"slot":"G","pid":4066354,"name":"Payton Pritchard","pos":["PG"],"adp":101.35,"rank":98,"pro":2,"inj":"ACTIVE"},{"pick":63,"round":6,"rp":3,"team":3,"auto":0,"slot":"SG","pid":4437244,"name":"Jalen Green","pos":["SG"],"adp":71.64,"rank":129,"pro":21,"inj":"ACTIVE"},{"pick":64,"round":6,"rp":4,"team":12,"auto":0,"slot":"SG","pid":4277956,"name":"Jordan Poole","pos":["PG","SG"],"adp":95.17,"rank":238,"pro":3,"inj":"ACTIVE"},{"pick":65,"round":6,"rp":5,"team":5,"auto":0,"slot":"SF","pid":3978,"name":"DeMar DeRozan","pos":["SF","PF"],"adp":55.12,"rank":102,"pro":23,"inj":"ACTIVE"},{"pick":66,"round":6,"rp":6,"team":4,"auto":0,"slot":"G","pid":2595516,"name":"Norman Powell","pos":["SG","SF"],"adp":101.12,"rank":64,"pro":14,"inj":"ACTIVE"},{"pick":67,"round":6,"rp":7,"team":1,"auto":0,"slot":"C","pid":4278129,"name":"Deandre Ayton","pos":["C"],"adp":117.62,"rank":190,"pro":13,"inj":"ACTIVE"},{"pick":68,"round":6,"rp":8,"team":10,"auto":0,"slot":"G","pid":3147657,"name":"Mikal Bridges","pos":["SG","SF"],"adp":68.54,"rank":26,"pro":18,"inj":"ACTIVE"},{"pick":69,"round":6,"rp":9,"team":6,"auto":0,"slot":"UTIL","pid":4701232,"name":"Mark Williams","pos":["C"],"adp":117.84,"rank":313,"pro":21,"inj":"OUT"},{"pick":70,"round":6,"rp":10,"team":9,"auto":0,"slot":"F","pid":3934719,"name":"OG Anunoby","pos":["SF","PF"],"adp":71.78,"rank":68,"pro":18,"inj":"ACTIVE"},{"pick":71,"round":6,"rp":11,"team":11,"auto":0,"slot":"UTIL","pid":4066328,"name":"Jarrett Allen","pos":["C"],"adp":64.81,"rank":49,"pro":5,"inj":"ACTIVE"},{"pick":72,"round":6,"rp":12,"team":7,"auto":0,"slot":"SF","pid":4914336,"name":"Shaedon Sharpe","pos":["SG","SF"],"adp":120.93,"rank":329,"pro":22,"inj":"OUT"},{"pick":73,"round":7,"rp":1,"team":7,"auto":0,"slot":"PF","pid":4684742,"name":"Ausar Thompson","pos":["SF","PF"],"adp":109.6,"rank":78,"pro":8,"inj":"ACTIVE"},{"pick":74,"round":7,"rp":2,"team":11,"auto":0,"slot":"PF","pid":3908845,"name":"John Collins","pos":["PF","C"],"adp":115.29,"rank":99,"pro":12,"inj":"ACTIVE"},{"pick":75,"round":7,"rp":3,"team":9,"auto":0,"slot":"UTIL","pid":4433621,"name":"Jalen Duren","pos":["C"],"adp":66.07,"rank":23,"pro":8,"inj":"ACTIVE"},{"pick":76,"round":7,"rp":4,"team":6,"auto":2,"slot":"UTIL","pid":5160992,"name":"Alex Sarr","pos":["C"],"adp":95.73,"rank":61,"pro":27,"inj":"DAY_TO_DAY"},{"pick":77,"round":7,"rp":5,"team":10,"auto":0,"slot":"C","pid":4222252,"name":"Isaiah Hartenstein","pos":["C"],"adp":121.63,"rank":132,"pro":25,"inj":"DAY_TO_DAY"},{"pick":78,"round":7,"rp":6,"team":1,"auto":0,"slot":"G","pid":4396907,"name":"Darius Garland","pos":["PG"],"adp":87.67,"rank":53,"pro":12,"inj":"ACTIVE"},{"pick":79,"round":7,"rp":7,"team":4,"auto":0,"slot":"F","pid":4431767,"name":"Christian Braun","pos":["SG","SF"],"adp":101.58,"rank":211,"pro":7,"inj":"ACTIVE"},{"pick":80,"round":7,"rp":8,"team":5,"auto":0,"slot":"UTIL","pid":4395725,"name":"Tyler Herro","pos":["PG","SG"],"adp":80.37,"rank":63,"pro":14,"inj":"DAY_TO_DAY"},{"pick":81,"round":7,"rp":9,"team":12,"auto":0,"slot":"SF","pid":4066383,"name":"Miles Bridges","pos":["SF","PF"],"adp":75.73,"rank":76,"pro":30,"inj":"ACTIVE"},{"pick":82,"round":7,"rp":10,"team":3,"auto":0,"slot":"UTIL","pid":3032976,"name":"Rudy Gobert","pos":["C"],"adp":86.84,"rank":55,"pro":16,"inj":"ACTIVE"},{"pick":83,"round":7,"rp":11,"team":8,"auto":0,"slot":"F","pid":3064514,"name":"Julius Randle","pos":["PF"],"adp":82.61,"rank":86,"pro":16,"inj":"ACTIVE"},{"pick":84,"round":7,"rp":12,"team":2,"auto":0,"slot":"PF","pid":4395625,"name":"RJ Barrett","pos":["SG","SF","PF"],"adp":101.66,"rank":139,"pro":28,"inj":"ACTIVE"},{"pick":85,"round":8,"rp":1,"team":2,"auto":0,"slot":"G","pid":4351851,"name":"Anfernee Simons","pos":["PG","SG"],"adp":111.07,"rank":221,"pro":4,"inj":"ACTIVE"},{"pick":86,"round":8,"rp":2,"team":8,"auto":0,"slot":"UTIL","pid":4395724,"name":"Immanuel Quickley","pos":["PG","SG"],"adp":118.1,"rank":90,"pro":28,"inj":"ACTIVE"},{"pick":87,"round":8,"rp":3,"team":3,"auto":0,"slot":"F","pid":3138196,"name":"Cameron Johnson","pos":["SF","PF"],"adp":139.16,"rank":140,"pro":7,"inj":"ACTIVE"},{"pick":88,"round":8,"rp":4,"team":12,"auto":0,"slot":"UTIL","pid":3913176,"name":"Brandon Ingram","pos":["SF"],"adp":87.79,"rank":79,"pro":28,"inj":"DAY_TO_DAY"},{"pick":89,"round":8,"rp":5,"team":5,"auto":0,"slot":"F","pid":4396971,"name":"Naz Reid","pos":["PF","C"],"adp":97.29,"rank":37,"pro":16,"inj":"ACTIVE"},{"pick":90,"round":8,"rp":6,"team":4,"auto":0,"slot":"UTIL","pid":4432174,"name":"Cam Thomas","pos":["SG","SF"],"adp":125.68,"rank":354,"pro":0,"inj":"ACTIVE"},{"pick":91,"round":8,"rp":7,"team":1,"auto":0,"slot":"UTIL","pid":4711294,"name":"Matas Buzelis","pos":["SF","PF"],"adp":121.05,"rank":59,"pro":4,"inj":"ACTIVE"},{"pick":92,"round":8,"rp":8,"team":10,"auto":0,"slot":"UTIL","pid":4683634,"name":"Bennedict Mathurin","pos":["SG","SF"],"adp":129.99,"rank":186,"pro":12,"inj":"ACTIVE"},{"pick":93,"round":8,"rp":9,"team":6,"auto":0,"slot":"SG","pid":4066262,"name":"Malik Monk","pos":["PG","SG","SF"],"adp":121.39,"rank":158,"pro":23,"inj":"ACTIVE"},{"pick":94,"round":8,"rp":10,"team":9,"auto":0,"slot":"G","pid":4395630,"name":"Devin Vassell","pos":["SG","SF"],"adp":126.26,"rank":128,"pro":24,"inj":"ACTIVE"},{"pick":95,"round":8,"rp":11,"team":11,"auto":0,"slot":"UTIL","pid":4397140,"name":"Kevin Porter Jr.","pos":["PG","SG"],"adp":96.37,"rank":109,"pro":15,"inj":"DAY_TO_DAY"},{"pick":96,"round":8,"rp":12,"team":7,"auto":0,"slot":"UTIL","pid":4433218,"name":"Jaden Ivey","pos":["PG","SG"],"adp":140.18,"rank":364,"pro":0,"inj":"DAY_TO_DAY"},{"pick":97,"round":9,"rp":1,"team":7,"auto":0,"slot":"UTIL","pid":5105565,"name":"Donovan Clingan","pos":["C"],"adp":107.66,"rank":43,"pro":22,"inj":"ACTIVE"},{"pick":98,"round":9,"rp":2,"team":11,"auto":0,"slot":"F","pid":4065732,"name":"De'Andre Hunter","pos":["SF","PF"],"adp":139.78,"rank":202,"pro":23,"inj":"DAY_TO_DAY"},{"pick":99,"round":9,"rp":3,"team":9,"auto":0,"slot":"UTIL","pid":4431680,"name":"Onyeka Okongwu","pos":["C"],"adp":93.27,"rank":44,"pro":1,"inj":"ACTIVE"},{"pick":100,"round":9,"rp":4,"team":6,"auto":0,"slot":"F","pid":4431671,"name":"Jaden McDaniels","pos":["SF"],"adp":97.97,"rank":84,"pro":16,"inj":"ACTIVE"},{"pick":101,"round":9,"rp":5,"team":10,"auto":0,"slot":"UTIL","pid":2490149,"name":"CJ McCollum","pos":["PG","SG"],"adp":99.81,"rank":82,"pro":1,"inj":"ACTIVE"},{"pick":102,"round":9,"rp":6,"team":1,"auto":0,"slot":"UTIL","pid":3059319,"name":"Andrew Wiggins","pos":["SF","PF"],"adp":95.85,"rank":87,"pro":14,"inj":"ACTIVE"},{"pick":103,"round":9,"rp":7,"team":4,"auto":0,"slot":"UTIL","pid":4431736,"name":"Toumani Camara","pos":["SF","PF"],"adp":131.59,"rank":131,"pro":22,"inj":"ACTIVE"},{"pick":104,"round":9,"rp":8,"team":5,"auto":0,"slot":"UTIL","pid":4277813,"name":"Herbert Jones","pos":["SF","PF"],"adp":139.94,"rank":192,"pro":3,"inj":"ACTIVE"},{"pick":105,"round":9,"rp":9,"team":12,"auto":0,"slot":"G","pid":4711272,"name":"Reed Sheppard","pos":["PG","SG"],"adp":103.36,"rank":58,"pro":10,"inj":"ACTIVE"},{"pick":106,"round":9,"rp":10,"team":3,"auto":0,"slot":"UTIL","pid":4432165,"name":"Jalen Suggs","pos":["PG","SG"],"adp":132.05,"rank":141,"pro":19,"inj":"ACTIVE"},{"pick":107,"round":9,"rp":11,"team":8,"auto":0,"slot":"UTIL","pid":5105623,"name":"Kel'el Ware","pos":["C"],"adp":126.37,"rank":67,"pro":14,"inj":"ACTIVE"},{"pick":108,"round":9,"rp":12,"team":2,"auto":0,"slot":"F","pid":6475,"name":"Klay Thompson","pos":["SG","SF"],"adp":130.62,"rank":224,"pro":6,"inj":"ACTIVE"},{"pick":109,"round":10,"rp":1,"team":2,"auto":0,"slot":"UTIL","pid":4251,"name":"Paul George","pos":["SF","PF"],"adp":100.04,"rank":93,"pro":20,"inj":"ACTIVE"},{"pick":110,"round":10,"rp":2,"team":8,"auto":0,"slot":"UTIL","pid":4433192,"name":"Tari Eason","pos":["SF","PF"],"adp":135.74,"rank":175,"pro":10,"inj":"ACTIVE"},{"pick":111,"round":10,"rp":3,"team":3,"auto":0,"slot":"UTIL","pid":6442,"name":"Kyrie Irving","pos":["PG","SG"],"adp":95.19,"rank":48,"pro":6,"inj":"DAY_TO_DAY"},{"pick":112,"round":10,"rp":4,"team":12,"auto":0,"slot":"UTIL","pid":4278067,"name":"Nic Claxton","pos":["C"],"adp":119.56,"rank":119,"pro":17,"inj":"ACTIVE"},{"pick":113,"round":10,"rp":5,"team":5,"auto":0,"slot":"UTIL","pid":5061589,"name":"Yves Missi","pos":["C"],"adp":140.02,"rank":163,"pro":3,"inj":"ACTIVE"},{"pick":114,"round":10,"rp":6,"team":4,"auto":0,"slot":"UTIL","pid":4683688,"name":"Dereck Lively II","pos":["C"],"adp":139.63,"rank":142,"pro":6,"inj":"DAY_TO_DAY"},{"pick":115,"round":10,"rp":7,"team":1,"auto":0,"slot":"UTIL","pid":6440,"name":"Tobias Harris","pos":["SF","PF"],"adp":119.97,"rank":94,"pro":8,"inj":"ACTIVE"},{"pick":116,"round":10,"rp":8,"team":10,"auto":0,"slot":"UTIL","pid":3134907,"name":"Kyle Kuzma","pos":["SF","PF"],"adp":138.67,"rank":223,"pro":15,"inj":"ACTIVE"},{"pick":117,"round":10,"rp":9,"team":6,"auto":0,"slot":"G","pid":4433627,"name":"Keyonte George","pos":["PG","SG"],"adp":111.04,"rank":89,"pro":26,"inj":"ACTIVE"},{"pick":118,"round":10,"rp":10,"team":9,"auto":0,"slot":"UTIL","pid":3136776,"name":"D'Angelo Russell","pos":["PG","SG"],"adp":125.41,"rank":314,"pro":27,"inj":"ACTIVE"},{"pick":119,"round":10,"rp":11,"team":11,"auto":0,"slot":"UTIL","pid":4683766,"name":"Isaiah Collier","pos":["PG"],"adp":139.04,"rank":228,"pro":26,"inj":"ACTIVE"},{"pick":120,"round":10,"rp":12,"team":7,"auto":0,"slot":"F","pid":5105592,"name":"Cam Whitmore","pos":["SF"],"adp":139.48,"rank":369,"pro":27,"inj":"DAY_TO_DAY"},{"pick":121,"round":11,"rp":1,"team":7,"auto":0,"slot":"BE","pid":4397424,"name":"Neemias Queta","pos":["C"],"adp":137.16,"rank":117,"pro":2,"inj":"ACTIVE"},{"pick":122,"round":11,"rp":2,"team":11,"auto":0,"slot":"BE","pid":3995,"name":"Jrue Holiday","pos":["PG","SG"],"adp":134.5,"rank":130,"pro":22,"inj":"ACTIVE"},{"pick":123,"round":11,"rp":3,"team":9,"auto":0,"slot":"BE","pid":6589,"name":"Draymond Green","pos":["PF","C"],"adp":118.87,"rank":160,"pro":9,"inj":"ACTIVE"},{"pick":124,"round":11,"rp":4,"team":6,"auto":0,"slot":"BE","pid":4845367,"name":"Stephon Castle","pos":["PG","SG"],"adp":75.3,"rank":91,"pro":24,"inj":"ACTIVE"},{"pick":125,"round":11,"rp":5,"team":10,"auto":0,"slot":"BE","pid":3064290,"name":"Aaron Gordon","pos":["PF"],"adp":121.68,"rank":153,"pro":7,"inj":"ACTIVE"},{"pick":126,"round":11,"rp":6,"team":1,"auto":0,"slot":"BE","pid":4709138,"name":"Brandin Podziemski","pos":["PG","SG"],"adp":134.17,"rank":66,"pro":9,"inj":"ACTIVE"},{"pick":127,"round":11,"rp":7,"team":4,"auto":0,"slot":"BE","pid":4431785,"name":"Scotty Pippen Jr.","pos":["PG","SG"],"adp":138.18,"rank":143,"pro":29,"inj":"DAY_TO_DAY"},{"pick":128,"round":11,"rp":8,"team":5,"auto":0,"slot":"BE","pid":4845374,"name":"Bub Carrington","pos":["PG","SG"],"adp":140.02,"rank":216,"pro":27,"inj":"ACTIVE"},{"pick":129,"round":11,"rp":9,"team":12,"auto":0,"slot":"BE","pid":4593125,"name":"Santi Aldama","pos":["SF","PF","C"],"adp":131.87,"rank":170,"pro":29,"inj":"DAY_TO_DAY"},{"pick":130,"round":11,"rp":10,"team":3,"auto":0,"slot":"BE","pid":4278049,"name":"Daniel Gafford","pos":["C"],"adp":131.2,"rank":114,"pro":6,"inj":"ACTIVE"},{"pick":131,"round":11,"rp":11,"team":8,"auto":0,"slot":"BE","pid":3934673,"name":"Donte DiVincenzo","pos":["PG","SG"],"adp":136.99,"rank":347,"pro":16,"inj":"OUT"},{"pick":132,"round":11,"rp":12,"team":2,"auto":0,"slot":"BE","pid":4432639,"name":"Jabari Smith Jr.","pos":["PF","C"],"adp":130.2,"rank":108,"pro":10,"inj":"ACTIVE"},{"pick":133,"round":12,"rp":1,"team":2,"auto":0,"slot":"BE","pid":4278078,"name":"P.J. Washington","pos":["SF","PF"],"adp":138.96,"rank":150,"pro":6,"inj":"ACTIVE"},{"pick":134,"round":12,"rp":2,"team":8,"auto":0,"slot":"BE","pid":4432170,"name":"Isaiah Jackson","pos":["PF","C"],"adp":140.09,"rank":234,"pro":12,"inj":"ACTIVE"},{"pick":135,"round":12,"rp":3,"team":3,"auto":0,"slot":"BE","pid":3468,"name":"Russell Westbrook","pos":["PG"],"adp":136.97,"rank":407,"pro":23,"inj":"ACTIVE"},{"pick":136,"round":12,"rp":4,"team":12,"auto":0,"slot":"BE","pid":5105637,"name":"Adem Bona","pos":["C"],"adp":140.0,"rank":264,"pro":20,"inj":"DAY_TO_DAY"},{"pick":137,"round":12,"rp":5,"team":5,"auto":0,"slot":"BE","pid":4396909,"name":"Aaron Nesmith","pos":["SF"],"adp":140.07,"rank":176,"pro":11,"inj":"ACTIVE"},{"pick":138,"round":12,"rp":6,"team":4,"auto":0,"slot":"BE","pid":4065733,"name":"Ty Jerome","pos":["PG"],"adp":127.8,"rank":72,"pro":29,"inj":"ACTIVE"},{"pick":139,"round":12,"rp":7,"team":1,"auto":0,"slot":"BE","pid":4351852,"name":"Mitchell Robinson","pos":["C"],"adp":138.71,"rank":115,"pro":18,"inj":"ACTIVE"},{"pick":140,"round":12,"rp":8,"team":10,"auto":0,"slot":"BE","pid":4277811,"name":"Collin Sexton","pos":["PG","SG"],"adp":138.44,"rank":149,"pro":4,"inj":"ACTIVE"},{"pick":141,"round":12,"rp":9,"team":6,"auto":0,"slot":"BE","pid":6580,"name":"Bradley Beal","pos":["SG","SF"],"adp":139.68,"rank":204,"pro":12,"inj":"DAY_TO_DAY"},{"pick":142,"round":12,"rp":10,"team":9,"auto":0,"slot":"BE","pid":4683692,"name":"Cason Wallace","pos":["SG"],"adp":137.69,"rank":107,"pro":25,"inj":"ACTIVE"},{"pick":143,"round":12,"rp":11,"team":11,"auto":0,"slot":"BE","pid":4277847,"name":"Wendell Carter Jr.","pos":["C"],"adp":139.67,"rank":171,"pro":19,"inj":"ACTIVE"},{"pick":144,"round":12,"rp":12,"team":7,"auto":0,"slot":"BE","pid":3133603,"name":"Kelly Oubre Jr.","pos":["SG","SF"],"adp":137.11,"rank":181,"pro":20,"inj":"ACTIVE"},{"pick":145,"round":13,"rp":1,"team":7,"auto":0,"slot":"BE","pid":3064482,"name":"Bobby Portis","pos":["PF"],"adp":132.57,"rank":169,"pro":15,"inj":"ACTIVE"},{"pick":146,"round":13,"rp":2,"team":11,"auto":0,"slot":"BE","pid":5124612,"name":"VJ Edgecombe","pos":["SG"],"adp":110.04,"rank":69,"pro":20,"inj":"ACTIVE"},{"pick":147,"round":13,"rp":3,"team":9,"auto":0,"slot":"BE","pid":5211175,"name":"Zaccharie Risacher","pos":["SF"],"adp":139.96,"rank":217,"pro":1,"inj":"ACTIVE"},{"pick":148,"round":13,"rp":4,"team":6,"auto":0,"slot":"BE","pid":4610139,"name":"Jeremy Sochan","pos":["PF"],"adp":140.14,"rank":259,"pro":18,"inj":"ACTIVE"},{"pick":149,"round":13,"rp":5,"team":10,"auto":0,"slot":"BE","pid":4066648,"name":"Rui Hachimura","pos":["SF","PF"],"adp":138.82,"rank":196,"pro":13,"inj":"ACTIVE"},{"pick":150,"round":13,"rp":6,"team":1,"auto":0,"slot":"BE","pid":6609,"name":"Khris Middleton","pos":["SF"],"adp":140.07,"rank":285,"pro":6,"inj":"ACTIVE"},{"pick":151,"round":13,"rp":7,"team":4,"auto":0,"slot":"BE","pid":4873138,"name":"Ace Bailey","pos":["SF","PF"],"adp":131.69,"rank":126,"pro":26,"inj":"ACTIVE"},{"pick":152,"round":13,"rp":8,"team":5,"auto":0,"slot":"BE","pid":3448,"name":"Brook Lopez","pos":["C"],"adp":139.74,"rank":112,"pro":12,"inj":"ACTIVE"},{"pick":153,"round":13,"rp":9,"team":12,"auto":0,"slot":"BE","pid":4397002,"name":"Ayo Dosunmu","pos":["SG"],"adp":136.2,"rank":110,"pro":16,"inj":"ACTIVE"},{"pick":154,"round":13,"rp":10,"team":3,"auto":0,"slot":"BE","pid":3907497,"name":"Dejounte Murray","pos":["PG","SG"],"adp":125.57,"rank":57,"pro":3,"inj":"ACTIVE"},{"pick":155,"round":13,"rp":11,"team":8,"auto":0,"slot":"BE","pid":4600663,"name":"Zach Edey","pos":["C"],"adp":127.27,"rank":113,"pro":29,"inj":"DAY_TO_DAY"},{"pick":156,"round":13,"rp":12,"team":2,"auto":0,"slot":"BE","pid":2581018,"name":"Kentavious Caldwell-Pope","pos":["SG","SF"],"adp":140.04,"rank":246,"pro":29,"inj":"DAY_TO_DAY"},{"pick":157,"round":14,"rp":1,"team":2,"auto":0,"slot":"BE","pid":2990984,"name":"Buddy Hield","pos":["SG","SF"],"adp":139.91,"rank":271,"pro":1,"inj":"ACTIVE"},{"pick":158,"round":14,"rp":2,"team":8,"auto":0,"slot":"BE","pid":4278355,"name":"Obi Toppin","pos":["PF"],"adp":138.59,"rank":240,"pro":11,"inj":"ACTIVE"},{"pick":159,"round":14,"rp":3,"team":3,"auto":0,"slot":"BE","pid":4594327,"name":"Keegan Murray","pos":["SF","PF"],"adp":127.18,"rank":83,"pro":23,"inj":"DAY_TO_DAY"},{"pick":160,"round":14,"rp":4,"team":12,"auto":0,"slot":"BE","pid":5037871,"name":"Dylan Harper","pos":["PG","SG"],"adp":100.84,"rank":101,"pro":24,"inj":"ACTIVE"},{"pick":161,"round":14,"rp":5,"team":5,"auto":0,"slot":"BE","pid":4702177,"name":"Keon Ellis","pos":["SG"],"adp":140.17,"rank":195,"pro":5,"inj":"ACTIVE"},{"pick":162,"round":14,"rp":6,"team":4,"auto":0,"slot":"BE","pid":4433247,"name":"Jonathan Kuminga","pos":["PF"],"adp":136.29,"rank":185,"pro":1,"inj":"ACTIVE"},{"pick":163,"round":14,"rp":7,"team":1,"auto":0,"slot":"BE","pid":4684806,"name":"Taylor Hendricks","pos":["PF"],"adp":139.97,"rank":null,"pro":29,"inj":"ACTIVE"},{"pick":164,"round":14,"rp":8,"team":10,"auto":0,"slot":"BE","pid":3032979,"name":"Dennis Schroder","pos":["PG"],"adp":139.43,"rank":210,"pro":5,"inj":"ACTIVE"},{"pick":165,"round":14,"rp":9,"team":6,"auto":0,"slot":"BE","pid":4395723,"name":"Keldon Johnson","pos":["SF","PF"],"adp":139.87,"rank":151,"pro":24,"inj":"ACTIVE"},{"pick":166,"round":14,"rp":10,"team":9,"auto":0,"slot":"BE","pid":4432848,"name":"Jaime Jaquez Jr.","pos":["SG","SF"],"adp":137.37,"rank":147,"pro":14,"inj":"ACTIVE"},{"pick":167,"round":14,"rp":11,"team":11,"auto":0,"slot":"BE","pid":3155526,"name":"Dillon Brooks","pos":["SG","SF"],"adp":134.81,"rank":137,"pro":21,"inj":"ACTIVE"},{"pick":168,"round":14,"rp":12,"team":7,"auto":0,"slot":"BE","pid":4397014,"name":"Quentin Grimes","pos":["SG"],"adp":138.25,"rank":118,"pro":20,"inj":"ACTIVE"}]}</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const TEAMS = D.teams, ORDER = D.pickOrder, N = ORDER.length, ROUNDS = 14, TOTAL = N*ROUNDS, TPS = D.timePerSelection;
+const PICKS = D.picks; // sorted by pick
+const POSN = ['PG','SG','SF','PF','C'];
+const SLOTS = {PG:1,SG:1,SF:1,PF:1,C:1,G:1,F:1,UTIL:3,BE:4};
+const teamForPick = p => { const r=Math.floor((p-1)/N), i=(p-1)%N; return r%2===0 ? ORDER[i] : ORDER[N-1-i]; };
+const T = id => TEAMS[String(id)];
+const fmt = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pickDur = i => { // realistic-ish seconds each pick took (deterministic pseudo random, some slow, one autopick)
+  const p = PICKS[i]; if (!p) return 30;
+  if (p.auto) return TPS;
+  const h = (p.pid*2654435761)>>>0; const base = 8 + (h%50); return p.round<=2 ? base+15 : base;
+};
+
+// ---------- simulation state ----------
+let S = {
+  phase:'live', layout:'broadcast', clock:'derived', tab:'board', playing:true, speed:10, poll:5,
+  espnPicks:0,          // picks ESPN "has" (true state)
+  seenPicks:0,          // picks our poller has observed
+  tPick:0,              // sim seconds elapsed in current pick (ESPN side)
+  lastSeenAt:0,         // sim time when poller saw last change
+  nextPollAt:0, now:0,
+  durations:[],         // observed seconds per pick (poller granularity)
+  startAt:0,
+};
+function reset(){ S.espnPicks=0;S.seenPicks=0;S.tPick=0;S.lastSeenAt=0;S.nextPollAt=0;S.now=0;S.durations=[];S.startAt=0; renderAll(); }
+
+function tick(dt){ // dt = sim seconds
+  if (S.phase!=='live') return;
+  S.now += dt;
+  if (S.espnPicks < TOTAL){
+    S.tPick += dt;
+    if (S.tPick >= pickDur(S.espnPicks)){ S.espnPicks++; S.tPick=0; }
+  }
+  if (S.now >= S.nextPollAt){
+    S.nextPollAt = S.now + S.poll;
+    if (S.espnPicks !== S.seenPicks){
+      for (let i=S.seenPicks;i<S.espnPicks;i++){ S.durations.push(S.now - S.lastSeenAt); toast(PICKS[i]); S.lastSeenAt=S.now; }
+      S.seenPicks = S.espnPicks;
+      renderPicks();
+    }
+  }
+  renderClock();
+  if (S.seenPicks>=TOTAL){ S.phase='done'; syncTop(); renderAll(); }
+}
+let last = performance.now();
+function loop(t){ const real=(t-last)/1000; last=t; if (S.playing) tick(real*S.speed); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+
+// ---------- derived values ----------
+const seen = () => PICKS.slice(0,S.seenPicks);
+const curPick = () => S.seenPicks+1;
+const avgDur = () => S.durations.length ? S.durations.reduce((a,b)=>a+b,0)/S.durations.length : 45;
+const remainingSec = () => (TOTAL - S.seenPicks) * avgDur();
+const roster = id => seen().filter(p=>p.team===id);
+const posCounts = id => { const c={PG:0,SG:0,SF:0,PF:0,C:0}; roster(id).forEach(p=>p.pos.forEach(x=>c[x]+= 1/p.pos.length)); return c; };
+const diff = p => p.adp ? Math.round(p.adp - p.pick) : 0;      // +N = fell N spots (value), -N = reached
+const tagFor = p => p.auto ? 'auto' : p.inj && p.inj!=='ACTIVE' ? 'inj' : diff(p)>=12 ? 'steal' : diff(p)<=-12 ? 'reach' : '';
+const teamValue = id => { const r=roster(id); return r.length? r.reduce((a,p)=>a+diff(p),0)/r.length : 0; };
+const grade = v => v>=8?'A':v>=3?'B':v>=-3?'C':v>=-8?'D':'F';
+const bestAvail = () => { const taken=new Set(seen().map(p=>p.pid)); return PICKS.filter(p=>!taken.has(p.pid)&&p.adp).sort((a,b)=>a.adp-b.adp).slice(0,8); };
+const posRun = () => { const s=seen(); let n=0,pos=null; for (let i=s.length-1;i>=0;i--){ const q=s[i].pos[0]; if(pos===null)pos=q; if(q!==pos)break; n++; } return {pos,n}; };
+const slowest = () => { const m={}; S.durations.forEach((d,i)=>{ const t=PICKS[i].team; (m[t]=m[t]||[]).push(d); }); return Object.entries(m).map(([t,a])=>({t:+t,avg:a.reduce((x,y)=>x+y,0)/a.length,n:a.length})).sort((a,b)=>b.avg-a.avg); };
+
+// ---------- render ----------
+function renderAll(){ renderHero(); renderTicker(); renderBoard(); renderFeed(); renderTeams(); renderTrends(); renderSide(); renderClock(); }
+function renderPicks(){ renderHero(); renderTicker(); renderBoard(); renderFeed(); renderTeams(); renderTrends(); renderSide(); }
+
+function renderHero(){
+  const h=document.getElementById('hero');
+  if (S.phase==='lobby'){
+    h.innerHTML=`<div class="lobby">
+      <div class="k" style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em">Draft starts in</div>
+      <div class="cd">27d 03:12:44</div>
+      <div style="color:var(--muted)">Thu, Oct 15 · 21:00 Israel · Snake · 14 rounds · 90s per pick · 12 teams</div>
+      <div class="order">${ORDER.map((id,i)=>`<div><b>${i+1}</b>${esc(T(id).abbrev)}<br><small style="color:var(--muted)">${esc(T(id).owner)}</small></div>`).join('')}</div>
+      <div class="note" style="margin-top:10px">Lobby data source: <code>settings.draftSettings.date / pickOrder / timePerSelection / type</code> + <code>teams[]</code>. Draft room opens 1h before (<code>availableDate</code>).</div>
+    </div>`; return;
+  }
+  if (S.phase==='done'){
+    const ranks=Object.keys(TEAMS).map(id=>({id:+id,v:teamValue(+id)})).sort((a,b)=>b.v-a.v);
+    h.innerHTML=`<div class="done"><div class="big">Draft complete · 168 picks</div>
+      <div style="color:var(--muted);margin:4px 0 12px">Total time ${fmt(S.now||6300)} · avg ${Math.round(avgDur())}s per pick · 1 autopick</div>
+      <div class="nextup" style="justify-content:center">${ranks.slice(0,3).map((r,i)=>`<div class="chip"><small>#${i+1} value</small><b>${esc(T(r.id).abbrev)} · ${grade(r.v)}</b></div>`).join('')}</div>
+      <div class="note" style="margin-top:10px">Next: hand off to existing Draft Report page (steals / busts / grades) once <code>draftDetail.drafted === true</code>.</div></div>`; return;
+  }
+  const pk=curPick(), tid=teamForPick(pk), t=T(tid), r=Math.floor((pk-1)/N)+1, rp=(pk-1)%N+1;
+  const lp=seen()[S.seenPicks-1];
+  const nxt=[1,2,3].map(k=>pk+k).filter(x=>x<=TOTAL).map(x=>({p:x,t:T(teamForPick(x))}));
+  h.innerHTML=`<div class="hero">
+    <div class="ring"><svg viewBox="0 0 100 100"><circle class="bgc" cx="50" cy="50" r="44"/><circle class="fg" id="ringfg" cx="50" cy="50" r="44" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg>
+      <div class="lbl"><b id="clockv">${fmt(TPS)}</b><small id="clockk">on the clock</small></div></div>
+    <div class="otc">
+      <div class="k">Round ${r} · Pick ${rp} · Overall #${pk}</div>
+      <div class="big"><img src="${t.logo}" alt="">${esc(t.name)}</div>
+      <div class="owner">${esc(t.owner)} · ${roster(tid).length} drafted · needs ${needs(tid)}</div>
+      <div class="meta"><span>Pace <b>${Math.round(avgDur())}s</b>/pick</span><span>ETA finish <b>${fmt(remainingSec())}</b></span><span>Last poll <b id="pollago">0s</b> ago</span><span>Picks left <b>${TOTAL-S.seenPicks}</b></span></div>
+      <div class="nextup" style="margin-top:10px">${nxt.map(x=>`<div class="chip"><small>#${x.p}</small><b>${esc(x.t.abbrev)}</b></div>`).join('')}</div>
+    </div>
+    <div class="lastpick ${lp?'flash':''}" key="${lp?lp.pick:0}"><div class="k">Last pick · #${lp?lp.pick:'—'}</div>
+      ${lp?`<div class="n">${esc(lp.name)} ${lp.pos.map(p=>`<span class="pos ${p}">${p}</span>`).join('')}</div><div class="t">${esc(T(lp.team).name)} ${tagHtml(lp)}</div>`:'<div class="t">Waiting for first pick…</div>'}
+    </div>
+  </div>`;
+}
+function needs(tid){ const c=posCounts(tid); const miss=POSN.filter(p=>c[p]<1); return miss.length?miss.join('/'):'depth'; }
+function tagHtml(p){ const t=tagFor(p); if(!t) return ''; const lbl={steal:`steal +${diff(p)}`,reach:`reach ${diff(p)}`,auto:'AUTO',inj:'INJ'}[t]; return `<span class="tag ${t}" style="position:static;margin-left:6px">${lbl}</span>`; }
+
+function renderClock(){
+  if (S.phase!=='live') return;
+  const el=document.getElementById('clockv'), fg=document.getElementById('ringfg'), k=document.getElementById('clockk'); if(!el) return;
+  const since = S.now - S.lastSeenAt;
+  document.getElementById('pollago').textContent = Math.max(0,Math.round(S.poll-(S.nextPollAt-S.now)))+'s';
+  if (S.clock==='pace'){ el.textContent=fmt(since); k.textContent='since last pick'; fg.style.strokeDashoffset=276.5*(1-Math.min(1,since/avgDur())); fg.className.baseVal='fg'; return; }
+  const rem = Math.max(0, TPS - since);
+  el.textContent = (rem===0?'':'~')+fmt(rem); k.textContent = rem===0 ? 'overtime · autopick?' : 'on the clock';
+  fg.style.strokeDashoffset = 276.5*(1-rem/TPS);
+  fg.className.baseVal = 'fg'+(rem<=15?' bad':rem<=30?' warn':'');
+}
+
+function renderTicker(){
+  const tk=document.getElementById('tk'); const pk=curPick(); let html='';
+  for (let p=1;p<=TOTAL;p++){
+    const t=T(teamForPick(p)), made=PICKS[p-1], done=p<=S.seenPicks;
+    if ((p-1)%N===0) html+=`<div class="r">R${Math.floor((p-1)/N)+1}</div>`;
+    html+=`<div class="c ${p===pk&&S.phase==='live'?'now':''}" id="tkc${p}"><small>Pick ${p}</small><b>${esc(t.abbrev)}</b><i>${done?esc(made.name):p===pk?'On the clock':''}</i></div>`;
+  }
+  tk.innerHTML=html; const c=document.getElementById('tkc'+pk); if(c) tk.scrollLeft=Math.max(0,c.offsetLeft-tk.clientWidth/2+60);
+}
+
+function renderBoard(){
+  const b=document.getElementById('board'); const pk=curPick();
+  let html='<table><tr><th></th>'+ORDER.map(id=>`<th><img src="${T(id).logo}" alt="">${esc(T(id).abbrev)}</th>`).join('')+'</tr>';
+  for (let r=0;r<ROUNDS;r++){
+    html+=`<tr><td class="rn">${r+1}</td>`;
+    for (let i=0;i<N;i++){
+      const p = r*N + (r%2===0 ? i : N-1-i) + 1; const made=p<=S.seenPicks?PICKS[p-1]:null;
+      if (made) html+=`<td class="p-${made.pos[0]} ${p===S.seenPicks?'new':''}"><b>${esc(made.name)}</b><small>#${p} · ${made.pos.join('/')}${made.adp?` · ADP ${Math.round(made.adp)}`:''}</small>${tagFor(made)?`<span class="tag ${tagFor(made)}">${tagFor(made)==='steal'?'+'+diff(made):tagFor(made)==='reach'?diff(made):tagFor(made).toUpperCase()}</span>`:''}</td>`;
+      else html+=`<td class="${p===pk&&S.phase==='live'?'now':''}"><small>#${p}</small></td>`;
+    }
+    html+='</tr>';
+  }
+  b.innerHTML=html+'</table>';
+}
+
+function renderFeed(){
+  const f=document.getElementById('feed'); const s=seen().slice().reverse();
+  f.innerHTML = s.length? s.map(p=>`<div class="row"><div class="pk">R${p.round}<b>#${p.pick}</b></div>
+    <div><div class="nm">${esc(p.name)} ${p.pos.map(x=>`<span class="pos ${x}">${x}</span>`).join('')}</div><div class="tm">${esc(T(p.team).name)} · ${esc(T(p.team).owner)}</div></div>
+    <div class="rt">ADP ${p.adp?Math.round(p.adp):'—'} · rank ${p.rank??'—'}<b>${tagHtml(p)||`<span style="color:var(--muted)">${diff(p)>0?'+':''}${diff(p)} vs ADP</span>`}</b></div></div>`).join('') : '<div class="note">No picks yet.</div>';
+}
+
+function renderTeams(){
+  const el=document.getElementById('teams'); const pk=curPick(); const onclk=S.phase==='live'?teamForPick(pk):-1;
+  el.innerHTML=ORDER.map(id=>{ const t=T(id), r=roster(id), c=posCounts(id), v=teamValue(id);
+    return `<div class="team ${id===onclk?'now':''}"><div class="hd"><img src="${t.logo}" alt=""><div><b>${esc(t.name)}</b><small>${esc(t.owner)} · ${r.length}/14</small></div><span class="grade" title="avg pick vs ADP">${r.length?grade(v):'–'}</span></div>
+      <div class="bars">${POSN.map(p=>`<div><i style="width:${Math.min(100,c[p]*50)}%;background:var(--${p})"></i><span>${p}</span></div>`).join('')}</div>
+      <ol>${r.map(p=>`<li><b>${esc(p.name)}</b><span>${p.pos.join('/')}</span></li>`).join('')}</ol></div>`; }).join('');
+}
+
+function renderTrends(){
+  const el=document.getElementById('trends'); const s=seen();
+  const byRound={}; s.forEach(p=>{ (byRound[p.round]=byRound[p.round]||{PG:0,SG:0,SF:0,PF:0,C:0})[p.pos[0]]++; });
+  const run=posRun(); const sl=slowest();
+  el.innerHTML=`
+    ${run.n>=3?`<div class="alert">🔥 Position run: ${run.n} straight ${run.pos}s taken — ${bestAvail().filter(p=>p.pos[0]===run.pos).length} quality ${run.pos}s left by ADP</div>`:''}
+    <div class="card" style="margin-bottom:10px"><h3>Positions taken by round <span class="sub">first eligible pos</span></h3>
+      <div style="padding:10px;display:grid;gap:4px">${Object.entries(byRound).map(([r,c])=>`<div style="display:grid;grid-template-columns:30px 1fr;gap:8px;align-items:center;font-size:11px"><span style="color:var(--muted)">R${r}</span><div class="runbar" style="padding:0">${POSN.map(p=>`<i style="flex:${c[p]||0.0001};background:var(--${p})" title="${p}: ${c[p]}"></i>`).join('')}</div></div>`).join('')||'<div class="note">Waiting for picks…</div>'}</div>
+      <div class="note">${POSN.map(p=>`<span class="pos ${p}">${p}</span>`).join(' ')}</div></div>
+    <div class="card" style="margin-bottom:10px"><h3>Slowest drafters <span class="sub">avg seconds per pick, poll-derived</span></h3>
+      <div class="hbar">${sl.slice(0,6).map(x=>`<div class="h"><span style="text-align:left;color:var(--text)">${esc(T(x.t).abbrev)}</span><i style="width:${Math.min(100,x.avg/TPS*100)}%"></i><span>${Math.round(x.avg)}s</span></div>`).join('')||'<div class="note">Waiting for picks…</div>'}</div></div>
+    <div class="card"><h3>Biggest steals / reaches so far <span class="sub">pick vs current ESPN ADP</span></h3>
+      <div class="list">${s.filter(p=>p.adp).sort((a,b)=>Math.abs(diff(b))-Math.abs(diff(a))).slice(0,8).map(p=>`<div class="li"><span class="tag ${diff(p)>0?'steal':'reach'}" style="position:static">${diff(p)>0?'+':''}${diff(p)}</span><span class="n">${esc(p.name)}</span><span class="v">#${p.pick} · ${esc(T(p.team).abbrev)}</span></div>`).join('')||'<div class="note">Waiting for picks…</div>'}</div></div>`;
+}
+
+function renderSide(){
+  const el=document.getElementById('side'); const ba=bestAvail(); const run=posRun();
+  const ranks=Object.keys(TEAMS).map(id=>({id:+id,v:teamValue(+id),n:roster(+id).length})).sort((a,b)=>b.v-a.v);
+  el.innerHTML=`
+    <div class="card"><h3>Draft status</h3><div class="kv">
+      <div><small>Progress</small><b>${S.seenPicks}/${TOTAL}</b></div><div><small>Round</small><b>${Math.min(ROUNDS,Math.floor(S.seenPicks/N)+1)}/${ROUNDS}</b></div>
+      <div><small>Avg pick</small><b>${Math.round(avgDur())}s</b></div><div><small>ETA</small><b>${fmt(remainingSec())}</b></div>
+      <div><small>Autopicks</small><b>${seen().filter(p=>p.auto).length}</b></div><div><small>Elapsed</small><b>${fmt(S.now)}</b></div></div></div>
+    ${run.n>=3?`<div class="alert">🔥 ${run.n} straight ${run.pos}s — run in progress</div>`:''}
+    <div class="card"><h3>Best available <span class="sub">by ESPN ADP · league-wide</span></h3><div class="list">${ba.map(p=>`<div class="li"><span class="v">${Math.round(p.adp)}</span><span class="n">${esc(p.name)}</span>${p.pos.map(x=>`<span class="pos ${x}">${x}</span>`).join('')}${p.inj&&p.inj!=='ACTIVE'?'<span class="tag inj" style="position:static">INJ</span>':''}</div>`).join('')}</div>
+      <div class="note">Swap source: ESPN ADP · our Player Rankings · last-year value</div></div>
+    <div class="card"><h3>Live value board <span class="sub">avg (ADP − pick)</span></h3><div class="list">${ranks.map((r,i)=>`<div class="li"><span class="v">${i+1}</span><span class="n">${esc(T(r.id).abbrev)} <span style="color:var(--muted);font-weight:400">${esc(T(r.id).owner)}</span></span><span class="v">${r.n?(r.v>0?'+':'')+r.v.toFixed(1):'—'}</span><span class="grade" style="font-size:11px;padding:1px 6px">${r.n?grade(r.v):'–'}</span></div>`).join('')}</div></div>`;
+}
+
+function toast(p){ const t=document.getElementById('toasts'); const d=document.createElement('div'); d.className='toast'; d.innerHTML=`<b>#${p.pick} ${esc(p.name)}</b>${esc(T(p.team).name)} ${tagHtml(p)}`; t.appendChild(d); setTimeout(()=>d.remove(),3500); while(t.children.length>4) t.firstChild.remove(); }
+
+// ---------- controls ----------
+function syncTop(){ document.querySelectorAll('[data-phase]').forEach(b=>b.classList.toggle('on',b.dataset.phase===S.phase)); document.querySelectorAll('[data-layout]').forEach(b=>b.classList.toggle('on',b.dataset.layout===S.layout)); document.querySelectorAll('[data-clock]').forEach(b=>b.classList.toggle('on',b.dataset.clock===S.clock)); document.querySelector('.wrap').dataset.layout=S.layout; document.getElementById('play').textContent=S.playing?'⏸ Pause':'▶ Play'; }
+document.querySelectorAll('[data-phase]').forEach(b=>b.onclick=()=>{ S.phase=b.dataset.phase; if(S.phase==='live'&&S.seenPicks>=TOTAL){reset();} if(S.phase==='done'){S.espnPicks=S.seenPicks=TOTAL;} if(S.phase==='lobby'){reset();} syncTop(); renderAll(); });
+document.querySelectorAll('[data-layout]').forEach(b=>b.onclick=()=>{ S.layout=b.dataset.layout; syncTop(); });
+document.querySelectorAll('[data-clock]').forEach(b=>b.onclick=()=>{ S.clock=b.dataset.clock; syncTop(); renderClock(); });
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===b)); document.querySelectorAll('[data-pane]').forEach(x=>x.classList.toggle('on',x.dataset.pane===S.tab)); });
+document.getElementById('play').onclick=()=>{ S.playing=!S.playing; syncTop(); };
+document.getElementById('step').onclick=()=>{ if(S.phase!=='live')return; S.espnPicks=Math.min(TOTAL,S.espnPicks+1); S.tPick=0; S.nextPollAt=S.now; tick(0.001); };
+document.getElementById('reset').onclick=()=>{ S.phase='live'; reset(); syncTop(); };
+document.getElementById('speed').oninput=e=>{ S.speed=+e.target.value; document.getElementById('speedv').textContent=S.speed+'×'; };
+document.getElementById('poll').oninput=e=>{ S.poll=+e.target.value; document.getElementById('pollv').textContent=S.poll+'s'; };
+// start mid-draft so the page is interesting immediately
+S.espnPicks=S.seenPicks=27; S.lastSeenAt=0; S.durations=PICKS.slice(0,27).map((_,i)=>pickDur(i)); S.now=S.durations.reduce((a,b)=>a+b,0); S.lastSeenAt=S.now; S.nextPollAt=S.now;
+syncTop(); renderAll();
+</script>
+</body>
+</html>

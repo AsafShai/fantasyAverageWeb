@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slot Cap Bar — A compact vs today</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --used:#2563eb; --usedsoft:rgba(37,99,235,.18);
+  --gone:#fecaca; --gone-ink:#b91c1c;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+  --g50:#f9fafb; --g200:#e5e7eb; --g400:#9ca3af; --g500:#6b7280; --g600:#4b5563; --g900:#111827;
+  --t-green:#dcfce7; --t-yellow:#fef9c3; --t-orange:#ffedd5; --t-red:#fee2e2;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --used:#60a5fa; --usedsoft:rgba(96,165,250,.2);
+  --gone:#450a0a; --gone-ink:#fca5a5;
+  --ok:#4ade80; --ok-bg:#052e16; --warn:#fbbf24; --warn-bg:#451a03; --bad:#f87171; --bad-bg:#450a0a;
+  --g50:#374151; --g200:#4b5563; --g400:#9ca3af; --g500:#9ca3af; --g600:#d1d5db; --g900:#f9fafb;
+  --t-green:#052e16; --t-yellow:#451a03; --t-orange:#431407; --t-red:#450a0a;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1);padding:18px 12px 48px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:16px;line-height:1.6}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:16px}
+.cardhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+h2{font-size:15px;font-weight:800}
+.tag{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.flat{background:var(--chip);color:var(--ink2)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.why{font-size:11.5px;color:var(--ink3);line-height:1.6;margin-top:10px}
+.why b{color:var(--ink2)}
+.split{display:grid;grid-template-columns:1fr 400px;gap:14px;align-items:start}
+@media(max-width:940px){.split{grid-template-columns:1fr}}
+.pane{border:1px dashed var(--border);border-radius:10px;padding:10px;overflow:hidden}
+.pane .lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;display:flex;justify-content:space-between}
+.pane .lab em{font-style:normal;color:var(--chip-on-ink);font-variant-numeric:tabular-nums}
+.mob{width:375px;max-width:100%}
+button.theme{position:fixed;top:12px;right:12px;border:1px solid var(--border);background:var(--card);border-radius:8px;font-size:15px;cursor:pointer;padding:6px 9px;z-index:9}
+
+/* ---------- today's SlotUsageTable, replicated ---------- */
+.old h3{font-size:24px;font-weight:700;color:var(--g900)}
+.old .oldsub{font-size:12px;color:var(--g500);margin-top:4px}
+.old .leg{font-size:12px;color:var(--g600);margin:16px 0}
+.old .legrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-bottom:4px}
+.old .legrow>span:first-child{font-weight:600;color:var(--g500);width:40px}
+.old .sw{display:inline-flex;align-items:center;gap:4px}
+.old .sw i{width:12px;height:12px;border-radius:2px;display:inline-block}
+.old .scroll{overflow-x:auto}
+.old table{border-collapse:collapse;min-width:100%}
+.old th,.old td{border:1px solid var(--g200)}
+.old thead th{padding:8px 16px;font-size:12px;font-weight:600;color:var(--g500);text-transform:uppercase;background:var(--g50);text-align:center}
+.old thead th .u3{color:var(--g400);font-weight:400;text-transform:none;font-size:12px}
+.old tbody th{padding:12px;font-size:12px;font-weight:600;color:var(--g600);background:var(--g50);text-align:left;white-space:nowrap}
+.old tbody th .s{font-weight:400;color:var(--g400);text-transform:none}
+.old tbody td{padding:12px 16px;font-size:14px;font-weight:500;text-align:center}
+.old .sub2{font-size:12px;font-weight:400;opacity:.8}
+.old .tg{background:var(--t-green)}.old .ty{background:var(--t-yellow)}.old .to{background:var(--t-orange)}.old .tr{background:var(--t-red)}
+
+/* ---------- A compact ---------- */
+.ac .head{display:flex;align-items:baseline;gap:8px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);padding-bottom:5px;border-bottom:1px solid var(--border)}
+.ac .head .sp{width:32px;flex:0 0 32px}
+.ac .head .bx{flex:1}
+.ac .head .nx{width:118px;flex:0 0 118px;display:flex;justify-content:space-between;text-align:right}
+.ac .head .nx span{width:34px}
+.ac .row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)}
+.ac .row:last-child{border-bottom:none}
+.ac .slot{width:32px;flex:0 0 32px;font-weight:800;font-size:12px}
+.ac .track{position:relative;height:14px;border-radius:7px;background:var(--chip);overflow:hidden;flex:1;min-width:60px}
+.ac .fill{position:absolute;left:0;top:0;bottom:0;background:var(--used)}
+.ac .gap{position:absolute;top:0;bottom:0;background:var(--usedsoft)}
+.ac .dead{position:absolute;top:0;bottom:0;right:0;background:var(--gone);opacity:.8}
+.ac .tick{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink1)}
+.ac .nx{width:118px;flex:0 0 118px;display:flex;justify-content:space-between;font-size:12px;font-variant-numeric:tabular-nums;font-weight:700}
+.ac .nx span{width:34px;text-align:right}
+.ac .nx .cap{color:var(--ink3);font-weight:500}
+.ac .nx .ok{color:var(--ok)}.ac .nx .warn{color:var(--warn)}.ac .nx .bad{color:var(--bad)}
+.ac .nx .goneTxt{color:var(--gone-ink)}
+.ac .chips{display:none}
+/* mobile: chips under the bar */
+@media(max-width:639px){
+  .ac .head .nx{display:none}
+  .ac .row{flex-wrap:wrap;padding:6px 0}
+  .ac .nx{display:none}
+  .ac .chips{display:flex;flex-wrap:wrap;gap:4px;width:100%;padding-left:40px}
+  .ac .chips b{font-variant-numeric:tabular-nums}
+  .ac .chips .c{font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:var(--chip);color:var(--ink2)}
+  .ac .chips .c.used{background:var(--usedsoft);color:var(--used)}
+  .ac .chips .c.ok{background:var(--ok-bg);color:var(--ok)}
+  .ac .chips .c.warn{background:var(--warn-bg);color:var(--warn)}
+  .ac .chips .c.bad{background:var(--bad-bg);color:var(--bad)}
+  .ac .chips .c.gone{background:var(--gone);color:var(--gone-ink)}
+}
+/* narrow desktop pane emulation */
+.pane.narrow .ac .head .nx{display:none}
+.pane.narrow .ac .row{flex-wrap:wrap;padding:6px 0}
+.pane.narrow .ac .nx{display:none}
+.pane.narrow .ac .chips{display:flex;flex-wrap:wrap;gap:4px;width:100%;padding-left:40px}
+.pane.narrow .ac .chips .c{font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:var(--chip);color:var(--ink2)}
+.pane.narrow .ac .chips .c.used{background:var(--usedsoft);color:var(--used)}
+.pane.narrow .ac .chips .c.ok{background:var(--ok-bg);color:var(--ok)}
+.pane.narrow .ac .chips .c.warn{background:var(--warn-bg);color:var(--warn)}
+.pane.narrow .ac .chips .c.bad{background:var(--bad-bg);color:var(--bad)}
+.pane.narrow .ac .chips .c.gone{background:var(--gone);color:var(--gone-ink)}
+
+.meaning{display:flex;flex-wrap:wrap;gap:5px 14px;font-size:11px;color:var(--ink2);margin-top:9px;line-height:1.5}
+.meaning div{display:flex;align-items:baseline;gap:5px}
+.meaning b{color:var(--ink1);font-weight:800}
+.meaning i{font-style:normal;color:var(--ink3)}
+.swatches{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--ink2);margin-top:7px}
+.swatches i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.hcompare{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.hcompare div{font-size:11.5px;background:var(--chip);border-radius:7px;padding:5px 10px;color:var(--ink2)}
+.hcompare b{color:var(--ink1);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<button class="theme" id="theme">🌙</button>
+<div class="wrap">
+  <h1>Variant A, compacted — against today's table</h1>
+  <div class="sub">
+    Same card, same data, both rendered live so the pixel heights below are measured, not claimed.
+    Goal was your constraint: keep A, keep the used/est/max legend, land near today's height without shrinking text past reading size.
+  </div>
+  <div class="hcompare" id="heights"></div>
+
+  <!-- TODAY -->
+  <div class="card">
+    <div class="cardhead"><h2>Today — <code>SlotUsageTable.tsx</code></h2><span class="tag flat">baseline</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab"><span>Desktop</span><em id="h-old-d">–</em></div><div class="old" id="old1"></div></div>
+      <div class="pane"><div class="lab"><span>375px</span><em id="h-old-m">–</em></div><div class="mob"><div class="old" id="old2"></div></div></div>
+    </div>
+    <div class="why"><b>Note:</b> at 375px this doesn't shrink — it scrolls sideways. Eight columns at <code>px-4</code> never fit, so on a phone you see PG–PF and swipe for the rest. The height number below is honest; the readability isn't.</div>
+  </div>
+
+  <!-- A COMPACT -->
+  <div class="card">
+    <div class="cardhead"><h2>A · compact</h2><span class="tag ok">proposed</span></div>
+    <div class="split">
+      <div class="pane"><div class="lab"><span>Desktop — one line per slot</span><em id="h-new-d">–</em></div><div class="ac" id="new1"></div></div>
+      <div class="pane narrow"><div class="lab"><span>375px — chips wrap under</span><em id="h-new-m">–</em></div><div class="mob"><div class="ac" id="new2"></div></div></div>
+    </div>
+    <div class="meaning">
+      <div><b>used</b><i>games already played in this slot</i></div>
+      <div><b>est</b><i>projected finish at current pace</i></div>
+      <div><b>max</b><i>highest total still reachable</i></div>
+      <div><b>cap</b><i>league limit for the slot</i></div>
+    </div>
+    <div class="swatches">
+      <span><i style="background:var(--used)"></i>used</span>
+      <span><i style="background:var(--usedsoft)"></i>projected gain</span>
+      <span><i style="background:var(--gone)"></i>unreachable</span>
+      <span><i style="background:var(--ink1);width:3px;height:12px;border-radius:0"></i>est. finish</span>
+      <span><i style="background:var(--chip)"></i>cap remaining</span>
+    </div>
+    <div class="why">
+      <b>How the height came down.</b> v1 put the chips on their own line always — 55px per slot, 440px total. Here the numbers move into fixed 34px columns on the same line as the bar (≈26px per slot), and the column headers <code>USED · EST · MAX · CAP</code> carry the labels once instead of eight times. Below 640px it falls back to the chip layout, where labels return per-chip because there is no header row to align to.<br><br>
+      <b>Where it still costs you.</b> The mobile fallback is ~2 lines per slot, so 375px is taller than desktop. That is the trade for not scrolling sideways — today's table is shorter on mobile only because you can't see two-thirds of it.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h2>What is kept from today's component</h2></div>
+    <div class="why" style="font-size:12px;color:var(--ink2)">
+      Same three values, same source — <code>projectSlot()</code> in <code>slotProjection.ts</code> already returns <code>used</code>, <code>maxGamesTotal</code>, <code>estimatedRounded</code>. Same tone thresholds via <code>estimatedTone()</code>, now applied to the <code>est</code> number instead of a cell background.<br><br>
+      <b>Dropped:</b> the <code>Rate</code> row's "vs NBA pace" delta. It measured the same thing <code>est</code> already tells you, and it was the row forcing two lines per cell. If you want it back it fits as a fifth number column on desktop and a fifth chip on mobile — say the word and I'll add it before the plan.<br><br>
+      <b>Gained:</b> unreachable cap becomes visible territory instead of arithmetic. In this scenario C is capped at 74 of 82 — in today's table that's the string <code>74/82</code> you have to subtract; here it's red the bar can never enter.
+    </div>
+  </div>
+</div>
+
+<script>
+const DL=22;
+const S=[{n:'PG',cap:82,used:68,est:79},{n:'SG',cap:82,used:71,est:82},{n:'SF',cap:82,used:66,est:77},
+{n:'PF',cap:82,used:69,est:80},{n:'C',cap:82,used:52,est:62},{n:'G',cap:82,used:70,est:81},
+{n:'F',cap:82,used:58,est:68},{n:'UTIL',cap:248,used:210,est:244}].map(s=>{
+  const pd=s.n==='UTIL'?3:1;
+  s.max=Math.min(s.cap,s.used+DL*pd); s.gone=s.cap-s.max;
+  s.tone=s.est>=s.cap-1?'ok':s.est>=s.cap*0.93?'warn':'bad';
+  return s;});
+const pc=(v,c)=>(v/c*100).toFixed(1)+'%';
+const NBA_PACE=68.4;
+
+function renderOld(el){
+  const tone=s=>s.est>=s.cap-1?'tg':s.est>=s.cap*0.975?'ty':s.est>=s.cap*0.95?'to':'tr';
+  const maxTone=s=>s.gone>0?'tr':'tg';
+  const rateTone=s=>{const d=Math.abs(s.used-(s.n==='UTIL'?NBA_PACE*3:NBA_PACE))/(s.n==='UTIL'?NBA_PACE*3:NBA_PACE);
+    return d<0.05?'tg':d<0.10?'ty':d<0.15?'to':'tr';};
+  el.innerHTML=`
+  <h3>Slot Usage</h3>
+  <div class="oldsub">Rate is per slot. Max and Est. are the whole column — UTIL cap (246+2).</div>
+  <div class="leg">
+    <div class="legrow"><span>Rate</span>
+      <span class="sw"><i class="tg" style="background:var(--t-green)"></i>&lt;5%</span>
+      <span class="sw"><i style="background:var(--t-yellow)"></i>5–10%</span>
+      <span class="sw"><i style="background:var(--t-orange)"></i>10–15%</span>
+      <span class="sw"><i style="background:var(--t-red)"></i>15%+</span>
+      <span style="color:var(--g400)">off the NBA rate, either way</span></div>
+    <div class="legrow"><span>Max</span>
+      <span class="sw"><i style="background:var(--t-green)"></i>still reachable</span>
+      <span class="sw"><i style="background:var(--t-red)"></i>gone</span></div>
+    <div class="legrow"><span>Est.</span>
+      <span class="sw"><i style="background:var(--t-green)"></i>82+</span>
+      <span class="sw"><i style="background:var(--t-yellow)"></i>80–82</span>
+      <span class="sw"><i style="background:var(--t-orange)"></i>78–80</span>
+      <span class="sw"><i style="background:var(--t-red)"></i>&lt;78</span>
+      <span style="color:var(--g400)">per slot</span></div>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th style="background:var(--g50)"></th>
+      ${S.map(s=>`<th>${s.n}${s.n==='UTIL'?'<div class="u3">×3 slots</div>':''}</th>`).join('')}</tr></thead>
+    <tbody>
+      <tr><th>Rate ⓘ<div class="s">used · vs NBA</div></th>
+        ${S.map(s=>{const base=s.n==='UTIL'?NBA_PACE*3:NBA_PACE;const d=s.used-base;
+        return `<td class="${rateTone(s)}">${s.used}<div class="sub2">${d>=0?'+':''}${d.toFixed(1)}</div></td>`;}).join('')}</tr>
+      <tr><th>Max ⓘ<div class="s">still reachable</div></th>
+        ${S.map(s=>`<td class="${maxTone(s)}">${s.max}<span style="opacity:.5">/${s.cap}</span></td>`).join('')}</tr>
+      <tr><th>Est. ⓘ<div class="s">projected</div></th>
+        ${S.map(s=>`<td class="${tone(s)}">${s.est}<span style="opacity:.5">/${s.cap}</span></td>`).join('')}</tr>
+    </tbody></table></div>`;
+}
+
+function renderAC(el){
+  el.innerHTML=`
+  <div class="head"><span class="sp"></span><span class="bx">Progress</span>
+    <span class="nx"><span>Used</span><span>Est</span><span>Max</span><span>Cap</span></span></div>
+  ${S.map(s=>`<div class="row">
+    <span class="slot">${s.n}</span>
+    <span class="track">
+      <span class="fill" style="width:${pc(s.used,s.cap)}"></span>
+      <span class="gap" style="left:${pc(s.used,s.cap)};width:${pc(Math.max(0,s.est-s.used),s.cap)}"></span>
+      ${s.gone>0?`<span class="dead" style="width:${pc(s.gone,s.cap)}"></span>`:''}
+      <span class="tick" style="left:${pc(s.est,s.cap)}"></span>
+    </span>
+    <span class="nx">
+      <span>${s.used}</span>
+      <span class="${s.tone}">${s.est}</span>
+      <span class="${s.gone>0?'goneTxt':''}">${s.max}</span>
+      <span class="cap">${s.cap}</span>
+    </span>
+    <span class="chips">
+      <span class="c used">used <b>${s.used}</b></span>
+      <span class="c ${s.tone}">est <b>${s.est}</b></span>
+      <span class="c ${s.gone>0?'gone':''}">max <b>${s.max}</b></span>
+      <span class="c">cap <b>${s.cap}</b></span>
+    </span>
+  </div>`).join('')}`;
+}
+
+renderOld(document.getElementById('old1')); renderOld(document.getElementById('old2'));
+renderAC(document.getElementById('new1')); renderAC(document.getElementById('new2'));
+
+function measure(){
+  const g=id=>document.getElementById(id).offsetHeight;
+  const od=g('old1'), om=g('old2'), nd=g('new1'), nm=g('new2');
+  document.getElementById('h-old-d').textContent=od+'px';
+  document.getElementById('h-old-m').textContent=om+'px';
+  document.getElementById('h-new-d').textContent=nd+'px';
+  document.getElementById('h-new-m').textContent=nm+'px';
+  const d=nd-od;
+  document.getElementById('heights').innerHTML=`
+    <div>Today, desktop: <b>${od}px</b></div>
+    <div>A compact, desktop: <b>${nd}px</b></div>
+    <div>Difference: <b style="color:${Math.abs(d)<=40?'var(--ok)':'var(--warn)'}">${d>=0?'+':''}${d}px</b></div>
+    <div>Today, 375px: <b>${om}px</b> <span style="color:var(--ink3)">(scrolls sideways)</span></div>
+    <div>A compact, 375px: <b>${nm}px</b> <span style="color:var(--ink3)">(no scroll)</span></div>`;
+}
+measure(); window.addEventListener('resize',measure);
+document.getElementById('theme').onclick=()=>{
+  document.body.classList.toggle('dark');
+  document.getElementById('theme').textContent=document.body.classList.contains('dark')?'☀️':'🌙';};
+</script>
+</body>
+</html>

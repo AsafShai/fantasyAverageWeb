@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draft Report Card — Mockup</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --steal:#2563eb; --bust:#dc2626; --neutral:#9ca3af;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1)}
+nav{position:sticky;top:0;z-index:40;background:var(--card);box-shadow:0 4px 10px rgba(0,0,0,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:8px 14px;overflow-x:auto}
+nav .brand{font-weight:800;font-size:13px;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;margin-right:8px}
+nav a{display:inline-flex;align-items:center;gap:4px;padding:6px 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2);text-decoration:none;white-space:nowrap}
+nav a.active{background:var(--chip-on);color:var(--chip-on-ink)}
+nav .spacer{flex:1}
+nav button{border:none;background:none;font-size:14px;cursor:pointer;padding:6px;border-radius:6px}
+main{max-width:1150px;margin:0 auto;padding:18px 12px 40px}
+h1{font-size:20px;font-weight:800;margin-bottom:2px}
+h2{font-size:14px;font-weight:700;margin:18px 0 8px}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.grades{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.gcard{border:1px solid var(--border);border-radius:10px;padding:9px 11px;display:flex;align-items:center;gap:10px}
+.gcard .letter{font-size:21px;font-weight:800;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff}
+.gcard .nm{font-size:12px;font-weight:700}
+.gcard .dt{font-size:10.5px;color:var(--ink3)}
+.boardwrap{overflow-x:auto}
+table{border-collapse:collapse;font-size:11.5px;width:100%}
+.board td,.board th{border:1px solid var(--border);padding:3px 4px;text-align:center;white-space:nowrap}
+.board th{font-size:10.5px;color:var(--ink2);background:var(--chip)}
+.board td{min-width:64px;font-weight:600;font-size:10.3px}
+.board td .r{display:block;font-weight:400;font-size:9px;opacity:.75}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.duo{grid-template-columns:1fr}}
+.plist{list-style:none}
+.plist li{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.plist li:last-child{border:none}
+.pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;color:#fff}
+.plist .meta{margin-left:auto;color:var(--ink3);font-size:11px;text-align:right}
+.full th{position:sticky;top:0;background:var(--chip);color:var(--ink2);font-size:10.5px;padding:6px 8px;text-align:left}
+.full td{padding:5px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.full tr:hover td{background:var(--chip)}
+.sorts{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;width:max-content;margin-bottom:8px}
+.sorts button{border:none;background:none;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer}
+.sorts button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tablewrap{overflow-x:auto;max-height:430px;overflow-y:auto}
+.note{font-size:11px;color:var(--ink3);margin-top:8px}
+.num{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏀 Fantasy League</span>
+  <a>📊 Dashboard</a><a>👥 Teams</a><a>🏆 Rankings</a><a>📈 Analytics</a><a class="active">📝 Draft Report</a><a>⛹️ Players</a>
+  <span class="spacer"></span>
+  <button id="theme">🌙</button>
+</nav>
+<main>
+  <h1>📝 Draft Report Card — 2025-26</h1>
+  <div class="sub">Every pick vs realized full-season value (8-cat z-score rank). Diff = pick number − value rank: positive means the player returned more than draft slot price.</div>
+
+  <div class="card"><h2 style="margin-top:0">Team Grades</h2><div class="grades" id="grades"></div></div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Draft Board — value heat</h2>
+    <div class="boardwrap"><table class="board" id="board"></table></div>
+    <div class="note">Blue = returned above slot · Red = below slot / DNP · Gray = about right. Columns follow round-1 order (3rd-round-reversal snake).</div>
+  </div>
+
+  <div class="duo">
+    <div class="card"><h2 style="margin-top:0">💎 Top Steals</h2><ul class="plist" id="steals"></ul></div>
+    <div class="card"><h2 style="margin-top:0">🕳️ Biggest Busts</h2><ul class="plist" id="busts"></ul></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">All 168 Picks</h2>
+    <div class="sorts" id="sorts">
+      <button data-k="pick" class="on">By Pick</button>
+      <button data-k="diff">By Diff</button>
+      <button data-k="z">By Value</button>
+    </div>
+    <div class="tablewrap"><table class="full"><thead><tr>
+      <th>Pick</th><th>Rd</th><th>Player</th><th>Fantasy Team</th><th>GP</th><th>MPG</th><th>zTotal</th><th>Value Rank</th><th>Diff</th><th>Verdict</th>
+    </tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="note">Mockup — real 2025-26 draft (ESPN <code>mDraftDetail</code>) joined with real season z-scores computed from <code>fs_player_games</code>. In production this updates nightly with season-to-date values.</div>
+  </div>
+</main>
+<script>
+const DATA = {"picks": [{"pick": 1, "round": 1, "team": "Alon's Angry Team", "player": "Nikola Jokic", "gp": 65, "mpg": 34.8, "z": 19.71, "vrank": 1}, {"pick": 2, "round": 1, "team": "50 Shades of Shai", "player": "Shai Gilgeous-Alexander", "gp": 68, "mpg": 33.2, "z": 15.95, "vrank": 3}, {"pick": 3, "round": 1, "team": "Oriel's Otherworldly Team", "player": "Victor Wembanyama", "gp": 64, "mpg": 29.2, "z": 17.27, "vrank": 2}, {"pick": 4, "round": 1, "team": "Barak's Best Team🏀", "player": "Luka Doncic", "gp": 64, "mpg": 35.8, "z": 14.5, "vrank": 4}, {"pick": 5, "round": 1, "team": "Chat GPT", "player": "Anthony Edwards", "gp": 61, "mpg": 35.0, "z": 10.33, "vrank": 13}, {"pick": 6, "round": 1, "team": "DORTAHTIT", "player": "Cade Cunningham", "gp": 64, "mpg": 33.9, "z": 11.12, "vrank": 10}, {"pick": 7, "round": 1, "team": "Asaf's Astounding Team", "player": "James Harden", "gp": 70, "mpg": 34.8, "z": 10.73, "vrank": 11}, {"pick": 8, "round": 1, "team": "Amihai's Awesome Team 🏆", "player": "Giannis Antetokounmpo", "gp": 36, "mpg": 28.9, "z": 6.57, "vrank": 47}, {"pick": 9, "round": 1, "team": "Roy's Rowdy Team", "player": "Trae Young", "gp": 15, "mpg": 25.6, "z": 4.51, "vrank": 75}, {"pick": 10, "round": 1, "team": "Khachapuri’s Team", "player": "Devin Booker", "gp": 64, "mpg": 33.5, "z": 7.64, "vrank": 31}, {"pick": 11, "round": 1, "team": "Trust the process", "player": "Anthony Davis", "gp": 20, "mpg": 31.3, "z": 8.46, "vrank": 24}, {"pick": 12, "round": 1, "team": "The Real KD", "player": "Karl-Anthony Towns", "gp": 75, "mpg": 31.0, "z": 9.01, "vrank": 21}, {"pick": 13, "round": 2, "team": "The Real KD", "player": "Stephen Curry", "gp": 43, "mpg": 30.9, "z": 11.41, "vrank": 8}, {"pick": 14, "round": 2, "team": "Trust the process", "player": "Tyrese Maxey", "gp": 70, "mpg": 38.0, "z": 13.8, "vrank": 5}, {"pick": 15, "round": 2, "team": "Khachapuri’s Team", "player": "Kevin Durant", "gp": 78, "mpg": 36.4, "z": 11.34, "vrank": 9}, {"pick": 16, "round": 2, "team": "Roy's Rowdy Team", "player": "Domantas Sabonis", "gp": 19, "mpg": 29.7, "z": 4.7, "vrank": 73}, {"pick": 17, "round": 2, "team": "Amihai's Awesome Team 🏆", "player": "Cooper Flagg", "gp": 70, "mpg": 33.5, "z": 7.15, "vrank": 38}, {"pick": 18, "round": 2, "team": "Asaf's Astounding Team", "player": "Evan Mobley", "gp": 65, "mpg": 31.9, "z": 5.7, "vrank": 56}, {"pick": 19, "round": 2, "team": "DORTAHTIT", "player": "Amen Thompson", "gp": 79, "mpg": 37.4, "z": 7.58, "vrank": 32}, {"pick": 20, "round": 2, "team": "Chat GPT", "player": "Jalen Williams", "gp": 33, "mpg": 28.4, "z": 4.5, "vrank": 76}, {"pick": 21, "round": 2, "team": "Barak's Best Team🏀", "player": "Alperen Sengun", "gp": 71, "mpg": 33.8, "z": 7.57, "vrank": 33}, {"pick": 22, "round": 2, "team": "Oriel's Otherworldly Team", "player": "Jalen Brunson", "gp": 74, "mpg": 35.0, "z": 6.81, "vrank": 41}, {"pick": 23, "round": 2, "team": "50 Shades of Shai", "player": "Jalen Johnson", "gp": 72, "mpg": 35.2, "z": 10.32, "vrank": 14}, {"pick": 24, "round": 2, "team": "Alon's Angry Team", "player": "Scottie Barnes", "gp": 80, "mpg": 33.5, "z": 10.3, "vrank": 15}, {"pick": 25, "round": 3, "team": "The Real KD", "player": "Derrick White", "gp": 77, "mpg": 34.1, "z": 6.94, "vrank": 40}, {"pick": 26, "round": 3, "team": "Trust the process", "player": "LaMelo Ball", "gp": 72, "mpg": 28.0, "z": 7.31, "vrank": 35}, {"pick": 27, "round": 3, "team": "Khachapuri’s Team", "player": "Chet Holmgren", "gp": 69, "mpg": 28.9, "z": 8.58, "vrank": 23}, {"pick": 28, "round": 3, "team": "Roy's Rowdy Team", "player": "Jaylen Brown", "gp": 71, "mpg": 34.4, "z": 7.85, "vrank": 29}, {"pick": 29, "round": 3, "team": "Amihai's Awesome Team 🏆", "player": "Ja Morant", "gp": 20, "mpg": 28.4, "z": 5.26, "vrank": 62}, {"pick": 30, "round": 3, "team": "Asaf's Astounding Team", "player": "Josh Giddey", "gp": 54, "mpg": 32.1, "z": 7.45, "vrank": 34}, {"pick": 31, "round": 3, "team": "DORTAHTIT", "player": "Bam Adebayo", "gp": 73, "mpg": 32.4, "z": 6.01, "vrank": 52}, {"pick": 32, "round": 3, "team": "Chat GPT", "player": "Donovan Mitchell", "gp": 70, "mpg": 33.5, "z": 11.43, "vrank": 7}, {"pick": 33, "round": 3, "team": "Barak's Best Team🏀", "player": "Pascal Siakam", "gp": 62, "mpg": 33.2, "z": 3.66, "vrank": 94}, {"pick": 34, "round": 3, "team": "Oriel's Otherworldly Team", "player": "Franz Wagner", "gp": 34, "mpg": 30.0, "z": 4.49, "vrank": 77}, {"pick": 35, "round": 3, "team": "50 Shades of Shai", "player": "Myles Turner", "gp": 71, "mpg": 26.9, "z": 3.27, "vrank": 102}, {"pick": 36, "round": 3, "team": "Alon's Angry Team", "player": "Jamal Murray", "gp": 75, "mpg": 35.4, "z": 10.66, "vrank": 12}, {"pick": 37, "round": 4, "team": "Alon's Angry Team", "player": "Ivica Zubac", "gp": 48, "mpg": 30.1, "z": 3.77, "vrank": 92}, {"pick": 38, "round": 4, "team": "50 Shades of Shai", "player": "Deni Avdija", "gp": 65, "mpg": 33.8, "z": 7.97, "vrank": 27}, {"pick": 39, "round": 4, "team": "Oriel's Otherworldly Team", "player": "Paolo Banchero", "gp": 72, "mpg": 34.7, "z": 4.88, "vrank": 69}, {"pick": 40, "round": 4, "team": "Barak's Best Team🏀", "player": "Zion Williamson", "gp": 62, "mpg": 29.7, "z": 3.6, "vrank": 97}, {"pick": 41, "round": 4, "team": "Chat GPT", "player": "Dyson Daniels", "gp": 76, "mpg": 33.2, "z": 5.3, "vrank": 60}, {"pick": 42, "round": 4, "team": "DORTAHTIT", "player": "Desmond Bane", "gp": 82, "mpg": 33.6, "z": 7.06, "vrank": 39}, {"pick": 43, "round": 4, "team": "Asaf's Astounding Team", "player": "Austin Reaves", "gp": 51, "mpg": 34.5, "z": 9.55, "vrank": 19}, {"pick": 44, "round": 4, "team": "Amihai's Awesome Team 🏆", "player": "Josh Hart", "gp": 66, "mpg": 30.2, "z": 4.21, "vrank": 81}, {"pick": 45, "round": 4, "team": "Roy's Rowdy Team", "player": "Nikola Vucevic", "gp": 63, "mpg": 28.8, "z": 4.92, "vrank": 67}, {"pick": 46, "round": 4, "team": "Khachapuri’s Team", "player": "Trey Murphy III", "gp": 66, "mpg": 35.5, "z": 9.17, "vrank": 20}, {"pick": 47, "round": 4, "team": "Trust the process", "player": "Michael Porter Jr.", "gp": 52, "mpg": 32.5, "z": 8.0, "vrank": 26}, {"pick": 48, "round": 4, "team": "The Real KD", "player": "Joel Embiid", "gp": 38, "mpg": 31.6, "z": 10.29, "vrank": 16}, {"pick": 49, "round": 5, "team": "The Real KD", "player": "Andrew Nembhard", "gp": 57, "mpg": 31.3, "z": 3.84, "vrank": 90}, {"pick": 50, "round": 5, "team": "Trust the process", "player": "Zach LaVine", "gp": 39, "mpg": 31.4, "z": 3.6, "vrank": 96}, {"pick": 51, "round": 5, "team": "Khachapuri’s Team", "player": "Jimmy Butler III", "gp": 38, "mpg": 31.1, "z": 8.32, "vrank": 25}, {"pick": 52, "round": 5, "team": "Roy's Rowdy Team", "player": "LeBron James", "gp": 60, "mpg": 33.2, "z": 7.25, "vrank": 36}, {"pick": 53, "round": 5, "team": "Amihai's Awesome Team 🏆", "player": "Lauri Markkanen", "gp": 42, "mpg": 34.3, "z": 9.76, "vrank": 18}, {"pick": 54, "round": 5, "team": "Asaf's Astounding Team", "player": "Kawhi Leonard", "gp": 65, "mpg": 32.1, "z": 13.49, "vrank": 6}, {"pick": 55, "round": 5, "team": "DORTAHTIT", "player": "Jaren Jackson Jr.", "gp": 48, "mpg": 30.3, "z": 6.64, "vrank": 44}, {"pick": 56, "round": 5, "team": "Chat GPT", "player": "Walker Kessler", "gp": 5, "mpg": 30.8, "z": 11.32, "vrank": null}, {"pick": 57, "round": 5, "team": "Barak's Best Team🏀", "player": "Kristaps Porzingis", "gp": 32, "mpg": 24.0, "z": 4.33, "vrank": 79}, {"pick": 58, "round": 5, "team": "Oriel's Otherworldly Team", "player": "De'Aaron Fox", "gp": 72, "mpg": 31.0, "z": 4.96, "vrank": 66}, {"pick": 59, "round": 5, "team": "50 Shades of Shai", "player": "Brandon Miller", "gp": 65, "mpg": 30.3, "z": 6.56, "vrank": 48}, {"pick": 60, "round": 5, "team": "Alon's Angry Team", "player": "Coby White", "gp": 50, "mpg": 25.0, "z": 1.61, "vrank": 155}, {"pick": 61, "round": 6, "team": "Alon's Angry Team", "player": "Jakob Poeltl", "gp": 46, "mpg": 25.0, "z": 2.27, "vrank": 131}, {"pick": 62, "round": 6, "team": "50 Shades of Shai", "player": "Payton Pritchard", "gp": 79, "mpg": 32.3, "z": 4.09, "vrank": 84}, {"pick": 63, "round": 6, "team": "Oriel's Otherworldly Team", "player": "Jalen Green", "gp": 32, "mpg": 25.9, "z": 0.78, "vrank": 181}, {"pick": 64, "round": 6, "team": "Barak's Best Team🏀", "player": "Jordan Poole", "gp": 39, "mpg": 23.9, "z": -0.49, "vrank": 226}, {"pick": 65, "round": 6, "team": "Chat GPT", "player": "DeMar DeRozan", "gp": 77, "mpg": 31.2, "z": 4.24, "vrank": 80}, {"pick": 66, "round": 6, "team": "DORTAHTIT", "player": "Norman Powell", "gp": 58, "mpg": 29.6, "z": 4.83, "vrank": 70}, {"pick": 67, "round": 6, "team": "Asaf's Astounding Team", "player": "Deandre Ayton", "gp": 72, "mpg": 27.2, "z": 3.0, "vrank": 113}, {"pick": 68, "round": 6, "team": "Amihai's Awesome Team 🏆", "player": "Mikal Bridges", "gp": 81, "mpg": 33.2, "z": 5.28, "vrank": 61}, {"pick": 69, "round": 6, "team": "Roy's Rowdy Team", "player": "Mark Williams", "gp": 60, "mpg": 23.6, "z": 3.93, "vrank": 88}, {"pick": 70, "round": 6, "team": "Khachapuri’s Team", "player": "OG Anunoby", "gp": 67, "mpg": 33.2, "z": 6.59, "vrank": 46}, {"pick": 71, "round": 6, "team": "Trust the process", "player": "Jarrett Allen", "gp": 56, "mpg": 27.1, "z": 4.46, "vrank": 78}, {"pick": 72, "round": 6, "team": "The Real KD", "player": "Shaedon Sharpe", "gp": 50, "mpg": 29.4, "z": 3.24, "vrank": 103}, {"pick": 73, "round": 7, "team": "The Real KD", "player": "Ausar Thompson", "gp": 73, "mpg": 26.0, "z": 2.85, "vrank": 119}, {"pick": 74, "round": 7, "team": "Trust the process", "player": "John Collins", "gp": 69, "mpg": 27.1, "z": 2.98, "vrank": 114}, {"pick": 75, "round": 7, "team": "Khachapuri’s Team", "player": "Jalen Duren", "gp": 70, "mpg": 28.2, "z": 7.17, "vrank": 37}, {"pick": 76, "round": 7, "team": "Roy's Rowdy Team", "player": "Alex Sarr", "gp": 48, "mpg": 27.2, "z": 5.73, "vrank": 55}, {"pick": 77, "round": 7, "team": "Amihai's Awesome Team 🏆", "player": "Isaiah Hartenstein", "gp": 47, "mpg": 24.2, "z": 3.3, "vrank": 101}, {"pick": 78, "round": 7, "team": "Asaf's Astounding Team", "player": "Darius Garland", "gp": 45, "mpg": 29.9, "z": 5.23, "vrank": 64}, {"pick": 79, "round": 7, "team": "DORTAHTIT", "player": "Christian Braun", "gp": 44, "mpg": 31.8, "z": 0.82, "vrank": 178}, {"pick": 80, "round": 7, "team": "Chat GPT", "player": "Tyler Herro", "gp": 33, "mpg": 31.3, "z": 6.38, "vrank": 49}, {"pick": 81, "round": 7, "team": "Barak's Best Team🏀", "player": "Miles Bridges", "gp": 77, "mpg": 31.0, "z": 3.07, "vrank": 110}, {"pick": 82, "round": 7, "team": "Oriel's Otherworldly Team", "player": "Rudy Gobert", "gp": 76, "mpg": 31.3, "z": 3.11, "vrank": 109}, {"pick": 83, "round": 7, "team": "50 Shades of Shai", "player": "Julius Randle", "gp": 79, "mpg": 33.0, "z": 5.8, "vrank": 54}, {"pick": 84, "round": 7, "team": "Alon's Angry Team", "player": "RJ Barrett", "gp": 57, "mpg": 30.3, "z": 1.95, "vrank": 142}, {"pick": 85, "round": 8, "team": "Alon's Angry Team", "player": "Anfernee Simons", "gp": 55, "mpg": 24.9, "z": 0.2, "vrank": 205}, {"pick": 86, "round": 8, "team": "50 Shades of Shai", "player": "Immanuel Quickley", "gp": 70, "mpg": 31.9, "z": 4.82, "vrank": 71}, {"pick": 87, "round": 8, "team": "Oriel's Otherworldly Team", "player": "Cameron Johnson", "gp": 54, "mpg": 30.5, "z": 1.78, "vrank": 150}, {"pick": 88, "round": 8, "team": "Barak's Best Team🏀", "player": "Brandon Ingram", "gp": 77, "mpg": 33.8, "z": 5.54, "vrank": 57}, {"pick": 89, "round": 8, "team": "Chat GPT", "player": "Naz Reid", "gp": 77, "mpg": 26.1, "z": 3.89, "vrank": 89}, {"pick": 90, "round": 8, "team": "DORTAHTIT", "player": "Cam Thomas", "gp": 42, "mpg": 21.0, "z": -3.53, "vrank": 343}, {"pick": 91, "round": 8, "team": "Asaf's Astounding Team", "player": "Matas Buzelis", "gp": 77, "mpg": 29.2, "z": 5.33, "vrank": 59}, {"pick": 92, "round": 8, "team": "Amihai's Awesome Team 🏆", "player": "Bennedict Mathurin", "gp": 54, "mpg": 30.0, "z": 2.94, "vrank": 117}, {"pick": 93, "round": 8, "team": "Roy's Rowdy Team", "player": "Malik Monk", "gp": 62, "mpg": 22.0, "z": 0.19, "vrank": 206}, {"pick": 94, "round": 8, "team": "Khachapuri’s Team", "player": "Devin Vassell", "gp": 67, "mpg": 30.5, "z": 1.75, "vrank": 152}, {"pick": 95, "round": 8, "team": "Trust the process", "player": "Kevin Porter Jr.", "gp": 38, "mpg": 33.2, "z": 9.92, "vrank": 17}, {"pick": 96, "round": 8, "team": "The Real KD", "player": "Jaden Ivey", "gp": 37, "mpg": 18.1, "z": -1.78, "vrank": 286}, {"pick": 97, "round": 9, "team": "The Real KD", "player": "Donovan Clingan", "gp": 77, "mpg": 27.2, "z": 5.91, "vrank": 53}, {"pick": 98, "round": 9, "team": "Trust the process", "player": "De'Andre Hunter", "gp": 45, "mpg": 26.1, "z": -0.16, "vrank": 217}, {"pick": 99, "round": 9, "team": "Khachapuri’s Team", "player": "Onyeka Okongwu", "gp": 74, "mpg": 31.0, "z": 6.17, "vrank": 50}, {"pick": 100, "round": 9, "team": "Roy's Rowdy Team", "player": "Jaden McDaniels", "gp": 73, "mpg": 31.7, "z": 5.24, "vrank": 63}, {"pick": 101, "round": 9, "team": "Amihai's Awesome Team 🏆", "player": "CJ McCollum", "gp": 76, "mpg": 29.8, "z": 3.05, "vrank": 111}, {"pick": 102, "round": 9, "team": "Asaf's Astounding Team", "player": "Andrew Wiggins", "gp": 68, "mpg": 30.3, "z": 4.9, "vrank": 68}, {"pick": 103, "round": 9, "team": "DORTAHTIT", "player": "Toumani Camara", "gp": 82, "mpg": 33.3, "z": 2.56, "vrank": 126}, {"pick": 104, "round": 9, "team": "Chat GPT", "player": "Herbert Jones", "gp": 56, "mpg": 28.4, "z": 0.85, "vrank": 176}, {"pick": 105, "round": 9, "team": "Barak's Best Team🏀", "player": "Reed Sheppard", "gp": 82, "mpg": 26.2, "z": 4.07, "vrank": 85}, {"pick": 106, "round": 9, "team": "Oriel's Otherworldly Team", "player": "Jalen Suggs", "gp": 57, "mpg": 27.6, "z": 6.67, "vrank": 43}, {"pick": 107, "round": 9, "team": "50 Shades of Shai", "player": "Kel'el Ware", "gp": 77, "mpg": 22.1, "z": 3.98, "vrank": 87}, {"pick": 108, "round": 9, "team": "Alon's Angry Team", "player": "Klay Thompson", "gp": 69, "mpg": 21.7, "z": -1.89, "vrank": 290}, {"pick": 109, "round": 10, "team": "Alon's Angry Team", "player": "Paul George", "gp": 37, "mpg": 30.7, "z": 6.12, "vrank": 51}, {"pick": 110, "round": 10, "team": "50 Shades of Shai", "player": "Tari Eason", "gp": 60, "mpg": 25.8, "z": 1.11, "vrank": 169}, {"pick": 111, "round": 10, "team": "Oriel's Otherworldly Team", "player": "Kyrie Irving", "gp": 0, "mpg": 0, "z": null, "vrank": null}, {"pick": 112, "round": 10, "team": "Barak's Best Team🏀", "player": "Nic Claxton", "gp": 69, "mpg": 27.8, "z": 1.7, "vrank": 153}, {"pick": 113, "round": 10, "team": "Chat GPT", "player": "Yves Missi", "gp": 66, "mpg": 19.7, "z": -1.09, "vrank": 252}, {"pick": 114, "round": 10, "team": "DORTAHTIT", "player": "Dereck Lively II", "gp": 7, "mpg": 16.5, "z": 1.27, "vrank": null}, {"pick": 115, "round": 10, "team": "Asaf's Astounding Team", "player": "Tobias Harris", "gp": 63, "mpg": 27.7, "z": 2.42, "vrank": 128}, {"pick": 116, "round": 10, "team": "Amihai's Awesome Team 🏆", "player": "Kyle Kuzma", "gp": 69, "mpg": 26.2, "z": 0.29, "vrank": 201}, {"pick": 117, "round": 10, "team": "Roy's Rowdy Team", "player": "Keyonte George", "gp": 54, "mpg": 33.1, "z": 8.79, "vrank": 22}, {"pick": 118, "round": 10, "team": "Khachapuri’s Team", "player": "D'Angelo Russell", "gp": 26, "mpg": 19.0, "z": -3.33, "vrank": 337}, {"pick": 119, "round": 10, "team": "Trust the process", "player": "Isaiah Collier", "gp": 59, "mpg": 25.7, "z": 1.56, "vrank": 156}, {"pick": 120, "round": 10, "team": "The Real KD", "player": "Cam Whitmore", "gp": 21, "mpg": 16.9, "z": -2.9, "vrank": 321}, {"pick": 121, "round": 11, "team": "The Real KD", "player": "Neemias Queta", "gp": 76, "mpg": 25.3, "z": 4.18, "vrank": 82}, {"pick": 122, "round": 11, "team": "Trust the process", "player": "Jrue Holiday", "gp": 53, "mpg": 29.4, "z": 4.72, "vrank": 72}, {"pick": 123, "round": 11, "team": "Khachapuri’s Team", "player": "Draymond Green", "gp": 68, "mpg": 27.5, "z": 2.1, "vrank": 135}, {"pick": 124, "round": 11, "team": "Roy's Rowdy Team", "player": "Stephon Castle", "gp": 68, "mpg": 30.0, "z": 3.8, "vrank": 91}, {"pick": 125, "round": 11, "team": "Amihai's Awesome Team 🏆", "player": "Aaron Gordon", "gp": 36, "mpg": 27.9, "z": 1.91, "vrank": 143}, {"pick": 126, "round": 11, "team": "Asaf's Astounding Team", "player": "Brandin Podziemski", "gp": 82, "mpg": 28.4, "z": 2.6, "vrank": 124}, {"pick": 127, "round": 11, "team": "DORTAHTIT", "player": "Scotty Pippen Jr.", "gp": 10, "mpg": 21.2, "z": 2.9, "vrank": null}, {"pick": 128, "round": 11, "team": "Chat GPT", "player": "Bub Carrington", "gp": 82, "mpg": 27.7, "z": -0.02, "vrank": 215}, {"pick": 129, "round": 11, "team": "Barak's Best Team🏀", "player": "Santi Aldama", "gp": 43, "mpg": 27.9, "z": 2.46, "vrank": 127}, {"pick": 130, "round": 11, "team": "Oriel's Otherworldly Team", "player": "Daniel Gafford", "gp": 55, "mpg": 21.7, "z": 2.07, "vrank": 137}, {"pick": 131, "round": 11, "team": "50 Shades of Shai", "player": "Donte DiVincenzo", "gp": 82, "mpg": 30.4, "z": 2.96, "vrank": 115}, {"pick": 132, "round": 11, "team": "Alon's Angry Team", "player": "Jabari Smith Jr.", "gp": 77, "mpg": 35.1, "z": 3.71, "vrank": 93}, {"pick": 133, "round": 12, "team": "Alon's Angry Team", "player": "P.J. Washington", "gp": 56, "mpg": 31.0, "z": 2.2, "vrank": 132}, {"pick": 134, "round": 12, "team": "50 Shades of Shai", "player": "Isaiah Jackson", "gp": 55, "mpg": 16.5, "z": -0.93, "vrank": 237}, {"pick": 135, "round": 12, "team": "Oriel's Otherworldly Team", "player": "Russell Westbrook", "gp": 64, "mpg": 28.9, "z": 3.22, "vrank": 104}, {"pick": 136, "round": 12, "team": "Barak's Best Team🏀", "player": "Adem Bona", "gp": 71, "mpg": 17.4, "z": -1.87, "vrank": 289}, {"pick": 137, "round": 12, "team": "Chat GPT", "player": "Aaron Nesmith", "gp": 45, "mpg": 29.7, "z": 0.63, "vrank": 188}, {"pick": 138, "round": 12, "team": "DORTAHTIT", "player": "Ty Jerome", "gp": 15, "mpg": 22.6, "z": 6.64, "vrank": 45}, {"pick": 139, "round": 12, "team": "Asaf's Astounding Team", "player": "Mitchell Robinson", "gp": 60, "mpg": 19.6, "z": 0.48, "vrank": 192}, {"pick": 140, "round": 12, "team": "Amihai's Awesome Team 🏆", "player": "Collin Sexton", "gp": 68, "mpg": 23.7, "z": 2.78, "vrank": 120}, {"pick": 141, "round": 12, "team": "Roy's Rowdy Team", "player": "Bradley Beal", "gp": 6, "mpg": 20.2, "z": -5.72, "vrank": null}, {"pick": 142, "round": 12, "team": "Khachapuri’s Team", "player": "Cason Wallace", "gp": 77, "mpg": 26.6, "z": 2.03, "vrank": 139}, {"pick": 143, "round": 12, "team": "Trust the process", "player": "Wendell Carter Jr.", "gp": 78, "mpg": 29.3, "z": 2.58, "vrank": 125}, {"pick": 144, "round": 12, "team": "The Real KD", "player": "Kelly Oubre Jr.", "gp": 50, "mpg": 31.5, "z": 2.66, "vrank": 123}, {"pick": 145, "round": 13, "team": "The Real KD", "player": "Bobby Portis", "gp": 67, "mpg": 24.2, "z": 1.14, "vrank": 166}, {"pick": 146, "round": 13, "team": "Trust the process", "player": "VJ Edgecombe", "gp": 75, "mpg": 35.0, "z": 5.01, "vrank": 65}, {"pick": 147, "round": 13, "team": "Khachapuri’s Team", "player": "Zaccharie Risacher", "gp": 67, "mpg": 22.4, "z": -1.08, "vrank": 251}, {"pick": 148, "round": 13, "team": "Roy's Rowdy Team", "player": "Jeremy Sochan", "gp": 39, "mpg": 11.8, "z": -4.86, "vrank": 397}, {"pick": 149, "round": 13, "team": "Amihai's Awesome Team 🏆", "player": "Rui Hachimura", "gp": 68, "mpg": 28.3, "z": -0.8, "vrank": 234}, {"pick": 150, "round": 13, "team": "Asaf's Astounding Team", "player": "Khris Middleton", "gp": 63, "mpg": 22.8, "z": -1.12, "vrank": 253}, {"pick": 151, "round": 13, "team": "DORTAHTIT", "player": "Ace Bailey", "gp": 72, "mpg": 27.6, "z": 1.13, "vrank": 167}, {"pick": 152, "round": 13, "team": "Chat GPT", "player": "Brook Lopez", "gp": 75, "mpg": 21.8, "z": 0.08, "vrank": 210}, {"pick": 153, "round": 13, "team": "Barak's Best Team🏀", "player": "Ayo Dosunmu", "gp": 69, "mpg": 27.3, "z": 3.48, "vrank": 98}, {"pick": 154, "round": 13, "team": "Oriel's Otherworldly Team", "player": "Dejounte Murray", "gp": 14, "mpg": 27.8, "z": 7.29, "vrank": null}, {"pick": 155, "round": 13, "team": "50 Shades of Shai", "player": "Zach Edey", "gp": 11, "mpg": 25.8, "z": 8.14, "vrank": null}, {"pick": 156, "round": 13, "team": "Alon's Angry Team", "player": "Kentavious Caldwell-Pope", "gp": 51, "mpg": 21.3, "z": -1.41, "vrank": 267}, {"pick": 157, "round": 14, "team": "Alon's Angry Team", "player": "Buddy Hield", "gp": 51, "mpg": 16.1, "z": -2.42, "vrank": 303}, {"pick": 158, "round": 14, "team": "50 Shades of Shai", "player": "Obi Toppin", "gp": 24, "mpg": 17.7, "z": 0.71, "vrank": 185}, {"pick": 159, "round": 14, "team": "Oriel's Otherworldly Team", "player": "Keegan Murray", "gp": 23, "mpg": 34.5, "z": 3.42, "vrank": 100}, {"pick": 160, "round": 14, "team": "Barak's Best Team🏀", "player": "Dylan Harper", "gp": 69, "mpg": 22.6, "z": 0.72, "vrank": 184}, {"pick": 161, "round": 14, "team": "Chat GPT", "player": "Keon Ellis", "gp": 72, "mpg": 20.5, "z": -1.19, "vrank": 255}, {"pick": 162, "round": 14, "team": "DORTAHTIT", "player": "Jonathan Kuminga", "gp": 36, "mpg": 23.1, "z": -1.02, "vrank": 246}, {"pick": 163, "round": 14, "team": "Asaf's Astounding Team", "player": "Taylor Hendricks", "gp": 58, "mpg": 19.3, "z": -1.68, "vrank": 283}, {"pick": 164, "round": 14, "team": "Amihai's Awesome Team 🏆", "player": "Dennis Schroder", "gp": 70, "mpg": 24.2, "z": -0.43, "vrank": 224}, {"pick": 165, "round": 14, "team": "Roy's Rowdy Team", "player": "Keldon Johnson", "gp": 82, "mpg": 23.3, "z": 0.31, "vrank": 198}, {"pick": 166, "round": 14, "team": "Khachapuri’s Team", "player": "Jaime Jaquez Jr.", "gp": 75, "mpg": 28.3, "z": 2.16, "vrank": 133}, {"pick": 167, "round": 14, "team": "Trust the process", "player": "Dillon Brooks", "gp": 56, "mpg": 30.4, "z": 1.97, "vrank": 140}, {"pick": 168, "round": 14, "team": "The Real KD", "player": "Quentin Grimes", "gp": 75, "mpg": 29.4, "z": 1.87, "vrank": 145}], "pool_size": 463};
+const POOL = DATA.pool_size;
+const picks = DATA.picks.map(p => {
+  const vr = p.vrank ?? POOL + 40;
+  return {...p, vr, diff: p.pick - vr, dnp: p.vrank == null};
+});
+const short = n => n.replace(/ Team$/,'').replace(/^The /,'').replace(/^(\S+)['’]s .*/,'$1');
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+const vtag = p => p.dnp ? (p.gp > 0 ? `INJ ${p.gp}gp` : 'DNP') : '#' + p.vr;
+function verdict(p){
+  if (p.dnp) return [p.gp > 0 ? 'INJ' : 'DNP', '#6b7280'];
+  if (p.diff >= 25) return ['Steal', '#2563eb'];
+  if (p.diff >= 10) return ['Solid', '#0d9488'];
+  if (p.diff > -10) return ['Fair', '#9ca3af'];
+  if (p.diff > -25) return ['Reach', '#d97706'];
+  return ['Bust', '#dc2626'];
+}
+function heat(p){
+  const d = Math.max(-60, Math.min(60, p.diff));
+  if (p.dnp) return 'rgba(220,38,38,.42)';
+  if (d > 8)  return `rgba(37,99,235,${(0.08 + d/60*0.38).toFixed(2)})`;
+  if (d < -8) return `rgba(220,38,38,${(0.08 - d/60*0.38).toFixed(2)})`;
+  return 'rgba(156,163,175,.10)';
+}
+
+const teams = {};
+picks.forEach(p => { (teams[p.team] ??= []).push(p); });
+const tstats = Object.entries(teams).map(([name, ps]) => ({
+  name, avg: ps.reduce((s,p)=>s+p.diff,0)/ps.length, z: ps.reduce((s,p)=>s+(p.z||0),0)
+})).sort((a,b)=>b.avg-a.avg);
+const gletter = i => i<2 ? 'A' : i<5 ? 'B' : i<8 ? 'C' : i<10 ? 'D' : 'F';
+const gcolor = { A:'#16a34a', B:'#0d9488', C:'#d97706', D:'#ea580c', F:'#dc2626' };
+document.getElementById('grades').innerHTML = tstats.map((t,i)=>{ const L=gletter(i); return `
+  <div class="gcard"><span class="letter" style="background:${gcolor[L]}">${L}</span>
+  <div><div class="nm">${esc(short(t.name))}</div><div class="dt">avg diff ${t.avg>0?'+':''}${t.avg.toFixed(1)} · zΣ ${t.z.toFixed(1)}</div></div></div>`; }).join('');
+
+const r1 = picks.filter(p=>p.round===1).sort((a,b)=>a.pick-b.pick).map(p=>p.team);
+const rounds = Math.max(...picks.map(p=>p.round));
+let bh = '<tr><th>Rd</th>' + r1.map(t=>`<th>${esc(short(t))}</th>`).join('') + '</tr>';
+for (let r=1; r<=rounds; r++){
+  bh += `<tr><th>${r}</th>` + r1.map(t=>{
+    const p = picks.find(x=>x.round===r && x.team===t);
+    if (!p) return '<td></td>';
+    const w = p.player.split(' ');
+    const last = /^(Jr\.?|Sr\.?|II|III|IV)$/.test(w[w.length-1]) ? w.slice(-2).join(' ') : w[w.length-1];
+    return `<td style="background:${heat(p)}" title="${esc(p.player)} — pick ${p.pick}, value ${vtag(p)}">${esc(last)}<span class="r">${p.pick} → ${vtag(p)}</span></td>`;
+  }).join('') + '</tr>';
+}
+document.getElementById('board').innerHTML = bh;
+
+const played = picks.filter(p=>!p.dnp);
+const fill = (id, list) => document.getElementById(id).innerHTML = list.map(p=>{ const [v,c]=verdict(p); return `
+  <li><span class="pill" style="background:${c}">${v}</span><b>${esc(p.player)}</b>
+  <span class="meta">pick ${p.pick} → value ${vtag(p)}<br>${esc(short(p.team))}</span></li>`; }).join('');
+fill('steals', [...played].sort((a,b)=>b.diff-a.diff).slice(0,5));
+fill('busts', [...picks].sort((a,b)=>a.diff-b.diff).slice(0,5).map(p=>p));
+
+let sortKey='pick';
+function renderRows(){
+  const rows = [...picks].sort((a,b)=> sortKey==='pick' ? a.pick-b.pick : sortKey==='diff' ? b.diff-a.diff : (b.z??-99)-(a.z??-99));
+  document.getElementById('rows').innerHTML = rows.map(p=>{ const [v,c]=verdict(p); return `
+    <tr><td class="num">${p.pick}</td><td class="num">${p.round}</td><td><b>${esc(p.player)}</b></td><td>${esc(short(p.team))}</td>
+    <td class="num">${p.gp||'—'}</td><td class="num">${p.mpg||'—'}</td><td class="num">${p.z==null?'—':p.z.toFixed(2)}</td>
+    <td class="num">${p.dnp?'—':'#'+p.vr}</td><td class="num" style="color:${p.diff>=10?'#2563eb':p.diff<=-10?'#dc2626':'var(--ink3)'}">${p.diff>0?'+':''}${p.dnp?'—':p.diff}</td>
+    <td><span class="pill" style="background:${c}">${v}</span></td></tr>`; }).join('');
+}
+document.getElementById('sorts').querySelectorAll('button').forEach(b=> b.onclick=()=>{ sortKey=b.dataset.k;
+  document.querySelectorAll('#sorts button').forEach(x=>x.className=''); b.className='on'; renderRows(); });
+renderRows();
+
+document.getElementById('theme').onclick=()=>{ document.documentElement.classList.toggle('dark');
+  document.getElementById('theme').textContent = document.documentElement.classList.contains('dark')?'☀️':'🌙'; };
+</script>
+</body>
+</html>

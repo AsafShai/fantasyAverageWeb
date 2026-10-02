@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slot Cap Bar — Anatomy</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --s1:#1d4ed8;   /* played */
+  --s2:#60a5fa;   /* will add */
+  --s3:#dbeafe;   /* could still add */
+  --s4:#fca5a5;   /* impossible */
+  --s4ink:#b91c1c;
+  --pace:#7c3aed; --pace-bg:#ede9fe;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --s1:#60a5fa; --s2:#2563eb; --s3:#1e3a5f; --s4:#7f1d1d; --s4ink:#fca5a5;
+  --pace:#a78bfa; --pace-bg:#2e1065;
+  --ok:#4ade80; --ok-bg:#052e16; --warn:#fbbf24; --warn-bg:#451a03; --bad:#f87171; --bad-bg:#450a0a;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1);padding:18px 12px 60px}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+h2{font-size:15px;font-weight:800}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:16px;line-height:1.65}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:16px;margin-bottom:16px}
+.cardhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+.tag{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.bad{background:var(--bad-bg);color:var(--bad)}
+.why{font-size:12px;color:var(--ink2);line-height:1.7;margin-top:12px}
+.why b{color:var(--ink1)}
+button.theme{position:fixed;top:12px;right:12px;border:1px solid var(--border);background:var(--card);border-radius:8px;font-size:15px;cursor:pointer;padding:6px 9px;z-index:9}
+
+/* ---------- anatomy diagram ---------- */
+.anat{padding:34px 0 6px;position:relative}
+.abar{position:relative;height:34px;border-radius:9px;overflow:hidden;display:flex;border:1px solid var(--border)}
+.aseg{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;overflow:hidden;white-space:nowrap}
+.aseg.l{color:var(--ink1)}
+.acap{position:absolute;top:-26px;left:0;right:0;height:18px;border-left:1px solid var(--ink3);border-right:1px solid var(--ink3);border-top:1px solid var(--ink3)}
+.acap span{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:var(--card);padding:0 8px;font-size:11px;font-weight:800;color:var(--ink2)}
+.apace{position:absolute;top:-4px;bottom:-4px;width:3px;background:var(--pace);border-radius:2px;z-index:3}
+.apaceflag{position:absolute;top:-24px;transform:translateX(-50%);background:var(--pace);color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;z-index:4}
+.apaceflag::after{content:'';position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);border-left:4px solid transparent;border-right:4px solid transparent;border-top:4px solid var(--pace)}
+.aticks{position:relative;height:52px;margin-top:2px}
+.atick{position:absolute;top:0;transform:translateX(-50%);text-align:center;font-size:10.5px;color:var(--ink2);width:88px}
+.atick .ln{width:1px;height:12px;background:var(--ink3);margin:0 auto 3px}
+.atick b{display:block;font-size:12px;color:var(--ink1);font-variant-numeric:tabular-nums}
+.atick i{font-style:normal;color:var(--ink3);font-size:10px;line-height:1.35;display:block}
+
+/* ---------- live bars ---------- */
+.row{padding:9px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:none}
+.top{display:flex;align-items:center;gap:9px}
+.slot{font-weight:800;font-size:12.5px;width:36px;flex:0 0 36px}
+.capn{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums;flex:0 0 auto;font-weight:700}
+.track{position:relative;height:18px;flex:1}
+.segs{position:absolute;inset:0;border-radius:9px;overflow:hidden;display:flex;border:1px solid var(--border)}
+.seg{height:100%}
+.seg.s1{background:var(--s1)} .seg.s2{background:var(--s2)}
+.seg.s3{background:var(--s3)} .seg.s4{background:var(--s4)}
+.hovers{position:absolute;inset:0}
+.hov{position:absolute;top:0;bottom:0;cursor:help}
+.hov::after{content:attr(data-tip);position:absolute;bottom:150%;left:50%;transform:translateX(-50%);
+  background:var(--ink1);color:var(--card);font-size:11px;font-weight:500;line-height:1.5;padding:8px 10px;
+  border-radius:8px;width:220px;white-space:normal;text-align:left;z-index:40;opacity:0;pointer-events:none;
+  box-shadow:0 6px 18px rgba(0,0,0,.28);transition:opacity .12s}
+.hov:hover::after,.hov:focus::after{opacity:1}
+.pace{position:absolute;top:-5px;bottom:-5px;width:3px;background:var(--pace);border-radius:2px;z-index:5;cursor:help}
+.pace::after{content:attr(data-tip);position:absolute;bottom:150%;left:50%;transform:translateX(-50%);
+  background:var(--pace);color:#fff;font-size:11px;font-weight:600;line-height:1.5;padding:8px 10px;border-radius:8px;
+  width:210px;white-space:normal;text-align:left;z-index:40;opacity:0;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.28);transition:opacity .12s}
+.pace:hover::after{opacity:1}
+.nums{display:flex;flex-wrap:wrap;gap:4px;padding-left:45px;margin-top:7px}
+.n{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;display:inline-flex;align-items:center;gap:4px}
+.n i{width:9px;height:9px;border-radius:2px;display:inline-block;font-style:normal}
+.n b{font-variant-numeric:tabular-nums}
+.n.k{background:var(--chip);color:var(--ink2)}
+.n.pace{background:var(--pace-bg);color:var(--pace);position:static;width:auto;height:auto}
+.n.pace::after{display:none}
+
+.legend{display:flex;flex-direction:column;gap:7px;margin-top:14px}
+.lrow{display:flex;align-items:flex-start;gap:9px;font-size:11.5px;color:var(--ink2);line-height:1.5}
+.lrow i{width:16px;height:14px;border-radius:3px;flex:0 0 16px;margin-top:1px;border:1px solid var(--border)}
+.lrow b{color:var(--ink1)}
+.q{font-size:12px;color:var(--ink2);line-height:1.7}
+.q dt{font-weight:800;color:var(--ink1);margin-top:11px}
+.q dt:first-child{margin-top:0}
+.q dd{margin:2px 0 0}
+@media(max-width:700px){
+  h1{font-size:17px}
+  .aseg{font-size:9.5px}
+  /* positioned tick labels collide below ~700px — reflow them into a wrapped list */
+  .aticks{height:auto;display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .atick{position:static;transform:none;width:auto;display:flex;align-items:baseline;gap:5px;
+    background:var(--chip);border-radius:6px;padding:3px 8px;text-align:left}
+  .atick .ln{display:none}
+  .atick b{display:inline}
+  .atick i{display:inline}
+}
+</style>
+</head>
+<body>
+<button class="theme" id="theme">🌙</button>
+<div class="wrap">
+  <h1>Slot cap bar — rebuilt anatomy</h1>
+  <div class="sub">
+    Your questions were all symptoms of one mistake: I layered four quantities plus a reference marker into one strip, using two identical black lines and a floating red block, then explained it in a legend.
+    Redone so <b>the bar is one continuous left-to-right story</b> — every boundary is a real number, nothing floats, and only one thing is a marker.
+  </div>
+
+  <!-- ANATOMY -->
+  <div class="card">
+    <div class="cardhead"><h2>Read it left to right</h2><span class="tag ok">C slot · the worst case on the roster</span></div>
+    <div class="anat" id="anat"></div>
+    <div class="legend">
+      <div class="lrow"><i style="background:var(--s1)"></i><span><b>Played — 52.</b> Games this slot has already used. Locked in.</span></div>
+      <div class="lrow"><i style="background:var(--s2)"></i><span><b>On track to add — 10.</b> What the current rate projects you'll add by season's end. Played + this = <b>est 62</b>.</span></div>
+      <div class="lrow"><i style="background:var(--s3)"></i><span><b>Still possible — 12.</b> Upside beyond the projection: enough game days remain to reach <b>74</b> if you filled this slot every single night from here.</span></div>
+      <div class="lrow"><i style="background:var(--s4)"></i><span><b>Gone — 8.</b> Cap you can no longer reach no matter what, because there aren't enough game days left. Not "unused" — <i>impossible</i>.</span></div>
+      <div class="lrow"><i style="background:var(--pace);border:none"></i><span><b>NBA pace — 68.4.</b> Where this slot would sit today if you'd never left it empty. The only marker on the bar, and the only purple thing on the page.</span></div>
+    </div>
+  </div>
+
+  <!-- Q&A -->
+  <div class="card">
+    <div class="cardhead"><h2>Your questions, answered on the bar</h2></div>
+    <dl class="q">
+      <dt>"Why is the unreachable part after the cap?"</dt>
+      <dd>It isn't — and that was the bug in the old design. <b>The cap is the whole width of the bar</b>, not a line inside it. The bar always spans 0 → cap, so red sits <i>inside</i> the cap, at the far end. The bracket above the diagram now says this out loud instead of leaving you to infer it.</dd>
+
+      <dt>"There are two lines and I can't tell them apart."</dt>
+      <dd>Now there's one. The est. tick is gone: <b>est is where colour 2 ends</b>, so the boundary carries the value instead of a line drawn on top of it. Pace stays a marker because it's the only quantity that isn't a segment boundary — it's an outside reference, so it gets its own shape <i>and</i> its own hue.</dd>
+
+      <dt>"What is cap remaining?"</dt>
+      <dd>Deleted. It was one grey area covering two different things — cap you can still get, and cap you can't. Those are now separate colours with separate names: <b>still possible</b> and <b>gone</b>.</dd>
+
+      <dt>"What does the red mean?"</dt>
+      <dd>Dead cap. With 22 game days left, a 1-per-day slot can add at most 22 more — so C tops out at 74 of 82 and those last 8 are unreachable. Red only appears when a slot is in that state; most slots have no red at all.</dd>
+    </dl>
+  </div>
+
+  <!-- LIVE -->
+  <div class="card">
+    <div class="cardhead"><h2>All eight slots</h2><span class="tag ok">hover any segment</span></div>
+    <div id="bars"></div>
+    <div class="why">
+      <b>Hover on desktop, chips on mobile.</b> Every segment carries its own tooltip naming the quantity, its value, and what it means — so the legend is a reminder, not a prerequisite. Touch devices can't hover, so the same four values stay printed as chips under every bar, colour-keyed to their segment. Nothing is hover-only.<br><br>
+      <b>Read the roster in one pass:</b> only <b>C</b> and <b>F</b> carry red, so those are the two slots with cap you've already lost. <b>C</b> is also the only bar whose purple marker sits far to the right of the blue — behind pace and not projected to catch up. SG, G and UTIL have blue running past purple: ahead of pace.
+    </div>
+  </div>
+</div>
+
+<script>
+const DL=22, NBA_PACE=68.4;
+const S=[{n:'PG',cap:82,used:68,est:79},{n:'SG',cap:82,used:71,est:82},{n:'SF',cap:82,used:66,est:77},
+{n:'PF',cap:82,used:69,est:80},{n:'C',cap:82,used:52,est:62},{n:'G',cap:82,used:70,est:81},
+{n:'F',cap:82,used:58,est:68},{n:'UTIL',cap:248,used:210,est:244}].map(s=>{
+  const pd=s.n==='UTIL'?3:1;
+  s.perDay=pd;
+  s.max=Math.min(s.cap,s.used+DL*pd);
+  s.par=+(NBA_PACE*pd).toFixed(1);
+  s.delta=+(s.used-s.par).toFixed(1);
+  return s;});
+const p=(v,c)=>(v/c*100);
+const px=(v,c)=>p(v,c).toFixed(2)+'%';
+
+/* anatomy diagram — C */
+(function(){
+  const s=S.find(x=>x.n==='C');
+  const seg=[[0,s.used,'s1','played 52'],[s.used,s.est,'s2','+10'],[s.est,s.max,'s3','+12'],[s.max,s.cap,'s4','8 gone']];
+  const cols={s1:'var(--s1)',s2:'var(--s2)',s3:'var(--s3)',s4:'var(--s4)'};
+  document.getElementById('anat').innerHTML=`
+    <div class="acap"><span>cap = 82 = the entire bar</span></div>
+    <div class="abar">
+      ${seg.map(([a,b,c,t])=>`<div class="aseg ${c==='s3'||c==='s4'?'l':''}" style="width:${px(b-a,s.cap)};background:${cols[c]}">${t}</div>`).join('')}
+      <div class="apace" style="left:${px(s.par,s.cap)}"></div>
+    </div>
+    <div class="apaceflag" style="left:${px(s.par,s.cap)};top:2px">NBA pace 68.4</div>
+    <div class="aticks">
+      ${[[0,'0','season start'],[s.used,'52','used'],[s.est,'62','est.'],[s.max,'74','max reachable'],[s.cap,'82','cap']]
+        .map(([v,lab,note])=>`<div class="atick" style="left:${px(v,s.cap)}"><div class="ln"></div><b>${lab}</b><i>${note}</i></div>`).join('')}
+    </div>`;
+})();
+
+/* live bars */
+document.getElementById('bars').innerHTML=S.map(s=>{
+  const willAdd=Math.max(0,s.est-s.used), possible=Math.max(0,s.max-s.est), gone=s.cap-s.max;
+  const seg=[
+    ['s1',s.used,`Played — ${s.used} of ${s.cap}. Games this slot has already used this season.`],
+    ['s2',willAdd,`On track to add — ${willAdd}. Projected finish is ${s.est}, from the current fill rate.`],
+    ['s3',possible,`Still possible — ${possible} more. Fill this slot every remaining night and it reaches ${s.max}.`],
+    ['s4',gone,`Gone — ${gone}. Only ${DL} game days remain${s.perDay>1?` (×${s.perDay} UTIL slots)`:''}, so ${s.cap} is out of reach.`]
+  ];
+  let acc=0;
+  const hov=seg.filter(([,v])=>v>0).map(([c,v,tip])=>{
+    const left=px(acc,s.cap), w=px(v,s.cap); acc+=v;
+    return `<span class="hov" style="left:${left};width:${w}" tabindex="0" data-tip="${tip}"></span>`;
+  }).join('');
+  const chip=(cls,col,lab,val)=>`<span class="n ${cls}"><i style="background:${col}"></i>${lab} <b>${val}</b></span>`;
+  return `<div class="row"><div class="top">
+    <span class="slot">${s.n}</span>
+    <span class="track">
+      <span class="segs">${seg.map(([c,v])=>v>0?`<span class="seg ${c}" style="width:${px(v,s.cap)}"></span>`:'').join('')}</span>
+      <span class="hovers">${hov}</span>
+      <span class="pace" style="left:${px(s.par,s.cap)}" data-tip="NBA pace ${s.par} — where this slot would sit today if it had never been left empty. You are ${s.delta>=0?'ahead by '+s.delta:'behind by '+Math.abs(s.delta)}."></span>
+    </span>
+    <span class="capn">/${s.cap}</span></div>
+    <div class="nums">
+      ${chip('k','var(--s1)','played',s.used)}
+      ${chip('k','var(--s2)','est',s.est)}
+      ${chip('k','var(--s3)','max',s.max)}
+      ${gone>0?chip('k','var(--s4)','gone',gone):''}
+      <span class="n pace">pace <b>${s.delta>0?'+':''}${s.delta}</b></span>
+    </div></div>`;
+}).join('');
+
+document.getElementById('theme').onclick=()=>{
+  document.body.classList.toggle('dark');
+  document.getElementById('theme').textContent=document.body.classList.contains('dark')?'☀️':'🌙';};
+</script>
+</body>
+</html>

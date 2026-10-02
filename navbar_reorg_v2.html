@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navbar Reorg v2 — Options</title>
+<style>
+  :root {
+    --blue:#2563eb; --purple:#9333ea; --gray-600:#4b5563; --gray-100:#f3f4f6;
+    --border:#e5e7eb; --green:#16a34a; --red:#dc2626; --amber:#d97706; --ink:#1f2937;
+    --card:#fff; --page:#fafafa;
+  }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,sans-serif; max-width:1040px; margin:0 auto; padding:24px 18px 60px;
+         color:var(--ink); line-height:1.5; background:var(--page); }
+  h1 { background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text;
+       color:transparent; font-size:28px; margin-bottom:4px; }
+  h2 { border-bottom:2px solid var(--border); padding-bottom:6px; margin-top:36px; font-size:19px; }
+  .sub { color:#6b7280; font-size:14px; margin-top:0; }
+
+  .optbar { display:flex; gap:8px; flex-wrap:wrap; margin:18px 0 6px; }
+  .optbtn { font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px; background:#e5e7eb;
+            color:var(--gray-600); cursor:pointer; border:1px solid transparent; user-select:none; }
+  .optbtn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .optbtn .rec { font-size:10px; opacity:.8; margin-left:5px; }
+
+  .optcard { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-top:12px; }
+  .optcard h3 { margin:0 0 4px; font-size:16px; }
+  .optcard p.why { margin:4px 0 0; font-size:13.5px; color:var(--gray-600); }
+  .metrics { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .metric { background:var(--gray-100); border-radius:8px; padding:6px 10px; font-size:12px; }
+  .metric b { display:block; font-size:16px; color:var(--blue); }
+  .pro, .con { font-size:13px; margin:3px 0; }
+  .pro::before { content:"+ "; color:var(--green); font-weight:700; }
+  .con::before { content:"- "; color:var(--red); font-weight:700; }
+
+  /* desktop nav mockup */
+  .navmock { background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.06);
+             padding:10px 12px; display:flex; align-items:center; gap:6px; margin:14px 0 0; flex-wrap:wrap; }
+  .brand { font-weight:700; background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text;
+           background-clip:text; color:transparent; white-space:nowrap; margin-right:6px; cursor:pointer; font-size:14px; }
+  .navitem { font-size:13px; padding:6px 9px; border-radius:6px; color:var(--gray-600); white-space:nowrap;
+             position:relative; cursor:pointer; }
+  .navitem:hover { background:var(--gray-100); }
+  .navitem.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .navitem.group.open .dropdown { display:block; }
+  .dropdown { display:none; position:absolute; top:100%; left:0; margin-top:4px; background:#fff; border:1px solid var(--border);
+              border-radius:6px; box-shadow:0 6px 14px rgba(0,0,0,.12); padding:5px; min-width:165px; z-index:10; }
+  .dropdown div { padding:7px 9px; font-size:12.5px; border-radius:4px; color:var(--gray-600); white-space:nowrap; }
+  .dropdown div:hover { background:var(--gray-100); }
+  .dropdown div.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .caret { font-size:9px; opacity:.6; margin-left:3px; }
+  .flagged { opacity:.55; }
+
+  .widthbar { display:flex; gap:6px; margin:12px 0 0; align-items:center; flex-wrap:wrap; }
+  .widthbar span.lbl { font-size:12px; color:#6b7280; margin-right:4px; }
+  .wbtn { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .wbtn.active { background:var(--ink); color:#fff; }
+  .navmock.compressed .navitem .txt { display:none; }
+  .navmock.compressed .navitem { padding:6px 8px; font-size:17px; }
+  .navmock.compressed .caret { font-size:8px; }
+  .navmock.compressed .dropdown div { font-size:12.5px; }
+  .navmock.compressed .dropdown { font-size:12.5px; }
+
+  .preview { margin-top:10px; padding:9px 13px; background:var(--gray-100); border-radius:8px; font-size:13px; }
+  .preview b { color:var(--blue); }
+
+  .flexrow { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .mobilewrap { width:300px; border:1px solid var(--border); border-radius:14px; padding:10px; background:#fff;
+                box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .mobrow { display:flex; align-items:center; justify-content:space-between; padding:9px 11px; border-radius:6px;
+            font-size:13px; color:var(--gray-600); cursor:pointer; }
+  .mobrow:hover { background:var(--gray-100); }
+  .mobrow.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .mobrow.grp { border:1px dashed var(--border); font-weight:600; margin:2px 0; }
+  .mobrow.grp.open { background:#eff6ff; color:var(--blue); border-color:var(--blue); }
+  .mobrow.grp .caret { transition:transform .15s ease; display:inline-block; }
+  .mobrow.grp.open .caret { transform:rotate(180deg); }
+  .mobsubwrap { overflow:hidden; max-height:0; transition:max-height .18s ease; background:#fafafa; border-radius:6px; }
+  .mobsubwrap.open { max-height:260px; }
+  .mobsub { padding:8px 11px 8px 30px; font-size:12.5px; color:#6b7280; cursor:pointer; border-radius:6px; }
+  .mobsub:hover { background:var(--gray-100); }
+  .mobsub.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+
+  .note { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:13.5px; margin:14px 0; }
+  code { background:var(--gray-100); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; background:#fff; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--gray-100); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:600; }
+  .keep { background:#dcfce7; color:var(--green); }
+  .move { background:#fef3c7; color:var(--amber); }
+  .new  { background:#e0e7ff; color:#4338ca; }
+  .togglerow { display:flex; gap:8px; align-items:center; margin:10px 0; font-size:12.5px; color:#6b7280; flex-wrap:wrap; }
+  .switch { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .switch.on { background:#4338ca; color:#fff; }
+</style>
+</head>
+<body>
+
+<h1>Navbar Reorg v2 — where do Trends &amp; Draft Report go?</h1>
+<p class="sub">Reorg already ships behind <code>VITE_FF_NAV_REORG</code>. Two pages landed after the plan locked and both got dumped into Tools. 13 destinations with all flags on (Feature Store excluded). Pick a grouping below — everything is clickable.</p>
+
+<div class="note">
+  <b>Today's Tools drawer</b> (<code>Layout.tsx:165</code>): Projections, Estimator, Trade, <b>Draft Report</b>, <b>Trends</b> (+ Feature Store dev-only).
+  Draft Report is a retrospective analysis page. Trends is per-player game-log scouting. Neither is a "tool" like Estimator/Trade — the drawer stopped meaning anything.
+</div>
+
+<h2>1. Pick an option</h2>
+<div class="optbar">
+  <span class="optbtn active" data-opt="A" onclick="setOpt('A')">A — Analysis vs Tools <span class="rec">★ rec</span></span>
+  <span class="optbtn" data-opt="B" onclick="setOpt('B')">B — Scope groups</span>
+  <span class="optbtn" data-opt="C" onclick="setOpt('C')">C — Minimal patch</span>
+</div>
+
+<div class="optcard" id="optcard"></div>
+
+<div class="togglerow">
+  <span class="switch on" id="fsSwitch" onclick="toggleFS()">🗄️ Feature Store (dev build)</span>
+  <span>toggle to see the dev-only entry appear inside its drawer</span>
+</div>
+
+<h2>2. Desktop nav</h2>
+<div class="widthbar">
+  <span class="lbl">width:</span>
+  <span class="wbtn active" id="wXl" onclick="setWidth('xl')">≥ xl (icon + label)</span>
+  <span class="wbtn" id="wMd" onclick="setWidth('md')">md–xl (icon only)</span>
+</div>
+<div class="navmock" id="nav"></div>
+<div class="preview" id="prev">Now viewing: <b>Teams</b></div>
+<p style="font-size:12.5px;color:#6b7280;">Click a group to open it, click an item inside to select. Logo = Dashboard <code>/</code>.</p>
+
+<h2>3. Mobile (hamburger)</h2>
+<div class="flexrow">
+  <div class="mobilewrap" id="mob"></div>
+  <div style="flex:1; min-width:240px;">
+    <div class="preview" id="prevMob">Now viewing: <b>Teams</b></div>
+    <p style="font-size:13px;color:var(--gray-600);">Hover doesn't exist on touch — groups become tap-to-expand accordions, same component already built in <code>ReorgLayout</code>. Adding a second group reuses that state pattern, no new interaction paradigm.</p>
+  </div>
+</div>
+
+<h2>4. What changes in code</h2>
+<table id="difftable"></table>
+
+<h2>5. Where future pages land</h2>
+<table>
+  <tr><th>Planned page (already in repo root)</th><th>Option A</th><th>Option B</th><th>Option C</th></tr>
+  <tr><td>Standings Race (<code>standings_race_plan.md</code>)</td><td>Analysis ▾</td><td>Analytics sub-tab</td><td>?? new top-level</td></tr>
+  <tr><td>Streaming Planner (<code>streaming_planner_plan.md</code>)</td><td>Tools ▾</td><td>Tools ▾</td><td>Tools ▾</td></tr>
+  <tr><td>Slot Estimator (<code>slot_estimator_plan.html</code>)</td><td>Tools ▾</td><td>Tools ▾</td><td>Tools ▾</td></tr>
+  <tr><td>Player Dynamic Range (<code>player_dynamic_range_plan.html</code>)</td><td>Analysis ▾</td><td>Players ▾</td><td>?? new top-level</td></tr>
+</table>
+<p style="font-size:13px;color:var(--gray-600);">A and B both give a rule you can apply without re-litigating. C has no rule — every new page is a fresh argument, and top-level count keeps climbing.</p>
+
+<h2>Open question</h2>
+<div class="note" style="background:#eff6ff;border-color:#bfdbfe;">
+  Group naming drives where <b>Trends</b> lands: intent-based (<b>Analysis</b> = what happened, <b>Tools</b> = what to do next) or scope-based (<b>League</b> vs <b>Players</b>). Pick an option above, then say go and I'll write the design doc.
+</div>
+
+<script>
+var FS = true;
+
+var OPTIONS = {
+  A: {
+    title: "A — Analysis vs Tools (recommended)",
+    why: "Split by what the user is trying to do: understand what happened, or decide what to do next. Two 3-item drawers instead of one 6-item junk drawer. Both highest-traffic rankings pages stay 1 click.",
+    pros: ["No drawer over 3 items", "League Rankings + Player Rankings stay flat, 1 click",
+           "Rule generalizes — future page is obviously Analysis or Tools", "Analytics keeps its own sub-tabs, unchanged"],
+    cons: ["Analytics drops from top-level to inside a drawer (+1 click)", "Second dropdown = second thing to open on mobile"],
+    top: 8,
+    nav: [
+      { p:"Teams", i:"👥" },
+      { p:"League Rankings", i:"🏆" },
+      { p:"Player Rankings", i:"📋", flag:true },
+      { g:"Analysis", i:"📊", kids:[ {p:"Analytics", i:"📈"}, {p:"Trends", i:"📉", flag:true}, {p:"Draft Report", i:"📝", flag:true} ] },
+      { p:"Players", i:"⛹️" },
+      { g:"Tools", i:"🛠️", kids:[ {p:"Projections", i:"🔭", flag:true}, {p:"Estimator", i:"🔮"}, {p:"Trade", i:"🔄"}, {p:"Feature Store", i:"🗄️", fs:true} ] },
+      { p:"Injuries", i:"🩺" },
+      { p:"NBA", i:"🏀" }
+    ],
+    diff: [
+      ["<span class='tag new'>new</span> Analysis group", "New dropdown, same component as Tools — pass a second config array instead of hardcoding one. Contains Analytics, Trends, Draft Report."],
+      ["<span class='tag move'>move</span> Analytics", "Was top-level link → now first item in Analysis drawer. Route <code>/analytics</code> unchanged, sub-tabs unchanged."],
+      ["<span class='tag move'>move</span> Trends, Draft Report", "Out of Tools → into Analysis. Routes unchanged, flags unchanged."],
+      ["<span class='tag keep'>keep</span> Tools", "Back to Projections, Estimator, Trade (+ Feature Store dev). Keyboard/ARIA behavior already built."],
+      ["<span class='tag move'>refactor</span> ReorgLayout", "Dropdown state is currently one <code>toolsOpen</code> boolean. Becomes keyed state (<code>openGroup: string | null</code>) so opening one closes the other. Same for mobile accordion."]
+    ]
+  },
+  B: {
+    title: "B — Scope groups (League / Players)",
+    why: "Group by what the data is about, not what you do with it. Trends is player-scoped so it joins Players; Draft Report becomes a 4th sub-tab of Analytics (page already has sticky sub-tabs). Tightest nav of the three.",
+    pros: ["7 top-level — least crowded at md–xl icon-only width", "Reuses the existing Analytics sub-tab pattern instead of adding nav depth", "Player pages sit together"],
+    cons: ["Players AND Player Rankings both lose 1-click access", "Draft Report buried as a sub-tab of a page it isn't really part of", "Analytics page grows to 4 sections — sub-tab row starts wrapping on mobile"],
+    top: 7,
+    nav: [
+      { p:"Teams", i:"👥" },
+      { p:"League Rankings", i:"🏆" },
+      { g:"Players", i:"⛹️", kids:[ {p:"Players", i:"⛹️"}, {p:"Player Rankings", i:"📋", flag:true}, {p:"Trends", i:"📉", flag:true} ] },
+      { p:"Analytics", i:"📈", note:"+ Draft Report as 4th sub-tab" },
+      { g:"Tools", i:"🛠️", kids:[ {p:"Projections", i:"🔭", flag:true}, {p:"Estimator", i:"🔮"}, {p:"Trade", i:"🔄"}, {p:"Feature Store", i:"🗄️", fs:true} ] },
+      { p:"Injuries", i:"🩺" },
+      { p:"NBA", i:"🏀" }
+    ],
+    diff: [
+      ["<span class='tag new'>new</span> Players group", "Players, Player Rankings, Trends. Same dropdown component as Tools."],
+      ["<span class='tag move'>move</span> Draft Report", "Out of nav entirely → 4th sticky sub-tab on the Analytics page. Route <code>/draft-report</code> either kept as a deep link or folded into <code>/analytics?tab=draft</code>."],
+      ["<span class='tag move'>move</span> Trends", "Out of Tools → into Players group."],
+      ["<span class='tag keep'>keep</span> Tools", "Projections, Estimator, Trade (+ Feature Store dev)."],
+      ["<span class='tag move'>refactor</span> Analytics page", "Sub-tab row goes from 3 to 4 — needs a horizontal-scroll or wrap check at 390px."]
+    ]
+  },
+  C: {
+    title: "C — Minimal patch",
+    why: "Leave the structure alone. Draft Report becomes an Analytics sub-tab, Trends goes top-level next to Players, Tools shrinks back to 3. Smallest diff, no new component.",
+    pros: ["Cheapest change — no new dropdown, no state refactor", "Everything except Tools stays 1 click"],
+    cons: ["9 top-level items — cramped between md and xl where labels are hidden", "No rule for the next page: 4 more planned features and nowhere obvious for them", "Trends top-level while Draft Report is a sub-tab is arbitrary from the user's side"],
+    top: 9,
+    nav: [
+      { p:"Teams", i:"👥" },
+      { p:"League Rankings", i:"🏆" },
+      { p:"Player Rankings", i:"📋", flag:true },
+      { p:"Analytics", i:"📈", note:"+ Draft Report as 4th sub-tab" },
+      { p:"Players", i:"⛹️" },
+      { p:"Trends", i:"📉", flag:true },
+      { g:"Tools", i:"🛠️", kids:[ {p:"Projections", i:"🔭", flag:true}, {p:"Estimator", i:"🔮"}, {p:"Trade", i:"🔄"}, {p:"Feature Store", i:"🗄️", fs:true} ] },
+      { p:"Injuries", i:"🩺" },
+      { p:"NBA", i:"🏀" }
+    ],
+    diff: [
+      ["<span class='tag move'>move</span> Trends", "Out of Tools → top-level link between Players and Tools."],
+      ["<span class='tag move'>move</span> Draft Report", "Out of Tools → 4th sticky sub-tab on Analytics."],
+      ["<span class='tag keep'>keep</span> everything else", "No new component, no state refactor. <code>toolsItems</code> array shrinks by two entries."],
+      ["<span class='tag move'>watch</span> md–xl width", "9 icon-only items + logo + dark toggle. Verify no horizontal overflow at 768–1280px."]
+    ]
+  }
+};
+
+var cur = 'A';
+var curPage = 'Teams';
+var openGroup = null;
+var mobOpenGroup = null;
+
+function visibleKids(kids) {
+  return kids.filter(function(k){ return !k.fs || FS; });
+}
+
+function renderCard() {
+  var o = OPTIONS[cur];
+  var html = '<h3>' + o.title + '</h3><p class="why">' + o.why + '</p>';
+  html += '<div class="metrics">';
+  html += '<div class="metric">top-level items<b>' + o.top + '</b></div>';
+  var drawers = o.nav.filter(function(n){ return n.g; });
+  html += '<div class="metric">dropdowns<b>' + drawers.length + '</b></div>';
+  var biggest = 0;
+  drawers.forEach(function(d){ biggest = Math.max(biggest, visibleKids(d.kids).length); });
+  html += '<div class="metric">biggest drawer<b>' + biggest + '</b></div>';
+  html += '</div><div style="margin-top:10px;">';
+  o.pros.forEach(function(p){ html += '<div class="pro">' + p + '</div>'; });
+  o.cons.forEach(function(c){ html += '<div class="con">' + c + '</div>'; });
+  html += '</div>';
+  document.getElementById('optcard').innerHTML = html;
+}
+
+function renderNav() {
+  var o = OPTIONS[cur];
+  var html = '<span class="brand" data-page="Dashboard (home)">🏀 Fantasy League</span>';
+  o.nav.forEach(function(n) {
+    if (n.g) {
+      var kids = visibleKids(n.kids);
+      var groupActive = kids.some(function(k){ return k.p === curPage; });
+      html += '<span class="navitem group' + (groupActive ? ' active' : '') + (openGroup === n.g ? ' open' : '') +
+              '" data-group="' + n.g + '">' + n.i + ' <span class="txt">' + n.g + '</span><span class="caret">▾</span>';
+      html += '<div class="dropdown">';
+      kids.forEach(function(k) {
+        html += '<div data-page="' + k.p + '" class="' + (k.p === curPage ? 'active ' : '') + (k.fs ? 'flagged' : '') + '">' +
+                k.i + ' ' + k.p + (k.fs ? ' <span style="font-size:10px;">(dev)</span>' : '') + '</div>';
+      });
+      html += '</div></span>';
+    } else {
+      html += '<span class="navitem' + (n.p === curPage ? ' active' : '') + '" data-page="' + n.p + '" title="' +
+              (n.note || n.p) + '">' + n.i + ' <span class="txt">' + n.p + '</span></span>';
+    }
+  });
+  var nav = document.getElementById('nav');
+  nav.innerHTML = html;
+  wire(nav, 'prev');
+}
+
+function renderMob() {
+  var o = OPTIONS[cur];
+  var html = '';
+  o.nav.forEach(function(n) {
+    if (n.g) {
+      var kids = visibleKids(n.kids);
+      var groupActive = kids.some(function(k){ return k.p === curPage; });
+      var isOpen = mobOpenGroup === n.g;
+      html += '<div class="mobrow grp' + (groupActive ? ' active' : '') + (isOpen ? ' open' : '') +
+              '" data-group="' + n.g + '"><span>' + n.i + ' ' + n.g + '</span><span class="caret">▾</span></div>';
+      html += '<div class="mobsubwrap' + (isOpen ? ' open' : '') + '">';
+      kids.forEach(function(k) {
+        html += '<div class="mobsub' + (k.p === curPage ? ' active' : '') + (k.fs ? ' flagged' : '') +
+                '" data-page="' + k.p + '">' + k.i + ' ' + k.p + (k.fs ? ' (dev)' : '') + '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="mobrow' + (n.p === curPage ? ' active' : '') + '" data-page="' + n.p + '">' +
+              n.i + ' ' + n.p + '</div>';
+    }
+  });
+  var mob = document.getElementById('mob');
+  mob.innerHTML = html;
+  wireMob(mob);
+}
+
+function wire(nav, previewId) {
+  nav.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      curPage = el.getAttribute('data-page');
+      openGroup = null;
+      renderNav(); renderMob(); setPreview();
+    });
+  });
+  nav.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      if (e.target.closest('.dropdown')) return;
+      e.stopPropagation();
+      var g = el.getAttribute('data-group');
+      openGroup = (openGroup === g) ? null : g;
+      renderNav();
+    });
+  });
+}
+
+function wireMob(mob) {
+  mob.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      curPage = el.getAttribute('data-page');
+      renderNav(); renderMob(); setPreview();
+    });
+  });
+  mob.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var g = el.getAttribute('data-group');
+      mobOpenGroup = (mobOpenGroup === g) ? null : g;
+      renderMob();
+    });
+  });
+}
+
+function setPreview() {
+  document.getElementById('prev').innerHTML = 'Now viewing: <b>' + curPage + '</b>';
+  document.getElementById('prevMob').innerHTML = 'Now viewing: <b>' + curPage + '</b>';
+}
+
+function renderDiff() {
+  var rows = '<tr><th style="width:26%;">Change</th><th>Detail</th></tr>';
+  OPTIONS[cur].diff.forEach(function(d) {
+    rows += '<tr><td>' + d[0] + '</td><td>' + d[1] + '</td></tr>';
+  });
+  document.getElementById('difftable').innerHTML = rows;
+}
+
+function setOpt(o) {
+  cur = o;
+  openGroup = null; mobOpenGroup = null;
+  document.querySelectorAll('.optbtn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-opt') === o);
+  });
+  renderCard(); renderNav(); renderMob(); renderDiff();
+}
+
+function setWidth(w) {
+  document.getElementById('nav').classList.toggle('compressed', w === 'md');
+  document.getElementById('wMd').classList.toggle('active', w === 'md');
+  document.getElementById('wXl').classList.toggle('active', w === 'xl');
+}
+
+function toggleFS() {
+  FS = !FS;
+  document.getElementById('fsSwitch').classList.toggle('on', FS);
+  renderCard(); renderNav(); renderMob();
+}
+
+document.addEventListener('click', function() {
+  if (openGroup !== null) { openGroup = null; renderNav(); }
+});
+
+setOpt('A');
+</script>
+</body>
+</html>

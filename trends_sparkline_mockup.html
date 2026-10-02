@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trends — expandable game-log chart (mockup)</title>
+<style>
+  :root {
+    --bg: #111827; --card: #1f2937; --line: #374151; --line-soft: #2b3644;
+    --txt: #f3f4f6; --muted: #9ca3af; --dim: #6b7280;
+    --blue: #3b82f6; --green: #10b981; --red: #ef4444; --amber: #f59e0b; --violet: #8b5cf6;
+    --band: rgba(59,130,246,.13);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--txt);
+         font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .card { background: var(--card); border-radius: 12px; padding: 12px; margin-bottom: 22px; }
+  .card > h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 2px 4px 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; text-transform: uppercase; font-size: 10px; letter-spacing: .05em;
+       color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+  tr.row:hover { background: rgba(255,255,255,.03); }
+  .name { font-weight: 600; cursor: pointer; user-select: none; }
+  .caret { display: inline-block; width: 14px; color: var(--dim); transition: transform .15s; }
+  tr.open .caret { transform: rotate(90deg); color: var(--blue); }
+  tr.sub td { color: var(--muted); }
+  tr.active td { background: rgba(59,130,246,.10); }
+  .pill { display: inline-flex; gap: 4px; align-items: center; font-weight: 700; font-size: 11px;
+          padding: 2px 8px; border-radius: 999px; }
+  .up { background: rgba(16,185,129,.15); color: #34d399; }
+  .down { background: rgba(239,68,68,.15); color: #f87171; }
+  .fa { background: rgba(59,130,246,.15); color: #93c5fd; font-size: 10px; font-weight: 700;
+        padding: 2px 7px; border-radius: 999px; }
+  .hide-sm { }
+
+  /* ---------- expand row ---------- */
+  .exp td { padding: 0; border-bottom: 1px solid var(--line); background: #18212f; }
+  /* sticky left keeps the chart on screen no matter the table's horizontal scroll */
+  .exp-inner { position: sticky; left: 0; padding: 12px 10px 14px; width: min(100%, calc(100vw - 40px)); }
+  .scroll { overflow-x: auto; }
+  .exp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .exp-title { font-size: 12px; color: var(--muted); margin-right: auto; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--muted); border: 0; font: inherit; font-size: 11px;
+                padding: 4px 10px; cursor: pointer; }
+  .seg button.on { background: var(--blue); color: #fff; }
+  .seg button:disabled { color: #4b5563; cursor: not-allowed; }
+  .chart-grid { display: flex; gap: 14px; align-items: stretch; flex-wrap: wrap; }
+  .chart-box { flex: 1 1 460px; min-width: 0; }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .stats { flex: 0 0 190px; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+  .stat { display: flex; justify-content: space-between; gap: 10px; font-size: 12px;
+          border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
+  .stat span:first-child { color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+  .swatch { display: inline-block; width: 14px; height: 10px; background: var(--band); vertical-align: middle;
+            margin-right: 5px; border: 1px solid rgba(59,130,246,.4); }
+  .note { color: var(--dim); font-size: 11px; margin-top: 8px; }
+  .tip { position: fixed; pointer-events: none; background: #0b1220; border: 1px solid var(--line);
+         border-radius: 6px; padding: 5px 8px; font-size: 11px; opacity: 0; transition: opacity .1s; z-index: 9; white-space: pre; }
+
+  @media (max-width: 640px) {
+    .hide-sm { display: none; }
+    .stats { flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; }
+    .stat { flex: 1 1 45%; }
+    body { padding: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📈 Trends — click a player to open the game-by-game chart</h1>
+  <p class="sub">Mockup only, fake data. Shaded band = the selected recency window (15d). Dashed lines = reference levels.</p>
+
+  <div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Ownership</span>
+    <div class="seg" id="own-seg">
+      <button data-own="all" class="on">All players</button>
+      <button data-own="fa">Free agents only</button>
+      <button data-own="rostered">Rostered only</button>
+    </div>
+    <select id="team-sel" style="background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12px">
+      <option value="">All fantasy teams</option>
+    </select>
+    <span style="flex:1"></span>
+    <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Shooting baseline</span>
+    <div class="seg" id="base-seg">
+      <button data-base="b2" class="on" title="Attempt-weighted % across the two seasons before this one. More stable, slower to react to a real change in the shooter.">Prior 2 seasons</button>
+      <button data-base="b1" title="Attempt-weighted % for last season only. Reacts faster to a genuine change, noisier for low-volume shooters.">Last season</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Minutes Movers — MPG per game</h2>
+    <div class="scroll"><table id="t-min"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Usage &amp; Role — USG% per game</h2>
+    <div class="scroll"><table id="t-usg"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Shooting Regression — multi-stat, one chart per selected category</h2>
+    <div class="scroll"><table id="t-sho"></table></div>
+  </div>
+
+  <p class="note">Mobile check: resize below 640px — Team/Pos/GP columns drop, stat block wraps under the chart, chart keeps full width.</p>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+// ---------------------------------------------------------------- fake data
+function rng(seed){ return () => (seed = seed*16807 % 2147483647) / 2147483647 }
+function dates(n){ const out=[], d=new Date('2026-07-23'); for(let i=n-1;i>=0;i--){ const x=new Date(d); x.setDate(d.getDate()-Math.round(i*1.9)); out.push(x.toISOString().slice(5,10)) } return out }
+
+function series(n, base, drift, noise, seed){
+  const r = rng(seed), out = []
+  for (let i=0;i<n;i++) out.push(Math.max(0, base + drift*(i/(n-1)) + (r()-0.5)*noise))
+  return out
+}
+
+const N = 26, DATES = dates(N)
+const WINDOW_FROM = N - 7          // last 7 games ≈ 15d window
+
+const PLAYERS = {
+  min: [
+    { name:'Ryan Rollins', team:'MIL', pos:'PG', season:21.4, win:31.2, gp:38, status:'FA',
+      vals: series(N, 18, 13, 7, 11) },
+    { name:'Toumani Camara', team:'POR', pos:'SF', season:28.9, win:22.1, gp:41, status:'Team Asaf',
+      vals: series(N, 32, -11, 6, 23) },
+    { name:'Jalen Duren', team:'DET', pos:'C', season:26.0, win:33.4, gp:44, status:'Beitar Bnei Yehuda',
+      vals: series(N, 24, 11, 5, 41) },
+  ],
+  usg: [
+    { name:'Ryan Rollins', team:'MIL', pos:'PG', season:17.8, win:23.4, gp:38, status:'FA',
+      vals: series(N, 15.5, 8, 5, 7), mpg: series(N, 18, 13, 7, 11) },
+  ],
+  sho: [
+    { name:'Cam Thomas', team:'BKN', pos:'SG', gp:33, status:'The Sixth Man',
+      stats: {
+        '3P%': { season:31.2, b1:38.6, b2:37.4, att:7.8, made: makes(N, 7.8, .31, 3), attempts: atts(N, 7.8, 3) },
+        'FT%': { season:88.1, b1:84.2, b2:85.0, att:5.1, made: makes(N, 5.1, .88, 5), attempts: atts(N, 5.1, 5) },
+        'FG%': { season:41.0, b1:45.1, b2:44.2, att:18.4, made: makes(N, 18.4, .41, 9), attempts: atts(N, 18.4, 9) },
+      } },
+    { name:'Naz Reid', team:'MIN', pos:'C', gp:39, status:'FA',
+      stats: {
+        '3P%': { season:41.8, b1:35.9, b2:36.6, att:5.4, made: makes(N, 5.4, .42, 13), attempts: atts(N, 5.4, 13) },
+        'FG%': { season:52.1, b1:48.0, b2:47.5, att:11.2, made: makes(N, 11.2, .52, 17), attempts: atts(N, 11.2, 17) },
+      } },
+  ],
+}
+function atts(n, avg, seed){ const r=rng(seed); return Array.from({length:n},()=>Math.max(0, Math.round(avg + (r()-.5)*avg*0.9))) }
+function makes(n, avg, pct, seed){ const r=rng(seed+1), a=atts(n,avg,seed)
+  return a.map(x => { let m=0; for(let i=0;i<x;i++) if (r() < pct) m++; return m }) }
+
+
+// ---------------------------------------------------------------- ownership
+const OWNERS = ['FA', 'Team Asaf', 'Beitar Bnei Yehuda', 'The Sixth Man']
+function ownerCell(p){
+  return p.status === 'FA'
+    ? '<span class="fa">FA</span>'
+    : `<span style="color:var(--muted);font-size:12px">${p.status}</span>`
+}
+function normalizeText(stat, s){
+  const madeDelta = -(s.season - baseOf(s)) / 100 * s.att
+  const label = { '3P%':'3PM', 'FT%':'FTM', 'FG%':'FGM' }[stat]
+  const sign = madeDelta >= 0 ? '+' : ''
+  return `<span style="color:${madeDelta>=0?'#34d399':'#f87171'}">${sign}${madeDelta.toFixed(2)} ${label}/g</span>`
+}
+
+// ---------------------------------------------------------------- chart core
+const W = 640, H = 170, PAD = { l: 34, r: 8, t: 10, b: 30 }, BARH = 26
+
+function scale(vals, pad=0.12){
+  let lo = Math.min(...vals), hi = Math.max(...vals)
+  const s = (hi - lo) || 1
+  return { lo: lo - s*pad, hi: hi + s*pad }
+}
+
+/* opts: { values, dates, refs:[{v,label,color,dash}], band:[i0,i1], color, unit,
+           bars:{values,label}, dots:[{i,v,w}] } */
+function lineChart(opts){
+  const n = opts.values.length
+  const barArea = opts.bars ? BARH : 0
+  const h = H, innerH = h - PAD.t - PAD.b - barArea
+  const all = opts.values.concat((opts.refs||[]).map(r=>r.v))
+  const { lo, hi } = scale(all, opts.dots ? 0.45 : 0.12)
+  const X = i => PAD.l + (n<=1?0:i*(W-PAD.l-PAD.r)/(n-1))
+  const Y = v => PAD.t + innerH - (v-lo)/(hi-lo)*innerH
+  const p = []
+
+  p.push(`<svg viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">`)
+
+  // window band
+  if (opts.band) {
+    const x0 = X(opts.band[0]) - 4, x1 = X(opts.band[1]) + 4
+    p.push(`<rect x="${x0}" y="${PAD.t-4}" width="${x1-x0}" height="${innerH+barArea+8}" fill="var(--band)" rx="4"/>`)
+    p.push(`<text x="${(x0+x1)/2}" y="${PAD.t+6}" fill="#93c5fd" font-size="9" text-anchor="middle">selected window</text>`)
+  }
+  // y gridlines
+  for (let k=0;k<=3;k++){
+    const v = lo + (hi-lo)*k/3, y = Y(v)
+    p.push(`<line x1="${PAD.l}" x2="${W-PAD.r}" y1="${y}" y2="${y}" stroke="var(--line-soft)" stroke-width="1"/>`)
+    p.push(`<text x="${PAD.l-6}" y="${y+3}" fill="var(--dim)" font-size="9" text-anchor="end">${v.toFixed(v>60?0:1)}</text>`)
+  }
+  // reference lines
+  ;(opts.refs||[]).forEach(r => {
+    const y = Y(r.v)
+    p.push(`<line x1="${PAD.l}" x2="${W-PAD.r}" y1="${y}" y2="${y}" stroke="${r.color}" stroke-width="1.4" stroke-dasharray="${r.dash||'5 4'}"/>`)
+    const left = r.anchor === 'start'
+    p.push(`<text x="${left ? PAD.l+4 : W-PAD.r}" y="${y-4}" fill="${r.color}" font-size="9" text-anchor="${left?'start':'end'}">${r.label}</text>`)
+  })
+  // raw per-game dots (shooting: noisy single-game %)
+  ;(opts.dots||[]).forEach(d => {
+    const clamped = Math.min(hi, Math.max(lo, d.v))
+    const off = clamped !== d.v
+    p.push(`<circle cx="${X(d.i)}" cy="${Y(clamped)}" r="${1.6 + d.w*2.4}" fill="var(--dim)" opacity="${off?.3:.55}"/>`)
+  })
+  // main line
+  const path = opts.values.map((v,i)=>`${i?'L':'M'}${X(i)},${Y(v)}`).join('')
+  p.push(`<path d="${path}" fill="none" stroke="${opts.color}" stroke-width="2.2" stroke-linejoin="round"/>`)
+  opts.values.forEach((v,i)=>p.push(`<circle cx="${X(i)}" cy="${Y(v)}" r="2.6" fill="${opts.color}"/>`))
+
+  // attempts bars
+  if (opts.bars){
+    const bmax = Math.max(...opts.bars.values, 1), by = h - PAD.b + 2
+    opts.bars.values.forEach((v,i)=>{
+      const bh = v/bmax*(BARH-4)
+      p.push(`<rect x="${X(i)-4}" y="${by-bh}" width="8" height="${bh}" fill="var(--violet)" opacity=".55" rx="1"/>`)
+    })
+    p.push(`<text x="${PAD.l-6}" y="${by-2}" fill="var(--dim)" font-size="8" text-anchor="end">${opts.bars.label}</text>`)
+  }
+  // x labels (sparse)
+  opts.dates.forEach((d,i)=>{
+    if (i % Math.ceil(n/6) && i !== n-1) return
+    p.push(`<text x="${X(i)}" y="${h-8}" fill="var(--dim)" font-size="9" text-anchor="middle">${d}</text>`)
+  })
+  // hover targets
+  opts.values.forEach((v,i)=>{
+    const t = `${opts.dates[i]}  ${v.toFixed(1)}${opts.unit||''}`
+    p.push(`<rect class="hit" data-tip="${t}" x="${X(i)-8}" y="${PAD.t-4}" width="16" height="${innerH+barArea+8}" fill="transparent"/>`)
+  })
+  p.push('</svg>')
+  return p.join('')
+}
+
+function statBlock(rows){
+  return `<div class="stats">${rows.map(([k,v])=>`<div class="stat"><span>${k}</span><span>${v}</span></div>`).join('')}</div>`
+}
+function legend(items){
+  return `<div class="legend">${items.map(i => i.band
+    ? `<span><span class="swatch"></span>${i.label}</span>`
+    : `<span><i style="border-color:${i.color};${i.dash?'border-top-style:dashed':''}"></i>${i.label}</span>`).join('')}</div>`
+}
+
+// ---------------------------------------------------------------- rows
+function rollingPct(made, att, k=5){
+  return made.map((_,i)=>{
+    const a = att.slice(Math.max(0,i-k+1), i+1).reduce((s,x)=>s+x,0)
+    const m = made.slice(Math.max(0,i-k+1), i+1).reduce((s,x)=>s+x,0)
+    return a ? m/a*100 : 0
+  })
+}
+
+function minutesExpand(p){
+  const chart = lineChart({ values:p.vals, dates:DATES, color:'var(--blue)', unit:' min',
+    band:[WINDOW_FROM, N-1],
+    refs:[{v:p.season, label:`season ${p.season.toFixed(1)}`, color:'var(--muted)'}] })
+  return `<div class="exp-head"><span class="exp-title">${p.name} — minutes per game, last ${N} games</span></div>
+    <div class="chart-grid"><div class="chart-box">${chart}</div>
+    ${statBlock([['Season MPG', p.season.toFixed(1)],['Window MPG', p.win.toFixed(1)],
+                 ['Δ MPG', (p.win-p.season>=0?'+':'')+(p.win-p.season).toFixed(1)],['GP', p.gp]])}</div>
+    ${legend([{color:'var(--blue)',label:'MPG per game'},{color:'var(--muted)',dash:1,label:'season average'},{band:1,label:'selected 15d window'}])}`
+}
+
+function usageExpand(p){
+  const chart = lineChart({ values:p.vals, dates:DATES, color:'var(--amber)', unit:'%',
+    band:[WINDOW_FROM, N-1],
+    refs:[{v:p.season, label:`season ${p.season.toFixed(1)}%`, color:'var(--muted)'}],
+    bars:{ values:p.mpg, label:'MIN' } })
+  return `<div class="exp-head"><span class="exp-title">${p.name} — USG% per game (bars = minutes, to spot usage-on-flat-minutes)</span></div>
+    <div class="chart-grid"><div class="chart-box">${chart}</div>
+    ${statBlock([['Δ USG', (p.win-p.season>=0?'+':'')+(p.win-p.season).toFixed(1)+'%'],
+                 ['Δ MPG', '+9.8'],
+                 ['Verdict', '<span class="pill up">Role ↑</span>'],
+                 ['Season / window USG%', p.season.toFixed(1)+' → '+p.win.toFixed(1)+'%'],['GP', p.gp]])}</div>
+    ${legend([{color:'var(--amber)',label:'USG% per game'},{color:'var(--muted)',dash:1,label:'season average'},{color:'var(--violet)',label:'minutes (bars)'},{band:1,label:'selected 15d window'}])}`
+}
+
+function shootingExpand(p, active){
+  const s = p.stats[active]
+  const base = baseOf(s)
+  const roll = rollingPct(s.made, s.attempts, 5)
+  const dots = s.made.map((m,i)=>({ i, v: s.attempts[i] ? m/s.attempts[i]*100 : 0,
+                                    w: s.attempts[i]/Math.max(...s.attempts) }))
+  const chart = lineChart({ values:roll, dates:DATES, color:'var(--green)', unit:'%',
+    band:[WINDOW_FROM, N-1], dots,
+    refs:[{v:s.season, label:`season ${s.season.toFixed(1)}%`, color:'var(--muted)'},
+          {v:base, label:`baseline (${BASE_LABEL[baselineMode]}) ${base.toFixed(1)}%`, color:'var(--red)', dash:'2 3', anchor:'start'}],
+    bars:{ values:s.attempts, label:'ATT' } })
+  const tabs = Object.keys(p.stats).map(k =>
+    `<button class="${k===active?'on':''}" data-stat="${k}" data-player="${p.name}">${k}</button>`).join('')
+  return `<div class="exp-head"><span class="exp-title">${p.name} — ${active} (5-game attempt-weighted, dots = single-game %)</span>
+      <div class="seg">${tabs}</div></div>
+    <div class="chart-grid"><div class="chart-box">${chart}</div>
+    ${statBlock([['Season '+active, s.season.toFixed(1)+'%'],[`Baseline (${BASE_LABEL[baselineMode]})`, base.toFixed(1)+'%'],
+                 ['Δ vs baseline', (s.season-base>=0?'+':'')+(s.season-base).toFixed(1)+'%'],
+                 ['If it normalizes', normalizeText(active, s).replace(/<[^>]+>/g,'')],
+                 ['Att/g', s.att.toFixed(1)]])}</div>
+    ${legend([{color:'var(--green)',label:'rolling-5 attempt-weighted %'},{color:'var(--dim)',label:'single game % (size = attempts)'},{color:'var(--muted)',dash:1,label:'season'},{color:'var(--red)',dash:1,label:'baseline'},{band:1,label:'selected 15d window'}])}`
+}
+
+// ---------------------------------------------------------------- table build
+const shootingActive = {}
+
+function draw([tableId, cols, players, cellsFn, expandFn, colSpan]){
+  players = players.filter(passOwnership)
+  const t = document.getElementById(tableId)
+  t.innerHTML = `<thead><tr>${cols.map(c=>`<th class="${c[1]||''}">${c[0]}</th>`).join('')}</tr></thead><tbody></tbody>`
+  const tb = t.querySelector('tbody')
+  players.forEach((p, idx) => {
+    const tr = document.createElement('tr')
+    tr.className = 'row'
+    tr.innerHTML = `<td class="name"><span class="caret">▶</span> ${p.name}</td>` + cellsFn(p)
+    const exp = document.createElement('tr')
+    exp.className = 'exp'
+    exp.style.display = 'none'
+    exp.innerHTML = `<td colspan="${colSpan}"><div class="exp-inner"></div></td>`
+    tr.onclick = () => {
+      const open = exp.style.display !== 'none'
+      exp.style.display = open ? 'none' : ''
+      tr.classList.toggle('open', !open)
+      if (!open) exp.querySelector('.exp-inner').innerHTML = expandFn(p, shootingActive[p.name])
+    }
+    tb.append(tr, exp)
+  })
+}
+
+const SPECS = []
+let ownMode = 'all', teamPick = '', baselineMode = 'b2'
+const BASE_LABEL = { b2: 'prior 2 seasons', b1: 'last season' }
+const baseOf = st => st[baselineMode]
+function build(...a){ SPECS.push(() => draw(a)); draw(a) }
+function renderAll(){ SPECS.forEach(f => f()) }
+
+build('t-min',
+  [['Player'],['Team','hide-sm'],['Pos','hide-sm'],['Season MPG'],['15d MPG'],['Δ MPG'],['Owner']],
+  PLAYERS.min,
+  p => `<td class="hide-sm">${p.team}</td><td class="hide-sm">${p.pos}</td>
+        <td>${p.season.toFixed(1)}</td><td>${p.win.toFixed(1)}</td>
+        <td><span class="pill ${p.win>=p.season?'up':'down'}">${p.win>=p.season?'▲ +':'▼ '}${(p.win-p.season).toFixed(1)}</span></td>
+        <td>${ownerCell(p)}</td>`,
+  minutesExpand, 7)
+
+build('t-usg',
+  [['Player'],['Team','hide-sm'],['Season USG%'],['15d USG%'],['Δ USG'],['Role'],['Owner']],
+  PLAYERS.usg,
+  p => `<td class="hide-sm">${p.team}</td><td>${p.season.toFixed(1)}%</td><td>${p.win.toFixed(1)}%</td>
+        <td><span class="pill up">▲ +${(p.win-p.season).toFixed(1)}%</span></td>
+        <td><span class="pill up">Role ↑</span></td><td>${ownerCell(p)}</td>`,
+  usageExpand, 7)
+
+SPECS.push(drawShooting)
+drawShooting()
+
+function drawShooting(){
+  const cols = ['Player','Team','Stat','Current%','Baseline%','Δ vs baseline','If it normalizes','Att/g','Owner']
+  const hide = { Team:1, 'Att/g':1 }
+  const t = document.getElementById('t-sho')
+  t.innerHTML = `<thead><tr>${cols.map(c=>`<th class="${hide[c]?'hide-sm':''}" ${c==='Baseline%'?`title="${BASE_LABEL[baselineMode]}, attempt-weighted"`:''}>${c==='Baseline%'?`Baseline (${BASE_LABEL[baselineMode]})`:c}</th>`).join('')}</tr></thead><tbody></tbody>`
+  const tb = t.querySelector('tbody')
+
+  PLAYERS.sho.filter(passOwnership).forEach(p => {
+    const keys = Object.keys(p.stats).sort((a,b)=>Math.abs(p.stats[b].season-baseOf(p.stats[b])) - Math.abs(p.stats[a].season-baseOf(p.stats[a])))
+    if (!shootingActive[p.name] || !p.stats[shootingActive[p.name]]) shootingActive[p.name] = keys[0]
+
+    const exp = document.createElement('tr')
+    exp.className = 'exp'
+    exp.style.display = 'none'
+    exp.innerHTML = `<td colspan="${cols.length}"><div class="exp-inner"></div></td>`
+
+    const trs = keys.map((k, i) => {
+      const st = p.stats[k], base = baseOf(st), dev = st.season - base
+      const tr = document.createElement('tr')
+      tr.className = 'row' + (i ? ' sub' : '')
+      tr.dataset.stat = k
+      tr.innerHTML =
+        (i === 0
+          ? `<td class="name" rowspan="${keys.length}"><span class="caret">▶</span> ${p.name}</td>
+             <td class="hide-sm" rowspan="${keys.length}">${p.team}</td>`
+          : '') +
+        `<td>${i ? '<span style="color:var(--dim)">↳ </span>' : ''}${k}</td>
+         <td>${st.season.toFixed(1)}%</td><td>${base.toFixed(1)}%</td>
+         <td><span class="pill ${dev>=0?'up':'down'}">${dev>=0?'▲ +':'▼ '}${dev.toFixed(1)}%</span></td>
+         <td>${normalizeText(k, st)}</td>
+         <td class="hide-sm">${st.att.toFixed(1)}</td>` +
+        (i === 0 ? `<td rowspan="${keys.length}">${ownerCell(p)}</td>` : '')
+      return tr
+    })
+
+    const paint = () => trs.forEach(tr =>
+      tr.classList.toggle('active', exp.style.display !== 'none' && tr.dataset.stat === shootingActive[p.name]))
+
+    trs.forEach(tr => tr.onclick = () => {
+      const wasOpen = exp.style.display !== 'none'
+      const sameStat = shootingActive[p.name] === tr.dataset.stat
+      shootingActive[p.name] = tr.dataset.stat
+      exp.style.display = (wasOpen && sameStat) ? 'none' : ''
+      trs[0].classList.toggle('open', exp.style.display !== 'none')
+      if (exp.style.display !== 'none') exp.querySelector('.exp-inner').innerHTML = shootingExpand(p, shootingActive[p.name])
+      paint()
+    })
+
+    tb.append(...trs, exp)
+  })
+}
+
+// ---------------------------------------------------------------- ownership filter
+function passOwnership(p){
+  if (ownMode === 'fa' && p.status !== 'FA') return false
+  if (ownMode === 'rostered' && p.status === 'FA') return false
+  if (teamPick && p.status !== teamPick) return false
+  return true
+}
+const sel = document.getElementById('team-sel')
+;[...new Set(Object.values(PLAYERS).flat().map(p => p.status))].sort().forEach(t => {
+  sel.insertAdjacentHTML('beforeend', `<option value="${t}">${t}</option>`)
+})
+sel.onchange = () => { teamPick = sel.value; renderAll() }
+document.getElementById('own-seg').onclick = e => {
+  const b = e.target.closest('button[data-own]'); if (!b) return
+  ownMode = b.dataset.own
+  ;[...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b))
+  renderAll()
+}
+
+document.getElementById('base-seg').onclick = e => {
+  const b = e.target.closest('button[data-base]'); if (!b) return
+  baselineMode = b.dataset.base
+  ;[...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b))
+  renderAll()
+}
+
+// stat toggle inside shooting expand row
+document.addEventListener('click', e => {
+  const b = e.target.closest('.seg button[data-stat]')
+  if (!b) return
+  e.stopPropagation()
+  const p = PLAYERS.sho.find(x => x.name === b.dataset.player)
+  shootingActive[p.name] = b.dataset.stat
+  b.closest('.exp-inner').innerHTML = shootingExpand(p, b.dataset.stat)
+})
+
+// tooltip
+const tip = document.getElementById('tip')
+document.addEventListener('mousemove', e => {
+  const h = e.target.closest?.('.hit')
+  if (!h) { tip.style.opacity = 0; return }
+  tip.textContent = h.dataset.tip
+  tip.style.left = (e.clientX + 12) + 'px'
+  tip.style.top  = (e.clientY - 28) + 'px'
+  tip.style.opacity = 1
+})
+</script>
+</body>
+</html>

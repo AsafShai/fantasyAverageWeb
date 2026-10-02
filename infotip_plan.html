@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InfoTip — metric explainers that work on touch</title>
+<style>
+  :root {
+    --blue:#2563eb; --purple:#9333ea; --gray-600:#4b5563; --gray-100:#f3f4f6; --gray-500:#6b7280;
+    --border:#e5e7eb; --green:#16a34a; --red:#dc2626; --amber:#d97706; --ink:#1f2937; --page:#fafafa;
+    --card:#fff; --sub:#6b7280;
+  }
+  body.dark {
+    --gray-100:#1f2937; --gray-600:#d1d5db; --gray-500:#9ca3af; --border:#374151;
+    --ink:#f3f4f6; --page:#111827; --card:#1f2937; --sub:#9ca3af;
+  }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,sans-serif; max-width:1060px; margin:0 auto; padding:24px 18px 60px;
+         color:var(--ink); line-height:1.5; background:var(--page); transition:background .15s; }
+  h1 { background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text;
+       color:transparent; font-size:27px; margin-bottom:4px; }
+  h2 { border-bottom:2px solid var(--border); padding-bottom:6px; margin-top:34px; font-size:19px; }
+  h3 { font-size:15px; margin:18px 0 6px; }
+  .sub { color:var(--sub); font-size:14px; margin-top:0; }
+  p, li { font-size:13.5px; color:var(--gray-600); }
+  code { background:var(--gray-100); padding:1px 5px; border-radius:4px; font-size:12px; color:var(--ink); }
+
+  .topbar { display:flex; gap:8px; align-items:center; margin:12px 0 0; flex-wrap:wrap; }
+  .btn { font-size:12.5px; padding:5px 11px; border-radius:6px; background:var(--gray-100); color:var(--gray-600);
+         cursor:pointer; border:1px solid var(--border); user-select:none; }
+  .btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+
+  .problem { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0; }
+  .pbox { flex:1; min-width:210px; border-radius:10px; padding:11px 13px; background:var(--card);
+          border:1px solid var(--border); border-left:5px solid var(--red); }
+  .pbox.ok { border-left-color:var(--green); }
+  .pbox h4 { margin:0 0 3px; font-size:14px; color:var(--ink); }
+  .pbox .st { font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; color:var(--red); }
+  .pbox.ok .st { color:var(--green); }
+  .pbox p { margin:4px 0 0; font-size:12.5px; }
+
+  .device { background:var(--card); border:1px solid var(--border); border-radius:10px;
+            box-shadow:0 2px 8px rgba(0,0,0,.07); overflow:visible; }
+  .device.phone { max-width:390px; }
+  .device .chrome { font-size:11px; color:var(--sub); padding:5px 10px; border-bottom:1px solid var(--border);
+                    display:flex; justify-content:space-between; }
+  .stack { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; }
+  .stack > div { flex:1; min-width:330px; }
+
+  table { border-collapse:collapse; width:100%; }
+  th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; font-weight:700;
+       color:var(--gray-500); padding:8px 6px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { font-size:12.5px; padding:7px 6px; border-bottom:1px solid var(--border); color:var(--gray-600); }
+  td.name { font-weight:600; color:var(--ink); }
+  td.pos { color:var(--green); font-weight:600; }
+  .thwrap { display:inline-flex; align-items:center; gap:3px; position:relative; }
+
+  /* the component itself */
+  .infotip { width:14px; height:14px; min-width:14px; border-radius:50%; border:1px solid var(--border);
+             background:var(--gray-100); color:var(--gray-500); font-size:9px; font-weight:700; line-height:1;
+             display:inline-flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;
+             font-family:Georgia,serif; font-style:italic; }
+  .infotip:hover { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .infotip.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+  /* mobile hit target — visual size stays 14px, tap area 40px */
+  .touch .infotip::after { content:''; position:absolute; inset:-13px; }
+
+  .bubble { position:absolute; z-index:30; top:calc(100% + 7px); left:-8px; width:230px; background:var(--card);
+            border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.16);
+            padding:9px 11px; display:none; text-transform:none; letter-spacing:0; }
+  .bubble.show { display:block; }
+  .bubble .bt { font-size:12px; font-weight:700; color:var(--ink); margin-bottom:3px; }
+  .bubble .bd { font-size:11.5px; color:var(--gray-600); font-weight:400; line-height:1.45; }
+  .bubble .bf { font-size:10.5px; color:var(--sub); margin-top:5px; font-family:ui-monospace,monospace; }
+  .bubble .bx { position:absolute; top:5px; right:7px; font-size:13px; color:var(--sub); cursor:pointer; display:none; }
+  .touch .bubble .bx { display:block; }
+  .touch .bubble { position:fixed; left:12px; right:12px; bottom:12px; top:auto; width:auto;
+                   box-shadow:0 -6px 24px rgba(0,0,0,.22); }
+
+  .note { margin-top:10px; padding:9px 13px; background:var(--gray-100); border-radius:8px; font-size:12.5px;
+          color:var(--gray-600); }
+  .note b { color:var(--blue); }
+
+  .cov { width:100%; border-collapse:collapse; margin-top:8px; }
+  .cov th { font-size:10.5px; }
+  .cov td { font-size:12.5px; }
+  .tag { font-size:10px; font-weight:700; padding:2px 7px; border-radius:99px; text-transform:uppercase; letter-spacing:.3px; }
+  .tag.none { background:#fee2e2; color:#b91c1c; }
+  .tag.part { background:#fef3c7; color:#92400e; }
+  .tag.has { background:#dcfce7; color:#15803d; }
+  body.dark .tag.none { background:#7f1d1d; color:#fecaca; }
+  body.dark .tag.part { background:#78350f; color:#fde68a; }
+  body.dark .tag.has { background:#14532d; color:#bbf7d0; }
+</style>
+</head>
+<body>
+
+<h1>InfoTip — metric explainers that work on touch</h1>
+<p class="sub">Mockup for review · replaces native <code>title=</code> · frontend only, no deps</p>
+
+<div class="topbar">
+  <span style="font-size:12px;color:var(--sub);">Preview:</span>
+  <span class="btn active" id="b-desk" onclick="setMode('desk')">🖥 Desktop (hover)</span>
+  <span class="btn" id="b-touch" onclick="setMode('touch')">📱 Mobile 390px (tap)</span>
+  <span class="btn" onclick="document.body.classList.toggle('dark')">🌙 Dark</span>
+</div>
+
+<h2>The problem</h2>
+<div class="problem">
+  <div class="pbox">
+    <div class="st">Broken on touch</div>
+    <h4>Native <code>title=</code> never fires on mobile</h4>
+    <p>Trends.tsx has 14 good header tooltips. Phone users see none of them. Most of the league is on a phone.</p>
+  </div>
+  <div class="pbox">
+    <div class="st">Missing entirely</div>
+    <h4>z-score pages explain nothing</h4>
+    <p>Rankings, PlayerRankings, Teams — zero <code>title=</code>. "z: 1.84" with no scale, no baseline, no hint it's good.</p>
+  </div>
+  <div class="pbox ok">
+    <div class="st">Fix</div>
+    <h4>One <code>&lt;InfoTip&gt;</code> component</h4>
+    <p>Visible ⓘ affordance, click/tap on both platforms, styled, dark-mode aware. Then cover the blind pages.</p>
+  </div>
+</div>
+
+<h2>How it looks — Rankings table</h2>
+<p>Click any <span class="infotip" style="cursor:default">i</span> below. Toggle Desktop/Mobile above to see both behaviours.</p>
+
+<div class="device" id="dev1" style="margin-top:10px;">
+  <div class="chrome"><span>Rankings</span><span id="chrome-mode">desktop</span></div>
+  <div style="padding:4px 10px 10px;">
+    <table>
+      <thead><tr>
+        <th>Team</th>
+        <th><span class="thwrap">Total z <span class="infotip" data-tip="ztot">i</span>
+          <span class="bubble" id="tip-ztot"><span class="bx" onclick="closeAll(event)">✕</span>
+            <div class="bt">Total z-score</div>
+            <div class="bd">Sum of the team's z-score in all 8 categories. Measures how many standard deviations above league average the roster is overall.</div>
+            <div class="bf">0 = league average · +8 = elite</div>
+          </span></span></th>
+        <th><span class="thwrap">PTS z <span class="infotip" data-tip="zpts">i</span>
+          <span class="bubble" id="tip-zpts"><span class="bx" onclick="closeAll(event)">✕</span>
+            <div class="bt">Points z-score</div>
+            <div class="bd">This team's points per game, expressed in standard deviations from the 12-team league mean.</div>
+            <div class="bf">(team − league mean) ÷ league stdev</div>
+          </span></span></th>
+        <th><span class="thwrap">Roto pts <span class="infotip" data-tip="roto">i</span>
+          <span class="bubble" id="tip-roto"><span class="bx" onclick="closeAll(event)">✕</span>
+            <div class="bt">Roto points</div>
+            <div class="bd">Rank in each of the 8 categories scores 12 down to 1 point. Summed across categories. Max 96.</div>
+            <div class="bf">8 cats × 12 teams → 96 max</div>
+          </span></span></th>
+        <th><span class="thwrap">Slot pace <span class="infotip" data-tip="pace">i</span>
+          <span class="bubble" id="tip-pace"><span class="bx" onclick="closeAll(event)">✕</span>
+            <div class="bt">Slot pace</div>
+            <div class="bd">Projected games this roster slot will use by season end, versus its cap. Over 100% means you run out of games early and sit players.</div>
+            <div class="bf">green &lt;95% · amber 95-100% · red &gt;100%</div>
+          </span></span></th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="name">Team Asaf</td><td class="pos">+6.42</td><td class="pos">+1.31</td><td>78</td><td>92%</td></tr>
+        <tr><td class="name">Bucket Brigade</td><td class="pos">+4.10</td><td>−0.22</td><td>71</td><td>101%</td></tr>
+        <tr><td class="name">Rim Runners</td><td>−1.88</td><td>+0.44</td><td>49</td><td>88%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="note" id="behaviour"><b>Desktop:</b> hover opens after ~120ms, moving away closes. Click pins it open (survives mouse-out) until you click elsewhere or press Esc.</div>
+
+<h2>Behaviour spec</h2>
+<div class="stack">
+  <div>
+    <h3>Desktop</h3>
+    <ul>
+      <li>ⓘ is always visible — discoverable, unlike a bare hover zone.</li>
+      <li>Hover opens after 120ms; leave closes after 100ms grace.</li>
+      <li>Click pins open. Esc or outside-click closes.</li>
+      <li>Bubble anchored under the header, flips above / shifts left near viewport edges.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Mobile (≈390px)</h3>
+    <ul>
+      <li>No hover. Tap only.</li>
+      <li>Hit target 40×40 via invisible padding — the glyph stays 14px so dense headers don't grow.</li>
+      <li>Bubble becomes a bottom sheet, full width, with an ✕ — never clipped by <code>overflow-x-auto</code> on the table.</li>
+      <li>Tap outside or ✕ closes. One open at a time.</li>
+    </ul>
+  </div>
+</div>
+<p style="margin-top:6px;"><b>Why bottom sheet on mobile:</b> your wide tables live inside <code>overflow-x-auto</code>. An absolutely-positioned bubble gets clipped or forces horizontal scroll. Fixed-position sheet sidesteps it entirely.</p>
+
+<h2>Also usable outside tables</h2>
+<div class="device" style="margin-top:8px;padding:12px 14px;">
+  <div style="font-size:13px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:5px;">
+    Matchup quality
+    <span class="thwrap"><span class="infotip" data-tip="mq">i</span>
+      <span class="bubble" id="tip-mq"><span class="bx" onclick="closeAll(event)">✕</span>
+        <div class="bt">Matchup quality</div>
+        <div class="bd">How favourable tonight's opponent is for this player's categories, based on opponent defensive rates allowed by position.</div>
+        <div class="bf">A = best · F = avoid</div>
+      </span></span>
+  </div>
+  <div style="font-size:12.5px;color:var(--gray-600);margin-top:4px;">Grade B+ vs POR — top-8 pace, 27th in opponent REB allowed.</div>
+</div>
+<p style="margin-top:6px;">Same component for section headings, badge labels, chart legends. One import, one prop.</p>
+
+<h2>Coverage plan</h2>
+<table class="cov">
+  <thead><tr><th>Page</th><th>Today</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td class="name">Rankings.tsx</td><td><span class="tag none">none</span></td><td>Add to all 8 cat columns + total z + roto pts</td></tr>
+    <tr><td class="name">PlayerRankings.tsx</td><td><span class="tag none">none</span></td><td>Add to z columns, rank, per-game vs total toggle</td></tr>
+    <tr><td class="name">Teams.tsx</td><td><span class="tag none">none</span></td><td>Add to slot pace, games used, estimated games</td></tr>
+    <tr><td class="name">Players.tsx</td><td><span class="tag part">2 non-metric</span></td><td>Convert both, add to owner / window columns</td></tr>
+    <tr><td class="name">Trends.tsx</td><td><span class="tag has">14 title=</span></td><td>Convert <code>title=</code> → <code>&lt;InfoTip&gt;</code>, text is already written</td></tr>
+    <tr><td class="name">TeamDetail, Trade, DraftReport</td><td><span class="tag part">partial</span></td><td>Convert existing, fill gaps</td></tr>
+  </tbody>
+</table>
+
+<h2>Implementation shape</h2>
+<ul>
+  <li><b>New:</b> <code>components/InfoTip.tsx</code> — props <code>title</code>, <code>body</code>, optional <code>formula</code>. Internal open state, outside-click + Esc listeners, <code>matchMedia</code> for the touch branch.</li>
+  <li><b>New:</b> <code>constants/metricGlossary.ts</code> — single map of metric key → {title, body, formula}. Call sites pass a key, not prose, so wording stays consistent everywhere the metric appears.</li>
+  <li><b>Edit:</b> the table header components on the pages above. Trends already has a shared <code>Th</code> — extend it with an optional tip key and most of that page converts in one edit.</li>
+  <li>No new dependency. No backend change.</li>
+</ul>
+<p><b>Optional follow-up (not in scope):</b> a <code>/glossary</code> page rendered straight off <code>metricGlossary.ts</code> — free once the map exists.</p>
+
+<script>
+  let mode = 'desk';
+  function setMode(m){
+    mode = m;
+    document.getElementById('b-desk').classList.toggle('active', m==='desk');
+    document.getElementById('b-touch').classList.toggle('active', m==='touch');
+    document.body.classList.toggle('touch', m==='touch');
+    document.getElementById('dev1').classList.toggle('phone', m==='touch');
+    document.getElementById('chrome-mode').textContent = m==='touch' ? '390px · touch' : 'desktop';
+    document.getElementById('behaviour').innerHTML = m==='touch'
+      ? '<b>Mobile:</b> tap ⓘ → bottom sheet. 40px hit target around a 14px glyph. Tap outside or ✕ to close. Never clipped by the scrolling table.'
+      : '<b>Desktop:</b> hover opens after ~120ms, moving away closes. Click pins it open (survives mouse-out) until you click elsewhere or press Esc.';
+    closeAll();
+  }
+  function closeAll(e){
+    if(e) e.stopPropagation();
+    document.querySelectorAll('.bubble.show').forEach(b=>b.classList.remove('show'));
+    document.querySelectorAll('.infotip.on').forEach(b=>b.classList.remove('on'));
+  }
+  document.querySelectorAll('.infotip[data-tip]').forEach(ic=>{
+    const bub = document.getElementById('tip-'+ic.dataset.tip);
+    ic.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      const open = bub.classList.contains('show');
+      closeAll();
+      if(!open){ bub.classList.add('show'); ic.classList.add('on'); }
+    });
+    ic.addEventListener('mouseenter', ()=>{ if(mode==='desk'){ closeAll(); bub.classList.add('show'); } });
+    ic.addEventListener('mouseleave', ()=>{ if(mode==='desk' && !ic.classList.contains('on')) bub.classList.remove('show'); });
+  });
+  document.addEventListener('click', ()=>closeAll());
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAll(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate Calendar mockup</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --used:#2563eb; --heat:37,99,235; --axis:#475569;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef3c7; --bad:#dc2626; --bad-bg:#fee2e2;
+  --light:#f59e0b; --light-bg:#fef3c7; --light-ink:#92400e;
+}
+.dark{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --used:#60a5fa; --heat:96,165,250; --axis:#94a3b8;
+  --ok:#4ade80; --ok-bg:#052e16; --warn:#fbbf24; --warn-bg:#451a03; --bad:#f87171; --bad-bg:#450a0a;
+  --light:#fbbf24; --light-bg:#451a03; --light-ink:#fcd34d;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1)}
+nav{position:sticky;top:0;z-index:40;background:var(--card);box-shadow:0 4px 10px rgba(0,0,0,.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:8px 14px;overflow-x:auto}
+nav .brand{font-weight:800;font-size:13px;background:linear-gradient(90deg,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;margin-right:8px}
+nav a{padding:6px 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2);white-space:nowrap}
+nav a.active{background:var(--chip-on);color:var(--chip-on-ink)}
+nav .spacer{flex:1}
+nav button{border:none;background:none;font-size:14px;cursor:pointer;padding:6px}
+main{max-width:1140px;margin:0 auto;padding:18px 12px 48px}
+h1{font-size:20px;font-weight:800;margin-bottom:2px}
+h2{font-size:14.5px;font-weight:800}
+.sub{font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.6}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.cardhead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.hint{font-size:11.5px;color:var(--ink3);font-weight:400}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.group{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;flex-wrap:wrap}
+.group button{border:none;background:none;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tabs{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:8px;margin-bottom:14px;overflow-x:auto}
+.tabs button{border:none;background:none;padding:7px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.tabs button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.panel{display:none}.panel.on{display:block}
+.pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.good{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.light{background:var(--light-bg);color:var(--light-ink)}
+.pill.flat{background:var(--chip);color:var(--ink2)}
+.note{font-size:11.5px;color:var(--ink3);margin-top:9px;line-height:1.6}
+.note b{color:var(--ink2)}
+.legend{display:flex;flex-wrap:wrap;gap:11px;font-size:11px;color:var(--ink2);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.where{font-size:11px;font-weight:700;color:var(--chip-on-ink);background:var(--chip-on);border-radius:6px;padding:3px 9px;display:inline-block;margin-bottom:10px}
+.callout{border-left:3px solid var(--chip-on-ink);background:var(--chip);border-radius:0 8px 8px 0;padding:10px 12px;font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:12px}
+.callout b{color:var(--ink1)}
+.callout.warnc{border-left-color:var(--warn)}
+.callout.cut{border-left-color:var(--bad)}
+.it{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:var(--ink3);color:var(--card);font-size:9px;font-weight:800;cursor:help;margin-left:3px;vertical-align:1px;position:relative}
+.it:hover::after,.it:focus::after{content:attr(data-tip);position:absolute;bottom:130%;left:50%;transform:translateX(-50%);background:var(--ink1);color:var(--card);font-size:11px;font-weight:500;line-height:1.45;padding:7px 9px;border-radius:7px;width:220px;white-space:normal;text-align:left;z-index:30;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+
+/* ---------- shared matchup chips ---------- */
+.mus{display:flex;flex-wrap:wrap;gap:4px}
+.mu{font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:5px;background:var(--chip);color:var(--ink2);
+    font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:.01em}
+.mu b{color:var(--ink1);font-weight:800}
+.mu em{font-style:normal;color:var(--ink3);font-weight:600;padding:0 1px}
+
+/* ---------- A: strip + detail ---------- */
+.strip{display:flex;gap:3px;align-items:flex-end;overflow-x:auto;padding-bottom:4px}
+.sday{flex:1 1 0;min-width:44px;text-align:center;cursor:pointer;border:none;background:none;padding:0;font:inherit;color:inherit}
+.sbar{height:104px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:4px;padding:2px}
+.sday:hover .sbar,.sday:focus-visible .sbar{background:var(--chip)}
+.sday.sel .sbar{background:var(--chip-on);box-shadow:inset 0 0 0 1px var(--chip-on-ink)}
+.sfill{background:var(--used);border-radius:3px 3px 0 0;transition:height .15s}
+.sday.hv .sfill{background:var(--used);box-shadow:inset 0 0 0 2px rgba(0,0,0,.14)}
+.sday.lo .sfill{background:var(--light)}
+.sday .n{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}
+.sday .d{font-size:9.5px;color:var(--ink3);line-height:1.35;margin-top:1px}
+.sday.sel .d,.sday.sel .n{color:var(--chip-on-ink)}
+.detail{margin-top:12px;border-top:1px solid var(--border);padding-top:11px}
+.detail .dh{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:8px}
+.detail .dh h3{font-size:13px;font-weight:800;margin:0}
+
+/* ---------- B: calendar weeks ---------- */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal .dow{font-size:10px;font-weight:800;color:var(--ink3);text-align:center;text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px}
+.cell{border:1px solid var(--border);border-radius:9px;padding:7px 6px;min-height:78px;display:flex;flex-direction:column;gap:3px;
+      background:var(--card);cursor:pointer;text-align:left;font:inherit;color:inherit}
+.cell:hover{border-color:var(--chip-on-ink)}
+.cell.open{border-color:var(--chip-on-ink);box-shadow:0 0 0 1px var(--chip-on-ink)}
+.cell .dt{font-size:10px;font-weight:700;color:var(--ink3);font-variant-numeric:tabular-nums}
+.cell .big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.cell .lab{font-size:9.5px;color:var(--ink3);font-weight:600}
+.cell .mus{margin-top:2px;display:none}
+.cell.open .mus{display:flex}
+.cell.open{min-height:auto}
+.cell .mu{font-size:9.5px;padding:2px 5px}
+.cell.empty{background:var(--chip);opacity:.55;cursor:default}
+.cell.empty:hover{border-color:var(--border)}
+
+/* ---------- C: table ---------- */
+.rows{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.r{display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border-bottom:1px solid var(--border);background:var(--card)}
+.r:last-child{border-bottom:none}
+.r.hvr{background:rgba(var(--heat),.07)}
+.r .rd{flex:0 0 92px;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.5}
+.r .rd s{display:block;text-decoration:none;font-size:10px;color:var(--ink3);font-weight:600}
+.r .rn{flex:0 0 78px;display:flex;align-items:center;gap:5px}
+.r .rn .cnt{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;width:20px;text-align:right}
+.r .rn .mini{flex:1;height:7px;border-radius:99px;background:var(--chip);overflow:hidden}
+.r .rn .mini s{display:block;height:100%;background:var(--used);text-decoration:none}
+.r.lor .rn .mini s{background:var(--light)}
+.r .rm{flex:1;min-width:0}
+
+@media(max-width:640px){
+  h1{font-size:17px}
+  .strip{gap:2px}
+  .sday{min-width:38px}
+  .cal{grid-template-columns:repeat(2,1fr)}
+  .cal .dow{display:none}
+  .cell{min-height:auto}
+  .r{flex-wrap:wrap;gap:6px}
+  .r .rd{flex:0 0 auto}
+  .r .rm{flex:1 1 100%}
+}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🏀 Fantasy League</span>
+  <a>📊 Dashboard</a><a>👥 Teams</a><a>🏆 Rankings</a><a>⛹️ Players</a><a class="active">🏀 NBA ▾</a><a>🩺 Injuries</a>
+  <span class="spacer"></span><button id="theme">🌙</button>
+</nav>
+<main>
+  <h1>📅 Slate calendar — next 14 days</h1>
+  <div class="sub">
+    Real published <b>2026-27</b> schedule, window starting <b>Tue Jan 5 2027</b>. Three layouts for the same question:
+    <b>how many NBA games land on each of the next 14 nights, and who plays.</b>
+    Data is already in the cached <code>/api/nba/schedule</code> payload — <code>calendar_days[]</code> gives the count,
+    the per-team <code>games[]</code> give the matchups. <b>No new endpoint, no new fetch.</b>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-p="a" class="on">Ⓐ Strip + detail</button>
+    <button data-p="b">Ⓑ Calendar weeks</button>
+    <button data-p="c">Ⓒ Day rows</button>
+    <button data-p="why">Ⓓ Does it earn a spot?</button>
+  </div>
+
+  <!-- ================= A ================= -->
+  <section class="panel on" id="p-a">
+    <span class="where">Schedule page — new card above the season grid</span>
+    <div class="card">
+      <div class="controls">
+        <div class="group" id="hzA"><button data-h="14" class="on">14 days</button><button data-h="28">28 days</button></div>
+      </div>
+      <div class="cardhead">
+        <h2>Games per night<span class="it" data-tip="Count of NBA games league-wide on that date. 30 teams / 2 = 15 is the theoretical max; a real night is 2–13.">i</span></h2>
+        <span class="hint" id="hintA"></span>
+      </div>
+      <div class="strip" id="stripA"></div>
+      <div class="legend">
+        <span><i style="background:var(--used)"></i>games that night</span>
+        <span><i style="background:var(--light)"></i>light night (≤5 games)</span>
+        <span><i style="background:var(--used);box-shadow:inset 0 0 0 2px rgba(0,0,0,.2)"></i>high-volume night (10+)</span>
+      </div>
+      <div class="detail" id="detailA"></div>
+      <div class="note"><b>Click any bar</b> to list that night's matchups underneath. The teams are opt-in, exactly as you framed it — the strip alone answers "which nights are thin", the detail answers "who's on".</div>
+    </div>
+    <div class="callout">
+      <b>Pro:</b> smallest footprint, and the shape of the fortnight reads in one glance — you can see the Jan 6 and Jan 9 dips without reading a single number.
+      <b>Con:</b> only one night's teams visible at a time, so comparing "who plays Thursday vs Friday" means two clicks.
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section class="panel" id="p-b">
+    <span class="where">Schedule page — new card above the season grid</span>
+    <div class="card">
+      <div class="cardhead">
+        <h2>Next 14 nights</h2>
+        <span class="hint">tap a day to expand its matchups · shaded by slate size</span>
+      </div>
+      <div class="cal" id="calB"></div>
+      <div class="legend">
+        <span><i style="background:rgba(var(--heat),.34)"></i>heavier night</span>
+        <span><i style="background:rgba(var(--heat),.08)"></i>lighter night</span>
+        <span><i style="background:var(--light-bg);box-shadow:inset 0 0 0 1px var(--light)"></i>light night (≤5)</span>
+      </div>
+      <div class="note"><b>Real calendar geometry</b> — Sun→Sat columns, so the weekly rhythm is structural rather than something you infer. Multiple days can be expanded at once.</div>
+    </div>
+    <div class="callout">
+      <b>Pro:</b> the only layout where "next Wednesday" is findable by position instead of by reading dates, and several nights can be open side by side.
+      <b>Con:</b> tallest of the three, and 7 columns collapse badly at 390px — it drops to a 2-column grid on mobile, which loses the calendar metaphor that justified it.
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section class="panel" id="p-c">
+    <span class="where">Schedule page — new card above the season grid</span>
+    <div class="card">
+      <div class="cardhead">
+        <h2>Next 14 nights</h2>
+        <span class="hint">every matchup visible · nothing hidden behind a click</span>
+      </div>
+      <div class="rows" id="rowsC"></div>
+      <div class="legend">
+        <span><i style="background:var(--used)"></i>games that night</span>
+        <span><i style="background:var(--light)"></i>light night (≤5 games)</span>
+        <span><i style="background:rgba(var(--heat),.07);box-shadow:inset 0 0 0 1px var(--border)"></i>high-volume night (10+)</span>
+      </div>
+      <div class="note">Away team first, <em>@</em>, then home — same convention as the team schedule tab.</div>
+    </div>
+    <div class="callout">
+      <b>Pro:</b> zero interaction, works identically on phone and desktop, and it is the only version you can Ctrl-F.
+      <b>Con:</b> ~14 rows × up to 13 chips is a lot of ink for a page that already carries a 30-row season table; the slate <i>shape</i> is weaker here than in Ⓐ.
+    </div>
+  </section>
+
+  <!-- ================= WHY ================= -->
+  <section class="panel" id="p-why">
+    <div class="card">
+      <div class="cardhead"><h2>Is this already covered?</h2><span class="pill good">no — genuinely new</span></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        <b>Season grid (the existing table on this page)</b> answers <i>per team, per month</i>. It cannot tell you what next Tuesday looks like.<br><br>
+        <b>Roster coverage (TeamDetail)</b> is a 14-day bar strip too — but it counts <i>your players</i> with a game, not league games.
+        That overlap is the one real design risk here: two 14-day bar strips in the same app that mean different things.
+        Ⓐ leans into it (same visual language, so the reader transfers the reading) and mitigates by living on a different page with a different title.
+        Ⓑ and Ⓒ sidestep it entirely by not being a bar strip.<br><br>
+        <b>Team schedule tab</b> lists one team's games with a <code>slate_size</code> column — so the number already exists in the app, but only reachable one team at a time.
+        <b>Nothing anywhere lists who plays on a given date.</b>
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>What it's for</h2><span class="pill flat">a query, not advice</span></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        Light nights are where a roster spot earns or wastes itself: on a 5-game night most of your team is idle,
+        so that is when an add matters and when a streamer either plays or doesn't. Heavy nights take care of themselves.
+        The view states the slate; it ranks nobody and recommends nothing — same posture as the rest of the page.
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Cost</h2><span class="pill good">frontend only</span></div>
+      <div class="note" style="font-size:12px;color:var(--ink2)">
+        <code>calendar_days[]</code> is already built in <code>schedule_service._build_payload</code> and already shipped in the response —
+        the frontend currently <b>ignores it entirely</b>. Matchups group client-side from the per-team <code>games[]</code>
+        already in the same payload. So: no backend change, no extra request, no cache work.
+        The only backend-adjacent question is whether the payload should pre-group matchups per date to save the client a 30×80 pass —
+        it's ~2400 iterations once per load, so probably not worth the response-size increase.
+      </div>
+    </div>
+    <div class="callout warnc">
+      <b>Open question — what is "next 14 days" in the offseason?</b> Today is Aug 2026; the season starts Oct 20.
+      Anchor the window to <code>max(today, season start)</code> so the card shows opening fortnight rather than 14 empty cells,
+      and label it honestly when it isn't actually "next".
+    </div>
+    <div class="callout cut">
+      <b>Deliberately not here: your players.</b> Overlaying "3 of your guys play" turns this into roster coverage, which already exists on TeamDetail.
+      This card is league-wide and league-only. If you want them joined, the right move is a link, not a merge.
+    </div>
+  </section>
+</main>
+
+<script>
+const DAYS = [{"date":"2027-01-05","n":9,"hv":false,"g":[["ATL","CHA"],["DET","SAC"],["LAC","ORL"],["LAL","WAS"],["MEM","MIA"],["MIL","CHI"],["MIN","HOU"],["PHO","DEN"],["TOR","CLE"]]},{"date":"2027-01-06","n":5,"hv":false,"g":[["IND","SAS"],["NYK","GSW"],["OKC","PHL"],["POR","NOP"],["UTA","BKN"]]},{"date":"2027-01-07","n":12,"hv":true,"g":[["BOS","LAL"],["CHI","SAC"],["CLE","ORL"],["DEN","CHA"],["DET","GSW"],["IND","ATL"],["LAC","MIL"],["MEM","HOU"],["MIA","BKN"],["MIN","TOR"],["OKC","WAS"],["POR","DAL"]]},{"date":"2027-01-08","n":8,"hv":false,"g":[["DET","LAL"],["MEM","SAS"],["MIA","PHL"],["MIN","WAS"],["NYK","SAC"],["ORL","NOP"],["PHO","DAL"],["UTA","TOR"]]},{"date":"2027-01-09","n":6,"hv":false,"g":[["BOS","LAC"],["CHA","POR"],["CHI","GSW"],["DEN","CLE"],["HOU","BKN"],["MIL","IND"]]},{"date":"2027-01-10","n":8,"hv":false,"g":[["CHA","SAC"],["CHI","PHO"],["DAL","MEM"],["NOP","MIA"],["OKC","ORL"],["PHL","TOR"],["SAS","ATL"],["UTA","DET"]]},{"date":"2027-01-11","n":6,"hv":false,"g":[["ATL","WAS"],["BKN","IND"],["CLE","MIN"],["DEN","NYK"],["HOU","BOS"],["LAL","LAC"]]},{"date":"2027-01-12","n":8,"hv":false,"g":[["BKN","MIA"],["CHI","UTA"],["DAL","MEM"],["DEN","MIL"],["DET","TOR"],["ORL","POR"],["SAC","GSW"],["WAS","PHL"]]},{"date":"2027-01-13","n":7,"hv":false,"g":[["CHA","GSW"],["CLE","ATL"],["HOU","OKC"],["LAL","POR"],["MIL","IND"],["NYK","BOS"],["PHO","TOR"]]},{"date":"2027-01-14","n":9,"hv":false,"g":[["BKN","PHL"],["CHA","UTA"],["DAL","DET"],["LAC","SAC"],["MEM","DEN"],["MIA","NYK"],["MIN","CHI"],["NOP","SAS"],["ORL","LAL"]]},{"date":"2027-01-15","n":8,"hv":false,"g":[["CLE","MIL"],["GSW","ATL"],["MIA","TOR"],["ORL","LAC"],["PHO","IND"],["SAC","POR"],["UTA","OKC"],["WAS","HOU"]]},{"date":"2027-01-16","n":6,"hv":false,"g":[["BKN","BOS"],["CHA","DEN"],["CLE","MEM"],["DAL","NYK"],["DET","HOU"],["MIN","PHL"]]},{"date":"2027-01-17","n":8,"hv":false,"g":[["GSW","MIA"],["IND","WAS"],["MIL","LAL"],["ORL","DEN"],["POR","OKC"],["SAC","UTA"],["SAS","NOP"],["TOR","CHI"]]},{"date":"2027-01-18","n":7,"hv":false,"g":[["BOS","WAS"],["DET","CLE"],["HOU","MEM"],["MIN","NYK"],["OKC","DAL"],["PHL","ATL"],["PHO","LAC"]]},{"date":"2027-01-19","n":7,"hv":false,"g":[["CHA","DAL"],["CHI","TOR"],["GSW","ORL"],["IND","PHL"],["LAL","SAC"],["POR","MIA"],["UTA","DEN"]]},{"date":"2027-01-20","n":10,"hv":true,"g":[["CHI","BKN"],["HOU","MIN"],["IND","BOS"],["LAC","UTA"],["MEM","PHO"],["MIA","SAS"],["MIL","SAC"],["OKC","NOP"],["POR","ATL"],["TOR","NYK"]]},{"date":"2027-01-21","n":4,"hv":false,"g":[["CLE","BKN"],["LAL","GSW"],["PHL","BOS"],["WAS","DEN"]]},{"date":"2027-01-22","n":11,"hv":true,"g":[["DAL","NOP"],["HOU","CHA"],["IND","DET"],["MEM","OKC"],["MIL","GSW"],["MIN","SAS"],["NYK","ATL"],["POR","ORL"],["SAC","LAL"],["UTA","PHO"],["WAS","LAC"]]},{"date":"2027-01-23","n":6,"hv":false,"g":[["ATL","MIA"],["CHA","BOS"],["CLE","DAL"],["MIL","DEN"],["PHL","CHI"],["TOR","BKN"]]},{"date":"2027-01-24","n":7,"hv":false,"g":[["HOU","ORL"],["LAC","NYK"],["MIN","DET"],["OKC","GSW"],["POR","SAS"],["UTA","PHO"],["WAS","LAL"]]},{"date":"2027-01-25","n":8,"hv":false,"g":[["CLE","NOP"],["DAL","CHI"],["LAC","PHL"],["MIA","BKN"],["MIN","MEM"],["ORL","CHA"],["SAC","DEN"],["TOR","BOS"]]},{"date":"2027-01-26","n":7,"hv":false,"g":[["ATL","DET"],["CHI","IND"],["HOU","SAS"],["MIL","UTA"],["OKC","LAL"],["PHO","NYK"],["WAS","POR"]]},{"date":"2027-01-27","n":9,"hv":false,"g":[["CHA","SAS"],["DAL","TOR"],["DEN","MIN"],["DET","CLE"],["GSW","POR"],["LAC","BOS"],["NOP","HOU"],["PHO","BKN"],["SAC","PHL"]]},{"date":"2027-01-28","n":8,"hv":false,"g":[["ATL","NYK"],["CHI","ORL"],["GSW","UTA"],["LAL","IND"],["MEM","OKC"],["MIA","MIL"],["PHL","NOP"],["SAC","WAS"]]},{"date":"2027-01-29","n":6,"hv":false,"g":[["CHA","MIN"],["CLE","TOR"],["DET","DAL"],["LAC","BKN"],["ORL","HOU"],["PHO","BOS"]]},{"date":"2027-01-30","n":8,"hv":false,"g":[["ATL","MIL"],["DEN","OKC"],["LAL","NYK"],["MEM","UTA"],["NOP","CLE"],["PHL","MIA"],["SAS","GSW"],["WAS","IND"]]},{"date":"2027-01-31","n":8,"hv":false,"g":[["BKN","ORL"],["BOS","TOR"],["CHI","OKC"],["HOU","DAL"],["LAL","CHA"],["PHO","MIN"],["POR","DEN"],["SAC","DET"]]},{"date":"2027-02-01","n":7,"hv":false,"g":[["CLE","UTA"],["MEM","MIL"],["MIA","IND"],["NOP","PHL"],["NYK","BKN"],["SAS","GSW"],["WAS","ATL"]]}];
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const HV = 10, LOW = 5;
+
+function d(iso){ const [y,m,dd] = iso.split('-').map(Number); return new Date(y, m-1, dd); }
+function fmt(iso){ const x = d(iso); return DOW[x.getDay()] + ' ' + MON[x.getMonth()] + ' ' + x.getDate(); }
+function chips(g){ return g.map(([a,h]) => `<span class="mu"><b>${a}</b><em>@</em><b>${h}</b></span>`).join(''); }
+
+/* ---------- A ---------- */
+let horizonA = 14, selA = 0;
+function renderA(){
+  const days = DAYS.slice(0, horizonA);
+  const max = Math.max(...days.map(x => x.n));
+  const total = days.reduce((s,x) => s + x.n, 0);
+  const lightest = days.reduce((a,b) => b.n < a.n ? b : a);
+  document.getElementById('hintA').innerHTML =
+    `${total} games over ${horizonA} nights · busiest <b>${max}</b> · lightest <b>${lightest.n}</b> on ${fmt(lightest.date)}`;
+  document.getElementById('stripA').innerHTML = days.map((x,i) => `
+    <button class="sday ${x.hv?'hv':''} ${x.n<=LOW?'lo':''} ${i===selA?'sel':''}" data-i="${i}">
+      <span class="sbar"><span class="sfill" style="height:${Math.round(x.n/max*100)}%"></span></span>
+      <span class="n">${x.n}</span>
+      <span class="d">${DOW[d(x.date).getDay()]}<br>${d(x.date).getMonth()+1}/${d(x.date).getDate()}</span>
+    </button>`).join('');
+  const s = days[selA];
+  document.getElementById('detailA').innerHTML = `
+    <div class="dh">
+      <h3>${fmt(s.date)}</h3>
+      <span class="pill ${s.hv?'warn':(s.n<=LOW?'light':'flat')}">${s.n} game${s.n===1?'':'s'}${s.hv?' · high volume':(s.n<=LOW?' · light night':'')}</span>
+      <span class="hint">${s.n*2} of 30 teams active</span>
+    </div>
+    <div class="mus">${chips(s.g)}</div>`;
+  document.querySelectorAll('#stripA .sday').forEach(b =>
+    b.onclick = () => { selA = +b.dataset.i; renderA(); });
+}
+document.getElementById('hzA').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  horizonA = +b.dataset.h; selA = 0;
+  document.querySelectorAll('#hzA button').forEach(x => x.classList.toggle('on', x === b));
+  renderA();
+};
+
+/* ---------- B ---------- */
+function renderB(){
+  const days = DAYS.slice(0,14);
+  const max = Math.max(...days.map(x => x.n));
+  const min = Math.min(...days.map(x => x.n));
+  const lead = d(days[0].date).getDay();
+  let html = DOW.map(x => `<span class="dow">${x}</span>`).join('');
+  for(let i=0;i<lead;i++) html += `<div class="cell empty"></div>`;
+  html += days.map((x,i) => {
+    const ratio = max === min ? 1 : (x.n - min) / (max - min);
+    const tint = (ratio * 0.36 + 0.05).toFixed(3);
+    const bg = x.n<=LOW ? 'background:var(--light-bg)' : `background:rgba(var(--heat),${tint})`;
+    return `<button class="cell" data-i="${i}" style="${bg}">
+      <span class="dt">${MON[d(x.date).getMonth()]} ${d(x.date).getDate()}</span>
+      <span class="big">${x.n}</span>
+      <span class="lab">${x.n<=LOW?'light night':(x.hv?'high volume':'games')}</span>
+      <span class="mus">${chips(x.g)}</span>
+    </button>`;
+  }).join('');
+  const el = document.getElementById('calB');
+  el.innerHTML = html;
+  el.querySelectorAll('.cell[data-i]').forEach(c =>
+    c.onclick = () => c.classList.toggle('open'));
+}
+
+/* ---------- C ---------- */
+function renderC(){
+  const days = DAYS.slice(0,14);
+  const max = Math.max(...days.map(x => x.n));
+  document.getElementById('rowsC').innerHTML = days.map(x => `
+    <div class="r ${x.hv?'hvr':''} ${x.n<=LOW?'lor':''}">
+      <span class="rd">${DOW[d(x.date).getDay()]} ${MON[d(x.date).getMonth()]} ${d(x.date).getDate()}
+        <s>${x.n<=LOW?'light night':(x.hv?'high volume':'&nbsp;')}</s></span>
+      <span class="rn"><span class="cnt">${x.n}</span>
+        <span class="mini"><s style="width:${Math.round(x.n/max*100)}%"></s></span></span>
+      <span class="rm"><span class="mus">${chips(x.g)}</span></span>
+    </div>`).join('');
+}
+
+/* ---------- chrome ---------- */
+document.getElementById('tabs').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'p-' + b.dataset.p));
+};
+document.getElementById('theme').onclick = e => {
+  document.body.classList.toggle('dark');
+  e.target.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+};
+
+renderA(); renderB(); renderC();
+</script>
+</body>
+</html>

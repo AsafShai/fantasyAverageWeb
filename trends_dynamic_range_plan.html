@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trends — dynamic time range — Plan</title>
+<style>
+:root{
+  --bg1:#f9fafb; --bg2:#eff6ff; --card:#ffffff; --border:#e5e7eb;
+  --ink1:#111827; --ink2:#4b5563; --ink3:#9ca3af;
+  --grid:#f3f4f6; --axis:#d1d5db; --chip:#f3f4f6; --chip-on:#dbeafe; --chip-on-ink:#1d4ed8;
+  --up:#059669; --up-bg:#d1fae5; --down:#dc2626; --down-bg:#fee2e2;
+  --warn:#b45309; --warn-bg:#fef3c7; --warn-bd:#fde68a;
+  --bad:#b91c1c; --bad-bg:#fee2e2; --bad-bd:#fecaca;
+  --ok-bg:#d1fae5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+  --bg1:#111827; --bg2:#1f2937; --card:#1f2937; --border:#374151;
+  --ink1:#f9fafb; --ink2:#d1d5db; --ink3:#6b7280;
+  --grid:#273244; --axis:#4b5563; --chip:#374151; --chip-on:#1e3a5f; --chip-on-ink:#93c5fd;
+  --up:#34d399; --up-bg:#064e3b; --down:#f87171; --down-bg:#7f1d1d;
+  --warn:#fcd34d; --warn-bg:#422006; --warn-bd:#713f12;
+  --bad:#fca5a5; --bad-bg:#450a0a; --bad-bd:#7f1d1d;
+  --ok-bg:#064e3b;
+}
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--ink1);padding-bottom:60px}
+main{max-width:1180px;margin:0 auto;padding:20px 12px}
+h1{font-size:22px;font-weight:800;margin-bottom:4px}
+h2{font-size:16px;font-weight:800;margin:26px 0 10px;padding-top:14px;border-top:1px solid var(--border)}
+h3{font-size:13px;font-weight:800;margin:14px 0 6px;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
+p,li{font-size:13.5px;color:var(--ink2);line-height:1.6}
+ul,ol{margin:6px 0 6px 20px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:var(--chip);padding:1px 5px;border-radius:4px;color:var(--ink1)}
+.sub{font-size:13px;color:var(--ink2);margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);padding:14px;margin-bottom:14px}
+.note{border-left:3px solid var(--chip-on-ink);background:var(--chip);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink2)}
+.warn{border-left:3px solid var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd);border-left-width:3px;border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink1)}
+.bad{border-left:3px solid var(--bad);background:var(--bad-bg);border:1px solid var(--bad-bd);border-left-width:3px;border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink1)}
+.ok{border-left:3px solid var(--up);background:var(--ok-bg);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink1)}
+.decided{border-left:3px solid var(--up);background:var(--chip);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--ink2)}
+.decided .tag,.ok .tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--up);border:1px solid var(--up);border-radius:999px;padding:1px 8px;margin-right:8px;vertical-align:1px}
+.warn .tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:1px 8px;margin-right:8px;vertical-align:1px}
+.bad .tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--bad);border:1px solid var(--bad);border-radius:999px;padding:1px 8px;margin-right:8px;vertical-align:1px}
+
+.demo{border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.09);background:var(--card);margin-bottom:16px}
+.demobar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--grid);border-bottom:1px solid var(--border);padding:8px 12px}
+.demobar .t{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:var(--ink3);margin-right:auto}
+.demobar button{border:1px solid var(--border);background:var(--card);color:var(--ink2);font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:7px;cursor:pointer}
+.demobar button.on{background:var(--chip-on);color:var(--chip-on-ink);border-color:var(--chip-on-ink)}
+.stage{padding:16px;margin:0 auto}
+.stage.mobile{max-width:390px;border-left:1px dashed var(--border);border-right:1px dashed var(--border)}
+
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.group{display:flex;flex-wrap:wrap;gap:3px;background:var(--chip);padding:3px;border-radius:8px}
+.group button{border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.group button.on{background:var(--card);color:var(--chip-on-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.group button.dash{border:1px dashed var(--ink3)}
+.group button.dash.on{border-color:var(--chip-on-ink)}
+.stage.mobile .group{width:100%}
+.stage.mobile .group.stretch button{flex:1;padding:6px 4px}
+.rangebox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--chip);border-radius:10px;padding:8px 12px;margin-bottom:10px}
+.rangebox .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3)}
+.valpill{font-size:12.5px;font-weight:800;color:var(--chip-on-ink);background:var(--chip-on);border-radius:999px;padding:3px 11px;white-space:nowrap}
+.hint{font-size:11px;color:var(--ink3)}
+.panel-cust{border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--card);margin-bottom:10px;display:inline-block;min-width:320px}
+.stage.mobile .panel-cust{display:block;min-width:0;width:100%}
+.fld{font-size:11px;font-weight:600;color:var(--ink2);margin-bottom:4px}
+input[type=date]{border:1px solid var(--border);background:var(--card);color:var(--ink1);border-radius:6px;padding:6px 9px;font-size:12.5px}
+input[type=date]:disabled{background:var(--grid);color:var(--ink3)}
+.stage.mobile input[type=date]{width:100%}
+.applyb{border:none;background:#2563eb;color:#fff;font-weight:700;font-size:12.5px;padding:7px 16px;border-radius:6px;cursor:pointer}
+.applyb:disabled{opacity:.4;cursor:not-allowed}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);border-bottom:1px solid var(--border);padding:7px 8px;white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--grid);color:var(--ink2);vertical-align:top}
+td b{color:var(--ink1)}
+.tw{overflow-x:auto}
+.hl{background:var(--chip-on);color:var(--chip-on-ink);border-radius:4px;padding:0 3px;transition:background .3s}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.badge.new{background:#f3e8ff;color:#7e22ce}
+@media (prefers-color-scheme: dark){.badge.new{background:#3b0764;color:#d8b4fe}}
+.badge.low{background:var(--chip);color:var(--ink3);font-weight:600}
+.badge.fa{background:var(--chip-on);color:var(--chip-on-ink)}
+.pill{display:inline-block;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px}
+.pill.up{background:var(--up-bg);color:var(--up)}
+.pill.down{background:var(--down-bg);color:var(--down)}
+.stack{list-style:none;margin:0;padding:0}
+.stack li{padding:7px 0 7px 22px;position:relative;border-bottom:1px solid var(--grid)}
+.stack li:before{content:"→";position:absolute;left:0;color:var(--chip-on-ink);font-weight:800}
+.verdict{font-weight:800}
+.verdict.yes{color:var(--up)} .verdict.no{color:var(--down)}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Trends page — dynamic time range</h1>
+<p class="sub">Replacing the fixed <code>7d / 15d / 30d</code> buttons in <code>frontend/src/pages/Trends.tsx</code> with a user-chosen recency window. Short answer: <b>yes — as a rolling window whose end is always pinned to the anchor date</b>, never a free start/end pair. Reason in §4.</p>
+
+<h2>0 · Decisions — all locked</h2>
+<div class="tw"><table>
+  <tr><th>Item</th><th>Decision</th></tr>
+  <tr><td>Window shape</td><td>Rolling only, end pinned to the anchor. Presets 7/15/30 + 📆 start-date custom.</td></tr>
+  <tr><td>Anchor ≠ today</td><td><b>Pass explicitly.</b> Never <code>new Date()</code>.</td></tr>
+  <tr><td>Flags</td><td><b>Unflagged</b>, inside the already-flagged <code>FF_TRENDS</code> page.</td></tr>
+  <tr><td>Bounded caches</td><td><b>Yes</b> — and it <i>reduces</i> memory rather than costing it. Numbers below.</td></tr>
+  <tr><td>Timezone</td><td><b>Fix the real code.</b> Not demo-only — 4 live sites, scope below.</td></tr>
+  <tr><td>Thundering herd</td><td><b>Coalesce in-flight requests.</b> One gotcha, noted in the plan.</td></tr>
+  <tr><td>Cache staleness</td><td><b>Key caches on the anchor date</b>, so an ingest invalidates everything at once.</td></tr>
+  <tr><td>Short windows</td><td>Live game-night hint + caution under 10 days.</td></tr>
+  <tr><td>Shooting · Season tab</td><td>De-emphasise, retitle to "Activity window".</td></tr>
+  <tr><td>Players page</td><td>Untouched.</td></tr>
+  <tr><td>days ⇄ games</td><td>Deferred — separate feature.</td></tr>
+</table></div>
+
+<div class="warn">
+<span class="tag">One open call</span><b>Full dynamic, or just more presets?</b> The only thing still genuinely undecided — see §10. Everything else above is settled and planned.
+</div>
+
+<h2>0b · Measured evidence</h2>
+<p class="sub">Taken against the running backend on live Neon data (2025-26 season, 411 qualifying players), not estimated.</p>
+
+<div class="tw"><table>
+  <tr><th>Cached object</th><th>Wire size</th><th>In-memory (RSS delta)</th><th>Cold fetch</th></tr>
+  <tr><td><code>MinutesResponse</code></td><td>104 KB</td><td><b>527 KB</b></td><td>4.4s</td></tr>
+  <tr><td><code>UsageResponse</code></td><td>142 KB</td><td><b>528 KB</b></td><td>2.8s</td></tr>
+  <tr><td><code>RegressionResponse</code> (form)</td><td>36 KB</td><td><b>217 KB</b></td><td>1.3s</td></tr>
+  <tr><td><code>GameLogResponse</code></td><td>11 KB</td><td><b>87 KB</b></td><td>1.9s</td></tr>
+</table></div>
+
+<div class="bad">
+<span class="tag">The real finding</span><b>The cache is already a memory risk today, before any of this ships.</b> <code>_game_log_cache</code> is keyed <code>(player_id, window, baseline, mode)</code> and never evicts. With today's 3 windows that is still <code>3 × 3 × 2 = 18</code> entries <i>per player</i> — a session where someone expands 50 players across a few settings reaches <b>~78 MB</b> of retained pydantic objects on a <b>512 MB</b> Render instance. Open the window space to 56 and the theoretical ceiling is <b>~14 GB</b>.
+</div>
+
+<div class="ok">
+<span class="tag">Answers your question</span><b>Bounded caches make memory <i>better</i>, not worse.</b> With LRU caps the ceiling becomes fixed and small, no matter how many distinct windows exist:
+<div class="tw" style="margin-top:8px"><table>
+  <tr><th>Cache</th><th>Cap</th><th>Worst-case memory</th></tr>
+  <tr><td><code>_minutes_cache</code></td><td>8</td><td>4.2 MB</td></tr>
+  <tr><td><code>_usage_cache</code></td><td>8</td><td>4.2 MB</td></tr>
+  <tr><td><code>_regression_cache</code></td><td>12</td><td>2.6 MB</td></tr>
+  <tr><td><code>_game_log_cache</code></td><td>64</td><td>5.6 MB</td></tr>
+  <tr><td colspan="2"><b>Total hard ceiling</b></td><td><b>≈ 17 MB</b>, constant</td></tr>
+</table></div>
+So this is a <b>memory fix that happens to also unblock dynamic windows</b> — worth shipping even if you drop dynamic ranges entirely.
+</div>
+
+<h2>1 · Live demo — click everything</h2>
+<p class="sub">Presets, plus <b>📆 Custom</b> for a start date. Column headers, the derived day count and the table values all recompute for real off a fake 6-player game log.</p>
+
+<div class="demo">
+  <div class="demobar">
+    <span class="t">Demo controls</span>
+    <button id="btnWidth">📱 Mobile 390px</button>
+    <span class="hint" id="anchorNote"></span>
+  </div>
+  <div class="stage" id="stage">
+    <div class="controls">
+      <div class="group" id="tabGrp">
+        <button data-tab="minutes" class="on">Minutes Movers</button>
+        <button data-tab="usage">Usage &amp; Role</button>
+      </div>
+    </div>
+
+    <div class="rangebox">
+      <span class="lbl">Recency window</span>
+      <div class="group stretch" id="winGrp">
+        <button data-win="7">7d</button>
+        <button data-win="15" class="on">15d</button>
+        <button data-win="30">30d</button>
+        <button data-win="custom" class="dash">📆 Custom</button>
+      </div>
+      <span class="valpill" id="valPill"></span>
+      <span class="hint" id="winHint"></span>
+    </div>
+
+    <div id="custPanel" style="display:none">
+      <div class="panel-cust">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <div class="fld">Window starts</div>
+            <input type="date" id="startInp">
+          </div>
+          <div style="opacity:.6">
+            <div class="fld">Through</div>
+            <input type="date" id="endInp" disabled>
+          </div>
+          <button class="applyb" id="applyBtn">Apply</button>
+        </div>
+        <p class="hint" id="custHint" style="margin-top:8px"></p>
+        <p class="hint" id="custErr" style="color:var(--down);font-weight:600"></p>
+      </div>
+    </div>
+
+    <div id="shortWarn"></div>
+
+    <div class="tw"><table id="tbl"></table></div>
+    <p class="hint" style="margin-top:8px">Highlighted headers are the ones that relabel from <code>windowDays</code> — all 15 sites already interpolate it in the real code.</p>
+  </div>
+</div>
+
+<h2>2 · What exists today</h2>
+<div class="tw"><table>
+  <tr><th>Piece</th><th>Current</th></tr>
+  <tr><td>Frontend</td><td><code>WINDOW_OPTIONS = [7, 15, 30]</code>, three buttons, persisted via <code>usePersistedState('trends.windowDays', 15)</code>. All column labels already interpolate <code>{windowDays}</code> — <b>no label work needed.</b></td></tr>
+  <tr><td>Route</td><td><code>window_days: int = DEFAULT_RECENCY_WINDOW_DAYS</code> — plain int, no validation.</td></tr>
+  <tr><td>Service</td><td><code>_normalize_window_days</code> silently snaps anything not in <code>VALID_RECENCY_WINDOWS_DAYS = (7, 15, 30)</code> back to 15. <b>Its only consumer</b> — confirmed by grep — so this is a one-function change.</td></tr>
+  <tr><td>Cache</td><td><code>_minutes_cache[window_days]</code>, <code>_usage_cache[window_days]</code>, <code>_regression_cache[(w, b, mode)]</code>, <code>_game_log_cache[(pid, w, b, mode)]</code> — plain dicts, 6h TTL <b>checked only on read, never evicted</b>.</td></tr>
+</table></div>
+
+<h2>3 · Which control — reuse the existing date picker</h2>
+
+<div class="note">
+<b>"Last N days" and "a start date" are the same control.</b> With the end pinned to the anchor, <code>window_days = anchor − start</code> — same request, same maths, same cache key. The choice is presentational only, so the two framings coexist rather than compete:
+<ul>
+<li><b>Presets (7 / 15 / 30) = count-thinking.</b> "How has he looked the last two weeks." The common case, one tap, no arithmetic.</li>
+<li><b>Custom date = event-thinking.</b> "Since the deadline", "since he came back from the ankle". This is <i>why</i> anyone reaches past the presets, and for that intent a date is exactly right — a count would force the user to work out what was 23 days ago.</li>
+</ul>
+A bare number box serves neither: presets beat it for the common case, a date beats it for the deliberate one. Hence presets + start-only picker, with the derived <code>= 21 days</code> always on screen so the trends semantics stay legible.
+</div>
+
+<div class="tw"><table>
+  <tr><th></th><th>Slider (<i>rejected</i>)</th><th>Existing <code>DateRangePicker</code>, start-only (<i>chosen</i>)</th></tr>
+  <tr><td>Consistency</td><td>New interaction found nowhere else in the app</td><td>Same panel, same validation copy, same look as every other custom range</td></tr>
+  <tr><td>Commit boundary</td><td>Needs debounce / <code>pointerup</code> plumbing to avoid one query per drag tick</td><td><b>Already has an Apply button.</b> Problem disappears.</td></tr>
+  <tr><td>Build cost</td><td>New component + tests</td><td>Two new props on a built, tested component</td></tr>
+  <tr><td>Risk</td><td>Cannot express an invalid window</td><td><b>Must lock the end date</b> — the one thing to get right</td></tr>
+</table></div>
+
+<div class="decided">
+<span class="tag">Decided</span><b>The end date is not user-editable here.</b> <code>DateRangePicker</code> as it exists takes a free <code>start</code> <i>and</i> <code>end</code>. A trends window must always end at the anchor date (§4①) or Shooting · Form's table and chart baselines silently diverge. So the reuse is <b>start-only</b>: pass <code>end</code> pinned to the anchor and render it disabled, then convert <code>window_days = anchor − start</code> before calling the API. The backend contract does not change — it still receives an integer.
+</div>
+
+<div class="warn">
+<span class="tag">Decided → P5</span><b>Anchor ≠ today.</b> <code>DateRangePicker</code> defaults its <code>today</code> prop to <code>new Date()</code>. The trends anchor is the <b>latest game day in the data</b>, which lags today whenever no games have been played yet today — and lags it by months in the offseason. Pass the anchor explicitly, and word the panel <i>"through Feb 7 (latest game day)"</i>, not <i>"through today"</i>. It is available on every trends payload as <code>window_start + window_days</code>, or from <code>useGetLeagueSummaryQuery</code>.
+</div>
+
+<div class="bad">
+<span class="tag">Decided → P3</span><b>Timezone: never round-trip these dates through <code>toISOString()</code>.</b> Found while building the demo above — the anchor rendered as <b>Feb 6</b> instead of Feb 7. <code>new Date('2026-02-07T00:00:00')</code> is <i>local</i> midnight, and <code>toISOString()</code> converts to UTC, which in Israel (UTC+2/+3) lands on the previous day. Every date that crosses the boundary here is affected: the value fed to <code>&lt;input type="date"&gt;</code>, the <code>min</code>/<code>max</code> attributes, and the <code>window_days</code> subtraction — a silent off-by-one that shifts the whole window and is invisible until someone checks the game count.
+<br><br>Build the <code>YYYY-MM-DD</code> string from <code>getFullYear/getMonth/getDate</code>, and do the day-count subtraction on dates normalised to local midnight.
+<br><br><b>You asked whether this is only here — it is not.</b> Grep found the same pattern in <b>4 live sites</b>, all pre-existing:
+<div class="tw" style="margin-top:6px"><table>
+  <tr><th>Site</th><th>What it does</th><th>Symptom</th></tr>
+  <tr><td><code>utils/dateRange.ts:1</code></td><td><code>todayIso()</code> — default <code>today</code> for <code>validateDateRange</code></td><td>"End date cannot be after today" rejects <i>today</i></td></tr>
+  <tr><td><code>components/DateRangePicker.tsx:5</code></td><td>same <code>todayIso()</code>, feeds the <code>max</code> attribute</td><td>date input won't allow today</td></tr>
+  <tr><td><code>pages/Analytics.tsx:55,60</code></td><td><code>today</code> + <code>getDateNDaysAgo(n)</code></td><td>preset ranges land one day early</td></tr>
+  <tr><td><code>pages/Rankings.tsx:21,26</code></td><td>same pair</td><td>same</td></tr>
+</table></div>
+<b>Severity: real but narrow.</b> In UTC+2/+3 the UTC date only differs from the local date between local midnight and 02:00/03:00. Outside that window everything is correct — which is why it has never been noticed. Inside it, custom ranges silently reject today and the L7/L15/L30 presets on Analytics and Rankings compute from the wrong day.
+<br><br><b>Fix once, centrally:</b> add <code>toLocalIso(d)</code> and <code>daysBetween(a, b)</code> to <code>utils/dateRange.ts</code>, point all four sites at them, and unit-test with <code>TZ</code> forced to a non-UTC zone — your machine and CI are both UTC+2/+3 and would otherwise agree with each other while being wrong.
+</div>
+
+<div class="decided">
+<span class="tag">Decided</span><b>The Players page is untouched.</b> Players / Player profile already have <code>season / L7 / L15 / L30 / custom</code> with a genuine two-date range, and that is correct there: those pages are pure aggregation over a window — no baseline, no vs-season comparison, nothing that has to be a suffix. Arbitrary start/end is both safe and useful there ("how did he do in December"). Worth stating the asymmetry in UI copy, since it otherwise reads as inconsistency: <b>Players constrains nothing because it compares nothing; Trends pins the end because it compares against the season.</b>
+</div>
+
+<div class="warn">
+<span class="tag">Decided → unflagged</span><b>Two flags to check.</b> <code>DateRangePicker</code> is normally reached through <code>TimePeriodSelector</code>, which gates Custom on <code>FF_CUSTOM_RANGE</code>; the Trends page itself is behind <code>FF_TRENDS</code>. Per <code>CLAUDE.md</code>, a flag set in <code>.env.local</code> is <b>not</b> set on Render. Use <code>DateRangePicker</code> directly rather than via <code>TimePeriodSelector</code> — its <code>season / L7 / L15 / L30</code> preset set and <code>TimePeriod</code> value type do not match what Trends stores — and decide deliberately whether the trends custom window rides <code>FF_CUSTOM_RANGE</code> or ships unflagged.
+</div>
+
+<h2>4 · Problems with the idea — read before building</h2>
+
+<div class="decided">
+<span class="tag">Decided</span><b>① Why the end is pinned: an arbitrary start/end would make the table and the chart disagree.</b> If "dynamic" means picking any two dates, Shooting · Form develops a silent inconsistency:
+<ul>
+<li><code>_form_stat</code> (the table) builds the baseline as <code>season_totals − window_totals</code> — everything outside the window, <i>including games after it</i>.</li>
+<li><code>_form_baseline_pct</code> (the chart's reference line) builds it as <code>games_df[game_date &lt; window_start]</code> — strictly <i>before</i> the window.</li>
+</ul>
+These are identical today only because the window is always a <b>trailing suffix</b> of the season. Give it a mid-season range and the same player shows one baseline in the row and a different one in the expanded chart, with nothing erroring.
+<br><br><i>Correction to an earlier draft:</i> the two-proportion z-test itself stays valid — <code>season − window</code> is set-disjoint from the window wherever it sits. The problem is the two divergent baseline constructions, not the statistics.
+<br><br><b>Decision: end always pinned to the anchor.</b> A true start/end range would need the two baseline paths unified first, and belongs in its own tab — the "Δ vs season" framing on Minutes and Usage also assumes a window that ends at the present.
+</div>
+
+<div class="warn">
+<span class="tag">Decided → P1</span><b>② Unbounded caches become a leak.</b> Four dicts keyed partly by <code>window_days</code>, none of which ever evict — entries are only TTL-checked when read. Today the key space is 3 values. Open it to 56 and <code>_game_log_cache</code> alone becomes <code>players × 56 × 3 baselines × 2 modes</code> of retained <code>GameLogResponse</code> objects on a Render free instance. <b>Must ship together with bounded caches</b> (an <code>OrderedDict</code> LRU, maxsize ~64 per cache, plus an expired sweep on write). Prerequisite, not a follow-up.
+</div>
+
+<div class="warn">
+<span class="tag">Decided → P6</span><b>③ Small windows collide with fixed sample gates.</b> <code>MIN_WINDOW_GP = 2</code> and <code>LOW_SAMPLE_GP = 3</code> are absolute game counts. At 5–7 days nearly every qualifying player sits at 2–3 games, so Minutes Movers becomes a wall of <span class="badge low">partial</span> badges and Δ is mostly noise. Form mode is safe — its <code>|z| ≥ 1.5</code> gate self-calibrates and simply returns fewer rows. <b>Mitigation:</b> the live "N game nights" hint plus an inline caution below ~10 days. <i>Drag the demo below 10d to see it.</i>
+</div>
+
+<div class="warn">
+<span class="tag">Decided → P6</span><b>④ The control is prominent on a tab where it barely does anything.</b> On <b>Shooting · Season</b> the window only drives the <code>G(Nd)</code> column; the actual comparison is season vs prior seasons. Making the control bigger makes that mismatch more confusing. <b>Mitigation:</b> on that tab, de-emphasise it and retitle to <code>Activity window</code> with a tooltip saying it only filters by recent games played.
+</div>
+
+<div class="note">
+<b>⑤ Days is arguably the wrong unit.</b> A 15-day window is 4 games for one player and 8 for another. For judging <i>form</i>, "last N games" is more natural. Days is right for "what changed since the deadline"; games is right for "is he hot". Ship days first — it is what the pipeline already speaks — and treat a <b>days ⇄ games toggle</b> as a distinct later feature: it needs a per-player window instead of one global date, which touches every compute function.
+</div>
+
+<h2>5 · What it costs — per tab</h2>
+<div class="tw"><table>
+  <tr><th>Tab</th><th>Window-dependent DB work today</th><th>Under dynamic windows</th></tr>
+  <tr><td><b>Usage &amp; Role</b></td><td><code>get_usage_components</code> — <b>full season, window-independent</b>. The window is applied in pandas. Only <code>get_games_since</code> is window-keyed.</td><td><span class="verdict yes">Nearly free.</span> Cache the season frame per season, slice per window.</td></tr>
+  <tr><td><b>Minutes Movers</b></td><td>Two <code>aggregate_shooting_by_player</code> calls: season-to-date (<b>window-independent</b>) + window (<b>window-keyed</b>), plus <code>get_games_since</code>.</td><td><span class="verdict yes">Cheap</span> once season-to-date is hoisted to its own cache. Each new window = 1 aggregate + 1 count.</td></tr>
+  <tr><td><b>Shooting · Form</b></td><td>Same two aggregates + prior-seasons baseline (window-independent).</td><td><span class="verdict yes">Cheap</span>, same hoist.</td></tr>
+  <tr><td><b>Shooting · Season</b></td><td>Window only affects <code>G(Nd)</code> and eligibility.</td><td><span class="verdict no">Nearly a no-op.</span> See §4④.</td></tr>
+</table></div>
+
+<div class="ok"><b>The hoist is the real win.</b> Splitting the season-to-date aggregate out of the per-window cache turns "change the window" from ~3 season-wide queries into ~1 window-sized query — worth doing <i>regardless</i> of whether dynamic ranges ship.</div>
+
+<h2>6 · Files to touch</h2>
+<h3>Backend</h3>
+<ul class="stack">
+  <li><code>services/trend_service.py</code> — <code>VALID_RECENCY_WINDOWS_DAYS</code> → <code>MIN_RECENCY_WINDOW_DAYS = 5</code> / <code>MAX_RECENCY_WINDOW_DAYS = 60</code>; <code>_normalize_window_days</code> clamps instead of snapping.</li>
+  <li><code>services/trend_service.py</code> — bounded LRU for the four caches; hoist the season-to-date aggregate and prior-season baseline into season-keyed caches.</li>
+  <li><code>routes/trends.py</code> — <code>window_days: int = Query(DEFAULT, ge=5, le=60)</code> on all four routes, so bad input 422s at the edge instead of being silently rewritten.</li>
+  <li><code>tests/routes/test_trends_route.py</code> + a service test — clamping at both ends, and that a window outside the old triple is honoured rather than snapped to 15.</li>
+</ul>
+<h3>Frontend</h3>
+<ul class="stack">
+  <li><code>components/DateRangePicker.tsx</code> — start-only mode: pin <code>end</code>, render it disabled, relabel Start → "Window starts", swap the footer hint. Existing call sites keep today's behaviour by default.</li>
+  <li><code>utils/dateRange.ts</code> — keep <code>validateDateRange</code> correct with a fixed end; add the days-between helper producing <code>window_days</code>.</li>
+  <li><code>pages/Trends.tsx</code> — add 📆 Custom beside the existing <code>WINDOW_OPTIONS</code> row; convert the applied start to <code>window_days</code>; render the <code>since Jan 17 · 21 days</code> chip.</li>
+  <li>Anchor date — pass it in explicitly (see §3 warning). Available as <code>window_start + window_days</code> on any trends payload, or from <code>useGetLeagueSummaryQuery</code>.</li>
+  <li>Nothing else. Headers, tooltips and <code>TrendGameLogChart</code>'s band already read <code>windowDays</code> from props.</li>
+</ul>
+
+<h2>7 · Build order</h2>
+<ol>
+  <li><b>Bounded caches + the season-frame hoist.</b> Pure backend, no user-visible change, stands on its own. Nothing else ships before this.</li>
+  <li>Clamp instead of snap; <code>Query(ge/le)</code> validation; tests.</li>
+  <li>Start-only mode on <code>DateRangePicker</code>, existing call sites unchanged.</li>
+  <li>Wire 📆 Custom into the Trends filter bar; start date → <code>window_days</code>; desktop + 390px.</li>
+  <li>The "N game nights" hint and short-window caution.</li>
+  <li>De-emphasise / retitle the control on Shooting · Season.</li>
+  <li><i>Separate feature, later:</i> last-N-games mode.</li>
+</ol>
+
+<h2>8 · Gaps found on review</h2>
+
+<div class="warn">
+<span class="tag">Decided → P2 (coalesce)</span><b>① Thundering herd on a cold instance.</b> Today only three windows exist, so the caches are warm almost all the time and a cache miss is rare. Open the key space to 56 and a just-woken instance can take several users on <i>different</i> windows at once — each firing its own season-wide <code>aggregate_shooting_by_player</code> with none of them able to reuse the others' work. The 6h TTL does not help; they all miss simultaneously.
+<br><br><b>Options:</b> (a) coalesce in-flight requests — keep a <code>dict[key, asyncio.Future]</code> beside each cache so concurrent callers on the same key await one query; (b) accept it, on the grounds that this is a ~12-user private league and simultaneous distinct-window cold hits are unlikely. <b>(b) is defensible</b> — but decide it deliberately rather than discovering it under load, and note that (a) is ~15 lines and also protects the existing 3-window case.
+</div>
+
+<div class="warn">
+<span class="tag">Decided → P1 (anchor in key)</span><b>② Cache staleness surface grows.</b> Not a new bug, but worth naming: the 6h TTL means a window can serve data that predates last night's ingest. With 3 windows that is 3 stale surfaces; with 56 it is up to 56, each expiring at a different wall-clock time, so two users on adjacent windows can legitimately see different numbers for the same player. If that is unacceptable, key the caches on the anchor date so an ingest that moves the anchor invalidates everything at once — a one-line change to the cache key, worth doing while the caching code is already open.
+</div>
+
+<h2>9 · Interim plan, item by item</h2>
+<p class="sub">Each is independently shippable and independently revertable. Order matters only where stated.</p>
+
+<div class="card">
+<h3>P1 · Bounded caches <span class="badge low">backend · blocker · ships alone</span></h3>
+<ul>
+<li>Add a small <code>_TTLCache</code> helper in <code>trend_service.py</code>: <code>OrderedDict</code>, <code>get/set</code>, <code>move_to_end</code> on hit, <code>popitem(last=False)</code> past <code>maxsize</code>, TTL checked on read <i>and</i> swept on write.</li>
+<li>Replace the four plain dicts. Caps: minutes 8, usage 8, regression 12, game-log 64 (→ ~17 MB ceiling, per §0b).</li>
+<li><b>Include the anchor date in every cache key</b> (the §8② decision) — one tuple element, so a new ingest invalidates all four caches at once instead of each aging out separately.</li>
+<li>Tests: eviction past <code>maxsize</code>, TTL expiry, LRU ordering, and that a changed anchor misses.</li>
+<li><b>Verify:</b> hammer one endpoint across 60 window values, assert <code>len(cache)</code> stays at the cap and RSS plateaus.</li>
+</ul>
+<p class="hint">Ships regardless of everything else — it fixes a live memory risk on its own.</p>
+</div>
+
+<div class="card">
+<h3>P2 · Request coalescing <span class="badge low">backend</span></h3>
+<ul>
+<li><code>dict[key, asyncio.Future]</code> beside each cache. First caller creates the future and computes; concurrent callers on the same key <code>await</code> it.</li>
+<li><b>The one gotcha:</b> remove the future in a <code>finally</code> block, not on success. If a query raises and the future is left in the dict, every later caller awaits a permanently-failed future and the endpoint stays broken until restart. Waiters correctly receive the exception — they would each have failed anyway — but the slot must be freed.</li>
+<li>Tests: N concurrent callers on one key produce exactly one DB call; a raising computation propagates to all waiters <i>and</i> clears the slot so the next call retries.</li>
+</ul>
+<p class="hint">~15 lines. Also protects today's 3-window case, so it is not purely dynamic-range work.</p>
+</div>
+
+<div class="card">
+<h3>P3 · Timezone helpers <span class="badge low">frontend · independent</span></h3>
+<ul>
+<li><code>utils/dateRange.ts</code>: add <code>toLocalIso(date)</code> and <code>daysBetween(startIso, endIso)</code>; rewrite <code>todayIso()</code> on top of <code>toLocalIso</code>.</li>
+<li>Repoint the 4 sites listed in §3 — <code>dateRange.ts</code>, <code>DateRangePicker.tsx</code>, <code>Analytics.tsx</code>, <code>Rankings.tsx</code>.</li>
+<li>Vitest with <code>TZ</code> forced to a non-UTC zone, asserting local midnight does not roll back a day.</li>
+<li><b>Verify:</b> the existing Analytics/Rankings preset buttons still produce the same ranges outside the 00:00–03:00 window (no regression), and the correct ones inside it.</li>
+</ul>
+<p class="hint">Pre-existing bug in shipped pages — worth doing on its own branch, before any trends work.</p>
+</div>
+
+<div class="card">
+<h3>P4 · Clamp instead of snap <span class="badge low">backend</span></h3>
+<ul>
+<li><code>VALID_RECENCY_WINDOWS_DAYS</code> → <code>MIN_RECENCY_WINDOW_DAYS = 5</code> / <code>MAX_RECENCY_WINDOW_DAYS = 60</code>. <code>_normalize_window_days</code> clamps. Single consumer, confirmed by grep.</li>
+<li><code>routes/trends.py</code>: <code>Query(DEFAULT, ge=5, le=60)</code> on all four routes so bad input 422s at the edge.</li>
+<li>Tests: clamping at both ends; a window outside the old triple is honoured rather than snapped to 15.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>P5 · Start-only date picker <span class="badge low">frontend</span></h3>
+<ul>
+<li><code>DateRangePicker.tsx</code>: optional <code>fixedEnd</code> prop — when set, the end input renders disabled at that value and validation skips the end rules. Existing call sites unchanged when the prop is absent.</li>
+<li><code>Trends.tsx</code>: 📆 Custom button beside the presets; on Apply convert with <code>daysBetween</code> from P3; render the <code>since Jan 17 · 21 days</code> chip; keep <code>usePersistedState('trends.windowDays')</code> storing a plain number.</li>
+<li>Anchor passed in explicitly from the trends payload (<code>window_start + window_days</code>).</li>
+<li><b>Verify:</b> desktop + 390px, per the repo's mobile rule.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>P6 · Short-window caution + Shooting · Season de-emphasis <span class="badge low">frontend · polish</span></h3>
+<ul>
+<li>Game-night count beside the window chip; caution block under 10 days (both demoed in §1).</li>
+<li>On the Shooting · Season tab, retitle to "Activity window" with a tooltip stating it only filters by recent games played.</li>
+</ul>
+</div>
+
+<h2>10 · The one remaining call — full dynamic, or just more presets?</h2>
+
+<p>You asked me to flag if dynamic ranges are problematic. <b>They are not</b> — once P1 lands, the marginal risk is small. But there is a cheaper middle path worth a moment's thought before committing.</p>
+
+<div class="tw"><table>
+  <tr><th></th><th>Expanded presets</th><th>Full dynamic (planned)</th></tr>
+  <tr><td>Control</td><td><code>7 / 10 / 14 / 21 / 30 / 45</code> — six buttons, nothing new to learn</td><td>Presets + 📆 start-date picker</td></tr>
+  <tr><td>Key space</td><td>6</td><td>56</td></tr>
+  <tr><td>Needs P1 bounded caches</td><td>Advisable</td><td><b>Required</b></td></tr>
+  <tr><td>Needs P3 timezone work</td><td><b>No</b> — no date maths at all</td><td>Yes (but it is a pre-existing bug regardless)</td></tr>
+  <tr><td>Needs P5 picker</td><td><b>No</b></td><td>Yes</td></tr>
+  <tr><td>Serves "since the deadline"</td><td>No</td><td>Yes</td></tr>
+  <tr><td>Work</td><td>P1 + P4, roughly a day</td><td>P1–P6</td></tr>
+</table></div>
+
+<div class="ok">
+<span class="tag">Recommendation</span><b>Ship it in the order above and decide at P4.</b> P1, P2 and P3 are all worth doing on their own merits — P1 fixes a live memory risk, P3 fixes a live date bug in two shipped pages. None of them commit you to dynamic ranges. After P4 (which is a handful of lines) you will have <i>most</i> of the benefit already, and can look at whether the 📆 picker in P5 still feels worth it. That is a real decision point, not a fork you have to take now.
+<br><br>If you want a single answer: <b>go all the way to P5.</b> The picker is reuse of a built component, not new work, and "since he came back from injury" is the query that actually motivates a trends page.
+</div>
+
+<div class="note">The picker built here should also serve the player-page Trends card — see <a href="player_page_trends_plan.html">player_page_trends_plan.html</a>.</div>
+
+<script>
+(function(){
+const ANCHOR = new Date('2026-02-07T00:00:00');
+const SEASON_START = new Date('2025-10-21T00:00:00');
+const MINW = 5, MAXW = 60;
+// local-parts, never toISOString(): in UTC+2/+3 the latter shifts local midnight
+// back a day and the anchor renders as Feb 6 instead of Feb 7
+const iso = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const nice = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+function lcg(s){return function(){s=(s*1664525+1013904223)%4294967296;return s/4294967296}}
+
+const PLAYERS = [
+  {name:'N. Alexander-Walker', team:'ATL', pos:'SG', own:'FA',            seed:11, ramp: 1.15},
+  {name:'Jalen Duren',         team:'DET', pos:'C',  own:'Shai Hulud',    seed:22, ramp: 0.85},
+  {name:'Keyonte George',      team:'UTA', pos:'PG', own:'FA',            seed:33, ramp:-0.95},
+  {name:'Toumani Camara',      team:'POR', pos:'PF', own:'Rim Reapers',   seed:44, ramp: 0.55},
+  {name:'Cam Whitmore',        team:'WAS', pos:'SF', own:'FA',            seed:55, ramp:-0.62},
+  {name:'Nikola Topic',        team:'OKC', pos:'PG', own:'Dubs Dynasty',  seed:66, ramp: 1.35}
+];
+
+PLAYERS.forEach(p=>{
+  const rnd = lcg(p.seed*7919);
+  const dates=[]; let d=new Date(ANCHOR);
+  for(let i=0;i<40;i++){dates.push(new Date(d)); d=new Date(d.getTime()-(rnd()<.45?2:3)*86400000);}
+  dates.reverse();
+  const base = 20+rnd()*10, ubase = 15+rnd()*8;
+  p.log = dates.map((date,i)=>({
+    date,
+    min: Math.max(6, base + (i>=30?(i-29)*p.ramp:0) + (rnd()-.5)*6.5),
+    usg: Math.max(7, ubase + (i>=30?(i-29)*p.ramp*0.55:0) + (rnd()-.5)*5)
+  }));
+});
+
+let tab='minutes', windowDays=15, custom=false, mobile=false;
+const winStart = () => new Date(ANCHOR.getTime()-windowDays*86400000);
+const clamp = n => Math.max(MINW, Math.min(MAXW, n));
+
+function gameNights(){
+  const ws = winStart();
+  const all = new Set();
+  PLAYERS.forEach(p=>p.log.forEach(g=>{ if(g.date>=ws) all.add(iso(g.date)); }));
+  return all.size;
+}
+
+function rows(){
+  const ws = winStart(), key = tab==='minutes'?'min':'usg';
+  return PLAYERS.map(p=>{
+    const w = p.log.filter(g=>g.date>=ws);
+    const season = p.log.reduce((t,g)=>t+g[key],0)/p.log.length;
+    const win = w.length ? w.reduce((t,g)=>t+g[key],0)/w.length : null;
+    return {p, season, win, n:w.length, d: win===null?null:win-season};
+  }).sort((a,b)=>Math.abs(b.d??0)-Math.abs(a.d??0));
+}
+
+function render(){
+  document.getElementById('stage').classList.toggle('mobile', mobile);
+  document.getElementById('anchorNote').textContent = 'anchor = 2026-02-07 (latest game day) · season start 2025-10-21';
+
+  document.querySelectorAll('#winGrp [data-win]').forEach(b=>{
+    const v=b.dataset.win;
+    b.classList.toggle('on', custom ? v==='custom' : (+v===windowDays));
+  });
+  document.getElementById('custPanel').style.display = custom?'':'none';
+  document.getElementById('valPill').textContent = windowDays+' days';
+  const nights = gameNights();
+  document.getElementById('winHint').textContent = 'since '+nice(winStart())+' · '+nights+' game nights';
+
+  const sw = document.getElementById('shortWarn');
+  sw.innerHTML = windowDays<10
+    ? `<div style="background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:8px;padding:8px 11px;margin-bottom:10px;font-size:12px;color:var(--ink1)"><b>Short window.</b> Most players have only 2–3 games in ${windowDays} days — Δ is mostly noise and nearly every row will be flagged <span class="badge low">partial</span>. (Problem §4③.)</div>`
+    : '';
+
+  const unit = tab==='minutes'?'':'%';
+  const lbl  = tab==='minutes'?'MPG':'USG%';
+  let h = `<tr>
+    <th>Player</th>${mobile?'':'<th>Team</th>'}
+    <th>Season ${lbl}</th>
+    <th><span class="hl">${windowDays}d</span> ${lbl}</th>
+    <th>Δ ${lbl} vs season</th>
+    ${mobile?'':`<th><span class="hl">G(${windowDays}d)</span></th>`}
+    ${mobile?'':'<th>Owner</th>'}</tr>`;
+  rows().forEach(r=>{
+    const thin = r.n<3;
+    h += `<tr>
+      <td><b>${r.p.name}</b>${thin?' <span class="badge low">partial</span>':''}</td>
+      ${mobile?'':`<td>${r.p.team}</td>`}
+      <td>${r.season.toFixed(1)}${unit}</td>
+      <td>${r.win===null?'—':r.win.toFixed(1)+unit}</td>
+      <td>${r.d===null?'—':`<span class="pill ${r.d>=0?'up':'down'}">${r.d>=0?'▲ +':'▼ '}${r.d.toFixed(1)}${unit}</span>`}</td>
+      ${mobile?'':`<td>${r.n}</td>`}
+      ${mobile?'':`<td>${r.p.own==='FA'?'<span class="badge fa">FA</span>':'<span style="color:var(--ink3)">'+r.p.own+'</span>'}</td>`}
+    </tr>`;
+  });
+  document.getElementById('tbl').innerHTML = h;
+
+  const si=document.getElementById('startInp'), ei=document.getElementById('endInp');
+  ei.value = iso(ANCHOR); si.min = iso(SEASON_START);
+  si.max = iso(new Date(ANCHOR.getTime()-MINW*86400000));
+  if(!si.value) si.value = iso(winStart());
+  document.getElementById('custHint').innerHTML =
+    `Always runs through <b>${nice(ANCHOR)} (latest game day)</b> — a trend window has to end at the present. min = season start (${iso(SEASON_START)}).`;
+}
+
+document.querySelectorAll('#tabGrp [data-tab]').forEach(b=>b.onclick=()=>{
+  tab=b.dataset.tab;
+  document.querySelectorAll('#tabGrp [data-tab]').forEach(x=>x.classList.toggle('on',x===b));
+  render();
+});
+document.querySelectorAll('#winGrp [data-win]').forEach(b=>b.onclick=()=>{
+  if(b.dataset.win==='custom'){ custom=true; }
+  else { custom=false; windowDays=+b.dataset.win; }
+  render();
+});
+document.getElementById('applyBtn').onclick=()=>{
+  const si=document.getElementById('startInp'), err=document.getElementById('custErr');
+  if(!si.value){ err.textContent='Pick a start date.'; return; }
+  const s=new Date(si.value+'T00:00:00');
+  let n=Math.round((ANCHOR-s)/86400000);
+  const c=clamp(n);
+  err.textContent = c!==n ? `${n} days is outside [${MINW}, ${MAXW}] — clamped to ${c}. (Backend also 422s out-of-range.)` : '';
+  windowDays=c; render();
+};
+document.getElementById('startInp').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('applyBtn').click();});
+document.getElementById('btnWidth').onclick=function(){
+  mobile=!mobile; this.classList.toggle('on',mobile);
+  this.textContent = mobile?'🖥 Desktop':'📱 Mobile 390px'; render();
+};
+render();
+})();
+</script>
+
+</main>
+</body>
+</html>

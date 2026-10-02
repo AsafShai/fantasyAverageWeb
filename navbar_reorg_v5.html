@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navbar Reorg v5 — Domain × Time</title>
+<style>
+  :root {
+    --blue:#2563eb; --purple:#9333ea; --gray-600:#4b5563; --gray-100:#f3f4f6;
+    --border:#e5e7eb; --green:#16a34a; --red:#dc2626; --amber:#d97706; --ink:#1f2937; --page:#fafafa;
+  }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,sans-serif; max-width:1060px; margin:0 auto; padding:24px 18px 60px;
+         color:var(--ink); line-height:1.5; background:var(--page); }
+  h1 { background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text; background-clip:text;
+       color:transparent; font-size:27px; margin-bottom:4px; }
+  h2 { border-bottom:2px solid var(--border); padding-bottom:6px; margin-top:36px; font-size:19px; }
+  .sub { color:#6b7280; font-size:14px; margin-top:0; }
+
+  .matrix { width:100%; border-collapse:separate; border-spacing:6px; margin:12px 0; }
+  .matrix th { background:transparent; font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; color:#6b7280; padding:2px 6px; }
+  .matrix td { background:#fff; border:1px solid var(--border); border-radius:8px; padding:9px 11px; vertical-align:top; font-size:13px; }
+  .matrix td.rowlbl { background:transparent; border:none; font-weight:600; font-size:13px; width:104px; padding-top:13px; }
+  .matrix td.past { border-left:4px solid var(--purple); }
+  .matrix td.now { border-left:4px solid var(--blue); }
+  .matrix td.future { border-left:4px solid var(--amber); }
+  .matrix td.na { background:#f9fafb; color:#9ca3af; font-style:italic; border-style:dashed; }
+  .matrix .pill { display:inline-block; background:var(--gray-100); border-radius:5px; padding:2px 7px; margin:2px 3px 2px 0; font-size:12px; }
+  .matrix .pill.p { background:#f3e8ff; color:#6b21a8; }
+  .matrix .pill.f { background:#fef3c7; color:#92400e; }
+
+  .optbar { display:flex; gap:8px; flex-wrap:wrap; margin:18px 0 6px; }
+  .optbtn { font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px; background:#e5e7eb;
+            color:var(--gray-600); cursor:pointer; border:1px solid transparent; user-select:none; }
+  .optbtn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .optbtn .rec { font-size:10px; opacity:.85; margin-left:5px; }
+
+  .optcard { background:#fff; border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-top:12px; }
+  .optcard h3 { margin:0 0 4px; font-size:16px; }
+  .optcard p.why { margin:4px 0 0; font-size:13.5px; color:var(--gray-600); }
+  .metrics { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .metric { background:var(--gray-100); border-radius:8px; padding:6px 10px; font-size:11.5px; color:#6b7280; }
+  .metric b { display:block; font-size:16px; color:var(--blue); }
+  .metric.warn b { color:var(--red); }
+  .pro, .con { font-size:13px; margin:3px 0; }
+  .pro::before { content:"+ "; color:var(--green); font-weight:700; }
+  .con::before { content:"- "; color:var(--red); font-weight:700; }
+
+  .navmock { background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.06);
+             padding:10px 12px; display:flex; align-items:center; gap:6px; margin:14px 0 0; flex-wrap:wrap; }
+  .brand { font-weight:700; background:linear-gradient(90deg,var(--blue),var(--purple)); -webkit-background-clip:text;
+           background-clip:text; color:transparent; white-space:nowrap; margin-right:6px; cursor:pointer; font-size:14px; }
+  .navitem { font-size:13px; padding:6px 9px; border-radius:6px; color:var(--gray-600); white-space:nowrap;
+             position:relative; cursor:pointer; }
+  .navitem:hover { background:var(--gray-100); }
+  .navitem.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .navitem.group.open .dropdown { display:block; }
+  .dropdown { display:none; position:absolute; top:100%; left:0; margin-top:4px; background:#fff; border:1px solid var(--border);
+              border-radius:6px; box-shadow:0 6px 14px rgba(0,0,0,.12); padding:5px; min-width:176px; z-index:10; }
+  .dropdown div { padding:7px 9px; font-size:12.5px; border-radius:4px; color:var(--gray-600); white-space:nowrap; }
+  .dropdown div:hover { background:var(--gray-100); }
+  .dropdown div.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .dropdown .sep { padding:5px 9px 2px; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#9ca3af;
+                   border-top:1px solid var(--border); margin-top:4px; pointer-events:none; }
+  .dropdown .sep.first { border-top:none; margin-top:0; }
+  .caret { font-size:9px; opacity:.6; margin-left:3px; }
+  .flagged { opacity:.55; }
+
+  .widthbar { display:flex; gap:6px; margin:12px 0 0; align-items:center; flex-wrap:wrap; }
+  .widthbar span.lbl { font-size:12px; color:#6b7280; margin-right:4px; }
+  .wbtn { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .wbtn.active { background:var(--ink); color:#fff; }
+  .navmock.compressed .navitem .txt { display:none; }
+  .navmock.compressed .navitem { padding:6px 8px; font-size:17px; }
+
+  .preview { margin-top:10px; padding:9px 13px; background:var(--gray-100); border-radius:8px; font-size:13px; }
+  .preview b { color:var(--blue); }
+  .preview .path { color:#6b7280; font-size:12px; }
+
+  .flexrow { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .mobilewrap { width:300px; border:1px solid var(--border); border-radius:14px; padding:10px; background:#fff;
+                box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .mobrow { display:flex; align-items:center; justify-content:space-between; padding:9px 11px; border-radius:6px;
+            font-size:13px; color:var(--gray-600); cursor:pointer; }
+  .mobrow:hover { background:var(--gray-100); }
+  .mobrow.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .mobrow.grp { border:1px dashed var(--border); font-weight:600; margin:2px 0; }
+  .mobrow.grp.open { background:#eff6ff; color:var(--blue); border-color:var(--blue); }
+  .mobrow.grp .caret { transition:transform .15s ease; display:inline-block; }
+  .mobrow.grp.open .caret { transform:rotate(180deg); }
+  .mobsubwrap { overflow:hidden; max-height:0; transition:max-height .18s ease; background:#fafafa; border-radius:6px; }
+  .mobsubwrap.open { max-height:340px; }
+  .mobsub { padding:8px 11px 8px 30px; font-size:12.5px; color:#6b7280; cursor:pointer; border-radius:6px; }
+  .mobsub:hover { background:var(--gray-100); }
+  .mobsub.active { background:#dbeafe; color:var(--blue); font-weight:600; }
+  .mobsep { padding:5px 11px 2px 22px; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#9ca3af; }
+
+  .note { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:13.5px; margin:14px 0; }
+  .note.blue { background:#eff6ff; border-color:#bfdbfe; }
+  .note.red { background:#fef2f2; border-color:#fecaca; }
+  code { background:var(--gray-100); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; background:#fff; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:var(--gray-100); }
+  td.num { text-align:center; font-weight:600; }
+  .yes { color:var(--green); font-weight:700; }
+  .no { color:var(--red); font-weight:700; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:600; }
+  .keep { background:#dcfce7; color:var(--green); }
+  .move { background:#fef3c7; color:var(--amber); }
+  .new  { background:#e0e7ff; color:#4338ca; }
+  .gone { background:#fee2e2; color:var(--red); }
+  .togglerow { display:flex; gap:8px; align-items:center; margin:10px 0; font-size:12.5px; color:#6b7280; flex-wrap:wrap; }
+  .switch { font-size:11.5px; padding:4px 9px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .switch.on { background:#4338ca; color:#fff; }
+  .namebar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .nbtn { font-size:12px; padding:5px 11px; border-radius:6px; background:#e5e7eb; color:var(--gray-600); cursor:pointer; }
+  .nbtn.active { background:var(--purple); color:#fff; }
+  .nbtn.f.active { background:var(--amber); color:#fff; }
+  .namelbl { font-size:12px; color:#6b7280; width:88px; }
+</style>
+</head>
+<body>
+
+<h1>Navbar Reorg v5 — domain × time</h1>
+<p class="sub">You were right that Analytics and Trends fit none of H's four groups. The fix makes the model symmetric: Forecast already pulls future-facing pages out of their domain, so past-facing pages get the same treatment.</p>
+
+<h2>Why not call it "Analysis"</h2>
+<div class="note red"><b>Same trap as Tools.</b> "Analytical data" has no failing case — Player Rankings is analysis, Estimator is analysis, Draft Report is analysis. A predicate that accepts everything produces a drawer that accepts everything. That is precisely how Tools ended up holding Trends and Draft Report.</div>
+<div class="note"><b>The sharp predicate: does the page show change across a time window?</b> It takes exactly the two pages you named and rejects the three that would have rotted the drawer.</div>
+
+<table>
+  <tr><th>Page</th><th style="width:14%;text-align:center;">Time window?</th><th>Evidence</th></tr>
+  <tr><td>Analytics</td><td class="num yes">✅</td><td>Date-range picker + a "Rankings Over Time" tab</td></tr>
+  <tr><td>Trends</td><td class="num yes">✅</td><td>Game-log window, baseline-season picker (<code>vs prior 2 seasons</code> / <code>vs last season</code>)</td></tr>
+  <tr><td>Player Rankings</td><td class="num no">❌</td><td>Current-season aggregate, ranked by weights — one snapshot</td></tr>
+  <tr><td>Draft Report</td><td class="num no">❌</td><td>One fixed past event. Retrospective, but not a series</td></tr>
+  <tr><td>Estimator</td><td class="num no">❌</td><td>One future outcome, not a trajectory</td></tr>
+</table>
+<p style="font-size:13px;color:var(--gray-600);margin-top:0;">Draft Report is the useful test — it <i>feels</i> analytical, and the predicate still says no. It stays in My League. No judgment call needed.</p>
+
+<h2>Every page on both axes</h2>
+<table class="matrix">
+  <tr><th></th><th>Past — change over a window</th><th>Present — current state</th><th>Future — predicted / hypothetical</th></tr>
+  <tr>
+    <td class="rowlbl">👥 My League</td>
+    <td class="past"><span class="pill p">League Analytics</span></td>
+    <td class="now"><span class="pill">League Rankings</span><span class="pill">Teams</span><span class="pill">Draft Report</span></td>
+    <td class="future"><span class="pill f">Estimator</span><span class="pill f">Trade</span></td>
+  </tr>
+  <tr>
+    <td class="rowlbl">⛹️ Players</td>
+    <td class="past"><span class="pill p">Player Trends</span></td>
+    <td class="now"><span class="pill">Players</span><span class="pill">Player Rankings</span></td>
+    <td class="future"><span class="pill f">Projections</span><span class="pill f">Feature Store <i>(dev)</i></span></td>
+  </tr>
+  <tr>
+    <td class="rowlbl">🏀 NBA</td>
+    <td class="na">none</td>
+    <td class="now"><span class="pill">NBA Teams</span><span class="pill">Injuries</span></td>
+    <td class="na">none</td>
+  </tr>
+</table>
+<div class="note blue"><b>Rename both pages to make the pairing obvious:</b> <code>Analytics</code> → <b>League Analytics</b> (already its own H1) and <code>Trends</code> → <b>Player Trends</b>. Labels only, routes unchanged. Side by side in one drawer they read as a matched pair rather than two unrelated pages.</div>
+
+<h2>1. Pick an option</h2>
+<div class="optbar">
+  <span class="optbtn active" data-opt="I" onclick="setOpt('I')">I — 5 groups <span class="rec">★ rec</span></span>
+  <span class="optbtn" data-opt="J" onclick="setOpt('J')">J — Time-first, 3 doors</span>
+  <span class="optbtn" data-opt="H" onclick="setOpt('H')">H — v4 rec, no Over Time</span>
+</div>
+
+<div class="optcard" id="optcard"></div>
+
+<div class="togglerow">
+  <span class="switch on" id="fsSwitch" onclick="toggleFS()">🗄️ Feature Store (dev build)</span>
+  <span>dev-only, bottom of the future group</span>
+</div>
+
+<h2>2. Group names</h2>
+<div class="namebar"><span class="namelbl">past group:</span>
+  <span class="nbtn active" data-past="Over Time" onclick="setPast('Over Time')">📉 Over Time</span>
+  <span class="nbtn" data-past="Trends" onclick="setPast('Trends')">📉 Trends</span>
+  <span class="nbtn" data-past="History" onclick="setPast('History')">📜 History</span>
+</div>
+<div class="namebar"><span class="namelbl">future group:</span>
+  <span class="nbtn f active" data-fut="Forecast" onclick="setFut('Forecast')">🔮 Forecast</span>
+  <span class="nbtn f" data-fut="Planner" onclick="setFut('Planner')">🗓️ Planner</span>
+  <span class="nbtn f" data-fut="What-If" onclick="setFut('What-If')">❓ What-If</span>
+</div>
+<p style="font-size:13px;color:var(--gray-600);margin-top:2px;"><b>Over Time</b> states the predicate, so it defends itself against the next page someone wants to dump in. <b>Trends</b> is shorter but collides with the page name unless you take the <code>Player Trends</code> rename. <b>History</b> reads as "old stuff", which undersells a page you use weekly.</p>
+
+<h2>3. Desktop nav</h2>
+<div class="widthbar">
+  <span class="lbl">width:</span>
+  <span class="wbtn active" id="wXl" onclick="setWidth('xl')">≥ xl (icon + label)</span>
+  <span class="wbtn" id="wMd" onclick="setWidth('md')">md–xl (icon only)</span>
+</div>
+<div class="navmock" id="nav"></div>
+<div class="preview" id="prev">Now viewing: <b>Teams</b></div>
+
+<h2>4. Mobile</h2>
+<div class="flexrow">
+  <div class="mobilewrap" id="mob"></div>
+  <div style="flex:1; min-width:240px;">
+    <div class="preview" id="prevMob">Now viewing: <b>Teams</b></div>
+    <p style="font-size:13px;color:var(--gray-600);">Every top-level row is a group in I and J — the menu is all accordions, no direct links. Tap a group, tap a page. Two taps to anywhere, uniformly.</p>
+  </div>
+</div>
+
+<h2>5. What changes in code</h2>
+<table id="difftable"></table>
+
+<h2>6. Where the 4 planned pages land</h2>
+<table id="futuretable"></table>
+
+<div class="note blue" id="verdict"></div>
+
+<script>
+var FS = true;
+var cur = 'I';
+var PAST = 'Over Time', PASTI = '📉';
+var FUT = 'Forecast', FUTI = '🔮';
+var PASTI_MAP = { 'Over Time':'📉', 'Trends':'📉', 'History':'📜' };
+var FUTI_MAP = { 'Forecast':'🔮', 'Planner':'🗓️', 'What-If':'❓' };
+var curPage = 'Teams';
+var openGroup = null;
+var mobOpenGroup = null;
+
+function buildOptions() {
+  var pastKids = [ {p:"League Analytics", i:"📈"}, {p:"Player Trends", i:"📉", flag:true} ];
+  var futKids = [ {p:"Projections", i:"🔭", flag:true}, {p:"Estimator", i:"🔮"},
+                  {p:"Trade", i:"🔄"}, {p:"Feature Store", i:"🗄️", fs:true} ];
+  return {
+    I: {
+      title: "I — five groups: three domains + " + PAST + " + " + FUT + " (recommended)",
+      why: "Domain drawers hold current state only. Two cross-cutting time drawers hold the past-facing and future-facing pages. Symmetric — the same rule that justifies " + FUT + " justifies " + PAST + ".",
+      pros: ["Directly fixes what you spotted — Analytics and Trends stop being orphans",
+             "Symmetric: past and future both cross-cut domain, neither is a special case",
+             "Predicate is testable, so the drawer can refuse a new page",
+             "No drawer over 4 even after the planned pages land"],
+      cons: ["Five doors for 13 pages — the most openable things of any option",
+             "Three drawers hold only 2 items each; a dropdown for two is thin",
+             "Two axes to hold in your head: what is it about, and when is it about"],
+      nav: [
+        { g:"My League", i:"👥", kids:[ {p:"League Rankings", i:"🏆"}, {p:"Teams", i:"👥"}, {p:"Draft Report", i:"📝", flag:true} ] },
+        { g:"Players", i:"⛹️", kids:[ {p:"Players", i:"⛹️"}, {p:"Player Rankings", i:"📋", flag:true} ] },
+        { g:PAST, i:PASTI, kids: pastKids },
+        { g:FUT, i:FUTI, kids: futKids },
+        { g:"NBA", i:"🏀", kids:[ {p:"NBA Teams", i:"🏀"}, {p:"Injuries", i:"🩺"} ] }
+      ],
+      diff: [
+        ["<span class='tag gone'>delete</span> Tools group", "<code>toolsItems</code> removed. The dropdown component — hover, Escape, Arrow-Down, Tab-out, <code>aria-haspopup</code>/<code>aria-expanded</code> — is kept and made generic, taking a group config instead of hardcoding Tools."],
+        ["<span class='tag new'>new</span> 5 groups", "My League (3), Players (2), " + PAST + " (2), " + FUT + " (3 + dev), NBA (2). No flat links."],
+        ["<span class='tag move'>rename</span> two nav labels", "<code>Analytics</code> → <b>League Analytics</b>, <code>Trends</code> → <b>Player Trends</b>. Labels only — <code>/analytics</code> and <code>/trends</code> unchanged. Also spell <code>NBA</code> out to <b>NBA Teams</b> inside its group so it doesn't echo the group header."],
+        ["<span class='tag move'>refactor</span> ReorgLayout", "Group config becomes <code>{label, icon, items[]}[]</code>. <code>toolsOpen</code> boolean → <code>openGroup: string | null</code> desktop, <code>mobileOpenGroup</code> mobile, so opening one closes the others. Render is a single <code>groups.map()</code> — no flat-link branch."],
+        ["<span class='tag move'>verify</span> icon-only width", "5 group triggers, each icon + caret, between <code>md</code> and <code>xl</code>. Fewer items than today's nav, so it should fit — confirm at 768px."],
+        ["<span class='tag keep'>keep</span> all routes + flags", "Zero route changes. Flag gating moves into each group's items array."]
+      ],
+      future: [
+        ["Standings Race", "My League", "past — standings across the season", PAST + " ▾"],
+        ["Slot Estimator", "My League", "future", FUT + " ▾"],
+        ["Streaming Planner", "Players", "future", FUT + " ▾"],
+        ["Player Dynamic Range", "Players", "present — observed spread", "Players ▾"]
+      ],
+      futureNote: "After all four: " + FUT + " 5, " + PAST + " 3, My League 3, Players 3, NBA 2. Nothing over 5."
+    },
+    J: {
+      title: "J — time first, domain as sections inside",
+      why: "Same two axes, opposite priority. Three doors — Now, " + PAST + ", " + FUT + " — and the domain becomes labeled sections inside each drawer instead of a top-level group.",
+      pros: ["Only 3 doors — the least cluttered bar of any option",
+             "No 2-item drawers",
+             "Domain is still visible, as section labels"],
+      cons: ["\"Now\" is a 7-item catch-all holding most of the app — the thing we keep trying to avoid",
+             "Domain demoted to a label you read rather than a thing you click",
+             "Answering \"where are the rosters\" means opening a drawer named after a time, which is not how you'd phrase the question"],
+      nav: [
+        { g:"Now", i:"📋", kids:[
+          {sec:"My League"}, {p:"League Rankings", i:"🏆"}, {p:"Teams", i:"👥"}, {p:"Draft Report", i:"📝", flag:true},
+          {sec:"Players"}, {p:"Players", i:"⛹️"}, {p:"Player Rankings", i:"📋", flag:true},
+          {sec:"NBA"}, {p:"NBA Teams", i:"🏀"}, {p:"Injuries", i:"🩺"}
+        ]},
+        { g:PAST, i:PASTI, kids: pastKids },
+        { g:FUT, i:FUTI, kids: futKids }
+      ],
+      diff: [
+        ["<span class='tag gone'>delete</span> Tools group", "Same as I."],
+        ["<span class='tag new'>new</span> 3 groups + sections", "Item arrays gain optional <code>{section: string}</code> entries; the renderer emits a non-interactive label row and skips it during keyboard navigation."],
+        ["<span class='tag move'>refactor</span> ReorgLayout", "Keyed-group state as in I, plus section-skipping in the Arrow-Down / first-focusable logic."],
+        ["<span class='tag move'>verify</span> mobile height", "The Now accordion is 7 rows + 3 section labels. Check it does not push " + PAST + " and " + FUT + " off-screen at 390px — may need internal scrolling."],
+        ["<span class='tag keep'>keep</span> all routes + flags", "Zero route changes."]
+      ],
+      future: [
+        ["Standings Race", "My League", "past", PAST + " ▾"],
+        ["Slot Estimator", "My League", "future", FUT + " ▾"],
+        ["Streaming Planner", "Players", "future", FUT + " ▾"],
+        ["Player Dynamic Range", "Players", "present", "Now ▾ → Players section"]
+      ],
+      futureNote: "After all four: Now 8, " + FUT + " 5, " + PAST + " 3. The Now drawer keeps absorbing everything current."
+    },
+    H: {
+      title: "H — v4 recommendation, no " + PAST + " group",
+      why: "Four groups, no past axis. Analytics sits in My League and Trends sits in Players purely because of what their data is about. Kept so you can see the orphan problem you spotted.",
+      pros: ["Four doors, one axis for the domain groups",
+             "Trade and Estimator aside, each page sits with its own subject matter"],
+      cons: ["League Analytics and Player Trends are split across two drawers despite doing the same job",
+             "Asymmetric — future-facing pages get pulled out of domain, past-facing ones do not",
+             "\"Where do I look at trends\" requires knowing whether it is a league trend or a player trend first"],
+      nav: [
+        { g:"My League", i:"👥", kids:[ {p:"League Rankings", i:"🏆"}, {p:"Teams", i:"👥"}, {p:"League Analytics", i:"📈"}, {p:"Draft Report", i:"📝", flag:true} ] },
+        { g:"Players", i:"⛹️", kids:[ {p:"Players", i:"⛹️"}, {p:"Player Rankings", i:"📋", flag:true}, {p:"Player Trends", i:"📉", flag:true} ] },
+        { g:FUT, i:FUTI, kids: futKids },
+        { g:"NBA", i:"🏀", kids:[ {p:"NBA Teams", i:"🏀"}, {p:"Injuries", i:"🩺"} ] }
+      ],
+      diff: [
+        ["<span class='tag gone'>delete</span> Tools group", "Same as I."],
+        ["<span class='tag new'>new</span> 4 groups", "My League (4), Players (3), " + FUT + " (3 + dev), NBA (2)."],
+        ["<span class='tag move'>refactor</span> ReorgLayout", "Same keyed-state refactor, no section support needed."],
+        ["<span class='tag move'>watch</span> drawer growth", "Standings Race lands in My League taking it to 5; Player Dynamic Range takes Players to 4."],
+        ["<span class='tag keep'>keep</span> all routes + flags", "Zero route changes."]
+      ],
+      future: [
+        ["Standings Race", "My League", "past", "My League ▾"],
+        ["Slot Estimator", "My League", "future", FUT + " ▾"],
+        ["Streaming Planner", "Players", "future", FUT + " ▾"],
+        ["Player Dynamic Range", "Players", "present", "Players ▾"]
+      ],
+      futureNote: "After all four: My League 5, " + FUT + " 5, Players 4, NBA 2."
+    }
+  };
+}
+
+var OPTIONS = buildOptions();
+
+function visibleKids(kids) { return kids.filter(function(k){ return !k.fs || FS; }); }
+function pageKids(kids) { return visibleKids(kids).filter(function(k){ return k.p; }); }
+function pathTo(page) {
+  var o = OPTIONS[cur];
+  for (var i = 0; i < o.nav.length; i++) {
+    var n = o.nav[i];
+    if (n.p === page) return page;
+    if (n.g && pageKids(n.kids).some(function(k){ return k.p === page; })) return n.g + " ▸ " + page;
+  }
+  return page;
+}
+
+function renderCard() {
+  var o = OPTIONS[cur];
+  var groups = o.nav.filter(function(n){ return n.g; });
+  var biggest = 0, thin = 0;
+  groups.forEach(function(g){
+    var n = pageKids(g.kids).length;
+    biggest = Math.max(biggest, n);
+    if (n <= 2) thin++;
+  });
+  var html = '<h3>' + o.title + '</h3><p class="why">' + o.why + '</p><div class="metrics">';
+  html += '<div class="metric">doors to open<b>' + groups.length + '</b></div>';
+  html += '<div class="metric' + (biggest > 5 ? ' warn' : '') + '">biggest drawer<b>' + biggest + '</b></div>';
+  html += '<div class="metric' + (thin > 2 ? ' warn' : '') + '">drawers with ≤2<b>' + thin + '</b></div>';
+  html += '<div class="metric">clicks to any page<b>2</b></div>';
+  html += '</div><div style="margin-top:10px;">';
+  o.pros.forEach(function(p){ html += '<div class="pro">' + p + '</div>'; });
+  o.cons.forEach(function(c){ html += '<div class="con">' + c + '</div>'; });
+  html += '</div>';
+  document.getElementById('optcard').innerHTML = html;
+}
+
+function renderNav() {
+  var o = OPTIONS[cur];
+  var html = '<span class="brand" data-page="Dashboard (home)">🏀 Fantasy League</span>';
+  o.nav.forEach(function(n) {
+    var kids = visibleKids(n.kids);
+    var groupActive = kids.some(function(k){ return k.p === curPage; });
+    html += '<span class="navitem group' + (groupActive ? ' active' : '') + (openGroup === n.g ? ' open' : '') +
+            '" data-group="' + n.g + '">' + n.i + ' <span class="txt">' + n.g + '</span><span class="caret">▾</span><div class="dropdown">';
+    var firstSec = true;
+    kids.forEach(function(k) {
+      if (k.sec) { html += '<div class="sep' + (firstSec ? ' first' : '') + '">' + k.sec + '</div>'; firstSec = false; return; }
+      html += '<div data-page="' + k.p + '" class="' + (k.p === curPage ? 'active ' : '') + (k.fs ? 'flagged' : '') + '">' +
+              k.i + ' ' + k.p + (k.fs ? ' <span style="font-size:10px;">(dev)</span>' : '') + '</div>';
+    });
+    html += '</div></span>';
+  });
+  var nav = document.getElementById('nav');
+  nav.innerHTML = html;
+  wireNav(nav);
+}
+
+function renderMob() {
+  var o = OPTIONS[cur];
+  var html = '';
+  o.nav.forEach(function(n) {
+    var kids = visibleKids(n.kids);
+    var groupActive = kids.some(function(k){ return k.p === curPage; });
+    var isOpen = mobOpenGroup === n.g;
+    html += '<div class="mobrow grp' + (groupActive ? ' active' : '') + (isOpen ? ' open' : '') +
+            '" data-group="' + n.g + '"><span>' + n.i + ' ' + n.g + '</span><span class="caret">▾</span></div>';
+    html += '<div class="mobsubwrap' + (isOpen ? ' open' : '') + '">';
+    kids.forEach(function(k) {
+      if (k.sec) { html += '<div class="mobsep">' + k.sec + '</div>'; return; }
+      html += '<div class="mobsub' + (k.p === curPage ? ' active' : '') + (k.fs ? ' flagged' : '') +
+              '" data-page="' + k.p + '">' + k.i + ' ' + k.p + (k.fs ? ' (dev)' : '') + '</div>';
+    });
+    html += '</div>';
+  });
+  var mob = document.getElementById('mob');
+  mob.innerHTML = html;
+  wireMob(mob);
+}
+
+function wireNav(nav) {
+  nav.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      curPage = el.getAttribute('data-page');
+      openGroup = null;
+      renderNav(); renderMob(); setPreview();
+    });
+  });
+  nav.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      if (e.target.closest('.dropdown')) return;
+      e.stopPropagation();
+      var g = el.getAttribute('data-group');
+      openGroup = (openGroup === g) ? null : g;
+      renderNav();
+    });
+  });
+}
+
+function wireMob(mob) {
+  mob.querySelectorAll('[data-page]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      curPage = el.getAttribute('data-page');
+      renderNav(); renderMob(); setPreview();
+    });
+  });
+  mob.querySelectorAll('[data-group]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var g = el.getAttribute('data-group');
+      mobOpenGroup = (mobOpenGroup === g) ? null : g;
+      renderMob();
+    });
+  });
+}
+
+function setPreview() {
+  var txt = 'Now viewing: <b>' + curPage + '</b> <span class="path">— ' + pathTo(curPage) + '</span>';
+  document.getElementById('prev').innerHTML = txt;
+  document.getElementById('prevMob').innerHTML = txt;
+}
+
+function renderDiff() {
+  var rows = '<tr><th style="width:26%;">Change</th><th>Detail</th></tr>';
+  OPTIONS[cur].diff.forEach(function(d) { rows += '<tr><td>' + d[0] + '</td><td>' + d[1] + '</td></tr>'; });
+  document.getElementById('difftable').innerHTML = rows;
+}
+
+function renderFuture() {
+  var o = OPTIONS[cur];
+  var rows = '<tr><th>Planned page</th><th>Domain</th><th>Time</th><th>Lands in</th></tr>';
+  o.future.forEach(function(f) {
+    rows += '<tr><td>' + f[0] + '</td><td>' + f[1] + '</td><td>' + f[2] + '</td><td><b>' + f[3] + '</b></td></tr>';
+  });
+  document.getElementById('futuretable').innerHTML = rows;
+  document.getElementById('verdict').innerHTML =
+    '<b>Sizes after the 4 planned pages land:</b> ' + o.futureNote +
+    '<br><br><b>My call: I, with the past group named ' + PAST + '.</b> The cost is real — five doors, three of them holding two items. ' +
+    'I would still take it: a thin drawer is a cosmetic problem, an orphaned page is a structural one, and you found two orphans by looking at the nav for a minute. ' +
+    'The thin drawers also fill themselves — Standings Race lands in ' + PAST + ', two of the four planned pages land in ' + FUT + '.' +
+    '<br><br><b>Take J instead if</b> five triggers in the bar bothers you more than a 7-item Now drawer does.';
+}
+
+function redraw() {
+  OPTIONS = buildOptions();
+  renderCard(); renderNav(); renderMob(); renderDiff(); renderFuture(); setPreview();
+}
+function setOpt(o) {
+  cur = o; openGroup = null; mobOpenGroup = null;
+  document.querySelectorAll('.optbtn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-opt') === o);
+  });
+  redraw();
+}
+function setPast(n) {
+  PAST = n; PASTI = PASTI_MAP[n];
+  document.querySelectorAll('[data-past]').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-past') === n);
+  });
+  openGroup = null; mobOpenGroup = null; redraw();
+}
+function setFut(n) {
+  FUT = n; FUTI = FUTI_MAP[n];
+  document.querySelectorAll('[data-fut]').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-fut') === n);
+  });
+  openGroup = null; mobOpenGroup = null; redraw();
+}
+function setWidth(w) {
+  document.getElementById('nav').classList.toggle('compressed', w === 'md');
+  document.getElementById('wMd').classList.toggle('active', w === 'md');
+  document.getElementById('wXl').classList.toggle('active', w === 'xl');
+}
+function toggleFS() {
+  FS = !FS;
+  document.getElementById('fsSwitch').classList.toggle('on', FS);
+  redraw();
+}
+document.addEventListener('click', function() {
+  if (openGroup !== null) { openGroup = null; renderNav(); }
+});
+
+setOpt('I');
+</script>
+</body>
+</html>
