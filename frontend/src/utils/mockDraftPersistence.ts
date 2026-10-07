@@ -59,6 +59,7 @@ export function isValidMockSession(value: unknown): value is MockSession {
   if (!isObject(value.players) || !Object.values(value.players).every(isValidPlayer)) return false
   if (!Array.isArray(value.picks) || !value.picks.every(isValidPick)) return false
   if (!isObject(value.rosters) || !Object.values(value.rosters).every(isValidRoster)) return false
+  if (value.untouchableIds != null && !isStringArray(value.untouchableIds)) return false
   if (value.picks.length > pickCount(value.teams, value.rounds)) return false
   const players = value.players
   return value.picks.every((pick) => isObject(pick) && typeof pick.playerId === 'string' && pick.playerId in players)
@@ -73,7 +74,10 @@ export function readMockSession(): MockSession | null {
       localStorage.removeItem(SESSION_KEY)
       return null
     }
-    return parsed
+    return {
+      ...parsed,
+      untouchableIds: isStringArray(parsed.untouchableIds) ? parsed.untouchableIds : [],
+    }
   } catch {
     clearMockSession()
     return null
