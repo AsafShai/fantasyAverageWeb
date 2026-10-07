@@ -183,20 +183,28 @@ export function eligibleForPhase<T extends { positions: string[] }>(
   return fitted.length ? fitted : available
 }
 
-/** 80% BPA, 15% among the next 2, 5% among the next 5. */
+/** Share of picks that take the best eligible player. The rest reach down the board. */
+const BOT_BPA_RATE = 0.65
+/** Cumulative cutoff: BPA plus the short reach. What remains is the long reach. */
+const BOT_NEAR_RATE = 0.9
+/** How many spots past the best player the short and long reaches can land on. */
+const BOT_NEAR_REACH = 3
+const BOT_LONG_REACH = 8
+
+/** 65% best player, 25% among the next 3, 10% among the next 8. */
 export function chooseFromWindow(eligibleCount: number, roll: number, slotRoll: number): number {
   if (eligibleCount <= 1) return 0
   let lo = 0
   let hi = 0
-  if (roll < 0.8) {
+  if (roll < BOT_BPA_RATE) {
     lo = 0
     hi = 0
-  } else if (roll < 0.95) {
+  } else if (roll < BOT_NEAR_RATE) {
     lo = Math.min(1, eligibleCount - 1)
-    hi = Math.min(2, eligibleCount - 1)
+    hi = Math.min(BOT_NEAR_REACH, eligibleCount - 1)
   } else {
     lo = Math.min(1, eligibleCount - 1)
-    hi = Math.min(5, eligibleCount - 1)
+    hi = Math.min(BOT_LONG_REACH, eligibleCount - 1)
   }
   if (hi <= lo) return lo
   return lo + Math.floor(slotRoll * (hi - lo + 1))
@@ -241,6 +249,8 @@ export type MockSession = {
   players: Record<string, MockSessionPlayer>
   picks: MockPick[]
   rosters: Record<number, RosterSlotFill<MockSessionPlayer>[]>
+  /** Players the user reserved. Bots skip them; the user can still draft them. */
+  untouchableIds: string[]
 }
 
 export function createMockSession(input: {
@@ -268,6 +278,7 @@ export function createMockSession(input: {
     players,
     picks: [],
     rosters,
+    untouchableIds: [],
   }
 }
 
@@ -301,6 +312,23 @@ export function availableDefaultPlayers(session: MockSession): MockSessionPlayer
   return session.defaultOrder.map((id) => session.players[id]).filter((p): p is MockSessionPlayer => Boolean(p) && !taken.has(p.id))
 }
 
+export function untouchableIdSet(session: MockSession): Set<string> {
+  return new Set(session.untouchableIds ?? [])
+}
+
+/** Remaining players a bot is allowed to take. Untouchables stay in the pool for the user. */
+export function availableBotPlayers(session: MockSession): MockSessionPlayer[] {
+  const reserved = untouchableIdSet(session)
+  return availableDefaultPlayers(session).filter((player) => !reserved.has(player.id))
+}
+
+export function toggleUntouchable(session: MockSession, playerId: string): MockSession {
+  if (isMockComplete(session) || !session.players[playerId] || takenIds(session).has(playerId)) return session
+  const ids = session.untouchableIds ?? []
+  const untouchableIds = ids.includes(playerId) ? ids.filter((id) => id !== playerId) : [...ids, playerId]
+  return { ...session, untouchableIds }
+}
+
 export function availableUserBoardIds(session: MockSession): string[] {
   const taken = takenIds(session)
   return session.userOrder.filter((id) => session.players[id] && !taken.has(id))
@@ -330,6 +358,7 @@ export function applyDraftPick(session: MockSession, playerId: string): MockSess
       ...session.rosters,
       [team]: assignToRoster(roster, player),
     },
+    untouchableIds: (session.untouchableIds ?? []).filter((id) => id !== playerId),
   }
 }
 
@@ -345,7 +374,7 @@ export function applyBotPick(session: MockSession, random: () => number = Math.r
   if (isMockComplete(session) || isUserOnTheClock(session)) return session
   const team = teamOnTheClock(session)
   if (team == null) return session
-  const player = nextBotPick(session.rosters[team] ?? emptyRoster(session.rounds), availableDefaultPlayers(session), random)
+  const player = nextBotPick(session.rosters[team] ?? emptyRoster(session.rounds), availableBotPlayers(session), random)
   if (!player) return session
   return applyDraftPick(session, player.id)
 }
@@ -368,9 +397,13 @@ export function autoUserPick(session: MockSession): MockSession {
     const player = session.players[id]
     return Boolean(player && hasOpenSlotFor(roster, player.positions))
   }
+  const reserved = untouchableIdSet(session)
+  const openDefault = availableDefaultPlayers(session).filter((player) => hasOpenSlotFor(roster, player.positions))
   const id =
+    availableUserBoardIds(session).find((boardId) => !reserved.has(boardId) && fits(boardId)) ??
+    openDefault.find((player) => !reserved.has(player.id))?.id ??
     availableUserBoardIds(session).find(fits) ??
-    availableDefaultPlayers(session).find((player) => hasOpenSlotFor(roster, player.positions))?.id
+    openDefault[0]?.id
   if (!id) return session
   return applyDraftPick(session, id)
 }
