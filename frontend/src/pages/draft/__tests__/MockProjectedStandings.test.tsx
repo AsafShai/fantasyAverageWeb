@@ -71,6 +71,7 @@ function session(picks: MockPick[]): MockSession {
     players,
     picks,
     rosters: {},
+    untouchableIds: [],
   }
 }
 

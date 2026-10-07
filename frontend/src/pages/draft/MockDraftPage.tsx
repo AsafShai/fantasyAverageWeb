@@ -37,6 +37,7 @@ import {
   isMockComplete,
   isUserOnTheClock,
   moveUserRosterPlayer,
+  toggleUntouchable,
   pickCount,
   runBotsUntilUser,
   type MockDraftSettings,
@@ -281,6 +282,15 @@ export default function MockDraftPage() {
     })
   }
 
+  const onToggleUntouchable = (playerId: string) => {
+    setSession((cur) => {
+      if (!cur) return cur
+      const next = toggleUntouchable(cur, playerId)
+      if (next.botDelaySec !== 0 || isUserOnTheClock(next) || isMockComplete(next)) return next
+      return runBotsUntilUser(next)
+    })
+  }
+
   const onMoveRoster = (fromIndex: number, toIndex: number) => {
     setSession((cur) => (cur ? moveUserRosterPlayer(cur, fromIndex, toIndex) : cur))
   }
@@ -367,6 +377,7 @@ export default function MockDraftPage() {
             clockFrozenSec={clockFrozenSec}
             paused={paused}
             onDraft={onDraft}
+            onToggleUntouchable={onToggleUntouchable}
             onMoveRoster={onMoveRoster}
             onSimToPick={onSimToPick}
             onPause={() => {

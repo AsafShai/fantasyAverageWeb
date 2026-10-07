@@ -87,6 +87,7 @@ function sessionOf(opts: {
     players,
     picks,
     rosters: {},
+    untouchableIds: [],
   }
 }
 

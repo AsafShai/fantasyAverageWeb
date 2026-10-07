@@ -23,6 +23,7 @@ import {
   rosterSlots,
   runBotsUntilUser,
   tickerPickNumbers,
+  toggleUntouchable,
   type MockSessionPlayer,
 } from '../mockDraft'
 
@@ -135,14 +136,16 @@ describe('bot brain', () => {
     expect(pick?.id).toBe('c')
   })
 
-  it('takes BPA when the roll is in the 80% window', () => {
+  it('takes the best player on a low roll and reaches further as the roll rises', () => {
     const roster = emptyRoster<MockSessionPlayer>(10)
     const available = [p('1', ['PG']), p('2', ['SG']), p('3', ['C'])]
     expect(nextBotPick(roster, available, () => 0)?.id).toBe('1')
-    expect(chooseFromWindow(8, 0, 0)).toBe(0)
-    expect(chooseFromWindow(8, 0.85, 0)).toBe(1)
-    expect(chooseFromWindow(8, 0.99, 0)).toBe(1)
-    expect(chooseFromWindow(8, 0.99, 0.99)).toBe(5)
+    expect(chooseFromWindow(10, 0, 0)).toBe(0)
+    expect(chooseFromWindow(10, 0.64, 0)).toBe(0)
+    expect(chooseFromWindow(10, 0.65, 0)).toBe(1)
+    expect(chooseFromWindow(10, 0.89, 0.99)).toBe(3)
+    expect(chooseFromWindow(10, 0.9, 0)).toBe(1)
+    expect(chooseFromWindow(10, 0.99, 0.99)).toBe(8)
   })
 })
 
@@ -192,6 +195,45 @@ describe('session engine', () => {
     expect(isUserOnTheClock(afterBots)).toBe(true)
     expect(afterBots.picks).toHaveLength(2)
     expect(afterBots.picks.map((pk) => pk.team)).toEqual([1, 2])
+  })
+
+  it('skips players the user marked untouchable and still lets the user draft them', () => {
+    let session = createMockSession({
+      settings: clampMockSettings({ teams: 4, rounds: 2, userPick: 4 }),
+      defaultOrder: players.map((x) => x.id),
+      userOrder: players.map((x) => x.id),
+      players,
+    })
+    session = toggleUntouchable(session, '1')
+    session = toggleUntouchable(session, '2')
+    const afterBots = runBotsUntilUser(session, () => 0)
+    expect(afterBots.picks.map((pk) => pk.playerId)).toEqual(['3', '4', '5'])
+    expect(isUserOnTheClock(afterBots)).toBe(true)
+    const userPick = applyDraftPick(afterBots, '1')
+    expect(userPick.picks.at(-1)?.playerId).toBe('1')
+    expect(userPick.untouchableIds).toEqual(['2'])
+    expect(toggleUntouchable(userPick, '2').untouchableIds).toEqual([])
+  })
+
+  it('auto-picks past an untouchable when another board player still fits', () => {
+    let session = createMockSession({
+      settings: {
+        teams: 8,
+        rounds: 10,
+        threeRr: false,
+        userPick: 1,
+        botDelaySec: 0,
+        userClockSec: 30,
+        rankingSource: 'csv',
+      },
+      defaultOrder: ['1', '2', '3', '4', '5', '6', '7', '8'],
+      userOrder: ['1', '2', '3', '4', '5', '6', '7', '8'],
+      players,
+    })
+    session = toggleUntouchable(session, '1')
+    session = autoUserPick(session)
+    expect(session.picks[0]?.playerId).toBe('2')
+    expect(session.untouchableIds).toEqual(['1'])
   })
 
   it('auto-picks the best remaining player on the user board', () => {
