@@ -108,11 +108,14 @@ const MockPlayerTableRow = memo(function MockPlayerTableRow({
   stats,
   madeLabel,
   inQueue,
+  untouchable,
   isSuggested,
   userTurn,
   canDraft,
+  showHold,
   onDraft,
   onToggleQueue,
+  onToggleUntouchable,
 }: {
   player: MockSessionPlayer
   rank: number | undefined
@@ -120,11 +123,14 @@ const MockPlayerTableRow = memo(function MockPlayerTableRow({
   stats: LastYearStats | null | undefined
   madeLabel: string | null
   inQueue: boolean
+  untouchable: boolean
   isSuggested: boolean
   userTurn: boolean
   canDraft: boolean
+  showHold: boolean
   onDraft: (id: string) => void
   onToggleQueue: (id: string) => void
+  onToggleUntouchable: (id: string) => void
 }) {
   return (
     <tr
@@ -133,7 +139,9 @@ const MockPlayerTableRow = memo(function MockPlayerTableRow({
           ? 'opacity-70'
           : inQueue
             ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
-            : ''
+            : untouchable
+              ? 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-400'
+              : ''
       }`}
     >
       <td className="px-2 py-2 tabular-nums text-xs text-gray-500">{rank}</td>
@@ -176,6 +184,22 @@ const MockPlayerTableRow = memo(function MockPlayerTableRow({
             >
               {inQueue ? '−' : '+'}
             </button>
+            {showHold ? (
+              <button
+                type="button"
+                aria-label={untouchable ? `Let bots draft ${player.name}` : `Make ${player.name} untouchable to bots`}
+                aria-pressed={untouchable}
+                title="Untouchable to bots"
+                onClick={() => onToggleUntouchable(player.id)}
+                className={`px-2 py-1 rounded text-xs font-bold ${
+                  untouchable
+                    ? 'bg-amber-500 text-white'
+                    : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                {untouchable ? 'Held' : 'Hold'}
+              </button>
+            ) : null}
           </div>
         )}
       </td>
@@ -204,12 +228,15 @@ const MockPlayerCard = memo(function MockPlayerCard({
   stats,
   madePick,
   inQueue,
+  untouchable,
   isSuggested,
   userTurn,
   canDraft,
+  showHold,
   onOpen,
   onDraft,
   onToggleQueue,
+  onToggleUntouchable,
 }: {
   player: MockSessionPlayer
   rank: number | undefined
@@ -217,12 +244,15 @@ const MockPlayerCard = memo(function MockPlayerCard({
   stats: LastYearStats | null | undefined
   madePick: number | null
   inQueue: boolean
+  untouchable: boolean
   isSuggested: boolean
   userTurn: boolean
   canDraft: boolean
+  showHold: boolean
   onOpen: (id: string) => void
   onDraft: (id: string) => void
   onToggleQueue: (id: string) => void
+  onToggleUntouchable: (id: string) => void
 }) {
   return (
     <div
@@ -231,7 +261,9 @@ const MockPlayerCard = memo(function MockPlayerCard({
           ? 'opacity-70'
           : inQueue
             ? `bg-blue-50 dark:bg-blue-950/40 ${isSuggested && userTurn ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-blue-400'}`
-            : ''
+            : untouchable
+              ? 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-400'
+              : ''
       }`}
     >
       <div className="flex items-center gap-1.5 min-w-0">
@@ -277,6 +309,22 @@ const MockPlayerCard = memo(function MockPlayerCard({
           >
             {inQueue ? '−' : '+'}
           </button>
+          {showHold ? (
+            <button
+              type="button"
+              aria-label={untouchable ? `Let bots draft ${player.name}` : `Make ${player.name} untouchable to bots`}
+              aria-pressed={untouchable}
+              title="Untouchable to bots"
+              onClick={() => onToggleUntouchable(player.id)}
+              className={`min-h-11 px-2 rounded-md text-xs font-bold ${
+                untouchable
+                  ? 'bg-amber-500 text-white'
+                  : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
+              }`}
+            >
+              {untouchable ? 'Held' : 'Hold'}
+            </button>
+          ) : null}
         </div>
       )}
       </div>
@@ -739,6 +787,76 @@ function QueueBar({
   )
 }
 
+function UntouchableBar({
+  players,
+  onRemove,
+  onDraft,
+  userTurn,
+  canDraft,
+  snap,
+}: {
+  players: MockSessionPlayer[]
+  onRemove: (id: string) => void
+  onDraft: (id: string) => void
+  userTurn: boolean
+  canDraft: (player: MockSessionPlayer) => boolean
+  snap: boolean
+}) {
+  if (players.length === 0) return null
+  return (
+    <div className="px-4 py-2 border-b border-amber-100 dark:border-amber-900 bg-amber-50/70 dark:bg-amber-950/30 min-w-0 w-full overflow-hidden">
+      <div className="text-[10px] uppercase tracking-wide text-amber-800 dark:text-amber-200 font-semibold">
+        Untouchable to bots · {players.length}
+      </div>
+      <ul
+        className={
+          snap
+            ? 'mt-1.5 flex gap-2 min-w-0 overflow-x-auto overscroll-x-contain snap-x snap-proximity pb-1 [scrollbar-width:thin]'
+            : 'mt-1.5 flex flex-wrap gap-1.5'
+        }
+      >
+        {players.map((player) => (
+          <li
+            key={player.id}
+            className={`inline-flex items-center gap-1.5 rounded-md border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 px-2 text-xs shrink-0 max-w-[min(100%,16rem)] ${
+              snap ? 'snap-start py-1.5' : 'py-1'
+            }`}
+          >
+            <span className="font-semibold text-gray-800 dark:text-gray-100 truncate">{player.name}</span>
+            {player.team_abbr ? (
+              <span className="text-[10px] font-semibold text-gray-400 shrink-0">{player.team_abbr}</span>
+            ) : null}
+            <button
+              type="button"
+              disabled={!userTurn || !canDraft(player)}
+              title={userTurn && !canDraft(player) ? 'No open roster spot for this player' : undefined}
+              aria-label={`Draft ${player.name}`}
+              onClick={() => onDraft(player.id)}
+              className={`shrink-0 rounded bg-blue-600 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed ${
+                snap ? 'min-h-11 px-2.5 text-xs' : 'px-1.5 py-0.5 text-[10px]'
+              }`}
+            >
+              Draft
+            </button>
+            <button
+              type="button"
+              aria-label={`Let bots draft ${player.name}`}
+              onClick={() => onRemove(player.id)}
+              className={
+                snap
+                  ? 'ml-0.5 min-w-11 min-h-11 -my-1 shrink-0 rounded text-lg font-bold leading-none flex items-center justify-center text-gray-500 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  : 'ml-0.5 w-4 h-4 rounded text-[11px] font-bold leading-none flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function PickHistoryList({
   session,
   detailsById,
@@ -842,11 +960,14 @@ function MockPlayerSheet({
   statsLabel,
   userTurn,
   canDraft,
+  showHold,
   inQueue,
+  untouchable,
   draftedLabel,
   onClose,
   onDraft,
   onToggleQueue,
+  onToggleUntouchable,
 }: {
   player: MockSessionPlayer
   photoUrl: string | null
@@ -855,11 +976,14 @@ function MockPlayerSheet({
   statsLabel: string
   userTurn: boolean
   canDraft: boolean
+  showHold: boolean
   inQueue: boolean
+  untouchable: boolean
   draftedLabel: string | null
   onClose: () => void
   onDraft: () => void
   onToggleQueue: () => void
+  onToggleUntouchable: () => void
 }) {
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -953,6 +1077,20 @@ function MockPlayerSheet({
             >
               {inQueue ? 'Remove from queue' : 'Add to queue'}
             </button>
+            {showHold ? (
+              <button
+                type="button"
+                aria-pressed={untouchable}
+                onClick={onToggleUntouchable}
+                className={`col-span-2 min-h-11 px-3 text-sm font-bold rounded-md ${
+                  untouchable
+                    ? 'bg-amber-500 text-white'
+                    : 'border border-amber-400 text-amber-800 dark:text-amber-200'
+                }`}
+              >
+                {untouchable ? 'Untouchable to bots' : 'Make untouchable to bots'}
+              </button>
+            ) : null}
           </div>
         )}
         {userTurn && !canDraft && !draftedLabel ? (
@@ -1094,6 +1232,7 @@ export default function MockDraftRoom({
   clockFrozenSec,
   paused,
   onDraft,
+  onToggleUntouchable,
   onMoveRoster,
   onSimToPick,
   onPause,
@@ -1105,6 +1244,7 @@ export default function MockDraftRoom({
   clockFrozenSec: number | null
   paused: boolean
   onDraft: (playerId: string) => void
+  onToggleUntouchable: (playerId: string) => void
   onMoveRoster: (fromIndex: number, toIndex: number) => void
   onSimToPick: () => void
   onPause: () => void
@@ -1260,6 +1400,14 @@ export default function MockDraftRoom({
         .map((id) => session.players[id])
         .filter((p): p is MockSessionPlayer => Boolean(p) && !taken.has(p.id)),
     [queue, session.players, taken],
+  )
+  const reserved = useMemo(() => new Set(session.untouchableIds ?? []), [session.untouchableIds])
+  const untouchablePlayers = useMemo(
+    () =>
+      (session.untouchableIds ?? [])
+        .map((id) => session.players[id])
+        .filter((p): p is MockSessionPlayer => Boolean(p) && !taken.has(p.id)),
+    [session.untouchableIds, session.players, taken],
   )
   const userRoster = session.rosters[session.userTeam] ?? []
   const canRoster = (player: MockSessionPlayer) => hasOpenSlotFor(userRoster, player.positions)
@@ -1551,11 +1699,14 @@ export default function MockDraftRoom({
                   made ? `Drafted · ${teamLabel(made.team, session.userTeam)} · #${made.pick}` : null
                 }
                 inQueue={queuedSet.has(player.id)}
+                untouchable={reserved.has(player.id)}
                 isSuggested={suggested?.id === player.id}
                 userTurn={userTurn}
                 canDraft={canRoster(player)}
+                showHold={!done}
                 onDraft={onDraft}
                 onToggleQueue={toggleQueue}
+                onToggleUntouchable={onToggleUntouchable}
               />
             )
           })}
@@ -1587,12 +1738,15 @@ export default function MockDraftRoom({
               stats={statsFrom === 'projection' ? full?.projection : full?.last_year}
               madePick={made?.pick ?? null}
               inQueue={queuedSet.has(player.id)}
+              untouchable={reserved.has(player.id)}
               isSuggested={suggested?.id === player.id}
               userTurn={userTurn}
               canDraft={canRoster(player)}
+              showHold={!done}
               onOpen={openPlayer}
               onDraft={onDraft}
               onToggleQueue={toggleQueue}
+              onToggleUntouchable={onToggleUntouchable}
             />
           )
         })}
@@ -1878,14 +2032,26 @@ export default function MockDraftRoom({
             ) : null}
           </div>
           {!isBelowLg ? (
-            <QueueBar
-              queuedPlayers={queuedPlayers}
-              onRemove={(id) => setQueue((cur) => cur.filter((x) => x !== id))}
-              onDraft={onDraft}
-              userTurn={userTurn}
-              canDraft={canRoster}
-              snap={false}
-            />
+            <>
+              <QueueBar
+                queuedPlayers={queuedPlayers}
+                onRemove={(id) => setQueue((cur) => cur.filter((x) => x !== id))}
+                onDraft={onDraft}
+                userTurn={userTurn}
+                canDraft={canRoster}
+                snap={false}
+              />
+              {!done ? (
+                <UntouchableBar
+                  players={untouchablePlayers}
+                  onRemove={onToggleUntouchable}
+                  onDraft={onDraft}
+                  userTurn={userTurn}
+                  canDraft={canRoster}
+                  snap={false}
+                />
+              ) : null}
+            </>
           ) : null}
           {isBelowLg && tab === 'roster' ? (
             <RosterPanel
@@ -1939,6 +2105,16 @@ export default function MockDraftRoom({
                 <QueueBar
                   queuedPlayers={queuedPlayers}
                   onRemove={(id) => setQueue((cur) => cur.filter((x) => x !== id))}
+                  onDraft={onDraft}
+                  userTurn={userTurn}
+                  canDraft={canRoster}
+                  snap
+                />
+              ) : null}
+              {isBelowLg && !done ? (
+                <UntouchableBar
+                  players={untouchablePlayers}
+                  onRemove={onToggleUntouchable}
                   onDraft={onDraft}
                   userTurn={userTurn}
                   canDraft={canRoster}
@@ -2011,6 +2187,8 @@ export default function MockDraftRoom({
           userTurn={userTurn && !selectedMade}
           canDraft={canRoster(selectedPlayer)}
           inQueue={queuedSet.has(selectedPlayer.id)}
+          untouchable={reserved.has(selectedPlayer.id)}
+          showHold={!done}
           draftedLabel={
             selectedMade
               ? `Drafted · ${teamLabel(selectedMade.team, session.userTeam)} · #${selectedMade.pick}`
@@ -2022,6 +2200,7 @@ export default function MockDraftRoom({
             setSelectedId(null)
           }}
           onToggleQueue={() => toggleQueue(selectedPlayer.id)}
+          onToggleUntouchable={() => onToggleUntouchable(selectedPlayer.id)}
         />
       ) : null}
 
