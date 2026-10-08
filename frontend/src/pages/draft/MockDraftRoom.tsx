@@ -40,6 +40,14 @@ import { MockProjectedStandings } from './MockProjectedStandings'
 import type { StatsFrom } from '../../utils/mockProjectedStandings'
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const
+const FILTER_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F'] as const
+
+function matchesPositionFilter(positions: string[], filter: string): boolean {
+  const pos = positions.map((p) => p.toUpperCase())
+  if (filter === 'G') return pos.some((p) => p === 'PG' || p === 'SG' || p === 'G')
+  if (filter === 'F') return pos.some((p) => p === 'SF' || p === 'PF' || p === 'F')
+  return pos.includes(filter)
+}
 const TOAST_MS = 5000
 const TOAST_MAX = 10
 type RoomTab = 'players' | 'roster' | 'history' | 'board' | 'standings'
@@ -1425,7 +1433,7 @@ export default function MockDraftRoom({
         if (!q && taken.has(p.id)) return false
         if (q && !p.name.toLowerCase().includes(q)) return false
         if (teamFilter && p.team_abbr !== teamFilter) return false
-        if (posFilter !== 'all' && !p.positions.includes(posFilter)) return false
+        if (posFilter !== 'all' && !matchesPositionFilter(p.positions, posFilter)) return false
         return true
       })
   }, [session.defaultOrder, session.userOrder, session.players, taken, debouncedSearch, teamFilter, posFilter])
@@ -1579,7 +1587,7 @@ export default function MockDraftRoom({
         className="w-full text-base rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-2 lg:ml-auto lg:w-48 lg:text-xs lg:py-1 order-first lg:order-last"
       />
       <div className="flex flex-wrap gap-1.5 lg:hidden">
-        {POSITIONS.map((pos) => (
+        {FILTER_POSITIONS.map((pos) => (
           <button
             key={pos}
             type="button"
@@ -1600,7 +1608,7 @@ export default function MockDraftRoom({
         className="hidden lg:block text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1"
       >
         <option value="all">All pos.</option>
-        {POSITIONS.map((pos) => (
+        {FILTER_POSITIONS.map((pos) => (
           <option key={pos} value={pos}>
             {pos}
           </option>
