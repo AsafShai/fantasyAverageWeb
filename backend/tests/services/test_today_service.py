@@ -343,6 +343,32 @@ class TestFailOpen:
         assert calls['n'] == 1
 
 
+class TestGamesCount:
+    @pytest.mark.asyncio
+    async def test_games_count_is_matchups_not_teams(self, monkeypatch):
+        """get_games_today keys both teams of each game — 2 games is 4 entries."""
+        from unittest.mock import AsyncMock, MagicMock
+        from app.services.nba_matchup_service import GameInfo
+
+        service = TodayService()
+        service.matchup_service = MagicMock(
+            get_games_today=AsyncMock(return_value={
+                'LAL': GameInfo(opponent='BOS', is_home=True),
+                'BOS': GameInfo(opponent='LAL', is_home=False),
+                'NY': GameInfo(opponent='PHI', is_home=True),
+                'PHI': GameInfo(opponent='NY', is_home=False),
+            }),
+            get_schedule_date=MagicMock(return_value='2026-10-20'),
+        )
+        service.data_provider = MagicMock(get_players_df=AsyncMock(return_value=players_df([
+            {'Name': 'LeBron James', 'Pro Team': 'LAL', 'team_id': 1, 'fantasy_team_name': 'Alpha'},
+        ])))
+        monkeypatch.setattr(service, '_injury_lookup', lambda: {})
+
+        _, games_count, _ = await service._get_tonight()
+        assert games_count == 2
+
+
 class TestInjuryReportRefreshesCachedHub:
     """A new injury report recounts the cached hub's roster health at once,
     without re-fetching the slate or resetting the hub's age."""
