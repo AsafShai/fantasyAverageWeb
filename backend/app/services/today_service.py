@@ -199,7 +199,8 @@ class TodayService:
         teams_playing = set(games.keys())
         health = self.build_roster_health(players_df, teams_playing, injuries)
         self._tonight_inputs = (players_df, teams_playing)
-        return slate_date, len(games), health
+        # `games` is keyed per team (both sides of each matchup), so halve it.
+        return slate_date, len(games) // 2, health
 
     @staticmethod
     def _injury_lookup() -> dict[str, str]:
