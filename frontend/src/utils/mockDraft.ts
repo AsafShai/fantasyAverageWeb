@@ -183,28 +183,76 @@ export function eligibleForPhase<T extends { positions: string[] }>(
   return fitted.length ? fitted : available
 }
 
-/** Share of picks that take the best eligible player. The rest reach down the board. */
-const BOT_BPA_RATE = 0.65
-/** Cumulative cutoff: BPA plus the short reach. What remains is the long reach. */
-const BOT_NEAR_RATE = 0.9
-/** How many spots past the best player the short and long reaches can land on. */
-const BOT_NEAR_REACH = 3
-const BOT_LONG_REACH = 8
+export type BotPickWindow = {
+  /** Rolls below this take the best eligible player. */
+  bpaRate: number
+  /** Rolls below this, and at or above bpaRate, take the short reach. */
+  nearRate: number
+  nearReach: number
+  longReach: number
+}
 
-/** 65% best player, 25% among the next 3, 10% among the next 8. */
-export function chooseFromWindow(eligibleCount: number, roll: number, slotRoll: number): number {
+/** Round 1 matches the old 80/15/5. The last round of a 15-round mock is much looser. */
+const EARLY_BOT_WINDOW = { bpaRate: 0.8, nearShare: 0.15, nearReach: 2, longReach: 5 }
+const LATE_BOT_WINDOW = { bpaRate: 0.35, nearShare: 0.3, nearReach: 8, longReach: 18 }
+/** Below 1 so a 15-round draft is already loose by the middle, not only in round 15. */
+const BOT_LOOSEN_CURVE = 0.65
+const FIFTEEN_ROUND_SPAN = 14
+
+/** Long-reach targets on a 15-round mock: round 5 reaches 9, round 8 reaches 11. */
+const LONG_REACH_ANCHORS: readonly [number, number][] = [
+  [0, EARLY_BOT_WINDOW.longReach],
+  [Math.pow(4 / FIFTEEN_ROUND_SPAN, BOT_LOOSEN_CURVE), 9],
+  [Math.pow(0.5, BOT_LOOSEN_CURVE), 11],
+  [1, LATE_BOT_WINDOW.longReach],
+]
+
+function longReachForProgress(progress: number): number {
+  for (let i = 1; i < LONG_REACH_ANCHORS.length; i++) {
+    const [endProgress, endReach] = LONG_REACH_ANCHORS[i]
+    const [startProgress, startReach] = LONG_REACH_ANCHORS[i - 1]
+    if (progress <= endProgress) {
+      const span = endProgress - startProgress
+      const t = span === 0 ? 1 : (progress - startProgress) / span
+      return Math.round(startReach + (endReach - startReach) * t)
+    }
+  }
+  return LATE_BOT_WINDOW.longReach
+}
+
+export function botWindowForRound(round: number, rounds: number): BotPickWindow {
+  const span = Math.max(1, rounds - 1)
+  const linear = Math.min(1, Math.max(0, (round - 1) / span))
+  const progress = Math.pow(linear, BOT_LOOSEN_CURVE)
+  const mix = (start: number, end: number) => start + (end - start) * progress
+  const bpaRate = mix(EARLY_BOT_WINDOW.bpaRate, LATE_BOT_WINDOW.bpaRate)
+  const nearShare = mix(EARLY_BOT_WINDOW.nearShare, LATE_BOT_WINDOW.nearShare)
+  return {
+    bpaRate,
+    nearRate: bpaRate + nearShare,
+    nearReach: Math.round(mix(EARLY_BOT_WINDOW.nearReach, LATE_BOT_WINDOW.nearReach)),
+    longReach: longReachForProgress(progress),
+  }
+}
+
+export function chooseFromWindow(
+  eligibleCount: number,
+  roll: number,
+  slotRoll: number,
+  window: BotPickWindow = botWindowForRound(1, 1),
+): number {
   if (eligibleCount <= 1) return 0
   let lo = 0
   let hi = 0
-  if (roll < BOT_BPA_RATE) {
+  if (roll < window.bpaRate) {
     lo = 0
     hi = 0
-  } else if (roll < BOT_NEAR_RATE) {
+  } else if (roll < window.nearRate) {
     lo = Math.min(1, eligibleCount - 1)
-    hi = Math.min(BOT_NEAR_REACH, eligibleCount - 1)
+    hi = Math.min(window.nearReach, eligibleCount - 1)
   } else {
     lo = Math.min(1, eligibleCount - 1)
-    hi = Math.min(BOT_LONG_REACH, eligibleCount - 1)
+    hi = Math.min(window.longReach, eligibleCount - 1)
   }
   if (hi <= lo) return lo
   return lo + Math.floor(slotRoll * (hi - lo + 1))
@@ -214,10 +262,11 @@ export function nextBotPick<T extends { id: string; positions: string[] }>(
   roster: RosterSlotFill<T>[],
   availableDefaultOrder: T[],
   random: () => number = Math.random,
+  window: BotPickWindow = botWindowForRound(1, 1),
 ): T | null {
   if (!availableDefaultOrder.length) return null
   const eligible = eligibleForPhase(roster, availableDefaultOrder)
-  const idx = chooseFromWindow(eligible.length, random(), random())
+  const idx = chooseFromWindow(eligible.length, random(), random(), window)
   return eligible[idx] ?? eligible[0] ?? null
 }
 
@@ -374,7 +423,14 @@ export function applyBotPick(session: MockSession, random: () => number = Math.r
   if (isMockComplete(session) || isUserOnTheClock(session)) return session
   const team = teamOnTheClock(session)
   if (team == null) return session
-  const player = nextBotPick(session.rosters[team] ?? emptyRoster(session.rounds), availableBotPlayers(session), random)
+  const pick = nextPickNumber(session)
+  const round = Math.floor((pick - 1) / session.teams) + 1
+  const player = nextBotPick(
+    session.rosters[team] ?? emptyRoster(session.rounds),
+    availableBotPlayers(session),
+    random,
+    botWindowForRound(round, session.rounds),
+  )
   if (!player) return session
   return applyDraftPick(session, player.id)
 }
