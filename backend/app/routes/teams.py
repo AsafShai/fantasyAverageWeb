@@ -3,6 +3,7 @@ from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
 from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.services.team_service import TeamService
 from typing import Annotated, List, Optional
+from app.utils.utils import latest_client_date
 from datetime import date
 from app.config import settings
 import logging
@@ -69,7 +70,7 @@ async def get_team_detail(
                 raise HTTPException(status_code=422, detail="start must be before end")
             if start < settings.season_start:
                 raise HTTPException(status_code=422, detail=f"start cannot be before season start ({settings.season_start})")
-            if end > date.today():
+            if end > latest_client_date():
                 raise HTTPException(status_code=422, detail="end cannot be in the future")
 
         if time_period == StatTimePeriod.CUSTOM:

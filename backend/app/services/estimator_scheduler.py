@@ -33,9 +33,12 @@ async def start_scheduler():
         logger.info(f"Estimator scheduler sleeping {sleep_seconds:.0f}s until {next_trigger.strftime('%H:%M')} IL")
         await asyncio.sleep(sleep_seconds)
         logger.info("Estimator scheduler triggered - syncing snapshot tables")
-        synced = await provider.sync_db_now()
-        if not synced:
-            logger.info("Snapshot already current or ESPN unavailable, skipping estimator run")
-            continue
-        logger.info("Snapshot tables updated, running estimator")
-        await service.run_and_store()
+        # The snapshot may already have been written by a page load since ESPN
+        # rolled the period over, so run regardless of whether this sync wrote
+        # anything: run_and_store itself skips when results cover the latest
+        # snapshot. A failure must not end the loop — the next slot retries.
+        try:
+            await provider.sync_db_now()
+            await service.run_and_store()
+        except Exception as e:
+            logger.error(f"Estimator scheduler run failed: {type(e).__name__}: {e}; will retry at next slot", exc_info=True)

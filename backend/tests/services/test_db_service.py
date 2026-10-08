@@ -584,3 +584,51 @@ async def test_over_time_omits_extras_column_when_migration_not_applied(db_servi
     await db_service.get_rankings_over_time("team_rankings_totals", None, 1234567890, 2026)
 
     assert "r.ranks" not in conn.fetch.call_args[0][0]
+
+
+def _snapshot_row(team_id: int, pts: int) -> dict:
+    return {
+        "team_id": team_id, "team_name": f"T{team_id}", "gp": 10,
+        "fgm": 1, "fga": 2, "fg_pct": 0.5, "ftm": 1, "fta": 2, "ft_pct": 0.5,
+        "three_pm": 1, "reb": 1, "ast": 1, "stl": 1, "blk": 1, "pts": pts,
+    }
+
+
+@pytest.mark.asyncio
+async def test_date_range_baseline_is_the_snapshot_before_start(db_service, monkeypatch):
+    """A snapshot dated D holds totals through D, so subtracting the one dated
+    start_date would drop the start day's games: the baseline is the latest
+    snapshot strictly before start_date, and the range reports start as covered."""
+    conn = FakeConn()
+    conn.fetchrow = AsyncMock(side_effect=[{"d": date(2026, 1, 10)}, {"d": date(2026, 1, 4)}])
+    conn.fetch = AsyncMock(side_effect=[[_snapshot_row(1, 300)], [_snapshot_row(1, 100)]])
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    end, start, rows_end, rows_start = await db_service.get_snapshots_for_date_range(
+        date(2026, 1, 5), date(2026, 1, 10), 1, 2026
+    )
+
+    baseline_query = conn.fetchrow.call_args_list[1][0]
+    assert "date < $3" in baseline_query[0]
+    assert baseline_query[3] == date(2026, 1, 5)
+    assert conn.fetch.call_args_list[1][0][3] == date(2026, 1, 4)
+    assert (start, end) == (date(2026, 1, 5), date(2026, 1, 10))
+    assert rows_end[0]["PTS"] == 300 and rows_start[0]["PTS"] == 100
+
+
+@pytest.mark.asyncio
+async def test_date_range_from_season_start_has_no_baseline(db_service, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "season_start", date(2026, 1, 1))
+    conn = FakeConn()
+    conn.fetchrow = AsyncMock(side_effect=[{"d": date(2026, 1, 10)}, {"d": None}])
+    conn.fetch = AsyncMock(return_value=[_snapshot_row(1, 300)])
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    end, start, rows_end, rows_start = await db_service.get_snapshots_for_date_range(
+        date(2026, 1, 1), date(2026, 1, 10), 1, 2026
+    )
+
+    assert start == date(2026, 1, 1)
+    assert rows_start == []
+    assert conn.fetch.await_count == 1

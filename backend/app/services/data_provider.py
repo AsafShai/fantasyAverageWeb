@@ -214,7 +214,7 @@ class DataProvider:
                 response.raise_for_status()
                 raw = response.json()
                 self.cache_manager.totals_cache['raw'] = raw
-            except httpx.RequestError as e:
+            except (httpx.HTTPError, ValueError) as e:
                 self.logger.error(f"Error fetching team names from ESPN API: {type(e).__name__}: {e}")
                 raise DataSourceError("Error fetching team names from ESPN API")
         return self.data_transformer.raw_standings_to_team_names(raw)
@@ -345,7 +345,9 @@ class DataProvider:
         return self.cache_manager.totals_cache.get('data_date')
 
     async def get_draft_detail_raw(self) -> Dict:
-        """Get raw ESPN draft picks. Draft is immutable after draft night, cached for process lifetime."""
+        """Get raw ESPN draft picks. Draft is immutable after draft night, so a
+        completed draft is cached for process lifetime; before that (no picks
+        yet) it is re-fetched so the report appears once the draft happens."""
         if self.cache_manager.draft_detail_cache is not None:
             return self.cache_manager.draft_detail_cache
 
@@ -353,10 +355,12 @@ class DataProvider:
             response = await self._client.get(self.espn_draft_detail_url)
             response.raise_for_status()
             api_data = response.json()
-            self.cache_manager.draft_detail_cache = api_data
-            self.logger.info("ESPN draft detail loaded (cached for process lifetime)")
+            draft_detail = api_data.get('draftDetail') or {}
+            if draft_detail.get('drafted') or draft_detail.get('picks'):
+                self.cache_manager.draft_detail_cache = api_data
+                self.logger.info("ESPN draft detail loaded (cached for process lifetime)")
             return api_data
-        except httpx.RequestError as e:
+        except httpx.HTTPError as e:
             self.logger.error(f"Error fetching draft detail from ESPN API: {type(e).__name__}: {e}")
             raise DataSourceError("Error fetching draft detail from ESPN API")
 
@@ -374,7 +378,7 @@ class DataProvider:
             self.cache_manager.players_directory_cache = directory
             self.logger.info(f"ESPN players directory loaded: {len(directory)} players (cached for process lifetime)")
             return directory
-        except httpx.RequestError as e:
+        except httpx.HTTPError as e:
             self.logger.error(f"Error fetching players directory from ESPN API: {type(e).__name__}: {e}")
             raise DataSourceError("Error fetching players directory from ESPN API")
 

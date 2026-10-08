@@ -62,9 +62,11 @@ const fitLabel = (name: string, maxWidth: number): string => {
   return s + '…'
 }
 
+// "YYYY-MM-DD" is a calendar day: read its parts rather than new Date(),
+// which parses it as UTC midnight and shows the previous day west of UTC.
 const formatDate = (dateStr: string) => {
-  const d = new Date(dateStr)
-  return `${d.getMonth() + 1}/${d.getDate()}`
+  const [, month, day] = dateStr.slice(0, 10).split('-').map(Number)
+  return `${month}/${day}`
 }
 
 function computeBumpRanks(rows: { teamId: number; value: number }[]): Map<number, number> {

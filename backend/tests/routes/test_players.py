@@ -137,7 +137,7 @@ def test_get_all_players_custom_start_before_season():
 
 def test_get_all_players_custom_end_in_future():
     start = settings.season_start + timedelta(days=1)
-    end = date.today() + timedelta(days=1)
+    end = date.today() + timedelta(days=2)
     response = client.get(f"/api/players/?time_period=custom&start={start}&end={end}")
     assert response.status_code == 422
     assert "future" in response.json()["detail"]

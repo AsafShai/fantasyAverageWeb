@@ -197,6 +197,34 @@ class TestBuildWindowedPlayersDf:
         assert actual_end == date(2026, 1, 9)
 
     @pytest.mark.asyncio
+    async def test_custom_window_overlays_extra_counting_and_ratio_categories(
+        self, sample_window_players_df
+    ):
+        """A league scoring TO and A/TO: a custom window must not show the
+        window's AST next to ESPN's season TO, nor keep ESPN's season A/TO."""
+        espn = sample_window_players_df.assign(TO=[90.0, 80.0, 70.0], **{'A/TO': [9.9, 9.9, 9.9]})
+        agg_df = pd.DataFrame([{
+            'player_id': 1, 'player_name': 'Player X', 'gp': 4,
+            'pts': 100.0, 'reb': 20.0, 'ast': 16.0, 'stl': 4.0, 'blk': 2.0,
+            'fgm': 28.0, 'fga': 60.0, 'ftm': 12.0, 'fta': 16.0,
+            'three_pm': 4.0, 'fg3a': 10.0, 'tov': 8.0, 'oreb': 5.0, 'dreb': 15.0, 'pf': 9.0,
+            'min': 120.0, 'fg_pct': 28.0 / 60.0, 'ft_pct': 12.0 / 16.0,
+        }])
+
+        merged, _, _ = await build_windowed_players_df(
+            StatTimePeriod.CUSTOM, espn, self._db_service(agg_df), date(2026, 1, 2), date(2026, 1, 9)
+        )
+
+        x = merged[merged['Name'] == 'Player X'].iloc[0]
+        assert x['TO'] == 8.0
+        assert x['A/TO'] == pytest.approx(2.0)
+        y = merged[merged['Name'] == 'Player Y'].iloc[0]  # no games in window
+        assert y['TO'] == 0.0
+        assert y['A/TO'] == 0.0
+        for col in ('tov', 'fg3a', 'oreb', 'dreb', 'pf', '3PA', 'OREB'):
+            assert col not in merged.columns
+
+    @pytest.mark.asyncio
     async def test_known_player_zero_games_in_window_keeps_espn_value(
         self, sample_window_players_df
     ):
