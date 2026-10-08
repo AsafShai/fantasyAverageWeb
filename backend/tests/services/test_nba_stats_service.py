@@ -135,6 +135,20 @@ class TestNBAStatsServiceAveragePace:
             assert result == round(expected_avg, 1)
 
     @pytest.mark.asyncio
+    async def test_get_nba_average_pace_requests_regular_season_only(self, nba_stats_service, mock_standings_response):
+        """Preseason games must not count toward pace — standings are pinned to seasontype=2"""
+        mock_response = Mock()
+        mock_response.json.return_value = mock_standings_response
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(nba_stats_service._client, 'get', new_callable=AsyncMock, return_value=mock_response) as mock_get:
+            await nba_stats_service.get_nba_average_pace(2027)
+
+            url = mock_get.call_args.args[0]
+            assert 'season=2027' in url
+            assert 'seasontype=2' in url
+
+    @pytest.mark.asyncio
     async def test_get_nba_average_pace_http_error(self, nba_stats_service):
         """Test handling of HTTP request error"""
         with patch.object(nba_stats_service._client, 'get', side_effect=httpx.RequestError("Connection failed")):

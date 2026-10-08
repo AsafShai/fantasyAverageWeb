@@ -62,7 +62,10 @@ class NBAStatsService:
 
     async def _fetch_nba_average_pace(self, season_id: int) -> Optional[float]:
         try:
-            url = f"https://site.api.espn.com/apis/v2/sports/basketball/nba/standings?season={season_id}"
+            # seasontype=2 pins regular-season standings — without it ESPN returns
+            # whichever phase is current, so during preseason the W-L records
+            # (and thus the pace) count preseason games.
+            url = f"https://site.api.espn.com/apis/v2/sports/basketball/nba/standings?season={season_id}&seasontype=2"
             response = await self._client.get(url)
             response.raise_for_status()
             data = response.json()
