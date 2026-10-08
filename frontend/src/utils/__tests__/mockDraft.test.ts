@@ -5,6 +5,7 @@ import {
   assignToRoster,
   autoUserPick,
   buildUserOrder,
+  botWindowForRound,
   chooseFromWindow,
   clampMockSettings,
   createMockSession,
@@ -139,13 +140,39 @@ describe('bot brain', () => {
   it('takes the best player on a low roll and reaches further as the roll rises', () => {
     const roster = emptyRoster<MockSessionPlayer>(10)
     const available = [p('1', ['PG']), p('2', ['SG']), p('3', ['C'])]
+    const late = botWindowForRound(15, 15)
     expect(nextBotPick(roster, available, () => 0)?.id).toBe('1')
-    expect(chooseFromWindow(10, 0, 0)).toBe(0)
-    expect(chooseFromWindow(10, 0.64, 0)).toBe(0)
-    expect(chooseFromWindow(10, 0.65, 0)).toBe(1)
-    expect(chooseFromWindow(10, 0.89, 0.99)).toBe(3)
-    expect(chooseFromWindow(10, 0.9, 0)).toBe(1)
-    expect(chooseFromWindow(10, 0.99, 0.99)).toBe(8)
+    expect(chooseFromWindow(20, 0.34, 0, late)).toBe(0)
+    expect(chooseFromWindow(20, 0.35, 0, late)).toBe(1)
+    expect(chooseFromWindow(20, 0.64, 0.99, late)).toBe(8)
+    expect(chooseFromWindow(20, 0.65, 0, late)).toBe(1)
+    expect(chooseFromWindow(20, 0.99, 0.99, late)).toBe(18)
+  })
+
+  it('loosens across a 15-round mock instead of staying on the best player', () => {
+    const early = botWindowForRound(1, 15)
+    expect(early.bpaRate).toBeCloseTo(0.8)
+    expect(early.nearRate).toBeCloseTo(0.95)
+    expect(early.nearReach).toBe(2)
+    expect(early.longReach).toBe(5)
+    expect(chooseFromWindow(20, 0.79, 0, early)).toBe(0)
+    expect(chooseFromWindow(20, 0.8, 0, early)).toBe(1)
+
+    expect(botWindowForRound(5, 15).longReach).toBe(9)
+
+    const mid = botWindowForRound(8, 15)
+    expect(mid.bpaRate).toBeCloseTo(0.513, 2)
+    expect(mid.bpaRate).toBeLessThan(0.55)
+    expect(mid.nearReach).toBe(6)
+    expect(mid.longReach).toBe(11)
+
+    expect(botWindowForRound(11, 15).longReach).toBe(14)
+
+    const late = botWindowForRound(15, 15)
+    expect(late.bpaRate).toBeCloseTo(0.35)
+    expect(late.nearRate).toBeCloseTo(0.65)
+    expect(late.nearReach).toBe(8)
+    expect(late.longReach).toBe(18)
   })
 })
 
