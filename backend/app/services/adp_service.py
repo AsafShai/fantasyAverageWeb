@@ -100,32 +100,69 @@ def parse_metric(raw: Optional[str]) -> str:
 
 
 def parse_sites(raw: Optional[str]) -> Optional[tuple[str, ...]]:
-    """Known site keys from a comma list. Empty or unknown-only → None (all sites)."""
+    """Known site keys from a comma list. Empty or unknown-only → None (all sites).
+
+    A part may carry a weight (`espn:50`); it is ignored here -- see parse_site_weights.
+    """
     if not raw:
         return None
     wanted: list[str] = []
     seen: set[str] = set()
     for part in raw.split(","):
-        key = part.strip().lower()
+        key = part.split(":", 1)[0].strip().lower()
         if key in SITES and key not in seen:
             wanted.append(key)
             seen.add(key)
     return tuple(wanted) if wanted else None
 
 
+def parse_site_weights(raw: Optional[str]) -> Optional[dict[str, float]]:
+    """Per-site weights from `espn:50,yahoo:30,fantrax:20`, or None for a plain mean.
+
+    Once any part carries a weight, a known site without one (or with a bad or negative
+    one) weighs 0. Weights are relative, so they need not total 100; all zero is a plain
+    mean.
+    """
+    if not raw or ":" not in raw:
+        return None
+    weights: dict[str, float] = {}
+    for part in raw.split(","):
+        key, _, raw_weight = part.partition(":")
+        key = key.strip().lower()
+        if key not in SITES or key in weights:
+            continue
+        try:
+            weight = float(raw_weight)
+        except ValueError:
+            weight = 0.0
+        weights[key] = weight if weight == weight and weight > 0 else 0.0  # NaN → 0
+    return weights if any(weights.values()) else None
+
+
 def compute_blend(
-    values: dict[str, Optional[float]], sites: Optional[tuple[str, ...]] = None
+    values: dict[str, Optional[float]],
+    sites: Optional[tuple[str, ...]] = None,
+    weights: Optional[dict[str, float]] = None,
 ) -> Optional[float]:
     """Mean of the non-null values among `sites` (defaults to every site).
+
+    With `weights`, a weighted mean over the sites that list the player: a missing site's
+    share is spread over the rest in proportion, so 50/30/20 with the 20 missing is
+    62.5/37.5. A player listed only by 0-weight sites has no Blend.
 
     A single listing site is still a Blend of one -- Spread is what signals that it is
     unaveraged.
     """
     keys = sites or SITES
-    vals = [values[site] for site in keys if values.get(site) is not None]
-    if not vals:
+    listed = [site for site in keys if values.get(site) is not None]
+    if not listed:
         return None
-    return round(sum(vals) / len(vals), 2)
+    if weights is None:
+        return round(sum(values[site] for site in listed) / len(listed), 2)  # type: ignore[misc]
+    total = sum(weights.get(site, 0.0) for site in listed)
+    if total <= 0:
+        return None
+    return round(sum(values[site] * weights.get(site, 0.0) for site in listed) / total, 2)  # type: ignore[operator]
 
 
 def compute_spread(
@@ -144,21 +181,24 @@ def _metric_values(player: AdpPlayer, metric: str) -> dict[str, Optional[float]]
 
 
 def apply_visible_sites(
-    players: list[AdpPlayer], sites: Optional[tuple[str, ...]], metric: str = "adp"
+    players: list[AdpPlayer],
+    sites: Optional[tuple[str, ...]],
+    metric: str = "adp",
+    weights: Optional[dict[str, float]] = None,
 ) -> list[AdpPlayer]:
     """Recompute one metric's blend / spread / blend rank from a site subset.
 
     The other metric's fields are left exactly as built, so a caller can narrow the ADP
     blend without disturbing the rankings blend the same row carries.
     """
-    if not sites or set(sites) == set(SITES):
+    if weights is None and (not sites or set(sites) == set(SITES)):
         return players
     blend_field, rank_field, spread_field = _METRIC_FIELDS[metric]
     blends: list[Optional[float]] = []
     spreads: list[Optional[float]] = []
     for p in players:
         values = _metric_values(p, metric)
-        blends.append(compute_blend(values, sites))
+        blends.append(compute_blend(values, sites, weights))
         spreads.append(compute_spread(values, sites))
     ranks = assign_ranks(blends)
     return [
@@ -683,7 +723,8 @@ def apply_blend_sites(
     sites: Optional[str] = None,
     rank_sites: Optional[str] = None,
 ) -> list[AdpPlayer]:
-    """Narrow each metric's blend to its own selected sites.
+    """Narrow each metric's blend to its own selected sites, weighted when the param
+    carries weights (`espn:50,yahoo:50`).
 
     The two selections are independent: the ADP view's checkboxes must never change the
     rankings blend the same rows carry, since the pre-draft board reads both at once to
@@ -693,8 +734,8 @@ def apply_blend_sites(
     cached = _blend_cache.get(key)
     if cached is not None:
         return cached
-    out = apply_visible_sites(players, parse_sites(sites), "adp")
-    out = apply_visible_sites(out, parse_sites(rank_sites), "rank")
+    out = apply_visible_sites(players, parse_sites(sites), "adp", parse_site_weights(sites))
+    out = apply_visible_sites(out, parse_sites(rank_sites), "rank", parse_site_weights(rank_sites))
     if len(_blend_cache) >= 24:
         _blend_cache.clear()
     _blend_cache[key] = out

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   annotateDraftPicks,
   blendRankValue,
+  blendSitesParam,
   blendValue,
   clampLeagueSettings,
   DEFAULT_DRAFT_METRIC,
   draftTeamForPick,
+  equalWeights,
   groupDraftPicksByTeam,
   isThreeRrReverse,
   nextShortSeasonLabel,
@@ -15,6 +17,7 @@ import {
   spreadValue,
   threeRrDisplayRounds,
   toListHeadshotUrl,
+  weightsTotal,
   withIndexBlends,
 } from '../adp'
 import type { AdpIndexPlayer, AdpPlayer, ProviderMeta } from '../../types/api'
@@ -159,5 +162,23 @@ describe('list headshots', () => {
     )
     expect(toListHeadshotUrl(null)).toBeNull()
     expect(toListHeadshotUrl('https://example.com/photo.png')).toBe('https://example.com/photo.png')
+  })
+})
+
+describe('weighted blend sites', () => {
+  it('splits 100 evenly in whole percents', () => {
+    expect(equalWeights(['espn', 'yahoo'])).toEqual({ espn: 50, yahoo: 50 })
+    expect(equalWeights(['espn', 'fantrax', 'yahoo'])).toEqual({ espn: 34, fantrax: 33, yahoo: 33 })
+    expect(equalWeights([])).toEqual({})
+  })
+
+  it('totals only the checked sites', () => {
+    expect(weightsTotal(['espn', 'yahoo'], { espn: 60, yahoo: 30, fantrax: 10 })).toBe(90)
+  })
+
+  it('encodes weights into the sites param', () => {
+    expect(blendSitesParam(['espn', 'yahoo'])).toBe('espn,yahoo')
+    expect(blendSitesParam(['espn', 'yahoo'], null)).toBe('espn,yahoo')
+    expect(blendSitesParam(['espn', 'yahoo'], { espn: 70 })).toBe('espn:70,yahoo:0')
   })
 })
