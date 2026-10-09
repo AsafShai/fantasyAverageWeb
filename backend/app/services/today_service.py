@@ -8,7 +8,7 @@ from app.config import settings
 from app.models import NightlyRun, RankMover, TeamRosterHealth, TodayHub
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
-from app.services.nba_matchup_service import NbaMatchupService
+from app.services.nba_matchup_service import get_shared_matchup_service
 from app.utils import category_storage
 from app.utils.category_storage import TOTAL_KEY
 from app.utils.name_matching import normalize_player_name
@@ -91,7 +91,7 @@ class TodayService:
         self._tonight_inputs = None
         self.db_service = DBService()
         self.data_provider = DataProvider()
-        self.matchup_service = NbaMatchupService()
+        self.matchup_service = get_shared_matchup_service()
 
     async def get_today_hub(self) -> TodayHub:
         cached_ts = _hub_cache.get('ts')

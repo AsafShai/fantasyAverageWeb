@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Player } from '../../../../types/api';
 import {
+  aggregateExtraAverages,
+  aggregateExtraTotals,
+  extraCountingCategories,
   aggregatePlayerAverages,
   aggregatePlayerStats,
   calculatePlayerAverages,
@@ -106,5 +109,24 @@ describe('getStatColor', () => {
   it('raw stat thresholds', () => {
     expect(getStatColor(25, false)).toContain('green');
     expect(getStatColor(15, false)).toContain('yellow');
+  });
+});
+
+describe('extra league categories', () => {
+  const withExtras = (extra: Record<string, number>, gp: number): Player => ({
+    player_name: 'p', pro_team: 'x', positions: ['PG'], team_id: 1, status: 'ONTEAM',
+    stats: { ...stats, gp, stats: { PTS: 1, 'FG%': 0.5, ...extra } },
+  });
+
+  it('lists only counting categories beyond the fixed fields', () => {
+    expect(extraCountingCategories([withExtras({}, 1)])).toEqual([]);
+    expect(extraCountingCategories([withExtras({ TO: 1, 'A/TO': 2, DD: 3 }, 1)])).toEqual(['TO', 'DD']);
+  });
+
+  it('sums totals and averages per-game values like the fixed stats', () => {
+    const players = [withExtras({ TO: 10 }, 5), withExtras({ TO: 6 }, 2)];
+    expect(aggregateExtraTotals(players, ['TO'])).toEqual({ TO: 16 });
+    expect(aggregateExtraAverages(players, ['TO'])).toEqual({ TO: (2 + 3) / 2 });
+    expect(aggregateExtraAverages([], ['TO'])).toEqual({ TO: 0 });
   });
 });

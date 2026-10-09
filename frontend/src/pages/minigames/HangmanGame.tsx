@@ -105,6 +105,8 @@ export default function HangmanGame() {
 
   useEffect(() => {
     if (phase !== 'won' || !autoMode) return
+    // Starts the visible countdown alongside the interval that drives it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCountdown(3)
     const t = setInterval(() => {
       setCountdown((c) => {

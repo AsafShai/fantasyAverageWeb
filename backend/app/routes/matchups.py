@@ -12,14 +12,14 @@ from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.depth_chart_service import DepthChartService
 from app.services.live_projection_service import LiveProjectionService
-from app.services.nba_matchup_service import NbaMatchupService
+from app.services.nba_matchup_service import get_shared_matchup_service
 from app.utils import background_tasks
 from app.utils.name_matching import normalize_player_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_matchup_service = NbaMatchupService()
+_matchup_service = get_shared_matchup_service()
 _data_provider = DataProvider()
 _projection_service = LiveProjectionService()
 _depth_chart_service = DepthChartService()

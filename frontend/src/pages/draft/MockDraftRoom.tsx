@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { useGetAdpQuery } from '../../store/api/fantasyApi'
 import { stablePlayerIds } from '../../utils/draftRankings'
 import { useDebounce } from '../../hooks/useDebounce'
@@ -31,6 +31,7 @@ import {
   rosterPositionCounts,
   tickerPickNumbers,
   totalPicks,
+  type MockPick,
   type MockSession,
   type MockSessionPlayer,
 } from '../../utils/mockDraft'
@@ -1283,7 +1284,9 @@ export default function MockDraftRoom({
     return readMockQueue().filter((id) => session.players[id] && !taken.has(id))
   })
   const queueRef = useRef<string[]>([])
-  queueRef.current = queue
+  useLayoutEffect(() => {
+    queueRef.current = queue
+  }, [queue])
   const [toasts, setToasts] = useState<PickToast[]>([])
   const seenPicks = useRef(session.picks.length)
   const wasUserTurn = useRef(false)
@@ -1310,29 +1313,36 @@ export default function MockDraftRoom({
     rail.scrollTop = rail.scrollHeight
   }, [session.picks.length])
 
-  useEffect(() => {
+  // State that follows other state is adjusted while rendering rather than in
+  // effects, so no frame paints the stale tab / selection first.
+  const [seenDone, setSeenDone] = useState(false)
+  if (done !== seenDone) {
+    setSeenDone(done)
     if (done) setTab('board')
-  }, [done])
+  }
 
   useEffect(() => {
     if (userTurn && !done && !wasUserTurn.current) setTab('players')
     wasUserTurn.current = userTurn
   }, [userTurn, done])
 
-  useEffect(() => {
+  const [moveFromTeam, setMoveFromTeam] = useState(viewTeam)
+  if (viewTeam !== moveFromTeam) {
+    setMoveFromTeam(viewTeam)
     setMoveFrom(null)
-  }, [viewTeam])
+  }
 
-  useEffect(() => {
-    if (!isBelowLg && (tab === 'roster' || tab === 'history')) setTab('players')
-  }, [isBelowLg, tab])
+  // Roster and history are their own tabs only on narrow screens.
+  if (!isBelowLg && (tab === 'roster' || tab === 'history')) setTab('players')
 
-  useEffect(() => {
+  const [seenBelowLg, setSeenBelowLg] = useState(isBelowLg)
+  if (isBelowLg !== seenBelowLg) {
+    setSeenBelowLg(isBelowLg)
     if (!isBelowLg) {
       setMoreOpen(false)
       setSelectedId(null)
     }
-  }, [isBelowLg])
+  }
 
   useEffect(() => {
     const prev = seenPicks.current
@@ -1397,7 +1407,7 @@ export default function MockDraftRoom({
   }, [session.defaultOrder])
 
   const pickByPlayer = useMemo(() => {
-    const map = new Map<string, (typeof session.picks)[number]>()
+    const map = new Map<string, MockPick>()
     for (const pk of session.picks) map.set(pk.playerId, pk)
     return map
   }, [session.picks])
@@ -1478,9 +1488,13 @@ export default function MockDraftRoom({
   const from = listed.length === 0 ? 0 : (safePage - 1) * resolvedPageSize + 1
   const to = Math.min(safePage * resolvedPageSize, listed.length)
 
-  useEffect(() => {
+  // Any change to what is listed starts back on page 1.
+  const listingKey = JSON.stringify([debouncedSearch, teamFilter, posFilter, resolvedPageSize])
+  const [pagedListingKey, setPagedListingKey] = useState(listingKey)
+  if (listingKey !== pagedListingKey) {
+    setPagedListingKey(listingKey)
     setPage(1)
-  }, [debouncedSearch, teamFilter, posFilter, resolvedPageSize])
+  }
 
   const neededDetailIds = useMemo(() => {
     const ids = paged.map((p) => p.id)
@@ -1497,20 +1511,24 @@ export default function MockDraftRoom({
     { ids: missingDetailIds.join(','), include_stats: true, ranked_only: false },
     { skip: missingDetailIds.length === 0 },
   )
-  useEffect(() => {
-    if (!details?.players.length) return
-    setDetailsById((prev) => {
-      let changed = false
-      const next = new Map(prev)
-      for (const player of details.players) {
-        if (next.get(player.id) !== player) {
-          next.set(player.id, player)
-          changed = true
+  // Fold each new detail batch into the accumulated map as it arrives.
+  const [mergedDetails, setMergedDetails] = useState<typeof details>(undefined)
+  if (details !== mergedDetails) {
+    setMergedDetails(details)
+    if (details?.players.length) {
+      setDetailsById((prev) => {
+        let changed = false
+        const next = new Map(prev)
+        for (const player of details.players) {
+          if (next.get(player.id) !== player) {
+            next.set(player.id, player)
+            changed = true
+          }
         }
-      }
-      return changed ? next : prev
-    })
-  }, [details])
+        return changed ? next : prev
+      })
+    }
+  }
 
   const boardPicks = useMemo(() => {
     const ordered = session.picks.map((pk) => hydrateAdpPlayer(asIndex(session.players[pk.playerId]), detailsById.get(pk.playerId)))

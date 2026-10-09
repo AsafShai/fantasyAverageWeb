@@ -40,20 +40,25 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
   const { groups } = useGlobalSearch(query)
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
+  // Each open starts from an empty search. Reset while rendering (not in an
+  // effect) so the reopened palette never paints the previous query first.
+  const [wasOpen, setWasOpen] = useState(isOpen)
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen)
+    if (isOpen) {
+      setQuery('')
+      setSelected(0)
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
       previouslyFocused.current = document.activeElement as HTMLElement | null
-      setQuery('')
-      setSelected(0)
       requestAnimationFrame(() => inputRef.current?.focus())
     } else {
       previouslyFocused.current?.focus()
     }
   }, [isOpen])
-
-  useEffect(() => {
-    setSelected(0)
-  }, [query])
 
   useEffect(() => {
     if (!isOpen) return
@@ -109,7 +114,10 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setSelected(0)
+            }}
             placeholder="Search players, teams, pages…"
             autoComplete="off"
             className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"

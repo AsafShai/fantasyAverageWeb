@@ -6,7 +6,6 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
-  type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
   type Modifier,
@@ -440,9 +439,13 @@ export default function PreDraftRankingsPage() {
   const from = visible.length === 0 ? 0 : (safePage - 1) * resolvedPageSize + 1
   const to = Math.min(safePage * resolvedPageSize, visible.length)
 
-  useEffect(() => {
+  // Any change to what is listed starts back on page 1.
+  const listingKey = JSON.stringify([debouncedSearch, teamFilter, posKey, resolvedPageSize])
+  const [pagedListingKey, setPagedListingKey] = useState(listingKey)
+  if (listingKey !== pagedListingKey) {
+    setPagedListingKey(listingKey)
     setPage(1)
-  }, [debouncedSearch, teamFilter, posKey, resolvedPageSize])
+  }
 
   const neededDetailIds = useMemo(() => {
     const ids = paged.map((p) => p.id)
@@ -461,24 +464,29 @@ export default function PreDraftRankingsPage() {
     { skip: missingDetailIds.length === 0 },
   )
   if (details?.providers?.length && details.providers !== providers) setProviders(details.providers)
-  useEffect(() => {
-    if (!details) return
-    if (details.last_year_season || details.projection_season) {
-      setDetailsSeason({ last: details.last_year_season ?? undefined, proj: details.projection_season ?? undefined })
-    }
-    if (!details.players.length) return
-    setDetailsById((prev) => {
-      let changed = false
-      const next = new Map(prev)
-      for (const p of details.players) {
-        if (next.get(p.id) !== p) {
-          next.set(p.id, p)
-          changed = true
-        }
+  // Fold each new detail batch into the accumulated map as it arrives.
+  const [mergedDetails, setMergedDetails] = useState<typeof details>(undefined)
+  if (details !== mergedDetails) {
+    setMergedDetails(details)
+    if (details) {
+      if (details.last_year_season || details.projection_season) {
+        setDetailsSeason({ last: details.last_year_season ?? undefined, proj: details.projection_season ?? undefined })
       }
-      return changed ? next : prev
-    })
-  }, [details])
+      if (details.players.length) {
+        setDetailsById((prev) => {
+          let changed = false
+          const next = new Map(prev)
+          for (const p of details.players) {
+            if (next.get(p.id) !== p) {
+              next.set(p.id, p)
+              changed = true
+            }
+          }
+          return changed ? next : prev
+        })
+      }
+    }
+  }
   const onMoveNeedIds = useCallback((ids: string[]) => {
     setMovePreviewIds((prev) => {
       const next = stablePlayerIds(ids)
@@ -570,7 +578,7 @@ export default function PreDraftRankingsPage() {
     didReorderRef.current = false
   }
 
-  const onDragEnd = (_event: DragEndEvent) => finishDrag(false)
+  const onDragEnd = () => finishDrag(false)
   const onDragCancel = () => finishDrag(true)
 
   const revealRank = useCallback(

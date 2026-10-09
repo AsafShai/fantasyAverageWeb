@@ -126,6 +126,8 @@ export default function PlayerRankings() {
 
   useEffect(() => {
     if (players.length > 0) {
+      // Ranks the newly loaded players (the heavy part runs in a transition).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       handleCalculate()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

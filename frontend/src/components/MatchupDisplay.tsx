@@ -166,11 +166,15 @@ export function MatchupExpandRow({
   // and show the previous slate's numbers. Keyed on stable primitives, not
   // the `proj` object identity, so a same-slate refetch (e.g. RTK Query
   // background revalidation) can't silently wipe an adjusted slider.
-  useEffect(() => {
-    clearTimeout(timer.current);
+  const slateKey = `${matchup.opponent}|${proj?.default_minutes}`;
+  const [syncedSlateKey, setSyncedSlateKey] = useState(slateKey);
+  if (slateKey !== syncedSlateKey) {
+    setSyncedSlateKey(slateKey);
     setMinutes(proj?.default_minutes ?? 0);
     setStats(proj?.stats ?? null);
-  }, [matchup.opponent, proj?.default_minutes]);
+  }
+  // A slider re-predict still pending from the previous slate must not land on this one.
+  useEffect(() => () => clearTimeout(timer.current), [slateKey]);
   const projActive = showProjection && !!proj && proj.status !== 'red' && !!stats;
 
   const onSlider = (v: number) => {

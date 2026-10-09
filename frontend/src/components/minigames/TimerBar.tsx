@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 /** Draining progress bar; calls onTimeout once when time hits 0. */
 export default function TimerBar({
@@ -14,11 +14,21 @@ export default function TimerBar({
 }) {
   const [remainingMs, setRemainingMs] = useState(totalSeconds * 1000)
   const onTimeoutRef = useRef(onTimeout)
-  onTimeoutRef.current = onTimeout
+  useLayoutEffect(() => {
+    onTimeoutRef.current = onTimeout
+  })
+
+  // A new round, a pause/resume or a new duration refills the bar. Done while
+  // rendering so the refilled bar is what paints, not a frame of the old one.
+  const timerKey = `${running}|${resetKey}|${totalSeconds}`
+  const [filledFor, setFilledFor] = useState(timerKey)
+  if (timerKey !== filledFor) {
+    setFilledFor(timerKey)
+    setRemainingMs(totalSeconds * 1000)
+  }
 
   useEffect(() => {
     const total = totalSeconds * 1000
-    setRemainingMs(total)
     if (!running) return
 
     const deadline = performance.now() + total
