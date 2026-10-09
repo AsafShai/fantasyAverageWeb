@@ -159,3 +159,48 @@ export const getStatColor = (value: number, isPercentage: boolean = false): stri
   if (value >= 10) return 'text-yellow-600';
   return 'text-gray-600';
 };
+// Scoring categories the fixed stat fields above already cover.
+const FIXED_FIELD_CATEGORIES = new Set(['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%']);
+
+// Quotients of two stats (mirrors the backend's RATIO_CATEGORIES). They can't be
+// summed or averaged across players, so the comparison leaves them out rather
+// than show a wrong combined value.
+const RATIO_CATEGORIES = new Set([
+  'FG%', 'FT%', '3P%', 'AFG%', 'A/TO', 'FTR', 'PPM',
+  'PPG', 'RPG', 'APG', 'BPG', 'SPG', 'TOPG', '3PG', 'MPG',
+]);
+
+// ESPN categories scored in reverse (fewer is better). Used to color the
+// comparison when the response doesn't say which of the league's are reversed.
+export const KNOWN_REVERSE_CATEGORIES = new Set([
+  'TO', 'PF', 'EJ', 'FF', 'TF', 'DQ', 'FGMI', 'FTMI', '3PMI', 'TOPG',
+]);
+
+/** Counting categories the league scores beyond the fixed fields, in the order
+ * the players' `stats.stats` lists them. Empty for a league on the standard 8. */
+export const extraCountingCategories = (players: Player[]): string[] => {
+  const seen = new Set<string>();
+  for (const player of players) {
+    for (const category of Object.keys(player.stats.stats ?? {})) {
+      if (!FIXED_FIELD_CATEGORIES.has(category) && !RATIO_CATEGORIES.has(category)) seen.add(category);
+    }
+  }
+  return [...seen];
+};
+
+/** Totals view: each extra category summed over the players. */
+export const aggregateExtraTotals = (players: Player[], categories: string[]): Record<string, number> =>
+  Object.fromEntries(categories.map(category => [
+    category,
+    players.reduce((sum, p) => sum + (p.stats.stats?.[category] ?? 0), 0),
+  ]));
+
+/** Averages view: the mean of each player's per-game value, the same way
+ * aggregatePlayerAverages combines the fixed counting stats. */
+export const aggregateExtraAverages = (players: Player[], categories: string[]): Record<string, number> =>
+  Object.fromEntries(categories.map(category => [
+    category,
+    players.length === 0 ? 0 : players.reduce(
+      (sum, p) => sum + (p.stats.gp > 0 ? (p.stats.stats?.[category] ?? 0) / p.stats.gp : 0), 0,
+    ) / players.length,
+  ]));

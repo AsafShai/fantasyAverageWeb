@@ -1,5 +1,5 @@
 from datetime import date
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 
@@ -11,7 +11,11 @@ class Settings(BaseSettings):
 
     season_id: int = Field(alias="SEASON_ID")
     league_id: int = Field(alias="LEAGUE_ID")
-    season_start: date = Field(default=date(2025, 10, 22), alias="SEASON_START")
+    # Normally replaced at startup by the opener derived from ESPN (main.py);
+    # this is only the fallback when that fails. Left unset, it is estimated
+    # from SEASON_ID (openers land around Oct 22 of the year the season starts)
+    # rather than pinned to one season's date that goes stale the next year.
+    season_start: Optional[date] = Field(default=None, alias="SEASON_START")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     injury_scheduler_enabled: bool = Field(default=True, alias="INJURY_SCHEDULER_ENABLED")
@@ -28,6 +32,12 @@ class Settings(BaseSettings):
         case_sensitive=False
     )
     
+    @model_validator(mode="after")
+    def _default_season_start(self) -> "Settings":
+        if self.season_start is None:
+            self.season_start = date(self.season_id - 1, 10, 22)
+        return self
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]
