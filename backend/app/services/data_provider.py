@@ -345,9 +345,10 @@ class DataProvider:
         return self.cache_manager.totals_cache.get('data_date')
 
     async def get_draft_detail_raw(self) -> Dict:
-        """Get raw ESPN draft picks. Draft is immutable after draft night, so a
-        completed draft is cached for process lifetime; before that (no picks
-        yet) it is re-fetched so the report appears once the draft happens."""
+        """Get raw ESPN draft picks. Draft is immutable once ESPN marks it
+        drafted, so only then is it cached for process lifetime; before or
+        during the draft it is re-fetched so the report never sticks on an
+        empty or partial pick list."""
         if self.cache_manager.draft_detail_cache is not None:
             return self.cache_manager.draft_detail_cache
 
@@ -355,8 +356,7 @@ class DataProvider:
             response = await self._client.get(self.espn_draft_detail_url)
             response.raise_for_status()
             api_data = response.json()
-            draft_detail = api_data.get('draftDetail') or {}
-            if draft_detail.get('drafted') or draft_detail.get('picks'):
+            if (api_data.get('draftDetail') or {}).get('drafted'):
                 self.cache_manager.draft_detail_cache = api_data
                 self.logger.info("ESPN draft detail loaded (cached for process lifetime)")
             return api_data
