@@ -9,6 +9,7 @@ from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.builders.response_builder import ResponseBuilder
 from app.utils.name_matching import resolve_join_key
+from app.utils.constants import RATIO_CATEGORIES
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,13 @@ _DB_STAT_COLS = {
     'PTS': 'pts', 'REB': 'reb', 'AST': 'ast', 'STL': 'stl', 'BLK': 'blk',
     'FGM': 'fgm', 'FGA': 'fga', 'FTM': 'ftm', 'FTA': 'fta', '3PM': 'three_pm',
     'MIN': 'min', 'FG%': 'fg_pct', 'FT%': 'ft_pct', 'GP': 'gp',
+}
+# Counting stats a league may score beyond the fixed set. Overlaid only when the
+# ESPN frame carries the column (i.e. the league scores it or a ratio it scores
+# is built from it) — otherwise a custom window would show the window's PTS next
+# to the season's TO.
+_DB_EXTRA_STAT_COLS = {
+    'TO': 'tov', '3PA': 'fg3a', 'OREB': 'oreb', 'DREB': 'dreb', 'PF': 'pf',
 }
 
 # "Known this season" must be independent of games played — a player out all
@@ -131,6 +139,10 @@ def merge_windowed_players_df(
     merged = espn_players_df.copy()
     is_custom = time_period == StatTimePeriod.CUSTOM
     merged['_join_key'] = merged['Name'].map(resolve_join_key)
+    stat_cols = {
+        **_DB_STAT_COLS,
+        **{c: db for c, db in _DB_EXTRA_STAT_COLS.items() if c in merged.columns},
+    }
 
     if agg_df.empty:
         windowed = pd.Series(False, index=merged.index)
@@ -138,10 +150,11 @@ def merge_windowed_players_df(
         agg_df = agg_df.copy()
         agg_df['_join_key'] = agg_df['player_name'].map(resolve_join_key)
         agg_df = agg_df.drop_duplicates('_join_key', keep='first')
-        db_cols = ['_join_key'] + list(_DB_STAT_COLS.values())
+        stat_cols = {c: db for c, db in stat_cols.items() if db in agg_df.columns}
+        db_cols = ['_join_key'] + list(stat_cols.values())
         merged = merged.merge(agg_df[db_cols], on='_join_key', how='left', suffixes=('', '_db'))
         windowed = merged['gp'].notna()
-        for espn_col, db_col in _DB_STAT_COLS.items():
+        for espn_col, db_col in stat_cols.items():
             merged.loc[windowed, espn_col] = merged.loc[windowed, db_col]
 
     if is_custom:
@@ -154,11 +167,25 @@ def merge_windowed_players_df(
     # Only custom ranges force-zero known-but-unwindowed players — they have
     # no ESPN split to fall back to. Presets leave the ESPN value in place
     # (see the comment above this function's docstring).
+    overwritten = windowed
     if is_custom:
         zero_matched = ~windowed
+        overwritten = windowed | zero_matched
         if zero_matched.any():
-            for espn_col in _DB_STAT_COLS:
+            for espn_col in stat_cols:
                 merged.loc[zero_matched, espn_col] = 0 if espn_col == 'GP' else 0.0
+
+    # Ratio categories other than FG%/FT% (which the aggregate computes itself)
+    # still hold ESPN's value for its split; rebuild them from the window's
+    # sources wherever those sources were just overwritten.
+    for category, (numerator, denominator) in RATIO_CATEGORIES.items():
+        if category in _DB_STAT_COLS or category not in merged.columns:
+            continue
+        if numerator not in stat_cols or denominator not in stat_cols:
+            continue
+        num = merged.loc[overwritten, numerator].astype(float)
+        den = merged.loc[overwritten, denominator].astype(float)
+        merged.loc[overwritten, category] = (num / den.where(den != 0)).fillna(0.0)
 
     unmatched = ~known
     if unmatched.any():
@@ -169,7 +196,7 @@ def merge_windowed_players_df(
         )
 
     merged['GP'] = merged['GP'].astype(int)
-    drop_cols = ['_join_key'] + list(_DB_STAT_COLS.values())
+    drop_cols = ['_join_key'] + list(_DB_STAT_COLS.values()) + list(_DB_EXTRA_STAT_COLS.values())
     merged = merged.drop(columns=[c for c in drop_cols if c in merged.columns])
     return merged
 

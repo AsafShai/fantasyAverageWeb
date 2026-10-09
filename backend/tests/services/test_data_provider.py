@@ -754,3 +754,27 @@ async def test_sync_db_now_fresh_fetch_restarts_totals_ttl(ttl_provider):
     await ttl_provider.get_totals_df()
 
     assert ttl_provider._client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("draft_detail, cached", [
+    ({"drafted": True, "picks": [{"playerId": 1}]}, True),
+    ({"drafted": False, "inProgress": True, "picks": [{"playerId": 1}]}, False),
+    ({"drafted": False, "picks": []}, False),
+])
+async def test_draft_detail_cached_only_once_drafted(draft_detail, cached):
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.data_provider import DataProvider
+
+    provider = object.__new__(DataProvider)
+    provider.cache_manager = MagicMock(draft_detail_cache=None)
+    provider.logger = MagicMock()
+    provider.espn_draft_detail_url = "http://espn/draft"
+    response = MagicMock()
+    response.json.return_value = {"draftDetail": draft_detail}
+    provider._client = MagicMock(get=AsyncMock(return_value=response))
+
+    result = await provider.get_draft_detail_raw()
+
+    assert result == {"draftDetail": draft_detail}
+    assert (provider.cache_manager.draft_detail_cache is not None) == cached

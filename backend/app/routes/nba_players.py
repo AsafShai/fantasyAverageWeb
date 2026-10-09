@@ -1,4 +1,5 @@
 import logging
+from app.utils.utils import latest_client_date
 from datetime import date
 from typing import Optional
 
@@ -27,7 +28,7 @@ def _validate_custom_range(time_period: StatTimePeriod, start: Optional[date], e
             status_code=422,
             detail=f"start cannot be before season start ({settings.season_start})",
         )
-    if end > date.today():
+    if end > latest_client_date():
         raise HTTPException(status_code=422, detail="end cannot be in the future")
 
 

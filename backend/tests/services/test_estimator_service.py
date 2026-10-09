@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -66,7 +67,8 @@ def _stub_run_inputs(svc, monkeypatch, estimate):
     """Everything around the Monte Carlo stubbed; `estimate` stands in for it."""
     import pandas as pd
     svc.db_service = MagicMock()
-    svc.db_service.estimator_has_data = AsyncMock(return_value=False)
+    svc.db_service.get_latest_snapshot_date = AsyncMock(return_value=date(2026, 1, 1))
+    svc.db_service.get_estimator_as_of = AsyncMock(return_value=None)
     for name in ("upsert_estimator_prediction", "upsert_estimator_ranking", "upsert_estimator_rank_probability"):
         setattr(svc.db_service, name, AsyncMock())
     monkeypatch.setattr(svc, "_get_snapshot_df", AsyncMock(return_value=pd.DataFrame({"x": [1]})))
@@ -129,37 +131,68 @@ async def test_waiting_caller_reports_failed_in_flight_run(estimator_service, mo
 
 
 @pytest.mark.asyncio
-async def test_lock_released_after_run_so_next_day_runs_again(estimator_service, monkeypatch):
-    from datetime import date
+async def test_runs_again_only_when_a_newer_snapshot_lands(estimator_service, monkeypatch):
     fake_est = _stub_run_inputs(estimator_service, monkeypatch, _estimate_result)
-    day = {"today": date(2026, 1, 1)}
-    monkeypatch.setattr(estimator_service_module, "israel_today", lambda: day["today"])
+    latest = estimator_service.db_service.get_latest_snapshot_date
 
     assert await estimator_service.run_and_store() is True
-    assert await estimator_service.run_and_store() is False  # same day: cached
-    day["today"] = date(2026, 1, 2)
+    assert await estimator_service.run_and_store() is False  # same snapshot: cached
+    latest.return_value = date(2026, 1, 2)
     assert await estimator_service.run_and_store() is True
     assert fake_est.return_value.estimate.call_count == 2
-
-
-def test_israel_today_rolls_over_before_utc():
-    from datetime import datetime, timezone
-    # 23:30 UTC on Jan 1 is already 01:30 on Jan 2 in Israel (UTC+2 in winter)
-    late_utc = datetime(2026, 1, 1, 23, 30, tzinfo=timezone.utc)
-    assert estimator_service_module.israel_today(late_utc).isoformat() == "2026-01-02"
+    assert estimator_service._cache_date == date(2026, 1, 2)
 
 
 @pytest.mark.asyncio
-async def test_run_stamps_cache_with_israel_date(estimator_service, monkeypatch):
-    from datetime import date
-    _stub_run_inputs(estimator_service, monkeypatch, _estimate_result)
-    monkeypatch.setattr(estimator_service_module, "israel_today", lambda: date(2030, 5, 5))
+async def test_skips_when_stored_results_cover_latest_snapshot(estimator_service, monkeypatch):
+    fake_est = _stub_run_inputs(estimator_service, monkeypatch, _estimate_result)
+    estimator_service.db_service.get_estimator_as_of.return_value = date(2026, 1, 1)
 
-    await estimator_service.run_and_store()
+    assert await estimator_service.run_and_store() is False
+    assert fake_est.return_value.estimate.call_count == 0
+    assert await estimator_service.run_and_store(wait=True) is False  # lock free: runs the check again
 
-    assert estimator_service._cache_date == date(2030, 5, 5)
+
+@pytest.mark.asyncio
+async def test_skips_without_snapshot(estimator_service, monkeypatch):
+    fake_est = _stub_run_inputs(estimator_service, monkeypatch, _estimate_result)
+    estimator_service.db_service.get_latest_snapshot_date.return_value = None
+
+    assert await estimator_service.run_and_store() is False
+    assert fake_est.return_value.estimate.call_count == 0
 
 
 def test_scheduler_and_service_share_one_timezone():
     from app.services import estimator_scheduler
     assert estimator_scheduler.ISRAEL_TZ is estimator_service_module.ISRAEL_TZ
+
+
+@pytest.mark.asyncio
+async def test_scheduler_runs_estimator_when_sync_wrote_nothing_and_survives_errors(monkeypatch):
+    """A page load may have written the snapshot before the slot fires, so a
+    no-op sync must still run the estimator; and one failing slot must not end
+    the scheduler loop."""
+    from app.services import estimator_scheduler
+
+    class _Stop(Exception):
+        pass
+
+    sleeps = {"n": 0}
+
+    async def fake_sleep(_seconds):
+        sleeps["n"] += 1
+        if sleeps["n"] > 2:
+            raise _Stop
+
+    provider = MagicMock()
+    provider.sync_db_now = AsyncMock(return_value=False)
+    service = MagicMock()
+    service.run_and_store = AsyncMock(side_effect=[RuntimeError("db down"), True])
+    monkeypatch.setattr(estimator_scheduler.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(estimator_scheduler, "DataProvider", lambda: provider)
+    monkeypatch.setattr(estimator_scheduler, "EstimatorService", lambda: service)
+
+    with pytest.raises(_Stop):
+        await estimator_scheduler.start_scheduler()
+
+    assert service.run_and_store.await_count == 2

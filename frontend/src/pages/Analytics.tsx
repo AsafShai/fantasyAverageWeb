@@ -9,7 +9,7 @@ import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 import { FF_NAV_REORG } from '../config/featureFlags'
-import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
+import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
 
 type AnalyticsTab = 'heatmap' | 'rankingsOverTime' | 'shootingStats'
 
@@ -83,15 +83,7 @@ const Analytics = () => {
   }
 
   const validateDates = (start: string, end: string) => {
-    if (!start || !end) {
-      setDateError('')
-      return
-    }
-    if (start >= end) {
-      setDateError('Start date must be before end date')
-    } else {
-      setDateError('')
-    }
+    setDateError(validateDateRange(start, end, summary?.season_start, today) ?? '')
   }
 
   const applyDates = () => {

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import Optional, Annotated
+from app.utils.utils import latest_client_date
 from datetime import date
 from app.models import LeagueRankings
 from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
@@ -30,7 +31,7 @@ async def get_rankings(
                 raise HTTPException(status_code=422, detail="start_date must be before end_date")
             if start_date < settings.season_start:
                 raise HTTPException(status_code=422, detail=f"start_date cannot be before season start ({settings.season_start})")
-            if end_date > date.today():
+            if end_date > latest_client_date():
                 raise HTTPException(status_code=422, detail="end_date cannot be in the future")
 
         return await ranking_service.get_league_rankings(
@@ -49,4 +50,4 @@ async def get_rankings(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.exception(f"Error getting rankings: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve rankings: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve rankings")

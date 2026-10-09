@@ -7,7 +7,7 @@ import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import type { RankingStats } from '../types/api'
-import { todayIso, getDateNDaysAgo } from '../utils/dateRange'
+import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
 
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -69,15 +69,7 @@ const Rankings = () => {
   }
 
   const validateDates = (start: string, end: string) => {
-    if (!start || !end) {
-      setDateError('')
-      return
-    }
-    if (start >= end) {
-      setDateError('Start date must be before end date')
-    } else {
-      setDateError('')
-    }
+    setDateError(validateDateRange(start, end, summary?.season_start, today) ?? '')
   }
 
   const applyDates = () => {

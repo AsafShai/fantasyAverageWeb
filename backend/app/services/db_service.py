@@ -545,9 +545,12 @@ class DBService:
     ):
         """
         Returns (actual_end_date, actual_start_date, rows_end, rows_start) for delta calculation.
+        Both ends are inclusive: a snapshot dated D holds totals through D's games,
+        so the baseline subtracted is the latest snapshot *before* start_date.
         - actual_end_date: closest date <= end_date in DB
-        - actual_start_date: closest date >= start_date in DB (None if no data at or after start)
-        - rows_start is empty list if no snapshot >= start_date exists (treat as zeros)
+        - actual_start_date: first day the delta covers -- the day after the
+          baseline snapshot, or the season start when there is no baseline
+        - rows_start is empty list if no snapshot < start_date exists (treat as zeros)
         - Returns (None, None, [], []) if no end snapshot found
 
         Rows are keyed by category code, not column name, and carry whatever
@@ -567,12 +570,16 @@ class DBService:
                 if actual_end_date is None:
                     return None, None, [], []
 
-                start_row = await conn.fetchrow(
-                    "SELECT MIN(date) AS d FROM team_daily_snapshot "
-                    "WHERE league_id = $1 AND season_id = $2 AND date >= $3",
+                baseline_row = await conn.fetchrow(
+                    "SELECT MAX(date) AS d FROM team_daily_snapshot "
+                    "WHERE league_id = $1 AND season_id = $2 AND date < $3",
                     league_id, season_id, start_date,
                 )
-                actual_start_date = start_row['d'] if start_row else None
+                baseline_date = baseline_row['d'] if baseline_row else None
+                actual_start_date = (
+                    baseline_date + timedelta(days=1) if baseline_date is not None
+                    else min(settings.season_start, start_date)
+                )
 
                 dynamic = await self._supports_dynamic_categories(conn)
                 query = f"""
@@ -585,8 +592,8 @@ class DBService:
                 rows_end = await conn.fetch(query, league_id, season_id, actual_end_date)
 
                 rows_start = []
-                if actual_start_date is not None:
-                    rows_start = await conn.fetch(query, league_id, season_id, actual_start_date)
+                if baseline_date is not None:
+                    rows_start = await conn.fetch(query, league_id, season_id, baseline_date)
 
                 logger.info(
                     f"Date range {start_date}..{end_date} resolved to snapshots "
@@ -782,6 +789,36 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to fetch estimator latest: {type(e).__name__}: {e}")
             return {}
+
+    async def get_latest_snapshot_date(self, league_id: int, season_id: int) -> Optional[date]:
+        """Date of the newest team_daily_snapshot row, or None if there is none."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetchval(
+                    "SELECT MAX(date) FROM team_daily_snapshot WHERE league_id = $1 AND season_id = $2",
+                    league_id, season_id,
+                )
+        except Exception as e:
+            logger.error(f"Failed to fetch latest snapshot date: {type(e).__name__}: {e}")
+            return None
+
+    async def get_estimator_as_of(self, league_id: int, season_id: int) -> Optional[date]:
+        """Snapshot date the stored estimator results were computed from, or None."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetchval(
+                    "SELECT MAX(as_of_date) FROM estimator_prediction WHERE league_id = $1 AND season_id = $2",
+                    league_id, season_id,
+                )
+        except Exception as e:
+            logger.error(f"Failed to fetch estimator as_of_date: {type(e).__name__}: {e}")
+            return None
 
     async def estimator_has_data(self, league_id: int, season_id: int) -> bool:
         pool = await self._get_pool()
@@ -1041,6 +1078,11 @@ class DBService:
                         SUM(ftm) AS ftm,
                         SUM(fta) AS fta,
                         SUM(fg3m) AS three_pm,
+                        SUM(fg3a) AS fg3a,
+                        SUM(tov) AS tov,
+                        SUM(oreb) AS oreb,
+                        SUM(dreb) AS dreb,
+                        SUM(pf) AS pf,
                         SUM(min) AS min,
                         COALESCE(SUM(fgm) / NULLIF(SUM(fga), 0), 0.0) AS fg_pct,
                         COALESCE(SUM(ftm) / NULLIF(SUM(fta), 0), 0.0) AS ft_pct,

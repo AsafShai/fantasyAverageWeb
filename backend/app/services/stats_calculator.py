@@ -88,7 +88,7 @@ class StatsCalculator:
                     averages_df[category].idxmin() if category in reverse_categories
                     else averages_df[category].idxmax()
                 )
-                best_team_row = averages_df.iloc[best_team_idx]
+                best_team_row = averages_df.loc[best_team_idx]
                 best_value = best_team_row[category]
                 
                 leaders[f'{category}_leader'] = {
