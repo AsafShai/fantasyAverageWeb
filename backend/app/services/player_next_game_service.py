@@ -12,7 +12,7 @@ import logging
 from app.models.projection_models import PlayerNextGameProjection, ProjectionStats
 from app.services.db_service import DBService
 from app.services.live_projection_service import LiveProjectionService
-from app.services.nba_matchup_service import NbaMatchupService
+from app.services.nba_matchup_service import get_shared_matchup_service
 from app.services.nba_player_catalog import get_player_bio
 from app.utils.team_abbr_map import canonical_abbr
 
@@ -24,7 +24,7 @@ _LOOKBACK_DATES = 10
 
 class PlayerNextGameService:
     def __init__(self) -> None:
-        self._matchups = NbaMatchupService()
+        self._matchups = get_shared_matchup_service()
         self._projections = LiveProjectionService()
 
     async def next_game_projection(

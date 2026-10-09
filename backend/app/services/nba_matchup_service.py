@@ -27,6 +27,13 @@ from model_stats_inference.espn.games import event_game_date, is_countable, is_f
 # All-Star break (~6 days); anything longer (offseason) is genuinely "no games".
 _UPCOMING_LOOKAHEAD_DAYS = 7
 
+# Same freshness as the shared day-events cache. A pinned date's team -> opponent
+# map does not change as its games progress, so this only saves repeat fetches
+# (the player card walks up to ~10 dates per view).
+_EXPLICIT_DATE_TTL = timedelta(minutes=5)
+# Backstop only: keys are dates the UI offers (upcoming + stored), a few dozen.
+_EXPLICIT_DATE_MAX_ENTRIES = 128
+
 
 def _season_str(season_id: int) -> str:
     return f'{season_id - 1}-{str(season_id)[2:]}'
@@ -62,7 +69,11 @@ class NbaMatchupService:
             'pace': None,
             'ts': None,
         }
-        self._events_cache: dict = {'by_day': {}, 'ts': None}
+        # 'fetched' = every candidate day the last fetch covered, including days
+        # whose events were all filtered out (not countable), which have no
+        # by_day key but must still count as cached.
+        self._events_cache: dict = {'by_day': {}, 'fetched': set(), 'ts': None}
+        self._explicit_cache: dict[str, tuple[datetime, dict[str, 'GameInfo']]] = {}
         self._resolved_date: str | None = None
         self._whitelist_cache: dict = {'dates': None, 'ts': None}
 
@@ -142,8 +153,15 @@ class NbaMatchupService:
         if date is not None:
             # Explicit/testing date: trusted verbatim, bypasses the whitelist
             # and the shared events cache entirely.
+            hit = self._explicit_cache.get(date)
+            if hit is not None and datetime.now() - hit[0] < _EXPLICIT_DATE_TTL:
+                return dict(hit[1])
             resp = await espn_client.scoreboard_async(self._client, date)
-            return self._games_from(resp.get('events', []))
+            games = self._games_from(resp.get('events', []))
+            if len(self._explicit_cache) >= _EXPLICIT_DATE_MAX_ENTRIES:
+                self._explicit_cache.clear()
+            self._explicit_cache[date] = (datetime.now(), games)
+            return dict(games)
 
         # Default view = the UPCOMING slate. The date is always pinned (ESPN's
         # dateless scoreboard returns the NEAREST game day — the season finale
@@ -244,7 +262,7 @@ class NbaMatchupService:
             self._events_cache['ts'] is not None
             and datetime.now() - self._events_cache['ts'] < timedelta(minutes=5)
         )
-        if not cache_fresh or not set(candidates) <= self._events_cache['by_day'].keys():
+        if not cache_fresh or not set(candidates) <= self._events_cache['fetched']:
             responses = await asyncio.gather(
                 *(espn_client.scoreboard_async(self._client, d.strftime('%Y%m%d')) for d in candidates)
             )
@@ -256,7 +274,7 @@ class NbaMatchupService:
                     day = event_game_date(event)
                     if start <= day <= end:
                         by_day.setdefault(day, []).append(event)
-            self._events_cache.update({'by_day': by_day, 'ts': datetime.now()})
+            self._events_cache.update({'by_day': by_day, 'fetched': set(candidates), 'ts': datetime.now()})
 
         return {d: self._events_cache['by_day'].get(d, []) for d in candidates}
 
@@ -276,3 +294,16 @@ class NbaMatchupService:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+
+_shared_service: NbaMatchupService | None = None
+
+
+def get_shared_matchup_service() -> NbaMatchupService:
+    """The one instance every caller shares, so the whitelist, day-events and
+    pinned-date caches (and the HTTP connection pool) are fetched once rather
+    than once per caller."""
+    global _shared_service
+    if _shared_service is None:
+        _shared_service = NbaMatchupService()
+    return _shared_service
