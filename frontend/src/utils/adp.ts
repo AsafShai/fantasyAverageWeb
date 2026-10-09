@@ -40,6 +40,31 @@ export function sitesForMetric(metric: AdpMetric, providers?: ProviderMeta[]): A
   return ADP_SITES.filter((site) => capable.has(site))
 }
 
+/** Percent per site for a weighted Blend. A checked site without an entry weighs 0. */
+export type SiteWeights = Partial<Record<AdpSiteKey, number>>
+
+/** Whole percents that split 100 as evenly as possible, the remainder to the first sites. */
+export function equalWeights(sites: AdpSiteKey[]): SiteWeights {
+  if (!sites.length) return {}
+  const base = Math.floor(100 / sites.length)
+  const extra = 100 - base * sites.length
+  return Object.fromEntries(sites.map((site, i) => [site, base + (i < extra ? 1 : 0)]))
+}
+
+export function weightsTotal(sites: AdpSiteKey[], weights: SiteWeights): number {
+  return sites.reduce((sum, site) => sum + (weights[site] ?? 0), 0)
+}
+
+/**
+ * The `sites` / `rank_sites` request param: `espn,yahoo`, or `espn:60,yahoo:40` when
+ * `weights` is given. The server spreads a site's share over the others for a player
+ * that site does not list.
+ */
+export function blendSitesParam(sites: AdpSiteKey[], weights?: SiteWeights | null): string {
+  if (!weights) return sites.join(',')
+  return sites.map((site) => `${site}:${weights[site] ?? 0}`).join(',')
+}
+
 export function siteValue(player: AdpPlayer, site: AdpSiteKey, metric: AdpMetric): number | null {
   return metric === 'adp' ? player[site].adp : player[site].ranking
 }
