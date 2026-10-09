@@ -69,6 +69,8 @@ export function useInjuryData(): {
 
   // Initial fetch — records + past notifications + last report time from backend
   useEffect(() => {
+    // Initial fetch; fetchAll flips the loading flag before the request goes out.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();
     fetch(`${API_BASE}/injuries/notifications`)
       .then(r => r.ok ? r.json() : [])

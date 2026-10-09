@@ -71,7 +71,7 @@ export default function DraftBoardPage() {
     include_stats: false,
   })
   if (data?.providers?.length && data.providers !== providers) setProviders(data.providers)
-  const players = data?.players ?? []
+  const players = useMemo(() => data?.players ?? [], [data?.players])
   const boardPicks = useMemo(
     () => annotateDraftPicks(players.slice(0, pickCount), league.teams, league.threeRr),
     [players, pickCount, league.teams, league.threeRr],

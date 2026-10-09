@@ -12,6 +12,8 @@ const DeadlineCountdown = ({ deadline }: DeadlineCountdownProps) => {
 
   useEffect(() => {
     if (!deadlineMs) return
+    // Syncing with the wall clock: a new deadline starts from the time left now.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimeLeft(deadlineMs - Date.now())
     const id = setInterval(() => {
       setTimeLeft(deadlineMs - Date.now())
