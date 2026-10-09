@@ -428,7 +428,7 @@ async def _try_update_injury_data() -> bool:
         return False
 
     now_il = get_utc_now_str()
-    new_records = parse_injury_pdf(pdf_bytes)
+    new_records = await asyncio.to_thread(parse_injury_pdf, pdf_bytes)
     notifications = compute_diff(injury_store, new_records, now_il)
     new_store = build_updated_store(injury_store, new_records, notifications, now_il)
 
@@ -515,7 +515,7 @@ async def initialize() -> None:
             db_timestamps[key] = str(ts)
 
     now_il = get_utc_now_str()
-    records = parse_injury_pdf(pdf_bytes)
+    records = await asyncio.to_thread(parse_injury_pdf, pdf_bytes)
     for record in records:
         key = f"{record.team}|{record.player}"
         last_update = db_timestamps.get(key, now_il)
@@ -530,7 +530,8 @@ async def initialize() -> None:
     last_report_time = report_dt.astimezone(timezone.utc).isoformat(timespec="minutes")
 
 
-_RETRY_OFFSETS = [0, 5, 10, 15, 15, 15]
+# Seconds after each mark; each retry sleeps the gap to the next offset.
+_RETRY_OFFSETS = [0, 5, 15, 30, 45, 60]
 
 
 async def start_scheduler() -> None:

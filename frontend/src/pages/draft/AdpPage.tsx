@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetAdpQuery, useLazyGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
@@ -233,9 +233,13 @@ export default function AdpPage() {
   // a column that is not even rendered. Fall back to Blend instead.
   if (isAdpSite(sortBy) && !available.includes(sortBy)) setSortBy('blend')
 
-  useEffect(() => {
+  // Any change to what is listed, or how, starts back on page 1.
+  const listingKey = JSON.stringify([debouncedSearch, teamFilter, posKey, sortBy, sortDir, resolvedPageSize, sitesKey, metric])
+  const [pagedListingKey, setPagedListingKey] = useState(listingKey)
+  if (listingKey !== pagedListingKey) {
+    setPagedListingKey(listingKey)
     setPage(1)
-  }, [debouncedSearch, teamFilter, posKey, sortBy, sortDir, resolvedPageSize, sitesKey, metric])
+  }
 
   const queryArgs = useMemo(
     () => ({

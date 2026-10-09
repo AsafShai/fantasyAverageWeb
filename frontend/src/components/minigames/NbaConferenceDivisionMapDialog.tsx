@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { ConferenceDivisionTree } from '../../minigames/conferenceDivisionTree'
 import { nbaTeamLogoUrl } from '../../minigames/conferenceDivisionTree'
 import type { WhoAmIMapExclusions } from '../../minigames/whoAmIMapExclusions'
@@ -76,21 +76,17 @@ export function NbaConferenceDivisionMapDialog({
   const westOut = ex.excludedConferences.has('West')
   const tabConflict = eastOut && westOut
 
-  const prevOpen = useRef(false)
-  useEffect(() => {
-    if (open && !prevOpen.current) {
-      if (!eastOut) setTab('East')
-      else if (!westOut) setTab('West')
-      else setTab('East')
-    }
-    prevOpen.current = open
-  }, [open, eastOut, westOut])
-
-  useEffect(() => {
-    if (!open) return
+  // Opening lands on a conference the clues haven't ruled out, and the tab
+  // follows if the open conference gets ruled out. Adjusted while rendering so
+  // the dialog never paints the ruled-out tab first.
+  const [wasOpen, setWasOpen] = useState(false)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setTab(eastOut && !westOut ? 'West' : 'East')
+  } else if (open) {
     if (tab === 'East' && eastOut && !westOut) setTab('West')
     if (tab === 'West' && westOut && !eastOut) setTab('East')
-  }, [open, tab, eastOut, westOut])
+  }
 
   if (!open) return null
 

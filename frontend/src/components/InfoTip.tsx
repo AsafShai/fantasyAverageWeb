@@ -37,6 +37,8 @@ export default function InfoTip({ title, body, formula, className = '' }: InfoTi
 
   useEffect(() => {
     if (!open) return
+    // Positions the popover from the trigger's measured DOM rect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     place()
     const handleOutside = (e: Event) => {
       if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {

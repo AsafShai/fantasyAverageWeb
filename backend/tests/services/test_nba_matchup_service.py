@@ -435,3 +435,67 @@ class TestPreseasonOpenerPreview:
         # only the single whitelist call from the normal lookahead scan —
         # no extra opener-day probe
         assert len(get.call_args_list) == 1
+
+
+@pytest.mark.asyncio
+async def test_explicit_date_is_cached_briefly(service):
+    """The player card walks several pinned dates per view; a repeat lookup
+    within the TTL must not refetch, and callers get their own dict."""
+    day = date(2026, 4, 12)
+    events_by_day = {day: [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=True, game_date=day)]}
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+    ) as get:
+        first = await service.get_games_today(date='20260412')
+        first.clear()
+        second = await service.get_games_today(date='20260412')
+
+    assert get.await_count == 1
+    assert second['LAL'].opponent == 'CHA'
+
+
+@pytest.mark.asyncio
+async def test_explicit_date_refetched_after_ttl(service):
+    from app.services import nba_matchup_service as module
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day({}),
+    ) as get:
+        await service.get_games_today(date='20260412')
+        stamped, games = service._explicit_cache['20260412']
+        service._explicit_cache['20260412'] = (stamped - module._EXPLICIT_DATE_TTL, games)
+        await service.get_games_today(date='20260412')
+
+    assert get.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_day_with_only_uncountable_events_does_not_bust_the_cache(service):
+    """A whitelisted day whose events are all filtered out (e.g. All-Star) has
+    no by_day key; it must still count as fetched, not force a refetch of the
+    whole window on every call."""
+    today = _today()
+    allstar = today + timedelta(days=2)
+    events_by_day = {
+        today: [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=today)],
+        allstar: [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=allstar, season_type=4)],
+    }
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+    ) as get:
+        await service.get_upcoming_game_dates(lookahead_days=7)
+        calls = get.await_count
+        await service.get_upcoming_game_dates(lookahead_days=7)
+
+    assert get.await_count == calls
+
+
+def test_callers_share_one_matchup_service():
+    from app.services.nba_matchup_service import get_shared_matchup_service
+    from app.services.player_next_game_service import PlayerNextGameService
+    from app.services.today_service import TodayService
+    import app.routes.matchups as matchups_route
+
+    shared = get_shared_matchup_service()
+    assert matchups_route._matchup_service is shared
+    assert TodayService().matchup_service is shared
+    assert PlayerNextGameService()._matchups is shared

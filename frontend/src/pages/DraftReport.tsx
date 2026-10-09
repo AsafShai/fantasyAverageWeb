@@ -60,7 +60,8 @@ export default function DraftReport() {
   const [expandedTeams, setExpandedTeams] = useState<Set<number>>(new Set())
   const toggleTeam = (id: number) => setExpandedTeams(prev => {
     const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
     return next
   })
   const diffDragRef = useRef<{ i: number; startX: number; startW: number } | null>(null)

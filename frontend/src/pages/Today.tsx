@@ -20,7 +20,7 @@ function formatSlate(slateDate: string | null): string {
 const Today = () => {
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
   const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
-  const { data: hub, isLoading: hubLoading } = useGetTodayHubQuery()
+  const { data: hub, isLoading: hubLoading, isError: hubError } = useGetTodayHubQuery()
 
   if (summaryLoading || rankingsLoading) {
     return <LoadingSpinner />
@@ -39,7 +39,11 @@ const Today = () => {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
         <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">
-          {hub ? `${formatSlate(hub.slate_date)} · ${hub.games_count} games` : 'loading slate…'}
+          {hub
+            ? `${formatSlate(hub.slate_date)} · ${hub.games_count} ${hub.games_count === 1 ? 'game' : 'games'}`
+            : hubError
+              ? 'slate unavailable'
+              : 'loading slate…'}
         </span>
       </div>
 

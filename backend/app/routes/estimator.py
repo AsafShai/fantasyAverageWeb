@@ -38,10 +38,7 @@ def _build_results(data: dict, elapsed_ms: float) -> EstimatorResults:
 
 async def _sync_and_run(service: EstimatorService, provider: DataProvider) -> None:
     synced = await provider.sync_db_now()
-    if synced:
-        logger.info("Estimator background sync: new ESPN data found, running estimator")
-    else:
-        logger.info("Estimator background sync: snapshot already current, checking if estimator is behind snapshot")
+    logger.info(f"Estimator background sync: {'new ESPN data written' if synced else 'snapshot already current'}, running estimator if behind it")
     await service.run_and_store()
 
 
@@ -55,11 +52,11 @@ async def get_estimator_results():
         data = await service.get_latest()
         if data is None:
             logger.info("No stored estimator results; syncing ESPN and running estimator inline")
-            synced = await provider.sync_db_now()
-            if synced:
-                ran = await service.run_and_store(wait=True)
-                if ran:
-                    data = await service.get_latest()
+            # Run even when the sync wrote nothing: the snapshot may already be
+            # current with no estimator results computed from it yet.
+            await provider.sync_db_now()
+            if await service.run_and_store(wait=True):
+                data = await service.get_latest()
         elif _refresh_due():
             background_tasks.spawn(_sync_and_run(service, provider), name="estimator-refresh")
 

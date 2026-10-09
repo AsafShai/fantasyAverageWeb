@@ -105,6 +105,8 @@ export default function HangmanGame() {
 
   useEffect(() => {
     if (phase !== 'won' || !autoMode) return
+    // Starts the visible countdown alongside the interval that drives it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCountdown(3)
     const t = setInterval(() => {
       setCountdown((c) => {
@@ -141,7 +143,7 @@ export default function HangmanGame() {
     }
   }
 
-  const useHint = (bit: number) => {
+  const revealHint = (bit: number) => {
     if (phase !== 'playing' || (hintMask & (1 << bit)) !== 0) return
     setHintMask((m) => m | (1 << bit))
     setStreak((s) => incrementHints(s))
@@ -224,7 +226,7 @@ export default function HangmanGame() {
                           key={h.bit}
                           type="button"
                           disabled={used}
-                          onClick={() => useHint(h.bit)}
+                          onClick={() => revealHint(h.bit)}
                           className="px-2 py-1 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
                         >
                           {h.label}

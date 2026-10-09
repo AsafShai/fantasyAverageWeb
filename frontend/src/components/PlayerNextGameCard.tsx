@@ -68,12 +68,15 @@ const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
   // revalidation must not wipe an adjusted slider.
   const defaultMinutes = data?.default_minutes ?? 0
   const opponent = data?.opponent ?? null
-  useEffect(() => {
-    clearTimeout(timer.current)
+  const slateKey = `${opponent}|${defaultMinutes}`
+  const [syncedSlateKey, setSyncedSlateKey] = useState<string | null>(null)
+  if (slateKey !== syncedSlateKey) {
+    setSyncedSlateKey(slateKey)
     setMinutes(defaultMinutes)
     setStats(data?.stats ?? null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opponent, defaultMinutes])
+  }
+  // A slider re-predict still pending from the previous game must not land on this one.
+  useEffect(() => () => clearTimeout(timer.current), [slateKey])
 
   if (!FF_PROJECTIONS) return null
 

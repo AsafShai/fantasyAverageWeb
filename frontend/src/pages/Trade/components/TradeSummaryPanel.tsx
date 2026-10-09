@@ -4,7 +4,11 @@ import type { TradeMode } from '../../../hooks/useTradeState';
 import {
   aggregatePlayerStats,
   aggregatePlayerAverages,
-  formatStatValue
+  aggregateExtraAverages,
+  aggregateExtraTotals,
+  extraCountingCategories,
+  formatStatValue,
+  KNOWN_REVERSE_CATEGORIES,
 } from '../utils/tradeCalculations';
 import { STAT_KEYS } from '../constants';
 
@@ -22,8 +26,20 @@ interface StatValueProps {
   comparedTo: number;
   isPercentage?: boolean;
   viewMode: 'totals' | 'averages';
-  field: (typeof STAT_KEYS)[number];
+  field: string;
+  /** Reverse-scored category (e.g. TO): the lower side is the better one. */
+  lowerIsBetter?: boolean;
 }
+
+interface Column {
+  key: string;
+  label: string;
+  icon: string;
+  /** Set for a league category beyond the fixed stat fields. */
+  extraCategory?: string;
+}
+
+const EXTRA_COLUMN_PREFIX = 'extra:';
 
 const STAT_HEADERS = [
   { label: 'MIN', icon: '⏰' },
@@ -44,13 +60,13 @@ const STAT_HEADERS = [
 
 
 
-const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage = false, viewMode, field }) => {
+const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage = false, viewMode, field, lowerIsBetter = false }) => {
   const getValueStyles = () => {
     if (value === comparedTo) {
       return { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' };
     }
 
-    return value > comparedTo
+    return (lowerIsBetter ? value < comparedTo : value > comparedTo)
       ? { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' }
       : { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
   };
@@ -89,16 +105,26 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
 
   const [isColumnControlsOpen, setIsColumnControlsOpen] = useState(false);
 
+  // League categories beyond the fixed fields (e.g. TO) get their own columns,
+  // placed before GP. None for a league on the standard 8 categories.
+  const extraCategories = extraCountingCategories([...playersA, ...playersB]);
+  const fixedColumns: Column[] = STAT_KEYS.map((key, index) => ({ key, ...STAT_HEADERS[index] }));
+  const extraColumns: Column[] = extraCategories.map(category => ({
+    key: `${EXTRA_COLUMN_PREFIX}${category}`, label: category, icon: '➕', extraCategory: category,
+  }));
+  const columns = [...fixedColumns.slice(0, -1), ...extraColumns, fixedColumns[fixedColumns.length - 1]];
+  const isShown = (key: string) => shownColumns[key] ?? true;
+
   const toggleColumn = (key: string) => {
     setShownColumns(prev => ({
       ...prev,
-      [key]: !prev[key]
+      [key]: !(prev[key] ?? true)
     }));
   };
 
   const showAllColumns = () => {
     const allShown: Record<string, boolean> = {};
-    STAT_KEYS.forEach(key => {
+    columns.forEach(({ key }) => {
       allShown[key] = true;
     });
     setShownColumns(allShown);
@@ -106,14 +132,13 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
 
   const hideAllColumns = () => {
     const allHidden: Record<string, boolean> = {};
-    STAT_KEYS.forEach(key => {
+    columns.forEach(({ key }) => {
       allHidden[key] = false;
     });
     setShownColumns(allHidden);
   };
 
-  const visibleColumns = STAT_KEYS.filter(key => shownColumns[key]);
-  const visibleHeaders = STAT_HEADERS.filter((_, index) => shownColumns[STAT_KEYS[index]]);
+  const visibleColumns = columns.filter(({ key }) => isShown(key));
 
   if (playersA.length === 0 && playersB.length === 0) {
     const emptyMessage = tradeMode === 'freeAgent'
@@ -137,6 +162,32 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   const displayStatsB = viewMode === 'averages'
     ? aggregatePlayerAverages(playersB)
     : aggregatePlayerStats(playersB);
+  const aggregateExtras = viewMode === 'averages' ? aggregateExtraAverages : aggregateExtraTotals;
+  const extraStatsA = aggregateExtras(playersA, extraCategories);
+  const extraStatsB = aggregateExtras(playersB, extraCategories);
+
+  const valueOf = (column: Column, fixed: typeof displayStatsA, extras: Record<string, number>) =>
+    column.extraCategory !== undefined
+      ? extras[column.extraCategory]
+      : fixed[column.key as keyof typeof fixed];
+
+  const renderRow = (
+    fixed: typeof displayStatsA, extras: Record<string, number>,
+    otherFixed: typeof displayStatsA, otherExtras: Record<string, number>,
+  ) => visibleColumns.map((column) => {
+    const isPercentage = column.key === 'fg_percentage' || column.key === 'ft_percentage';
+    return (
+      <StatValue
+        key={column.key}
+        value={valueOf(column, fixed, extras)}
+        comparedTo={valueOf(column, otherFixed, otherExtras)}
+        viewMode={viewMode}
+        isPercentage={isPercentage}
+        field={column.key}
+        lowerIsBetter={column.extraCategory !== undefined && KNOWN_REVERSE_CATEGORIES.has(column.extraCategory)}
+      />
+    );
+  });
 
   const comparisonTitle = tradeMode === 'freeAgent'
     ? '📊 Player Comparison: Your Team vs Free Agents'
@@ -178,8 +229,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {STAT_HEADERS.map(({ label, icon }, index) => {
-                    const key = STAT_KEYS[index];
+                  {columns.map(({ key, label, icon }) => {
                     return (
                       <label
                         key={key}
@@ -187,7 +237,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                       >
                         <input
                           type="checkbox"
-                          checked={shownColumns[key]}
+                          checked={isShown(key)}
                           onChange={() => toggleColumn(key)}
                           className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                         />
@@ -206,8 +256,8 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
             <div className="grid gap-1" style={{ gridTemplateColumns: `220px repeat(${visibleColumns.length}, minmax(60px, 1fr))` }}>
               {/* Header row */}
               <div className="font-semibold text-gray-700 p-2 text-sm">Team</div>
-              {visibleHeaders.map(({ label, icon }) => (
-                <div key={label} className="font-semibold text-gray-700 p-2 text-center text-xs leading-tight">
+              {visibleColumns.map(({ key, label, icon }) => (
+                <div key={key} className="font-semibold text-gray-700 p-2 text-center text-xs leading-tight">
                   <div className="text-sm">{icon}</div>
                   <div>{label}</div>
                 </div>
@@ -218,38 +268,14 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   {teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
                 </span>
               </div>
-              {visibleColumns.map((key) => {
-                const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';
-                return (
-                  <StatValue
-                    key={key}
-                    value={displayStatsA[key as keyof typeof displayStatsA]}
-                    comparedTo={displayStatsB[key as keyof typeof displayStatsB]}
-                    viewMode={viewMode}
-                    isPercentage={isPercentage}
-                    field={key}
-                  />
-                );
-              })}
+              {renderRow(displayStatsA, extraStatsA, displayStatsB, extraStatsB)}
 
               <div className="bg-green-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
                 <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}>
                   {tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
                 </span>
               </div>
-              {visibleColumns.map((key) => {
-                const isPercentage = key === 'fg_percentage' || key === 'ft_percentage';
-                return (
-                  <StatValue
-                    key={key}
-                    value={displayStatsB[key as keyof typeof displayStatsB]}
-                    comparedTo={displayStatsA[key as keyof typeof displayStatsA]}
-                    viewMode={viewMode}
-                    isPercentage={isPercentage}
-                    field={key}
-                  />
-                );
-              })}
+              {renderRow(displayStatsB, extraStatsB, displayStatsA, extraStatsA)}
             </div>
           </div>
         </div>

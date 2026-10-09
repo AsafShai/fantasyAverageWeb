@@ -205,12 +205,11 @@ export function MockProjectedStandings({
     setSortDir(key === 'team' ? 'asc' : 'desc')
   }
 
-  useEffect(() => {
-    if (!gpVisible && sortBy === 'gp') {
-      setSortBy('total')
-      setSortDir('desc')
-    }
-  }, [gpVisible, sortBy])
+  // Hiding the GP column drops a sort on it back to the total.
+  if (!gpVisible && sortBy === 'gp') {
+    setSortBy('total')
+    setSortDir('desc')
+  }
 
   if (session.picks.length === 0) {
     return (

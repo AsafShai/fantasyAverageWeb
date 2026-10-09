@@ -109,7 +109,7 @@ export default function MockDraftPage() {
     sites: sitesParam,
     rank_sites: rankSitesParam,
   })
-  const indexPlayers = data?.players ?? []
+  const indexPlayers = useMemo(() => data?.players ?? [], [data?.players])
   const prefetchIds = useMemo(
     () => stablePlayerIds(indexPlayers.slice(0, 25).map((p) => p.id)).join(','),
     [indexPlayers],
@@ -125,9 +125,8 @@ export default function MockDraftPage() {
     setSettingsRaw((prev) => clampMockSettings({ ...clampMockSettings(prev), ...partial }))
   }
 
-  useEffect(() => {
-    if (!hasSaved && settings.rankingSource === 'saved') patch({ rankingSource: 'default' })
-  }, [hasSaved, settings.rankingSource])
+  // Without saved rankings there is nothing for the 'saved' source to read.
+  if (!hasSaved && settings.rankingSource === 'saved') patch({ rankingSource: 'default' })
 
   useEffect(() => {
     writeMockPaused(paused)
@@ -302,10 +301,18 @@ export default function MockDraftPage() {
     })
   }
 
+  // The clock restarts only when the pick, whose turn it is, or completion
+  // changes; reading `session`/`paused`/`carriedClock` here without depending
+  // on them is deliberate, since any other session edit must not restart it.
+  const picksMade = session?.picks.length
+  const userOnClock = session && isUserOnTheClock(session)
+  const mockComplete = session && isMockComplete(session)
   useEffect(() => {
     if (!session || isMockComplete(session)) {
       remainingRef.current = null
       deadlineRef.current = null
+      // Syncing the pick clock with wall-clock time for the new turn.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClockDeadlineMs(null)
       setClockFrozenSec(null)
       return
@@ -332,7 +339,8 @@ export default function MockDraftPage() {
     const deadline = Date.now() + (remainingRef.current ?? duration) * 1000
     deadlineRef.current = deadline
     setClockDeadlineMs(deadline)
-  }, [session?.picks.length, session && isUserOnTheClock(session), session && isMockComplete(session)])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
+  }, [picksMade, userOnClock, mockComplete])
 
   useEffect(() => {
     if (paused || !session || isMockComplete(session)) return
@@ -362,7 +370,8 @@ export default function MockDraftPage() {
       window.clearTimeout(timer)
       remainingRef.current = Math.max(0, remaining - (Date.now() - started) / 1000)
     }
-  }, [paused, session?.picks.length, session && isMockComplete(session), session && isUserOnTheClock(session)])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
+  }, [paused, picksMade, mockComplete, userOnClock])
 
   if (isLoading && !data) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />

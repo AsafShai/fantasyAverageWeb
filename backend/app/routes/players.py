@@ -3,6 +3,7 @@ from app.models import PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError, DataSourceError
 from app.services.player_service import PlayerService, players_etag
 from typing import Annotated, Optional
+from app.utils.utils import latest_client_date
 from datetime import date
 from app.config import settings
 import logging
@@ -38,7 +39,7 @@ async def get_all_players(
                 raise HTTPException(status_code=422, detail="start must be before end")
             if start < settings.season_start:
                 raise HTTPException(status_code=422, detail=f"start cannot be before season start ({settings.season_start})")
-            if end > date.today():
+            if end > latest_client_date():
                 raise HTTPException(status_code=422, detail="end cannot be in the future")
 
         etag = players_etag(time_period, page, limit)

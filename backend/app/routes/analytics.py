@@ -5,6 +5,7 @@ from app.services.league_service import LeagueService
 from app.services.db_service import DBService
 from typing import Annotated, Optional
 from app.exceptions import ResourceNotFoundError, DataSourceError
+from app.utils.utils import latest_client_date
 from datetime import date, date as date_type
 from app.config import settings
 
@@ -34,7 +35,7 @@ async def get_heatmap(
                 raise HTTPException(status_code=422, detail="start_date must be before end_date")
             if start_date < settings.season_start:
                 raise HTTPException(status_code=422, detail=f"start_date cannot be before season start ({settings.season_start})")
-            if end_date > date.today():
+            if end_date > latest_client_date():
                 raise HTTPException(status_code=422, detail="end_date cannot be in the future")
 
         return await league_service.get_heatmap_data(start_date=start_date, end_date=end_date)

@@ -1,4 +1,5 @@
 import type { ScheduleCalendarDay, ScheduleResponse } from '../types/api'
+import { toLocalIso } from './dateRange'
 
 export const HIGH_VOLUME_GAMES = 10
 
@@ -52,10 +53,13 @@ export function formatSlateDate(date: string, options: Intl.DateTimeFormatOption
   return new Intl.DateTimeFormat('en-US', options).format(new Date(`${date}T12:00:00`))
 }
 
+// Calendar-day arithmetic stays in local time end to end: converting a local
+// noon back through toISOString() lands on the previous UTC day for viewers at
+// UTC+12 and beyond.
 export function addDays(date: string, amount: number): string {
   const next = new Date(`${date}T12:00:00`)
   next.setDate(next.getDate() + amount)
-  return next.toISOString().slice(0, 10)
+  return toLocalIso(next)
 }
 
 /** Monday-start week key, matching how fantasy weeks are usually drawn. */
@@ -63,7 +67,7 @@ export function weekStart(date: string): string {
   const value = new Date(`${date}T12:00:00`)
   const mondayOffset = (value.getDay() + 6) % 7
   value.setDate(value.getDate() - mondayOffset)
-  return value.toISOString().slice(0, 10)
+  return toLocalIso(value)
 }
 
 export function matchupsByDate(schedule: ScheduleResponse): Map<string, SlateMatchup[]> {
