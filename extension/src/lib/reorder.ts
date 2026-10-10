@@ -1,3 +1,4 @@
+import { applyInstantOrder, isRankingsComponent, type RankingsComponent } from './instantApply'
 import { mergeEspnOrder, packedPlacement, rowKey, topPlayers } from './match'
 import { parseEspnId } from './normalize'
 import { identitiesMatchOrder, nextMisplacedIndex, swapDidNotMove } from './rankMoves'
@@ -618,6 +619,55 @@ async function applyByDrags(
   return aborted(signal) ? 'stopped' : 'complete'
 }
 
+function findRankingsComponent(): RankingsComponent | null {
+  const start = queryRows()[0]
+  if (!start) return null
+  let fiber = fiberFromNode(start)
+  for (let depth = 0; fiber && depth < 120; depth++) {
+    try {
+      const node: unknown = fiber.stateNode
+      if (!isUnsafeToWalk(node) && isRankingsComponent(node)) return node
+    } catch {
+      /* cross-origin or revoked object */
+    }
+    fiber = fiber.return ?? null
+  }
+  return null
+}
+
+async function screenShowsOrder(expected: EspnBoardRow[], matched: number): Promise<boolean> {
+  for (let i = 0; i < 20; i++) {
+    await sleep(50)
+    const board = rowsToBoard(queryRows())
+    const n = Math.min(board.length, matched)
+    if (n > 0 && board.slice(0, n).every((row, idx) => rowKey(row) === rowKey(expected[idx]))) return true
+  }
+  return false
+}
+
+async function tryInstantApply(desired: RankedPlayer[]): Promise<ReorderResult | null> {
+  const component = findRankingsComponent()
+  if (!component) return null
+  let outcome
+  try {
+    outcome = applyInstantOrder(component, desired)
+  } catch {
+    return null
+  }
+  if (!outcome) return null
+  if (!(await screenShowsOrder(outcome.expected, outcome.matched))) return null
+  return applyFinishResult({
+    stopped: false,
+    placed: outcome.matched,
+    missing: outcome.unmatchedCsv.length,
+    wrong: 0,
+    unmatchedCsv: outcome.unmatchedCsv,
+    totalEspn: topPlayers(desired).length,
+    method: 'espn-instant',
+    saveOn: saveButtonEnabled(),
+  })
+}
+
 export function snapshotReorderResult(desired: RankedPlayer[], stopped: boolean): ReorderResult {
   return finishFromBoard(desired, stopped ? 'stopped' : 'espn-drags', stopped)
 }
@@ -657,6 +707,15 @@ async function applyRankingsToEspnPageInner(
   signal?: AbortSignal,
 ): Promise<ReorderResult> {
   if (!desired.length) return { ok: false, error: 'No rankings to apply.' }
+  if (aborted(signal)) return finishFromBoard(desired, 'stopped', true)
+
+  for (let i = 0; i < 12 && queryRows().length < 10; i++) {
+    if (aborted(signal)) return finishFromBoard(desired, 'stopped', true)
+    await sleep(250)
+  }
+  onProgress?.('Applying order…')
+  const instant = await tryInstantApply(desired)
+  if (instant) return instant
   if (aborted(signal)) return finishFromBoard(desired, 'stopped', true)
 
   onProgress?.('Loading the full ESPN list…')
