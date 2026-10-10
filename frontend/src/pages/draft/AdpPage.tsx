@@ -413,7 +413,7 @@ export default function AdpPage() {
               className="hidden lg:inline text-xs text-gray-400"
               title={`${BLEND_LABEL[metric]} averages the checked sites that list this player.`}
             >
-              {weights.applied ? 'Blend is weighted' : 'Blend uses checked sites'}
+              {weights.enabled ? 'Blend is weighted' : 'Blend uses checked sites'}
             </span>
           </div>
           <div className="flex items-center gap-2 lg:ml-auto">
