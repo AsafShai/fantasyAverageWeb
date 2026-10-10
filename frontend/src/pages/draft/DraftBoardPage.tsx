@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
+import BlendWeightsPanel from '../../components/draft/BlendWeightsPanel'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
@@ -59,7 +60,7 @@ export default function DraftBoardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const pickCount = league.teams * league.rounds
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
-  const { sites, available, toggle, sitesParam, rankSitesParam } = useBlendSites(metric, providers)
+  const { sites, available, toggle, sitesParam, rankSitesParam, weights } = useBlendSites(metric, providers)
   const { data, isLoading, isFetching, error } = useGetAdpQuery({
     page: 1,
     page_size: pickCount,
@@ -138,6 +139,7 @@ export default function DraftBoardPage() {
             ))}
           </div>
         </div>
+        <BlendWeightsPanel sites={sites} weights={weights} />
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Show by</span>
           {(['round', 'team'] as BoardShowBy[]).map((mode) => (

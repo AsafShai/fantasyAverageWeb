@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
+import BlendWeightsPanel from '../../components/draft/BlendWeightsPanel'
 import { useDebounce } from '../../hooks/useDebounce'
 import { useIsBelowLg } from '../../hooks/useIsBelowLg'
 import { getErrorMessage } from '../../utils/errorMessage'
@@ -287,7 +288,7 @@ const SortableRankRow = memo(function SortableRankRow({
 export default function PreDraftRankingsPage() {
   const [source, setSource] = usePersistedState<AdpMetric>('draft.rankings.source', DEFAULT_DRAFT_METRIC)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
-  const { sites, available, toggle: toggleSite, sitesParam, rankSitesParam } = useBlendSites(
+  const { sites, available, toggle: toggleSite, sitesParam, rankSitesParam, weights } = useBlendSites(
     source,
     providers,
   )
@@ -872,6 +873,7 @@ export default function PreDraftRankingsPage() {
             ))}
           </div>
         </div>
+        <BlendWeightsPanel sites={sites} weights={weights} />
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={saveRankings} disabled={!dirty} className={saveClass}>
             Save rankings

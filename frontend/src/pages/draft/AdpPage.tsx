@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useGetAdpQuery, useLazyGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
+import BlendWeightsPanel from '../../components/draft/BlendWeightsPanel'
 import { useDebounce } from '../../hooks/useDebounce'
 import { useIsBelowLg } from '../../hooks/useIsBelowLg'
 import { getErrorMessage } from '../../utils/errorMessage'
@@ -209,7 +210,7 @@ export default function AdpPage() {
   // screen instead of blanking it.
   const [lastGood, setLastGood] = useState<AdpResponse | undefined>(undefined)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
-  const { sites: visibleSites, available, toggle: toggleSite, sitesParam, rankSitesParam } =
+  const { sites: visibleSites, available, toggle: toggleSite, sitesParam, rankSitesParam, weights } =
     useBlendSites(metric, providers)
   const [sortBy, setSortBy] = usePersistedState<SortKey>('draft.adp.sortBy', 'blend')
   const [sortDir, setSortDir] = usePersistedState<'asc' | 'desc'>('draft.adp.sortDir', 'asc')
@@ -226,7 +227,7 @@ export default function AdpPage() {
   const posKey = posFilter.join(',')
   const resolvedPageSize: PageSize = resolvePageSize(pageSize)
 
-  const sitesKey = visibleSites.join(',')
+  const sitesKey = metric === 'adp' ? sitesParam : rankSitesParam
 
   // A sort column can vanish under the current view: sorting by Fantrax and switching to
   // Rankings leaves every row's sort value null, which silently degrades to a name sort on
@@ -412,7 +413,7 @@ export default function AdpPage() {
               className="hidden lg:inline text-xs text-gray-400"
               title={`${BLEND_LABEL[metric]} averages the checked sites that list this player.`}
             >
-              Blend uses checked sites
+              {weights.enabled ? 'Blend is weighted' : 'Blend uses checked sites'}
             </span>
           </div>
           <div className="flex items-center gap-2 lg:ml-auto">
@@ -435,6 +436,7 @@ export default function AdpPage() {
             </div>
           </div>
         </div>
+        <BlendWeightsPanel sites={visibleSites} weights={weights} />
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
           <input
             value={search}

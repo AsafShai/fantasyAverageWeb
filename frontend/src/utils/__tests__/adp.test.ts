@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
   annotateDraftPicks,
   blendRankValue,
+  blendSitesParam,
   blendValue,
   clampLeagueSettings,
   DEFAULT_DRAFT_METRIC,
   draftTeamForPick,
+  equalWeights,
+  evenSplitLabel,
+  isEvenSplit,
+  paramSites,
+  rebalanceWeights,
+  roundedWeights,
   groupDraftPicksByTeam,
   isThreeRrReverse,
   nextShortSeasonLabel,
@@ -15,6 +22,7 @@ import {
   spreadValue,
   threeRrDisplayRounds,
   toListHeadshotUrl,
+  weightsTotal,
   withIndexBlends,
 } from '../adp'
 import type { AdpIndexPlayer, AdpPlayer, ProviderMeta } from '../../types/api'
@@ -159,5 +167,97 @@ describe('list headshots', () => {
     )
     expect(toListHeadshotUrl(null)).toBeNull()
     expect(toListHeadshotUrl('https://example.com/photo.png')).toBe('https://example.com/photo.png')
+  })
+})
+
+describe('weighted blend sites', () => {
+  it('splits 100 evenly in whole percents', () => {
+    expect(equalWeights(['espn', 'yahoo'])).toEqual({ espn: 50, yahoo: 50 })
+    expect(equalWeights(['espn', 'fantrax', 'yahoo'])).toEqual({ espn: 34, fantrax: 33, yahoo: 33 })
+    expect(equalWeights([])).toEqual({})
+  })
+
+  it('totals only the checked sites', () => {
+    expect(weightsTotal(['espn', 'yahoo'], { espn: 60, yahoo: 30, fantrax: 10 })).toBe(90)
+  })
+
+  it('keeps the total at 100 when one site changes', () => {
+    const sites = ['espn', 'sleeper', 'yahoo'] as const
+    expect(rebalanceWeights([...sites], { espn: 34, sleeper: 33, yahoo: 33 }, 'espn', 50)).toEqual({
+      espn: 50,
+      sleeper: 25,
+      yahoo: 25,
+    })
+    // The others keep their proportions.
+    expect(rebalanceWeights([...sites], { espn: 20, sleeper: 60, yahoo: 20 }, 'espn', 60)).toEqual({
+      espn: 60,
+      sleeper: 30,
+      yahoo: 10,
+    })
+    // Others all at 0: they share the rest evenly.
+    expect(rebalanceWeights([...sites], { espn: 100, sleeper: 0, yahoo: 0 }, 'espn', 40)).toEqual({
+      espn: 40,
+      sleeper: 30,
+      yahoo: 30,
+    })
+    const odd = rebalanceWeights([...sites], { espn: 34, sleeper: 33, yahoo: 33 }, 'yahoo', 33)
+    expect(Object.values(odd).reduce((a, b) => a + (b ?? 0), 0)).toBeCloseTo(100)
+    expect(rebalanceWeights(['espn'], {}, 'espn', 40)).toEqual({ espn: 100 })
+  })
+
+  it('keeps proportions over many small steps', () => {
+    const sites = ['espn', 'sleeper', 'yahoo'] as const
+    let weights = { espn: 100, sleeper: 0, yahoo: 0 } as Parameters<typeof rebalanceWeights>[1]
+    for (let v = 95; v >= 60; v -= 5) weights = rebalanceWeights([...sites], weights, 'espn', v)
+    expect(weights.sleeper).toBeCloseTo(20)
+    expect(weights.yahoo).toBeCloseTo(20)
+  })
+
+  it('rounds for display without losing the 100 total', () => {
+    expect(roundedWeights(['espn', 'sleeper', 'yahoo'], { espn: 100 / 3, sleeper: 100 / 3, yahoo: 100 / 3 })).toEqual({
+      espn: 34,
+      sleeper: 33,
+      yahoo: 33,
+    })
+    expect(roundedWeights(['espn', 'yahoo'], { espn: 62.5, yahoo: 37.5 })).toEqual({ espn: 63, yahoo: 37 })
+  })
+
+  it('leaves locked sites where they are', () => {
+    const sites = ['espn', 'sleeper', 'yahoo'] as const
+    const start = { espn: 50, sleeper: 30, yahoo: 20 }
+    // ESPN locked: only Yahoo moves when Sleeper does.
+    expect(rebalanceWeights([...sites], start, 'sleeper', 40, ['espn'])).toEqual({ espn: 50, sleeper: 40, yahoo: 10 })
+    // Capped at what the locked site leaves free.
+    expect(rebalanceWeights([...sites], start, 'sleeper', 80, ['espn'])).toEqual({ espn: 50, sleeper: 50, yahoo: 0 })
+    // Nothing free to trade with: the site keeps the rest of 100.
+    expect(rebalanceWeights([...sites], start, 'sleeper', 10, ['espn', 'yahoo'])).toEqual({
+      espn: 50,
+      sleeper: 30,
+      yahoo: 20,
+    })
+  })
+
+  it('labels an even split exactly', () => {
+    expect(evenSplitLabel(2)).toBe('50')
+    expect(evenSplitLabel(3)).toBe('33⅓')
+    expect(evenSplitLabel(4)).toBe('25')
+  })
+
+  it('treats a split no more than 1 apart as even', () => {
+    expect(isEvenSplit(['espn', 'sleeper', 'yahoo'], { espn: 34, sleeper: 33, yahoo: 33 })).toBe(true)
+    expect(isEvenSplit(['espn', 'sleeper', 'yahoo'], { espn: 35, sleeper: 33, yahoo: 32 })).toBe(false)
+    expect(isEvenSplit(['espn', 'yahoo'], { espn: 50, yahoo: 50 })).toBe(true)
+  })
+
+  it('reads the sites out of a weighted param', () => {
+    expect(paramSites('espn:60,yahoo:40')).toBe('espn,yahoo')
+    expect(paramSites('espn,yahoo')).toBe('espn,yahoo')
+  })
+
+  it('encodes weights into the sites param', () => {
+    expect(blendSitesParam(['espn', 'yahoo'])).toBe('espn,yahoo')
+    expect(blendSitesParam(['espn', 'yahoo'], null)).toBe('espn,yahoo')
+    expect(blendSitesParam(['espn', 'yahoo'], { espn: 70 })).toBe('espn:70,yahoo:0')
+    expect(blendSitesParam(['espn', 'yahoo'], { espn: 100 / 3, yahoo: 200 / 3 })).toBe('espn:33.33,yahoo:66.67')
   })
 })

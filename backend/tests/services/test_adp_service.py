@@ -17,6 +17,7 @@ from app.services.adp_service import (
     load_espn_stat_splits,
     mark_fringe,
     normalize_player_name,
+    parse_site_weights,
     parse_sites,
     reset_adp_cache,
     resolve_adp_seasons,
@@ -63,6 +64,45 @@ def test_parse_sites_keeps_known_keys():
     assert parse_sites("nonsense,unknown") is None
     assert parse_sites("espn,sleeper,espn") == ("espn", "sleeper")
     assert parse_sites("yahoo") == ("yahoo",)
+
+
+def test_parse_sites_ignores_weights():
+    assert parse_sites("espn:50,yahoo:50") == ("espn", "yahoo")
+
+
+def test_parse_site_weights():
+    assert parse_site_weights(None) is None
+    assert parse_site_weights("espn,yahoo") is None
+    assert parse_site_weights("espn:0,yahoo:0") is None
+    assert parse_site_weights("espn:50,yahoo:30,fantrax:20") == {"espn": 50.0, "yahoo": 30.0, "fantrax": 20.0}
+    # A site without a usable weight weighs 0; unknown sites and repeats are dropped.
+    assert parse_site_weights("espn:70,yahoo,fantrax:-5,sleeper:abc,nba:10,espn:1") == {
+        "espn": 70.0,
+        "yahoo": 0.0,
+        "fantrax": 0.0,
+        "sleeper": 0.0,
+    }
+
+
+def test_compute_blend_weighted():
+    adp = {"espn": 10.0, "yahoo": 20.0, "fantrax": 40.0}
+    weights = {"espn": 50.0, "yahoo": 30.0, "fantrax": 20.0}
+    assert compute_blend(adp, ("espn", "yahoo", "fantrax"), weights) == 19.0
+    # A missing site's share goes to the rest in proportion: 62.5 / 37.5.
+    assert compute_blend({"espn": 10.0, "yahoo": 20.0, "fantrax": None}, None, weights) == 13.75
+    # Listed only by a 0-weight site: no Blend.
+    assert compute_blend({"espn": None, "yahoo": None, "fantrax": 40.0}, None, {"espn": 1.0}) is None
+
+
+def test_apply_visible_sites_weights_all_sites():
+    """Weights recompute the Blend even when every site is checked."""
+    a = AdpPlayer(id="a", name="A", espn=SiteAdp(adp=10.0), yahoo=SiteAdp(adp=30.0), blend=20.0, spread=20.0)
+    b = AdpPlayer(id="b", name="B", espn=SiteAdp(adp=25.0), yahoo=SiteAdp(adp=5.0), blend=15.0, spread=20.0)
+    out = apply_blend_sites([a, b], sites="espn:90,fantrax:0,sleeper:0,yahoo:10", rank_sites=None)
+    assert out[0].blend == 12.0
+    assert out[1].blend == 23.0
+    assert [out[0].blend_rank, out[1].blend_rank] == [1, 2]
+    assert out[0].spread == 20.0
 
 
 def test_apply_visible_sites_recomputes_blend_and_ranks():

@@ -40,6 +40,102 @@ export function sitesForMetric(metric: AdpMetric, providers?: ProviderMeta[]): A
   return ADP_SITES.filter((site) => capable.has(site))
 }
 
+/** Percent per site for a weighted Blend. A checked site without an entry weighs 0. */
+export type SiteWeights = Partial<Record<AdpSiteKey, number>>
+
+/** Whole percents that split 100 as evenly as possible, the remainder to the first sites. */
+export function equalWeights(sites: AdpSiteKey[]): SiteWeights {
+  if (!sites.length) return {}
+  const base = Math.floor(100 / sites.length)
+  const extra = 100 - base * sites.length
+  return Object.fromEntries(sites.map((site, i) => [site, base + (i < extra ? 1 : 0)]))
+}
+
+/**
+ * Set one site's percent and spread the change over the other unlocked sites in proportion
+ * to their current percents (evenly if they are all 0), so the total stays 100. The other
+ * shares are left unrounded; `roundedWeights` is for display.
+ * Locked sites never move; the moved site is capped at what they leave free.
+ */
+export function rebalanceWeights(
+  sites: AdpSiteKey[],
+  weights: SiteWeights,
+  site: AdpSiteKey,
+  percent: number,
+  locked: AdpSiteKey[] = [],
+): SiteWeights {
+  const free = sites.filter((s) => s !== site && !locked.includes(s))
+  const held = sites.filter((s) => s !== site && locked.includes(s))
+  const heldTotal = held.reduce((sum, s) => sum + (weights[s] ?? 0), 0)
+  const kept = Object.fromEntries(held.map((s) => [s, weights[s] ?? 0]))
+  if (!free.length) return { ...kept, [site]: 100 - heldTotal }
+  const value = Math.min(100 - heldTotal, Math.max(0, Math.round(percent) || 0))
+  const remaining = 100 - heldTotal - value
+  const current = free.map((s) => weights[s] ?? 0)
+  const base = current.reduce((sum, w) => sum + w, 0)
+  // Exact shares, not rounded: rounding here would feed back into the next step's
+  // proportions and drift (from 0/0, eight steps gave 24/16 instead of 20/20).
+  const exact = free.map((_, i) => (base > 0 ? (remaining * current[i]) / base : remaining / free.length))
+  return { ...kept, [site]: value, ...Object.fromEntries(free.map((s, i) => [s, exact[i]])) }
+}
+
+/** Whole percents for display that still total 100 (largest remainder). */
+export function roundedWeights(sites: AdpSiteKey[], weights: SiteWeights): SiteWeights {
+  const exact = sites.map((site) => weights[site] ?? 0)
+  const floors = exact.map(Math.floor)
+  let leftover = Math.round(exact.reduce((sum, w) => sum + w, 0)) - floors.reduce((sum, w) => sum + w, 0)
+  const order = exact.map((w, i) => [w - floors[i], i] as const).sort((x, y) => y[0] - x[0])
+  for (const [, i] of order) {
+    if (leftover <= 0) break
+    floors[i] += 1
+    leftover -= 1
+  }
+  return Object.fromEntries(sites.map((site, i) => [site, floors[i]]))
+}
+
+/**
+ * Label for each site's share of an even split: whole when 100 divides evenly (50, 25),
+ * otherwise exact -- 33⅓ rather than the 34/33/33 the sliders hold.
+ */
+export function evenSplitLabel(count: number): string {
+  if (count <= 0) return '0'
+  const share = 100 / count
+  if (Number.isInteger(share)) return String(share)
+  const whole = Math.floor(share)
+  const fraction = share - whole
+  if (Math.abs(fraction - 1 / 3) < 1e-9) return `${whole}⅓`
+  if (Math.abs(fraction - 2 / 3) < 1e-9) return `${whole}⅔`
+  return share.toFixed(1)
+}
+
+/** Percents no more than 1 apart over `sites` -- an even split, so the Blend is a plain mean. */
+export function isEvenSplit(sites: AdpSiteKey[], weights: SiteWeights): boolean {
+  const values = sites.map((site) => weights[site] ?? 0)
+  return values.length > 0 && Math.max(...values) - Math.min(...values) <= 1
+}
+
+/** The checked sites a `sites` param names, without weights: `espn:60,yahoo:40` → `espn,yahoo`. */
+export function paramSites(param: string): string {
+  return param
+    .split(',')
+    .map((part) => part.split(':')[0])
+    .join(',')
+}
+
+export function weightsTotal(sites: AdpSiteKey[], weights: SiteWeights): number {
+  return sites.reduce((sum, site) => sum + (weights[site] ?? 0), 0)
+}
+
+/**
+ * The `sites` / `rank_sites` request param: `espn,yahoo`, or `espn:60,yahoo:40` when
+ * `weights` is given. The server spreads a site's share over the others for a player
+ * that site does not list.
+ */
+export function blendSitesParam(sites: AdpSiteKey[], weights?: SiteWeights | null): string {
+  if (!weights) return sites.join(',')
+  return sites.map((site) => `${site}:${Number((weights[site] ?? 0).toFixed(2))}`).join(',')
+}
+
 export function siteValue(player: AdpPlayer, site: AdpSiteKey, metric: AdpMetric): number | null {
   return metric === 'adp' ? player[site].adp : player[site].ranking
 }
