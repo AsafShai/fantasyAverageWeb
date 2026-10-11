@@ -49,7 +49,7 @@ import {
 
 const SOURCE_LABEL: Record<RankingSource, string> = {
   saved: 'Saved rankings',
-  default: 'Bot order',
+  default: 'Default',
   csv: 'Import CSV',
 }
 
@@ -118,12 +118,27 @@ export default function MockDraftPage() {
   const [botMetric, setBotMetric] = usePersistedState<AdpMetric>('draft.mock.botMetric', DEFAULT_DRAFT_METRIC)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
   const botBlend = useBlendSites(botMetric, providers, 'draft.mock.bots')
-  const { data, isLoading, isFetching, error } = useGetAdpIndexQuery({
+  const botIndex = useGetAdpIndexQuery({
     metric: botMetric,
     sites: botBlend.sitesParam,
     rank_sites: botBlend.rankSitesParam,
   })
-  const indexPlayers = useMemo(() => data?.players ?? [], [data?.players])
+  // "Default" for your list is Blend Rank from the sites shared with the other draft pages.
+  const userBlend = useBlendSites(DEFAULT_DRAFT_METRIC)
+  const userIndex = useGetAdpIndexQuery({
+    metric: DEFAULT_DRAFT_METRIC,
+    sites: userBlend.sitesParam,
+    rank_sites: userBlend.rankSitesParam,
+  })
+  const isLoading = userIndex.isLoading || botIndex.isLoading
+  const error = userIndex.error ?? botIndex.error
+  // Narrowing sites can drop players only an unchecked site lists, so the pool is both lists.
+  const indexPlayers = useMemo(() => {
+    const seen = new Set<string>()
+    return [...(userIndex.data?.players ?? []), ...(botIndex.data?.players ?? [])].filter(
+      (p) => !seen.has(p.id) && Boolean(seen.add(p.id)),
+    )
+  }, [userIndex.data?.players, botIndex.data?.players])
   const prefetchIds = useMemo(
     () => stablePlayerIds(indexPlayers.slice(0, 25).map((p) => p.id)).join(','),
     [indexPlayers],
@@ -133,7 +148,8 @@ export default function MockDraftPage() {
     { skip: prefetchIds.length === 0 },
   )
   if (prefetched?.providers?.length && prefetched.providers !== providers) setProviders(prefetched.providers)
-  const defaultOrder = useMemo(() => indexPlayers.map((p) => p.id), [indexPlayers])
+  const defaultOrder = useMemo(() => (userIndex.data?.players ?? []).map((p) => p.id), [userIndex.data?.players])
+  const botOrder = useMemo(() => (botIndex.data?.players ?? []).map((p) => p.id), [botIndex.data?.players])
   const needed = pickCount(settings.teams, settings.rounds)
 
   const patch = (partial: Partial<MockDraftSettings>) => {
@@ -216,7 +232,7 @@ export default function MockDraftPage() {
   const startMock = () => {
     setSetupError(null)
     const next = clampMockSettings(settings)
-    if (indexPlayers.length < needed) {
+    if (Math.min(defaultOrder.length, botOrder.length) < needed) {
       setSetupError(`Need at least ${needed} ranked players to start this mock.`)
       return
     }
@@ -238,6 +254,7 @@ export default function MockDraftPage() {
     let live = createMockSession({
       settings: next,
       defaultOrder,
+      botOrder,
       userOrder,
       players: indexPlayers,
     })
@@ -388,10 +405,10 @@ export default function MockDraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
   }, [paused, picksMade, mockComplete, userOnClock])
 
-  // Starting while a new bot order is loading would draft from the previous one.
-  const botBoardLoading = isFetching
+  // Starting while a changed order is loading would draft from the previous one.
+  const ordersLoading = userIndex.isFetching || botIndex.isFetching
 
-  if (isLoading && !data) return <LoadingSpinner />
+  if (isLoading && !(userIndex.data && botIndex.data)) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
   if (session) {
@@ -473,7 +490,7 @@ export default function MockDraftPage() {
 
           <div>
             <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
-            <div className="text-xs text-gray-400 mt-0.5">Orders your list and decides your auto-picks. Bot order copies the bots' draft order.</div>
+            <div className="text-xs text-gray-400 mt-0.5">Orders your list and decides your auto-picks. Default is Blend Rank from your Draft Board sites.</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
                 <Choice
@@ -586,10 +603,10 @@ export default function MockDraftPage() {
         <button
           type="button"
           onClick={startMock}
-          disabled={botBoardLoading}
+          disabled={ordersLoading}
           className="btn-primary w-full py-2.5 text-sm font-semibold disabled:opacity-60"
         >
-          {botBoardLoading ? 'Loading bot order…' : 'Start Mock Draft'}
+          {ordersLoading ? 'Loading rankings…' : 'Start Mock Draft'}
         </button>
       </div>
     </div>
