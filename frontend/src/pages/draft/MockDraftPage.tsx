@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
-import { useBlendSites } from '../../hooks/useBlendSites'
+import { useBlendSites, type BlendSites } from '../../hooks/useBlendSites'
 import BlendWeightsPanel from '../../components/draft/BlendWeightsPanel'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -82,6 +82,46 @@ function Choice<T extends string | number>({
   )
 }
 
+/** Blend Rank / Blend ADP, the sites in the blend and optional weights. */
+function BlendOrderFields({
+  metric,
+  onMetric,
+  blend,
+}: {
+  metric: AdpMetric
+  onMetric: (metric: AdpMetric) => void
+  blend: BlendSites
+}) {
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(['rank', 'adp'] as AdpMetric[]).map((key) => (
+          <Choice key={key} value={key} selected={metric === key} onClick={onMetric}>
+            {BLEND_LABEL[key]}
+          </Choice>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sites</span>
+        {blend.available.map((site) => (
+          <label key={site} className="inline-flex min-h-11 items-center gap-1.5 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={blend.sites.includes(site)}
+              onChange={() => blend.toggle(site)}
+              className="rounded border-gray-300"
+            />
+            {SITE_LABEL[site]}
+          </label>
+        ))}
+      </div>
+      <div className="mt-1">
+        <BlendWeightsPanel sites={blend.sites} weights={blend.weights} />
+      </div>
+    </>
+  )
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="card p-5 space-y-6">
@@ -123,10 +163,11 @@ export default function MockDraftPage() {
     sites: botBlend.sitesParam,
     rank_sites: botBlend.rankSitesParam,
   })
-  // "Default" for your list is Blend Rank from the sites shared with the other draft pages.
-  const userBlend = useBlendSites(DEFAULT_DRAFT_METRIC)
+  // "Default" for your list is your saved blend: the sites and weights shared with the other draft pages.
+  const [userMetric, setUserMetric] = usePersistedState<AdpMetric>('draft.mock.userMetric', DEFAULT_DRAFT_METRIC)
+  const userBlend = useBlendSites(userMetric, providers)
   const userIndex = useGetAdpIndexQuery({
-    metric: DEFAULT_DRAFT_METRIC,
+    metric: userMetric,
     sites: userBlend.sitesParam,
     rank_sites: userBlend.rankSitesParam,
   })
@@ -490,7 +531,7 @@ export default function MockDraftPage() {
 
           <div>
             <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
-            <div className="text-xs text-gray-400 mt-0.5">Orders your list and decides your auto-picks. Default is Blend Rank from your Draft Board sites.</div>
+            <div className="text-xs text-gray-400 mt-0.5">Orders your list and decides your auto-picks.</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
                 <Choice
@@ -504,6 +545,14 @@ export default function MockDraftPage() {
                 </Choice>
               ))}
             </div>
+            {settings.rankingSource === 'default' ? (
+              <div className="mt-3">
+                <div className="text-xs text-gray-400">
+                  Your blend. Sites and weights are shared with the Draft Board and Rankings pages.
+                </div>
+                <BlendOrderFields metric={userMetric} onMetric={setUserMetric} blend={userBlend} />
+              </div>
+            ) : null}
             {settings.rankingSource === 'csv' ? (
               <div className="mt-3">
                 <input
@@ -569,32 +618,10 @@ export default function MockDraftPage() {
           <div>
             <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft order</div>
             <div className="text-xs text-gray-400 mt-0.5">
-              Bots take the best available player in this order. Set here only; the other draft pages keep their own sites.
+              Bots draft from this list and fill their open roster spots. Early on they mostly take the top player who
+              fits; as the draft goes on they reach further down the list more often. Set here only.
             </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(['rank', 'adp'] as AdpMetric[]).map((key) => (
-                <Choice key={key} value={key} selected={botMetric === key} onClick={setBotMetric}>
-                  {BLEND_LABEL[key]}
-                </Choice>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sites</span>
-              {botBlend.available.map((site) => (
-                <label key={site} className="inline-flex min-h-11 items-center gap-1.5 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={botBlend.sites.includes(site)}
-                    onChange={() => botBlend.toggle(site)}
-                    className="rounded border-gray-300"
-                  />
-                  {SITE_LABEL[site]}
-                </label>
-              ))}
-            </div>
-            <div className="mt-1">
-              <BlendWeightsPanel sites={botBlend.sites} weights={botBlend.weights} />
-            </div>
+            <BlendOrderFields metric={botMetric} onMetric={setBotMetric} blend={botBlend} />
           </div>
         </Section>
 
