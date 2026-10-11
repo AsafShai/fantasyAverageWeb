@@ -14,15 +14,11 @@ import {
 } from '../utils/adp'
 import type { AdpMetric, ProviderMeta } from '../types/api'
 
-const STORAGE_KEYS: Record<AdpMetric, string> = {
-  adp: 'draft.adp.visibleSites',
-  rank: 'draft.rank.visibleSites',
-}
+/** Storage prefix of the selection the draft pages share. */
+const SHARED_PREFIX = 'draft'
 
-const WEIGHT_KEYS: Record<AdpMetric, string> = {
-  adp: 'draft.adp.siteWeights',
-  rank: 'draft.rank.siteWeights',
-}
+const sitesKey = (prefix: string, metric: AdpMetric) => `${prefix}.${metric}.visibleSites`
+const weightsKey = (prefix: string, metric: AdpMetric) => `${prefix}.${metric}.siteWeights`
 
 /**
  * `forSites` is the checked-site list the percents and locks were set for (comma-joined).
@@ -72,12 +68,19 @@ export type BlendSites = {
  * the same localStorage key drift apart. Both views' selections are read on every call
  * (hook order is fixed) and both are sent on every request, because the pre-draft board
  * shows an ADP-vs-rankings delta and so needs both blends narrowed correctly at once.
+ *
+ * `storagePrefix` keeps a separate selection instead of the shared one -- the mock draft's
+ * bot board uses it so tuning the bots never changes the other draft pages.
  */
-export function useBlendSites(metric: AdpMetric, providers?: ProviderMeta[]): BlendSites {
-  const [adpRaw, setAdpRaw] = usePersistedState<AdpSiteKey[]>(STORAGE_KEYS.adp, [
+export function useBlendSites(
+  metric: AdpMetric,
+  providers?: ProviderMeta[],
+  storagePrefix: string = SHARED_PREFIX,
+): BlendSites {
+  const [adpRaw, setAdpRaw] = usePersistedState<AdpSiteKey[]>(sitesKey(storagePrefix, 'adp'), [
     ...sitesForMetric('adp'),
   ])
-  const [rankRaw, setRankRaw] = usePersistedState<AdpSiteKey[]>(STORAGE_KEYS.rank, [
+  const [rankRaw, setRankRaw] = usePersistedState<AdpSiteKey[]>(sitesKey(storagePrefix, 'rank'), [
     ...sitesForMetric('rank'),
   ])
 
@@ -96,8 +99,8 @@ export function useBlendSites(metric: AdpMetric, providers?: ProviderMeta[]): Bl
   const adpSites = useMemo(() => resolve(adpRaw, adpAvailable), [adpRaw, adpAvailable])
   const rankSites = useMemo(() => resolve(rankRaw, rankAvailable), [rankRaw, rankAvailable])
 
-  const [adpWeights, setAdpWeights] = usePersistedState<StoredWeights>(WEIGHT_KEYS.adp, NO_WEIGHTS)
-  const [rankWeights, setRankWeights] = usePersistedState<StoredWeights>(WEIGHT_KEYS.rank, NO_WEIGHTS)
+  const [adpWeights, setAdpWeights] = usePersistedState<StoredWeights>(weightsKey(storagePrefix, 'adp'), NO_WEIGHTS)
+  const [rankWeights, setRankWeights] = usePersistedState<StoredWeights>(weightsKey(storagePrefix, 'rank'), NO_WEIGHTS)
 
   const effectiveWeights = (stored: StoredWeights, sites: AdpSiteKey[]) =>
     stored.forSites === sites.join(',') ? stored.percents : equalWeights(sites)

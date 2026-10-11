@@ -70,4 +70,13 @@ describe('useBlendSites weights', () => {
     act(() => result.current.toggle('yahoo'))
     expect(result.current.rankSitesParam).toBe('espn,sleeper')
   })
+
+  it('keeps a prefixed selection apart from the shared one', () => {
+    const shared = render()
+    const bots = renderHook(() => useBlendSites('rank', undefined, 'draft.mock.bots'))
+    act(() => bots.result.current.toggle('yahoo'))
+    expect(bots.result.current.rankSitesParam).toBe('espn,sleeper')
+    expect(shared.result.current.rankSitesParam).toBe('espn,sleeper,yahoo')
+    expect(localStorage.getItem('draft.rank.visibleSites')).toBeNull()
+  })
 })
