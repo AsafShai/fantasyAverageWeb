@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
+import BlendWeightsPanel from '../../components/draft/BlendWeightsPanel'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
@@ -9,7 +10,8 @@ import LeagueSettingsFields, { Stepper } from '../../components/draft/LeagueSett
 import ConfirmDialog from '../../components/draft/ConfirmDialog'
 import { parseRankingsCsvImport, rankingsCsvFileError } from '../../utils/draftCsv'
 import { EMPTY_RANKINGS, stablePlayerIds, type DraftRankingsState } from '../../utils/draftRankings'
-import { DEFAULT_DRAFT_METRIC } from '../../utils/adp'
+import { BLEND_LABEL, DEFAULT_DRAFT_METRIC, SITE_LABEL } from '../../utils/adp'
+import type { AdpMetric, ProviderMeta } from '../../types/api'
 import {
   clearMockClock,
   clearMockPaused,
@@ -47,7 +49,7 @@ import {
 
 const SOURCE_LABEL: Record<RankingSource, string> = {
   saved: 'Saved rankings',
-  default: 'Default',
+  default: 'Bot board',
   csv: 'Import CSV',
 }
 
@@ -103,21 +105,25 @@ export default function MockDraftPage() {
   const deadlineRef = useRef<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const { sitesParam, rankSitesParam } = useBlendSites(DEFAULT_DRAFT_METRIC)
-  const { data, isLoading, error } = useGetAdpIndexQuery({
-    metric: DEFAULT_DRAFT_METRIC,
-    sites: sitesParam,
-    rank_sites: rankSitesParam,
+  // The bot board has its own site selection, apart from the one the other draft pages share.
+  const [botMetric, setBotMetric] = usePersistedState<AdpMetric>('draft.mock.botMetric', DEFAULT_DRAFT_METRIC)
+  const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
+  const botBlend = useBlendSites(botMetric, providers, 'draft.mock.bots')
+  const { data, isLoading, isFetching, error } = useGetAdpIndexQuery({
+    metric: botMetric,
+    sites: botBlend.sitesParam,
+    rank_sites: botBlend.rankSitesParam,
   })
   const indexPlayers = useMemo(() => data?.players ?? [], [data?.players])
   const prefetchIds = useMemo(
     () => stablePlayerIds(indexPlayers.slice(0, 25).map((p) => p.id)).join(','),
     [indexPlayers],
   )
-  useGetAdpQuery(
+  const { data: prefetched } = useGetAdpQuery(
     { ids: prefetchIds, include_stats: true, ranked_only: false },
     { skip: prefetchIds.length === 0 },
   )
+  if (prefetched?.providers?.length && prefetched.providers !== providers) setProviders(prefetched.providers)
   const defaultOrder = useMemo(() => indexPlayers.map((p) => p.id), [indexPlayers])
   const needed = pickCount(settings.teams, settings.rounds)
 
@@ -373,6 +379,9 @@ export default function MockDraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
   }, [paused, picksMade, mockComplete, userOnClock])
 
+  // Starting while a new bot board is loading would draft from the previous one.
+  const botBoardLoading = isFetching
+
   if (isLoading && !data) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
@@ -416,8 +425,8 @@ export default function MockDraftPage() {
     <div className="max-w-xl mx-auto px-4 sm:px-6 pb-10">
       <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Mock Draft</h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-        Practice a snake or 3RR draft against bots. Bots always pick from Blend Rank order. Your board is only for
-        your list and auto-picks.
+        Practice a snake or 3RR draft against bots. Bots pick from the bot board below. Your board is only for your
+        list and auto-picks.
       </p>
 
       <div className="card p-5 mt-5 space-y-6">
@@ -479,8 +488,39 @@ export default function MockDraftPage() {
         </div>
 
         <div>
+          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Bot board</div>
+          <div className="text-xs text-gray-400 mt-0.5">
+            Bots take the best available player in this order. Set here only; the other draft pages keep their own sites.
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(['rank', 'adp'] as AdpMetric[]).map((key) => (
+              <Choice key={key} value={key} selected={botMetric === key} onClick={setBotMetric}>
+                {BLEND_LABEL[key]}
+              </Choice>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sites</span>
+            {botBlend.available.map((site) => (
+              <label key={site} className="inline-flex min-h-11 items-center gap-1.5 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={botBlend.sites.includes(site)}
+                  onChange={() => botBlend.toggle(site)}
+                  className="rounded border-gray-300"
+                />
+                {SITE_LABEL[site]}
+              </label>
+            ))}
+          </div>
+          <div className="mt-1">
+            <BlendWeightsPanel sites={botBlend.sites} weights={botBlend.weights} />
+          </div>
+        </div>
+
+        <div>
           <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
-          <div className="text-xs text-gray-400 mt-0.5">Bots ignore this and use Blend Rank order.</div>
+          <div className="text-xs text-gray-400 mt-0.5">Only your list and auto-picks. Bot board uses the bots' order.</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
               <Choice
@@ -528,8 +568,13 @@ export default function MockDraftPage() {
 
         {setupError ? <p className="text-sm text-red-600 dark:text-red-400">{setupError}</p> : null}
 
-        <button type="button" onClick={startMock} className="btn-primary w-full py-2.5 text-sm font-semibold">
-          Start Mock Draft
+        <button
+          type="button"
+          onClick={startMock}
+          disabled={botBoardLoading}
+          className="btn-primary w-full py-2.5 text-sm font-semibold disabled:opacity-60"
+        >
+          {botBoardLoading ? 'Loading bot board…' : 'Start Mock Draft'}
         </button>
       </div>
     </div>
