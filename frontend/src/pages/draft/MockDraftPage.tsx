@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites } from '../../hooks/useBlendSites'
@@ -49,7 +49,7 @@ import {
 
 const SOURCE_LABEL: Record<RankingSource, string> = {
   saved: 'Saved rankings',
-  default: 'Bot board',
+  default: 'Bot order',
   csv: 'Import CSV',
 }
 
@@ -82,6 +82,15 @@ function Choice<T extends string | number>({
   )
 }
 
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="card p-5 space-y-6">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
 export default function MockDraftPage() {
   const [settingsRaw, setSettingsRaw] = usePersistedState<MockDraftSettings>('draft.mock.settings.v2', DEFAULT_MOCK_SETTINGS)
   const settings = useMemo(() => clampMockSettings(settingsRaw), [settingsRaw])
@@ -105,7 +114,7 @@ export default function MockDraftPage() {
   const deadlineRef = useRef<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // The bot board has its own site selection, apart from the one the other draft pages share.
+  // The bot order has its own site selection, apart from the one the other draft pages share.
   const [botMetric, setBotMetric] = usePersistedState<AdpMetric>('draft.mock.botMetric', DEFAULT_DRAFT_METRIC)
   const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
   const botBlend = useBlendSites(botMetric, providers, 'draft.mock.bots')
@@ -379,7 +388,7 @@ export default function MockDraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
   }, [paused, picksMade, mockComplete, userOnClock])
 
-  // Starting while a new bot board is loading would draft from the previous one.
+  // Starting while a new bot order is loading would draft from the previous one.
   const botBoardLoading = isFetching
 
   if (isLoading && !data) return <LoadingSpinner />
@@ -425,146 +434,152 @@ export default function MockDraftPage() {
     <div className="max-w-xl mx-auto px-4 sm:px-6 pb-10">
       <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Mock Draft</h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-        Practice a snake or 3RR draft against bots. Bots pick from the bot board below. Your board is only for your
-        list and auto-picks.
+        Practice a snake or 3RR draft against bots. Your settings shape your own list and auto-picks; bot settings
+        decide how the bots draft.
       </p>
 
-      <div className="card p-5 mt-5 space-y-6">
-        <LeagueSettingsFields
-          value={settings}
-          onChange={(league) => patch(league)}
-        />
+      <div className="mt-5 space-y-4">
+        <Section title="League">
+          <LeagueSettingsFields
+            value={settings}
+            onChange={(league) => patch(league)}
+          />
+        </Section>
 
-        <Stepper
-          label="Your first-round pick"
-          value={settings.userPick}
-          min={1}
-          max={settings.teams}
-          onChange={(userPick) => patch({ userPick })}
-        />
+        <Section title="Your settings">
+          <Stepper
+            label="Your first-round pick"
+            value={settings.userPick}
+            min={1}
+            max={settings.teams}
+            onChange={(userPick) => patch({ userPick })}
+          />
 
-        <div>
-          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Bot pick time</div>
-          <div className="text-xs text-gray-400 mt-0.5">Immediate jumps to your next pick after you draft.</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Choice value={0} selected={settings.botDelaySec === 0} onClick={(botDelaySec) => patch({ botDelaySec })}>
-              Immediate
-            </Choice>
-            <Choice
-              value={settings.botDelaySec === 0 ? 3 : settings.botDelaySec}
-              selected={settings.botDelaySec > 0}
-              onClick={(botDelaySec) => patch({ botDelaySec })}
-            >
-              Timed
-            </Choice>
-          </div>
-          {settings.botDelaySec > 0 ? (
-            <div className="mt-3">
-              <Stepper
-                label="Seconds between bot picks"
-                value={settings.botDelaySec}
-                min={1}
-                max={10}
-                onChange={(botDelaySec) => patch({ botDelaySec })}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <div>
-          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">User pick time</div>
-          <div className="text-xs text-gray-400 mt-0.5">At 0:00 the best remaining player on your board is drafted.</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Choice value={30} selected={settings.userClockSec === 30} onClick={(userClockSec) => patch({ userClockSec })}>
-              30 seconds
-            </Choice>
-            <Choice value={60} selected={settings.userClockSec === 60} onClick={(userClockSec) => patch({ userClockSec })}>
-              60 seconds
-            </Choice>
-            <Choice value={0} selected={settings.userClockSec === 0} onClick={(userClockSec) => patch({ userClockSec })}>
-              Unlimited
-            </Choice>
-          </div>
-        </div>
-
-        <div>
-          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Bot board</div>
-          <div className="text-xs text-gray-400 mt-0.5">
-            Bots take the best available player in this order. Set here only; the other draft pages keep their own sites.
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(['rank', 'adp'] as AdpMetric[]).map((key) => (
-              <Choice key={key} value={key} selected={botMetric === key} onClick={setBotMetric}>
-                {BLEND_LABEL[key]}
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Your pick time</div>
+            <div className="text-xs text-gray-400 mt-0.5">At 0:00 the best remaining player on your board is drafted.</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Choice value={30} selected={settings.userClockSec === 30} onClick={(userClockSec) => patch({ userClockSec })}>
+                30 seconds
               </Choice>
-            ))}
+              <Choice value={60} selected={settings.userClockSec === 60} onClick={(userClockSec) => patch({ userClockSec })}>
+                60 seconds
+              </Choice>
+              <Choice value={0} selected={settings.userClockSec === 0} onClick={(userClockSec) => patch({ userClockSec })}>
+                Unlimited
+              </Choice>
+            </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sites</span>
-            {botBlend.available.map((site) => (
-              <label key={site} className="inline-flex min-h-11 items-center gap-1.5 text-sm cursor-pointer">
+
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
+            <div className="text-xs text-gray-400 mt-0.5">Orders your list and decides your auto-picks. Bot order copies the bots' draft order.</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
+                <Choice
+                  key={source}
+                  value={source}
+                  selected={settings.rankingSource === source}
+                  disabled={source === 'saved' && !hasSaved}
+                  onClick={(rankingSource) => patch({ rankingSource })}
+                >
+                  {source === 'saved' && !hasSaved ? 'Saved rankings (none)' : SOURCE_LABEL[source]}
+                </Choice>
+              ))}
+            </div>
+            {settings.rankingSource === 'csv' ? (
+              <div className="mt-3">
                 <input
-                  type="checkbox"
-                  checked={botBlend.sites.includes(site)}
-                  onChange={() => botBlend.toggle(site)}
-                  className="rounded border-gray-300"
+                  ref={fileRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) importCsv(file)
+                  }}
                 />
-                {SITE_LABEL[site]}
-              </label>
-            ))}
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="min-h-11 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 dark:border-gray-600"
+                >
+                  Choose CSV
+                </button>
+                {csvName ? (
+                  <p className="mt-2 text-xs text-gray-500">
+                    {csvName}
+                    {csvOk ? ` · ${csvMatched} matched` : ` · ${csvMatched} matched (need ${needed})`}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-400">Export CSV from Pre-Draft Rankings, then import it here.</p>
+                )}
+              </div>
+            ) : null}
           </div>
-          <div className="mt-1">
-            <BlendWeightsPanel sites={botBlend.sites} weights={botBlend.weights} />
-          </div>
-        </div>
+        </Section>
 
-        <div>
-          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
-          <div className="text-xs text-gray-400 mt-0.5">Only your list and auto-picks. Bot board uses the bots' order.</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
-              <Choice
-                key={source}
-                value={source}
-                selected={settings.rankingSource === source}
-                disabled={source === 'saved' && !hasSaved}
-                onClick={(rankingSource) => patch({ rankingSource })}
-              >
-                {source === 'saved' && !hasSaved ? 'Saved rankings (none)' : SOURCE_LABEL[source]}
+        <Section title="Bot settings">
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Bot pick time</div>
+            <div className="text-xs text-gray-400 mt-0.5">Immediate jumps to your next pick after you draft.</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Choice value={0} selected={settings.botDelaySec === 0} onClick={(botDelaySec) => patch({ botDelaySec })}>
+                Immediate
               </Choice>
-            ))}
-          </div>
-          {settings.rankingSource === 'csv' ? (
-            <div className="mt-3">
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  e.target.value = ''
-                  if (file) importCsv(file)
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="min-h-11 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 dark:border-gray-600"
+              <Choice
+                value={settings.botDelaySec === 0 ? 3 : settings.botDelaySec}
+                selected={settings.botDelaySec > 0}
+                onClick={(botDelaySec) => patch({ botDelaySec })}
               >
-                Choose CSV
-              </button>
-              {csvName ? (
-                <p className="mt-2 text-xs text-gray-500">
-                  {csvName}
-                  {csvOk ? ` · ${csvMatched} matched` : ` · ${csvMatched} matched (need ${needed})`}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-gray-400">Export CSV from Pre-Draft Rankings, then import it here.</p>
-              )}
+                Timed
+              </Choice>
             </div>
-          ) : null}
-        </div>
+            {settings.botDelaySec > 0 ? (
+              <div className="mt-3">
+                <Stepper
+                  label="Seconds between bot picks"
+                  value={settings.botDelaySec}
+                  min={1}
+                  max={10}
+                  onChange={(botDelaySec) => patch({ botDelaySec })}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft order</div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              Bots take the best available player in this order. Set here only; the other draft pages keep their own sites.
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(['rank', 'adp'] as AdpMetric[]).map((key) => (
+                <Choice key={key} value={key} selected={botMetric === key} onClick={setBotMetric}>
+                  {BLEND_LABEL[key]}
+                </Choice>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sites</span>
+              {botBlend.available.map((site) => (
+                <label key={site} className="inline-flex min-h-11 items-center gap-1.5 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={botBlend.sites.includes(site)}
+                    onChange={() => botBlend.toggle(site)}
+                    className="rounded border-gray-300"
+                  />
+                  {SITE_LABEL[site]}
+                </label>
+              ))}
+            </div>
+            <div className="mt-1">
+              <BlendWeightsPanel sites={botBlend.sites} weights={botBlend.weights} />
+            </div>
+          </div>
+        </Section>
 
         {setupError ? <p className="text-sm text-red-600 dark:text-red-400">{setupError}</p> : null}
 
@@ -574,7 +589,7 @@ export default function MockDraftPage() {
           disabled={botBoardLoading}
           className="btn-primary w-full py-2.5 text-sm font-semibold disabled:opacity-60"
         >
-          {botBoardLoading ? 'Loading bot board…' : 'Start Mock Draft'}
+          {botBoardLoading ? 'Loading bot order…' : 'Start Mock Draft'}
         </button>
       </div>
     </div>
