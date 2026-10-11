@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
-import { useBlendSites } from '../../hooks/useBlendSites'
+import { useBlendSites, type BlendSites } from '../../hooks/useBlendSites'
+import BlendWeightsPanel from '../../components/draft/BlendWeightsPanel'
 import { getErrorMessage } from '../../utils/errorMessage'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
@@ -9,7 +10,8 @@ import LeagueSettingsFields, { Stepper } from '../../components/draft/LeagueSett
 import ConfirmDialog from '../../components/draft/ConfirmDialog'
 import { parseRankingsCsvImport, rankingsCsvFileError } from '../../utils/draftCsv'
 import { EMPTY_RANKINGS, stablePlayerIds, type DraftRankingsState } from '../../utils/draftRankings'
-import { DEFAULT_DRAFT_METRIC } from '../../utils/adp'
+import { BLEND_LABEL, DEFAULT_DRAFT_METRIC, SITE_LABEL } from '../../utils/adp'
+import type { AdpMetric, ProviderMeta } from '../../types/api'
 import {
   clearMockClock,
   clearMockPaused,
@@ -80,6 +82,55 @@ function Choice<T extends string | number>({
   )
 }
 
+/** Blend Rank / Blend ADP, the sites in the blend and optional weights. */
+function BlendOrderFields({
+  metric,
+  onMetric,
+  blend,
+}: {
+  metric: AdpMetric
+  onMetric: (metric: AdpMetric) => void
+  blend: BlendSites
+}) {
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(['rank', 'adp'] as AdpMetric[]).map((key) => (
+          <Choice key={key} value={key} selected={metric === key} onClick={onMetric}>
+            {BLEND_LABEL[key]}
+          </Choice>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sites</span>
+        {blend.available.map((site) => (
+          <label key={site} className="inline-flex min-h-11 items-center gap-1.5 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={blend.sites.includes(site)}
+              onChange={() => blend.toggle(site)}
+              className="rounded border-gray-300"
+            />
+            {SITE_LABEL[site]}
+          </label>
+        ))}
+      </div>
+      <div className="mt-1">
+        <BlendWeightsPanel sites={blend.sites} weights={blend.weights} />
+      </div>
+    </>
+  )
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="card p-5 space-y-6">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
 export default function MockDraftPage() {
   const [settingsRaw, setSettingsRaw] = usePersistedState<MockDraftSettings>('draft.mock.settings.v2', DEFAULT_MOCK_SETTINGS)
   const settings = useMemo(() => clampMockSettings(settingsRaw), [settingsRaw])
@@ -103,22 +154,43 @@ export default function MockDraftPage() {
   const deadlineRef = useRef<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const { sitesParam, rankSitesParam } = useBlendSites(DEFAULT_DRAFT_METRIC)
-  const { data, isLoading, error } = useGetAdpIndexQuery({
-    metric: DEFAULT_DRAFT_METRIC,
-    sites: sitesParam,
-    rank_sites: rankSitesParam,
+  // The bot order has its own site selection, apart from the one the other draft pages share.
+  const [botMetric, setBotMetric] = usePersistedState<AdpMetric>('draft.mock.botMetric', DEFAULT_DRAFT_METRIC)
+  const [providers, setProviders] = useState<ProviderMeta[] | undefined>(undefined)
+  const botBlend = useBlendSites(botMetric, providers, 'draft.mock.bots')
+  const botIndex = useGetAdpIndexQuery({
+    metric: botMetric,
+    sites: botBlend.sitesParam,
+    rank_sites: botBlend.rankSitesParam,
   })
-  const indexPlayers = useMemo(() => data?.players ?? [], [data?.players])
+  // "Default" for your list is your saved blend: the sites and weights shared with the other draft pages.
+  const [userMetric, setUserMetric] = usePersistedState<AdpMetric>('draft.mock.userMetric', DEFAULT_DRAFT_METRIC)
+  const userBlend = useBlendSites(userMetric, providers)
+  const userIndex = useGetAdpIndexQuery({
+    metric: userMetric,
+    sites: userBlend.sitesParam,
+    rank_sites: userBlend.rankSitesParam,
+  })
+  const isLoading = userIndex.isLoading || botIndex.isLoading
+  const error = userIndex.error ?? botIndex.error
+  // Narrowing sites can drop players only an unchecked site lists, so the pool is both lists.
+  const indexPlayers = useMemo(() => {
+    const seen = new Set<string>()
+    return [...(userIndex.data?.players ?? []), ...(botIndex.data?.players ?? [])].filter(
+      (p) => !seen.has(p.id) && Boolean(seen.add(p.id)),
+    )
+  }, [userIndex.data?.players, botIndex.data?.players])
   const prefetchIds = useMemo(
     () => stablePlayerIds(indexPlayers.slice(0, 25).map((p) => p.id)).join(','),
     [indexPlayers],
   )
-  useGetAdpQuery(
+  const { data: prefetched } = useGetAdpQuery(
     { ids: prefetchIds, include_stats: true, ranked_only: false },
     { skip: prefetchIds.length === 0 },
   )
-  const defaultOrder = useMemo(() => indexPlayers.map((p) => p.id), [indexPlayers])
+  if (prefetched?.providers?.length && prefetched.providers !== providers) setProviders(prefetched.providers)
+  const defaultOrder = useMemo(() => (userIndex.data?.players ?? []).map((p) => p.id), [userIndex.data?.players])
+  const botOrder = useMemo(() => (botIndex.data?.players ?? []).map((p) => p.id), [botIndex.data?.players])
   const needed = pickCount(settings.teams, settings.rounds)
 
   const patch = (partial: Partial<MockDraftSettings>) => {
@@ -201,7 +273,7 @@ export default function MockDraftPage() {
   const startMock = () => {
     setSetupError(null)
     const next = clampMockSettings(settings)
-    if (indexPlayers.length < needed) {
+    if (Math.min(defaultOrder.length, botOrder.length) < needed) {
       setSetupError(`Need at least ${needed} ranked players to start this mock.`)
       return
     }
@@ -223,6 +295,7 @@ export default function MockDraftPage() {
     let live = createMockSession({
       settings: next,
       defaultOrder,
+      botOrder,
       userOrder,
       players: indexPlayers,
     })
@@ -373,7 +446,10 @@ export default function MockDraftPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
   }, [paused, picksMade, mockComplete, userOnClock])
 
-  if (isLoading && !data) return <LoadingSpinner />
+  // Starting while a changed order is loading would draft from the previous one.
+  const ordersLoading = userIndex.isFetching || botIndex.isFetching
+
+  if (isLoading && !(userIndex.data && botIndex.data)) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
   if (session) {
@@ -416,120 +492,148 @@ export default function MockDraftPage() {
     <div className="max-w-xl mx-auto px-4 sm:px-6 pb-10">
       <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Mock Draft</h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-        Practice a snake or 3RR draft against bots. Bots always pick from Blend Rank order. Your board is only for
-        your list and auto-picks.
+        Practice a snake or 3RR draft against bots. Your settings shape your own list and auto-picks; bot settings
+        decide how the bots draft.
       </p>
 
-      <div className="card p-5 mt-5 space-y-6">
-        <LeagueSettingsFields
-          value={settings}
-          onChange={(league) => patch(league)}
-        />
+      <div className="mt-5 space-y-4">
+        <Section title="League">
+          <LeagueSettingsFields
+            value={settings}
+            onChange={(league) => patch(league)}
+          />
+        </Section>
 
-        <Stepper
-          label="Your first-round pick"
-          value={settings.userPick}
-          min={1}
-          max={settings.teams}
-          onChange={(userPick) => patch({ userPick })}
-        />
+        <Section title="Your settings">
+          <Stepper
+            label="Your first-round pick"
+            value={settings.userPick}
+            min={1}
+            max={settings.teams}
+            onChange={(userPick) => patch({ userPick })}
+          />
 
-        <div>
-          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Bot pick time</div>
-          <div className="text-xs text-gray-400 mt-0.5">Immediate jumps to your next pick after you draft.</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Choice value={0} selected={settings.botDelaySec === 0} onClick={(botDelaySec) => patch({ botDelaySec })}>
-              Immediate
-            </Choice>
-            <Choice
-              value={settings.botDelaySec === 0 ? 3 : settings.botDelaySec}
-              selected={settings.botDelaySec > 0}
-              onClick={(botDelaySec) => patch({ botDelaySec })}
-            >
-              Timed
-            </Choice>
-          </div>
-          {settings.botDelaySec > 0 ? (
-            <div className="mt-3">
-              <Stepper
-                label="Seconds between bot picks"
-                value={settings.botDelaySec}
-                min={1}
-                max={10}
-                onChange={(botDelaySec) => patch({ botDelaySec })}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <div>
-          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">User pick time</div>
-          <div className="text-xs text-gray-400 mt-0.5">At 0:00 the best remaining player on your board is drafted.</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Choice value={30} selected={settings.userClockSec === 30} onClick={(userClockSec) => patch({ userClockSec })}>
-              30 seconds
-            </Choice>
-            <Choice value={60} selected={settings.userClockSec === 60} onClick={(userClockSec) => patch({ userClockSec })}>
-              60 seconds
-            </Choice>
-            <Choice value={0} selected={settings.userClockSec === 0} onClick={(userClockSec) => patch({ userClockSec })}>
-              Unlimited
-            </Choice>
-          </div>
-        </div>
-
-        <div>
-          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
-          <div className="text-xs text-gray-400 mt-0.5">Bots ignore this and use Blend Rank order.</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
-              <Choice
-                key={source}
-                value={source}
-                selected={settings.rankingSource === source}
-                disabled={source === 'saved' && !hasSaved}
-                onClick={(rankingSource) => patch({ rankingSource })}
-              >
-                {source === 'saved' && !hasSaved ? 'Saved rankings (none)' : SOURCE_LABEL[source]}
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Your pick time</div>
+            <div className="text-xs text-gray-400 mt-0.5">At 0:00 the best remaining player on your board is drafted.</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Choice value={30} selected={settings.userClockSec === 30} onClick={(userClockSec) => patch({ userClockSec })}>
+                30 seconds
               </Choice>
-            ))}
-          </div>
-          {settings.rankingSource === 'csv' ? (
-            <div className="mt-3">
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  e.target.value = ''
-                  if (file) importCsv(file)
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="min-h-11 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 dark:border-gray-600"
-              >
-                Choose CSV
-              </button>
-              {csvName ? (
-                <p className="mt-2 text-xs text-gray-500">
-                  {csvName}
-                  {csvOk ? ` · ${csvMatched} matched` : ` · ${csvMatched} matched (need ${needed})`}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-gray-400">Export CSV from Pre-Draft Rankings, then import it here.</p>
-              )}
+              <Choice value={60} selected={settings.userClockSec === 60} onClick={(userClockSec) => patch({ userClockSec })}>
+                60 seconds
+              </Choice>
+              <Choice value={0} selected={settings.userClockSec === 0} onClick={(userClockSec) => patch({ userClockSec })}>
+                Unlimited
+              </Choice>
             </div>
-          ) : null}
-        </div>
+          </div>
+
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft rankings from</div>
+            <div className="text-xs text-gray-400 mt-0.5">Orders your list and decides your auto-picks.</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(['saved', 'default', 'csv'] as RankingSource[]).map((source) => (
+                <Choice
+                  key={source}
+                  value={source}
+                  selected={settings.rankingSource === source}
+                  disabled={source === 'saved' && !hasSaved}
+                  onClick={(rankingSource) => patch({ rankingSource })}
+                >
+                  {source === 'saved' && !hasSaved ? 'Saved rankings (none)' : SOURCE_LABEL[source]}
+                </Choice>
+              ))}
+            </div>
+            {settings.rankingSource === 'default' ? (
+              <div className="mt-3">
+                <div className="text-xs text-gray-400">
+                  Your blend. Sites and weights are shared with the Draft Board and Rankings pages.
+                </div>
+                <BlendOrderFields metric={userMetric} onMetric={setUserMetric} blend={userBlend} />
+              </div>
+            ) : null}
+            {settings.rankingSource === 'csv' ? (
+              <div className="mt-3">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) importCsv(file)
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="min-h-11 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 dark:border-gray-600"
+                >
+                  Choose CSV
+                </button>
+                {csvName ? (
+                  <p className="mt-2 text-xs text-gray-500">
+                    {csvName}
+                    {csvOk ? ` · ${csvMatched} matched` : ` · ${csvMatched} matched (need ${needed})`}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-400">Export CSV from Pre-Draft Rankings, then import it here.</p>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </Section>
+
+        <Section title="Bot settings">
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Bot pick time</div>
+            <div className="text-xs text-gray-400 mt-0.5">Immediate jumps to your next pick after you draft.</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Choice value={0} selected={settings.botDelaySec === 0} onClick={(botDelaySec) => patch({ botDelaySec })}>
+                Immediate
+              </Choice>
+              <Choice
+                value={settings.botDelaySec === 0 ? 3 : settings.botDelaySec}
+                selected={settings.botDelaySec > 0}
+                onClick={(botDelaySec) => patch({ botDelaySec })}
+              >
+                Timed
+              </Choice>
+            </div>
+            {settings.botDelaySec > 0 ? (
+              <div className="mt-3">
+                <Stepper
+                  label="Seconds between bot picks"
+                  value={settings.botDelaySec}
+                  min={1}
+                  max={10}
+                  onChange={(botDelaySec) => patch({ botDelaySec })}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div>
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-100">Draft order</div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              Bots draft from this list and fill their open roster spots. Early on they mostly take the top player who
+              fits; as the draft goes on they reach further down the list more often. Set here only.
+            </div>
+            <BlendOrderFields metric={botMetric} onMetric={setBotMetric} blend={botBlend} />
+          </div>
+        </Section>
 
         {setupError ? <p className="text-sm text-red-600 dark:text-red-400">{setupError}</p> : null}
 
-        <button type="button" onClick={startMock} className="btn-primary w-full py-2.5 text-sm font-semibold">
-          Start Mock Draft
+        <button
+          type="button"
+          onClick={startMock}
+          disabled={ordersLoading}
+          className="btn-primary w-full py-2.5 text-sm font-semibold disabled:opacity-60"
+        >
+          {ordersLoading ? 'Loading rankings…' : 'Start Mock Draft'}
         </button>
       </div>
     </div>

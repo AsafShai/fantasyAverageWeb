@@ -224,6 +224,21 @@ describe('session engine', () => {
     expect(afterBots.picks.map((pk) => pk.team)).toEqual([1, 2])
   })
 
+  it('has bots pick from botOrder while the user default stays on defaultOrder', () => {
+    const ids = players.map((x) => x.id)
+    const session = createMockSession({
+      settings: clampMockSettings({ teams: 4, rounds: 2, userPick: 4 }),
+      defaultOrder: ids,
+      botOrder: [...ids].reverse(),
+      userOrder: ids,
+      players,
+    })
+    const afterBots = runBotsUntilUser(session, () => 0)
+    const reversed = [...ids].reverse()
+    expect(afterBots.picks.map((pk) => pk.playerId)).toEqual(reversed.slice(0, 3))
+    expect(autoUserPick(afterBots).picks.at(-1)?.playerId).toBe(ids[0])
+  })
+
   it('skips players the user marked untouchable and still lets the user draft them', () => {
     let session = createMockSession({
       settings: clampMockSettings({ teams: 4, rounds: 2, userPick: 4 }),

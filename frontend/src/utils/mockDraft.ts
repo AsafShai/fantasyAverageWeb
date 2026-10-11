@@ -294,6 +294,8 @@ export type MockSession = {
   botDelaySec: number
   userClockSec: number
   defaultOrder: string[]
+  /** The order bots pick from. Sessions saved before it existed have none and use defaultOrder. */
+  botOrder?: string[]
   userOrder: string[]
   players: Record<string, MockSessionPlayer>
   picks: MockPick[]
@@ -305,6 +307,7 @@ export type MockSession = {
 export function createMockSession(input: {
   settings: MockDraftSettings
   defaultOrder: string[]
+  botOrder?: string[]
   userOrder: string[]
   players: MockSessionPlayer[]
 }): MockSession {
@@ -323,6 +326,7 @@ export function createMockSession(input: {
     botDelaySec: settings.botDelaySec,
     userClockSec: settings.userClockSec,
     defaultOrder: input.defaultOrder.filter((id) => players[id]),
+    botOrder: (input.botOrder ?? input.defaultOrder).filter((id) => players[id]),
     userOrder: input.userOrder.filter((id) => players[id]),
     players,
     picks: [],
@@ -368,7 +372,10 @@ export function untouchableIdSet(session: MockSession): Set<string> {
 /** Remaining players a bot is allowed to take. Untouchables stay in the pool for the user. */
 export function availableBotPlayers(session: MockSession): MockSessionPlayer[] {
   const reserved = untouchableIdSet(session)
-  return availableDefaultPlayers(session).filter((player) => !reserved.has(player.id))
+  const taken = takenIds(session)
+  return (session.botOrder ?? session.defaultOrder)
+    .map((id) => session.players[id])
+    .filter((p): p is MockSessionPlayer => Boolean(p) && !taken.has(p.id) && !reserved.has(p.id))
 }
 
 export function toggleUntouchable(session: MockSession, playerId: string): MockSession {
