@@ -2,6 +2,8 @@ name: PR Check
 
 on:
   pull_request:
+  # deploy.yaml runs this same suite and deploys only if it passes
+  workflow_call:
 
 jobs:
   test-backend:
