@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     injury_scheduler_enabled: bool = Field(default=True, alias="INJURY_SCHEDULER_ENABLED")
     model_nightly_enabled: bool = Field(default=False, alias="MODEL_NIGHTLY_ENABLED")
     nba_players_refresh_enabled: bool = Field(default=False, alias="NBA_PLAYERS_REFRESH_ENABLED")
+    # Hourly ADP refresh/snapshots only matter during draft season; off by default
+    # so it stays idle between drafts. Turn on ahead of the next season's drafts.
+    adp_scheduler_enabled: bool = Field(default=False, alias="ADP_SCHEDULER_ENABLED")
     # When the deployed models need a feature the stored vectors lack, should the
     # nightly rebuild them itself? Detection is always on and costs three queries;
     # the rebuild is what needs memory (~380 MB), so it defaults to OFF and the

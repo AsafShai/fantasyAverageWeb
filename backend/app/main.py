@@ -99,7 +99,10 @@ async def lifespan(app: FastAPI):
         background_tasks.spawn(nba_players_scheduler.start_scheduler(), name="nba-players-scheduler")
     else:
         logger.info("NBA players refresh scheduler disabled via NBA_PLAYERS_REFRESH_ENABLED=false")
-    background_tasks.spawn(adp_snapshot_scheduler.start_scheduler(), name="adp-snapshot-scheduler")
+    if settings.adp_scheduler_enabled:
+        background_tasks.spawn(adp_snapshot_scheduler.start_scheduler(), name="adp-snapshot-scheduler")
+    else:
+        logger.info("ADP snapshot scheduler disabled via ADP_SCHEDULER_ENABLED=false")
     yield
     # Shutdown
     await background_tasks.cancel_all()
