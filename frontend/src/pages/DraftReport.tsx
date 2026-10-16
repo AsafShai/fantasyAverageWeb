@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { useGetDraftReportQuery, useGetAllPlayersQuery } from '../store/api/fantasyApi'
+import { useGetDraftReportQuery, useGetAllPlayersQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -37,6 +37,18 @@ function heatColor(p: ScoredPick): string {
   return 'rgba(156,163,175,0.10)'
 }
 
+// Board heat is noise early on — sample sizes are too small to judge picks.
+// Only color once two months of the season have elapsed.
+const HEAT_MIN_SEASON_MONTHS = 2
+
+function isHeatReady(seasonStart: string | undefined, now: Date = new Date()): boolean {
+  if (!seasonStart) return false
+  const ready = new Date(`${seasonStart}T00:00:00`)
+  if (isNaN(ready.getTime())) return false
+  ready.setMonth(ready.getMonth() + HEAT_MIN_SEASON_MONTHS)
+  return now >= ready
+}
+
 export default function DraftReport() {
   const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('draftReport.calcMode', 'per_game')
   const [includeLowGp, setIncludeLowGp] = usePersistedState('draftReport.includeLowGp', false)
@@ -46,6 +58,8 @@ export default function DraftReport() {
   // draft report's value calc consistent with the rest of the app instead of
   // maintaining a separate data source.
   const { data: playersData, isLoading: poolLoading, error: poolError } = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' })
+  const { data: summary } = useGetLeagueSummaryQuery()
+  const showHeat = isHeatReady(summary?.season_start)
   const [sortCol, setSortCol] = useState<SortCol>('pick')
   const [sortAsc, setSortAsc] = useState(true)
 
@@ -160,7 +174,7 @@ export default function DraftReport() {
         </p>
 
         <section>
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Draft Board — value heat</h2>
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">{showHeat ? 'Draft Board — value heat' : 'Draft Board'}</h2>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
             <table className="text-xs border-collapse">
               <thead>
@@ -179,7 +193,7 @@ export default function DraftReport() {
                       const p = gridByRoundTeam.get(`${round}-${t.team_id}`)
                       if (!p) return <td key={t.team_id} className="px-2 py-1.5" />
                       return (
-                        <td key={t.team_id} className="px-2 py-1.5 align-top min-w-[110px]" style={{ backgroundColor: heatColor(p) }}>
+                        <td key={t.team_id} className="px-2 py-1.5 align-top min-w-[110px]" style={showHeat ? { backgroundColor: heatColor(p) } : undefined}>
                           <div className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{p.player_name}</div>
                           <div className="text-[10px] text-gray-500 dark:text-gray-400">{p.pick} → {valueTag(p)}</div>
                         </td>
@@ -190,7 +204,11 @@ export default function DraftReport() {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Blue = returned above slot · Red = below slot / INJ / DNP · Gray = about right.</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+            {showHeat
+              ? 'Blue = returned above slot · Red = below slot / INJ / DNP · Gray = about right.'
+              : `Value heat appears after the first ${HEAT_MIN_SEASON_MONTHS} months of the season — too early to judge picks.`}
+          </p>
         </section>
 
         <section>
