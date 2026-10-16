@@ -63,6 +63,7 @@ async def test_lifespan_keeps_schedulers_referenced_and_cancels_them_on_shutdown
          patch.object(main.settings, "injury_scheduler_enabled", True), \
          patch.object(main.settings, "model_nightly_enabled", True), \
          patch.object(main.settings, "nba_players_refresh_enabled", True), \
+         patch.object(main.settings, "adp_scheduler_enabled", True), \
          patch.object(main.DataProvider, "close", AsyncMock()), \
          patch.object(main.NBAStatsService, "close", AsyncMock()):
         async with main.lifespan(main.app):
@@ -76,3 +77,27 @@ async def test_lifespan_keeps_schedulers_referenced_and_cancels_them_on_shutdown
     assert sorted(started) == ["adp", "estimator", "injury", "nightly", "players"]
     assert all(t.cancelled() for t in tasks)
     assert not background_tasks._tasks
+
+
+@pytest.mark.asyncio
+async def test_lifespan_skips_adp_scheduler_when_disabled():
+    import asyncio
+    from app.utils import background_tasks
+
+    adp_start = AsyncMock()
+    with patch.object(main, "derive_season_start", AsyncMock(return_value=None)), \
+         patch.object(main.injury_service, "initialize", AsyncMock()), \
+         patch.object(main.settings, "injury_scheduler_enabled", False), \
+         patch.object(main.settings, "model_nightly_enabled", False), \
+         patch.object(main.settings, "nba_players_refresh_enabled", False), \
+         patch.object(main.settings, "adp_scheduler_enabled", False), \
+         patch.object(main.estimator_scheduler, "start_scheduler", AsyncMock()), \
+         patch.object(main.adp_snapshot_scheduler, "start_scheduler", adp_start), \
+         patch.object(main.DataProvider, "close", AsyncMock()), \
+         patch.object(main.NBAStatsService, "close", AsyncMock()):
+        async with main.lifespan(main.app):
+            await asyncio.sleep(0)
+            names = {t.get_name() for t in background_tasks._tasks}
+            assert "adp-snapshot-scheduler" not in names
+
+    adp_start.assert_not_called()
