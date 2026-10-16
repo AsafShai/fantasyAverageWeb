@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { useGetDraftReportQuery, useGetAllPlayersQuery } from '../store/api/fantasyApi'
+import { useGetDraftReportQuery, useGetAllPlayersQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -37,6 +37,18 @@ function heatColor(p: ScoredPick): string {
   return 'rgba(156,163,175,0.10)'
 }
 
+// Board heat is noise early on — sample sizes are too small to judge picks.
+// Only color once two months of the season have elapsed.
+const HEAT_MIN_SEASON_MONTHS = 2
+
+function isHeatReady(seasonStart: string | undefined, now: Date = new Date()): boolean {
+  if (!seasonStart) return false
+  const ready = new Date(`${seasonStart}T00:00:00`)
+  if (isNaN(ready.getTime())) return false
+  ready.setMonth(ready.getMonth() + HEAT_MIN_SEASON_MONTHS)
+  return now >= ready
+}
+
 export default function DraftReport() {
   const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('draftReport.calcMode', 'per_game')
   const [includeLowGp, setIncludeLowGp] = usePersistedState('draftReport.includeLowGp', false)
@@ -46,6 +58,8 @@ export default function DraftReport() {
   // draft report's value calc consistent with the rest of the app instead of
   // maintaining a separate data source.
   const { data: playersData, isLoading: poolLoading, error: poolError } = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' })
+  const { data: summary } = useGetLeagueSummaryQuery()
+  const showHeat = isHeatReady(summary?.season_start)
   const [sortCol, setSortCol] = useState<SortCol>('pick')
   const [sortAsc, setSortAsc] = useState(true)
 
@@ -160,7 +174,7 @@ export default function DraftReport() {
         </p>
 
         <section>
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Draft Board — value heat</h2>
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">{showHeat ? 'Draft Board — value heat' : 'Draft Board'}</h2>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
             <table className="text-xs border-collapse">
               <thead>
@@ -179,7 +193,7 @@ export default function DraftReport() {
                       const p = gridByRoundTeam.get(`${round}-${t.team_id}`)
                       if (!p) return <td key={t.team_id} className="px-2 py-1.5" />
                       return (
-                        <td key={t.team_id} className="px-2 py-1.5 align-top min-w-[110px]" style={{ backgroundColor: heatColor(p) }}>
+                        <td key={t.team_id} className="px-2 py-1.5 align-top min-w-[110px]" style={showHeat ? { backgroundColor: heatColor(p) } : undefined}>
                           <div className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{p.player_name}</div>
                           <div className="text-[10px] text-gray-500 dark:text-gray-400">{p.pick} → {valueTag(p)}</div>
                         </td>
@@ -190,86 +204,92 @@ export default function DraftReport() {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Blue = returned above slot · Red = below slot / INJ / DNP · Gray = about right.</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+            {showHeat
+              ? 'Blue = returned above slot · Red = below slot / INJ / DNP · Gray = about right.'
+              : `Value heat appears after the first ${HEAT_MIN_SEASON_MONTHS} months of the season — too early to judge picks.`}
+          </p>
         </section>
 
-        <section>
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Team Draft Value — diff vs slot</h2>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
-            <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
-              <colgroup>
-                {diffColWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
-              </colgroup>
-              <thead className="bg-gray-50 dark:bg-gray-900">
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  {(['#', 'Team', 'Total Diff', 'Avg Diff', 'Ranked / Picks'] as const).map((label, i) => (
-                    <th
-                      key={label}
-                      title={label === 'Ranked / Picks' ? `How many of the team's draft picks earned a value rank — only players with ${minGp}+ GP are ranked, so low-GP / DNP picks are left out` : undefined}
-                      className={`relative px-2 sm:px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 ${i >= 2 ? 'text-right' : 'text-left'}`}
-                    >
-                      {label}
-                      {i < diffColWidths.length - 1 && (
-                        <span
-                          onMouseDown={onDiffResizeDown(i)}
-                          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400/60"
-                        />
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {teamDiffs.map((t, i) => {
-                  const hasExcluded = t.unranked.length > 0
-                  const open = expandedTeams.has(t.team_id)
-                  return (
-                    <React.Fragment key={t.team_id}>
-                      <tr
-                        onClick={() => hasExcluded && toggleTeam(t.team_id)}
-                        className={`border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasExcluded ? 'cursor-pointer' : ''}`}
+        {FF_DRAFT_STEALS_BUSTS && (
+          <section>
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Team Draft Value — diff vs slot</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+              <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                <colgroup>
+                  {diffColWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
+                </colgroup>
+                <thead className="bg-gray-50 dark:bg-gray-900">
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    {(['#', 'Team', 'Total Diff', 'Avg Diff', 'Ranked / Picks'] as const).map((label, i) => (
+                      <th
+                        key={label}
+                        title={label === 'Ranked / Picks' ? `How many of the team's draft picks earned a value rank — only players with ${minGp}+ GP are ranked, so low-GP / DNP picks are left out` : undefined}
+                        className={`relative px-2 sm:px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 ${i >= 2 ? 'text-right' : 'text-left'}`}
                       >
-                        <td className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-400 dark:text-gray-500 font-mono text-xs">{i + 1}</td>
-                        <td className="px-2 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 truncate">{t.team_name}</td>
-                        <td className={`px-2 sm:px-3 py-1.5 sm:py-2 text-right font-mono text-xs ${t.totalDiff >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}`}>
-                          {t.totalDiff > 0 ? `+${t.totalDiff}` : t.totalDiff}
-                        </td>
-                        <td className={`px-2 sm:px-3 py-1.5 sm:py-2 text-right font-semibold font-mono ${t.avgDiff >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}`}>
-                          {t.avgDiff > 0 ? `+${t.avgDiff.toFixed(1)}` : t.avgDiff.toFixed(1)}
-                        </td>
-                        <td className="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-gray-500 dark:text-gray-400 text-xs font-mono whitespace-nowrap">
-                          {t.n}/{t.total}
-                          <span className="inline-block w-3 text-left text-amber-500 dark:text-amber-400">{hasExcluded ? (open ? '▾' : '▸') : ''}</span>
-                        </td>
-                      </tr>
-                      {open && (
-                        <tr className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-700">
-                          <td />
-                          <td colSpan={4} className="px-2 sm:px-3 py-2">
-                            <div className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Not ranked (under {minGp} GP — excluded from diff):</div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {t.unranked.map(u => (
-                                <span key={u.pick} className="inline-flex items-center gap-1 text-xs bg-white dark:bg-gray-800 rounded px-1.5 py-0.5 border border-gray-200 dark:border-gray-700">
-                                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${BADGE_STYLES[u.badge]}`}>{u.badge}</span>
-                                  <span className="text-gray-700 dark:text-gray-200">{u.player_name}</span>
-                                  <span className="text-gray-400 dark:text-gray-500">#{u.pick} · {u.gp ?? 0}gp</span>
-                                </span>
-                              ))}
-                            </div>
+                        {label}
+                        {i < diffColWidths.length - 1 && (
+                          <span
+                            onMouseDown={onDiffResizeDown(i)}
+                            className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none hover:bg-blue-400/60"
+                          />
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamDiffs.map((t, i) => {
+                    const hasExcluded = t.unranked.length > 0
+                    const open = expandedTeams.has(t.team_id)
+                    return (
+                      <React.Fragment key={t.team_id}>
+                        <tr
+                          onClick={() => hasExcluded && toggleTeam(t.team_id)}
+                          className={`border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasExcluded ? 'cursor-pointer' : ''}`}
+                        >
+                          <td className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-400 dark:text-gray-500 font-mono text-xs">{i + 1}</td>
+                          <td className="px-2 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 truncate">{t.team_name}</td>
+                          <td className={`px-2 sm:px-3 py-1.5 sm:py-2 text-right font-mono text-xs ${t.totalDiff >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}`}>
+                            {t.totalDiff > 0 ? `+${t.totalDiff}` : t.totalDiff}
+                          </td>
+                          <td className={`px-2 sm:px-3 py-1.5 sm:py-2 text-right font-semibold font-mono ${t.avgDiff >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}`}>
+                            {t.avgDiff > 0 ? `+${t.avgDiff.toFixed(1)}` : t.avgDiff.toFixed(1)}
+                          </td>
+                          <td className="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-gray-500 dark:text-gray-400 text-xs font-mono whitespace-nowrap">
+                            {t.n}/{t.total}
+                            <span className="inline-block w-3 text-left text-amber-500 dark:text-amber-400">{hasExcluded ? (open ? '▾' : '▸') : ''}</span>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  )
-                })}
-                {teamDiffs.length === 0 && (
-                  <tr><td colSpan={5} className="px-3 py-2 text-xs text-gray-400">No qualifying picks yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Sum / avg of (pick − value rank) over ranked picks. Positive = team's picks returned above draft slot. Rows with ▸ expand to show picks left out (under {minGp} GP). Drag column edges to resize.</p>
-        </section>
+                        {open && (
+                          <tr className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-700">
+                            <td />
+                            <td colSpan={4} className="px-2 sm:px-3 py-2">
+                              <div className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Not ranked (under {minGp} GP — excluded from diff):</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {t.unranked.map(u => (
+                                  <span key={u.pick} className="inline-flex items-center gap-1 text-xs bg-white dark:bg-gray-800 rounded px-1.5 py-0.5 border border-gray-200 dark:border-gray-700">
+                                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${BADGE_STYLES[u.badge]}`}>{u.badge}</span>
+                                    <span className="text-gray-700 dark:text-gray-200">{u.player_name}</span>
+                                    <span className="text-gray-400 dark:text-gray-500">#{u.pick} · {u.gp ?? 0}gp</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                  {teamDiffs.length === 0 && (
+                    <tr><td colSpan={5} className="px-3 py-2 text-xs text-gray-400">No qualifying picks yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Sum / avg of (pick − value rank) over ranked picks. Positive = team's picks returned above draft slot. Rows with ▸ expand to show picks left out (under {minGp} GP). Drag column edges to resize.</p>
+          </section>
+        )}
 
         {FF_DRAFT_STEALS_BUSTS && (
           <>
