@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router'
 import { useSort } from '../../hooks/useSort'
 import SortableHeaderCell from './SortableHeaderCell'
 import type { TeamRosterHealth } from '../../types/api'
+import { leadWithMyTeam, MyTeamMark, myTeamRowClass } from '../MyTeamMark'
+import { useMyTeam } from '../../context/MyTeamContext'
 
 interface RosterHealthProps {
   slateDate: string | null
@@ -67,7 +69,9 @@ function Tile({ value, label, warn = false }: { value: number; label: string; wa
 
 export default function RosterHealth({ slateDate, gamesCount, teams }: RosterHealthProps) {
   const navigate = useNavigate()
-  const { sorted, sortKey, direction, toggle } = useSort<TeamRosterHealth, SortKey>(teams, COMPARATORS)
+  const { myTeamId, isMyTeam } = useMyTeam()
+  const ordered = leadWithMyTeam(teams, myTeamId)
+  const { sorted, sortKey, direction, toggle } = useSort<TeamRosterHealth, SortKey>(ordered, COMPARATORS)
 
   const availableTotal = teams.reduce((sum, team) => sum + team.available_tonight, 0)
   const outTotal = teams.reduce((sum, team) => sum + team.out, 0)
@@ -147,8 +151,11 @@ export default function RosterHealth({ slateDate, gamesCount, teams }: RosterHea
                   onClick={() => navigate(`/team/${team.team_id}`)}
                   className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
                 >
-                  <td className="sticky left-0 z-10 max-w-[6rem] truncate bg-white px-1.5 py-1.5 text-xs text-gray-900 sm:max-w-[8rem] sm:px-2 sm:text-sm dark:bg-gray-800 dark:text-gray-100">
-                    {team.team_name}
+                  <td className={`sticky left-0 z-10 max-w-[6rem] bg-white px-1.5 py-1.5 text-xs text-gray-900 sm:max-w-[8rem] sm:px-2 sm:text-sm dark:bg-gray-800 dark:text-gray-100 ${myTeamRowClass(isMyTeam(team.team_id))}`}>
+                    <span className="inline-flex max-w-full items-center">
+                      <span className="truncate">{team.team_name}</span>
+                      <MyTeamMark teamId={team.team_id} />
+                    </span>
                   </td>
                   <td className="px-0.5 py-1.5 text-right text-xs font-bold tabular-nums text-gray-900 sm:px-2 sm:text-sm dark:text-gray-50">
                     {team.games_tonight}

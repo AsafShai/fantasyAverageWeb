@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useInjuryData } from '../hooks/useInjuryData';
 import { useDebounce } from '../hooks/useDebounce';
 import InjuryFilters from '../components/injuries/InjuryFilters';
@@ -6,6 +6,9 @@ import InjuryTable from '../components/injuries/InjuryTable';
 import NotificationsPanel from '../components/injuries/NotificationsPanel';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import { useMyTeam } from '../context/MyTeamContext';
+import { useGetTeamDetailQuery } from '../store/api/fantasyApi';
+import { normalizePlayerName } from '../utils/playerName';
 
 interface Filters {
   search: string;
@@ -17,12 +20,29 @@ export default function Injuries() {
   const { records, loading, error, notifications, lastReportTime } = useInjuryData();
   const [filters, setFilters] = useState<Filters>({ search: '', teams: [], statuses: [] });
   const [notifOpen, setNotifOpen] = useState(false);
+  const { myTeam, myTeamId } = useMyTeam();
+  const [myRosterOnly, setMyRosterOnly] = useState(true);
+  useEffect(() => { setMyRosterOnly(true) }, [myTeamId]);
+  const rosterQuery = useGetTeamDetailQuery(
+    { teamId: myTeamId ?? 0 },
+    { skip: myTeamId == null },
+  );
   const debouncedSearch = useDebounce(filters.search, 300);
 
   const teams = useMemo(() => {
     const unique = Array.from(new Set(records.map(r => r.team))).sort();
     return unique;
   }, [records]);
+
+  const rosterNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const player of rosterQuery.data?.players ?? []) {
+      names.add(normalizePlayerName(player.player_name));
+    }
+    return names;
+  }, [rosterQuery.data]);
+
+  const rosterFilterOn = myTeamId != null && myRosterOnly && rosterQuery.isSuccess;
 
   const filteredRecords = useMemo(() => {
     return records
@@ -32,9 +52,10 @@ export default function Injuries() {
           r.player.toLowerCase().includes(debouncedSearch.toLowerCase());
         const matchesTeam = filters.teams.length === 0 || filters.teams.includes(r.team);
         const matchesStatus = filters.statuses.length === 0 || filters.statuses.includes(r.status);
-        return matchesSearch && matchesTeam && matchesStatus;
+        const matchesRoster = !rosterFilterOn || rosterNames.has(normalizePlayerName(r.player));
+        return matchesSearch && matchesTeam && matchesStatus && matchesRoster;
       })
-  }, [records, debouncedSearch, filters.teams, filters.statuses]);
+  }, [records, debouncedSearch, filters.teams, filters.statuses, rosterFilterOn, rosterNames]);
 
   return (
     <>
@@ -92,6 +113,19 @@ export default function Injuries() {
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4 sm:flex-nowrap">
                 <InjuryFilters filters={filters} onChange={setFilters} teams={teams} />
+                {myTeam && (
+                  <label className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200">
+                    <input
+                      type="checkbox"
+                      checked={myRosterOnly}
+                      onChange={(event) => setMyRosterOnly(event.target.checked)}
+                    />
+                    My roster
+                  </label>
+                )}
+                {myTeam && myRosterOnly && rosterQuery.isError && (
+                  <span className="text-xs text-gray-500">Could not load your roster, showing every injury.</span>
+                )}
                 {lastReportTime && (
                   <span className="text-xs text-gray-400 shrink-0">
                     Last report: {new Date(lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -99,7 +133,11 @@ export default function Injuries() {
                 )}
               </div>
               <div className="injury-table-scroll">
-                <InjuryTable records={filteredRecords} totalCount={records.length} />
+                {myTeam && myRosterOnly && rosterQuery.isLoading ? (
+                  <p className="py-6 text-sm text-gray-500">Loading your roster…</p>
+                ) : (
+                  <InjuryTable records={filteredRecords} totalCount={records.length} />
+                )}
               </div>
               {records.length > 0 && (
                 <p className="text-xs text-gray-400 mt-2">

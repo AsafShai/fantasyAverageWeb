@@ -3,9 +3,12 @@ import { useGetTeamsListQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
+import { leadWithMyTeam, MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
 
 const Teams = () => {
   const { data: teams, error, isLoading } = useGetTeamsListQuery()
+  const { myTeamId, isMyTeam } = useMyTeam()
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load teams')} />
@@ -21,16 +24,17 @@ const Teams = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {teams.map((team) => (
+        {leadWithMyTeam(teams, myTeamId).map((team) => (
           <Link
             key={team.team_id}
             to={`/team/${team.team_id}`}
-            className="block bg-white rounded-lg shadow hover:shadow-lg transition-shadow duration-200 p-6"
+            className={`block bg-white rounded-lg shadow hover:shadow-lg transition-shadow duration-200 p-6 ${myTeamRowClass(isMyTeam(team.team_id))}`}
           >
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">
                   {team.team_name}
+                  <MyTeamMark teamId={team.team_id} />
                 </h3>
                 <p className="text-sm text-gray-500">Team #{team.team_id}</p>
               </div>

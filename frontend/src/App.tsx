@@ -5,6 +5,7 @@ import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
 import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE, FF_TODAY_HUB } from './config/featureFlags'
+import { MyTeamProvider } from './context/MyTeamContext'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Today = lazy(() => import('./pages/Today'))
@@ -43,6 +44,7 @@ function App() {
       <GlobalLoadingBar />
       <ErrorBoundary>
         <Suspense fallback={<LoadingSpinner />}>
+          <MyTeamProvider>
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={FF_TODAY_HUB ? <Today /> : <Dashboard />} />
@@ -82,6 +84,7 @@ function App() {
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
+          </MyTeamProvider>
         </Suspense>
       </ErrorBoundary>
     </div>

@@ -7,6 +7,9 @@ import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import InjuryBadge from '../components/InjuryBadge';
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../components/MyTeamMark';
+import { useMyTeam } from '../context/MyTeamContext';
+import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam';
 
 const STAT_COLS: [keyof ProjectionStats, string][] = [
   ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['three_pm', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
@@ -161,6 +164,12 @@ export default function Projections() {
   const [search, setSearch] = useState('');
   const [nbaTeam, setNbaTeam] = useState('');
   const [fantasyTeamId, setFantasyTeamId] = useState('');
+  const { myTeamId, isMyTeam } = useMyTeam();
+  useFollowMyTeamValue(
+    fantasyTeamId === '' ? null : fantasyTeamId,
+    myTeamId == null ? null : String(myTeamId),
+    setFantasyTeamId,
+  );
 
   const { data: allPlayers } = useGetAllPlayersQuery({ page: 1, limit: 1200 });
   const { data: fantasyTeams } = useGetTeamsListQuery();
@@ -266,7 +275,9 @@ export default function Projections() {
         >
           <option value="">All Fantasy Teams</option>
           <option value="0">Free Agents / Waivers</option>
-          {fantasyTeams?.map((t) => <option key={t.team_id} value={t.team_id}>{t.team_name}</option>)}
+          {leadWithMyTeam(fantasyTeams ?? [], myTeamId).map((t) => (
+            <option key={t.team_id} value={t.team_id}>{fantasyTeamOptionLabel(t.team_name, isMyTeam(t.team_id))}</option>
+          ))}
         </select>
         <span className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} players</span>
       </div>

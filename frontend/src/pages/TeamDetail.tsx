@@ -17,6 +17,7 @@ import InjuryBadge from '../components/InjuryBadge'
 import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
+import { MyTeamMark } from '../components/MyTeamMark'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_SCHEDULE } from '../config/featureFlags'
@@ -355,7 +356,10 @@ const TeamDetail = () => {
         </button>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-bold text-gray-900">{team_detail.team.team_name}</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {team_detail.team.team_name}
+              <MyTeamMark teamId={team_detail.team.team_id} />
+            </h1>
             <DataDateBadge dataDate={team_detail.data_date} />
           </div>
           <a

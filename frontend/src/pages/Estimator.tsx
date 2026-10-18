@@ -4,6 +4,9 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import type { TeamRankProbability, TeamRanking, TeamPrediction } from '../types/estimator'
+import { MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
+import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
 
 const STAT_LABELS: Record<string, string> = {
   fg_pct: 'FG%',
@@ -58,7 +61,9 @@ function useDarkMode() {
 }
 
 function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
+  const { isMyTeam } = useMyTeam()
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  useFollowMyTeamId(selectedTeamId, setSelectedTeamId)
   const isDark = useDarkMode()
 
   const teamMap = new Map<number, { team_name: string; probs: Map<number, number> }>()
@@ -109,10 +114,11 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
                   className={`transition-all duration-150 ${isSelected ? 'border-[3px] border-black dark:border-white' : ''}`}
                 >
                   <td
-                    className={`px-3 py-1.5 whitespace-nowrap cursor-pointer transition-colors duration-150 ${isSelected ? 'font-bold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                    className={`px-3 py-1.5 whitespace-nowrap cursor-pointer transition-colors duration-150 ${isSelected ? 'font-bold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'} ${myTeamRowClass(isMyTeam(team.team_id))}`}
                     onClick={() => setSelectedTeamId(prev => prev === team.team_id ? null : team.team_id)}
                   >
                     {team.team_name}
+                    <MyTeamMark teamId={team.team_id} />
                   </td>
                   {rankCols.map(r => {
                     const prob = team.probs.get(r) ?? 0
@@ -140,6 +146,7 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
 type RankingSortKey = 'rank' | 'total_expected_pts' | 'projected_total_gp' | `expected_pts_${typeof STAT_KEYS[number]}`
 
 function RankingTable({ rankings }: { rankings: TeamRanking[] }) {
+  const { isMyTeam } = useMyTeam()
   const [sortKey, setSortKey] = useState<RankingSortKey>('rank')
   const [sortAsc, setSortAsc] = useState(true)
 
@@ -188,7 +195,10 @@ function RankingTable({ rankings }: { rankings: TeamRanking[] }) {
             {sorted.map(team => (
               <tr key={team.team_id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                 <td className="px-3 py-2 font-bold">{team.rank}</td>
-                <td className="px-3 py-2 font-medium whitespace-nowrap">{team.team_name}</td>
+                <td className={`px-3 py-2 font-medium whitespace-nowrap ${myTeamRowClass(isMyTeam(team.team_id))}`}>
+                  {team.team_name}
+                  <MyTeamMark teamId={team.team_id} />
+                </td>
                 {STAT_KEYS.map(k => (
                   <td key={k} className="px-2 py-2 text-center text-xs">
                     {(team[`expected_pts_${k}` as keyof TeamRanking] as number).toFixed(1)}
@@ -212,6 +222,7 @@ function RankingTable({ rankings }: { rankings: TeamRanking[] }) {
 type ProjectionSortKey = 'team_name' | 'projected_total_gp' | `estimated_final_${StatKey}`
 
 function ProjectionSummary({ predictions }: { predictions: TeamPrediction[] }) {
+  const { isMyTeam } = useMyTeam()
   const [sortKey, setSortKey] = useState<ProjectionSortKey>('team_name')
   const [sortAsc, setSortAsc] = useState(true)
 
@@ -264,7 +275,10 @@ function ProjectionSummary({ predictions }: { predictions: TeamPrediction[] }) {
           <tbody>
             {sorted.map(team => (
               <tr key={team.team_id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-3 py-2 font-medium whitespace-nowrap">{team.team_name}</td>
+                <td className={`px-3 py-2 font-medium whitespace-nowrap ${myTeamRowClass(isMyTeam(team.team_id))}`}>
+                  {team.team_name}
+                  <MyTeamMark teamId={team.team_id} />
+                </td>
                 {STAT_KEYS.map(k => {
                   const val = team[`estimated_final_${k}` as keyof TeamPrediction] as number
                   const variance = team[`variance_${k}` as keyof TeamPrediction] as number
