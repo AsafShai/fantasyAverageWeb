@@ -206,7 +206,7 @@ const TeamDetail = () => {
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
-    ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: false }] : statColumns),
+    ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: true }] : statColumns),
     ...(FF_MATCHUP_QUALITY && !showSchedule ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
   ]
 
@@ -234,6 +234,9 @@ const TeamDetail = () => {
         } else if (sortBy === 'pro_team') {
           aVal = a.pro_team
           bVal = b.pro_team
+        } else if (sortBy === 'week_games') {
+          aVal = weekGameCount(opponents, a.pro_team, weekDays)
+          bVal = weekGameCount(opponents, b.pro_team, weekDays)
         } else {
           const aStat = a.stats[sortBy as PlayerStatKey] ?? -1
           const bStat = b.stats[sortBy as PlayerStatKey] ?? -1
@@ -430,6 +433,8 @@ const TeamDetail = () => {
         <RosterCoverage
           players={team_detail.players ?? []}
           teamId={teamIdNumber}
+          horizon={scheduleHorizon}
+          onHorizonChange={setScheduleHorizon}
           onSelectDate={setCoverageDate}
           onActiveDate={setActiveCoverageDate}
         />
