@@ -3,8 +3,11 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DeadlineCountdown from '../components/DeadlineCountdown'
 import { getErrorMessage } from '../utils/errorMessage'
+import { MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
 
 const Dashboard = () => {
+  const { isMyTeam } = useMyTeam()
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
   const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
 
@@ -112,13 +115,16 @@ const Dashboard = () => {
           {topTeams.map((team: import('../types/api').RankingStats, index: number) => (
             <div
               key={team.team.team_id}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              className={`flex items-center justify-between p-3 bg-gray-50 rounded-lg ${myTeamRowClass(isMyTeam(team.team.team_id))}`}
             >
               <div className="flex items-center space-x-3">
                 <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-medium">
                   {index + 1}
                 </span>
-                <span className="font-medium">{team.team.team_name}</span>
+                <span className="font-medium">
+                  {team.team.team_name}
+                  <MyTeamMark teamId={team.team.team_id} />
+                </span>
               </div>
               <div className="text-right">
                 <span className="text-lg font-bold text-gray-900">
