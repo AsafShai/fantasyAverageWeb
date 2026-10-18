@@ -12,11 +12,13 @@ import {
 } from '../hooks/useUrlState';
 import { useGetAllPlayersQuery, useGetScheduleQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery } from '../store/api/fantasyApi';
-import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStatKey, CustomDateRange } from '../types/api';
+import type { PlayerFilters, Player, StatFilter, TimePeriod, ComparisonOperator, PlayerStatKey, CustomDateRange, ScheduleResponse } from '../types/api';
 import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
 import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
+import { StatsScheduleToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode } from '../components/PlayerWeekColumns';
+import { opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';
 import PlayerNameLink from '../components/PlayerNameLink';
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_PAST_SLATES, FF_SCHEDULE } from '../config/featureFlags';
@@ -98,6 +100,7 @@ const Players = () => {
     urlState.from && urlState.to ? { start: urlState.from, end: urlState.to } : null
   );
   const [integerMode, setIntegerMode] = usePersistedState('players.integerMode', true);
+  const [tableMode, setTableMode] = useState<PlayerTableMode>('stats');
 
   const { data, isLoading, error } = useGetAllPlayersQuery({
     page: 1,
@@ -106,7 +109,7 @@ const Players = () => {
     ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   });
   const { data: teams } = useGetTeamsListQuery();
-  const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE || !FF_MATCHUP_QUALITY });
+  const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE });
 
   useEffect(() => {
     if (timePeriod !== 'custom' || !customRange || !data?.players) return
@@ -249,16 +252,13 @@ const Players = () => {
 
       <FilterPanel filters={filters} onChange={setFilters} teams={teams} />
 
-      <div className="flex flex-wrap justify-between items-center sm:items-stretch gap-2 mt-4 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="sm:hidden">
-            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
-          </div>
+      <div className="flex flex-col gap-2 mt-4 mb-4">
+        <div className="flex items-center justify-between gap-2">
           <div className="results-count hidden sm:flex sm:items-center">
             Showing {filteredPlayers.length} players
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center justify-end gap-2 ml-auto">
+          <div className="flex flex-wrap items-center justify-end gap-2">
           {FF_MATCHUP_QUALITY && (
             <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none" title="Pick a game day. Past dates (debug) show that slate with current player state.">
               <span>Slate</span>
@@ -322,30 +322,43 @@ const Players = () => {
               Integer projections
             </label>
           )}
-          <div className="hidden sm:block">
-            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
           </div>
-<div className="flex self-start border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-            <button
-              className={`px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-              onClick={() => setShowAverages(true)}
-            >
-              Per Game
-            </button>
-            <button
-              className={`px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-              onClick={() => setShowAverages(false)}
-            >
-              Totals
-            </button>
+          <div className="flex shrink-0 items-center gap-2">
+          {tableMode !== 'schedule' && (
+            <div className="flex self-start border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+              <button
+                className={`px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                onClick={() => setShowAverages(true)}
+              >
+                Per Game
+              </button>
+              <button
+                className={`px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                onClick={() => setShowAverages(false)}
+              >
+                Totals
+              </button>
+            </div>
+          )}
+          {FF_SCHEDULE && (
+            <div className="shrink-0">
+              <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
+            </div>
+          )}
+          </div>
           </div>
         </div>
+        {tableMode !== 'schedule' && (
+          <div className="flex justify-end">
+            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
+          </div>
+        )}
       </div>
       <div className="results-count sm:hidden mb-2">
         Showing {filteredPlayers.length} players
       </div>
 
-      {timePeriod === 'custom' && customRange && (
+      {tableMode !== 'schedule' && timePeriod === 'custom' && customRange && (
         <CoverageNotice
           requestedStart={customRange.start}
           requestedEnd={customRange.end}
@@ -361,6 +374,8 @@ const Players = () => {
           showAverages={showAverages}
           matchupMap={matchupMap}
           integerMode={integerMode}
+          tableMode={tableMode}
+          schedule={schedule}
         />
       </div>
     </div>
@@ -532,12 +547,16 @@ const PlayerTable = ({
   showAverages,
   matchupMap,
   integerMode,
+  tableMode,
+  schedule,
 }: {
   players: Player[];
   teamMap: Map<number, string>;
   showAverages: boolean;
   matchupMap: Map<string, PlayerMatchup>;
   integerMode: boolean;
+  tableMode: PlayerTableMode;
+  schedule: ScheduleResponse | undefined;
 }) => {
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -550,6 +569,16 @@ const PlayerTable = ({
       return next;
     });
   };
+
+  const showSchedule = tableMode === 'schedule';
+  const weekDays = useMemo(() => weekScheduleDays(), []);
+  const opponents = useMemo(
+    () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
+    [schedule],
+  );
+  const statColumnCount = showSchedule ? weekDays.length + 1 : 10;
+  const showMatchup = FF_MATCHUP_QUALITY && !showSchedule;
+  const matchupColumnCount = showMatchup ? 1 : 0;
 
   const getTeamDisplay = useCallback((player: Player) => {
     if (player.status === 'ONTEAM' && player.team_id !== 0) {
@@ -633,17 +662,30 @@ const PlayerTable = ({
           <th onClick={() => handleSort('pro_team')}>NBA Team {sortBy === 'pro_team' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
           <th>Pos</th>
           <th onClick={() => handleSort('team_id')}>Team {sortBy === 'team_id' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('minutes')}>{showAverages ? 'MPG' : 'MIN'} {sortBy === 'minutes' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('fg_percentage')}>FG% {sortBy === 'fg_percentage' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('ft_percentage')}>FT% {sortBy === 'ft_percentage' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('three_pm')}>{showAverages ? '3PG' : '3PM'} {sortBy === 'three_pm' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('reb')}>{showAverages ? 'RPG' : 'REB'} {sortBy === 'reb' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('ast')}>{showAverages ? 'APG' : 'AST'} {sortBy === 'ast' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('stl')}>{showAverages ? 'SPG' : 'STL'} {sortBy === 'stl' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('blk')}>{showAverages ? 'BPG' : 'BLK'} {sortBy === 'blk' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('pts')}>{showAverages ? 'PPG' : 'PTS'} {sortBy === 'pts' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          <th onClick={() => handleSort('gp')}>GP {sortBy === 'gp' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
-          {FF_MATCHUP_QUALITY && <th>Matchup</th>}
+          {showSchedule ? (
+            <>
+              {weekDays.map(day => (
+                <th key={day.date} className="week-day">
+                  <WeekDayHeading day={day} />
+                </th>
+              ))}
+              <th className="week-day">Games</th>
+            </>
+          ) : (
+            <>
+              <th onClick={() => handleSort('minutes')}>{showAverages ? 'MPG' : 'MIN'} {sortBy === 'minutes' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('fg_percentage')}>FG% {sortBy === 'fg_percentage' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('ft_percentage')}>FT% {sortBy === 'ft_percentage' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('three_pm')}>{showAverages ? '3PG' : '3PM'} {sortBy === 'three_pm' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('reb')}>{showAverages ? 'RPG' : 'REB'} {sortBy === 'reb' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('ast')}>{showAverages ? 'APG' : 'AST'} {sortBy === 'ast' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('stl')}>{showAverages ? 'SPG' : 'STL'} {sortBy === 'stl' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('blk')}>{showAverages ? 'BPG' : 'BLK'} {sortBy === 'blk' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('pts')}>{showAverages ? 'PPG' : 'PTS'} {sortBy === 'pts' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+              <th onClick={() => handleSort('gp')}>GP {sortBy === 'gp' && (sortOrder === 'asc' ? '↑' : '↓')}</th>
+            </>
+          )}
+          {showMatchup && <th>Matchup</th>}
         </tr>
       </thead>
       <tbody>
@@ -658,7 +700,16 @@ const PlayerTable = ({
                 <td>{player.pro_team}</td>
                 <td>{player.positions.join(', ')}</td>
                 <td>{getTeamDisplay(player)}</td>
-                {noData ? (
+                {showSchedule ? (
+                  <>
+                    {weekDays.map(day => (
+                      <td key={day.date} className="text-center">
+                        <WeekOpponent opponent={weekOpponent(opponents, player.pro_team, day.date)} />
+                      </td>
+                    ))}
+                    <td className="text-center font-semibold">{weekGameCount(opponents, player.pro_team, weekDays)}</td>
+                  </>
+                ) : noData ? (
                   <td
                     colSpan={10}
                     className="text-center italic text-gray-400"
@@ -680,7 +731,7 @@ const PlayerTable = ({
                     <td>{player.stats.gp}</td>
                   </>
                 )}
-                {FF_MATCHUP_QUALITY && (
+                {showMatchup && (
                   <td>
                     <MatchupCell
                       matchup={matchup}
@@ -691,8 +742,8 @@ const PlayerTable = ({
                   </td>
                 )}
               </tr>
-              {FF_MATCHUP_QUALITY && isExpanded && matchup && (
-                <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
+              {showMatchup && isExpanded && matchup && (
+                <MatchupExpandRow matchup={matchup} colSpan={4 + statColumnCount + matchupColumnCount} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
               )}
             </React.Fragment>
           );

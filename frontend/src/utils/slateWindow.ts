@@ -62,6 +62,55 @@ export function addDays(date: string, amount: number): string {
   return toLocalIso(next)
 }
 
+/** Today through the same weekday next week, inclusive. */
+export const WEEK_SCHEDULE_LENGTH = 8
+
+export interface WeekScheduleDay {
+  date: string
+  weekday: string
+  label: string
+}
+
+export function weekScheduleDays(today: string = easternToday()): WeekScheduleDay[] {
+  return Array.from({ length: WEEK_SCHEDULE_LENGTH }, (_, offset) => {
+    const date = addDays(today, offset)
+    return {
+      date,
+      weekday: formatSlateDate(date, { weekday: 'short' }),
+      label: formatSlateDate(date, { month: 'short', day: 'numeric' }),
+    }
+  })
+}
+
+export function opponentsByTeamDate(schedule: ScheduleResponse): Map<string, string> {
+  const opponents = new Map<string, string>()
+  for (const team of schedule.teams) {
+    for (const game of team.games) {
+      opponents.set(`${team.abbreviation}|${game.date}`, game.opponent_abbreviation)
+    }
+  }
+  return opponents
+}
+
+export function weekOpponent(
+  opponents: Map<string, string>,
+  abbreviation: string,
+  date: string,
+): string | undefined {
+  return opponents.get(`${abbreviation}|${date}`)
+}
+
+export function weekGameCount(
+  opponents: Map<string, string>,
+  abbreviation: string,
+  days: readonly { date: string }[],
+): number {
+  return days.reduce(
+    (count, day) => count + (weekOpponent(opponents, abbreviation, day.date) ? 1 : 0),
+    0,
+  )
+}
+
 /** Monday-start week key, matching how fantasy weeks are usually drawn. */
 export function weekStart(date: string): string {
   const value = new Date(`${date}T12:00:00`)

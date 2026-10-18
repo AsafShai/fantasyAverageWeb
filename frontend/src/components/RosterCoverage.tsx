@@ -9,6 +9,7 @@ import { firstScheduleDay, formatSlateDate } from '../utils/slateWindow'
 interface RosterCoverageProps {
   players: Player[]
   teamId: number
+  onSelectDate?: (date: string) => void
 }
 
 function daySurface(day: ScheduleCalendarDay): string {
@@ -22,7 +23,7 @@ function slateTone(day: ScheduleCalendarDay): string {
   return 'bg-gray-100 text-gray-500'
 }
 
-export default function RosterCoverage({ players, teamId }: RosterCoverageProps) {
+export default function RosterCoverage({ players, teamId, onSelectDate }: RosterCoverageProps) {
   const { data: schedule, isLoading, error } = useGetScheduleQuery()
   const { data: allPlayerData } = useGetAllPlayersQuery({ limit: 500 }, { skip: players.length > 0 })
   const [horizon, setHorizon] = useState<14 | 28>(14)
@@ -79,7 +80,10 @@ export default function RosterCoverage({ players, teamId }: RosterCoverageProps)
           <button
             type="button"
             key={day.date}
-            onClick={() => setSelectedDate(day.date)}
+            onClick={() => {
+              setSelectedDate(day.date)
+              onSelectDate?.(day.date)
+            }}
             className={`w-16 min-w-16 shrink-0 rounded-lg px-1.5 py-2 text-center leading-none transition-shadow ${daySurface(day)} ${activeDate === day.date ? 'border-[3px] border-blue-700 shadow-sm' : 'border-2 border-gray-200'}`}
             aria-pressed={activeDate === day.date}
             aria-label={`${formatSlateDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${roster.length} rostered players have an NBA game; ${day.slate_size} NBA games on the slate`}

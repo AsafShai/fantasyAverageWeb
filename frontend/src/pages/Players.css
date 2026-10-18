@@ -231,8 +231,13 @@
   z-index: 10;
 }
 
-.player-table th:hover {
-  background: #e0e0e0;
+.player-table th.week-day {
+  cursor: default;
+  text-align: center;
+}
+
+.player-table th.week-day:hover {
+  background: #f5f5f5;
 }
 
 .player-table td {
@@ -358,6 +363,10 @@
 
 :where(.dark, .dark *) .player-table th:hover {
   background: #1e293b;
+}
+
+:where(.dark, .dark *) .player-table th.week-day:hover {
+  background: #0f172a;
 }
 
 :where(.dark, .dark *) .player-table td {
