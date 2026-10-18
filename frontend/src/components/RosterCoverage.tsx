@@ -1,14 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useGetAllPlayersQuery, useGetScheduleQuery } from '../store/api/fantasyApi'
 import type { Player, ScheduleCalendarDay } from '../types/api'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { firstScheduleDay, formatSlateDate } from '../utils/slateWindow'
+import { SCHEDULE_HORIZONS, type ScheduleHorizon } from './PlayerWeekColumns'
 
 interface RosterCoverageProps {
   players: Player[]
   teamId: number
+  horizon: ScheduleHorizon
+  onHorizonChange: (horizon: ScheduleHorizon) => void
+  onSelectDate?: (date: string) => void
+  onActiveDate?: (date: string) => void
 }
 
 function daySurface(day: ScheduleCalendarDay): string {
@@ -22,10 +27,9 @@ function slateTone(day: ScheduleCalendarDay): string {
   return 'bg-gray-100 text-gray-500'
 }
 
-export default function RosterCoverage({ players, teamId }: RosterCoverageProps) {
+export default function RosterCoverage({ players, teamId, horizon, onHorizonChange, onSelectDate, onActiveDate }: RosterCoverageProps) {
   const { data: schedule, isLoading, error } = useGetScheduleQuery()
   const { data: allPlayerData } = useGetAllPlayersQuery({ limit: 500 }, { skip: players.length > 0 })
-  const [horizon, setHorizon] = useState<14 | 28>(14)
   const [selectedDate, setSelectedDate] = useState('')
 
   const days = useMemo(() => schedule?.calendar_days ?? [], [schedule])
@@ -49,6 +53,10 @@ export default function RosterCoverage({ players, teamId }: RosterCoverageProps)
 
   const activeDate = visibleDays.some(day => day.date === selectedDate) ? selectedDate : visibleDays[0]?.date ?? ''
 
+  useEffect(() => {
+    if (activeDate) onActiveDate?.(activeDate)
+  }, [activeDate, onActiveDate])
+
   if (isLoading) return <div className="bg-white rounded-lg shadow p-6"><LoadingSpinner /></div>
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load schedule coverage')} />
   if (!schedule || !visibleDays.length) return null
@@ -61,11 +69,11 @@ export default function RosterCoverage({ players, teamId }: RosterCoverageProps)
           <p className="mt-1 text-xs text-gray-500">Bar height = rostered players with an NBA game. The slate label is the total number of NBA games that day.</p>
         </div>
         <div className="flex rounded-lg border border-gray-200 p-1 text-xs">
-          {[14, 28].map(value => (
+          {SCHEDULE_HORIZONS.map(value => (
             <button
               key={value}
               type="button"
-              onClick={() => setHorizon(value as 14 | 28)}
+              onClick={() => onHorizonChange(value)}
               className={`rounded-md px-3 py-2 ${horizon === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {value} days
@@ -79,7 +87,10 @@ export default function RosterCoverage({ players, teamId }: RosterCoverageProps)
           <button
             type="button"
             key={day.date}
-            onClick={() => setSelectedDate(day.date)}
+            onClick={() => {
+              setSelectedDate(day.date)
+              onSelectDate?.(day.date)
+            }}
             className={`w-16 min-w-16 shrink-0 rounded-lg px-1.5 py-2 text-center leading-none transition-shadow ${daySurface(day)} ${activeDate === day.date ? 'border-[3px] border-blue-700 shadow-sm' : 'border-2 border-gray-200'}`}
             aria-pressed={activeDate === day.date}
             aria-label={`${formatSlateDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${roster.length} rostered players have an NBA game; ${day.slate_size} NBA games on the slate`}
