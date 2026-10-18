@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useGetAllPlayersQuery, useGetScheduleQuery } from '../store/api/fantasyApi'
 import type { Player, ScheduleCalendarDay } from '../types/api'
 import LoadingSpinner from './LoadingSpinner'
@@ -10,6 +10,7 @@ interface RosterCoverageProps {
   players: Player[]
   teamId: number
   onSelectDate?: (date: string) => void
+  onActiveDate?: (date: string) => void
 }
 
 function daySurface(day: ScheduleCalendarDay): string {
@@ -23,10 +24,10 @@ function slateTone(day: ScheduleCalendarDay): string {
   return 'bg-gray-100 text-gray-500'
 }
 
-export default function RosterCoverage({ players, teamId, onSelectDate }: RosterCoverageProps) {
+export default function RosterCoverage({ players, teamId, onSelectDate, onActiveDate }: RosterCoverageProps) {
   const { data: schedule, isLoading, error } = useGetScheduleQuery()
   const { data: allPlayerData } = useGetAllPlayersQuery({ limit: 500 }, { skip: players.length > 0 })
-  const [horizon, setHorizon] = useState<14 | 28>(14)
+  const [horizon, setHorizon] = useState<7 | 14 | 28>(7)
   const [selectedDate, setSelectedDate] = useState('')
 
   const days = useMemo(() => schedule?.calendar_days ?? [], [schedule])
@@ -50,6 +51,10 @@ export default function RosterCoverage({ players, teamId, onSelectDate }: Roster
 
   const activeDate = visibleDays.some(day => day.date === selectedDate) ? selectedDate : visibleDays[0]?.date ?? ''
 
+  useEffect(() => {
+    if (activeDate) onActiveDate?.(activeDate)
+  }, [activeDate, onActiveDate])
+
   if (isLoading) return <div className="bg-white rounded-lg shadow p-6"><LoadingSpinner /></div>
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load schedule coverage')} />
   if (!schedule || !visibleDays.length) return null
@@ -62,11 +67,11 @@ export default function RosterCoverage({ players, teamId, onSelectDate }: Roster
           <p className="mt-1 text-xs text-gray-500">Bar height = rostered players with an NBA game. The slate label is the total number of NBA games that day.</p>
         </div>
         <div className="flex rounded-lg border border-gray-200 p-1 text-xs">
-          {[14, 28].map(value => (
+          {[7, 14, 28].map(value => (
             <button
               key={value}
               type="button"
-              onClick={() => setHorizon(value as 14 | 28)}
+              onClick={() => setHorizon(value as 7 | 14 | 28)}
               className={`rounded-md px-3 py-2 ${horizon === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {value} days

@@ -3,6 +3,38 @@ import './MatchupDisplay.css'
 
 export type PlayerTableMode = 'stats' | 'schedule'
 
+export const SCHEDULE_HORIZONS = [7, 14, 28] as const
+export type ScheduleHorizon = (typeof SCHEDULE_HORIZONS)[number]
+
+export function ScheduleHorizonToggle({
+  value,
+  onChange,
+}: {
+  value: ScheduleHorizon
+  onChange: (value: ScheduleHorizon) => void
+}) {
+  return (
+    <div className="flex w-full overflow-hidden rounded border border-gray-300 sm:w-auto dark:border-gray-600">
+      {SCHEDULE_HORIZONS.map((days, index) => (
+        <button
+          key={days}
+          type="button"
+          className={`flex-1 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${
+            index > 0 ? 'border-l border-gray-300 dark:border-gray-600' : ''
+          } ${
+            value === days
+              ? 'bg-blue-600 font-medium text-white'
+              : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+          }`}
+          onClick={() => onChange(days)}
+        >
+          {days} days
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function StatsScheduleToggle({
   mode,
   onChange,
@@ -11,7 +43,7 @@ export function StatsScheduleToggle({
   onChange: (mode: PlayerTableMode) => void
 }) {
   return (
-    <div className="flex self-start border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+    <div className="flex w-full self-start overflow-hidden rounded border border-gray-300 sm:w-auto dark:border-gray-600">
       <button
         type="button"
         className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${

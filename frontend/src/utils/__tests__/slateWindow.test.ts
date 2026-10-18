@@ -42,11 +42,17 @@ function schedule(teams: ScheduleTeam[]): ScheduleResponse {
 }
 
 describe('weekScheduleDays', () => {
-  it('covers today through the same weekday a week later', () => {
+  it('covers today and the next six days', () => {
     const days = weekScheduleDays('2026-10-18')
-    expect(days).toHaveLength(8)
+    expect(days).toHaveLength(7)
     expect(days[0]).toMatchObject({ date: '2026-10-18', weekday: 'Sun', label: 'Oct 18' })
-    expect(days[7]).toMatchObject({ date: '2026-10-25', weekday: 'Sun', label: 'Oct 25' })
+    expect(days[6]).toMatchObject({ date: '2026-10-24', weekday: 'Sat', label: 'Oct 24' })
+  })
+
+  it('extends through the requested number of days', () => {
+    const days = weekScheduleDays('2026-10-18', 14)
+    expect(days).toHaveLength(14)
+    expect(days[13]).toMatchObject({ date: '2026-10-31', weekday: 'Sat', label: 'Oct 31' })
   })
 })
 
