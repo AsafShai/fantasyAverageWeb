@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useMyTeam } from '../../context/MyTeamContext';
+import { useFollowMyTeamValue } from '../../hooks/useFollowMyTeam';
 import type { TimePeriod, CustomDateRange } from '../../types/api';
 import { TeamTradeSection } from './components/TeamTradeSection';
 import { TradeStatsToggle } from './components/TradeStatsToggle';
@@ -47,6 +49,13 @@ export const Trade: React.FC = () => {
     isFetchingFreeAgents,
     freeAgentsError,
   } = useTradeData(teamA, teamB, tradeMode, timePeriod, customRange);
+
+  const { myTeamId } = useMyTeam();
+  const tradeTarget = teams.some(team => team.team_id === myTeamId) ? myTeamId : null;
+  useFollowMyTeamValue(teamA?.team_id ?? null, tradeTarget, (id) => {
+    const team = teams.find(item => item.team_id === id);
+    if (team) handleTeamAChange(team);
+  });
 
   // Derive selected players from the latest fetched data so stats update
   // immediately when the time period changes, without needing to re-select.

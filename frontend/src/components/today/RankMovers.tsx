@@ -4,6 +4,8 @@ import { useSort } from '../../hooks/useSort'
 import SortableHeaderCell from './SortableHeaderCell'
 import MultiSelectFilter from './MultiSelectFilter'
 import type { RankMover } from '../../types/api'
+import { leadWithMyTeam, MyTeamMark, myTeamRowClass } from '../MyTeamMark'
+import { useMyTeam } from '../../context/MyTeamContext'
 
 interface RankMoversProps {
   movers: RankMover[]
@@ -24,6 +26,7 @@ function formatDelta(delta: number): string {
 
 export default function RankMovers({ movers }: RankMoversProps) {
   const navigate = useNavigate()
+  const { myTeamId, isMyTeam } = useMyTeam()
   const [selectedTeams, setSelectedTeams] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
 
@@ -47,7 +50,8 @@ export default function RankMovers({ movers }: RankMoversProps) {
     [movers, selectedTeams, selectedCategories],
   )
 
-  const { sorted, sortKey, direction, toggle } = useSort<RankMover, SortKey>(filtered, COMPARATORS)
+  const ordered = leadWithMyTeam(filtered, myTeamId)
+  const { sorted, sortKey, direction, toggle } = useSort<RankMover, SortKey>(ordered, COMPARATORS)
 
   return (
     <div className="flex min-w-0 flex-col rounded-lg bg-white p-4 shadow dark:bg-gray-800">
@@ -112,8 +116,11 @@ export default function RankMovers({ movers }: RankMoversProps) {
                     onClick={() => navigate(`/team/${mover.team_id}`)}
                     className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
                   >
-                    <td className="max-w-[8rem] truncate px-1.5 py-1.5 text-xs text-gray-900 sm:max-w-[11rem] sm:px-3 sm:text-sm dark:text-gray-100">
-                      {mover.team_name}
+                    <td className={`max-w-[8rem] px-1.5 py-1.5 text-xs text-gray-900 sm:max-w-[11rem] sm:px-3 sm:text-sm dark:text-gray-100 ${myTeamRowClass(isMyTeam(mover.team_id))}`}>
+                      <span className="inline-flex max-w-full items-center">
+                        <span className="truncate">{mover.team_name}</span>
+                        <MyTeamMark teamId={mover.team_id} />
+                      </span>
                     </td>
                     <td className="px-1.5 py-1.5 sm:px-2">
                       <span

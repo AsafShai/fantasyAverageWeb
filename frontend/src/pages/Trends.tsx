@@ -16,6 +16,9 @@ import DateRangePicker from '../components/DateRangePicker'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange } from '../types/api'
+import { fantasyTeamOptionLabel } from '../components/MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
+import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam'
 
 const MIN_CUSTOM_WINDOW_DAYS = 5
 const MAX_CUSTOM_WINDOW_DAYS = 60
@@ -613,6 +616,11 @@ export default function Trends() {
   const [minGames, setMinGames] = usePersistedState('trends.minGames', 3)
   const [ownership, setOwnership] = usePersistedState<Ownership>('trends.ownership', 'all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
+  const { myTeam } = useMyTeam()
+  useFollowMyTeamValue(fantasyTeam, myTeam?.team_name ?? null, (name) => {
+    setFantasyTeam(name)
+    setOwnership('all')
+  })
   // one remembered choice per tab: "prior 2 seasons" is the right default when
   // judging a season line, "this season" when judging current form
   const [seasonBaseline, setSeasonBaseline] = usePersistedState(
@@ -711,8 +719,10 @@ export default function Trends() {
 
   const teamOptions = useMemo(() => {
     const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? regressionQuery.data?.items ?? []
-    return [...new Set(items.map(i => i.fantasy_status).filter(t => t !== 'FA'))].sort()
-  }, [minutesQuery.data, usageQuery.data, regressionQuery.data])
+    const names = [...new Set(items.map(i => i.fantasy_status).filter(t => t !== 'FA'))].sort()
+    if (!myTeam || !names.includes(myTeam.team_name)) return names
+    return [myTeam.team_name, ...names.filter(name => name !== myTeam.team_name)]
+  }, [minutesQuery.data, usageQuery.data, regressionQuery.data, myTeam])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
@@ -831,7 +841,9 @@ export default function Trends() {
               className="col-span-2 px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm sm:max-w-[170px]"
             >
               <option value="">All fantasy teams</option>
-              {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
+              {teamOptions.map(t => (
+                <option key={t} value={t}>{fantasyTeamOptionLabel(t, t === myTeam?.team_name)}</option>
+              ))}
             </select>
             <label className="col-span-2 flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
               <span className="w-[72px] sm:w-auto shrink-0">Min games</span>

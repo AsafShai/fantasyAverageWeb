@@ -6,6 +6,8 @@ import { TeamRankingsBar } from './TeamRankingsBar';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import ErrorMessage from '../../../components/ErrorMessage';
 import { getErrorMessage } from '../../../utils/errorMessage';
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../../../components/MyTeamMark';
+import { useMyTeam } from '../../../context/MyTeamContext';
 
 interface TeamTradeSectionProps {
   title: string;
@@ -40,7 +42,7 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
   viewMode,
   categoryRanks,
 }) => {
-
+  const { myTeamId, isMyTeam } = useMyTeam();
 
   return (
     <div className="card p-3">
@@ -69,9 +71,9 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
             className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
           >
             <option value="">Choose a team...</option>
-            {teams.map((team) => (
+            {leadWithMyTeam(teams, myTeamId).map((team) => (
               <option key={team.team_id} value={team.team_id}>
-                {team.team_name}
+                {fantasyTeamOptionLabel(team.team_name, isMyTeam(team.team_id))}
               </option>
             ))}
           </select>

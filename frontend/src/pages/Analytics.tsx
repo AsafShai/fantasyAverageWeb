@@ -10,6 +10,8 @@ import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 import { FF_NAV_REORG } from '../config/featureFlags'
 import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
+import { MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
 
 type AnalyticsTab = 'heatmap' | 'rankingsOverTime' | 'shootingStats'
 
@@ -38,6 +40,7 @@ const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
 const Analytics = () => {
+  const { isMyTeam } = useMyTeam()
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   useEffect(() => {
     const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')))
@@ -302,10 +305,11 @@ const Analytics = () => {
                     <td
                       className={`px-4 py-2 cursor-pointer transition-colors duration-150 ${
                         isHighlighted ? 'font-bold' : 'font-medium hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                      } ${myTeamRowClass(isMyTeam(team.team_id))}`}
                       onClick={() => handleTeamClick(team.team_id)}
                     >
                       {team.team_name}
+                      <MyTeamMark teamId={team.team_id} />
                     </td>
                     {sortedData.normalized_data[teamIndex]?.map((value: number, catIndex: number) => {
                       const cellValue: number | undefined = sortedData.data[teamIndex]?.[catIndex]
