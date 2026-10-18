@@ -272,6 +272,14 @@
   background: #f5f5f5;
 }
 
+.player-table th.week-day.week-games {
+  cursor: pointer;
+}
+
+.player-table th.week-day.week-games:hover {
+  background: #e8e8e8;
+}
+
 .player-table th.week-day.week-day-selected,
 .player-table th.week-day.week-day-selected:hover,
 .player-table td.week-day-selected {
@@ -405,6 +413,10 @@
 
 :where(.dark, .dark *) .player-table th.week-day:hover {
   background: #0f172a;
+}
+
+:where(.dark, .dark *) .player-table th.week-day.week-games:hover {
+  background: #1e293b;
 }
 
 :where(.dark, .dark *) .player-table th.week-day.week-day-selected,

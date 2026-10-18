@@ -632,6 +632,9 @@ const PlayerTable = ({
       } else if (sortColumn === 'team_id') {
         aVal = getTeamDisplay(a)
         bVal = getTeamDisplay(b)
+      } else if (sortColumn === 'week_games') {
+        aVal = weekGameCount(opponents, a.pro_team, weekDays)
+        bVal = weekGameCount(opponents, b.pro_team, weekDays)
       } else if (sortColumn in a.stats) {
         const aStat = a.stats[sortColumn as PlayerStatKey]
         const bStat = b.stats[sortColumn as PlayerStatKey]
@@ -654,7 +657,7 @@ const PlayerTable = ({
         return aVal < bVal ? 1 : -1;
       }
     });
-  }, [players, sortBy, sortOrder, showAverages, getTeamDisplay]);
+  }, [players, sortBy, sortOrder, showAverages, getTeamDisplay, opponents, weekDays]);
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -680,7 +683,9 @@ const PlayerTable = ({
                   <WeekDayHeading day={day} />
                 </th>
               ))}
-              <th className="week-day">Games</th>
+              <th className="week-day week-games" onClick={() => handleSort('week_games')}>
+                Games {sortBy === 'week_games' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
             </>
           ) : (
             <>

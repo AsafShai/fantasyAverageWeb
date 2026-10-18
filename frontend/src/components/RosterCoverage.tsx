@@ -5,10 +5,13 @@ import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { firstScheduleDay, formatSlateDate } from '../utils/slateWindow'
+import { SCHEDULE_HORIZONS, type ScheduleHorizon } from './PlayerWeekColumns'
 
 interface RosterCoverageProps {
   players: Player[]
   teamId: number
+  horizon: ScheduleHorizon
+  onHorizonChange: (horizon: ScheduleHorizon) => void
   onSelectDate?: (date: string) => void
   onActiveDate?: (date: string) => void
 }
@@ -24,10 +27,9 @@ function slateTone(day: ScheduleCalendarDay): string {
   return 'bg-gray-100 text-gray-500'
 }
 
-export default function RosterCoverage({ players, teamId, onSelectDate, onActiveDate }: RosterCoverageProps) {
+export default function RosterCoverage({ players, teamId, horizon, onHorizonChange, onSelectDate, onActiveDate }: RosterCoverageProps) {
   const { data: schedule, isLoading, error } = useGetScheduleQuery()
   const { data: allPlayerData } = useGetAllPlayersQuery({ limit: 500 }, { skip: players.length > 0 })
-  const [horizon, setHorizon] = useState<7 | 14 | 28>(7)
   const [selectedDate, setSelectedDate] = useState('')
 
   const days = useMemo(() => schedule?.calendar_days ?? [], [schedule])
@@ -67,11 +69,11 @@ export default function RosterCoverage({ players, teamId, onSelectDate, onActive
           <p className="mt-1 text-xs text-gray-500">Bar height = rostered players with an NBA game. The slate label is the total number of NBA games that day.</p>
         </div>
         <div className="flex rounded-lg border border-gray-200 p-1 text-xs">
-          {[7, 14, 28].map(value => (
+          {SCHEDULE_HORIZONS.map(value => (
             <button
               key={value}
               type="button"
-              onClick={() => setHorizon(value as 7 | 14 | 28)}
+              onClick={() => onHorizonChange(value)}
               className={`rounded-md px-3 py-2 ${horizon === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {value} days
