@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router'
 import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
+import { MyTeamSelect } from './MyTeamSelect'
 import CommandPalette from './CommandPalette'
 import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE, FF_TODAY_HUB } from '../config/featureFlags'
 import { store } from '../store/store'
@@ -201,6 +202,7 @@ const Layout = () => {
                 </Fragment>
               ))}
               <div className="mx-3 h-6 w-0.5 bg-gray-300 dark:bg-gray-500 shrink-0 rounded-full" />
+              <MyTeamSelect />
               <SearchButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
@@ -242,6 +244,7 @@ const Layout = () => {
           {/* Mobile Navigation Menu */}
           {mobileMenuOpen && (
             <div className="md:hidden pb-4">
+              <MyTeamSelect fullWidth onNavigate={closeMobileMenu} />
               <div className="flex flex-col space-y-1">
                 {navItems.map((item) => (
                   <Fragment key={item.path}>
@@ -653,6 +656,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
               ))}
 
               <div className="mx-3 h-6 w-0.5 bg-gray-300 dark:bg-gray-500 shrink-0 rounded-full" />
+              <MyTeamSelect />
               <SearchButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
@@ -694,6 +698,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
           {/* Mobile Navigation Menu */}
           {mobileMenuOpen && (
             <div className="md:hidden pb-4">
+              <MyTeamSelect fullWidth onNavigate={closeMobileMenu} />
               <div className="flex flex-col space-y-1">
                 {navGroups.map((group) => (
                   <MobileNavGroup

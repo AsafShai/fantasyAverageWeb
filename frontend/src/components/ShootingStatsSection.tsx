@@ -6,8 +6,11 @@ import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from './DataDateBadge'
 import type { TeamShotStats } from '../types/api'
+import { MyTeamMark, myTeamRowClass } from './MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
 
 const ShootingStatsSection = () => {
+  const { isMyTeam } = useMyTeam()
   const [sortBy, setSortBy] = useState<string>('fg_percentage')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
@@ -118,13 +121,14 @@ const ShootingStatsSection = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {shots.map((team: TeamShotStats) => (
               <tr key={team.team.team_id} className="hover:bg-orange-50 dark:hover:bg-gray-700 transition-colors duration-150 border-b border-gray-100">
-                <td className="table-cell">
+                <td className={`table-cell ${myTeamRowClass(isMyTeam(team.team.team_id))}`}>
                   <Link
                     to={`/team/${team.team.team_id}`}
                     className="text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-150 hover:underline"
                   >
                     {team.team.team_name}
                   </Link>
+                  <MyTeamMark teamId={team.team.team_id} />
                 </td>
                 <td className="table-cell font-medium">{team.fgm}</td>
                 <td className="table-cell font-medium">{team.fga}</td>

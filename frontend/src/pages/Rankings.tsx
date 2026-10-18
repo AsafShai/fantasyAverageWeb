@@ -8,6 +8,8 @@ import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import type { RankingStats } from '../types/api'
 import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
+import { MyTeamMark } from '../components/MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
 
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -29,6 +31,7 @@ const RANKINGS_URL_SCHEMA = {
 }
 
 const Rankings = () => {
+  const { isMyTeam } = useMyTeam()
   const [urlState, setUrlState] = useUrlState(RANKINGS_URL_SCHEMA)
   const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from < urlState.to
   const [sortBy, setSortBy] = useState<string>(urlState.sort)
@@ -363,13 +366,14 @@ const Rankings = () => {
                   <td className="table-cell font-bold text-blue-600">
                     #{team.rank || index + 1}
                   </td>
-                  <td className="table-cell sticky left-0 z-10 bg-white group-hover:bg-blue-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
+                  <td className={`table-cell sticky left-0 z-10 bg-white group-hover:bg-blue-50 ${isMyTeam(team.team.team_id) ? 'shadow-[inset_4px_0_0_0_#2563eb,2px_0_4px_-2px_rgba(0,0,0,0.15)]' : 'shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]'}`}>
                     <Link
                       to={`/team/${team.team.team_id}`}
                       className="text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-150 hover:underline"
                     >
                       {team.team.team_name}
                     </Link>
+                    <MyTeamMark teamId={team.team.team_id} />
                   </td>
                   {columns.slice(2).map((column) => {
                     const isCategoryColumn = categoryKeys.includes(column.key)

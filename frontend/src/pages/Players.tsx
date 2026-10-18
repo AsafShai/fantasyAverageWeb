@@ -18,6 +18,8 @@ import TimePeriodSelector from '../components/TimePeriodSelector';
 import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns';
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../components/MyTeamMark';
+import { useMyTeam } from '../context/MyTeamContext';
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';
 import PlayerNameLink from '../components/PlayerNameLink';
@@ -390,6 +392,7 @@ const Players = () => {
 };
 
 const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onChange: (filters: PlayerFilters) => void; teams?: Array<{ team_id: number; team_name: string }> }) => {
+  const { myTeamId, isMyTeam } = useMyTeam()
   const [statFilter, setStatFilter] = useState<Partial<StatFilter>>({});
 
   const addStatFilter = () => {
@@ -474,9 +477,9 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
         >
           <option value="">All Teams</option>
           <option value="0">Free Agents / Waivers</option>
-          {teams?.map(team => (
+          {leadWithMyTeam(teams ?? [], myTeamId).map(team => (
             <option key={team.team_id} value={team.team_id}>
-              {team.team_name}
+              {fantasyTeamOptionLabel(team.team_name, isMyTeam(team.team_id))}
             </option>
           ))}
         </select>

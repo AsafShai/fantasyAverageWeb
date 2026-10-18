@@ -6,6 +6,9 @@ import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { FF_DRAFT_STEALS_BUSTS } from '../config/featureFlags'
 import { buildScoredPicks, buildTeamDiffRanking, topSteals, topBusts, MIN_GP_FOR_RANK, LOW_GP_MIN, type ScoredPick, type DraftBadge } from '../utils/draftReport'
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../components/MyTeamMark'
+import { useMyTeam } from '../context/MyTeamContext'
+import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
 
 type SortCol = 'pick' | 'diff' | 'valueRank'
 
@@ -115,6 +118,8 @@ export default function DraftReport() {
   }, [scoredPicks])
 
   const [teamFilter, setTeamFilter] = useState<number | null>(null)
+  const { myTeamId, isMyTeam } = useMyTeam()
+  useFollowMyTeamId(teamFilter, setTeamFilter)
 
   const sortedPicks = useMemo(() => {
     const withFallback = (p: ScoredPick, col: SortCol) => {
@@ -356,8 +361,8 @@ export default function DraftReport() {
               className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             >
               <option value="">All teams</option>
-              {teamColumns.map(t => (
-                <option key={t.team_id} value={t.team_id}>{t.team_name}</option>
+              {leadWithMyTeam(teamColumns, myTeamId).map(t => (
+                <option key={t.team_id} value={t.team_id}>{fantasyTeamOptionLabel(t.team_name, isMyTeam(t.team_id))}</option>
               ))}
             </select>
           </div>
