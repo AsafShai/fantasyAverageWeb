@@ -55,13 +55,13 @@ const TimePeriodSelector: React.FC<TimePeriodSelectorProps> = ({
   };
 
   return (
-    <div className="mb-3 sm:mb-0">
-      <div className="bg-gray-100 p-1 rounded-lg flex flex-wrap gap-1.5 w-auto max-w-sm sm:max-w-none">
+    <div className="mb-0 w-full sm:w-auto">
+      <div className="grid w-full grid-cols-2 gap-1.5 rounded-lg bg-gray-100 p-1 sm:flex sm:w-auto sm:flex-wrap">
         {periods.map((period) => (
           <button
             key={period.value}
             onClick={() => onChange(period.value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap ${
+            className={`rounded-md px-3 py-1.5 text-center text-xs font-medium whitespace-nowrap transition-all duration-200 ${
               value === period.value
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-800'
@@ -76,7 +76,7 @@ const TimePeriodSelector: React.FC<TimePeriodSelectorProps> = ({
           <button
             onClick={() => setPanelOpen((o) => !o)}
             aria-expanded={panelOpen}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap border border-dashed ${
+            className={`col-span-2 rounded-md border border-dashed px-3 py-1.5 text-center text-xs font-medium whitespace-nowrap transition-all duration-200 sm:col-span-1 ${
               value === 'custom'
                 ? 'bg-white text-blue-600 shadow-sm border-blue-300'
                 : 'text-gray-600 hover:text-gray-800 border-gray-400'

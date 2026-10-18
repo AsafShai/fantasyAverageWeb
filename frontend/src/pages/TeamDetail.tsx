@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
-import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery } from '../store/api/fantasyApi'
+import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery, useGetScheduleQuery } from '../store/api/fantasyApi'
 import type { TimePeriod, PlayerMatchup, CustomDateRange, PlayerStatKey } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -17,6 +17,8 @@ import InjuryBadge from '../components/InjuryBadge'
 import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
+import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
+import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_SCHEDULE } from '../config/featureFlags'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
@@ -83,13 +85,30 @@ const TeamDetail = () => {
     })
   }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder])
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
+  const [tableMode, setTableMode] = useState<PlayerTableMode>('stats')
+  const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
+  const [coverageDate, setCoverageDate] = useState<string | null>(null)
+  const [activeCoverageDate, setActiveCoverageDate] = useState<string | null>(null)
+  const showSchedule = FF_SCHEDULE && tableMode === 'schedule'
+  const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE })
+  const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
+  const opponents = useMemo(
+    () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
+    [schedule],
+  )
   const [integerMode, setIntegerMode] = usePersistedState('teamDetail.integerMode', true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
-  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY })
+  const coverageSlate = !showSchedule && coverageDate ? coverageDate.replaceAll('-', '') : undefined
+  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !!coverageSlate })
+  const { currentData: datedMatchups } = useGetMatchupsTodayQuery(coverageSlate, {
+    skip: !FF_MATCHUP_QUALITY || !coverageSlate,
+  })
+  const datedMatchupReady = datedMatchups !== undefined
+  const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
   const matchupMap = useMemo(() => {
     if (!FF_MATCHUP_QUALITY) return new Map<string, PlayerMatchup>()
-    return new Map(liveMatchups.map((m: PlayerMatchup) => [m.player_name, m]))
-  }, [liveMatchups])
+    return new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m]))
+  }, [matchupRows])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {
@@ -157,11 +176,7 @@ const TeamDetail = () => {
   const perGameCategories = Object.keys(team_detail.category_ranks)
     .filter(key => !PERCENTAGE_CATEGORIES.has(key))
 
-  const columns = [
-    { key: 'include', label: 'Include', align: 'center', sortable: false },
-    { key: 'player_name', label: 'Player', align: 'left', sortable: true },
-    { key: 'positions', label: 'Position', align: 'left', sortable: true },
-    { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
+  const statColumns = [
     { key: 'minutes', label: showAverages ? 'MPG' : 'Min', align: 'right', sortable: true },
     { key: 'fg_percentage', label: 'FG%', align: 'right', sortable: true },
     { key: 'ft_percentage', label: 'FT%', align: 'right', sortable: true },
@@ -172,7 +187,27 @@ const TeamDetail = () => {
     { key: 'blk', label: showAverages ? 'BPG' : 'BLK', align: 'right', sortable: true },
     { key: 'pts', label: showAverages ? 'PPG' : 'PTS', align: 'right', sortable: true },
     { key: 'gp', label: 'GP', align: 'right', sortable: true },
-    ...(FF_MATCHUP_QUALITY ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
+  ]
+  const dayColumns = weekDays.map(day => ({
+    key: `day:${day.date}`,
+    label: day.weekday,
+    align: 'center',
+    sortable: false,
+    day,
+  }))
+  const columns: {
+    key: string
+    label: string
+    align: string
+    sortable: boolean
+    day?: WeekScheduleDay
+  }[] = [
+    { key: 'include', label: 'Include', align: 'center', sortable: false },
+    { key: 'player_name', label: 'Player', align: 'left', sortable: true },
+    { key: 'positions', label: 'Position', align: 'left', sortable: true },
+    { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
+    ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: true }] : statColumns),
+    ...(FF_MATCHUP_QUALITY && !showSchedule ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
   ]
 
   const getPositionOrder = (positions: string[]): number => {
@@ -199,6 +234,9 @@ const TeamDetail = () => {
         } else if (sortBy === 'pro_team') {
           aVal = a.pro_team
           bVal = b.pro_team
+        } else if (sortBy === 'week_games') {
+          aVal = weekGameCount(opponents, a.pro_team, weekDays)
+          bVal = weekGameCount(opponents, b.pro_team, weekDays)
         } else {
           const aStat = a.stats[sortBy as PlayerStatKey] ?? -1
           const bStat = b.stats[sortBy as PlayerStatKey] ?? -1
@@ -391,44 +429,70 @@ const TeamDetail = () => {
           gameDaysLeft={leagueSummary?.nba_game_days_left}
         />
       )}
-      {FF_SCHEDULE && <RosterCoverage players={team_detail.players ?? []} teamId={teamIdNumber} />}
+      {FF_SCHEDULE && (
+        <RosterCoverage
+          players={team_detail.players ?? []}
+          teamId={teamIdNumber}
+          horizon={scheduleHorizon}
+          onHorizonChange={setScheduleHorizon}
+          onSelectDate={setCoverageDate}
+          onActiveDate={setActiveCoverageDate}
+        />
+      )}
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
           {!team_detail.players && (
             <p className="text-sm text-gray-500 italic">Player data unavailable</p>
           )}
-          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start gap-3">
-            {FF_PROJECTIONS && (
-              <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
-                <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
-                Integer projections
-              </label>
-            )}
-            <TimePeriodSelector
-              value={timePeriod}
-              onChange={setTimePeriod}
-              customRange={customRange}
-              onCustomRangeChange={setCustomRange}
-            />
-            <div className="flex self-start border border-gray-300 rounded overflow-hidden">
-              <button
-                className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                onClick={() => setShowAverages(true)}
-              >
-                Per Game
-              </button>
-              <button
-                className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                onClick={() => setShowAverages(false)}
-              >
-                Totals
-              </button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+              {FF_SCHEDULE && (
+                <div className="order-1 w-full sm:order-3 sm:w-auto">
+                  <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
+                </div>
+              )}
+              {!showSchedule && (
+                <div className="order-2 flex w-full overflow-hidden rounded border border-gray-300 sm:order-2 sm:w-auto">
+                  <button
+                    className={`flex-1 border-r border-gray-300 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    onClick={() => setShowAverages(true)}
+                  >
+                    Per Game
+                  </button>
+                  <button
+                    className={`flex-1 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    onClick={() => setShowAverages(false)}
+                  >
+                    Totals
+                  </button>
+                </div>
+              )}
+              {FF_PROJECTIONS && (
+                <label className="order-3 flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none sm:order-1">
+                  <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
+                  Integer projections
+                </label>
+              )}
             </div>
+            {!showSchedule ? (
+              <div className="w-full sm:flex sm:justify-end">
+                <TimePeriodSelector
+                  value={timePeriod}
+                  onChange={setTimePeriod}
+                  customRange={customRange}
+                  onCustomRangeChange={setCustomRange}
+                />
+              </div>
+            ) : (
+              <div className="w-full sm:flex sm:justify-end">
+                <ScheduleHorizonToggle value={scheduleHorizon} onChange={setScheduleHorizon} />
+              </div>
+            )}
           </div>
         </div>
-        {timePeriod === 'custom' && customRange && (
+        {!showSchedule && timePeriod === 'custom' && customRange && (
           <CoverageNotice
             requestedStart={customRange.start}
             requestedEnd={customRange.end}
@@ -442,7 +506,7 @@ const TeamDetail = () => {
           </div>
         ) : (
         <div className="overflow-x-auto mq-scroll-container">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full border-separate border-spacing-0 [&_th]:border-b [&_td]:border-b [&_th]:border-gray-200 [&_td]:border-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 {columns.map((column) => (
@@ -452,7 +516,9 @@ const TeamDetail = () => {
                     className={`px-4 py-3 text-${column.align} text-xs font-medium text-gray-500 uppercase tracking-wider ${
                       column.sortable !== false ? 'cursor-pointer hover:bg-gray-100' : ''
                     } transition-colors duration-150 ${
-                      column.key === 'player_name' ? 'sticky left-0 z-10 bg-gray-50 border-r border-gray-200' : ''
+                      column.key === 'player_name' ? 'sticky left-0 z-10 bg-gray-50 border-r border-r-gray-200' : ''
+                    } ${
+                      showSchedule && column.day?.date === activeCoverageDate ? 'bg-blue-100' : ''
                     }`}
                   >
                     {column.key === 'include' ? (
@@ -465,6 +531,10 @@ const TeamDetail = () => {
                           className="w-4 h-4 text-blue-600 cursor-pointer"
                           title="Toggle all players"
                         />
+                      </div>
+                    ) : 'day' in column && column.day ? (
+                      <div className="flex items-center justify-center">
+                        <WeekDayHeading day={column.day} />
                       </div>
                     ) : (
                       <div className={`flex items-center ${column.align === 'right' ? 'justify-end' : column.align === 'center' ? 'justify-center' : ''}`}>
@@ -480,9 +550,11 @@ const TeamDetail = () => {
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white">
               {sortedPlayers.map((player, idx) => {
-                const matchup = matchupMap.get(player.player_name)
+                const awaitingCoverageMatchup = !!coverageSlate && !datedMatchupReady
+                const matchup = awaitingCoverageMatchup ? undefined : matchupMap.get(player.player_name)
+                const coverageOpponent = coverageDate ? weekOpponent(opponents, player.pro_team, coverageDate) : undefined
                 const isExpanded = expandedRows.has(player.player_name)
                 const noData = player.has_data === false
                 return (
@@ -498,10 +570,24 @@ const TeamDetail = () => {
                           title={noData ? 'Excluded from average — no data for this range' : undefined}
                         />
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-gray-200"><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-r-gray-200"><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
-                      {noData ? (
+                      {showSchedule ? (
+                        <>
+                          {weekDays.map(day => (
+                            <td
+                              key={day.date}
+                              className={`px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 ${day.date === activeCoverageDate ? 'bg-blue-100' : ''}`}
+                            >
+                              <WeekOpponent opponent={weekOpponent(opponents, player.pro_team, day.date)} />
+                            </td>
+                          ))}
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-center font-semibold text-gray-900">
+                            {weekGameCount(opponents, player.pro_team, weekDays)}
+                          </td>
+                        </>
+                      ) : noData ? (
                         <td
                           className="px-4 py-3 text-center italic text-gray-400"
                           colSpan={10}
@@ -523,45 +609,62 @@ const TeamDetail = () => {
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
                         </>
                       )}
-                      {FF_MATCHUP_QUALITY && (
+                      {FF_MATCHUP_QUALITY && !showSchedule && (
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <MatchupCell
-                            matchup={matchup}
-                            isExpanded={isExpanded}
-                            onToggle={() => toggleExpand(player.player_name)}
-                            playerStats={player.stats}
-                          />
+                          {awaitingCoverageMatchup ? (
+                            coverageOpponent
+                              ? <span className="mq-opp">vs {coverageOpponent}</span>
+                              : <span className="mq-no-game">—</span>
+                          ) : (
+                            <MatchupCell
+                              matchup={matchup}
+                              isExpanded={isExpanded}
+                              onToggle={() => toggleExpand(player.player_name)}
+                              playerStats={player.stats}
+                            />
+                          )}
                         </td>
                       )}
                     </tr>
-                    {FF_MATCHUP_QUALITY && isExpanded && matchup && (
-                      <MatchupExpandRow matchup={matchup} colSpan={15} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
+                    {FF_MATCHUP_QUALITY && !showSchedule && isExpanded && matchup && (
+                      <MatchupExpandRow matchup={matchup} colSpan={columns.length} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
                     )}
                   </React.Fragment>
                 )
               })}
-              <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-t-2 border-blue-400 font-bold">
+              <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0">
                 <td className="px-4 py-3 whitespace-nowrap text-center">
                   <span className="text-blue-600">-</span>
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-blue-900 sticky left-0 z-10 bg-gradient-to-r from-blue-50 to-indigo-50 border-r border-gray-200">
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-blue-900 sticky left-0 z-10 bg-gradient-to-r from-blue-50 to-indigo-50 border-r border-r-gray-200">
                   {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">
                   {includedPlayers === null ? visiblePlayers.length : includedPlayers.size} players
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, showAverages ? 1 : teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.fg_percentage * 100)}%</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.ft_percentage * 100)}%</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.three_pm, showAverages ? 1 : teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.reb, showAverages ? 1 : teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.ast, showAverages ? 1 : teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.stl, showAverages ? 1 : teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, showAverages ? 1 : teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, showAverages ? 1 : teamAverage.gp)}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
-                {FF_MATCHUP_QUALITY && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
+                {showSchedule ? (
+                  <>
+                    {weekDays.map(day => (
+                      <td key={day.date} className={`px-4 py-3 whitespace-nowrap text-sm text-blue-900 ${day.date === activeCoverageDate ? 'bg-blue-100' : ''}`} />
+                    ))}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900" />
+                  </>
+                ) : (
+                  <>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.minutes, showAverages ? 1 : teamAverage.gp)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.fg_percentage * 100)}%</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatNumber(teamAverage.ft_percentage * 100)}%</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.three_pm, showAverages ? 1 : teamAverage.gp)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.reb, showAverages ? 1 : teamAverage.gp)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.ast, showAverages ? 1 : teamAverage.gp)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.stl, showAverages ? 1 : teamAverage.gp)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.blk, showAverages ? 1 : teamAverage.gp)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{formatStat(teamAverage.pts, showAverages ? 1 : teamAverage.gp)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
+                  </>
+                )}
+                {FF_MATCHUP_QUALITY && !showSchedule && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
               </tr>
             </tbody>
           </table>
