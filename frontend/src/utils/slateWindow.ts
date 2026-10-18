@@ -62,8 +62,8 @@ export function addDays(date: string, amount: number): string {
   return toLocalIso(next)
 }
 
-/** Today through the same weekday next week, inclusive. */
-export const WEEK_SCHEDULE_LENGTH = 8
+/** Consecutive Eastern days starting today. Seven is the default schedule window. */
+export const WEEK_SCHEDULE_LENGTH = 7
 
 export interface WeekScheduleDay {
   date: string
@@ -71,8 +71,8 @@ export interface WeekScheduleDay {
   label: string
 }
 
-export function weekScheduleDays(today: string = easternToday()): WeekScheduleDay[] {
-  return Array.from({ length: WEEK_SCHEDULE_LENGTH }, (_, offset) => {
+export function weekScheduleDays(today: string = easternToday(), length: number = WEEK_SCHEDULE_LENGTH): WeekScheduleDay[] {
+  return Array.from({ length }, (_, offset) => {
     const date = addDays(today, offset)
     return {
       date,

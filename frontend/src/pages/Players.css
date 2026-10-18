@@ -104,6 +104,38 @@
   min-width: 150px;
 }
 
+@media (max-width: 639px) {
+  .players-page {
+    padding: 12px;
+  }
+
+  .filter-panel {
+    padding: 14px;
+  }
+
+  .checkbox-group {
+    gap: 10px 14px;
+  }
+
+  .stat-filter-builder {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+
+  .stat-filter-builder select,
+  .stat-filter-builder input,
+  .stat-filter-builder button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .stat-filter-builder select:first-of-type,
+  .stat-filter-builder button {
+    grid-column: 1 / -1;
+  }
+}
+
 .stat-filter-builder button {
   padding: 8px 16px;
   background: #1976d2;
@@ -240,6 +272,12 @@
   background: #f5f5f5;
 }
 
+.player-table th.week-day.week-day-selected,
+.player-table th.week-day.week-day-selected:hover,
+.player-table td.week-day-selected {
+  background: #dbeafe;
+}
+
 .player-table td {
   padding: 10px 8px;
   border-bottom: 1px solid #eee;
@@ -367,6 +405,12 @@
 
 :where(.dark, .dark *) .player-table th.week-day:hover {
   background: #0f172a;
+}
+
+:where(.dark, .dark *) .player-table th.week-day.week-day-selected,
+:where(.dark, .dark *) .player-table th.week-day.week-day-selected:hover,
+:where(.dark, .dark *) .player-table td.week-day-selected {
+  background: #1e3a5f;
 }
 
 :where(.dark, .dark *) .player-table td {

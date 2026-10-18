@@ -17,8 +17,8 @@ import InjuryBadge from '../components/InjuryBadge'
 import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
-import { StatsScheduleToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode } from '../components/PlayerWeekColumns'
-import { opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
+import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
+import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_SCHEDULE } from '../config/featureFlags'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
@@ -86,10 +86,12 @@ const TeamDetail = () => {
   }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder])
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
   const [tableMode, setTableMode] = useState<PlayerTableMode>('stats')
+  const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
+  const [activeCoverageDate, setActiveCoverageDate] = useState<string | null>(null)
   const showSchedule = FF_SCHEDULE && tableMode === 'schedule'
   const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE })
-  const weekDays = useMemo(() => weekScheduleDays(), [])
+  const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
   const opponents = useMemo(
     () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
     [schedule],
@@ -424,51 +426,64 @@ const TeamDetail = () => {
           gameDaysLeft={leagueSummary?.nba_game_days_left}
         />
       )}
-      {FF_SCHEDULE && <RosterCoverage players={team_detail.players ?? []} teamId={teamIdNumber} onSelectDate={setCoverageDate} />}
+      {FF_SCHEDULE && (
+        <RosterCoverage
+          players={team_detail.players ?? []}
+          teamId={teamIdNumber}
+          onSelectDate={setCoverageDate}
+          onActiveDate={setActiveCoverageDate}
+        />
+      )}
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <h2 className="text-2xl font-bold text-gray-900">Roster</h2>
           {!team_detail.players && (
             <p className="text-sm text-gray-500 italic">Player data unavailable</p>
           )}
-          <div className="flex flex-col items-end gap-3">
-            <div className="flex items-center justify-end gap-3">
-              {FF_PROJECTIONS && (
-                <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
-                  <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
-                  Integer projections
-                </label>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+              {FF_SCHEDULE && (
+                <div className="order-1 w-full sm:order-3 sm:w-auto">
+                  <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
+                </div>
               )}
               {!showSchedule && (
-                <div className="flex self-start border border-gray-300 rounded overflow-hidden">
+                <div className="order-2 flex w-full overflow-hidden rounded border border-gray-300 sm:order-2 sm:w-auto">
                   <button
-                    className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    className={`flex-1 border-r border-gray-300 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                     onClick={() => setShowAverages(true)}
                   >
                     Per Game
                   </button>
                   <button
-                    className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    className={`flex-1 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                     onClick={() => setShowAverages(false)}
                   >
                     Totals
                   </button>
                 </div>
               )}
-              {FF_SCHEDULE && (
-                <div className="shrink-0">
-                  <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
-                </div>
+              {FF_PROJECTIONS && (
+                <label className="order-3 flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none sm:order-1">
+                  <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
+                  Integer projections
+                </label>
               )}
             </div>
-            {!showSchedule && (
-              <TimePeriodSelector
-                value={timePeriod}
-                onChange={setTimePeriod}
-                customRange={customRange}
-                onCustomRangeChange={setCustomRange}
-              />
+            {!showSchedule ? (
+              <div className="w-full sm:flex sm:justify-end">
+                <TimePeriodSelector
+                  value={timePeriod}
+                  onChange={setTimePeriod}
+                  customRange={customRange}
+                  onCustomRangeChange={setCustomRange}
+                />
+              </div>
+            ) : (
+              <div className="w-full sm:flex sm:justify-end">
+                <ScheduleHorizonToggle value={scheduleHorizon} onChange={setScheduleHorizon} />
+              </div>
             )}
           </div>
         </div>
@@ -498,7 +513,7 @@ const TeamDetail = () => {
                     } transition-colors duration-150 ${
                       column.key === 'player_name' ? 'sticky left-0 z-10 bg-gray-50 border-r border-r-gray-200' : ''
                     } ${
-                      showSchedule && column.day?.date === coverageDate ? 'bg-blue-100' : ''
+                      showSchedule && column.day?.date === activeCoverageDate ? 'bg-blue-100' : ''
                     }`}
                   >
                     {column.key === 'include' ? (
@@ -558,7 +573,7 @@ const TeamDetail = () => {
                           {weekDays.map(day => (
                             <td
                               key={day.date}
-                              className={`px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 ${day.date === coverageDate ? 'bg-blue-100' : ''}`}
+                              className={`px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 ${day.date === activeCoverageDate ? 'bg-blue-100' : ''}`}
                             >
                               <WeekOpponent opponent={weekOpponent(opponents, player.pro_team, day.date)} />
                             </td>
@@ -626,7 +641,7 @@ const TeamDetail = () => {
                 {showSchedule ? (
                   <>
                     {weekDays.map(day => (
-                      <td key={day.date} className={`px-4 py-3 whitespace-nowrap text-sm text-blue-900 ${day.date === coverageDate ? 'bg-blue-100' : ''}`} />
+                      <td key={day.date} className={`px-4 py-3 whitespace-nowrap text-sm text-blue-900 ${day.date === activeCoverageDate ? 'bg-blue-100' : ''}`} />
                     ))}
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900" />
                   </>
