@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { InjuryRecord } from '../../types/injury';
+import { renderWithProviders } from '../../test/helpers';
 import Injuries from '../Injuries';
 
 const { mockUseInjuryData } = vi.hoisted(() => ({
@@ -33,7 +34,7 @@ describe('Injuries page', () => {
       notifications: [],
       lastReportTime: null,
     });
-    render(<Injuries />);
+    renderWithProviders(<Injuries />);
     expect(screen.getAllByText('Jay').length).toBeGreaterThan(0);
     expect(screen.getByText(/showing 2 of 2 player/i)).toBeInTheDocument();
   });
@@ -47,7 +48,7 @@ describe('Injuries page', () => {
       notifications: [],
       lastReportTime: null,
     });
-    render(<Injuries />);
+    renderWithProviders(<Injuries />);
     await user.type(screen.getByPlaceholderText(/search player/i), 'Unique');
     await waitFor(() => expect(screen.getByText(/showing 1 of 2 player/i)).toBeInTheDocument(), {
       timeout: 3000,
@@ -63,7 +64,7 @@ describe('Injuries page', () => {
       notifications: [],
       lastReportTime: null,
     });
-    render(<Injuries />);
+    renderWithProviders(<Injuries />);
     await user.click(screen.getAllByRole('button', { name: /all teams/i })[0]!);
     const dalBox = screen.getByRole('checkbox', { name: /^DAL$/ });
     await user.click(dalBox);
@@ -84,7 +85,7 @@ describe('Injuries page', () => {
       notifications: [],
       lastReportTime: null,
     });
-    render(<Injuries />);
+    renderWithProviders(<Injuries />);
     await user.click(screen.getAllByRole('button', { name: /all statuses/i })[0]!);
     await user.click(screen.getByRole('checkbox', { name: /^out$/i }));
     expect(screen.getByText(/showing 1 of 2 player/i)).toBeInTheDocument();
@@ -100,7 +101,7 @@ describe('Injuries page', () => {
       notifications: [],
       lastReportTime: null,
     });
-    render(<Injuries />);
+    renderWithProviders(<Injuries />);
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
@@ -112,7 +113,7 @@ describe('Injuries page', () => {
       notifications: [],
       lastReportTime: null,
     });
-    render(<Injuries />);
+    renderWithProviders(<Injuries />);
     expect(screen.getByText('boom')).toBeInTheDocument();
   });
 });
