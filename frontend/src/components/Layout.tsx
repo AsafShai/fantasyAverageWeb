@@ -95,7 +95,7 @@ const MobileSearchIconButton = ({ onClick }: { onClick: () => void }) => {
       type="button"
       onClick={onClick}
       aria-label="Search"
-      className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
     >
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.6" />
@@ -513,7 +513,7 @@ const NavShell = ({ darkMode, setDarkMode, setSearchOpen }: NavShellProps) => {
               <MobileSearchIconButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
-                className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 aria-label="Toggle dark mode"
               >
                 <span className="text-base">{darkMode ? '☀️' : '🌙'}</span>
