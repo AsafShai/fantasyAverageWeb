@@ -28,20 +28,41 @@ interface TradeTreeProps {
 
 const NODE = 'inline-grid max-w-full gap-0.5 rounded-md border px-2.5 py-1.5 text-sm'
 
-function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelectTrade }: {
+// A follow-up trade hangs off the stint of the player who was traded on, so
+// that stint identifies it even when one onward trade took two players.
+const stintKey = (s: { player_id: number; start: string }) => `${s.player_id}-${s.start}`
+
+function countStints(nodes: TreeStint[]): number {
+  return nodes.reduce((n, { next }) => n + 1 + (next ? countStints(next.received) : 0), 0)
+}
+
+function followUpKeys(nodes: TreeStint[]): string[] {
+  return nodes.flatMap(({ stint, next }) => (next ? [stintKey(stint), ...followUpKeys(next.received)] : []))
+}
+
+interface BranchProps {
   nodes: TreeStint[]
   teams: TeamLookup
   teamId: number
   seasonOver: boolean
   truncated: Set<string>
+  collapsed: Set<string>
+  onToggle: (key: string) => void
   onExpand: () => void
   onSelectTrade: (id: string) => void
-}) {
+}
+
+function Branch(props: BranchProps) {
+  const { nodes, teams, teamId, seasonOver, truncated, collapsed, onToggle, onExpand, onSelectTrade } = props
   const abbrev = teamAbbrev(teams, teamId)
   return (
     <ul className="space-y-1 border-l border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
-      {nodes.map(({ stint: s, next }) => (
-        <li key={`${s.player_id}-${s.start}`} className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
+      {nodes.map(({ stint: s, next }) => {
+        const key = stintKey(s)
+        const isCollapsed = collapsed.has(key)
+        const hidden = next && !truncated.has(next.trade.id) ? countStints(next.received) : 0
+        return (
+        <li key={key} className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
           <div className={`${NODE} border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800`}>
             <span className="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900 dark:text-gray-100">
               <PlayerNameLink name={s.name} playerId={s.player_id} className="-my-1 inline-block py-1 hover:underline" />
@@ -54,20 +75,36 @@ function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelec
           {next ? (
             <ul className="mt-1 border-l border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
               <li className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
-                <button
-                  type="button"
-                  onClick={() => onSelectTrade(next.trade.id)}
-                  className={`${NODE} border-gray-300 bg-gray-50 text-left hover:border-blue-400 dark:border-gray-600 dark:bg-gray-700`}
-                >
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    Traded to {teamAbbrev(teams, next.otherTeamId)} · {formatDay(next.trade.date)}
-                  </span>
-                  <span className="text-xs text-gray-600 dark:text-gray-300">
-                    {next.sentAlongside.length > 0 && `sent with ${next.sentAlongside.map(p => p.name).join(', ')}; `}
-                    {abbrev} got back:
-                  </span>
-                </button>
-                {truncated.has(next.trade.id) ? (
+                <div className="flex max-w-full items-start gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onToggle(key)}
+                    aria-expanded={!isCollapsed}
+                    aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} trade to ${teamAbbrev(teams, next.otherTeamId)} on ${formatDay(next.trade.date)}`}
+                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    <span aria-hidden="true" className={`inline-block text-xs transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▼</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTrade(next.trade.id)}
+                    className={`${NODE} min-w-0 border-gray-300 bg-gray-50 text-left hover:border-blue-400 dark:border-gray-600 dark:bg-gray-700`}
+                  >
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      Traded to {teamAbbrev(teams, next.otherTeamId)} · {formatDay(next.trade.date)}
+                    </span>
+                    <span className="text-xs text-gray-600 dark:text-gray-300">
+                      {next.sentAlongside.length > 0 && `sent with ${next.sentAlongside.map(p => p.name).join(', ')}; `}
+                      {abbrev} got back
+                      {isCollapsed
+                        ? truncated.has(next.trade.id)
+                          ? ' (hidden)'
+                          : ` ${hidden} ${hidden === 1 ? 'player' : 'players'} (hidden)`
+                        : ':'}
+                    </span>
+                  </button>
+                </div>
+                {isCollapsed ? null : truncated.has(next.trade.id) ? (
                   <div className="mt-1 pl-3 sm:pl-5">
                     <button
                       type="button"
@@ -78,7 +115,7 @@ function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelec
                     </button>
                   </div>
                 ) : (
-                  <Branch nodes={next.received} teams={teams} teamId={teamId} seasonOver={seasonOver} truncated={truncated} onExpand={onExpand} onSelectTrade={onSelectTrade} />
+                  <Branch {...props} nodes={next.received} />
                 )}
               </li>
             </ul>
@@ -110,7 +147,8 @@ function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelec
             </ul>
           )}
         </li>
-      ))}
+        )
+      })}
     </ul>
   )
 }
@@ -122,6 +160,17 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
   const trade = trades.find(t => t.id === tradeId) ?? trades[trades.length - 1]
   const follow = trade?.sides.some(s => s.team_id === teamId) ? (teamId as number) : trade?.sides[0]?.team_id
   const [depth, setDepth] = useState(INITIAL_DEPTH)
+  // Follow-up trades the viewer folded away, for the tree currently shown.
+  const [collapsedState, setCollapsedState] = useState<{ tree: string; keys: Set<string> }>({ tree: '', keys: new Set() })
+  const treeKey = `${trade?.id}:${follow}`
+  const collapsed = collapsedState.tree === treeKey ? collapsedState.keys : new Set<string>()
+  const setCollapsed = (keys: Set<string>) => setCollapsedState({ tree: treeKey, keys })
+  const toggle = (key: string) => {
+    const next = new Set(collapsed)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    setCollapsed(next)
+  }
 
   const tree = useMemo(
     () => (trade && follow != null ? buildTradeTree(trades, trade.id, follow, depth) : null),
@@ -136,6 +185,7 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
     )
   }
   const abbrev = teamAbbrev(teams, follow)
+  const allFollowUps = followUpKeys(tree.root)
 
   return (
     <div className="space-y-4 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
@@ -182,6 +232,26 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
           {tree.stints} player stints · {tree.games} games played for {abbrev}
           {tree.truncated.size > 0 && ' so far'}
         </p>
+        {allFollowUps.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setCollapsed(new Set(allFollowUps))}
+              disabled={collapsed.size === allFollowUps.length}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              Collapse all
+            </button>
+            <button
+              type="button"
+              onClick={() => setCollapsed(new Set())}
+              disabled={collapsed.size === 0}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              Expand all
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
@@ -201,6 +271,8 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
             teamId={follow}
             seasonOver={activity.season_over}
             truncated={tree.truncated}
+            collapsed={collapsed}
+            onToggle={toggle}
             onExpand={() => setDepth(d => d + INITIAL_DEPTH)}
             onSelectTrade={onSelectTrade}
           />
