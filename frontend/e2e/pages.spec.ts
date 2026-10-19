@@ -15,6 +15,7 @@ const PAGES: { path: string; heading: RegExp }[] = [
   { path: '/player-rankings', heading: /Player Rankings/ },
   { path: '/trends', heading: /Trends/ },
   { path: '/minigames', heading: /^Minigames$/ },
+  { path: '/model-accuracy', heading: /Model vs\. Reality/ },
   { path: '/does-not-exist', heading: /404/ },
 ]
 
