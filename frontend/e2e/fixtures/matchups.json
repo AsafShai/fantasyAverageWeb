@@ -1,0 +1,92 @@
+[
+  {
+    "player_name": "Alpha Star",
+    "pro_team": "LAL",
+    "opponent": "BOS",
+    "is_home": true,
+    "pace": 100,
+    "league_avg_pace": 99,
+    "positions": [
+      "PG"
+    ],
+    "def_ranks": {
+      "pts": 5,
+      "reb": 10,
+      "ast": 20,
+      "stl": 3,
+      "blk": 25,
+      "three_pm": 15,
+      "fg_percentage": 7,
+      "ft_percentage": 9
+    },
+    "def_values": {
+      "pts": 110,
+      "reb": 44,
+      "ast": 25,
+      "stl": 7,
+      "blk": 5,
+      "three_pm": 12,
+      "fg_percentage": 0.47,
+      "ft_percentage": 0.78
+    },
+    "league_avg_def_values": {
+      "pts": 110,
+      "reb": 44,
+      "ast": 25,
+      "stl": 7,
+      "blk": 5,
+      "three_pm": 12,
+      "fg_percentage": 0.47,
+      "ft_percentage": 0.78
+    },
+    "projection": null,
+    "game_date": "2026-10-21",
+    "on_depth_chart": true,
+    "injury_status": null
+  },
+  {
+    "player_name": "Bench Guy",
+    "pro_team": "BOS",
+    "opponent": "LAL",
+    "is_home": true,
+    "pace": 100,
+    "league_avg_pace": 99,
+    "positions": [
+      "PG"
+    ],
+    "def_ranks": {
+      "pts": 5,
+      "reb": 10,
+      "ast": 20,
+      "stl": 3,
+      "blk": 25,
+      "three_pm": 15,
+      "fg_percentage": 7,
+      "ft_percentage": 9
+    },
+    "def_values": {
+      "pts": 110,
+      "reb": 44,
+      "ast": 25,
+      "stl": 7,
+      "blk": 5,
+      "three_pm": 12,
+      "fg_percentage": 0.47,
+      "ft_percentage": 0.78
+    },
+    "league_avg_def_values": {
+      "pts": 110,
+      "reb": 44,
+      "ast": 25,
+      "stl": 7,
+      "blk": 5,
+      "three_pm": 12,
+      "fg_percentage": 0.47,
+      "ft_percentage": 0.78
+    },
+    "projection": null,
+    "game_date": "2026-10-21",
+    "on_depth_chart": true,
+    "injury_status": null
+  }
+]

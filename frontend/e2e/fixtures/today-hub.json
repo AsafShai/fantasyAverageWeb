@@ -1,0 +1,28 @@
+{
+  "slate_date": "2026-10-21",
+  "games_count": 8,
+  "movers": [
+    {
+      "team_id": 1,
+      "team_name": "Fantasy One",
+      "category": "AST",
+      "delta": 3
+    }
+  ],
+  "roster_health": [
+    {
+      "team_id": 1,
+      "team_name": "Fantasy One",
+      "games_tonight": 7,
+      "available_tonight": 6,
+      "probable": 0,
+      "questionable": 1,
+      "doubtful": 0,
+      "out": 0
+    }
+  ],
+  "last_nightly": {
+    "game_date": "2026-10-18",
+    "rows": 240
+  }
+}
