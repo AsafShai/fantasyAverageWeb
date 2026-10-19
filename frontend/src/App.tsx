@@ -5,6 +5,7 @@ import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
 import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE, FF_TODAY_HUB } from './config/featureFlags'
+import { FF_LEAGUE_ACTIVITY } from './config/featureFlags'
 import { MyTeamProvider } from './context/MyTeamContext'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -37,6 +38,7 @@ const DraftBoardPage = lazy(() => import('./pages/draft/DraftBoardPage'))
 const PreDraftRankingsPage = lazy(() => import('./pages/draft/PreDraftRankingsPage'))
 const MockDraftPage = lazy(() => import('./pages/draft/MockDraftPage'))
 const MoversPage = lazy(() => import('./pages/draft/MoversPage'))
+const LeagueActivity = lazy(() => import('./pages/LeagueActivity'))
 
 function App() {
   return (
@@ -76,6 +78,7 @@ function App() {
               {FF_DRAFT_PAGES && <Route path="draft/mock" element={<MockDraftPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/movers" element={<MoversPage />} />}
               {FF_TRENDS && <Route path="trends" element={<Trends />} />}
+              {FF_LEAGUE_ACTIVITY && <Route path="activity" element={<LeagueActivity />} />}
               {FF_MINIGAMES && <Route path="minigames" element={<Minigames />} />}
               {FF_MINIGAMES && <Route path="minigames/hangman" element={<HangmanGame />} />}
               {FF_MINIGAMES && <Route path="minigames/who-he-play-for" element={<WhoHePlayForGame />} />}

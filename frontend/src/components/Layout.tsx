@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
 import { MyTeamSelect } from './MyTeamSelect'
 import CommandPalette from './CommandPalette'
+import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
 import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE, FF_TODAY_HUB } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
@@ -140,6 +141,7 @@ const Layout = () => {
     { path: '/players', label: 'Players', icon: '⛹️' },
     { path: '/injuries', label: 'Injuries', icon: '🩺' },
     { path: '/trade', label: 'Trade', icon: '🔄' },
+    ...(FF_LEAGUE_ACTIVITY ? [{ path: '/activity', label: 'Activity', icon: '🔁' }] : []),
     { path: '/nba-teams', label: 'NBA', icon: '🏀' },
     ...(FF_MINIGAMES ? [{ path: '/minigames', label: 'Minigames', icon: '🎮' }] : []),
     ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
@@ -563,6 +565,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
         ...(FF_TODAY_HUB ? [{ path: '/', label: 'Today', icon: '📊' }] : []),
         { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
         { path: '/teams', label: 'Teams', icon: '👥' },
+        ...(FF_LEAGUE_ACTIVITY ? [{ path: '/activity', label: 'Activity', icon: '🔁' }] : []),
         ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
       ],
     },

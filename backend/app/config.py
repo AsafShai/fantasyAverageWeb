@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # the rebuild is what needs memory (~380 MB), so it defaults to OFF and the
     # nightly just logs what to run. Turn on only where the container can afford it.
     model_feature_heal_auto: bool = Field(default=False, alias="MODEL_FEATURE_HEAL_AUTO")
+    # Build the league activity view in the background at startup, so the first
+    # visitor doesn't wait for one ESPN roster snapshot per day of the season.
+    league_activity_warm: bool = Field(default=True, alias="LEAGUE_ACTIVITY_WARM")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

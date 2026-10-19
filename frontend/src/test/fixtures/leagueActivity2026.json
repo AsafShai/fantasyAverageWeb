@@ -1,0 +1,441 @@
+{
+ "season_id": 2026,
+ "season_over": true,
+ "latest_date": "2026-03-31",
+ "categories": [
+  "PTS",
+  "BLK",
+  "STL",
+  "AST",
+  "REB",
+  "3PM",
+  "FG%",
+  "FT%"
+ ],
+ "teams": [
+  {
+   "team_id": 1,
+   "name": "Asaf's Astounding Team",
+   "abbrev": "ASAF"
+  },
+  {
+   "team_id": 8,
+   "name": "50 Shades of Shai",
+   "abbrev": "DOR"
+  }
+ ],
+ "moves": [
+  {
+   "id": "ed36a936-6da3-4381-b35e-e8f797c71798",
+   "kind": "add",
+   "at": "2026-03-30T08:36:32.831000Z",
+   "team_id": 8,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 3908845,
+     "name": "John Collins"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 4066757,
+     "name": "Player 4066757"
+    }
+   ]
+  },
+  {
+   "id": "5a8e301e-7955-4eda-96b1-3029ebf3e38f",
+   "kind": "add",
+   "at": "2026-03-28T17:02:31.489000Z",
+   "team_id": 1,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4712863,
+     "name": "Player 4712863"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 3908845,
+     "name": "John Collins"
+    }
+   ]
+  },
+  {
+   "id": "8e57ae01-bddf-439b-9f8c-0304b00b8366",
+   "kind": "add",
+   "at": "2026-03-25T23:19:22.319000Z",
+   "team_id": 12,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4278562,
+     "name": "Paul Reed"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 4711297,
+     "name": "Player 4711297"
+    }
+   ]
+  },
+  {
+   "id": "83353dee-a152-4720-a166-35ab97b1575e",
+   "kind": "add",
+   "at": "2026-03-19T16:30:47.464000Z",
+   "team_id": 8,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4683747,
+     "name": "Player 4683747"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 4278562,
+     "name": "Paul Reed"
+    }
+   ]
+  },
+  {
+   "id": "fc3d60b3-b366-47b0-9991-28e8a5d98fa6",
+   "kind": "add",
+   "at": "2026-03-17T09:45:27.638000Z",
+   "team_id": 8,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4278562,
+     "name": "Paul Reed"
+    }
+   ],
+   "dropped": []
+  },
+  {
+   "id": "cf9f5a50-f1d8-4eb9-b3b3-e4e29927f4b9",
+   "kind": "trade",
+   "at": "2026-03-16T09:40:53.828000Z",
+   "team_id": 1,
+   "other_team_id": 8,
+   "trade_id": "cf9f5a50-f1d8-4eb9-b3b3-e4e29927f4b9",
+   "added": [
+    {
+     "player_id": 4066261,
+     "name": "Bam Adebayo"
+    },
+    {
+     "player_id": 3908845,
+     "name": "John Collins"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 4432158,
+     "name": "Evan Mobley"
+    }
+   ]
+  },
+  {
+   "id": "3c647bf4-a2bc-4036-8d2e-d182bd2beda0",
+   "kind": "add",
+   "at": "2026-03-16T09:36:17.026000Z",
+   "team_id": 1,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 2991139,
+     "name": "Kris Dunn"
+    }
+   ],
+   "dropped": []
+  },
+  {
+   "id": "8870186f-36f1-49e0-a0f9-25d62c758d5a",
+   "kind": "drop",
+   "at": "2026-03-16T09:34:19.503000Z",
+   "team_id": 1,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [],
+   "dropped": [
+    {
+     "player_id": 4432827,
+     "name": "Oscar Tshiebwe"
+    }
+   ]
+  },
+  {
+   "id": "16354986-00f6-425f-bdf6-ba2dc2da59f9",
+   "kind": "add",
+   "at": "2026-03-15T00:54:18.158000Z",
+   "team_id": 1,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4432827,
+     "name": "Oscar Tshiebwe"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 4277848,
+     "name": "Player 4277848"
+    }
+   ]
+  },
+  {
+   "id": "3fe6472f-365b-49ef-a0b8-142937d403e2",
+   "kind": "add",
+   "at": "2026-03-14T16:59:48.808000Z",
+   "team_id": 1,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4433174,
+     "name": "Player 4433174"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 2991139,
+     "name": "Kris Dunn"
+    }
+   ]
+  },
+  {
+   "id": "8117139b-4804-46e9-bc7a-c066d0e038a4",
+   "kind": "add",
+   "at": "2026-03-13T22:52:36.986000Z",
+   "team_id": 1,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4702177,
+     "name": "Player 4702177"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 4278562,
+     "name": "Paul Reed"
+    }
+   ]
+  },
+  {
+   "id": "c365b6ec-159f-4b39-a9cc-98aab9b69c1b",
+   "kind": "add",
+   "at": "2026-03-13T17:01:25.459000Z",
+   "team_id": 1,
+   "other_team_id": null,
+   "trade_id": null,
+   "added": [
+    {
+     "player_id": 4278562,
+     "name": "Paul Reed"
+    }
+   ],
+   "dropped": [
+    {
+     "player_id": 4997526,
+     "name": "Player 4997526"
+    }
+   ]
+  }
+ ],
+ "trades": [
+  {
+   "id": "cf9f5a50-f1d8-4eb9-b3b3-e4e29927f4b9",
+   "date": "2026-03-17",
+   "accepted_at": "2026-03-16T09:40:53.828000Z",
+   "sides": [
+    {
+     "team_id": 1,
+     "received": [
+      {
+       "player_id": 4066261,
+       "name": "Bam Adebayo",
+       "team_id": 1,
+       "start": "2026-03-17",
+       "end": "2026-03-31",
+       "days": 15,
+       "games_played": 5,
+       "team_games": 6,
+       "totals": {
+        "PTS": 97.0,
+        "BLK": 2.0,
+        "STL": 5.0,
+        "AST": 21.0,
+        "OREB": 8.0,
+        "DREB": 56.0,
+        "REB": 64.0,
+        "TO": 6.0,
+        "FGM": 29.0,
+        "FGA": 79.0,
+        "FTM": 33.0,
+        "FTA": 40.0,
+        "3PM": 6.0,
+        "3PA": 32.0
+       },
+       "exit": "season_end",
+       "exit_trade_id": null,
+       "picked_up_after": null
+      },
+      {
+       "player_id": 3908845,
+       "name": "John Collins",
+       "team_id": 1,
+       "start": "2026-03-17",
+       "end": "2026-03-27",
+       "days": 11,
+       "games_played": 4,
+       "team_games": 4,
+       "totals": {
+        "PTS": 41.0,
+        "BLK": 1.0,
+        "STL": 4.0,
+        "AST": 4.0,
+        "OREB": 7.0,
+        "DREB": 19.0,
+        "REB": 26.0,
+        "TO": 5.0,
+        "FGM": 15.0,
+        "FGA": 33.0,
+        "FTM": 7.0,
+        "FTA": 9.0,
+        "3PM": 4.0,
+        "3PA": 13.0
+       },
+       "exit": "released",
+       "exit_trade_id": null,
+       "picked_up_after": {
+        "team_id": 8,
+        "date": "2026-03-30",
+        "games_played": 1
+       }
+      }
+     ]
+    },
+    {
+     "team_id": 8,
+     "received": [
+      {
+       "player_id": 4432158,
+       "name": "Evan Mobley",
+       "team_id": 8,
+       "start": "2026-03-17",
+       "end": "2026-03-31",
+       "days": 15,
+       "games_played": 6,
+       "team_games": 6,
+       "totals": {
+        "PTS": 124.0,
+        "BLK": 6.0,
+        "STL": 3.0,
+        "AST": 19.0,
+        "OREB": 18.0,
+        "DREB": 47.0,
+        "REB": 65.0,
+        "TO": 5.0,
+        "FGM": 54.0,
+        "FGA": 88.0,
+        "FTM": 15.0,
+        "FTA": 25.0,
+        "3PM": 1.0,
+        "3PA": 6.0
+       },
+       "exit": "season_end",
+       "exit_trade_id": null,
+       "picked_up_after": null
+      }
+     ]
+    }
+   ],
+   "released_for_trade": [],
+   "open_roster_spot": {
+    "team_id": 8,
+    "added_on": "2026-03-17",
+    "stint": {
+     "player_id": 4278562,
+     "name": "Paul Reed",
+     "team_id": 8,
+     "start": "2026-03-17",
+     "end": "2026-03-18",
+     "days": 2,
+     "games_played": 1,
+     "team_games": 1,
+     "totals": {
+      "PTS": 10.0,
+      "BLK": 0.0,
+      "STL": 0.0,
+      "AST": 1.0,
+      "OREB": 3.0,
+      "DREB": 1.0,
+      "REB": 4.0,
+      "TO": 0.0,
+      "FGM": 4.0,
+      "FGA": 5.0,
+      "FTM": 2.0,
+      "FTA": 4.0,
+      "3PM": 0.0,
+      "3PA": 0.0
+     },
+     "exit": "released",
+     "exit_trade_id": null,
+     "picked_up_after": null
+    }
+   }
+  }
+ ],
+ "released": [
+  {
+   "player_id": 3908845,
+   "name": "John Collins",
+   "released_by": 1,
+   "released_on": "2026-03-28",
+   "games_before_release": 4,
+   "stint": {
+    "player_id": 3908845,
+    "name": "John Collins",
+    "team_id": 8,
+    "start": "2026-03-30",
+    "end": "2026-03-31",
+    "days": 2,
+    "games_played": 1,
+    "team_games": 1,
+    "totals": {
+     "PTS": 17.0,
+     "BLK": 0.0,
+     "STL": 2.0,
+     "AST": 1.0,
+     "OREB": 3.0,
+     "DREB": 3.0,
+     "REB": 6.0,
+     "TO": 0.0,
+     "FGM": 7.0,
+     "FGA": 8.0,
+     "FTM": 0.0,
+     "FTA": 0.0,
+     "3PM": 3.0,
+     "3PA": 3.0
+    },
+    "exit": "season_end",
+    "exit_trade_id": null,
+    "picked_up_after": null
+   }
+  }
+ ],
+ "last_updated": "2026-04-14T09:00:00Z"
+}

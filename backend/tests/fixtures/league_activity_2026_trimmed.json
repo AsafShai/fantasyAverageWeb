@@ -1,0 +1,1386 @@
+{
+ "_note": "Trimmed from the real 2025-26 league (ESPN season 2026, league 660330196): teams 1 and 8 only, six players, scoring periods 146-150 and 156-162 (2026-03-15..19, 03-25..31). Covers the 2026-03-17 trade, a withdrawn (self-vetoed) accept, the open-spot pickup and a release picked up by the other team.",
+ "season_start": "2025-10-21",
+ "league": {
+  "status": {
+   "firstScoringPeriod": 1,
+   "latestScoringPeriod": 175,
+   "finalScoringPeriod": 174
+  },
+  "settings": {
+   "scoringSettings": {
+    "scoringItems": [
+     {
+      "statId": 0,
+      "isReverseItem": false
+     },
+     {
+      "statId": 1,
+      "isReverseItem": false
+     },
+     {
+      "statId": 2,
+      "isReverseItem": false
+     },
+     {
+      "statId": 3,
+      "isReverseItem": false
+     },
+     {
+      "statId": 6,
+      "isReverseItem": false
+     },
+     {
+      "statId": 17,
+      "isReverseItem": false
+     },
+     {
+      "statId": 19,
+      "isReverseItem": false
+     },
+     {
+      "statId": 20,
+      "isReverseItem": false
+     }
+    ]
+   }
+  },
+  "teams": [
+   {
+    "id": 1,
+    "name": "Asaf's Astounding Team",
+    "abbrev": "ASAF"
+   },
+   {
+    "id": 8,
+    "name": "50 Shades of Shai",
+    "abbrev": "DOR"
+   }
+  ]
+ },
+ "rosters": {
+  "146": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 146,
+            "stats": {
+             "0": 18.0,
+             "1": 4.0,
+             "2": 0.0,
+             "3": 4.0,
+             "4": 3.0,
+             "5": 8.0,
+             "6": 11.0,
+             "11": 4.0,
+             "13": 8.0,
+             "14": 14.0,
+             "15": 2.0,
+             "16": 5.0,
+             "17": 0.0,
+             "18": 3.0,
+             "40": 36.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 4432827,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Oscar Tshiebwe",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 146,
+            "stats": {
+             "0": 9.0,
+             "1": 0.0,
+             "2": 3.0,
+             "3": 1.0,
+             "4": 4.0,
+             "5": 4.0,
+             "6": 8.0,
+             "11": 0.0,
+             "13": 3.0,
+             "14": 5.0,
+             "15": 3.0,
+             "16": 6.0,
+             "17": 0.0,
+             "18": 0.0,
+             "40": 23.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": []
+         }
+        }
+       },
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "147": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": []
+         }
+        }
+       },
+       {
+        "playerId": 2991139,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kris Dunn",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 147,
+            "stats": {
+             "0": 9.0,
+             "1": 1.0,
+             "2": 1.0,
+             "3": 1.0,
+             "4": 1.0,
+             "5": 1.0,
+             "6": 2.0,
+             "11": 1.0,
+             "13": 3.0,
+             "14": 5.0,
+             "15": 1.0,
+             "16": 2.0,
+             "17": 2.0,
+             "18": 3.0,
+             "40": 23.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": []
+         }
+        }
+       },
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 147,
+            "stats": {
+             "0": 11.0,
+             "1": 0.0,
+             "2": 1.0,
+             "3": 4.0,
+             "4": 3.0,
+             "5": 6.0,
+             "6": 9.0,
+             "11": 1.0,
+             "13": 4.0,
+             "14": 8.0,
+             "15": 3.0,
+             "16": 5.0,
+             "17": 0.0,
+             "18": 1.0,
+             "40": 26.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "148": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": []
+         }
+        }
+       },
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 148,
+            "stats": {}
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 148,
+            "stats": {
+             "0": 27.0,
+             "1": 3.0,
+             "2": 0.0,
+             "3": 2.0,
+             "4": 6.0,
+             "5": 9.0,
+             "6": 15.0,
+             "11": 0.0,
+             "13": 12.0,
+             "14": 21.0,
+             "15": 3.0,
+             "16": 5.0,
+             "17": 0.0,
+             "18": 2.0,
+             "40": 33.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 4278562,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Paul Reed",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 148,
+            "stats": {
+             "0": 10.0,
+             "1": 0.0,
+             "2": 0.0,
+             "3": 1.0,
+             "4": 3.0,
+             "5": 1.0,
+             "6": 4.0,
+             "11": 0.0,
+             "13": 4.0,
+             "14": 5.0,
+             "15": 2.0,
+             "16": 4.0,
+             "17": 0.0,
+             "18": 0.0,
+             "40": 13.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "149": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 149,
+            "stats": {
+             "0": 18.0,
+             "1": 1.0,
+             "2": 0.0,
+             "3": 2.0,
+             "4": 3.0,
+             "5": 4.0,
+             "6": 7.0,
+             "11": 1.0,
+             "13": 6.0,
+             "14": 11.0,
+             "15": 6.0,
+             "16": 6.0,
+             "17": 0.0,
+             "18": 3.0,
+             "40": 24.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": []
+         }
+        }
+       },
+       {
+        "playerId": 4278562,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Paul Reed",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "150": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 150,
+            "stats": {
+             "0": 18.0,
+             "1": 0.0,
+             "2": 1.0,
+             "3": 1.0,
+             "4": 0.0,
+             "5": 8.0,
+             "6": 8.0,
+             "11": 3.0,
+             "13": 7.0,
+             "14": 14.0,
+             "15": 1.0,
+             "16": 3.0,
+             "17": 3.0,
+             "18": 8.0,
+             "40": 28.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 150,
+            "stats": {
+             "0": 28.0,
+             "1": 0.0,
+             "2": 1.0,
+             "3": 2.0,
+             "4": 2.0,
+             "5": 8.0,
+             "6": 10.0,
+             "11": 0.0,
+             "13": 9.0,
+             "14": 19.0,
+             "15": 7.0,
+             "16": 10.0,
+             "17": 3.0,
+             "18": 8.0,
+             "40": 38.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 150,
+            "stats": {
+             "0": 26.0,
+             "1": 0.0,
+             "2": 1.0,
+             "3": 3.0,
+             "4": 6.0,
+             "5": 8.0,
+             "6": 14.0,
+             "11": 0.0,
+             "13": 12.0,
+             "14": 19.0,
+             "15": 2.0,
+             "16": 6.0,
+             "17": 0.0,
+             "18": 1.0,
+             "40": 36.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "156": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 156,
+            "stats": {
+             "0": 0.0,
+             "1": 0.0,
+             "2": 1.0,
+             "3": 0.0,
+             "4": 1.0,
+             "5": 4.0,
+             "6": 5.0,
+             "11": 1.0,
+             "13": 0.0,
+             "14": 2.0,
+             "15": 0.0,
+             "16": 0.0,
+             "17": 0.0,
+             "18": 1.0,
+             "40": 22.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 156,
+            "stats": {
+             "0": 17.0,
+             "1": 0.0,
+             "2": 2.0,
+             "3": 7.0,
+             "4": 1.0,
+             "5": 9.0,
+             "6": 10.0,
+             "11": 1.0,
+             "13": 6.0,
+             "14": 19.0,
+             "15": 4.0,
+             "16": 5.0,
+             "17": 1.0,
+             "18": 9.0,
+             "40": 33.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 156,
+            "stats": {
+             "0": 8.0,
+             "1": 0.0,
+             "2": 0.0,
+             "3": 4.0,
+             "4": 1.0,
+             "5": 4.0,
+             "6": 5.0,
+             "11": 2.0,
+             "13": 3.0,
+             "14": 8.0,
+             "15": 2.0,
+             "16": 5.0,
+             "17": 0.0,
+             "18": 0.0,
+             "40": 31.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "157": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": []
+         }
+        }
+       },
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "158": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 158,
+            "stats": {
+             "0": 5.0,
+             "1": 0.0,
+             "2": 2.0,
+             "3": 1.0,
+             "4": 3.0,
+             "5": 3.0,
+             "6": 6.0,
+             "11": 0.0,
+             "13": 2.0,
+             "14": 6.0,
+             "15": 0.0,
+             "16": 0.0,
+             "17": 1.0,
+             "18": 1.0,
+             "40": 20.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 158,
+            "stats": {
+             "0": 14.0,
+             "1": 1.0,
+             "2": 1.0,
+             "3": 3.0,
+             "4": 1.0,
+             "5": 15.0,
+             "6": 16.0,
+             "11": 2.0,
+             "13": 3.0,
+             "14": 14.0,
+             "15": 7.0,
+             "16": 8.0,
+             "17": 1.0,
+             "18": 8.0,
+             "40": 31.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 158,
+            "stats": {
+             "0": 23.0,
+             "1": 0.0,
+             "2": 1.0,
+             "3": 3.0,
+             "4": 0.0,
+             "5": 10.0,
+             "6": 10.0,
+             "11": 0.0,
+             "13": 10.0,
+             "14": 15.0,
+             "15": 2.0,
+             "16": 2.0,
+             "17": 1.0,
+             "18": 2.0,
+             "40": 29.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "159": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "160": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 160,
+            "stats": {
+             "0": 15.0,
+             "1": 1.0,
+             "2": 0.0,
+             "3": 3.0,
+             "4": 0.0,
+             "5": 12.0,
+             "6": 12.0,
+             "11": 1.0,
+             "13": 6.0,
+             "14": 16.0,
+             "15": 3.0,
+             "16": 4.0,
+             "17": 0.0,
+             "18": 3.0,
+             "40": 33.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "161": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 161,
+            "stats": {
+             "0": 23.0,
+             "1": 0.0,
+             "2": 1.0,
+             "3": 6.0,
+             "4": 4.0,
+             "5": 12.0,
+             "6": 16.0,
+             "11": 2.0,
+             "13": 5.0,
+             "14": 11.0,
+             "15": 12.0,
+             "16": 13.0,
+             "17": 1.0,
+             "18": 4.0,
+             "40": 42.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 161,
+            "stats": {
+             "0": 34.0,
+             "1": 3.0,
+             "2": 1.0,
+             "3": 3.0,
+             "4": 4.0,
+             "5": 13.0,
+             "6": 17.0,
+             "11": 2.0,
+             "13": 15.0,
+             "14": 21.0,
+             "15": 4.0,
+             "16": 5.0,
+             "17": 0.0,
+             "18": 0.0,
+             "40": 30.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "162": {
+   "teams": [
+    {
+     "id": 1,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "stats": []
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": 8,
+     "roster": {
+      "entries": [
+       {
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 162,
+            "stats": {
+             "0": 6.0,
+             "1": 0.0,
+             "2": 0.0,
+             "3": 4.0,
+             "4": 1.0,
+             "5": 3.0,
+             "6": 4.0,
+             "11": 1.0,
+             "13": 2.0,
+             "14": 4.0,
+             "15": 2.0,
+             "16": 2.0,
+             "17": 0.0,
+             "18": 1.0,
+             "40": 22.0
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "stats": [
+           {
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "scoringPeriodId": 162,
+            "stats": {
+             "0": 17.0,
+             "1": 0.0,
+             "2": 2.0,
+             "3": 1.0,
+             "4": 3.0,
+             "5": 3.0,
+             "6": 6.0,
+             "11": 0.0,
+             "13": 7.0,
+             "14": 8.0,
+             "15": 0.0,
+             "16": 0.0,
+             "17": 3.0,
+             "18": 3.0,
+             "40": 31.0
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "transactions": [
+  {
+   "id": "c365b6ec-159f-4b39-a9cc-98aab9b69c1b",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 144,
+   "proposedDate": 1773421285459,
+   "teamId": 1,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4278562,
+     "fromTeamId": 0,
+     "toTeamId": 1
+    },
+    {
+     "type": "DROP",
+     "playerId": 4997526,
+     "fromTeamId": 1,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "8117139b-4804-46e9-bc7a-c066d0e038a4",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 144,
+   "proposedDate": 1773442356986,
+   "teamId": 1,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4702177,
+     "fromTeamId": 0,
+     "toTeamId": 1
+    },
+    {
+     "type": "DROP",
+     "playerId": 4278562,
+     "fromTeamId": 1,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "3fe6472f-365b-49ef-a0b8-142937d403e2",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 145,
+   "proposedDate": 1773507588808,
+   "teamId": 1,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4433174,
+     "fromTeamId": 0,
+     "toTeamId": 1
+    },
+    {
+     "type": "DROP",
+     "playerId": 2991139,
+     "fromTeamId": 1,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "16354986-00f6-425f-bdf6-ba2dc2da59f9",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 145,
+   "proposedDate": 1773536058158,
+   "teamId": 1,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4432827,
+     "fromTeamId": 0,
+     "toTeamId": 1
+    },
+    {
+     "type": "DROP",
+     "playerId": 4277848,
+     "fromTeamId": 1,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "6334f15a-072f-4f00-b647-5d3b28072ea5",
+   "type": "TRADE_ACCEPT",
+   "scoringPeriodId": 147,
+   "proposedDate": 1773653477793,
+   "teamId": 1,
+   "relatedTransactionId": "8462cbe0-f1a2-456c-8e74-2443b24938cf",
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "DROP",
+     "playerId": 4432827,
+     "fromTeamId": 1,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "8097ff26-1863-41ab-9c98-0325b88fb202",
+   "type": "TRADE_VETO",
+   "status": "EXECUTED",
+   "scoringPeriodId": 147,
+   "proposedDate": 1773653651669,
+   "teamId": 1,
+   "relatedTransactionId": "8462cbe0-f1a2-456c-8e74-2443b24938cf",
+   "bidAmount": 0,
+   "items": []
+  },
+  {
+   "id": "8870186f-36f1-49e0-a0f9-25d62c758d5a",
+   "type": "ROSTER",
+   "status": "EXECUTED",
+   "scoringPeriodId": 147,
+   "proposedDate": 1773653659503,
+   "teamId": 1,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "DROP",
+     "playerId": 4432827,
+     "fromTeamId": 1,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "3c647bf4-a2bc-4036-8d2e-d182bd2beda0",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 147,
+   "proposedDate": 1773653777026,
+   "teamId": 1,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 2991139,
+     "fromTeamId": 0,
+     "toTeamId": 1
+    }
+   ]
+  },
+  {
+   "id": "dda5e5b1-5bcf-4b1e-8294-e8585205f20b",
+   "type": "TRADE_ACCEPT",
+   "scoringPeriodId": 147,
+   "proposedDate": 1773654053828,
+   "teamId": 8,
+   "relatedTransactionId": "cf9f5a50-f1d8-4eb9-b3b3-e4e29927f4b9",
+   "bidAmount": 0,
+   "items": []
+  },
+  {
+   "id": "fc3d60b3-b366-47b0-9991-28e8a5d98fa6",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 148,
+   "proposedDate": 1773740727638,
+   "teamId": 8,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4278562,
+     "fromTeamId": 0,
+     "toTeamId": 8
+    }
+   ]
+  },
+  {
+   "id": "83353dee-a152-4720-a166-35ab97b1575e",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 150,
+   "proposedDate": 1773937847464,
+   "teamId": 8,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4683747,
+     "fromTeamId": 0,
+     "toTeamId": 8
+    },
+    {
+     "type": "DROP",
+     "playerId": 4278562,
+     "fromTeamId": 8,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "8e57ae01-bddf-439b-9f8c-0304b00b8366",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 156,
+   "proposedDate": 1774480762319,
+   "teamId": 12,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4278562,
+     "fromTeamId": 0,
+     "toTeamId": 12
+    },
+    {
+     "type": "DROP",
+     "playerId": 4711297,
+     "fromTeamId": 12,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "5a8e301e-7955-4eda-96b1-3029ebf3e38f",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 159,
+   "proposedDate": 1774717351489,
+   "teamId": 1,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 4712863,
+     "fromTeamId": 0,
+     "toTeamId": 1
+    },
+    {
+     "type": "DROP",
+     "playerId": 3908845,
+     "fromTeamId": 1,
+     "toTeamId": 0
+    }
+   ]
+  },
+  {
+   "id": "ed36a936-6da3-4381-b35e-e8f797c71798",
+   "type": "FREEAGENT",
+   "status": "EXECUTED",
+   "scoringPeriodId": 161,
+   "proposedDate": 1774859792831,
+   "teamId": 8,
+   "bidAmount": 0,
+   "items": [
+    {
+     "type": "ADD",
+     "playerId": 3908845,
+     "fromTeamId": 0,
+     "toTeamId": 8
+    },
+    {
+     "type": "DROP",
+     "playerId": 4066757,
+     "fromTeamId": 8,
+     "toTeamId": 0
+    }
+   ]
+  }
+ ]
+}

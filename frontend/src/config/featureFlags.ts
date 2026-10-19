@@ -15,3 +15,5 @@ export const FF_MINIGAMES = import.meta.env.VITE_FF_MINIGAMES === 'true';
 export const FF_GLOBAL_SEARCH = import.meta.env.VITE_FF_GLOBAL_SEARCH === 'true';
 export const FF_SCHEDULE = import.meta.env.VITE_FF_SCHEDULE === 'true';
 export const FF_TODAY_HUB = import.meta.env.VITE_FF_TODAY_HUB === 'true';
+// League Activity page (adds/drops/trades, trade history + tree) and the Today "Latest moves" card.
+export const FF_LEAGUE_ACTIVITY = import.meta.env.VITE_FF_LEAGUE_ACTIVITY === 'true';

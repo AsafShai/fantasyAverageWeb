@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from app.models import LeagueSummary, LeagueShotsData, DraftReport, TodayHub
+from app.models.activity_models import LeagueActivity, LatestMoves
 from app.services.league_service import LeagueService
 from app.services.draft_report_service import DraftReportService
 from app.services.today_service import TodayService
+from app.services.league_activity_service import get_league_activity_service
 from app.exceptions import ResourceNotFoundError, DataSourceError
 from typing import Annotated
 import logging
@@ -78,3 +80,29 @@ async def get_draft_report(
         raise HTTPException(status_code=500, detail="Failed to retrieve draft report") from e
 
 
+
+
+@router.get("/activity", response_model=LeagueActivity)
+async def get_league_activity() -> LeagueActivity:
+    """Every add, drop, waiver claim and trade this season, plus what each side
+    of each trade got while the players were on its roster."""
+    try:
+        return await get_league_activity_service().get_activity()
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error getting league activity: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve league activity") from e
+
+
+@router.get("/activity/latest", response_model=LatestMoves)
+async def get_latest_moves(limit: int = Query(8, ge=1, le=50)) -> LatestMoves:
+    """The most recent moves only, for the Today card."""
+    try:
+        activity = await get_league_activity_service().get_activity()
+        return LatestMoves(teams=activity.teams, moves=activity.moves[:limit])
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error getting latest moves: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve latest moves") from e
