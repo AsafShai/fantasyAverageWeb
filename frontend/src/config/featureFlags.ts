@@ -15,3 +15,4 @@ export const FF_MINIGAMES = import.meta.env.VITE_FF_MINIGAMES === 'true';
 export const FF_GLOBAL_SEARCH = import.meta.env.VITE_FF_GLOBAL_SEARCH === 'true';
 export const FF_SCHEDULE = import.meta.env.VITE_FF_SCHEDULE === 'true';
 export const FF_TODAY_HUB = import.meta.env.VITE_FF_TODAY_HUB === 'true';
+export const FF_SHARE_CARDS = import.meta.env.VITE_FF_SHARE_CARDS === 'true';
