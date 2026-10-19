@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGetLeagueSummaryQuery } from '../store/api/fantasyApi';
-import { FF_CUSTOM_RANGE } from '../config/featureFlags';
 import DateRangePicker from './DateRangePicker';
 import type { CustomDateRange } from '../types/api';
 
@@ -26,7 +25,7 @@ const TimePeriodSelector: React.FC<TimePeriodSelectorProps> = ({
   onCustomRangeChange,
   allowCustom = true,
 }) => {
-  const showCustom = FF_CUSTOM_RANGE && allowCustom;
+  const showCustom = allowCustom;
   const { data: summary } = useGetLeagueSummaryQuery(undefined, { skip: !showCustom });
   const [panelOpen, setPanelOpen] = useState(false);
   const prevPeriodRef = useRef<TimePeriod>(value === 'custom' ? 'season' : value);

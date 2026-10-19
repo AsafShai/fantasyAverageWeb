@@ -1,0 +1,59 @@
+{
+  "players": [
+    {
+      "player_name": "Alpha Star",
+      "pro_team": "LAL",
+      "positions": [
+        "PG",
+        "SG"
+      ],
+      "team_id": 1,
+      "status": "ONTEAM",
+      "stats": {
+        "pts": 250,
+        "reb": 80,
+        "ast": 40,
+        "stl": 10,
+        "blk": 5,
+        "fgm": 100,
+        "fga": 200,
+        "ftm": 40,
+        "fta": 50,
+        "fg_percentage": 0.5,
+        "ft_percentage": 0.8,
+        "three_pm": 30,
+        "minutes": 800,
+        "gp": 10
+      }
+    },
+    {
+      "player_name": "Bench Guy",
+      "pro_team": "BOS",
+      "positions": [
+        "C"
+      ],
+      "team_id": 1,
+      "status": "ONTEAM",
+      "stats": {
+        "pts": 50,
+        "reb": 80,
+        "ast": 40,
+        "stl": 10,
+        "blk": 5,
+        "fgm": 100,
+        "fga": 200,
+        "ftm": 40,
+        "fta": 50,
+        "fg_percentage": 0.5,
+        "ft_percentage": 0.8,
+        "three_pm": 30,
+        "minutes": 800,
+        "gp": 10
+      }
+    }
+  ],
+  "total_count": 2,
+  "page": 1,
+  "limit": 1200,
+  "has_more": false
+}

@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -28,6 +29,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Playwright specs live in e2e/ and run with `npm run test:e2e`.
+    exclude: [...configDefaults.exclude, 'e2e/**'],
     maxWorkers: 1,
     fileParallelism: false,
   },

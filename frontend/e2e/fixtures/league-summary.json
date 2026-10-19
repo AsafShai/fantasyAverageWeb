@@ -1,0 +1,20 @@
+{
+  "total_teams": 12,
+  "total_games_played": 400,
+  "nba_avg_pace": 99.4,
+  "nba_game_days_left": 120,
+  "category_leaders": {},
+  "league_averages": {
+    "fg_percentage": 0.47,
+    "ft_percentage": 0.78,
+    "three_pm": 12,
+    "ast": 24,
+    "reb": 43,
+    "stl": 7,
+    "blk": 4,
+    "pts": 112,
+    "gp": 3
+  },
+  "last_updated": "2026-10-18T09:41:00Z",
+  "season_start": "2025-10-22"
+}

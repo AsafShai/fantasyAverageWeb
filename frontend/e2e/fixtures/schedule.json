@@ -1,0 +1,92 @@
+{
+  "season": "2026-27",
+  "high_volume_threshold": 8,
+  "calendar_days": [
+    {
+      "date": "2026-10-21",
+      "slate_size": 8,
+      "high_volume": false
+    },
+    {
+      "date": "2026-10-23",
+      "slate_size": 11,
+      "high_volume": true
+    }
+  ],
+  "teams": [
+    {
+      "team_id": 1,
+      "abbreviation": "LAL",
+      "team_name": "LAL",
+      "games": [
+        {
+          "game_id": "2026-10-21BOS",
+          "date": "2026-10-21",
+          "opponent_id": 2,
+          "opponent": "BOS",
+          "opponent_abbreviation": "BOS",
+          "is_home": true,
+          "rest_days": 1,
+          "slate_size": 8,
+          "high_volume": false
+        },
+        {
+          "game_id": "2026-10-23BOS",
+          "date": "2026-10-23",
+          "opponent_id": 2,
+          "opponent": "BOS",
+          "opponent_abbreviation": "BOS",
+          "is_home": false,
+          "rest_days": 1,
+          "slate_size": 8,
+          "high_volume": false
+        }
+      ],
+      "monthly_games": {
+        "2026-10": 2
+      },
+      "total_games": 82,
+      "b2b_count": 10,
+      "high_volume_games": 20,
+      "avg_rest_days": 1.5
+    },
+    {
+      "team_id": 2,
+      "abbreviation": "BOS",
+      "team_name": "BOS",
+      "games": [
+        {
+          "game_id": "2026-10-21LAL",
+          "date": "2026-10-21",
+          "opponent_id": 2,
+          "opponent": "LAL",
+          "opponent_abbreviation": "LAL",
+          "is_home": true,
+          "rest_days": 1,
+          "slate_size": 8,
+          "high_volume": false
+        },
+        {
+          "game_id": "2026-10-23LAL",
+          "date": "2026-10-23",
+          "opponent_id": 2,
+          "opponent": "LAL",
+          "opponent_abbreviation": "LAL",
+          "is_home": false,
+          "rest_days": 1,
+          "slate_size": 8,
+          "high_volume": false
+        }
+      ],
+      "monthly_games": {
+        "2026-10": 2
+      },
+      "total_games": 82,
+      "b2b_count": 10,
+      "high_volume_games": 20,
+      "avg_rest_days": 1.5
+    }
+  ],
+  "published_games_min": 2,
+  "published_games_max": 2
+}

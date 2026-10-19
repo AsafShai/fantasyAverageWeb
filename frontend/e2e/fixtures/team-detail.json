@@ -1,0 +1,110 @@
+{
+  "team": {
+    "team_id": 1,
+    "team_name": "Fantasy One"
+  },
+  "espn_url": "https://fantasy.espn.com",
+  "players": [
+    {
+      "player_name": "Alpha Star",
+      "pro_team": "LAL",
+      "positions": [
+        "PG",
+        "SG"
+      ],
+      "team_id": 1,
+      "status": "ONTEAM",
+      "stats": {
+        "pts": 250,
+        "reb": 80,
+        "ast": 40,
+        "stl": 10,
+        "blk": 5,
+        "fgm": 100,
+        "fga": 200,
+        "ftm": 40,
+        "fta": 50,
+        "fg_percentage": 0.5,
+        "ft_percentage": 0.8,
+        "three_pm": 30,
+        "minutes": 800,
+        "gp": 10
+      }
+    },
+    {
+      "player_name": "Bench Guy",
+      "pro_team": "BOS",
+      "positions": [
+        "C"
+      ],
+      "team_id": 1,
+      "status": "ONTEAM",
+      "stats": {
+        "pts": 50,
+        "reb": 80,
+        "ast": 40,
+        "stl": 10,
+        "blk": 5,
+        "fgm": 100,
+        "fga": 200,
+        "ftm": 40,
+        "fta": 50,
+        "fg_percentage": 0.5,
+        "ft_percentage": 0.8,
+        "three_pm": 30,
+        "minutes": 800,
+        "gp": 10
+      }
+    }
+  ],
+  "shot_chart": {
+    "team": {
+      "team_id": 1,
+      "team_name": "Fantasy One"
+    },
+    "fgm": 100,
+    "fga": 200,
+    "fg_percentage": 0.5,
+    "ftm": 40,
+    "fta": 50,
+    "ft_percentage": 0.8,
+    "gp": 10
+  },
+  "raw_averages": {
+    "fg_percentage": 0.47,
+    "ft_percentage": 0.78,
+    "three_pm": 12,
+    "ast": 24,
+    "reb": 43,
+    "stl": 7,
+    "blk": 4,
+    "pts": 112,
+    "gp": 3,
+    "team": {
+      "team_id": 1,
+      "team_name": "Fantasy One"
+    }
+  },
+  "ranking_stats": {
+    "fg_percentage": 0.47,
+    "ft_percentage": 0.78,
+    "three_pm": 12,
+    "ast": 24,
+    "reb": 43,
+    "stl": 7,
+    "blk": 4,
+    "pts": 112,
+    "gp": 3,
+    "team": {
+      "team_id": 1,
+      "team_name": "Fantasy One"
+    },
+    "total_points": 80,
+    "rank": 1
+  },
+  "category_ranks": {
+    "pts": 1
+  },
+  "slot_usage": {},
+  "data_date": "2026-10-18"
+}
