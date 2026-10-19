@@ -850,9 +850,22 @@ export interface ProjectionMiss {
   reason_detail: string;
 }
 
+export interface DidNotPlay {
+  player_id: number;
+  player_name: string;
+  game_date: string;
+  team: string;
+  opponent: string;
+  is_home: boolean;
+  proj_min: number;
+  injury_status: string | null;
+}
+
 export interface AccuracyMisses {
   week_start: string | null;
   misses: ProjectionMiss[];
+  didnt_play: DidNotPlay[];
+  didnt_play_count: number;
 }
 
 export interface ProjectedGame {

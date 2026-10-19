@@ -82,8 +82,8 @@ const WeeklyTrendChart = ({ weeks, categories }: { weeks: AccuracyWeek[]; catego
                 className="text-gray-500 dark:text-gray-400"
               />
               <Tooltip content={<TrendTooltip catKey={catKey} />} />
-              <Line type="monotone" dataKey="baseline" stroke="var(--accuracy-baseline)" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
-              <Line type="monotone" dataKey="model" stroke="var(--accuracy-model)" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+              <Line type="linear" dataKey="baseline" stroke="var(--accuracy-baseline)" strokeWidth={2} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+              <Line type="linear" dataKey="model" stroke="var(--accuracy-model)" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

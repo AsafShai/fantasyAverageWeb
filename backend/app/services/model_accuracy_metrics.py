@@ -62,6 +62,11 @@ def _abbr(team_id) -> str:
     return TEAM_ID_TO_ABBR.get(int(team_id), '')
 
 
+def _text(v) -> Optional[str]:
+    """A text column's value, or None for NULL — pandas may hold it as NaN."""
+    return v if isinstance(v, str) and v else None
+
+
 def season_start_for(day: date) -> date:
     """NBA seasons straddle the new year; Aug 1 is safely between two of them."""
     year = day.year if day.month >= 8 else day.year - 1
@@ -173,7 +178,7 @@ def miss_reason(row: dict) -> tuple[str, str]:
     prove it: no game → blowout → foul trouble → minutes → shooting → unknown."""
     proj_min = _f(row.get('proj_min')) or 0.0
     if row.get('outcome') == 'dnp':
-        injury = row.get('injury_status')
+        injury = _text(row.get('injury_status'))
         detail = f'Projected {proj_min:.0f} min'
         detail += f'; listed {injury} at snapshot' if injury else '; not on the injury report at snapshot'
         return 'DNP', detail
@@ -215,6 +220,10 @@ def _line(row: dict) -> list[dict]:
 
 
 def biggest_misses(df: pd.DataFrame, limit: int = 6) -> list[dict]:
+    """Largest misses among games the player actually played. DNPs are listed
+    separately (didnt_play): a projected player sitting out would otherwise
+    fill this list every week and hide the misses the model could learn from."""
+    df = played(df)
     if df.empty:
         return []
     df = df.assign(_z=composite(df))
@@ -237,6 +246,27 @@ def biggest_misses(df: pd.DataFrame, limit: int = 6) -> list[dict]:
             'reason_detail': detail,
         })
     return out
+
+
+def didnt_play(df: pd.DataFrame, limit: int = 8) -> list[dict]:
+    """Projected players who sat out, most projected minutes first."""
+    rows = df[df['outcome'] == 'dnp'] if not df.empty else df
+    if rows.empty:
+        return []
+    rows = rows.sort_values('proj_min', ascending=False).head(limit)
+    return [
+        {
+            'player_id': int(r['player_id']),
+            'player_name': r['player_name'],
+            'game_date': r['game_date'].isoformat(),
+            'team': _abbr(r['team_id']),
+            'opponent': _abbr(r['opponent_team_id']),
+            'is_home': bool(r['is_home']),
+            'proj_min': round(float(r['proj_min']), 1),
+            'injury_status': _text(r.get('injury_status')),
+        }
+        for r in rows.to_dict('records')
+    ]
 
 
 def flag_for(zs: list[float]) -> str:

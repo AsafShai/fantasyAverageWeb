@@ -15,6 +15,7 @@ import CategoryAccuracyTable from '../components/modelAccuracy/CategoryAccuracyT
 import WeeklyTrendChart from '../components/modelAccuracy/WeeklyTrendChart'
 import MissesList from '../components/modelAccuracy/MissesList'
 import PlayersAccuracyTable from '../components/modelAccuracy/PlayersAccuracyTable'
+import DidNotPlayList from '../components/modelAccuracy/DidNotPlayList'
 import {
   WINDOW_LABELS,
   filterByRoster,
@@ -86,9 +87,9 @@ function ModeBanner({ mode, summary }: { mode: AccuracyMode; summary?: AccuracyS
 
 function Tile({ label, value, detail, tone }: { label: string; value: string; detail: string; tone?: 'good' }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 grid gap-0.5">
+    <div className="min-w-0 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 px-3 sm:px-4 py-3 grid gap-0.5 content-start">
       <span className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</span>
-      <span className={`text-2xl font-bold ${tone === 'good' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-gray-100'}`}>{value}</span>
+      <span className={`text-xl sm:text-2xl font-bold ${tone === 'good' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-gray-100'}`}>{value}</span>
       <span className="text-xs text-gray-600 dark:text-gray-300">{detail}</span>
     </div>
   )
@@ -99,7 +100,7 @@ function SummaryTiles({ summary }: { summary: AccuracySummary }) {
   const pts = summary.categories.find(c => c.key === 'pts')
   const min = summary.minutes
   return (
-    <section aria-label="Headline numbers" className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))]">
+    <section aria-label="Headline numbers" className="grid gap-3 grid-cols-2 lg:grid-cols-4">
       <Tile label="Categories beating baseline" value={`${h.beating} of ${h.graded}`} detail="Lower error than the last-10 average" />
       <Tile
         label="Avg. error reduction"
@@ -147,7 +148,7 @@ const ModelAccuracy = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 grid gap-5 pb-10">
+    <div className="max-w-6xl mx-auto px-4 grid grid-cols-[minmax(0,1fr)] gap-5 pb-10">
       <section className="flex flex-wrap gap-3 items-end justify-between">
         <div className="min-w-0">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Model vs. Reality</h1>
@@ -197,7 +198,7 @@ const ModelAccuracy = () => {
             <CategoryAccuracyTable categories={summary.categories} />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2.5">
               Error is mean absolute error per game. Hit rate is the share of games within the band shown. FG% and FT%
-              count only games with 5+ FGA / 2+ FTA. Bars left of the line mean the model beat the baseline.
+              count only games with 5+ FGA / 2+ FTA. A negative gap (bar left of the line) means the model beat the baseline.
             </p>
           </section>
         </>
@@ -210,15 +211,20 @@ const ModelAccuracy = () => {
         </section>
       )}
 
-      {mode === 'pregame' && (missesQ.data?.misses.length ?? 0) > 0 && (
+      {mode === 'pregame' && missesQ.data && (missesQ.data.misses.length > 0 || missesQ.data.didnt_play.length > 0) && (
         <section className={CARD}>
           <div className="flex flex-wrap gap-2 justify-between items-baseline mb-3">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               Biggest misses{missesQ.data?.week_start ? `, week of ${formatShortDate(missesQ.data.week_start)}` : ''}
             </h2>
-            <span className="text-xs text-gray-500 dark:text-gray-400">Ranked by total miss across counting stats. Reason shown when the data explains it.</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Games played, ranked by total miss across counting stats. Reason shown when the data explains it.</span>
           </div>
-          <MissesList misses={missesQ.data!.misses} />
+          <div className="grid gap-5">
+            {missesQ.data.misses.length > 0 && <MissesList misses={missesQ.data.misses} />}
+            {missesQ.data.didnt_play.length > 0 && (
+              <DidNotPlayList rows={missesQ.data.didnt_play} total={missesQ.data.didnt_play_count} />
+            )}
+          </div>
         </section>
       )}
 
@@ -236,7 +242,7 @@ const ModelAccuracy = () => {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2.5">
             Each bar is one game; bars above the line beat the projection, bars below trailed it (summed over PTS,
             REB, AST, 3PM, STL and BLK in spread units). "Beating" / "Trailing" means at least 5 of the last 8 games went
-            that way and the average is beyond ±0.5.
+            that way and the average is beyond ±0.5. Most out-of-line players first.
           </p>
         </section>
       )}

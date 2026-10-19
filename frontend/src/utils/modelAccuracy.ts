@@ -1,4 +1,4 @@
-import type { AccuracyWindow, CategoryAccuracy, Player, ProjectionFlag } from '../types/api'
+import type { AccuracyWindow, CategoryAccuracy, Player, PlayerAccuracyRow, ProjectionFlag } from '../types/api'
 
 export const WINDOW_LABELS: Record<AccuracyWindow, string> = {
   week: 'This week',
@@ -68,4 +68,18 @@ export function filterByRoster<T extends { player_id: number }>(
 export function formatShortDate(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** Players most out of line with their projections first: flagged rows
+ *  (beating / trailing), then by the size of their average miss. */
+export function rankPlayers(rows: PlayerAccuracyRow[]): PlayerAccuracyRow[] {
+  const avg = (r: PlayerAccuracyRow) => Math.abs(r.games.reduce((s, g) => s + g.z, 0) / Math.max(r.games.length, 1))
+  return [...rows].sort((a, b) => Number(b.flag !== 'flat') - Number(a.flag !== 'flat') || avg(b) - avg(a))
+}
+
+/** Half-width of the error-vs-baseline bar scale in percent: fits the largest
+ *  gap with headroom, never narrower than ±5% so tiny gaps stay small. */
+export function deltaScale(deltas: (number | null)[]): number {
+  const max = Math.max(0, ...deltas.filter((d): d is number => d != null).map(Math.abs))
+  return Math.max(5, Math.ceil(max / 5) * 5)
 }

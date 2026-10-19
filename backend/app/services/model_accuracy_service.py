@@ -414,12 +414,17 @@ async def misses(week: Optional[date]) -> dict:
         if week is None:
             latest = await _latest_date('pregame')
             if latest is None:
-                return {'week_start': None, 'misses': []}
+                return {'week_start': None, 'misses': [], 'didnt_play': [], 'didnt_play_count': 0}
             start = metrics.week_start(latest)
         else:
             start = metrics.week_start(week)
         df = await _fetch_pregame(start, start + timedelta(days=6))
-        return {'week_start': start.isoformat(), 'misses': metrics.biggest_misses(df)}
+        return {
+            'week_start': start.isoformat(),
+            'misses': metrics.biggest_misses(df),
+            'didnt_play': metrics.didnt_play(df),
+            'didnt_play_count': int((df['outcome'] == 'dnp').sum()) if not df.empty else 0,
+        }
     return await _cached(('misses', week), build)
 
 

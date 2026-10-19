@@ -37,24 +37,24 @@ const PlayerAccuracyCard = ({ playerId }: { playerId: number }) => {
             <thead>
               <tr className="text-gray-500 dark:text-gray-400">
                 <th className="pr-2 pb-1"></th>
-                {data.categories.map(c => <th key={c.key} className="px-1.5 pb-1 font-medium text-right">{c.label}</th>)}
+                {data.categories.map(c => <th key={c.key} className="px-1 sm:px-1.5 pb-1 font-medium text-right">{c.label}</th>)}
               </tr>
             </thead>
             <tbody className="tabular-nums">
               <tr>
-                <td className="pr-2 text-gray-500 dark:text-gray-400">Proj</td>
-                {data.categories.map(c => <td key={c.key} className="px-1.5 py-0.5 text-right">{c.proj.toFixed(1)}</td>)}
+                <td className="pr-1.5 sm:pr-2 text-gray-500 dark:text-gray-400">Proj</td>
+                {data.categories.map(c => <td key={c.key} className="px-1 sm:px-1.5 py-0.5 text-right">{c.proj.toFixed(1)}</td>)}
               </tr>
               <tr>
-                <td className="pr-2 text-gray-500 dark:text-gray-400">Actual</td>
-                {data.categories.map(c => <td key={c.key} className="px-1.5 py-0.5 text-right font-semibold">{c.actual == null ? '—' : c.actual.toFixed(1)}</td>)}
+                <td className="pr-1.5 sm:pr-2 text-gray-500 dark:text-gray-400">Actual</td>
+                {data.categories.map(c => <td key={c.key} className="px-1 sm:px-1.5 py-0.5 text-right font-semibold">{c.actual == null ? '—' : c.actual.toFixed(1)}</td>)}
               </tr>
               <tr>
-                <td className="pr-2 text-gray-500 dark:text-gray-400">Diff</td>
+                <td className="pr-1.5 sm:pr-2 text-gray-500 dark:text-gray-400">Diff</td>
                 {data.categories.map(c => {
                   const d = c.actual == null ? null : c.actual - c.proj
                   const tone = d == null || Math.abs(d) < 0.15 ? 'text-gray-500 dark:text-gray-400' : d > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'
-                  return <td key={c.key} className={`px-1.5 py-0.5 text-right ${tone}`}>{d == null ? '—' : formatSigned(d)}</td>
+                  return <td key={c.key} className={`px-1 sm:px-1.5 py-0.5 text-right ${tone}`}>{d == null ? '—' : formatSigned(d)}</td>
                 })}
               </tr>
             </tbody>

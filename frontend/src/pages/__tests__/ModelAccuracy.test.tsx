@@ -34,11 +34,16 @@ const weekly: AccuracyWeekly = {
 const misses: AccuracyMisses = {
   week_start: '2026-12-07',
   misses: [{
-    player_id: 3917376, player_name: 'Jaylen Brown', game_date: '2026-12-10', team_id: 2, team: 'BOS',
-    opponent_team_id: 14, opponent: 'MIA', is_home: false, z: -6.8,
-    line: [{ stat: 'MIN', proj: 34, actual: 0 }, { stat: 'PTS', proj: 26.4, actual: 0 }],
-    reason: 'DNP', reason_detail: 'Projected 34 min; listed Questionable at snapshot',
+    player_id: 3917376, player_name: 'Anthony Edwards', game_date: '2026-12-12', team_id: 16, team: 'MIN',
+    opponent_team_id: 23, opponent: 'SAC', is_home: true, z: -5.1,
+    line: [{ stat: 'MIN', proj: 36, actual: 22 }, { stat: 'PTS', proj: 27.9, actual: 9 }],
+    reason: 'Blowout', reason_detail: 'Won by 34; played 22 of projected 36 min',
   }],
+  didnt_play: [{
+    player_id: 3917377, player_name: 'Jaylen Brown', game_date: '2026-12-10', team: 'BOS', opponent: 'MIA',
+    is_home: false, proj_min: 34.2, injury_status: 'Questionable',
+  }],
+  didnt_play_count: 9,
 }
 
 const game = (z: number, d: number) => ({
@@ -98,19 +103,25 @@ describe('ModelAccuracy page', () => {
     expect(within(ptsRow).getByText('5.12')).toBeInTheDocument()
     expect(within(ptsRow).getByText('5.94')).toBeInTheDocument()
     expect(within(ptsRow).getByRole('img', { name: '-13.8% vs baseline' })).toBeInTheDocument()
+    // Bar scale fits the largest gap (13.8%) rather than a fixed ±20%.
+    expect(screen.getByRole('columnheader', { name: /baseline \(±15%\)/ })).toBeInTheDocument()
   })
 
   it('lists the biggest misses with their reason and only rostered players by default', async () => {
     stubApi({ pregame, retro })
     renderWithProviders(<ModelAccuracy />)
 
-    await waitFor(() => expect(screen.getByText('Jaylen Brown')).toBeInTheDocument())
-    expect(screen.getByText('DNP')).toBeInTheDocument()
-    expect(screen.getByText('Projected 34 min; listed Questionable at snapshot')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Anthony Edwards')).toBeInTheDocument())
+    expect(screen.getByText('Blowout')).toBeInTheDocument()
+    expect(screen.getByText('Won by 34; played 22 of projected 36 min')).toBeInTheDocument()
+    // Sitting out is listed apart from the misses.
+    expect(screen.getByText(/9 this week/)).toBeInTheDocument()
+    expect(screen.getByText('Jaylen Brown')).toBeInTheDocument()
+    expect(screen.getByText('34 min · Questionable')).toBeInTheDocument()
 
     await waitFor(() => expect(screen.getByText('Rostered Star')).toBeInTheDocument())
     expect(screen.queryByText('Free Agent Guy')).not.toBeInTheDocument()
-    expect(screen.getByText('Beating')).toBeInTheDocument()
+    expect(screen.getAllByText('Beating').length).toBeGreaterThan(0)
 
     await userEvent.click(screen.getByRole('button', { name: 'All players' }))
     expect(screen.getByText('Free Agent Guy')).toBeInTheDocument()
@@ -119,13 +130,13 @@ describe('ModelAccuracy page', () => {
   it('switches to the given-minutes mode, which hides pre-game-only sections', async () => {
     const fetchMock = stubApi({ pregame, retro })
     renderWithProviders(<ModelAccuracy />)
-    await waitFor(() => expect(screen.getByText('Jaylen Brown')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Anthony Edwards')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'Given actual minutes' }))
 
     await waitFor(() => expect(screen.getByText(/measures per-minute\s+skill only/)).toBeInTheDocument())
     expect(fetchMock.mock.calls.some(([u]) => String(u instanceof Request ? u.url : u).includes('mode=retro'))).toBe(true)
-    expect(screen.queryByText('Jaylen Brown')).not.toBeInTheDocument()
+    expect(screen.queryByText('Anthony Edwards')).not.toBeInTheDocument()
     expect(await screen.findByText('Given')).toBeInTheDocument()
   })
 

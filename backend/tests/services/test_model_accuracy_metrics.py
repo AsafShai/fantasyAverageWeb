@@ -109,21 +109,36 @@ def test_miss_reason(over, label):
 def test_miss_reason_dnp_detail_names_snapshot_injury_status():
     assert m.miss_reason(_row(outcome='dnp', injury_status='Questionable'))[1] == 'Projected 34 min; listed Questionable at snapshot'
     assert 'not on the injury report' in m.miss_reason(_row(outcome='dnp'))[1]
+    assert 'not on the injury report' in m.miss_reason(_row(outcome='dnp', injury_status=float('nan')))[1]
 
 
-def test_biggest_misses_ranked_by_absolute_composite():
+def test_biggest_misses_ranked_by_absolute_composite_among_played_games():
     df = _df(
         _row(player_id=1, player_name='Small', actual_pts=7.0),
         _row(player_id=2, player_name='Big Over', actual_pts=30.0, actual_min=44.0),
-        _row(player_id=3, player_name='Big Under', outcome='dnp', **{f'actual_{s}': np.nan for s in m.STATS}),
+        _row(player_id=4, player_name='Big Under', actual_pts=0.0, actual_reb=0.0, actual_min=10.0),
+        # A DNP would zero every category and top the list; it goes to didnt_play.
+        _row(player_id=3, player_name='Sat Out', outcome='dnp', **{f'actual_{s}': np.nan for s in m.STATS}),
     )
     out = m.biggest_misses(df, limit=2)
-    # A DNP zeroes every category, so it outranks a 25-point overshoot.
-    assert [x['player_name'] for x in out] == ['Big Under', 'Big Over']
-    assert out[0]['z'] < 0 < out[1]['z']
-    assert out[0]['reason'] == 'DNP'
-    assert out[1]['line'][0] == {'stat': 'MIN', 'proj': 34.0, 'actual': 44.0}
-    assert out[1]['line'][1]['stat'] == 'PTS'
+    assert [x['player_name'] for x in out] == ['Big Over', 'Big Under']
+    assert out[0]['z'] > 0 > out[1]['z']
+    assert out[0]['line'][0] == {'stat': 'MIN', 'proj': 34.0, 'actual': 44.0}
+    assert out[0]['line'][1]['stat'] == 'PTS'
+    assert out[1]['reason'] == 'Minutes gap'
+    assert out[0]['team'] == 'DET' and out[0]['opponent'] == 'NYK'
+
+
+def test_didnt_play_lists_dnps_by_projected_minutes():
+    df = _df(
+        _row(player_id=1, player_name='Bench', outcome='dnp', proj_min=12.0),
+        _row(player_id=2, player_name='Starter', outcome='dnp', proj_min=36.0, injury_status='Questionable'),
+        _row(player_id=3, player_name='Played'),
+    )
+    out = m.didnt_play(df)
+    assert [x['player_name'] for x in out] == ['Starter', 'Bench']
+    assert out[0]['injury_status'] == 'Questionable' and out[1]['injury_status'] is None
+    assert m.didnt_play(df.iloc[[2]]) == []
 
 
 def test_player_rows_skip_dnps_in_strip_and_need_min_games():

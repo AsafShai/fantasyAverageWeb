@@ -66,9 +66,22 @@ class ProjectionMiss(BaseModel):
     reason_detail: str
 
 
+class DidNotPlay(BaseModel):
+    player_id: int
+    player_name: str
+    game_date: str
+    team: str
+    opponent: str
+    is_home: bool
+    proj_min: float
+    injury_status: Optional[str] = None
+
+
 class AccuracyMisses(BaseModel):
     week_start: Optional[str] = None
     misses: list[ProjectionMiss]
+    didnt_play: list[DidNotPlay] = []
+    didnt_play_count: int = 0
 
 
 class ProjectedGame(BaseModel):

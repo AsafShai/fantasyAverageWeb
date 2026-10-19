@@ -8,11 +8,11 @@ const MissesList = ({ misses }: { misses: ProjectionMiss[] }) => (
       const up = m.z > 0
       return (
         <div key={`${m.player_id}-${m.game_date}`} className="min-w-0 grid gap-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-3">
-          <div className="flex items-baseline justify-between gap-2">
+          <div className="flex items-start justify-between gap-2">
             <span className="min-w-0">
               <PlayerNameLink name={m.player_name} playerId={m.player_id} className="font-semibold text-gray-900 dark:text-gray-100 hover:underline" />
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {'  '}{m.team} {m.is_home ? 'vs' : '@'} {m.opponent} · {formatShortDate(m.game_date)}
+              <span className="block text-xs text-gray-500 dark:text-gray-400">
+                {m.team} {m.is_home ? 'vs' : '@'} {m.opponent} · {formatShortDate(m.game_date)}
               </span>
             </span>
             <span
