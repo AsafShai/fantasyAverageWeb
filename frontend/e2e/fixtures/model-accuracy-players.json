@@ -1,0 +1,1864 @@
+{
+ "players": [
+  {
+   "player_id": 4397475,
+   "player_name": "AJ Green",
+   "team_id": 15,
+   "team": "MIL",
+   "games": [
+    {
+     "game_date": "2026-03-31",
+     "opponent_team_id": 6,
+     "opponent": "DAL",
+     "z": 2.04,
+     "proj_pts": 9.6,
+     "actual_pts": 17.0,
+     "proj_min": 25.4,
+     "actual_min": 28.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 10,
+     "opponent": "HOU",
+     "z": 3.65,
+     "proj_pts": 9.6,
+     "actual_pts": 15.0,
+     "proj_min": 27.6,
+     "actual_min": 46.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 2,
+     "opponent": "BOS",
+     "z": 2.47,
+     "proj_pts": 11.9,
+     "actual_pts": 15.0,
+     "proj_min": 32.6,
+     "actual_min": 31.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 29,
+     "opponent": "MEM",
+     "z": -4.11,
+     "proj_pts": 13.1,
+     "actual_pts": 6.0,
+     "proj_min": 32.0,
+     "actual_min": 27.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 17,
+     "opponent": "BKN",
+     "z": 3.56,
+     "proj_pts": 11.8,
+     "actual_pts": 20.0,
+     "proj_min": 32.0,
+     "actual_min": 39.0
+    },
+    {
+     "game_date": "2026-04-08",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": -0.85,
+     "proj_pts": 12.7,
+     "actual_pts": 13.0,
+     "proj_min": 34.2,
+     "actual_min": 30.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 17,
+     "opponent": "BKN",
+     "z": 10.55,
+     "proj_pts": 13.9,
+     "actual_pts": 35.0,
+     "proj_min": 34.6,
+     "actual_min": 41.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 20,
+     "opponent": "PHL",
+     "z": 1.66,
+     "proj_pts": 13.1,
+     "actual_pts": 19.0,
+     "proj_min": 33.6,
+     "actual_min": 36.0
+    }
+   ],
+   "dnp": 0,
+   "proj_pts": 12.0,
+   "actual_pts": 17.5,
+   "proj_min": 31.5,
+   "actual_min": 34.8,
+   "flag": "up"
+  },
+  {
+   "player_id": 3064290,
+   "player_name": "Aaron Gordon",
+   "team_id": 7,
+   "team": "DEN",
+   "games": [
+    {
+     "game_date": "2026-03-20",
+     "opponent_team_id": 28,
+     "opponent": "TOR",
+     "z": 0.3,
+     "proj_pts": 13.3,
+     "actual_pts": 16.0,
+     "proj_min": 25.0,
+     "actual_min": 29.0
+    },
+    {
+     "game_date": "2026-03-22",
+     "opponent_team_id": 22,
+     "opponent": "POR",
+     "z": -1.54,
+     "proj_pts": 14.8,
+     "actual_pts": 12.0,
+     "proj_min": 26.6,
+     "actual_min": 28.0
+    },
+    {
+     "game_date": "2026-03-24",
+     "opponent_team_id": 21,
+     "opponent": "PHO",
+     "z": -0.5,
+     "proj_pts": 13.5,
+     "actual_pts": 16.0,
+     "proj_min": 26.6,
+     "actual_min": 26.0
+    },
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 26,
+     "opponent": "UTA",
+     "z": -0.76,
+     "proj_pts": 16.7,
+     "actual_pts": 17.0,
+     "proj_min": 27.4,
+     "actual_min": 31.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 26,
+     "opponent": "UTA",
+     "z": -2.75,
+     "proj_pts": 16.0,
+     "actual_pts": 6.0,
+     "proj_min": 26.6,
+     "actual_min": 28.0
+    },
+    {
+     "game_date": "2026-04-04",
+     "opponent_team_id": 24,
+     "opponent": "SAS",
+     "z": -1.3,
+     "proj_pts": 14.7,
+     "actual_pts": 15.0,
+     "proj_min": 28.4,
+     "actual_min": 41.0
+    },
+    {
+     "game_date": "2026-04-06",
+     "opponent_team_id": 22,
+     "opponent": "POR",
+     "z": 3.41,
+     "proj_pts": 15.9,
+     "actual_pts": 23.0,
+     "proj_min": 30.8,
+     "actual_min": 31.0
+    },
+    {
+     "game_date": "2026-04-08",
+     "opponent_team_id": 29,
+     "opponent": "MEM",
+     "z": -4.14,
+     "proj_pts": 18.2,
+     "actual_pts": 6.0,
+     "proj_min": 31.4,
+     "actual_min": 22.0
+    }
+   ],
+   "dnp": 3,
+   "proj_pts": 15.4,
+   "actual_pts": 13.9,
+   "proj_min": 27.9,
+   "actual_min": 29.5,
+   "flag": "down"
+  },
+  {
+   "player_id": 4873138,
+   "player_name": "Ace Bailey",
+   "team_id": 26,
+   "team": "UTA",
+   "games": [
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 7,
+     "opponent": "DEN",
+     "z": -4.21,
+     "proj_pts": 18.5,
+     "actual_pts": 15.0,
+     "proj_min": 31.2,
+     "actual_min": 27.0
+    },
+    {
+     "game_date": "2026-03-28",
+     "opponent_team_id": 21,
+     "opponent": "PHO",
+     "z": -0.17,
+     "proj_pts": 17.8,
+     "actual_pts": 13.0,
+     "proj_min": 31.6,
+     "actual_min": 34.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 5,
+     "opponent": "CLE",
+     "z": -1.78,
+     "proj_pts": 18.7,
+     "actual_pts": 19.0,
+     "proj_min": 31.6,
+     "actual_min": 35.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 7,
+     "opponent": "DEN",
+     "z": -6.11,
+     "proj_pts": 18.5,
+     "actual_pts": 12.0,
+     "proj_min": 32.0,
+     "actual_min": 33.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 10,
+     "opponent": "HOU",
+     "z": -0.42,
+     "proj_pts": 16.9,
+     "actual_pts": 22.0,
+     "proj_min": 31.6,
+     "actual_min": 33.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 25,
+     "opponent": "OKC",
+     "z": 0.14,
+     "proj_pts": 17.5,
+     "actual_pts": 14.0,
+     "proj_min": 32.4,
+     "actual_min": 33.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 29,
+     "opponent": "MEM",
+     "z": 2.98,
+     "proj_pts": 20.6,
+     "actual_pts": 23.0,
+     "proj_min": 33.6,
+     "actual_min": 29.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": -4.11,
+     "proj_pts": 18.3,
+     "actual_pts": 15.0,
+     "proj_min": 32.6,
+     "actual_min": 29.0
+    }
+   ],
+   "dnp": 1,
+   "proj_pts": 18.4,
+   "actual_pts": 16.6,
+   "proj_min": 32.1,
+   "actual_min": 31.6,
+   "flag": "down"
+  },
+  {
+   "player_id": 5105637,
+   "player_name": "Adem Bona",
+   "team_id": 20,
+   "team": "PHL",
+   "games": [
+    {
+     "game_date": "2026-03-28",
+     "opponent_team_id": 30,
+     "opponent": "CHA",
+     "z": -4.93,
+     "proj_pts": 6.4,
+     "actual_pts": 2.0,
+     "proj_min": 20.6,
+     "actual_min": 6.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": -2.63,
+     "proj_pts": 6.3,
+     "actual_pts": 2.0,
+     "proj_min": 18.8,
+     "actual_min": 14.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 27,
+     "opponent": "WAS",
+     "z": 2.38,
+     "proj_pts": 6.0,
+     "actual_pts": 13.0,
+     "proj_min": 17.6,
+     "actual_min": 21.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 16,
+     "opponent": "MIN",
+     "z": -3.5,
+     "proj_pts": 5.2,
+     "actual_pts": 2.0,
+     "proj_min": 16.4,
+     "actual_min": 6.0
+    },
+    {
+     "game_date": "2026-04-04",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": 0.76,
+     "proj_pts": 3.6,
+     "actual_pts": 10.0,
+     "proj_min": 12.4,
+     "actual_min": 23.0
+    },
+    {
+     "game_date": "2026-04-09",
+     "opponent_team_id": 10,
+     "opponent": "HOU",
+     "z": -2.46,
+     "proj_pts": 4.2,
+     "actual_pts": 2.0,
+     "proj_min": 14.0,
+     "actual_min": 15.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 11,
+     "opponent": "IND",
+     "z": 0.01,
+     "proj_pts": 4.8,
+     "actual_pts": 3.0,
+     "proj_min": 15.8,
+     "actual_min": 19.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 15,
+     "opponent": "MIL",
+     "z": -2.93,
+     "proj_pts": 5.1,
+     "actual_pts": 4.0,
+     "proj_min": 16.8,
+     "actual_min": 17.0
+    }
+   ],
+   "dnp": 1,
+   "proj_pts": 5.2,
+   "actual_pts": 4.8,
+   "proj_min": 16.6,
+   "actual_min": 15.1,
+   "flag": "down"
+  },
+  {
+   "player_id": 4900671,
+   "player_name": "Ajay Mitchell",
+   "team_id": 25,
+   "team": "OKC",
+   "games": [
+    {
+     "game_date": "2026-03-25",
+     "opponent_team_id": 2,
+     "opponent": "BOS",
+     "z": -2.48,
+     "proj_pts": 12.6,
+     "actual_pts": 8.0,
+     "proj_min": 24.6,
+     "actual_min": 25.0
+    },
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 4,
+     "opponent": "CHI",
+     "z": 1.33,
+     "proj_pts": 13.7,
+     "actual_pts": 15.0,
+     "proj_min": 23.6,
+     "actual_min": 25.0
+    },
+    {
+     "game_date": "2026-03-29",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": -0.3,
+     "proj_pts": 11.7,
+     "actual_pts": 8.0,
+     "proj_min": 23.2,
+     "actual_min": 24.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": 1.5,
+     "proj_pts": 10.5,
+     "actual_pts": 14.0,
+     "proj_min": 22.4,
+     "actual_min": 36.0
+    },
+    {
+     "game_date": "2026-04-02",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": -2.49,
+     "proj_pts": 12.4,
+     "actual_pts": 10.0,
+     "proj_min": 25.0,
+     "actual_min": 16.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 26,
+     "opponent": "UTA",
+     "z": -1.35,
+     "proj_pts": 13.9,
+     "actual_pts": 7.0,
+     "proj_min": 25.2,
+     "actual_min": 19.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": -1.31,
+     "proj_pts": 12.1,
+     "actual_pts": 9.0,
+     "proj_min": 24.0,
+     "actual_min": 21.0
+    },
+    {
+     "game_date": "2026-04-08",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": -2.55,
+     "proj_pts": 11.0,
+     "actual_pts": 7.0,
+     "proj_min": 23.2,
+     "actual_min": 24.0
+    }
+   ],
+   "dnp": 2,
+   "proj_pts": 12.2,
+   "actual_pts": 9.8,
+   "proj_min": 23.9,
+   "actual_min": 23.8,
+   "flag": "down"
+  },
+  {
+   "player_id": 2991350,
+   "player_name": "Alex Caruso",
+   "team_id": 25,
+   "team": "OKC",
+   "games": [
+    {
+     "game_date": "2026-03-23",
+     "opponent_team_id": 20,
+     "opponent": "PHL",
+     "z": -3.44,
+     "proj_pts": 6.9,
+     "actual_pts": 4.0,
+     "proj_min": 18.8,
+     "actual_min": 16.0
+    },
+    {
+     "game_date": "2026-03-25",
+     "opponent_team_id": 2,
+     "opponent": "BOS",
+     "z": 0.86,
+     "proj_pts": 5.8,
+     "actual_pts": 9.0,
+     "proj_min": 17.4,
+     "actual_min": 21.0
+    },
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 4,
+     "opponent": "CHI",
+     "z": -1.94,
+     "proj_pts": 6.5,
+     "actual_pts": 6.0,
+     "proj_min": 17.2,
+     "actual_min": 15.0
+    },
+    {
+     "game_date": "2026-03-29",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": 0.78,
+     "proj_pts": 5.4,
+     "actual_pts": 6.0,
+     "proj_min": 15.4,
+     "actual_min": 18.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": -0.56,
+     "proj_pts": 6.3,
+     "actual_pts": 3.0,
+     "proj_min": 18.0,
+     "actual_min": 27.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 26,
+     "opponent": "UTA",
+     "z": -2.18,
+     "proj_pts": 7.6,
+     "actual_pts": 5.0,
+     "proj_min": 19.4,
+     "actual_min": 13.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": -1.52,
+     "proj_pts": 6.4,
+     "actual_pts": 6.0,
+     "proj_min": 18.8,
+     "actual_min": 10.0
+    },
+    {
+     "game_date": "2026-04-08",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": -2.72,
+     "proj_pts": 5.3,
+     "actual_pts": 2.0,
+     "proj_min": 16.6,
+     "actual_min": 13.0
+    }
+   ],
+   "dnp": 3,
+   "proj_pts": 6.3,
+   "actual_pts": 5.1,
+   "proj_min": 17.7,
+   "actual_min": 16.6,
+   "flag": "down"
+  },
+  {
+   "player_id": 6585,
+   "player_name": "Andre Drummond",
+   "team_id": 20,
+   "team": "PHL",
+   "games": [
+    {
+     "game_date": "2026-03-28",
+     "opponent_team_id": 30,
+     "opponent": "CHA",
+     "z": -3.91,
+     "proj_pts": 6.5,
+     "actual_pts": 0.0,
+     "proj_min": 19.4,
+     "actual_min": 6.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 27,
+     "opponent": "WAS",
+     "z": 4.38,
+     "proj_pts": 5.1,
+     "actual_pts": 6.0,
+     "proj_min": 15.0,
+     "actual_min": 24.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 16,
+     "opponent": "MIN",
+     "z": 0.18,
+     "proj_pts": 4.6,
+     "actual_pts": 4.0,
+     "proj_min": 15.0,
+     "actual_min": 9.0
+    },
+    {
+     "game_date": "2026-04-04",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": -0.37,
+     "proj_pts": 3.8,
+     "actual_pts": 4.0,
+     "proj_min": 12.6,
+     "actual_min": 18.0
+    },
+    {
+     "game_date": "2026-04-06",
+     "opponent_team_id": 24,
+     "opponent": "SAS",
+     "z": -1.56,
+     "proj_pts": 3.9,
+     "actual_pts": 5.0,
+     "proj_min": 12.4,
+     "actual_min": 9.0
+    },
+    {
+     "game_date": "2026-04-09",
+     "opponent_team_id": 10,
+     "opponent": "HOU",
+     "z": 6.25,
+     "proj_pts": 4.1,
+     "actual_pts": 5.0,
+     "proj_min": 13.2,
+     "actual_min": 30.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 11,
+     "opponent": "IND",
+     "z": 2.4,
+     "proj_pts": 5.9,
+     "actual_pts": 10.0,
+     "proj_min": 18.0,
+     "actual_min": 29.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 15,
+     "opponent": "MIL",
+     "z": 4.77,
+     "proj_pts": 6.5,
+     "actual_pts": 12.0,
+     "proj_min": 19.0,
+     "actual_min": 23.0
+    }
+   ],
+   "dnp": 1,
+   "proj_pts": 5.0,
+   "actual_pts": 5.8,
+   "proj_min": 15.6,
+   "actual_min": 18.5,
+   "flag": "up"
+  },
+  {
+   "player_id": 4395712,
+   "player_name": "Andrew Nembhard",
+   "team_id": 11,
+   "team": "IND",
+   "games": [
+    {
+     "game_date": "2026-03-08",
+     "opponent_team_id": 22,
+     "opponent": "POR",
+     "z": 1.27,
+     "proj_pts": 16.3,
+     "actual_pts": 14.0,
+     "proj_min": 28.4,
+     "actual_min": 28.0
+    },
+    {
+     "game_date": "2026-03-12",
+     "opponent_team_id": 21,
+     "opponent": "PHO",
+     "z": -1.6,
+     "proj_pts": 15.0,
+     "actual_pts": 23.0,
+     "proj_min": 28.0,
+     "actual_min": 17.0
+    },
+    {
+     "game_date": "2026-03-13",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": 0.42,
+     "proj_pts": 14.1,
+     "actual_pts": 8.0,
+     "proj_min": 25.8,
+     "actual_min": 32.0
+    },
+    {
+     "game_date": "2026-03-21",
+     "opponent_team_id": 24,
+     "opponent": "SAS",
+     "z": 1.88,
+     "proj_pts": 14.2,
+     "actual_pts": 25.0,
+     "proj_min": 26.4,
+     "actual_min": 28.0
+    },
+    {
+     "game_date": "2026-03-23",
+     "opponent_team_id": 19,
+     "opponent": "ORL",
+     "z": 2.95,
+     "proj_pts": 15.8,
+     "actual_pts": 13.0,
+     "proj_min": 27.2,
+     "actual_min": 35.0
+    },
+    {
+     "game_date": "2026-03-25",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": 3.75,
+     "proj_pts": 15.9,
+     "actual_pts": 14.0,
+     "proj_min": 28.0,
+     "actual_min": 34.0
+    },
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": 1.19,
+     "proj_pts": 16.5,
+     "actual_pts": 13.0,
+     "proj_min": 29.2,
+     "actual_min": 32.0
+    },
+    {
+     "game_date": "2026-03-29",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": -2.11,
+     "proj_pts": 18.6,
+     "actual_pts": 15.0,
+     "proj_min": 32.2,
+     "actual_min": 36.0
+    }
+   ],
+   "dnp": 7,
+   "proj_pts": 15.8,
+   "actual_pts": 15.6,
+   "proj_min": 28.1,
+   "actual_min": 30.2,
+   "flag": "up"
+  },
+  {
+   "player_id": 4594268,
+   "player_name": "Anthony Edwards",
+   "team_id": 16,
+   "team": "MIN",
+   "games": [
+    {
+     "game_date": "2026-03-07",
+     "opponent_team_id": 19,
+     "opponent": "ORL",
+     "z": 2.56,
+     "proj_pts": 28.5,
+     "actual_pts": 34.0,
+     "proj_min": 36.8,
+     "actual_min": 32.0
+    },
+    {
+     "game_date": "2026-03-10",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": -4.94,
+     "proj_pts": 27.4,
+     "actual_pts": 14.0,
+     "proj_min": 35.6,
+     "actual_min": 31.0
+    },
+    {
+     "game_date": "2026-03-11",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": -0.46,
+     "proj_pts": 26.7,
+     "actual_pts": 36.0,
+     "proj_min": 34.6,
+     "actual_min": 35.0
+    },
+    {
+     "game_date": "2026-03-13",
+     "opponent_team_id": 9,
+     "opponent": "GSW",
+     "z": 4.52,
+     "proj_pts": 27.3,
+     "actual_pts": 42.0,
+     "proj_min": 33.8,
+     "actual_min": 37.0
+    },
+    {
+     "game_date": "2026-03-15",
+     "opponent_team_id": 25,
+     "opponent": "OKC",
+     "z": -1.21,
+     "proj_pts": 26.8,
+     "actual_pts": 19.0,
+     "proj_min": 33.8,
+     "actual_min": 37.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 6,
+     "opponent": "DAL",
+     "z": -7.21,
+     "proj_pts": 29.4,
+     "actual_pts": 17.0,
+     "proj_min": 34.4,
+     "actual_min": 23.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 20,
+     "opponent": "PHL",
+     "z": -5.58,
+     "proj_pts": 27.2,
+     "actual_pts": 8.0,
+     "proj_min": 32.6,
+     "actual_min": 26.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 10,
+     "opponent": "HOU",
+     "z": -2.88,
+     "proj_pts": 23.9,
+     "actual_pts": 22.0,
+     "proj_min": 31.6,
+     "actual_min": 27.0
+    }
+   ],
+   "dnp": 5,
+   "proj_pts": 27.1,
+   "actual_pts": 24.0,
+   "proj_min": 34.1,
+   "actual_min": 31.0,
+   "flag": "down"
+  },
+  {
+   "player_id": 2581184,
+   "player_name": "Anthony Gill",
+   "team_id": 27,
+   "team": "WAS",
+   "games": [
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": 0.3,
+     "proj_pts": 8.5,
+     "actual_pts": 11.0,
+     "proj_min": 26.0,
+     "actual_min": 36.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 20,
+     "opponent": "PHL",
+     "z": 3.6,
+     "proj_pts": 9.3,
+     "actual_pts": 21.0,
+     "proj_min": 28.0,
+     "actual_min": 35.0
+    },
+    {
+     "game_date": "2026-04-04",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": -3.5,
+     "proj_pts": 11.0,
+     "actual_pts": 6.0,
+     "proj_min": 29.8,
+     "actual_min": 22.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 17,
+     "opponent": "BKN",
+     "z": -0.22,
+     "proj_pts": 10.3,
+     "actual_pts": 17.0,
+     "proj_min": 29.8,
+     "actual_min": 41.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 4,
+     "opponent": "CHI",
+     "z": -2.73,
+     "proj_pts": 12.8,
+     "actual_pts": 8.0,
+     "proj_min": 33.0,
+     "actual_min": 16.0
+    },
+    {
+     "game_date": "2026-04-09",
+     "opponent_team_id": 4,
+     "opponent": "CHI",
+     "z": -0.48,
+     "proj_pts": 11.4,
+     "actual_pts": 14.0,
+     "proj_min": 30.0,
+     "actual_min": 39.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": -3.42,
+     "proj_pts": 11.5,
+     "actual_pts": 10.0,
+     "proj_min": 30.6,
+     "actual_min": 35.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 5,
+     "opponent": "CLE",
+     "z": -0.26,
+     "proj_pts": 11.0,
+     "actual_pts": 14.0,
+     "proj_min": 30.6,
+     "actual_min": 30.0
+    }
+   ],
+   "dnp": 0,
+   "proj_pts": 10.7,
+   "actual_pts": 12.6,
+   "proj_min": 29.7,
+   "actual_min": 31.8,
+   "flag": "down"
+  },
+  {
+   "player_id": 4684742,
+   "player_name": "Ausar Thompson",
+   "team_id": 8,
+   "team": "DET",
+   "games": [
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 25,
+     "opponent": "OKC",
+     "z": 1.73,
+     "proj_pts": 10.8,
+     "actual_pts": 8.0,
+     "proj_min": 30.2,
+     "actual_min": 26.0
+    },
+    {
+     "game_date": "2026-03-31",
+     "opponent_team_id": 28,
+     "opponent": "TOR",
+     "z": -1.1,
+     "proj_pts": 11.1,
+     "actual_pts": 5.0,
+     "proj_min": 30.4,
+     "actual_min": 26.0
+    },
+    {
+     "game_date": "2026-04-02",
+     "opponent_team_id": 16,
+     "opponent": "MIN",
+     "z": 5.82,
+     "proj_pts": 10.4,
+     "actual_pts": 7.0,
+     "proj_min": 28.4,
+     "actual_min": 31.0
+    },
+    {
+     "game_date": "2026-04-04",
+     "opponent_team_id": 20,
+     "opponent": "PHL",
+     "z": 1.05,
+     "proj_pts": 9.9,
+     "actual_pts": 14.0,
+     "proj_min": 27.2,
+     "actual_min": 25.0
+    },
+    {
+     "game_date": "2026-04-06",
+     "opponent_team_id": 19,
+     "opponent": "ORL",
+     "z": 0.53,
+     "proj_pts": 10.0,
+     "actual_pts": 8.0,
+     "proj_min": 26.4,
+     "actual_min": 31.0
+    },
+    {
+     "game_date": "2026-04-08",
+     "opponent_team_id": 15,
+     "opponent": "MIL",
+     "z": 1.0,
+     "proj_pts": 10.4,
+     "actual_pts": 10.0,
+     "proj_min": 27.8,
+     "actual_min": 24.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 30,
+     "opponent": "CHA",
+     "z": 2.96,
+     "proj_pts": 9.3,
+     "actual_pts": 12.0,
+     "proj_min": 27.4,
+     "actual_min": 25.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 11,
+     "opponent": "IND",
+     "z": -1.35,
+     "proj_pts": 10.1,
+     "actual_pts": 7.0,
+     "proj_min": 27.2,
+     "actual_min": 22.0
+    }
+   ],
+   "dnp": 0,
+   "proj_pts": 10.2,
+   "actual_pts": 8.9,
+   "proj_min": 28.1,
+   "actual_min": 26.2,
+   "flag": "up"
+  },
+  {
+   "player_id": 4066457,
+   "player_name": "Austin Reaves",
+   "team_id": 13,
+   "team": "LAL",
+   "games": [
+    {
+     "game_date": "2026-03-19",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": -5.69,
+     "proj_pts": 26.2,
+     "actual_pts": 18.0,
+     "proj_min": 40.4,
+     "actual_min": 40.0
+    },
+    {
+     "game_date": "2026-03-21",
+     "opponent_team_id": 19,
+     "opponent": "ORL",
+     "z": 0.83,
+     "proj_pts": 26.2,
+     "actual_pts": 26.0,
+     "proj_min": 40.8,
+     "actual_min": 40.0
+    },
+    {
+     "game_date": "2026-03-23",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": -2.92,
+     "proj_pts": 25.5,
+     "actual_pts": 24.0,
+     "proj_min": 41.0,
+     "actual_min": 40.0
+    },
+    {
+     "game_date": "2026-03-25",
+     "opponent_team_id": 11,
+     "opponent": "IND",
+     "z": -1.23,
+     "proj_pts": 26.4,
+     "actual_pts": 25.0,
+     "proj_min": 39.8,
+     "actual_min": 38.0
+    },
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 17,
+     "opponent": "BKN",
+     "z": 0.62,
+     "proj_pts": 25.1,
+     "actual_pts": 26.0,
+     "proj_min": 39.4,
+     "actual_min": 40.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 27,
+     "opponent": "WAS",
+     "z": -4.3,
+     "proj_pts": 27.1,
+     "actual_pts": 19.0,
+     "proj_min": 39.6,
+     "actual_min": 27.0
+    },
+    {
+     "game_date": "2026-03-31",
+     "opponent_team_id": 5,
+     "opponent": "CLE",
+     "z": -0.26,
+     "proj_pts": 24.1,
+     "actual_pts": 19.0,
+     "proj_min": 37.0,
+     "actual_min": 37.0
+    },
+    {
+     "game_date": "2026-04-02",
+     "opponent_team_id": 25,
+     "opponent": "OKC",
+     "z": -5.6,
+     "proj_pts": 22.7,
+     "actual_pts": 15.0,
+     "proj_min": 36.4,
+     "actual_min": 27.0
+    }
+   ],
+   "dnp": 5,
+   "proj_pts": 25.4,
+   "actual_pts": 21.5,
+   "proj_min": 39.3,
+   "actual_min": 36.1,
+   "flag": "down"
+  },
+  {
+   "player_id": 4067017,
+   "player_name": "A.J. Lawson",
+   "team_id": 28,
+   "team": "TOR",
+   "games": [
+    {
+     "game_date": "2026-03-31",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": 5.09,
+     "proj_pts": 1.8,
+     "actual_pts": 13.0,
+     "proj_min": 6.0,
+     "actual_min": 19.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 23,
+     "opponent": "SAC",
+     "z": -1.23,
+     "proj_pts": 3.5,
+     "actual_pts": 2.0,
+     "proj_min": 9.2,
+     "actual_min": 16.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 29,
+     "opponent": "MEM",
+     "z": 3.47,
+     "proj_pts": 5.0,
+     "actual_pts": 8.0,
+     "proj_min": 12.0,
+     "actual_min": 13.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 2,
+     "opponent": "BOS",
+     "z": -3.08,
+     "proj_pts": 5.5,
+     "actual_pts": 0.0,
+     "proj_min": 14.4,
+     "actual_min": 6.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": -2.43,
+     "proj_pts": 6.2,
+     "actual_pts": 0.0,
+     "proj_min": 14.6,
+     "actual_min": 3.0
+    },
+    {
+     "game_date": "2026-04-09",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": -2.64,
+     "proj_pts": 4.3,
+     "actual_pts": 0.0,
+     "proj_min": 11.4,
+     "actual_min": 3.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": 3.18,
+     "proj_pts": 2.8,
+     "actual_pts": 5.0,
+     "proj_min": 8.2,
+     "actual_min": 22.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 17,
+     "opponent": "BKN",
+     "z": 0.87,
+     "proj_pts": 3.2,
+     "actual_pts": 10.0,
+     "proj_min": 9.4,
+     "actual_min": 11.0
+    }
+   ],
+   "dnp": 0,
+   "proj_pts": 4.0,
+   "actual_pts": 4.8,
+   "proj_min": 10.6,
+   "actual_min": 11.6,
+   "flag": "flat"
+  },
+  {
+   "player_id": 5170947,
+   "player_name": "AJ Johnson",
+   "team_id": 6,
+   "team": "DAL",
+   "games": [
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 22,
+     "opponent": "POR",
+     "z": -0.96,
+     "proj_pts": 2.2,
+     "actual_pts": 0.0,
+     "proj_min": 7.0,
+     "actual_min": 10.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 16,
+     "opponent": "MIN",
+     "z": -0.78,
+     "proj_pts": 2.5,
+     "actual_pts": 0.0,
+     "proj_min": 8.0,
+     "actual_min": 5.0
+    },
+    {
+     "game_date": "2026-03-31",
+     "opponent_team_id": 15,
+     "opponent": "MIL",
+     "z": 4.03,
+     "proj_pts": 3.0,
+     "actual_pts": 8.0,
+     "proj_min": 8.6,
+     "actual_min": 16.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 19,
+     "opponent": "ORL",
+     "z": -1.68,
+     "proj_pts": 3.6,
+     "actual_pts": 2.0,
+     "proj_min": 10.6,
+     "actual_min": 2.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": -1.03,
+     "proj_pts": 2.8,
+     "actual_pts": 1.0,
+     "proj_min": 8.6,
+     "actual_min": 5.0
+    },
+    {
+     "game_date": "2026-04-08",
+     "opponent_team_id": 21,
+     "opponent": "PHO",
+     "z": 1.88,
+     "proj_pts": 2.3,
+     "actual_pts": 4.0,
+     "proj_min": 7.6,
+     "actual_min": 17.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 24,
+     "opponent": "SAS",
+     "z": 3.35,
+     "proj_pts": 3.2,
+     "actual_pts": 13.0,
+     "proj_min": 9.0,
+     "actual_min": 20.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 4,
+     "opponent": "CHI",
+     "z": 0.94,
+     "proj_pts": 5.3,
+     "actual_pts": 20.0,
+     "proj_min": 12.0,
+     "actual_min": 25.0
+    }
+   ],
+   "dnp": 1,
+   "proj_pts": 3.1,
+   "actual_pts": 6.0,
+   "proj_min": 8.9,
+   "actual_min": 12.5,
+   "flag": "flat"
+  },
+  {
+   "player_id": 3922230,
+   "player_name": "Aaron Holiday",
+   "team_id": 10,
+   "team": "HOU",
+   "games": [
+    {
+     "game_date": "2026-03-31",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": -3.99,
+     "proj_pts": 6.4,
+     "actual_pts": 0.0,
+     "proj_min": 17.2,
+     "actual_min": 6.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 15,
+     "opponent": "MIL",
+     "z": -2.38,
+     "proj_pts": 6.4,
+     "actual_pts": 3.0,
+     "proj_min": 15.8,
+     "actual_min": 13.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 26,
+     "opponent": "UTA",
+     "z": 2.02,
+     "proj_pts": 5.6,
+     "actual_pts": 6.0,
+     "proj_min": 14.2,
+     "actual_min": 18.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 9,
+     "opponent": "GSW",
+     "z": 2.51,
+     "proj_pts": 5.5,
+     "actual_pts": 6.0,
+     "proj_min": 15.4,
+     "actual_min": 22.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 21,
+     "opponent": "PHO",
+     "z": 0.86,
+     "proj_pts": 5.7,
+     "actual_pts": 12.0,
+     "proj_min": 16.8,
+     "actual_min": 21.0
+    },
+    {
+     "game_date": "2026-04-09",
+     "opponent_team_id": 20,
+     "opponent": "PHL",
+     "z": 0.67,
+     "proj_pts": 5.8,
+     "actual_pts": 7.0,
+     "proj_min": 16.0,
+     "actual_min": 14.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 16,
+     "opponent": "MIN",
+     "z": -3.59,
+     "proj_pts": 6.3,
+     "actual_pts": 0.0,
+     "proj_min": 17.6,
+     "actual_min": 6.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 29,
+     "opponent": "MEM",
+     "z": 2.79,
+     "proj_pts": 6.3,
+     "actual_pts": 7.0,
+     "proj_min": 16.2,
+     "actual_min": 20.0
+    }
+   ],
+   "dnp": 0,
+   "proj_pts": 6.0,
+   "actual_pts": 5.1,
+   "proj_min": 16.1,
+   "actual_min": 15.0,
+   "flag": "flat"
+  },
+  {
+   "player_id": 4396909,
+   "player_name": "Aaron Nesmith",
+   "team_id": 11,
+   "team": "IND",
+   "games": [
+    {
+     "game_date": "2026-03-13",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": -0.53,
+     "proj_pts": 10.4,
+     "actual_pts": 12.0,
+     "proj_min": 23.6,
+     "actual_min": 34.0
+    },
+    {
+     "game_date": "2026-03-15",
+     "opponent_team_id": 15,
+     "opponent": "MIL",
+     "z": 5.71,
+     "proj_pts": 12.8,
+     "actual_pts": 32.0,
+     "proj_min": 27.4,
+     "actual_min": 29.0
+    },
+    {
+     "game_date": "2026-03-17",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": -1.42,
+     "proj_pts": 13.5,
+     "actual_pts": 14.0,
+     "proj_min": 29.2,
+     "actual_min": 24.0
+    },
+    {
+     "game_date": "2026-03-18",
+     "opponent_team_id": 22,
+     "opponent": "POR",
+     "z": -1.94,
+     "proj_pts": 14.2,
+     "actual_pts": 15.0,
+     "proj_min": 29.4,
+     "actual_min": 26.0
+    },
+    {
+     "game_date": "2026-03-21",
+     "opponent_team_id": 24,
+     "opponent": "SAS",
+     "z": -4.95,
+     "proj_pts": 14.6,
+     "actual_pts": 5.0,
+     "proj_min": 29.6,
+     "actual_min": 25.0
+    },
+    {
+     "game_date": "2026-03-23",
+     "opponent_team_id": 19,
+     "opponent": "ORL",
+     "z": 3.05,
+     "proj_pts": 12.7,
+     "actual_pts": 19.0,
+     "proj_min": 27.6,
+     "actual_min": 35.0
+    },
+    {
+     "game_date": "2026-03-25",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": -0.66,
+     "proj_pts": 13.0,
+     "actual_pts": 14.0,
+     "proj_min": 27.8,
+     "actual_min": 32.0
+    },
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": 4.45,
+     "proj_pts": 13.4,
+     "actual_pts": 26.0,
+     "proj_min": 28.4,
+     "actual_min": 35.0
+    }
+   ],
+   "dnp": 8,
+   "proj_pts": 13.1,
+   "actual_pts": 17.1,
+   "proj_min": 27.9,
+   "actual_min": 30.0,
+   "flag": "flat"
+  },
+  {
+   "player_id": 4397183,
+   "player_name": "Aaron Wiggins",
+   "team_id": 25,
+   "team": "OKC",
+   "games": [
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 4,
+     "opponent": "CHI",
+     "z": -1.5,
+     "proj_pts": 6.3,
+     "actual_pts": 9.0,
+     "proj_min": 15.6,
+     "actual_min": 11.0
+    },
+    {
+     "game_date": "2026-03-30",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": 1.27,
+     "proj_pts": 6.3,
+     "actual_pts": 10.0,
+     "proj_min": 16.6,
+     "actual_min": 17.0
+    },
+    {
+     "game_date": "2026-04-02",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": -2.59,
+     "proj_pts": 7.8,
+     "actual_pts": 7.0,
+     "proj_min": 18.8,
+     "actual_min": 13.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 26,
+     "opponent": "UTA",
+     "z": -2.44,
+     "proj_pts": 6.7,
+     "actual_pts": 0.0,
+     "proj_min": 14.6,
+     "actual_min": 8.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 13,
+     "opponent": "LAL",
+     "z": 1.83,
+     "proj_pts": 4.6,
+     "actual_pts": 10.0,
+     "proj_min": 12.0,
+     "actual_min": 20.0
+    },
+    {
+     "game_date": "2026-04-08",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": -2.73,
+     "proj_pts": 5.2,
+     "actual_pts": 2.0,
+     "proj_min": 13.8,
+     "actual_min": 4.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 7,
+     "opponent": "DEN",
+     "z": 6.16,
+     "proj_pts": 4.7,
+     "actual_pts": 13.0,
+     "proj_min": 12.4,
+     "actual_min": 25.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 21,
+     "opponent": "PHO",
+     "z": 3.17,
+     "proj_pts": 5.1,
+     "actual_pts": 3.0,
+     "proj_min": 14.0,
+     "actual_min": 27.0
+    }
+   ],
+   "dnp": 1,
+   "proj_pts": 5.8,
+   "actual_pts": 6.8,
+   "proj_min": 14.7,
+   "actual_min": 15.6,
+   "flag": "flat"
+  },
+  {
+   "player_id": 3213,
+   "player_name": "Al Horford",
+   "team_id": 9,
+   "team": "GSW",
+   "games": [
+    {
+     "game_date": "2026-03-02",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": 1.36,
+     "proj_pts": 10.8,
+     "actual_pts": 17.0,
+     "proj_min": 26.0,
+     "actual_min": 27.0
+    },
+    {
+     "game_date": "2026-03-05",
+     "opponent_team_id": 10,
+     "opponent": "HOU",
+     "z": 4.09,
+     "proj_pts": 10.5,
+     "actual_pts": 17.0,
+     "proj_min": 26.2,
+     "actual_min": 33.0
+    },
+    {
+     "game_date": "2026-03-07",
+     "opponent_team_id": 25,
+     "opponent": "OKC",
+     "z": -3.94,
+     "proj_pts": 11.1,
+     "actual_pts": 4.0,
+     "proj_min": 27.2,
+     "actual_min": 29.0
+    },
+    {
+     "game_date": "2026-03-10",
+     "opponent_team_id": 4,
+     "opponent": "CHI",
+     "z": 4.22,
+     "proj_pts": 12.7,
+     "actual_pts": 13.0,
+     "proj_min": 27.6,
+     "actual_min": 34.0
+    },
+    {
+     "game_date": "2026-03-13",
+     "opponent_team_id": 16,
+     "opponent": "MIN",
+     "z": -8.35,
+     "proj_pts": 12.4,
+     "actual_pts": 3.0,
+     "proj_min": 29.0,
+     "actual_min": 5.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 23,
+     "opponent": "SAC",
+     "z": -3.89,
+     "proj_pts": 11.9,
+     "actual_pts": 10.0,
+     "proj_min": 25.6,
+     "actual_min": 18.0
+    },
+    {
+     "game_date": "2026-04-12",
+     "opponent_team_id": 12,
+     "opponent": "LAC",
+     "z": -4.57,
+     "proj_pts": 10.9,
+     "actual_pts": 5.0,
+     "proj_min": 23.8,
+     "actual_min": 19.0
+    }
+   ],
+   "dnp": 6,
+   "proj_pts": 11.5,
+   "actual_pts": 9.9,
+   "proj_min": 26.5,
+   "actual_min": 23.6,
+   "flag": "flat"
+  },
+  {
+   "player_id": 5160992,
+   "player_name": "Alex Sarr",
+   "team_id": 27,
+   "team": "WAS",
+   "games": [
+    {
+     "game_date": "2026-03-08",
+     "opponent_team_id": 3,
+     "opponent": "NOP",
+     "z": -4.96,
+     "proj_pts": 16.2,
+     "actual_pts": 7.0,
+     "proj_min": 25.8,
+     "actual_min": 18.0
+    },
+    {
+     "game_date": "2026-03-10",
+     "opponent_team_id": 14,
+     "opponent": "MIA",
+     "z": 3.86,
+     "proj_pts": 13.1,
+     "actual_pts": 28.0,
+     "proj_min": 23.0,
+     "actual_min": 20.0
+    },
+    {
+     "game_date": "2026-03-12",
+     "opponent_team_id": 19,
+     "opponent": "ORL",
+     "z": 5.41,
+     "proj_pts": 12.1,
+     "actual_pts": 16.0,
+     "proj_min": 21.4,
+     "actual_min": 23.0
+    },
+    {
+     "game_date": "2026-03-14",
+     "opponent_team_id": 2,
+     "opponent": "BOS",
+     "z": -0.8,
+     "proj_pts": 11.9,
+     "actual_pts": 4.0,
+     "proj_min": 21.0,
+     "actual_min": 22.0
+    },
+    {
+     "game_date": "2026-03-19",
+     "opponent_team_id": 8,
+     "opponent": "DET",
+     "z": -3.71,
+     "proj_pts": 12.6,
+     "actual_pts": 2.0,
+     "proj_min": 21.8,
+     "actual_min": 21.0
+    },
+    {
+     "game_date": "2026-03-21",
+     "opponent_team_id": 25,
+     "opponent": "OKC",
+     "z": 3.86,
+     "proj_pts": 11.6,
+     "actual_pts": 14.0,
+     "proj_min": 20.8,
+     "actual_min": 22.0
+    },
+    {
+     "game_date": "2026-03-27",
+     "opponent_team_id": 9,
+     "opponent": "GSW",
+     "z": -0.38,
+     "proj_pts": 12.7,
+     "actual_pts": 8.0,
+     "proj_min": 21.6,
+     "actual_min": 23.0
+    }
+   ],
+   "dnp": 8,
+   "proj_pts": 12.9,
+   "actual_pts": 11.3,
+   "proj_min": 22.2,
+   "actual_min": 21.3,
+   "flag": "flat"
+  },
+  {
+   "player_id": 4871144,
+   "player_name": "Alperen Sengun",
+   "team_id": 10,
+   "team": "HOU",
+   "games": [
+    {
+     "game_date": "2026-03-29",
+     "opponent_team_id": 3,
+     "opponent": "NOP",
+     "z": 10.56,
+     "proj_pts": 23.0,
+     "actual_pts": 36.0,
+     "proj_min": 35.6,
+     "actual_min": 32.0
+    },
+    {
+     "game_date": "2026-03-31",
+     "opponent_team_id": 18,
+     "opponent": "NYK",
+     "z": -2.3,
+     "proj_pts": 21.5,
+     "actual_pts": 13.0,
+     "proj_min": 35.6,
+     "actual_min": 30.0
+    },
+    {
+     "game_date": "2026-04-01",
+     "opponent_team_id": 15,
+     "opponent": "MIL",
+     "z": -0.09,
+     "proj_pts": 22.8,
+     "actual_pts": 25.0,
+     "proj_min": 35.0,
+     "actual_min": 29.0
+    },
+    {
+     "game_date": "2026-04-03",
+     "opponent_team_id": 26,
+     "opponent": "UTA",
+     "z": -6.92,
+     "proj_pts": 24.1,
+     "actual_pts": 19.0,
+     "proj_min": 33.4,
+     "actual_min": 28.0
+    },
+    {
+     "game_date": "2026-04-05",
+     "opponent_team_id": 9,
+     "opponent": "GSW",
+     "z": 1.05,
+     "proj_pts": 19.3,
+     "actual_pts": 24.0,
+     "proj_min": 30.4,
+     "actual_min": 37.0
+    },
+    {
+     "game_date": "2026-04-07",
+     "opponent_team_id": 21,
+     "opponent": "PHO",
+     "z": -2.14,
+     "proj_pts": 19.4,
+     "actual_pts": 12.0,
+     "proj_min": 31.2,
+     "actual_min": 28.0
+    },
+    {
+     "game_date": "2026-04-09",
+     "opponent_team_id": 20,
+     "opponent": "PHL",
+     "z": -3.47,
+     "proj_pts": 19.5,
+     "actual_pts": 8.0,
+     "proj_min": 30.4,
+     "actual_min": 33.0
+    },
+    {
+     "game_date": "2026-04-10",
+     "opponent_team_id": 16,
+     "opponent": "MIN",
+     "z": -0.62,
+     "proj_pts": 18.8,
+     "actual_pts": 22.0,
+     "proj_min": 31.0,
+     "actual_min": 29.0
+    }
+   ],
+   "dnp": 1,
+   "proj_pts": 21.1,
+   "actual_pts": 19.9,
+   "proj_min": 32.8,
+   "actual_min": 30.8,
+   "flag": "flat"
+  }
+ ]
+}

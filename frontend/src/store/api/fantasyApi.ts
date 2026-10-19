@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, AccuracySummary, AccuracyMode, AccuracyWindow, AccuracyWeekly, AccuracyMisses, PlayerAccuracyRow, PlayerAccuracy } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 
@@ -120,6 +120,26 @@ export const fantasyApi = createApi({
     }),
     predictProjection: builder.mutation<{ stats: ProjectionStats }, { player_name: string; opponent: string; is_home: boolean; minutes: number }>({
       query: (body) => ({ url: '/projections/predict', method: 'POST', body }),
+    }),
+    getModelAccuracySummary: builder.query<AccuracySummary, { mode: AccuracyMode; window: AccuracyWindow }>({
+      query: ({ mode, window }) => `/model-accuracy/summary?mode=${mode}&window=${window}`,
+      keepUnusedDataFor: 600,
+    }),
+    getModelAccuracyWeekly: builder.query<AccuracyWeekly, AccuracyMode>({
+      query: (mode) => `/model-accuracy/weekly?mode=${mode}`,
+      keepUnusedDataFor: 600,
+    }),
+    getModelAccuracyMisses: builder.query<AccuracyMisses, void>({
+      query: () => '/model-accuracy/misses',
+      keepUnusedDataFor: 600,
+    }),
+    getModelAccuracyPlayers: builder.query<{ players: PlayerAccuracyRow[] }, void>({
+      query: () => '/model-accuracy/players',
+      keepUnusedDataFor: 600,
+    }),
+    getPlayerModelAccuracy: builder.query<PlayerAccuracy, number>({
+      query: (playerId) => `/model-accuracy/player/${playerId}`,
+      keepUnusedDataFor: 600,
     }),
     getFeatureStorePlayers: builder.query<PlayersListResponse, void>({
       query: () => '/feature-store/players',
@@ -272,6 +292,11 @@ export const {
   useGetCurrentSlateDateQuery,
   useGetPlayerNextGameProjectionQuery,
   usePredictProjectionMutation,
+  useGetModelAccuracySummaryQuery,
+  useGetModelAccuracyWeeklyQuery,
+  useGetModelAccuracyMissesQuery,
+  useGetModelAccuracyPlayersQuery,
+  useGetPlayerModelAccuracyQuery,
   useGetFeatureStorePlayersQuery,
   useGetFeatureStorePlayerStateQuery,
   useGetFeatureStoreTeamsQuery,

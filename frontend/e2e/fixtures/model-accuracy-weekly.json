@@ -1,0 +1,233 @@
+{
+ "mode": "pregame",
+ "weeks": [
+  {
+   "week_start": "2026-03-02",
+   "games": 1044,
+   "categories": {
+    "pts": {
+     "model_mae": 4.475,
+     "baseline_mae": 4.531
+    },
+    "reb": {
+     "model_mae": 1.915,
+     "baseline_mae": 1.982
+    },
+    "ast": {
+     "model_mae": 1.373,
+     "baseline_mae": 1.407
+    },
+    "fg3m": {
+     "model_mae": 0.888,
+     "baseline_mae": 0.902
+    },
+    "stl": {
+     "model_mae": 0.74,
+     "baseline_mae": 0.766
+    },
+    "blk": {
+     "model_mae": 0.523,
+     "baseline_mae": 0.527
+    },
+    "fg_pct": {
+     "model_mae": 12.583,
+     "baseline_mae": 13.069
+    },
+    "ft_pct": {
+     "model_mae": 20.543,
+     "baseline_mae": 20.308
+    }
+   }
+  },
+  {
+   "week_start": "2026-03-09",
+   "games": 1012,
+   "categories": {
+    "pts": {
+     "model_mae": 5.058,
+     "baseline_mae": 5.204
+    },
+    "reb": {
+     "model_mae": 1.831,
+     "baseline_mae": 1.906
+    },
+    "ast": {
+     "model_mae": 1.348,
+     "baseline_mae": 1.38
+    },
+    "fg3m": {
+     "model_mae": 0.939,
+     "baseline_mae": 0.958
+    },
+    "stl": {
+     "model_mae": 0.713,
+     "baseline_mae": 0.72
+    },
+    "blk": {
+     "model_mae": 0.539,
+     "baseline_mae": 0.534
+    },
+    "fg_pct": {
+     "model_mae": 13.047,
+     "baseline_mae": 13.532
+    },
+    "ft_pct": {
+     "model_mae": 20.519,
+     "baseline_mae": 21.374
+    }
+   }
+  },
+  {
+   "week_start": "2026-03-16",
+   "games": 1058,
+   "categories": {
+    "pts": {
+     "model_mae": 4.651,
+     "baseline_mae": 4.726
+    },
+    "reb": {
+     "model_mae": 1.85,
+     "baseline_mae": 1.912
+    },
+    "ast": {
+     "model_mae": 1.363,
+     "baseline_mae": 1.408
+    },
+    "fg3m": {
+     "model_mae": 0.892,
+     "baseline_mae": 0.907
+    },
+    "stl": {
+     "model_mae": 0.728,
+     "baseline_mae": 0.74
+    },
+    "blk": {
+     "model_mae": 0.524,
+     "baseline_mae": 0.531
+    },
+    "fg_pct": {
+     "model_mae": 12.054,
+     "baseline_mae": 12.584
+    },
+    "ft_pct": {
+     "model_mae": 19.65,
+     "baseline_mae": 20.452
+    }
+   }
+  },
+  {
+   "week_start": "2026-03-23",
+   "games": 1063,
+   "categories": {
+    "pts": {
+     "model_mae": 4.54,
+     "baseline_mae": 4.683
+    },
+    "reb": {
+     "model_mae": 1.841,
+     "baseline_mae": 1.88
+    },
+    "ast": {
+     "model_mae": 1.407,
+     "baseline_mae": 1.445
+    },
+    "fg3m": {
+     "model_mae": 0.906,
+     "baseline_mae": 0.924
+    },
+    "stl": {
+     "model_mae": 0.731,
+     "baseline_mae": 0.752
+    },
+    "blk": {
+     "model_mae": 0.506,
+     "baseline_mae": 0.505
+    },
+    "fg_pct": {
+     "model_mae": 12.475,
+     "baseline_mae": 13.119
+    },
+    "ft_pct": {
+     "model_mae": 19.479,
+     "baseline_mae": 20.753
+    }
+   }
+  },
+  {
+   "week_start": "2026-03-30",
+   "games": 1045,
+   "categories": {
+    "pts": {
+     "model_mae": 4.689,
+     "baseline_mae": 4.827
+    },
+    "reb": {
+     "model_mae": 1.873,
+     "baseline_mae": 1.961
+    },
+    "ast": {
+     "model_mae": 1.374,
+     "baseline_mae": 1.409
+    },
+    "fg3m": {
+     "model_mae": 0.871,
+     "baseline_mae": 0.901
+    },
+    "stl": {
+     "model_mae": 0.723,
+     "baseline_mae": 0.73
+    },
+    "blk": {
+     "model_mae": 0.511,
+     "baseline_mae": 0.522
+    },
+    "fg_pct": {
+     "model_mae": 12.083,
+     "baseline_mae": 13.014
+    },
+    "ft_pct": {
+     "model_mae": 19.824,
+     "baseline_mae": 19.39
+    }
+   }
+  },
+  {
+   "week_start": "2026-04-06",
+   "games": 1071,
+   "categories": {
+    "pts": {
+     "model_mae": 5.296,
+     "baseline_mae": 5.444
+    },
+    "reb": {
+     "model_mae": 2.031,
+     "baseline_mae": 2.102
+    },
+    "ast": {
+     "model_mae": 1.536,
+     "baseline_mae": 1.611
+    },
+    "fg3m": {
+     "model_mae": 0.975,
+     "baseline_mae": 0.995
+    },
+    "stl": {
+     "model_mae": 0.744,
+     "baseline_mae": 0.766
+    },
+    "blk": {
+     "model_mae": 0.515,
+     "baseline_mae": 0.517
+    },
+    "fg_pct": {
+     "model_mae": 12.963,
+     "baseline_mae": 13.84
+    },
+    "ft_pct": {
+     "model_mae": 21.83,
+     "baseline_mae": 21.544
+    }
+   }
+  }
+ ]
+}

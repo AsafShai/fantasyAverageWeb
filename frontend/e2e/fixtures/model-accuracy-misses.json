@@ -1,0 +1,228 @@
+{
+ "week_start": "2026-04-06",
+ "misses": [
+  {
+   "player_id": 4592435,
+   "player_name": "Branden Carlson",
+   "game_date": "2026-04-12",
+   "team_id": 25,
+   "team": "OKC",
+   "opponent_team_id": 21,
+   "opponent": "PHO",
+   "is_home": true,
+   "z": 16.19,
+   "line": [
+    {
+     "stat": "MIN",
+     "proj": 13.4,
+     "actual": 42.0
+    },
+    {
+     "stat": "BLK",
+     "proj": 0.6,
+     "actual": 5.0
+    },
+    {
+     "stat": "3PM",
+     "proj": 0.6,
+     "actual": 5.0
+    }
+   ],
+   "reason": "Minutes gap",
+   "reason_detail": "Played 42 of projected 13 min"
+  },
+  {
+   "player_id": 4280245,
+   "player_name": "Jamaree Bouyea",
+   "game_date": "2026-04-12",
+   "team_id": 21,
+   "team": "PHO",
+   "opponent_team_id": 25,
+   "opponent": "OKC",
+   "is_home": false,
+   "z": 13.97,
+   "line": [
+    {
+     "stat": "MIN",
+     "proj": 8.2,
+     "actual": 40.0
+    },
+    {
+     "stat": "PTS",
+     "proj": 2.6,
+     "actual": 27.0
+    },
+    {
+     "stat": "AST",
+     "proj": 0.9,
+     "actual": 9.0
+    }
+   ],
+   "reason": "Minutes gap",
+   "reason_detail": "Played 40 of projected 8 min"
+  },
+  {
+   "player_id": 4397251,
+   "player_name": "Ron Harper Jr.",
+   "game_date": "2026-04-12",
+   "team_id": 2,
+   "team": "BOS",
+   "opponent_team_id": 19,
+   "opponent": "ORL",
+   "is_home": true,
+   "z": 13.96,
+   "line": [
+    {
+     "stat": "MIN",
+     "proj": 6.8,
+     "actual": 37.0
+    },
+    {
+     "stat": "PTS",
+     "proj": 2.0,
+     "actual": 27.0
+    },
+    {
+     "stat": "3PM",
+     "proj": 0.4,
+     "actual": 5.0
+    }
+   ],
+   "reason": "Minutes gap",
+   "reason_detail": "Played 37 of projected 7 min"
+  },
+  {
+   "player_id": 5279133,
+   "player_name": "Joan Beringer",
+   "game_date": "2026-04-12",
+   "team_id": 16,
+   "team": "MIN",
+   "opponent_team_id": 3,
+   "opponent": "NOP",
+   "is_home": true,
+   "z": 13.81,
+   "line": [
+    {
+     "stat": "MIN",
+     "proj": 12.0,
+     "actual": 31.0
+    },
+    {
+     "stat": "BLK",
+     "proj": 0.8,
+     "actual": 7.0
+    },
+    {
+     "stat": "REB",
+     "proj": 4.5,
+     "actual": 13.0
+    }
+   ],
+   "reason": "Minutes gap",
+   "reason_detail": "Played 31 of projected 12 min"
+  },
+  {
+   "player_id": 4593841,
+   "player_name": "Baylor Scheierman",
+   "game_date": "2026-04-12",
+   "team_id": 2,
+   "team": "BOS",
+   "opponent_team_id": 19,
+   "opponent": "ORL",
+   "is_home": true,
+   "z": 13.29,
+   "line": [
+    {
+     "stat": "MIN",
+     "proj": 20.8,
+     "actual": 39.0
+    },
+    {
+     "stat": "PTS",
+     "proj": 6.2,
+     "actual": 30.0
+    },
+    {
+     "stat": "3PM",
+     "proj": 1.6,
+     "actual": 6.0
+    }
+   ],
+   "reason": "Minutes gap",
+   "reason_detail": "Played 39 of projected 21 min"
+  },
+  {
+   "player_id": 2990984,
+   "player_name": "Buddy Hield",
+   "game_date": "2026-04-12",
+   "team_id": 1,
+   "team": "ATL",
+   "opponent_team_id": 14,
+   "opponent": "MIA",
+   "is_home": false,
+   "z": 12.34,
+   "line": [
+    {
+     "stat": "MIN",
+     "proj": 5.0,
+     "actual": 21.0
+    },
+    {
+     "stat": "3PM",
+     "proj": 0.3,
+     "actual": 7.0
+    },
+    {
+     "stat": "PTS",
+     "proj": 1.9,
+     "actual": 31.0
+    }
+   ],
+   "reason": "Minutes gap",
+   "reason_detail": "Played 21 of projected 5 min"
+  }
+ ],
+ "didnt_play": [
+  {
+   "player_id": 4684740,
+   "player_name": "Amen Thompson",
+   "game_date": "2026-04-12",
+   "team": "HOU",
+   "opponent": "MEM",
+   "is_home": true,
+   "proj_min": 38.2,
+   "injury_status": null
+  },
+  {
+   "player_id": 3936299,
+   "player_name": "Jamal Murray",
+   "game_date": "2026-04-10",
+   "team": "DEN",
+   "opponent": "OKC",
+   "is_home": true,
+   "proj_min": 38.0,
+   "injury_status": null
+  },
+  {
+   "player_id": 3936299,
+   "player_name": "Jamal Murray",
+   "game_date": "2026-04-12",
+   "team": "DEN",
+   "opponent": "SAS",
+   "is_home": false,
+   "proj_min": 38.0,
+   "injury_status": null
+  },
+  {
+   "player_id": 3112335,
+   "player_name": "Nikola Jokic",
+   "game_date": "2026-04-10",
+   "team": "DEN",
+   "opponent": "OKC",
+   "is_home": true,
+   "proj_min": 37.4,
+   "injury_status": null
+  }
+ ],
+ "didnt_play_count": 591
+}

@@ -499,3 +499,16 @@ def test_callers_share_one_matchup_service():
     assert matchups_route._matchup_service is shared
     assert TodayService().matchup_service is shared
     assert PlayerNextGameService()._matchups is shared
+
+
+def test_games_from_marks_tipped_off_games_not_pregame(service):
+    today = _today()
+    pre = _scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=today)
+    pre['status']['type']['state'] = 'pre'
+    live = _scoreboard_event(2, 1, 'BOS', 'ATL', completed=False, game_date=today)
+    live['status']['type']['state'] = 'in'
+
+    games = service._games_from([pre, live])
+
+    assert games['LAL'].pregame is True and games['CHA'].pregame is True
+    assert games['BOS'].pregame is False and games['ATL'].pregame is False

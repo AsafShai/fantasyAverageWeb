@@ -1,0 +1,92 @@
+{
+ "mode": "pregame",
+ "window": "season",
+ "start": "2025-08-01",
+ "end": "2026-04-12",
+ "games": 6293,
+ "dnp": 2637,
+ "categories": [
+  {
+   "key": "pts",
+   "label": "PTS",
+   "band": 4.0,
+   "model_mae": 4.785,
+   "baseline_mae": 4.902,
+   "hit_rate": 0.5311,
+   "games": 6293
+  },
+  {
+   "key": "reb",
+   "label": "REB",
+   "band": 2.0,
+   "model_mae": 1.891,
+   "baseline_mae": 1.958,
+   "hit_rate": 0.6515,
+   "games": 6293
+  },
+  {
+   "key": "ast",
+   "label": "AST",
+   "band": 2.0,
+   "model_mae": 1.401,
+   "baseline_mae": 1.444,
+   "hit_rate": 0.7813,
+   "games": 6293
+  },
+  {
+   "key": "fg3m",
+   "label": "3PM",
+   "band": 1.0,
+   "model_mae": 0.912,
+   "baseline_mae": 0.931,
+   "hit_rate": 0.6665,
+   "games": 6293
+  },
+  {
+   "key": "stl",
+   "label": "STL",
+   "band": 1.0,
+   "model_mae": 0.73,
+   "baseline_mae": 0.746,
+   "hit_rate": 0.7945,
+   "games": 6293
+  },
+  {
+   "key": "blk",
+   "label": "BLK",
+   "band": 1.0,
+   "model_mae": 0.52,
+   "baseline_mae": 0.523,
+   "hit_rate": 0.8975,
+   "games": 6293
+  },
+  {
+   "key": "fg_pct",
+   "label": "FG%",
+   "band": 10.0,
+   "model_mae": 12.533,
+   "baseline_mae": 13.193,
+   "hit_rate": 0.496,
+   "games": 4615
+  },
+  {
+   "key": "ft_pct",
+   "label": "FT%",
+   "band": 15.0,
+   "model_mae": 20.321,
+   "baseline_mae": 20.641,
+   "hit_rate": 0.4056,
+   "games": 3304
+  }
+ ],
+ "minutes": {
+  "key": "min",
+  "label": "MIN",
+  "band": 5.0,
+  "model_mae": 5.255,
+  "baseline_mae": 5.267,
+  "hit_rate": 0.5856,
+  "games": 6293
+ },
+ "first_snapshot_date": "2026-03-02"
+}

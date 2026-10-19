@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from app.services import model_accuracy_service
 from app.services.model_nightly_service import ModelNightlyService
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,10 @@ async def start_scheduler():
         try:
             statuses = await service.run_catchup()
             logger.info(f"Model nightly catch-up finished: {statuses}")
+            # Grade the nights just ingested, then record today's slate as the
+            # (possibly just refreshed) store projects it — before US tip-off.
+            await model_accuracy_service.reconcile_pending()
+            await model_accuracy_service.snapshot_upcoming_slate()
         except Exception as e:
             logger.error(f"Model nightly pipeline failed: {type(e).__name__}: {e}; will retry at next slot")
             logger.exception("Model nightly pipeline failure traceback")

@@ -43,6 +43,9 @@ def _season_str(season_id: int) -> str:
 class GameInfo:
     opponent: str  # canonical abbreviation
     is_home: bool
+    # ESPN status state is 'pre' (not tipped off yet). Gates the pre-game
+    # projection snapshot, which must never record a projection after tip-off.
+    pregame: bool = True
 
 
 # stat key served to the UI -> aggregate column from get_team_defense_aggregates
@@ -288,8 +291,9 @@ class NbaMatchupService:
                 # scoreboard abbreviations are site dialect (NY/GS/…) — normalize
                 a_abbr = canonical_abbr(a['team']['abbreviation'])
                 b_abbr = canonical_abbr(b['team']['abbreviation'])
-                games[a_abbr] = GameInfo(opponent=b_abbr, is_home=a.get('homeAway') == 'home')
-                games[b_abbr] = GameInfo(opponent=a_abbr, is_home=b.get('homeAway') == 'home')
+                pregame = event.get('status', {}).get('type', {}).get('state', 'pre') == 'pre'
+                games[a_abbr] = GameInfo(opponent=b_abbr, is_home=a.get('homeAway') == 'home', pregame=pregame)
+                games[b_abbr] = GameInfo(opponent=a_abbr, is_home=b.get('homeAway') == 'home', pregame=pregame)
         return games
 
     async def close(self) -> None:

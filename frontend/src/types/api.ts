@@ -796,3 +796,110 @@ export interface TodayHub {
   roster_health: TeamRosterHealth[];
   last_nightly: NightlyRun | null;
 }
+
+// Model vs. Reality (/api/model-accuracy)
+export type AccuracyMode = 'pregame' | 'retro';
+export type AccuracyWindow = 'week' | 'd30' | 'season';
+export type ProjectionFlag = 'up' | 'down' | 'flat';
+
+export interface CategoryAccuracy {
+  key: string;
+  label: string;
+  band: number;
+  model_mae: number | null;
+  baseline_mae: number | null;
+  hit_rate: number | null;
+  games: number;
+}
+
+export interface AccuracySummary {
+  mode: AccuracyMode;
+  window: AccuracyWindow;
+  start: string | null;
+  end: string | null;
+  games: number;
+  dnp: number;
+  categories: CategoryAccuracy[];
+  minutes: CategoryAccuracy | null;
+  first_snapshot_date: string | null;
+}
+
+export interface AccuracyWeek {
+  week_start: string;
+  games: number;
+  categories: Record<string, { model_mae: number | null; baseline_mae: number | null }>;
+}
+
+export interface AccuracyWeekly {
+  mode: AccuracyMode;
+  weeks: AccuracyWeek[];
+}
+
+export interface ProjectionMiss {
+  player_id: number;
+  player_name: string;
+  game_date: string;
+  team_id: number;
+  team: string;
+  opponent_team_id: number;
+  opponent: string;
+  is_home: boolean;
+  z: number;
+  line: { stat: string; proj: number; actual: number }[];
+  reason: string;
+  reason_detail: string;
+}
+
+export interface DidNotPlay {
+  player_id: number;
+  player_name: string;
+  game_date: string;
+  team: string;
+  opponent: string;
+  is_home: boolean;
+  proj_min: number;
+  injury_status: string | null;
+}
+
+export interface AccuracyMisses {
+  week_start: string | null;
+  misses: ProjectionMiss[];
+  didnt_play: DidNotPlay[];
+  didnt_play_count: number;
+}
+
+export interface ProjectedGame {
+  game_date: string;
+  opponent_team_id: number;
+  opponent: string;
+  z: number;
+  proj_pts: number;
+  actual_pts: number;
+  proj_min: number;
+  actual_min: number;
+}
+
+export interface PlayerAccuracyRow {
+  player_id: number;
+  player_name: string;
+  team_id: number;
+  team: string;
+  games: ProjectedGame[];
+  dnp: number;
+  proj_pts: number;
+  actual_pts: number;
+  proj_min: number;
+  actual_min: number;
+  flag: ProjectionFlag;
+}
+
+export interface PlayerAccuracy {
+  player_id: number;
+  player_name: string;
+  games: ProjectedGame[];
+  categories: { key: string; label: string; proj: number; actual: number | null }[];
+  proj_min: number;
+  actual_min: number;
+  beat_count: number;
+  flag: ProjectionFlag;
+}

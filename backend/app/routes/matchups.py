@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import date as date_type, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
@@ -12,6 +12,7 @@ from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.depth_chart_service import DepthChartService
 from app.services.live_projection_service import LiveProjectionService
+from app.services import model_accuracy_service
 from app.services.nba_matchup_service import get_shared_matchup_service
 from app.utils import background_tasks
 from app.utils.name_matching import normalize_player_name
@@ -285,6 +286,16 @@ async def _build_matchups(
             on_depth_chart=normalize_player_name(row['Name']) in depth_chart_names.get(pro_team, set()),
             injury_status=injury_lookup.get(normalize_player_name(row['Name'])),
         ))
+
+    # Pre-game snapshot of what this slate shows (Model vs. Reality). Past
+    # what-if slates and games already tipped off are filtered inside.
+    if resolved_date and projections:
+        background_tasks.spawn(
+            model_accuracy_service.record_pregame_snapshot(
+                players_df, games_today, projections, injury_lookup, date_type.fromisoformat(resolved_date),
+            ),
+            name=f'pregame-snapshot-{resolved_date}',
+        )
 
     logger.info(
         f'Matchups built for slate {resolved_date}: {len(games_today)} teams playing, '

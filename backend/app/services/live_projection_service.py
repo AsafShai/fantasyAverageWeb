@@ -106,7 +106,8 @@ class LiveProjectionService:
         results, errors = await asyncio.to_thread(inference.predict_many, reqs)
         out: dict[str, dict] = {}
         for (name, pid, default_min), res, err in zip(meta, results, errors):
-            out[name] = _to_projection(inference.store, pid, default_min, today, res, err)
+            # player_id rides along for the pre-game snapshot (model_accuracy_service).
+            out[name] = {**_to_projection(inference.store, pid, default_min, today, res, err), 'player_id': pid}
         return out
 
     async def project_next_game(

@@ -19,6 +19,24 @@ html, body {
   --trend-season-line: #6b7280;
   --trend-grid: #e5e7eb;
 }
+/* Model vs. Reality: model line/bars vs the last-10 baseline, and the
+   diverging beat (blue) / trail (red) marks. Dark steps validated against
+   the gray-800 card surface. */
+:root {
+  --accuracy-model: #2a78d6;
+  --accuracy-baseline: #9ca3af;
+  --accuracy-pos: #2a78d6;
+  --accuracy-neg: #e34948;
+  --accuracy-zero: #d1d5db;
+}
+.dark {
+  --accuracy-model: #3987e5;
+  --accuracy-baseline: #8b95a5;
+  --accuracy-pos: #3987e5;
+  --accuracy-neg: #e66767;
+  --accuracy-zero: #4b5563;
+}
+
 .dark {
   --trend-band: rgba(45, 212, 191, 0.26);
   --trend-band-label: #5eead4;
