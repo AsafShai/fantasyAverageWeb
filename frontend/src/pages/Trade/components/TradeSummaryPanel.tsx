@@ -11,6 +11,10 @@ import {
   KNOWN_REVERSE_CATEGORIES,
 } from '../utils/tradeCalculations';
 import { STAT_KEYS } from '../constants';
+import { useMyTeam } from '../../../context/MyTeamContext';
+import { ShareCardButton } from '../../../components/share/ShareCardButton';
+import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
+import { formatAsOf, type TradeShareRow } from '../../../components/share/shareCardFormat';
 
 interface TradeSummaryPanelProps {
   teamA: Team | null;
@@ -19,6 +23,8 @@ interface TradeSummaryPanelProps {
   playersB: Player[];
   viewMode: 'totals' | 'averages';
   tradeMode: TradeMode;
+  /** Time window of the stats, e.g. "Season" or "Last 30 days"; shown on the share card. */
+  periodLabel?: string;
 }
 
 interface StatValueProps {
@@ -40,6 +46,18 @@ interface Column {
 }
 
 const EXTRA_COLUMN_PREFIX = 'extra:';
+
+// Scoring categories on the share card, mapped to the aggregate fields.
+const SHARE_CATEGORIES = [
+  { category: 'FG%', field: 'fg_percentage' },
+  { category: 'FT%', field: 'ft_percentage' },
+  { category: '3PM', field: 'three_pm' },
+  { category: 'REB', field: 'reb' },
+  { category: 'AST', field: 'ast' },
+  { category: 'STL', field: 'stl' },
+  { category: 'BLK', field: 'blk' },
+  { category: 'PTS', field: 'pts' },
+] as const;
 
 const STAT_HEADERS = [
   { label: 'MIN', icon: '⏰' },
@@ -94,7 +112,9 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   playersB,
   viewMode,
   tradeMode,
+  periodLabel = 'Season',
 }) => {
+  const { myTeamId } = useMyTeam();
   const [shownColumns, setShownColumns] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     STAT_KEYS.forEach(key => {
@@ -189,6 +209,36 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
     );
   });
 
+  // Share card: each column is what that team receives, so team A's column
+  // holds the stats of the players team B sends, and vice versa.
+  const isTeamTrade = tradeMode === 'team';
+  const teamAName = teamA?.team_name ?? 'Your team';
+  const teamBName = teamB?.team_name ?? 'Team B';
+  const shareRows: TradeShareRow[] = [
+    ...SHARE_CATEGORIES.map(({ category, field }): TradeShareRow => ({
+      category,
+      values: isTeamTrade ? [displayStatsB[field], displayStatsA[field]] : [displayStatsA[field], displayStatsB[field]],
+    })),
+    ...extraCategories.map((category): TradeShareRow => ({
+      category,
+      values: isTeamTrade ? [extraStatsB[category], extraStatsA[category]] : [extraStatsA[category], extraStatsB[category]],
+      lowerIsBetter: KNOWN_REVERSE_CATEGORIES.has(category),
+    })),
+  ];
+  const names = (players: Player[]) => players.map(p => p.player_name);
+  const shareSides: [TradeShareSide, TradeShareSide] = isTeamTrade
+    ? [
+      { heading: `${teamAName} gets`, players: names(playersB), verdict: `${teamAName} gets the better side` },
+      { heading: `${teamBName} gets`, players: names(playersA), verdict: `${teamBName} gets the better side` },
+    ]
+    : [
+      { heading: 'Drop', players: names(playersA), verdict: 'Keeping wins' },
+      { heading: 'Add', players: names(playersB), verdict: 'The pickup wins' },
+    ];
+  const mySide = !isTeamTrade || myTeamId === null ? null
+    : teamA?.team_id === myTeamId ? 0 : teamB?.team_id === myTeamId ? 1 : null;
+  const shareTitle = isTeamTrade ? `${teamAName} ⇄ ${teamBName}` : `${teamAName} pickup check`;
+
   const comparisonTitle = tradeMode === 'freeAgent'
     ? '📊 Player Comparison: Your Team vs Free Agents'
     : '📊 Trade Comparison';
@@ -197,9 +247,26 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
     <div className="space-y-6">
       {playersA.length > 0 && playersB.length > 0 && (
         <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-            {comparisonTitle}
-          </h2>
+          <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
+            <h2 className="text-2xl font-bold text-gray-900 text-center">
+              {comparisonTitle}
+            </h2>
+            <ShareCardButton
+              title={isTeamTrade ? 'Trade Analysis' : 'Pickup Check'}
+              highlightOption={mySide !== null}
+              renderCard={({ dark, highlightMyTeam }) => (
+                <TradeShareCard
+                  dark={dark}
+                  title={shareTitle}
+                  subtitle={`${periodLabel} · ${viewMode} · as of ${formatAsOf()}`}
+                  sides={shareSides}
+                  rows={shareRows}
+                  mode={viewMode}
+                  highlightSide={highlightMyTeam ? mySide : null}
+                />
+              )}
+            />
+          </div>
 
           {/* Show/Hide Columns Control */}
           <div className="mb-6">
