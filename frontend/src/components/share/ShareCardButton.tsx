@@ -31,6 +31,9 @@ const RESULT_MESSAGES: Partial<Record<ShareImageResult, string>> = {
   copied: 'Copied. Paste it into WhatsApp.',
 }
 
+const PRIMARY_ACTION = 'bg-blue-600 text-white hover:bg-blue-700'
+const SECONDARY_ACTION = 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+
 const isDarkTheme = () => document.documentElement.classList.contains('dark')
 
 const ShareIcon = () => (
@@ -54,6 +57,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
   const [dark, setDark] = useState(false)
   const [highlightMyTeam, setHighlightMyTeam] = usePersistedState('share.highlightMyTeam', false)
   const [message, setMessage] = useState<string | null>(null)
+  const [zoomed, setZoomed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const fileName = shareFileName(title, todayIso())
   const { cardRef, blob, file, status, error, render, share, copy, download } = useShareImage(fileName, title)
@@ -76,7 +80,9 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
       if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
     }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key !== 'Escape') return
+      if (zoomed) setZoomed(false)
+      else setOpen(false)
     }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('touchstart', onPointerDown)
@@ -86,12 +92,13 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
       document.removeEventListener('touchstart', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open])
+  }, [open, zoomed])
 
   const toggle = () => {
     if (!open) {
       setDark(isDarkTheme())
       setMessage(null)
+      setZoomed(false)
     }
     setOpen(!open)
   }
@@ -132,51 +139,76 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
           aria-label="Share as image"
           className="fixed inset-x-3 bottom-3 z-50 sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 shadow-xl text-left text-gray-900 dark:text-gray-100"
         >
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between">
             <span className="text-sm font-semibold">Share as image</span>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="-mr-2 flex h-11 w-11 sm:h-8 sm:w-8 items-center justify-center rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">✕</button>
           </div>
 
-          <div className="mb-3 flex items-center justify-center min-h-[96px] rounded-lg bg-gray-100 dark:bg-gray-900 overflow-hidden">
-            {status === 'error' ? (
-              <p className="p-3 text-xs text-red-600 dark:text-red-400">Couldn't create the image: {error}</p>
-            ) : previewUrl ? (
-              <img src={previewUrl} alt={`${title} preview`} className={`max-h-48 w-auto transition-opacity ${ready ? '' : 'opacity-50'}`} />
+          {/* Compact preview: a thumbnail to confirm the card, full size on tap. */}
+          <div className="mb-3 flex items-center gap-3">
+            {previewUrl ? (
+              <button
+                type="button"
+                onClick={() => setZoomed(true)}
+                aria-label="View full size"
+                className="shrink-0 overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+              >
+                <img src={previewUrl} alt={`${title} preview`} className={`h-20 w-auto max-w-[96px] object-contain transition-opacity ${ready ? '' : 'opacity-50'}`} />
+              </button>
             ) : (
-              <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Preparing image…</span>
+              <div className={`h-20 w-16 shrink-0 rounded-md bg-gray-100 dark:bg-gray-700 ${status === 'error' ? '' : 'animate-pulse'}`} />
             )}
+            <div className="min-w-0 flex-1">
+              {status === 'error' ? (
+                <p className="text-xs text-red-600 dark:text-red-400">Couldn't create the image: {error}</p>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-gray-400">{ready ? <><span className="sm:hidden">Tap</span><span className="hidden sm:inline">Click</span> the image to see it full size</> : 'Preparing image…'}</p>
+              )}
+              {highlightOption && (
+                <label className="mt-1 flex min-h-11 sm:min-h-8 items-center gap-2 text-sm cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={highlightMyTeam}
+                    onChange={(e) => setHighlightMyTeam(e.target.checked)}
+                    className="w-4 h-4 accent-blue-600"
+                  />
+                  Highlight my team
+                </label>
+              )}
+            </div>
           </div>
-
-          {highlightOption && (
-            <label className="mb-3 flex min-h-11 sm:min-h-0 items-center gap-2 text-sm cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={highlightMyTeam}
-                onChange={(e) => setHighlightMyTeam(e.target.checked)}
-                className="w-4 h-4 accent-blue-600"
-              />
-              Highlight my team
-            </label>
-          )}
 
           <div className="flex flex-col gap-2">
             {showShare && (
-              <button type="button" disabled={!ready} onClick={() => runAction(share, "Couldn't open the share sheet")} className={`${actionClass} bg-blue-600 text-white hover:bg-blue-700`}>
+              <button type="button" disabled={!ready} onClick={() => runAction(share, "Couldn't open the share sheet")} className={`${actionClass} ${PRIMARY_ACTION}`}>
                 Share…
               </button>
             )}
-            {showCopy && (
-              <button type="button" disabled={!ready} onClick={() => runAction(copy, "Copy isn't available here. Use Download instead")} className={`${actionClass} ${showShare ? 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                Copy image
+            <div className="flex gap-2">
+              {showCopy && (
+                <button type="button" disabled={!ready} onClick={() => runAction(copy, "Copy isn't available here. Use Download instead")} className={`${actionClass} ${showShare ? SECONDARY_ACTION : PRIMARY_ACTION}`}>
+                  Copy image
+                </button>
+              )}
+              <button type="button" disabled={!ready} onClick={() => runAction(download, "Couldn't save the image")} className={`${actionClass} ${showShare || showCopy ? SECONDARY_ACTION : PRIMARY_ACTION}`}>
+                Download PNG
               </button>
-            )}
-            <button type="button" disabled={!ready} onClick={() => runAction(download, "Couldn't save the image")} className={`${actionClass} bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600`}>
-              Download PNG
-            </button>
+            </div>
           </div>
 
           {message && <p role="status" className="mt-2 text-xs text-gray-600 dark:text-gray-300">{message}</p>}
         </div>
+      )}
+
+      {open && zoomed && previewUrl && (
+        <button
+          type="button"
+          onClick={() => setZoomed(false)}
+          aria-label="Close full-size image"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        >
+          <img src={previewUrl} alt={`${title} full size`} className="max-h-full max-w-full object-contain" />
+        </button>
       )}
 
       {open && createPortal(

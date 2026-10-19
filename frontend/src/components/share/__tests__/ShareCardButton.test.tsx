@@ -107,6 +107,21 @@ describe('ShareCardMenu', () => {
     expect(screen.getByRole('button', { name: 'Download PNG' })).toBeDisabled();
   });
 
+  it('opens the thumbnail full size; Escape closes that before the menu', async () => {
+    await openMenu();
+    await userEvent.click(screen.getByRole('button', { name: 'View full size' }));
+    expect(screen.getByAltText('Roto Rankings full size')).toHaveAttribute('src', 'blob:preview');
+
+    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
+    expect(screen.queryByAltText('Roto Rankings full size')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'View full size' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close full-size image' }));
+    expect(screen.queryByAltText('Roto Rankings full size')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('closes on Escape and on a click outside', async () => {
     render(
       <div>
