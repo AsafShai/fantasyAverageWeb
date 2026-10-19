@@ -270,8 +270,20 @@ async def reconcile_pending() -> int:
 
 # --- read side ----------------------------------------------------------------
 
-async def _fetch_pregame(start: Optional[date] = None, end: Optional[date] = None, player_id: Optional[int] = None) -> pd.DataFrame:
+# Read failures (DB down, query error) seen so far; _cached skips caching a
+# build during which this moved. A one-element list so helpers can bump it.
+_failed_reads = [0]
+
+
+async def _read_pool():
     pool = await _pool()
+    if pool is None:
+        _failed_reads[0] += 1
+    return pool
+
+
+async def _fetch_pregame(start: Optional[date] = None, end: Optional[date] = None, player_id: Optional[int] = None) -> pd.DataFrame:
+    pool = await _read_pool()
     if pool is None:
         return pd.DataFrame()
     clauses, args = ["outcome IN ('played', 'dnp')"], []
@@ -291,13 +303,14 @@ async def _fetch_pregame(start: Optional[date] = None, end: Optional[date] = Non
                 *args,
             )
     except Exception as e:
+        _failed_reads[0] += 1
         logger.error(f'Failed to read pre-game projections: {type(e).__name__}: {e} ({_MISSING_TABLE_HINT} if missing)')
         return pd.DataFrame()
     return _frame([dict(r) for r in rows])
 
 
 async def _fetch_retro(start: date, end: date) -> pd.DataFrame:
-    pool = await _pool()
+    pool = await _read_pool()
     if pool is None:
         return pd.DataFrame()
     try:
@@ -315,6 +328,7 @@ async def _fetch_retro(start: date, end: date) -> pd.DataFrame:
                 list({int(r['player_id']) for r in evals}),
             )
     except Exception as e:
+        _failed_reads[0] += 1
         logger.error(f'Failed to read retro eval rows: {type(e).__name__}: {e}')
         return pd.DataFrame()
     frame = metrics.retro_frame(_frame([dict(r) for r in evals]), pd.DataFrame([dict(r) for r in fs]))
@@ -333,7 +347,7 @@ def _frame(records: list[dict]) -> pd.DataFrame:
 
 
 async def _latest_date(mode: str) -> Optional[date]:
-    pool = await _pool()
+    pool = await _read_pool()
     if pool is None:
         return None
     sql = (
@@ -345,27 +359,34 @@ async def _latest_date(mode: str) -> Optional[date]:
         async with pool.acquire() as conn:
             return await conn.fetchval(sql)
     except Exception as e:
+        _failed_reads[0] += 1
         logger.error(f'Failed to read latest {mode} date: {type(e).__name__}: {e}')
         return None
 
 
 async def _first_snapshot_date() -> Optional[date]:
-    pool = await _pool()
+    pool = await _read_pool()
     if pool is None:
         return None
     try:
         async with pool.acquire() as conn:
             return await conn.fetchval('SELECT MIN(game_date) FROM model_pregame_projections')
     except Exception:
+        _failed_reads[0] += 1
         return None
 
 
 async def _cached(key: tuple, build):
+    """TTL cache over a response build. A build that hit an unreachable DB or
+    a failed read still returns its (empty) result, but isn't cached — or a
+    brief outage would read as "no data yet" for the whole TTL."""
     hit = _cache.get(key)
     if hit is not None and time.monotonic() - hit[0] < _CACHE_TTL_S:
         return hit[1]
+    failures = _failed_reads[0]
     value = await build()
-    _cache[key] = (time.monotonic(), value)
+    if _failed_reads[0] == failures:
+        _cache[key] = (time.monotonic(), value)
     return value
 
 

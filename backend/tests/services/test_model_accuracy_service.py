@@ -167,3 +167,21 @@ async def test_summary_retro_has_no_minutes():
     ):
         out = await svc.summary('retro', 'season')
     assert out['minutes'] is None and out['games'] == 1
+
+
+@pytest.mark.asyncio
+async def test_empty_result_from_unreachable_db_is_not_cached():
+    # DB down: the page gets the empty summary, but the next request retries
+    # instead of serving "no data" for the whole TTL.
+    with patch.object(svc, '_pool', AsyncMock(return_value=None)):
+        out = await svc.summary('pregame', 'season')
+    assert out['games'] == 0
+    assert svc._cache == {}
+
+    with (
+        patch.object(svc, '_latest_date', AsyncMock(return_value=None)),
+        patch.object(svc, '_first_snapshot_date', AsyncMock(return_value=None)),
+    ):
+        await svc.summary('pregame', 'season')
+    # A genuinely empty result (DB reachable, nothing graded) is cached.
+    assert ('summary', 'pregame', 'season') in svc._cache

@@ -1,0 +1,160 @@
+{
+ "player_id": 4432166,
+ "player_name": "Cade Cunningham",
+ "games": [
+  {
+   "game_date": "2026-03-05",
+   "opponent_team_id": 24,
+   "opponent": "SAS",
+   "z": -3.35,
+   "proj_pts": 25.4,
+   "actual_pts": 26.0,
+   "proj_min": 37.2,
+   "actual_min": 39.0
+  },
+  {
+   "game_date": "2026-03-08",
+   "opponent_team_id": 14,
+   "opponent": "MIA",
+   "z": -2.72,
+   "proj_pts": 28.0,
+   "actual_pts": 26.0,
+   "proj_min": 38.0,
+   "actual_min": 35.0
+  },
+  {
+   "game_date": "2026-03-10",
+   "opponent_team_id": 17,
+   "opponent": "BKN",
+   "z": -1.01,
+   "proj_pts": 26.4,
+   "actual_pts": 21.0,
+   "proj_min": 37.4,
+   "actual_min": 26.0
+  },
+  {
+   "game_date": "2026-03-12",
+   "opponent_team_id": 20,
+   "opponent": "PHL",
+   "z": -2.71,
+   "proj_pts": 25.4,
+   "actual_pts": 8.0,
+   "proj_min": 35.2,
+   "actual_min": 28.0
+  },
+  {
+   "game_date": "2026-03-13",
+   "opponent_team_id": 29,
+   "opponent": "MEM",
+   "z": 2.43,
+   "proj_pts": 24.1,
+   "actual_pts": 17.0,
+   "proj_min": 33.4,
+   "actual_min": 30.0
+  },
+  {
+   "game_date": "2026-03-15",
+   "opponent_team_id": 28,
+   "opponent": "TOR",
+   "z": 1.19,
+   "proj_pts": 20.0,
+   "actual_pts": 33.0,
+   "proj_min": 31.6,
+   "actual_min": 37.0
+  },
+  {
+   "game_date": "2026-03-17",
+   "opponent_team_id": 27,
+   "opponent": "WAS",
+   "z": -10.76,
+   "proj_pts": 23.4,
+   "actual_pts": 6.0,
+   "proj_min": 31.2,
+   "actual_min": 5.0
+  },
+  {
+   "game_date": "2026-04-08",
+   "opponent_team_id": 15,
+   "opponent": "MIL",
+   "z": 0.48,
+   "proj_pts": 17.5,
+   "actual_pts": 13.0,
+   "proj_min": 25.2,
+   "actual_min": 26.0
+  },
+  {
+   "game_date": "2026-04-10",
+   "opponent_team_id": 30,
+   "opponent": "CHA",
+   "z": -1.33,
+   "proj_pts": 15.4,
+   "actual_pts": 14.0,
+   "proj_min": 25.2,
+   "actual_min": 28.0
+  },
+  {
+   "game_date": "2026-04-12",
+   "opponent_team_id": 11,
+   "opponent": "IND",
+   "z": 0.19,
+   "proj_pts": 17.6,
+   "actual_pts": 7.0,
+   "proj_min": 25.2,
+   "actual_min": 22.0
+  }
+ ],
+ "categories": [
+  {
+   "key": "pts",
+   "label": "PTS",
+   "proj": 22.3,
+   "actual": 17.1
+  },
+  {
+   "key": "reb",
+   "label": "REB",
+   "proj": 5.2,
+   "actual": 4.1
+  },
+  {
+   "key": "ast",
+   "label": "AST",
+   "proj": 9.3,
+   "actual": 10.1
+  },
+  {
+   "key": "fg3m",
+   "label": "3PM",
+   "proj": 2.0,
+   "actual": 2.0
+  },
+  {
+   "key": "stl",
+   "label": "STL",
+   "proj": 1.4,
+   "actual": 1.1
+  },
+  {
+   "key": "blk",
+   "label": "BLK",
+   "proj": 0.8,
+   "actual": 0.3
+  },
+  {
+   "key": "fg_pct",
+   "label": "FG%",
+   "proj": 48.1,
+   "actual": 49.3
+  },
+  {
+   "key": "ft_pct",
+   "label": "FT%",
+   "proj": 79.9,
+   "actual": 82.6
+  }
+ ],
+ "proj_min": 32.0,
+ "actual_min": 27.6,
+ "beat_count": 4,
+ "flag": "flat"
+}
