@@ -191,6 +191,9 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // True while the menu is open only because the pointer hovered the group, so the
+  // click that usually follows the hover keeps it open instead of toggling it shut.
+  const openedByHoverRef = useRef(false)
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const isOpen = openKey === group.key
 
@@ -217,7 +220,16 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
     }, 150)
   }
 
+  const handleGroupMouseEnter = () => {
+    if (!isOpen) openedByHoverRef.current = true
+    openMenu()
+  }
+
   useEffect(() => () => clearCloseTimeout(), [])
+
+  useEffect(() => {
+    if (!isOpen) openedByHoverRef.current = false
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -284,7 +296,7 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
     <div
       ref={groupRef}
       className="relative h-14 flex items-center"
-      onMouseEnter={openMenu}
+      onMouseEnter={handleGroupMouseEnter}
       onMouseLeave={scheduleCloseMenu}
     >
       <button
@@ -294,7 +306,9 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
         aria-expanded={isOpen}
         onClick={() => {
           clearCloseTimeout()
-          setOpenKey(isOpen ? null : group.key)
+          const keepOpen = isOpen && openedByHoverRef.current
+          openedByHoverRef.current = false
+          setOpenKey(isOpen && !keepOpen ? null : group.key)
         }}
         onKeyDown={handleButtonKeyDown}
         className={desktopItemClass(isActive)}
