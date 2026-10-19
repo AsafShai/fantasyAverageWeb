@@ -26,6 +26,7 @@ from app.routes.feature_store import router as feature_store_router
 from app.routes.trends import router as trends_router
 from app.routes.schedule import router as schedule_router
 from app.routes.adp import router as adp_router
+from app.routes.model_accuracy import router as model_accuracy_router
 from dotenv import load_dotenv
 from app.config import settings
 import logging
@@ -191,6 +192,7 @@ app.include_router(feature_store_router, prefix='/api/feature-store', tags=['Fea
 app.include_router(trends_router, prefix='/api/trends', tags=['Trends'])
 app.include_router(schedule_router, prefix='/api/nba', tags=['NBA Schedule'])
 app.include_router(adp_router, prefix='/api/adp', tags=['ADP'])
+app.include_router(model_accuracy_router, prefix='/api/model-accuracy', tags=['Model Accuracy'])
 
 
 

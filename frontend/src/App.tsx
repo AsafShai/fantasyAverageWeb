@@ -4,7 +4,7 @@ import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE, FF_TODAY_HUB } from './config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_SCHEDULE, FF_TODAY_HUB, FF_MODEL_ACCURACY } from './config/featureFlags'
 import { MyTeamProvider } from './context/MyTeamContext'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -24,6 +24,7 @@ const FeatureStore = lazy(() => import('./pages/FeatureStore'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const PlayerRankings = lazy(() => import('./pages/PlayerRankings'))
 const Projections = lazy(() => import('./pages/Projections'))
+const ModelAccuracy = lazy(() => import('./pages/ModelAccuracy'))
 const DraftReport = lazy(() => import('./pages/DraftReport'))
 const Trends = lazy(() => import('./pages/Trends'))
 const Minigames = lazy(() => import('./pages/Minigames'))
@@ -68,6 +69,7 @@ function App() {
               {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
               {FF_PLAYER_RANKINGS && <Route path="player-rankings" element={<PlayerRankings />} />}
               {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
+              {FF_MODEL_ACCURACY && <Route path="model-accuracy" element={<ModelAccuracy />} />}
               {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
               {FF_DRAFT_PAGES && <Route path="draft/rankings-adp" element={<AdpPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/adp" element={<Navigate to="/draft/rankings-adp" replace />} />}

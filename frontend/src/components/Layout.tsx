@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import Footer from './Footer'
 import { MyTeamSelect } from './MyTeamSelect'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE, FF_TODAY_HUB } from '../config/featureFlags'
+import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE, FF_TODAY_HUB, FF_MODEL_ACCURACY } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
 import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
@@ -11,6 +11,7 @@ import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/trends': () => import('../pages/Trends'),
   '/projections': () => import('../pages/Projections'),
+  '/model-accuracy': () => import('../pages/ModelAccuracy'),
   '/feature-store': () => import('../pages/FeatureStore'),
   '/analytics': () => import('../pages/Analytics'),
   '/players': () => import('../pages/Players'),
@@ -145,6 +146,7 @@ const Layout = () => {
     ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
     ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
     ...(FF_PROJECTIONS ? [{ path: '/projections', label: 'Projections', icon: '🔭' }] : []),
+    ...(FF_MODEL_ACCURACY ? [{ path: '/model-accuracy', label: 'Model vs. Reality', icon: '🎯' }] : []),
     ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
     ...(FF_TRENDS ? [{ path: '/trends', label: 'Trends', icon: '📈' }] : []),
   ]
@@ -584,6 +586,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
         { path: '/analytics', label: 'League Analytics', icon: '📈' },
         ...(FF_TRENDS ? [{ path: '/trends', label: 'Player Trends', icon: '📉' }] : []),
         ...(FF_PROJECTIONS ? [{ path: '/projections', label: 'Projections', icon: '🔭' }] : []),
+        ...(FF_MODEL_ACCURACY ? [{ path: '/model-accuracy', label: 'Model vs. Reality', icon: '🎯' }] : []),
         { path: '/estimator', label: 'Standings Estimator', icon: '🔮' },
         ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
       ],

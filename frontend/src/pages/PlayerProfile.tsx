@@ -9,6 +9,8 @@ import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import PlayerTrendsCard from '../components/PlayerTrendsCard'
 import PlayerNextGameCard from '../components/PlayerNextGameCard'
+import PlayerAccuracyCard from '../components/modelAccuracy/PlayerAccuracyCard'
+import { FF_MODEL_ACCURACY } from '../config/featureFlags'
 
 function backLabel(from: string | undefined): string {
   if (!from) return '← Back'
@@ -268,6 +270,8 @@ const PlayerProfile = () => {
       <PlayerTrendsCard playerId={Number(playerId)} />
 
       <PlayerNextGameCard playerId={playerId} />
+
+      {FF_MODEL_ACCURACY && <PlayerAccuracyCard playerId={Number(playerId)} />}
     </div>
   )
 }
