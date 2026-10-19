@@ -18,6 +18,9 @@ import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
 import { MyTeamMark } from '../components/MyTeamMark'
+import { ShareCardButton } from '../components/share/ShareCardButton'
+import { TeamShareCard } from '../components/share/TeamShareCard'
+import { formatAsOf } from '../components/share/shareCardFormat'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 import { FF_PROJECTIONS } from '../config/featureFlags'
@@ -362,17 +365,42 @@ const TeamDetail = () => {
             </h1>
             <DataDateBadge dataDate={team_detail.data_date} />
           </div>
-          <a
-            href={team_detail.espn_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-medium rounded-lg shadow hover:from-red-700 hover:to-red-800 transition-all duration-200"
-          >
-            View on ESPN
-            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
+          <div className="flex items-center gap-2">
+            <ShareCardButton
+              title={`${team_detail.team.team_name} Report`}
+              renderCard={({ dark }) => {
+                const points = team_detail.category_ranks
+                const teamCount = leagueSummary?.total_teams ?? Math.max(...Object.values(points), 1)
+                return (
+                  <TeamShareCard
+                    dark={dark}
+                    teamName={team_detail.team.team_name}
+                    rank={team_detail.ranking_stats.rank ?? 0}
+                    totalPoints={team_detail.ranking_stats.total_points}
+                    teamCount={teamCount}
+                    categories={Object.entries(points).map(([category, categoryPoints]) => ({
+                      category,
+                      points: categoryPoints,
+                      value: team_detail.ranking_stats.stats?.[category] ?? team_detail.raw_averages.stats?.[category],
+                    }))}
+                    gp={team_detail.raw_averages.gp}
+                    asOf={formatAsOf(team_detail.data_date)}
+                  />
+                )
+              }}
+            />
+            <a
+              href={team_detail.espn_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-medium rounded-lg shadow hover:from-red-700 hover:to-red-800 transition-all duration-200"
+            >
+              View on ESPN
+              <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
         </div>
       </div>
 

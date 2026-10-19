@@ -10,6 +10,14 @@ import { TradeSummaryPanel } from './components/TradeSummaryPanel';
 import { useTradeState } from '../../hooks/useTradeState';
 import { useTradeData } from '../../hooks/useTradeData';
 import TimePeriodSelector from '../../components/TimePeriodSelector';
+import { formatShort } from '../../utils/dateRange';
+
+const PERIOD_LABELS: Record<Exclude<TimePeriod, 'custom'>, string> = {
+  season: 'Season',
+  last_7: 'Last 7 days',
+  last_15: 'Last 15 days',
+  last_30: 'Last 30 days',
+};
 
 export const Trade: React.FC = () => {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
@@ -181,6 +189,9 @@ export const Trade: React.FC = () => {
           playersB={tradeMode === 'team' ? currentSelectedPlayersB : currentSelectedFreeAgents}
           viewMode={viewMode}
           tradeMode={tradeMode}
+          periodLabel={timePeriod === 'custom'
+            ? (customRange ? `${formatShort(customRange.start)} – ${formatShort(customRange.end)}` : 'Custom range')
+            : PERIOD_LABELS[timePeriod]}
         />
       </div>
     </div>

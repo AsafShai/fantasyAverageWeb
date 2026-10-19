@@ -10,6 +10,9 @@ import type { RankingStats } from '../types/api'
 import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { useMyTeam } from '../context/MyTeamContext'
+import { ShareCardButton } from '../components/share/ShareCardButton'
+import { RankingsShareCard } from '../components/share/RankingsShareCard'
+import { formatAsOf } from '../components/share/shareCardFormat'
 
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -31,7 +34,7 @@ const RANKINGS_URL_SCHEMA = {
 }
 
 const Rankings = () => {
-  const { isMyTeam } = useMyTeam()
+  const { isMyTeam, myTeamId } = useMyTeam()
   const [urlState, setUrlState] = useUrlState(RANKINGS_URL_SCHEMA)
   const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from < urlState.to
   const [sortBy, setSortBy] = useState<string>(urlState.sort)
@@ -186,14 +189,37 @@ const Rankings = () => {
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-lg">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-bold text-white">
-                Team {titleWord} ({modeLabel})
-                {isDateRangeActive && (
-                  <span className="ml-2 text-lg font-normal text-blue-100">
-                    – {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}
-                  </span>
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-2xl font-bold text-white">
+                  Team {titleWord} ({modeLabel})
+                  {isDateRangeActive && (
+                    <span className="ml-2 text-lg font-normal text-blue-100">
+                      – {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}
+                    </span>
+                  )}
+                </h2>
+                {rankings.length > 0 && (
+                  <div className="shrink-0">
+                    <ShareCardButton
+                      title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
+                      variant="onBlue"
+                      highlightOption={myTeamId !== null}
+                      renderCard={({ dark, highlightMyTeam }) => (
+                        <RankingsShareCard
+                          dark={dark}
+                          rows={rankings}
+                          categories={categoryKeys}
+                          view={viewMode}
+                          mode={mode}
+                          rangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} – ${formatDate(appliedDates.endDate!)}` : undefined}
+                          asOf={formatAsOf(data?.data_date)}
+                          highlightTeamId={highlightMyTeam ? myTeamId : null}
+                        />
+                      )}
+                    />
+                  </div>
                 )}
-              </h2>
+              </div>
               <p className="text-blue-100 mt-1">
                 {isStandings
                   ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
