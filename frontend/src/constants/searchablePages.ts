@@ -4,6 +4,7 @@ import {
   FF_DRAFT_REPORT,
   FF_DRAFT_PAGES,
 } from '../config/featureFlags'
+import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
 
 export interface SearchablePage {
   label: string
@@ -21,6 +22,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Today', path: '/', icon: '📊', group: 'League' },
   { label: 'Standings & Rankings', path: '/rankings', icon: '🏆', group: 'League' },
   { label: 'Teams', path: '/teams', icon: '👥', group: 'League' },
+  ...(FF_LEAGUE_ACTIVITY ? [{ label: 'Activity', path: '/activity', icon: '🔁', group: 'League' }] : []),
   ...(FF_DRAFT_REPORT ? [{ label: 'Draft Report', path: '/draft-report', icon: '📝', group: 'League' }] : []),
   { label: 'Players', path: '/players', icon: '⛹️', group: 'Players' },
   ...(FF_DRAFT_PAGES

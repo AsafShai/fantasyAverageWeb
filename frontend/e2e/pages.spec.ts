@@ -5,6 +5,7 @@ const PAGES: { path: string; heading: RegExp }[] = [
   { path: '/', heading: /^Today$/ },
   { path: '/rankings', heading: /Team Rankings/ },
   { path: '/teams', heading: /^Teams$/ },
+  { path: '/activity', heading: /^League Activity$/ },
   { path: '/team/1', heading: /Fantasy One/ },
   { path: '/analytics', heading: /League Analytics/ },
   { path: '/trade', heading: /Trade Analyzer/ },

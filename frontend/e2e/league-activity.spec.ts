@@ -1,21 +1,16 @@
 import type { Page } from '@playwright/test'
 import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test'
-import { fixture, mockApi } from './support/mockApi'
 
 // League Activity (FF_LEAGUE_ACTIVITY), against a trimmed copy of the real
 // 2025-26 response: team 1 (ASAF) and team 8 (DOR) traded on Mar 17, and
 // team 4's (CADE) Nov 13 trade starts a long chain of follow-up trades.
 
-const ACTIVITY = fixture<{ moves: unknown[]; teams: unknown[] }>('league-activity')
 const MAR17 = 'cf9f5a50-f1d8-4eb9-b3b3-e4e29927f4b9'
 const CADE_NOV13 = '51ab1606-8af1-4ddb-8e59-9c0f66963d3f'
 const COLLINS = 3908845
 
+// The activity fixture is served by DEFAULT_API (support/mockApi.ts).
 test.beforeEach(async ({ page }) => {
-  await mockApi(page, {
-    '/league/activity': ACTIVITY,
-    '/league/activity/latest': { teams: ACTIVITY.teams, moves: ACTIVITY.moves.slice(0, 8) },
-  })
   // Team 1 exists in the teams fixture, so it can be "my team".
   await page.addInitScript(() => localStorage.setItem('fw:myTeam.id', '1'))
 })
