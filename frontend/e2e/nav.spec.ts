@@ -12,11 +12,87 @@ test.describe('desktop nav', () => {
       await expect(nav.getByRole('button', { name: new RegExp(group) })).toBeVisible()
     }
 
-    // Groups open on hover. (Hover then click toggles the menu shut again, so don't click.)
-    await nav.getByRole('button', { name: /Insights/ }).hover()
+    await nav.getByRole('button', { name: /Insights/ }).click()
     await page.getByRole('menuitem', { name: /Player Trends/ }).click()
     await expect(page).toHaveURL(/\/trends$/)
     await expect(page.getByRole('heading', { level: 1, name: /Trends/ })).toBeVisible()
+  })
+
+  test('clicking a group that hover just opened keeps it open', async ({ page }) => {
+    await page.goto('/')
+    const button = page.getByRole('navigation').getByRole('button', { name: /Insights/ })
+    await button.hover()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await page.waitForTimeout(300)
+    await button.click()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByRole('menu')).toBeVisible()
+
+    // Once the click owns the menu, a second click closes it.
+    await button.click()
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('clicking a closed group with the mouse already on it opens it', async ({ page }) => {
+    await page.goto('/')
+    const button = page.getByRole('navigation').getByRole('button', { name: /Insights/ })
+    await button.hover()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    // Close it with Escape while the mouse stays on the button.
+    await button.press('Escape')
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    await button.click()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByRole('menu')).toBeVisible()
+  })
+
+  test('clicking a focused group without hovering opens it', async ({ page }) => {
+    await page.goto('/')
+    const button = page.getByRole('navigation').getByRole('button', { name: /Insights/ })
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    // Fire the click without moving the mouse, as an assistive tech activation does.
+    await button.dispatchEvent('click')
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByRole('menu')).toBeVisible()
+  })
+
+  test('Escape and clicking outside close the menu', async ({ page }) => {
+    await page.goto('/')
+    const button = page.getByRole('navigation').getByRole('button', { name: /Insights/ })
+    await button.click()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await button.press('Escape')
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('menu')).toBeHidden()
+
+    await button.click()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await page.getByRole('heading', { level: 1, name: 'Today' }).click()
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('menu')).toBeHidden()
+  })
+
+  test('Enter, Space and ArrowDown work from the keyboard', async ({ page }) => {
+    await page.goto('/')
+    const button = page.getByRole('navigation').getByRole('button', { name: /Insights/ })
+    await button.focus()
+
+    await page.keyboard.press('Enter')
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Enter')
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+
+    await page.keyboard.press('Space')
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Space')
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+
+    await page.keyboard.press('ArrowDown')
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByRole('menuitem').first()).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(button).toHaveAttribute('aria-expanded', 'false')
+    await expect(button).toBeFocused()
   })
 
   test('the logo links home', async ({ page }) => {
