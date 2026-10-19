@@ -37,6 +37,7 @@ export default defineConfig({
       VITE_FF_DRAFT_STEALS_BUSTS: 'false',
       // Under test: Model vs. Reality page and its PlayerProfile card.
       VITE_FF_MODEL_ACCURACY: 'true',
+      VITE_FF_SHARE_CARDS: 'true',
     },
   },
 })

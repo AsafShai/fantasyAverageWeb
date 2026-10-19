@@ -8,3 +8,5 @@ export const FF_DRAFT_PAGES = import.meta.env.VITE_FF_DRAFT_PAGES === 'true';
 export const FF_DRAFT_STEALS_BUSTS = import.meta.env.VITE_FF_DRAFT_STEALS_BUSTS === 'true';
 // Model vs. Reality page + the projection-accuracy module on PlayerProfile.
 export const FF_MODEL_ACCURACY = import.meta.env.VITE_FF_MODEL_ACCURACY === 'true';
+// Share-as-image cards on Rankings, Team Detail and the Trade Analyzer.
+export const FF_SHARE_CARDS = import.meta.env.VITE_FF_SHARE_CARDS === 'true';
