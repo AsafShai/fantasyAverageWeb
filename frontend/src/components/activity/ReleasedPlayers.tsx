@@ -19,6 +19,9 @@ const ReleasedPlayers = ({ activity, categories, mode, onModeChange }: ReleasedP
   const teams = useMemo(() => teamLookup(activity.teams), [activity.teams])
   const [by, setBy] = useState<number | null>(null)
   const rows = activity.released.filter(r => by === null || r.released_by === by)
+  const emptyText = activity.released.length === 0
+    ? 'No released player has played 5 games for another team yet.'
+    : 'No released players from this team were picked up elsewhere.'
 
   return (
     <div className="space-y-3 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
@@ -41,7 +44,36 @@ const ReleasedPlayers = ({ activity, categories, mode, onModeChange }: ReleasedP
         </label>
         <StatModeToggle mode={mode} onChange={onModeChange} />
       </div>
-      <div className="overflow-x-auto">
+      <ul className="space-y-2 sm:hidden">
+        {rows.length === 0 ? (
+          <li className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">{emptyText}</li>
+        ) : (
+          rows.map(r => (
+            <li
+              key={`${r.player_id}-${r.released_by}`}
+              className={`rounded-md border border-gray-200 p-2.5 text-sm dark:border-gray-700 ${myTeamRowClass(isMyTeam(r.released_by))}`}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <PlayerNameLink name={r.name} playerId={r.player_id} className="-my-1 inline-block py-1 font-semibold text-gray-900 hover:underline dark:text-gray-100" />
+                <span className="shrink-0 text-xs font-semibold tabular-nums">{r.stint.games_played} GP after</span>
+              </div>
+              <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
+                Released by <b>{teamAbbrev(teams, r.released_by)}</b> {formatDay(r.released_on)} ({r.games_before_release} GP) · picked up by{' '}
+                <b>{teamAbbrev(teams, r.stint.team_id)}</b> {formatDay(r.stint.start)}
+              </p>
+              <dl className="mt-1.5 grid grid-cols-4 gap-x-2 gap-y-1 text-xs tabular-nums">
+                {categories.map(cat => (
+                  <div key={cat} className="flex justify-between gap-1">
+                    <dt className="text-gray-500 dark:text-gray-400">{cat}</dt>
+                    <dd>{formatCategory(categoryValue(stintLine(r.stint), cat, mode), cat, mode)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))
+        )}
+      </ul>
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400">
@@ -58,9 +90,7 @@ const ReleasedPlayers = ({ activity, categories, mode, onModeChange }: ReleasedP
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={4 + categories.length} className="px-2 py-6 text-center text-gray-500 dark:text-gray-400">
-                  {activity.released.length === 0
-                    ? 'No released player has played 5 games for another team yet.'
-                    : 'No released players from this team were picked up elsewhere.'}
+                  {emptyText}
                 </td>
               </tr>
             ) : (
@@ -70,7 +100,7 @@ const ReleasedPlayers = ({ activity, categories, mode, onModeChange }: ReleasedP
                   className={`border-b border-gray-100 dark:border-gray-700 ${myTeamRowClass(isMyTeam(r.released_by))}`}
                 >
                   <td className="px-2 py-1.5 font-semibold whitespace-nowrap">
-                    <PlayerNameLink name={r.name} playerId={r.player_id} className="text-gray-900 hover:underline dark:text-gray-100" />
+                    <PlayerNameLink name={r.name} playerId={r.player_id} className="-my-1 inline-block py-1 text-gray-900 hover:underline dark:text-gray-100" />
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     {teamAbbrev(teams, r.released_by)}{' '}

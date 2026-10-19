@@ -126,7 +126,10 @@ describe('League Activity page', () => {
   it('lists released players who played elsewhere', async () => {
     renderPage('/activity?tab=released')
     await waitFor(() => expect(screen.getByText('Released players who played elsewhere')).toBeInTheDocument())
-    const row = screen.getByRole('link', { name: 'John Collins' }).closest('tr') as HTMLElement
+    // Same player as a phone card and a desktop table row; CSS shows one.
+    const [card, tableLink] = screen.getAllByRole('link', { name: 'John Collins' })
+    expect(card.closest('li')).toHaveTextContent(/Released by ASAF.*picked up by DOR/)
+    const row = tableLink.closest('tr') as HTMLElement
     expect(within(row).getByText(/^ASAF/)).toBeInTheDocument()
     expect(within(row).getByText(/^DOR/)).toBeInTheDocument()
   })

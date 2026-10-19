@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { LeagueActivity } from '../../types/activity'
 import { useMyTeam } from '../../context/MyTeamContext'
 import { fantasyTeamOptionLabel, myTeamRowClass } from '../MyTeamMark'
@@ -31,6 +31,15 @@ const TradesTab = ({
     [activity.trades, teamId],
   )
   const selected = activity.trades.find(t => t.id === selectedId) ?? list[0]
+  const detailRef = useRef<HTMLDivElement>(null)
+
+  // List and detail stack below lg, so take the reader to the trade they picked.
+  const pick = (id: string) => {
+    onSelect(id)
+    if (window.matchMedia?.('(max-width: 1023px)').matches) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
+  }
 
   if (activity.trades.length === 0) {
     return (
@@ -69,7 +78,7 @@ const TradesTab = ({
                 <button
                   type="button"
                   aria-current={current || undefined}
-                  onClick={() => onSelect(t.id)}
+                  onClick={() => pick(t.id)}
                   className={`block w-full space-y-1 border-b border-gray-100 px-3 py-2.5 text-left text-sm dark:border-gray-700 ${
                     current ? 'bg-blue-50 dark:bg-blue-950/50' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   } ${myTeamRowClass(mine)}`}
@@ -93,19 +102,21 @@ const TradesTab = ({
       </div>
 
       {selected && (
-        <TradeDetail
-          trade={selected}
-          trades={activity.trades}
-          teams={teams}
-          categories={categories}
-          seasonOver={activity.season_over}
-          mode={mode}
-          onModeChange={onModeChange}
-          overrides={overrides}
-          onOverridesChange={onOverridesChange}
-          onSelectTrade={onSelect}
-          onOpenTree={onOpenTree}
-        />
+        <div ref={detailRef} className="min-w-0 scroll-mt-4">
+          <TradeDetail
+            trade={selected}
+            trades={activity.trades}
+            teams={teams}
+            categories={categories}
+            seasonOver={activity.season_over}
+            mode={mode}
+            onModeChange={onModeChange}
+            overrides={overrides}
+            onOverridesChange={onOverridesChange}
+            onSelectTrade={pick}
+            onOpenTree={onOpenTree}
+          />
+        </div>
       )}
     </div>
   )

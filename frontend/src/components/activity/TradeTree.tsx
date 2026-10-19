@@ -39,12 +39,12 @@ function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelec
 }) {
   const abbrev = teamAbbrev(teams, teamId)
   return (
-    <ul className="space-y-1 border-l border-gray-300 pl-5 dark:border-gray-600">
+    <ul className="space-y-1 border-l border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
       {nodes.map(({ stint: s, next }) => (
-        <li key={`${s.player_id}-${s.start}`} className="relative pt-1 before:absolute before:top-5 before:-left-5 before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
+        <li key={`${s.player_id}-${s.start}`} className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
           <div className={`${NODE} border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800`}>
             <span className="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900 dark:text-gray-100">
-              <PlayerNameLink name={s.name} playerId={s.player_id} className="hover:underline" />
+              <PlayerNameLink name={s.name} playerId={s.player_id} className="-my-1 inline-block py-1 hover:underline" />
               {s.games_played < SMALL_SAMPLE_GAMES ? <Pill tone="warn">Small sample</Pill> : missedGames(s) && <Pill tone="warn">Missed games</Pill>}
             </span>
             <span className="text-xs text-gray-600 tabular-nums dark:text-gray-300">
@@ -52,8 +52,8 @@ function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelec
             </span>
           </div>
           {next ? (
-            <ul className="mt-1 border-l border-gray-300 pl-5 dark:border-gray-600">
-              <li className="relative pt-1 before:absolute before:top-5 before:-left-5 before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
+            <ul className="mt-1 border-l border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
+              <li className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
                 <button
                   type="button"
                   onClick={() => onSelectTrade(next.trade.id)}
@@ -68,7 +68,7 @@ function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelec
                   </span>
                 </button>
                 {truncated.has(next.trade.id) ? (
-                  <div className="mt-1 pl-5">
+                  <div className="mt-1 pl-3 sm:pl-5">
                     <button
                       type="button"
                       onClick={onExpand}
@@ -83,15 +83,15 @@ function Branch({ nodes, teams, teamId, seasonOver, truncated, onExpand, onSelec
               </li>
             </ul>
           ) : (
-            <ul className="mt-1 border-l border-gray-300 pl-5 dark:border-gray-600">
-              <li className="relative pt-1 before:absolute before:top-5 before:-left-5 before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
+            <ul className="mt-1 border-l border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
+              <li className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
                 {s.exit === 'released' ? (
                   <>
                     <div className={`${NODE} border-dashed border-gray-400 text-gray-700 dark:border-gray-500 dark:text-gray-300`}>
                       Released {formatDay(s.end)}
                     </div>
                     {s.picked_up_after && (
-                      <ul className="mt-1 border-l border-dotted border-gray-300 pl-5 dark:border-gray-600">
+                      <ul className="mt-1 border-l border-dotted border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
                         <li className="pt-1">
                           <div className={`${NODE} border-dotted border-gray-400 text-gray-500 dark:border-gray-500 dark:text-gray-400`}>
                             <span>┄ {teamAbbrev(teams, s.picked_up_after.team_id)} picked him up {formatDay(s.picked_up_after.date)}</span>

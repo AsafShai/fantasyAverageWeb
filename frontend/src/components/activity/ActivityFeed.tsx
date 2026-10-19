@@ -36,12 +36,12 @@ const ActivityFeed = ({ activity }: { activity: LeagueActivity }) => {
   const page = visible.slice(0, shown)
   return (
     <div className="space-y-3 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
-        <label className="flex items-center gap-2">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-gray-700 sm:flex sm:flex-wrap sm:items-center sm:gap-x-4 dark:text-gray-300">
+        <label className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
           Team
           <select
             id="activity-team"
-            className={SELECT_CLASS}
+            className={`${SELECT_CLASS} w-full sm:w-auto`}
             value={teamId ?? ''}
             onChange={e => resetPaging(setTeamId)(e.target.value ? Number(e.target.value) : null)}
           >
@@ -53,21 +53,21 @@ const ActivityFeed = ({ activity }: { activity: LeagueActivity }) => {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
           Type
-          <select id="activity-kind" className={SELECT_CLASS} value={kind} onChange={e => resetPaging(setKind)(e.target.value as MoveFilter)}>
+          <select id="activity-kind" className={`${SELECT_CLASS} w-full sm:w-auto`} value={kind} onChange={e => resetPaging(setKind)(e.target.value as MoveFilter)}>
             {MOVE_FILTERS.map(f => (
               <option key={f.value} value={f.value}>{f.label}</option>
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
           From
-          <input id="activity-from" type="date" className={SELECT_CLASS} value={from} max={to || undefined} onChange={e => resetPaging(setFrom)(e.target.value)} />
+          <input id="activity-from" type="date" className={`${SELECT_CLASS} w-full sm:w-auto`} value={from} max={to || undefined} onChange={e => resetPaging(setFrom)(e.target.value)} />
         </label>
-        <label className="flex items-center gap-2">
+        <label className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
           To
-          <input id="activity-to" type="date" className={SELECT_CLASS} value={to} min={from || undefined} onChange={e => resetPaging(setTo)(e.target.value)} />
+          <input id="activity-to" type="date" className={`${SELECT_CLASS} w-full sm:w-auto`} value={to} min={from || undefined} onChange={e => resetPaging(setTo)(e.target.value)} />
         </label>
       </div>
 

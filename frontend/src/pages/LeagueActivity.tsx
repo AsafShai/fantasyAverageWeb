@@ -21,6 +21,14 @@ const TAB_LABEL: Record<Tab, string> = {
   released: 'Released players',
 }
 
+// Phone widths fit all four tabs only with short labels.
+const TAB_SHORT: Record<Tab, string> = {
+  activity: 'Activity',
+  trades: 'Trades',
+  tree: 'Tree',
+  released: 'Released',
+}
+
 const URL_SCHEMA = {
   tab: enumParam(TABS, 'activity'),
   trade: stringParam(''),
@@ -49,7 +57,7 @@ export default function LeagueActivity() {
         </p>
       </div>
 
-      <div role="tablist" aria-label="League activity views" className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700">
+      <div role="tablist" aria-label="League activity views" className="-mx-4 flex gap-1 overflow-x-auto border-b border-gray-200 px-4 sm:mx-0 sm:px-0 dark:border-gray-700">
         {TABS.map(t => (
           <button
             key={t}
@@ -57,14 +65,16 @@ export default function LeagueActivity() {
             type="button"
             id={`activity-tab-${t}`}
             aria-selected={url.tab === t}
+            aria-label={TAB_LABEL[t]}
             onClick={() => setUrl({ tab: t })}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
               url.tab === t
                 ? 'border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300'
                 : 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'
             }`}
           >
-            {TAB_LABEL[t]}
+            <span className="sm:hidden">{TAB_SHORT[t]}</span>
+            <span className="hidden sm:inline">{TAB_LABEL[t]}</span>
           </button>
         ))}
       </div>

@@ -15,7 +15,7 @@ const LatestMovesCard = () => {
     <section className="rounded-lg bg-white shadow-md dark:bg-gray-800">
       <div className="flex items-baseline justify-between gap-2 px-4 pt-3 pb-2">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Latest moves</h2>
-        <Link to="/activity" className="text-sm text-blue-700 hover:underline dark:text-blue-300">
+        <Link to="/activity" className="-my-1 inline-block py-1 text-sm text-blue-700 hover:underline dark:text-blue-300">
           All activity →
         </Link>
       </div>

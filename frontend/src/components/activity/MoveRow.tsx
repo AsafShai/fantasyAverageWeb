@@ -48,13 +48,13 @@ const MoveRow = ({ move, teams, when, compact = false }: MoveRowProps) => {
       {move.added.map(p => (
         <span key={`a${p.player_id}`} className="text-emerald-700 dark:text-emerald-400">
           +{' '}
-          <PlayerNameLink name={p.name} playerId={p.player_id} className="hover:underline" />
+          <PlayerNameLink name={p.name} playerId={p.player_id} className="-my-1 inline-block py-1 hover:underline" />
         </span>
       ))}
       {move.dropped.map(p => (
         <span key={`d${p.player_id}`} className="text-gray-500 dark:text-gray-400">
           −{' '}
-          <PlayerNameLink name={p.name} playerId={p.player_id} className="hover:underline" />
+          <PlayerNameLink name={p.name} playerId={p.player_id} className="-my-1 inline-block py-1 hover:underline" />
         </span>
       ))}
     </>

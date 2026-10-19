@@ -189,15 +189,15 @@ const TradeDetail = ({
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-semibold text-gray-900 dark:text-gray-100">
                         {row.openSpot && 'Open roster spot: '}
-                        <PlayerNameLink name={s.name} playerId={s.player_id} className="hover:underline" />
+                        <PlayerNameLink name={s.name} playerId={s.player_id} className="-my-1 inline-block py-1 hover:underline" />
                       </span>
-                      <label htmlFor={id} className="flex shrink-0 cursor-pointer items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                      <label htmlFor={id} className="-m-1.5 flex shrink-0 cursor-pointer items-center gap-1.5 rounded p-1.5 text-xs text-gray-600 dark:text-gray-300">
                         <input
                           id={id}
                           type="checkbox"
                           checked={row.counted}
                           onChange={e => toggle(row, e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
+                          className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4 dark:border-gray-600"
                         />
                         Count
                       </label>
@@ -271,7 +271,35 @@ const TradeDetail = ({
         </div>
 
         <h3 className="pt-2 font-semibold text-gray-900 dark:text-gray-100">By player</h3>
-        <div className="overflow-x-auto">
+        <ul className="space-y-2 sm:hidden">
+          {rows.flatMap((sideRowsForTeam, i) =>
+            sideRowsForTeam.map(row => (
+              <li
+                key={`${i}-${row.openSpot}-${row.stint.player_id}`}
+                className={`rounded-md border border-gray-200 p-2.5 text-sm dark:border-gray-700 ${row.counted ? '' : 'text-gray-400 italic dark:text-gray-500'}`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-semibold">
+                    <SideDot side={i as 0 | 1} />
+                    {row.stint.name}
+                    {row.openSpot && <span className="ml-1 text-xs font-normal text-gray-400">open spot</span>}
+                    {!row.counted && <span className="ml-1 text-xs font-normal">not counted</span>}
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums">{row.stint.games_played} GP</span>
+                </div>
+                <dl className="mt-1.5 grid grid-cols-4 gap-x-2 gap-y-1 text-xs tabular-nums">
+                  {categories.map(cat => (
+                    <div key={cat} className="flex justify-between gap-1">
+                      <dt className="text-gray-500 dark:text-gray-400">{cat}</dt>
+                      <dd>{formatCategory(categoryValue(stintLine(row.stint), cat, mode), cat, mode)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            )),
+          )}
+        </ul>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400">
