@@ -23,7 +23,7 @@ import { useMyTeam } from '../context/MyTeamContext';
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';
 import PlayerNameLink from '../components/PlayerNameLink';
-import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_PAST_SLATES, FF_SCHEDULE } from '../config/featureFlags';
+import { FF_PROJECTIONS, FF_PAST_SLATES } from '../config/featureFlags';
 import './Players.css';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
@@ -112,7 +112,7 @@ const Players = () => {
     ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   });
   const { data: teams } = useGetTeamsListQuery();
-  const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE });
+  const { data: schedule } = useGetScheduleQuery();
 
   useEffect(() => {
     if (timePeriod !== 'custom' || !customRange || !data?.players) return
@@ -128,9 +128,9 @@ const Players = () => {
   // Slate picker: next game days for everyone; past dates (what-if/debug view
   // — that day's games with current player state) are flag-gated.
   const [slateDate, setSlateDate] = useState(urlState.slate);
-  const { data: upcomingDates = [] } = useGetUpcomingDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
-  const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !FF_PAST_SLATES });
-  const { data: currentSlateDate } = useGetCurrentSlateDateQuery(undefined, { skip: !FF_MATCHUP_QUALITY });
+  const { data: upcomingDates = [] } = useGetUpcomingDatesQuery();
+  const { data: pastDates = [] } = useGetMatchupDatesQuery(undefined, { skip: !FF_PAST_SLATES });
+  const { data: currentSlateDate } = useGetCurrentSlateDateQuery();
   const selectedSlateDate = slateDate || currentSlateDate || '';
   const playingTeamsOnSlate = useMemo(() => {
     if (!selectedSlateDate || !schedule) return null;
@@ -143,7 +143,6 @@ const Players = () => {
   const [playingOnSlateOnly, setPlayingOnSlateOnly] = useState(urlState.onslate);
   const { data: matchups = [] } = useGetMatchupsTodayQuery(
     slateDate ? slateDate.replaceAll('-', '') : undefined,
-    { skip: !FF_MATCHUP_QUALITY }
   );
   const matchupMap = useMemo(
     () => new Map(matchups.map((m: PlayerMatchup) => [m.player_name, m])),
@@ -262,63 +261,59 @@ const Players = () => {
           </div>
           <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center sm:justify-end">
           <div className="order-2 flex w-full flex-col gap-2 sm:order-1 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          {FF_MATCHUP_QUALITY && (
-            <label className="flex w-full items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none sm:w-auto sm:gap-1" title="Pick a game day. Past dates (debug) show that slate with current player state.">
-              <span className="shrink-0">Slate</span>
-              <select
-                value={slateDate}
-                onChange={(e) => setSlateDate(e.target.value)}
-                className="min-w-0 flex-1 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 sm:flex-none sm:py-1"
-              >
-                <option value="">
-                  {slateDate === '' && currentSlateDate
-                    ? `Upcoming (live) — ${currentSlateDate}`
-                    : slateDate === '' && currentSlateDate === null
-                      ? 'Upcoming (live) — no games scheduled'
-                      : 'Upcoming (live)'}
-                </option>
-                {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
-                {FF_PAST_SLATES && pastDates.length > 0 && (
-                  <optgroup label="Past (debug)">
-                    {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
+          <label className="flex w-full items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none sm:w-auto sm:gap-1" title="Pick a game day. Past dates (debug) show that slate with current player state.">
+            <span className="shrink-0">Slate</span>
+            <select
+              value={slateDate}
+              onChange={(e) => setSlateDate(e.target.value)}
+              className="min-w-0 flex-1 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 sm:flex-none sm:py-1"
+            >
+              <option value="">
+                {slateDate === '' && currentSlateDate
+                  ? `Upcoming (live) — ${currentSlateDate}`
+                  : slateDate === '' && currentSlateDate === null
+                    ? 'Upcoming (live) — no games scheduled'
+                    : 'Upcoming (live)'}
+              </option>
+              {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
+              {FF_PAST_SLATES && pastDates.length > 0 && (
+                <optgroup label="Past (debug)">
+                  {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
                 </optgroup>
               )}
             </select>
           </label>
-          )}
-          {FF_MATCHUP_QUALITY && FF_SCHEDULE && (
-            <label
-              className={`group inline-flex h-9 w-full items-center gap-2 rounded-md border px-2 text-xs transition-colors focus-within:ring-2 focus-within:ring-blue-300 sm:h-8 sm:w-auto ${
+          <label
+            className={`group inline-flex h-9 w-full items-center gap-2 rounded-md border px-2 text-xs transition-colors focus-within:ring-2 focus-within:ring-blue-300 sm:h-8 sm:w-auto ${
+              !selectedSlateDate || !playingTeamsOnSlate
+                ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
+                : playingOnSlateOnly
+                  ? 'cursor-pointer border-blue-600 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100'
+                  : 'cursor-pointer border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50/40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-gray-700'
+            }`}
+            title="Keep only players whose NBA team plays on the selected slate."
+          >
+            <input
+              className="sr-only"
+              type="checkbox"
+              checked={playingOnSlateOnly}
+              disabled={!selectedSlateDate || !playingTeamsOnSlate}
+              onChange={(e) => setPlayingOnSlateOnly(e.target.checked)}
+            />
+            <span
+              aria-hidden="true"
+              className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
                 !selectedSlateDate || !playingTeamsOnSlate
-                  ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
+                  ? 'bg-gray-300 dark:bg-gray-600'
                   : playingOnSlateOnly
-                    ? 'cursor-pointer border-blue-600 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100'
-                    : 'cursor-pointer border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50/40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-gray-700'
+                    ? 'bg-blue-600'
+                    : 'bg-gray-300 dark:bg-gray-600'
               }`}
-              title="Keep only players whose NBA team plays on the selected slate."
             >
-              <input
-                className="sr-only"
-                type="checkbox"
-                checked={playingOnSlateOnly}
-                disabled={!selectedSlateDate || !playingTeamsOnSlate}
-                onChange={(e) => setPlayingOnSlateOnly(e.target.checked)}
-              />
-              <span
-                aria-hidden="true"
-                className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
-                  !selectedSlateDate || !playingTeamsOnSlate
-                    ? 'bg-gray-300 dark:bg-gray-600'
-                    : playingOnSlateOnly
-                      ? 'bg-blue-600'
-                      : 'bg-gray-300 dark:bg-gray-600'
-                }`}
-              >
-                <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${playingOnSlateOnly ? 'translate-x-[14px]' : ''}`} />
-              </span>
-              <span className="whitespace-nowrap font-medium">Only playing on slate</span>
-            </label>
-          )}
+              <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${playingOnSlateOnly ? 'translate-x-[14px]' : ''}`} />
+            </span>
+            <span className="whitespace-nowrap font-medium">Only playing on slate</span>
+          </label>
           {FF_PROJECTIONS && (
             <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none">
               <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
@@ -327,11 +322,9 @@ const Players = () => {
           )}
           </div>
           <div className="order-1 flex w-full flex-col gap-2 sm:order-2 sm:w-auto sm:flex-row sm:items-center">
-          {FF_SCHEDULE && (
-            <div className="w-full sm:order-2 sm:w-auto">
-              <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
-            </div>
-          )}
+          <div className="w-full sm:order-2 sm:w-auto">
+            <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
+          </div>
           {tableMode !== 'schedule' && (
             <div className="flex w-full self-start overflow-hidden rounded border border-gray-300 sm:order-1 sm:w-auto dark:border-gray-600">
               <button
@@ -591,7 +584,7 @@ const PlayerTable = ({
     [schedule],
   );
   const statColumnCount = showSchedule ? weekDays.length + 1 : 10;
-  const showMatchup = FF_MATCHUP_QUALITY && !showSchedule;
+  const showMatchup = !showSchedule;
   const matchupColumnCount = showMatchup ? 1 : 0;
 
   const getTeamDisplay = useCallback((player: Player) => {
