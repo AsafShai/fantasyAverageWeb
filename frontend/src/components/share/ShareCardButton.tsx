@@ -111,7 +111,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
   const ready = status === 'ready'
   const showShare = typeof navigator.canShare === 'function' && (file ? canShareFile(file) : true)
   const showCopy = canCopyImage()
-  const actionClass = 'w-full px-3 py-2 rounded-md text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+  const actionClass = 'w-full min-h-11 sm:min-h-0 px-3 py-2 rounded-md text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
   return (
     <div ref={containerRef} className="relative inline-block">
@@ -120,7 +120,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
         onClick={toggle}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${BUTTON_STYLES[variant]}`}
+        className={`inline-flex items-center gap-1.5 min-h-11 sm:min-h-0 px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${BUTTON_STYLES[variant]}`}
       >
         <ShareIcon />
         Share
@@ -132,9 +132,9 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
           aria-label="Share as image"
           className="fixed inset-x-3 bottom-3 z-50 sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 shadow-xl text-left text-gray-900 dark:text-gray-100"
         >
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1">
             <span className="text-sm font-semibold">Share as image</span>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 px-1">✕</button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="-mr-2 flex h-11 w-11 sm:h-8 sm:w-8 items-center justify-center rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">✕</button>
           </div>
 
           <div className="mb-3 flex items-center justify-center min-h-[96px] rounded-lg bg-gray-100 dark:bg-gray-900 overflow-hidden">
@@ -148,7 +148,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
           </div>
 
           {highlightOption && (
-            <label className="mb-3 flex items-center gap-2 text-sm cursor-pointer select-none">
+            <label className="mb-3 flex min-h-11 sm:min-h-0 items-center gap-2 text-sm cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={highlightMyTeam}
