@@ -1,0 +1,21 @@
+{
+  "averages_rankings": [
+    {
+      "team": {
+        "team_id": 1,
+        "team_name": "Fantasy One"
+      },
+      "total_points": 80.5
+    },
+    {
+      "team": {
+        "team_id": 2,
+        "team_name": "Second Team"
+      },
+      "total_points": 74
+    }
+  ],
+  "totals_rankings": [],
+  "categories": [],
+  "last_updated": "2026-10-18T09:41:00Z"
+}
