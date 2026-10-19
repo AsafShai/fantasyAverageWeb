@@ -8,7 +8,6 @@ import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
-import { FF_NAV_REORG } from '../config/featureFlags'
 import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
 import { useMyTeam } from '../context/MyTeamContext'
@@ -346,30 +345,6 @@ const Analytics = () => {
               })}
             </tbody>
           </table>
-        </div>
-      </div>
-    )
-  }
-
-  if (!FF_NAV_REORG) {
-    return (
-      <div className="space-y-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">League Analytics</h1>
-            <DataDateBadge dataDate={heatmapData?.data_date} />
-          </div>
-
-          {renderHeatmapTable(
-            heatmapData,
-            "Performance Heatmap",
-            "Visual representation of team performance across different categories. Red indicates below-average performance, white indicates league-average performance, and green indicates above-average performance. Click column headers to sort by team name or category values."
-          )}
-
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <StandingsRace />
         </div>
       </div>
     )

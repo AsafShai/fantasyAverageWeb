@@ -1,0 +1,11 @@
+{
+  "teams": [
+    { "team_id": 1, "team_name": "Fantasy One" },
+    { "team_id": 2, "team_name": "Second Team" }
+  ],
+  "categories": ["PTS", "REB"],
+  "data": [[112, 43], [108, 46]],
+  "normalized_data": [[0.6, 0.4], [0.4, 0.6]],
+  "ranks_data": [[1, 2], [2, 1]],
+  "data_date": "2026-10-18"
+}

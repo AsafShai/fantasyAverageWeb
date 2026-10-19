@@ -9,7 +9,6 @@ import PlayerNameLink from '../components/PlayerNameLink';
 import type { DepthChartPosition } from '../types/api';
 import { applyDepthChartFilters } from '../utils/depthChartFilters';
 import TeamScheduleView from '../components/TeamScheduleView';
-import { FF_SCHEDULE } from '../config/featureFlags';
 
 const MAX_DEPTH = 5;
 const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th'];
@@ -201,11 +200,9 @@ export default function NbaTeams() {
                 <h2 id="nba-depth-chart-heading" className="mb-4 text-xl font-semibold text-gray-900">Depth chart</h2>
                 <DepthChartView key={`depth-${selectedTeamId}`} teamId={selectedTeamId} />
               </section>
-              {FF_SCHEDULE && (
-                <section aria-labelledby="nba-team-schedule-heading">
-                  <TeamScheduleView key={`schedule-${selectedTeamId}`} teamId={selectedTeamId} />
-                </section>
-              )}
+              <section aria-labelledby="nba-team-schedule-heading">
+                <TeamScheduleView key={`schedule-${selectedTeamId}`} teamId={selectedTeamId} />
+              </section>
             </div>
           )}
         </>

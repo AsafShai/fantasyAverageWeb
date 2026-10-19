@@ -4,8 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/helpers'
 import TimePeriodSelector from '../TimePeriodSelector'
 
-vi.mock('../../config/featureFlags', () => ({ FF_CUSTOM_RANGE: true }))
-
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }

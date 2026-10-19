@@ -23,7 +23,7 @@ import { TeamShareCard } from '../components/share/TeamShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
-import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_SCHEDULE } from '../config/featureFlags'
+import { FF_PROJECTIONS } from '../config/featureFlags'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -93,8 +93,8 @@ const TeamDetail = () => {
   const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
   const [activeCoverageDate, setActiveCoverageDate] = useState<string | null>(null)
-  const showSchedule = FF_SCHEDULE && tableMode === 'schedule'
-  const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE })
+  const showSchedule = tableMode === 'schedule'
+  const { data: schedule } = useGetScheduleQuery()
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
   const opponents = useMemo(
     () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
@@ -103,16 +103,16 @@ const TeamDetail = () => {
   const [integerMode, setIntegerMode] = usePersistedState('teamDetail.integerMode', true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
   const coverageSlate = !showSchedule && coverageDate ? coverageDate.replaceAll('-', '') : undefined
-  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !!coverageSlate })
+  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !!coverageSlate })
   const { currentData: datedMatchups } = useGetMatchupsTodayQuery(coverageSlate, {
-    skip: !FF_MATCHUP_QUALITY || !coverageSlate,
+    skip: !coverageSlate,
   })
   const datedMatchupReady = datedMatchups !== undefined
   const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
-  const matchupMap = useMemo(() => {
-    if (!FF_MATCHUP_QUALITY) return new Map<string, PlayerMatchup>()
-    return new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m]))
-  }, [matchupRows])
+  const matchupMap = useMemo(
+    () => new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m])),
+    [matchupRows],
+  )
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {
@@ -211,7 +211,7 @@ const TeamDetail = () => {
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
     ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: true }] : statColumns),
-    ...(FF_MATCHUP_QUALITY && !showSchedule ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
+    ...(!showSchedule ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
   ]
 
   const getPositionOrder = (positions: string[]): number => {
@@ -461,16 +461,14 @@ const TeamDetail = () => {
           gameDaysLeft={leagueSummary?.nba_game_days_left}
         />
       )}
-      {FF_SCHEDULE && (
-        <RosterCoverage
-          players={team_detail.players ?? []}
-          teamId={teamIdNumber}
-          horizon={scheduleHorizon}
-          onHorizonChange={setScheduleHorizon}
-          onSelectDate={setCoverageDate}
-          onActiveDate={setActiveCoverageDate}
-        />
-      )}
+      <RosterCoverage
+        players={team_detail.players ?? []}
+        teamId={teamIdNumber}
+        horizon={scheduleHorizon}
+        onHorizonChange={setScheduleHorizon}
+        onSelectDate={setCoverageDate}
+        onActiveDate={setActiveCoverageDate}
+      />
 
       <div className="bg-white rounded-lg shadow p-4 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -480,11 +478,9 @@ const TeamDetail = () => {
           )}
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-              {FF_SCHEDULE && (
-                <div className="order-1 w-full sm:order-3 sm:w-auto">
-                  <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
-                </div>
-              )}
+              <div className="order-1 w-full sm:order-3 sm:w-auto">
+                <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
+              </div>
               {!showSchedule && (
                 <div className="order-2 flex w-full overflow-hidden rounded border border-gray-300 sm:order-2 sm:w-auto">
                   <button
@@ -641,7 +637,7 @@ const TeamDetail = () => {
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
                         </>
                       )}
-                      {FF_MATCHUP_QUALITY && !showSchedule && (
+                      {!showSchedule && (
                         <td className="px-4 py-3 whitespace-nowrap">
                           {awaitingCoverageMatchup ? (
                             coverageOpponent
@@ -658,7 +654,7 @@ const TeamDetail = () => {
                         </td>
                       )}
                     </tr>
-                    {FF_MATCHUP_QUALITY && !showSchedule && isExpanded && matchup && (
+                    {!showSchedule && isExpanded && matchup && (
                       <MatchupExpandRow matchup={matchup} colSpan={columns.length} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
                     )}
                   </React.Fragment>
@@ -696,7 +692,7 @@ const TeamDetail = () => {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
                   </>
                 )}
-                {FF_MATCHUP_QUALITY && !showSchedule && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
+                {!showSchedule && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
               </tr>
             </tbody>
           </table>
