@@ -153,6 +153,9 @@ class MockDataProvider:
     async def get_slot_usage(self, raw=None):
         return {}
 
+    async def get_lineup_slots(self):
+        return {}
+
     async def get_draft_detail_raw(self):
         return {
             'draftDetail': {

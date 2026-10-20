@@ -778,3 +778,59 @@ async def test_draft_detail_cached_only_once_drafted(draft_detail, cached):
 
     assert result == {"draftDetail": draft_detail}
     assert (provider.cache_manager.draft_detail_cache is not None) == cached
+
+
+@pytest.fixture
+def lineup_provider(provider, monkeypatch):
+    provider.cache_manager.lineup_slots_cache = {"etag": None, "data": None, "fetched_at": 0.0}
+    provider.data_transformer.parse_lineup_slots.return_value = {10: "PG"}
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(data_provider_module.time, "monotonic", lambda: clock["now"])
+    provider.clock = clock
+    return provider
+
+
+def _roster_resp(status_code=200, etag="r1"):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.headers = {"ETag": etag}
+    resp.json.return_value = {"teams": []}
+    return resp
+
+
+@pytest.mark.asyncio
+async def test_get_lineup_slots_caches_within_ttl(lineup_provider):
+    lineup_provider._client.get = AsyncMock(return_value=_roster_resp())
+
+    first = await lineup_provider.get_lineup_slots()
+    second = await lineup_provider.get_lineup_slots()
+
+    assert first == {10: "PG"}
+    assert second is first
+    assert lineup_provider._client.get.await_count == 1
+    assert lineup_provider._client.get.await_args.args[0].endswith("?view=mRoster")
+
+
+@pytest.mark.asyncio
+async def test_get_lineup_slots_revalidates_with_etag_after_ttl(lineup_provider):
+    lineup_provider._client.get = AsyncMock(return_value=_roster_resp())
+    first = await lineup_provider.get_lineup_slots()
+
+    lineup_provider.clock["now"] += data_provider_module.LINEUP_SLOTS_TTL_SECONDS + 1
+    lineup_provider._client.get = AsyncMock(return_value=_roster_resp(status_code=304))
+    second = await lineup_provider.get_lineup_slots()
+
+    assert second is first
+    assert lineup_provider._client.get.await_args.kwargs["headers"]["If-None-Match"] == "r1"
+
+
+@pytest.mark.asyncio
+async def test_get_lineup_slots_failure_serves_last_good_or_empty(lineup_provider):
+    lineup_provider._client.get = AsyncMock(side_effect=httpx.ConnectError("down"))
+    assert await lineup_provider.get_lineup_slots() == {}
+
+    lineup_provider._client.get = AsyncMock(return_value=_roster_resp())
+    good = await lineup_provider.get_lineup_slots()
+    lineup_provider.clock["now"] += data_provider_module.LINEUP_SLOTS_TTL_SECONDS + 1
+    lineup_provider._client.get = AsyncMock(side_effect=httpx.ConnectError("down"))
+    assert await lineup_provider.get_lineup_slots() is good

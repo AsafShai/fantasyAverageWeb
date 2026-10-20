@@ -206,6 +206,7 @@ const TeamDetail = () => {
     sortable: boolean
     day?: WeekScheduleDay
   }[] = [
+    { key: 'lineup_slot', label: 'Slot', align: 'left', sortable: true },
     { key: 'include', label: 'Include', align: 'center', sortable: false },
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
@@ -220,6 +221,13 @@ const TeamDetail = () => {
     return positionRank[firstPos as keyof typeof positionRank] ?? 99
   }
 
+  // ESPN lineup order: starters, flex, UTIL, then bench and IR.
+  const lineupSlotOrder = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'SG/SF', 'G/F', 'PF/C', 'F/C', 'UTIL', 'BE', 'IR']
+  const getLineupSlotOrder = (slot?: string | null): number => {
+    const idx = slot ? lineupSlotOrder.indexOf(slot) : -1
+    return idx === -1 ? 99 : idx
+  }
+
   const allPlayers = team_detail.players ?? []
 
   const sortedPlayers = sortBy === null
@@ -231,6 +239,9 @@ const TeamDetail = () => {
         if (sortBy === 'player_name') {
           aVal = a.player_name
           bVal = b.player_name
+        } else if (sortBy === 'lineup_slot') {
+          const diff = getLineupSlotOrder(a.lineup_slot) - getLineupSlotOrder(b.lineup_slot)
+          return sortOrder === 'asc' ? diff : -diff
         } else if (sortBy === 'positions') {
           const aPosOrder = getPositionOrder(a.positions)
           const bPosOrder = getPositionOrder(b.positions)
@@ -588,6 +599,13 @@ const TeamDetail = () => {
                 return (
                   <React.Fragment key={idx}>
                     <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                        {player.lineup_slot === 'IR' ? (
+                          <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200" title="Injured reserve">IR</span>
+                        ) : player.lineup_slot && player.lineup_slot !== 'BE' ? (
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200" title="Active lineup slot">{player.lineup_slot}</span>
+                        ) : (player.lineup_slot ?? '—')}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap text-center">
                         <input
                           type="checkbox"
@@ -661,6 +679,7 @@ const TeamDetail = () => {
                 )
               })}
               <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0">
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 <td className="px-4 py-3 whitespace-nowrap text-center">
                   <span className="text-blue-600">-</span>
                 </td>

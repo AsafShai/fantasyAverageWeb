@@ -78,6 +78,27 @@ class TestParseSlotUsage:
         assert transformer.parse_slot_usage(espn) == {}
 
 
+class TestParseLineupSlots:
+    def test_maps_each_rostered_player_to_its_slot(self, transformer):
+        payload = {"teams": [
+            {"id": 1, "roster": {"entries": [
+                {"playerId": 10, "lineupSlotId": 0},
+                {"playerId": 11, "lineupSlotId": 11},
+                {"playerId": 12, "lineupSlotId": 12},
+            ]}},
+            {"id": 2, "roster": {"entries": [{"playerId": 20, "lineupSlotId": 13}]}},
+        ]}
+        assert transformer.parse_lineup_slots(payload) == {10: 'PG', 11: 'UTIL', 12: 'BE', 20: 'IR'}
+
+    def test_skips_unknown_slots_and_missing_rosters(self, transformer):
+        payload = {"teams": [
+            {"id": 1},
+            {"id": 2, "roster": {"entries": [{"playerId": 20, "lineupSlotId": 99}, {"lineupSlotId": 0}]}},
+        ]}
+        assert transformer.parse_lineup_slots(payload) == {}
+        assert transformer.parse_lineup_slots(None) == {}
+
+
 class TestRawStandingsToTotals:
     def test_success(self, transformer):
         df = transformer.raw_standings_to_totals_df(_standings_payload())

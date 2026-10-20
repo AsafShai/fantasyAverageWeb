@@ -3,12 +3,12 @@ from typing import List, Dict, Optional
 from datetime import datetime, date
 from .base import Team
 from .stats import ShotChartStats, TeamAverageStats, RankingStats, SlotUsage
-from .player import Player
+from .player import Player, TeamRosterPlayer
 
 class TeamDetail(BaseModel):
     team: Team
     espn_url: str
-    players: Optional[List[Player]] = None
+    players: Optional[List[TeamRosterPlayer]] = None
     shot_chart: ShotChartStats
     raw_averages: TeamAverageStats
     ranking_stats: RankingStats
