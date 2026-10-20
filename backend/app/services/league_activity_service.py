@@ -10,6 +10,9 @@ request, his per-game box scores for the season:
 - a few batched calls return those players' per-game stats;
 - one call returns the NBA schedule, to know when each scoring period locks.
 
+The same per-game stats for the most-owned players form the pool each stint is
+valued against (stint_value): his z-score and rank over the same dates.
+
 A player belongs to a fantasy team for a scoring period if he was on it when
 that period's roster locked. ESPN's rosterLocktimeType decides when that is:
 the day's first tip-off (FIRSTGAME_SCORINGPERIOD) or the player's own game
@@ -38,10 +41,12 @@ from app.models.activity_models import (
     PickedUpAfter,
     PlayerStint,
     ReleasedPlayer,
+    StintValue,
     Trade,
     TradeSide,
 )
 from app.services.data_transformer import DataTransformer
+from app.services.stint_value import StintValuer
 from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY
 from app.utils.ssl_context import shared_ssl_context
 
@@ -60,6 +65,9 @@ ACTUAL_STATS = 0
 # More than the whole NBA player pool (~1,100), so one call covers every card.
 CARD_LIMIT = 3000
 STATS_BATCH = 50
+# Most-owned players whose game logs form the pool stints are ranked against;
+# comfortably more than the 300-player reference pool Player Rankings uses.
+VALUE_POOL_SIZE = 450
 # How soon after an uneven trade a no-drop pickup counts as filling the spot.
 OPEN_SPOT_WINDOW_DAYS = 3
 # Released players are listed only when the new team got some real use out of them.
@@ -200,7 +208,10 @@ class _Builder:
         season_over: bool,
         latest_period: int,
         lock_per_game: bool,
+        valuer: Optional[StintValuer] = None,
     ):
+        self.valuer = valuer
+        self._values: dict[tuple[int, int], Optional[StintValue]] = {}
         self.txs = [tx for tx in transactions if tx.get('status', 'EXECUTED') == 'EXECUTED']
         self.logs = game_logs
         self.sched = schedule
@@ -282,7 +293,16 @@ class _Builder:
         later = [x for x in self.stints_by_pid[s.pid] if x.acquired_at > s.acquired_at]
         return later[0] if later else None
 
-    def stint_model(self, s: _Stint) -> PlayerStint:
+    def _value(self, s: _Stint, played: int, totals: dict[str, float]) -> Optional[StintValue]:
+        # The same stint is modelled for the feed, its trade and the released list.
+        if self.valuer is None:
+            return None
+        key = (s.pid, s.acquired_at)
+        if key not in self._values:
+            self._values[key] = self.valuer.value(s.first_period, s.last_period, played, totals)
+        return self._values[key]
+
+    def stint_model(self, s: _Stint, valued: bool = True) -> PlayerStint:
         played, team_games, totals = self._games(s)
         if s.left_kind == 'TRADE':
             exit_, exit_trade = 'traded', self._trade_id(s.left_by)
@@ -314,6 +334,7 @@ class _Builder:
             exit=exit_,
             exit_trade_id=exit_trade,
             picked_up_after=picked_up,
+            value=self._value(s, played, totals) if valued else None,
         )
 
     # -- trades -------------------------------------------------------------
@@ -400,7 +421,7 @@ class _Builder:
             nxt = self._next_stint(s)
             if nxt is None or nxt.team == s.team:
                 continue
-            stint = self.stint_model(nxt)
+            stint = self.stint_model(nxt, valued=False)
             if stint.games_played < MIN_RELEASED_GAMES:
                 continue
             key = (s.pid, s.team)
@@ -426,8 +447,11 @@ def build_league_activity(
     names: Optional[dict[int, str]] = None,
     season_over: bool = False,
     lock_per_game: bool = False,
+    pool_logs: Optional[dict[int, list[GameLine]]] = None,
+    reverse_categories: Optional[set[str]] = None,
 ) -> LeagueActivity:
-    b = _Builder(transactions, game_logs, schedule, season_start, names or {}, season_over, latest_period, lock_per_game)
+    valuer = StintValuer(pool_logs, categories, reverse_categories or set(), latest_period) if pool_logs else None
+    b = _Builder(transactions, game_logs, schedule, season_start, names or {}, season_over, latest_period, lock_per_game, valuer)
     trades = b.trades()
     return LeagueActivity(
         season_id=season_id,
@@ -453,6 +477,7 @@ class _ActivityCache:
     def __init__(self):
         self.league: Optional[dict] = None
         self.cards: Optional[list[dict]] = None
+        self.pool_ids: list[int] = []
         self.cards_at = 0.0
         self.stats: dict[int, dict] = {}
         self.stats_at = 0.0
@@ -499,11 +524,12 @@ class LeagueActivityService:
         response.raise_for_status()
         return response.json()
 
-    async def _cards(self) -> list[dict]:
-        """Every player card with a transaction this season, in one call."""
+    async def _cards(self) -> tuple[list[dict], list[int]]:
+        """Every player card with a transaction this season, plus the ids of the
+        most-owned players (the valuation pool), in one call."""
         f = ('{"players":{"limit":%d,"sortPercOwned":{"sortPriority":1,"sortAsc":false}}}' % CARD_LIMIT)
-        data = await self._get([('view', 'kona_playercard')], f)
-        return [c for c in data.get('players', []) if c.get('transactions')]
+        players = (await self._get([('view', 'kona_playercard')], f)).get('players', [])
+        return [c for c in players if c.get('transactions')], [c['id'] for c in players[:VALUE_POOL_SIZE]]
 
     async def _stat_cards(self, ids: list[int]) -> list[dict]:
         sem = asyncio.Semaphore(FETCH_CONCURRENCY)
@@ -521,18 +547,21 @@ class LeagueActivityService:
         now = time.monotonic()
         if _cache.cards is None or now - _cache.cards_at >= CARDS_TTL_SECONDS:
             _cache.league = await self._get([('view', 'mSettings'), ('view', 'mTeam')])
-            _cache.cards = await self._cards()
+            _cache.cards, _cache.pool_ids = await self._cards()
             _cache.cards_at = now
         if _cache.schedule is None or now - _cache.schedule_at >= SCHEDULE_TTL_SECONDS:
             _cache.schedule = await self._get([('view', 'proTeamSchedules_wl')], url=self.season_url)
             _cache.schedule_at = now
-        ids = [c['id'] for c in _cache.cards]
+        ids = list(dict.fromkeys([c['id'] for c in _cache.cards] + _cache.pool_ids))
         missing = [i for i in ids if i not in _cache.stats]
         if now - _cache.stats_at >= STATS_TTL_SECONDS:
             missing, _cache.stats_at = ids, now
         if missing:
             for card in await self._stat_cards(missing):
                 _cache.stats[card['id']] = card
+            # A player ESPN returns nothing for isn't asked for again until the next stats refresh.
+            for i in missing:
+                _cache.stats.setdefault(i, {'id': i, 'player': {'stats': []}})
 
     async def close(self) -> None:
         if self._client is not None:
@@ -567,19 +596,24 @@ class LeagueActivityService:
             final = status.get('finalScoringPeriod') or latest
             roster_lock = ((league.get('settings') or {}).get('rosterSettings') or {}).get('rosterLocktimeType')
             transactions, names = merge_card_transactions(_cache.cards or [])
-            stat_cards = [_cache.stats[c['id']] for c in _cache.cards or [] if c['id'] in _cache.stats]
+            # Parsed once: the pool overlaps heavily with the traded players.
+            ids = dict.fromkeys([c['id'] for c in _cache.cards or []] + _cache.pool_ids)
+            logs = parse_game_logs([_cache.stats[i] for i in ids if i in _cache.stats], self.season_id)
+            transformer = DataTransformer()
             result = build_league_activity(
                 season_id=self.season_id,
                 transactions=transactions,
-                game_logs=parse_game_logs(stat_cards, self.season_id),
+                game_logs=logs,
                 schedule=parse_schedule(_cache.schedule or {}, first, min(latest, final)),
                 season_start=settings.season_start,
                 teams=parse_teams(league),
-                categories=DataTransformer().resolve_ranking_categories(league),
+                categories=transformer.resolve_ranking_categories(league),
                 latest_period=min(latest, final),
                 names=names,
                 season_over=latest > final,
                 lock_per_game=roster_lock == 'INDIVIDUAL_GAME',
+                pool_logs={i: logs[i] for i in _cache.pool_ids if i in logs},
+                reverse_categories=transformer.resolve_reverse_categories(league),
             )
             _cache.result, _cache.result_key = result, result_key
             logger.info(

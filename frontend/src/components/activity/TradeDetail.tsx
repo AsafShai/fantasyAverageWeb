@@ -22,7 +22,9 @@ import {
   type StatMode,
   type TradeOverrides,
 } from '../../utils/leagueActivity'
-import { Pill, SIDE_BAR, SIDE_PANEL, SideDot, StatModeToggle } from './shared'
+import InfoTip from '../InfoTip'
+import { Pill, SIDE_BAR, SIDE_PANEL, SideDot, StatModeToggle, ValueChips } from './shared'
+import { VALUE_EXPLAINER, VALUE_LEGEND, rankTone, signedZ, valueTitle } from './stintValue'
 import { teamAbbrev, teamName, type TeamLookup } from './teams'
 
 interface TradeDetailProps {
@@ -214,6 +216,7 @@ const TradeDetail = ({
                     </p>
                     {!row.openSpot && (
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <ValueChips stint={s} />
                         <StintCaveats row={row} />
                         <ExitPill row={row} trades={trades} teams={teams} seasonOver={seasonOver} onSelectTrade={onSelectTrade} />
                       </div>
@@ -224,6 +227,9 @@ const TradeDetail = ({
             </div>
           ))}
         </div>
+        {rows.some(r => r.some(row => row.stint.value)) && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">{VALUE_LEGEND}</p>
+        )}
       </section>
 
       <section className="space-y-3 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
@@ -270,7 +276,10 @@ const TradeDetail = ({
           </table>
         </div>
 
-        <h3 className="pt-2 font-semibold text-gray-900 dark:text-gray-100">By player</h3>
+        <h3 className="flex items-center gap-1.5 pt-2 font-semibold text-gray-900 dark:text-gray-100">
+          By player
+          <InfoTip title="Rank and Z-score" body={VALUE_EXPLAINER} />
+        </h3>
         <ul className="space-y-2 sm:hidden">
           {rows.flatMap((sideRowsForTeam, i) =>
             sideRowsForTeam.map(row => (
@@ -287,6 +296,9 @@ const TradeDetail = ({
                   </span>
                   <span className="shrink-0 text-xs tabular-nums">{row.stint.games_played} GP</span>
                 </div>
+                {row.stint.value && (
+                  <div className="mt-1 flex flex-wrap gap-1.5 not-italic"><ValueChips stint={row.stint} /></div>
+                )}
                 <dl className="mt-1.5 grid grid-cols-4 gap-x-2 gap-y-1 text-xs tabular-nums">
                   {categories.map(cat => (
                     <div key={cat} className="flex justify-between gap-1">
@@ -305,6 +317,8 @@ const TradeDetail = ({
               <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400">
                 <th className="px-2 py-1.5 text-left font-semibold">Player</th>
                 <th className="px-2 py-1.5 text-right font-semibold">GP</th>
+                <th className="px-2 py-1.5 text-right font-semibold" title={VALUE_EXPLAINER}>Rank</th>
+                <th className="px-2 py-1.5 text-right font-semibold" title={VALUE_EXPLAINER}>Z-score</th>
                 {categories.map(cat => (
                   <th key={cat} className="px-2 py-1.5 text-right font-semibold">{cat}</th>
                 ))}
@@ -324,6 +338,12 @@ const TradeDetail = ({
                       {!row.counted && <span className="ml-1 text-xs">not counted</span>}
                     </td>
                     <td className="px-2 py-1.5 text-right font-semibold">{row.stint.games_played}</td>
+                    <td className="px-2 py-1.5 text-right" title={valueTitle(row.stint)}>
+                      {row.stint.value ? (
+                        <span className={`rounded px-1.5 py-0.5 font-semibold ${rankTone(row.stint.value.rank)}`}>{row.stint.value.rank}</span>
+                      ) : '–'}
+                    </td>
+                    <td className="px-2 py-1.5 text-right" title={valueTitle(row.stint)}>{row.stint.value ? signedZ(row.stint.value.z) : '–'}</td>
                     {categories.map(cat => (
                       <td key={cat} className="px-2 py-1.5 text-right">
                         {formatCategory(categoryValue(stintLine(row.stint), cat, mode), cat, mode)}

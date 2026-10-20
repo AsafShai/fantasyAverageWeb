@@ -31,6 +31,16 @@ export interface PickedUpAfter {
   games_played: number
 }
 
+/** How a stint's per-game line ranks against the league over the same dates
+ * (z-scores the way Player Rankings scores, top-300 reference pool). */
+export interface StintValue {
+  rank: number
+  of: number
+  z: number
+  cat_z: Record<string, number>
+  cat_rank: Record<string, number>
+}
+
 export interface PlayerStint {
   player_id: number
   name: string
@@ -44,6 +54,7 @@ export interface PlayerStint {
   exit: StintExit
   exit_trade_id: string | null
   picked_up_after: PickedUpAfter | null
+  value?: StintValue | null
 }
 
 export interface OpenRosterSpot {
