@@ -472,14 +472,16 @@ def build_league_activity(
 
 class _ActivityCache:
     """Process-wide. League settings and transactions refresh every
-    CARDS_TTL_SECONDS, per-game stats every STATS_TTL_SECONDS, the schedule daily."""
+    CARDS_TTL_SECONDS, per-game stats every STATS_TTL_SECONDS, the schedule daily.
+    Per-game stats are kept parsed: ESPN's raw stat cards are several times
+    bigger and nothing else in them is read."""
 
     def __init__(self):
         self.league: Optional[dict] = None
         self.cards: Optional[list[dict]] = None
         self.pool_ids: list[int] = []
         self.cards_at = 0.0
-        self.stats: dict[int, dict] = {}
+        self.stats: dict[int, list[GameLine]] = {}
         self.stats_at = 0.0
         self.schedule: Optional[dict] = None
         self.schedule_at = 0.0
@@ -557,11 +559,10 @@ class LeagueActivityService:
         if now - _cache.stats_at >= STATS_TTL_SECONDS:
             missing, _cache.stats_at = ids, now
         if missing:
-            for card in await self._stat_cards(missing):
-                _cache.stats[card['id']] = card
+            _cache.stats.update(parse_game_logs(await self._stat_cards(missing), self.season_id))
             # A player ESPN returns nothing for isn't asked for again until the next stats refresh.
             for i in missing:
-                _cache.stats.setdefault(i, {'id': i, 'player': {'stats': []}})
+                _cache.stats.setdefault(i, [])
 
     async def close(self) -> None:
         if self._client is not None:
@@ -596,9 +597,8 @@ class LeagueActivityService:
             final = status.get('finalScoringPeriod') or latest
             roster_lock = ((league.get('settings') or {}).get('rosterSettings') or {}).get('rosterLocktimeType')
             transactions, names = merge_card_transactions(_cache.cards or [])
-            # Parsed once: the pool overlaps heavily with the traded players.
             ids = dict.fromkeys([c['id'] for c in _cache.cards or []] + _cache.pool_ids)
-            logs = parse_game_logs([_cache.stats[i] for i in ids if i in _cache.stats], self.season_id)
+            logs = {i: _cache.stats[i] for i in ids if i in _cache.stats}
             transformer = DataTransformer()
             result = build_league_activity(
                 season_id=self.season_id,
