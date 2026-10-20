@@ -15,9 +15,11 @@ import {
 import { Pill, SELECT_CLASS } from './shared'
 import { teamAbbrev, teamLookup, type TeamLookup } from './teams'
 
-// Chains in this league run long (17 trades when both sides are followed), so
-// the tree opens three trades deep and grows on request.
-const INITIAL_DEPTH = 3
+// Only a guard against runaway chains; real ones are a handful of trades deep.
+const MAX_DEPTH = 50
+// A tree up to this many players opens fully. A bigger one opens one level of
+// follow-up trades (what each player got was flipped for) and folds the rest.
+const AUTO_EXPAND_MAX_PLAYERS = 8
 
 interface TradeTreeProps {
   activity: LeagueActivity
@@ -37,6 +39,13 @@ function countStints(nodes: TreeStint[]): number {
   return nodes.reduce((n, { next }) => n + 1 + (next ? countStints(next.received) : 0), 0)
 }
 
+/** Follow-ups folded when a tree first opens: none for a small tree, every one
+ * below the first level for a bigger one. */
+function defaultCollapsed(root: TreeStint[], players: number): Set<string> {
+  if (players <= AUTO_EXPAND_MAX_PLAYERS) return new Set()
+  return new Set(root.flatMap(({ next }) => (next && !next.shownWith ? followUpKeys(next.received) : [])))
+}
+
 function followUpKeys(nodes: TreeStint[]): string[] {
   return nodes.flatMap(({ stint, next }) =>
     next && !next.shownWith ? [stintKey(stint), ...followUpKeys(next.received)] : [],
@@ -48,22 +57,23 @@ interface BranchProps {
   teams: TeamLookup
   teamId: number
   seasonOver: boolean
-  truncated: Set<string>
   collapsed: Set<string>
   onToggle: (key: string) => void
-  onExpand: () => void
   onSelectTrade: (id: string) => void
 }
 
 function Branch(props: BranchProps) {
-  const { nodes, teams, teamId, seasonOver, truncated, collapsed, onToggle, onExpand, onSelectTrade } = props
+  const { nodes, teams, teamId, seasonOver, collapsed, onToggle, onSelectTrade } = props
   const abbrev = teamAbbrev(teams, teamId)
   return (
     <ul className="space-y-1 border-l border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
       {nodes.map(({ stint: s, next }) => {
         const key = stintKey(s)
         const isCollapsed = collapsed.has(key)
-        const hidden = next && !truncated.has(next.trade.id) ? countStints(next.received) : 0
+        // Folded label: the players this trade brought back, and everyone
+        // further down the branch when that's more.
+        const direct = next ? next.received.length : 0
+        const hidden = next ? countStints(next.received) : 0
         return (
         <li key={key} className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
           <div className={`${NODE} border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800`}>
@@ -102,26 +112,12 @@ function Branch(props: BranchProps) {
                       {!next.shownWith && next.sentAlongside.length > 0 && `sent with ${next.sentAlongside.map(p => p.name).join(', ')}; `}
                       {next.shownWith ? `Same trade as ${next.shownWith} (shown above)` : <>{abbrev} got back
                       {isCollapsed
-                        ? truncated.has(next.trade.id)
-                          ? ' (hidden)'
-                          : ` ${hidden} ${hidden === 1 ? 'player' : 'players'} (hidden)`
+                        ? ` ${direct} ${direct === 1 ? 'player' : 'players'} (${hidden > direct ? `${hidden} in this branch, ` : ''}hidden)`
                         : ':'}</>}
                     </span>
                   </button>
                 </div>
-                {isCollapsed || next.shownWith ? null : truncated.has(next.trade.id) ? (
-                  <div className="mt-1 pl-3 sm:pl-5">
-                    <button
-                      type="button"
-                      onClick={onExpand}
-                      className="rounded-md border border-gray-300 px-2.5 py-1 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      Show what that turned into
-                    </button>
-                  </div>
-                ) : (
-                  <Branch {...props} nodes={next.received} />
-                )}
+                {!isCollapsed && !next.shownWith && <Branch {...props} nodes={next.received} />}
               </li>
             </ul>
           ) : (
@@ -164,11 +160,23 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
   const trades = activity.trades
   const trade = trades.find(t => t.id === tradeId) ?? trades[trades.length - 1]
   const follow = trade?.sides.some(s => s.team_id === teamId) ? (teamId as number) : trade?.sides[0]?.team_id
-  const [depth, setDepth] = useState(INITIAL_DEPTH)
-  // Follow-up trades the viewer folded away, for the tree currently shown.
-  const [collapsedState, setCollapsedState] = useState<{ tree: string; keys: Set<string> }>({ tree: '', keys: new Set() })
+  const tree = useMemo(
+    () => (trade && follow != null ? buildTradeTree(trades, trade.id, follow, MAX_DEPTH) : null),
+    [trades, trade, follow],
+  )
+  // Follow-up trades folded away for the tree currently shown; until the viewer
+  // toggles one, the size-based default applies.
+  const [collapsedState, setCollapsedState] = useState<{ tree: string; keys: Set<string> } | null>(null)
   const treeKey = `${trade?.id}:${follow}`
-  const collapsed = collapsedState.tree === treeKey ? collapsedState.keys : new Set<string>()
+  const collapsed = useMemo(
+    () =>
+      collapsedState?.tree === treeKey
+        ? collapsedState.keys
+        : tree
+          ? defaultCollapsed(tree.root, tree.stints)
+          : new Set<string>(),
+    [collapsedState, treeKey, tree],
+  )
   const setCollapsed = (keys: Set<string>) => setCollapsedState({ tree: treeKey, keys })
   const toggle = (key: string) => {
     const next = new Set(collapsed)
@@ -176,11 +184,6 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
     else next.add(key)
     setCollapsed(next)
   }
-
-  const tree = useMemo(
-    () => (trade && follow != null ? buildTradeTree(trades, trade.id, follow, depth) : null),
-    [trades, trade, follow, depth],
-  )
 
   if (!trade || follow == null || !tree) {
     return (
@@ -205,10 +208,7 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
             id="tree-trade"
             className={`${SELECT_CLASS} max-w-[16rem]`}
             value={trade.id}
-            onChange={e => {
-              setDepth(INITIAL_DEPTH)
-              onChange(e.target.value, follow)
-            }}
+            onChange={e => onChange(e.target.value, follow)}
           >
             {[...trades].reverse().map(t => (
               <option key={t.id} value={t.id}>
@@ -249,7 +249,7 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
         </dl>
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <p className="text-sm text-gray-600 tabular-nums dark:text-gray-400">
-            {tree.stints} players · {tree.games} GP for {abbrev}{tree.truncated.size > 0 && ' so far'}
+            {tree.stints} players · {tree.games} GP for {abbrev}
           </p>
           {allFollowUps.length > 0 && (
             <div className="flex gap-2">
@@ -284,10 +284,8 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
               teams={teams}
               teamId={follow}
               seasonOver={activity.season_over}
-              truncated={tree.truncated}
               collapsed={collapsed}
               onToggle={toggle}
-              onExpand={() => setDepth(d => d + INITIAL_DEPTH)}
               onSelectTrade={onSelectTrade}
             />
           </>
