@@ -186,6 +186,8 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
   }
   const abbrev = teamAbbrev(teams, follow)
   const allFollowUps = followUpKeys(tree.root)
+  const other = trade.sides.find(s => s.team_id !== follow)
+  const sent = other?.received ?? []
 
   return (
     <div className="space-y-4 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
@@ -262,20 +264,34 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
       </div>
 
       <div className="overflow-x-auto pb-1">
-        {tree.root.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{abbrev} received no players in this trade.</p>
-        ) : (
-          <Branch
-            nodes={tree.root}
-            teams={teams}
-            teamId={follow}
-            seasonOver={activity.season_over}
-            truncated={tree.truncated}
-            collapsed={collapsed}
-            onToggle={toggle}
-            onExpand={() => setDepth(d => d + INITIAL_DEPTH)}
-            onSelectTrade={onSelectTrade}
-          />
+        {/* The trade being followed is the root; what came back hangs under it. */}
+        <button
+          type="button"
+          onClick={() => onSelectTrade(trade.id)}
+          className={`${NODE} border-gray-300 bg-gray-50 text-left hover:border-blue-400 dark:border-gray-600 dark:bg-gray-700`}
+        >
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
+            Trade with {teamAbbrev(teams, other?.team_id ?? 0)} · {formatDay(trade.date)}
+          </span>
+          <span className="text-xs text-gray-600 dark:text-gray-300">
+            {abbrev} sent {sent.length ? sent.map(p => p.name).join(', ') : 'no players'}
+            {tree.root.length ? '; got:' : ' and got no players back.'}
+          </span>
+        </button>
+        {tree.root.length > 0 && (
+          <div className="mt-1 pl-3 sm:pl-5">
+            <Branch
+              nodes={tree.root}
+              teams={teams}
+              teamId={follow}
+              seasonOver={activity.season_over}
+              truncated={tree.truncated}
+              collapsed={collapsed}
+              onToggle={toggle}
+              onExpand={() => setDepth(d => d + INITIAL_DEPTH)}
+              onSelectTrade={onSelectTrade}
+            />
+          </div>
         )}
       </div>
     </div>

@@ -35,6 +35,24 @@ function renderTree() {
   return renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={1} onChange={vi.fn()} onSelectTrade={vi.fn()} />)
 }
 
+describe('TradeTree root', () => {
+  it('starts with the followed trade: who it was with, when, and what this side sent', async () => {
+    const user = userEvent.setup()
+    const onSelectTrade = vi.fn()
+    renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={1} onChange={vi.fn()} onSelectTrade={onSelectTrade} />)
+
+    const root = screen.getByRole('button', { name: /Trade with T2 · Jan 5/ })
+    expect(root).toHaveTextContent('T1 sent Player 90; got:')
+    await user.click(root)
+    expect(onSelectTrade).toHaveBeenCalledWith('t1')
+  })
+
+  it('names what the other side sent when following it', () => {
+    renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={2} onChange={vi.fn()} onSelectTrade={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /Trade with T1 · Jan 5/ })).toHaveTextContent('T2 sent Player 10, Player 11; got:')
+  })
+})
+
 describe('TradeTree collapsing', () => {
   it('folds a follow-up trade and everything under it, and unfolds it again', async () => {
     const user = userEvent.setup()
