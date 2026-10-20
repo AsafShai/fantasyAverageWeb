@@ -50,6 +50,12 @@ const TEAM_DETAIL_URL_SCHEMA = {
   order: enumParam(['asc', 'desc'] as const, 'asc'),
 }
 
+// On mobile, only names this long wrap onto a second line, and only between
+// words: hyphenated surnames (Alexander-Walker) get a non-breaking hyphen.
+const LONG_NAME_CHARS = 16
+const isLongName = (name: string) => name.length > LONG_NAME_CHARS
+const wrapFriendlyName = (name: string) => name.replaceAll('-', '\u2011')
+
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
   const navigate = useNavigate()
@@ -208,7 +214,7 @@ const TeamDetail = () => {
     day?: WeekScheduleDay
   }[] = [
     { key: 'lineup_slot', label: 'Slot', align: 'left', sortable: true },
-    { key: 'include', label: 'Include', align: 'center', sortable: false },
+    ...(!showSchedule ? [{ key: 'include', label: 'Include', align: 'center', sortable: false }] : []),
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
@@ -509,7 +515,7 @@ const TeamDetail = () => {
                   </button>
                 </div>
               )}
-              {FF_PROJECTIONS && (
+              {FF_PROJECTIONS && !showSchedule && (
                 <label className="order-3 flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none sm:order-1">
                   <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
                   Integer projections
@@ -607,6 +613,7 @@ const TeamDetail = () => {
                           <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-sky-400/15 dark:text-sky-300 dark:ring-sky-400/40" title="Active lineup slot">{player.lineup_slot}</span>
                         ) : (player.lineup_slot ?? '—')}
                       </td>
+                      {!showSchedule && (
                       <td className="px-4 py-3 whitespace-nowrap text-center">
                         <input
                           type="checkbox"
@@ -617,7 +624,8 @@ const TeamDetail = () => {
                           title={noData ? 'Excluded from average — no data for this range' : undefined}
                         />
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-r-gray-200"><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
+                      )}
+                      <td className={`px-4 py-3 ${isLongName(player.player_name) ? 'max-w-[38vw] whitespace-normal sm:max-w-none sm:whitespace-nowrap' : 'whitespace-nowrap'} text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-r-gray-200`}><PlayerNameLink name={wrapFriendlyName(player.player_name)} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
                       {showSchedule ? (
@@ -681,14 +689,16 @@ const TeamDetail = () => {
               })}
               <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0">
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
-                <td className="px-4 py-3 whitespace-nowrap text-center">
-                  <span className="text-blue-600">-</span>
-                </td>
+                {!showSchedule && (
+                  <td className="px-4 py-3 whitespace-nowrap text-center">
+                    <span className="text-blue-600">-</span>
+                  </td>
+                )}
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-blue-900 sticky left-0 z-10 bg-gradient-to-r from-blue-50 to-indigo-50 border-r border-r-gray-200">
                   {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">
-                  {includedPlayers === null ? visiblePlayers.length : includedPlayers.size} players
+                  {showSchedule || includedPlayers === null ? visiblePlayers.length : includedPlayers.size} players
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 {showSchedule ? (
