@@ -13,7 +13,8 @@ os.environ.update({
     "CORS_ORIGINS": "http://localhost:3000,http://localhost:5173",
     "ENVIRONMENT": "test",
     "LOG_LEVEL": "WARNING",
-    "PORT": "8000"
+    "PORT": "8000",
+    "LEAGUE_ACTIVITY_WARM": "false",
 })
 
 # Import after setting environment variables

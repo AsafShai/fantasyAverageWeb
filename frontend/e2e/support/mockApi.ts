@@ -21,6 +21,11 @@ export type MockResponse = unknown | ((route: Route) => Promise<void> | void)
 export const DEFAULT_API: Record<string, () => MockResponse> = {
   '/league/summary': () => fixture('league-summary'),
   '/league/today': () => fixture('today-hub'),
+  '/league/activity': () => fixture('league-activity'),
+  '/league/activity/latest': () => {
+    const { teams, moves } = fixture<{ teams: unknown[]; moves: unknown[] }>('league-activity')
+    return { teams, moves: moves.slice(0, 8) }
+  },
   '/rankings': () => fixture('rankings'),
   '/analytics/heatmap': () => fixture('heatmap'),
   '/players': () => fixture('players'),

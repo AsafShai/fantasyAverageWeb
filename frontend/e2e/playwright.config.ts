@@ -36,6 +36,7 @@ export default defineConfig({
       VITE_FF_DRAFT_PAGES: 'false',
       VITE_FF_DRAFT_STEALS_BUSTS: 'false',
       VITE_FF_SHARE_CARDS: 'true',
+      VITE_FF_LEAGUE_ACTIVITY: 'true',
     },
   },
 })

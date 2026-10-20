@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import Footer from './Footer'
 import { MyTeamSelect } from './MyTeamSelect'
 import CommandPalette from './CommandPalette'
+import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
 import { FF_FEATURE_STORE, FF_PROJECTIONS, FF_DRAFT_REPORT, FF_DRAFT_PAGES } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
@@ -421,6 +422,7 @@ const NavShell = ({ darkMode, setDarkMode, setSearchOpen }: NavShellProps) => {
         { path: '/', label: 'Today', icon: '📊' },
         { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
         { path: '/teams', label: 'Teams', icon: '👥' },
+        ...(FF_LEAGUE_ACTIVITY ? [{ path: '/activity', label: 'Activity', icon: '🔁' }] : []),
         ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
       ],
     },

@@ -18,6 +18,9 @@ CACHE_RULES: dict[str, str] = {
     # recomputed once a day (09:00-11:00 IL); body carries elapsed_ms, so it
     # rarely revalidates to 304, but max-age still spares repeat fetches
     "/api/estimator/results": "public, max-age=300",
+    # rebuilt at most every 5 minutes (server status TTL)
+    "/api/league/activity": "public, max-age=120, stale-while-revalidate=600",
+    "/api/league/activity/latest": "public, max-age=120, stale-while-revalidate=600",
 }
 
 

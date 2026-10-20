@@ -32,6 +32,7 @@ import logging
 from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
 from app.services.nba_matchup_service import get_shared_matchup_service
+from app.services.league_activity_service import get_league_activity_service
 from app.services import schedule_service
 from app.services import injury_service
 from app.services import estimator_scheduler
@@ -103,6 +104,8 @@ async def lifespan(app: FastAPI):
         background_tasks.spawn(adp_snapshot_scheduler.start_scheduler(), name="adp-snapshot-scheduler")
     else:
         logger.info("ADP snapshot scheduler disabled via ADP_SCHEDULER_ENABLED=false")
+    if settings.league_activity_warm:
+        background_tasks.spawn(get_league_activity_service().warm(), name="league-activity-warm")
     yield
     # Shutdown
     await background_tasks.cancel_all()
@@ -111,6 +114,7 @@ async def lifespan(app: FastAPI):
         await data_provider.close()
         await NBAStatsService().close()
         await get_shared_matchup_service().close()
+        await get_league_activity_service().close()
         logger.info("Closed httpx client connections")
     except Exception as e:
         logger.error(f"Error during shutdown cleanup: {e}")

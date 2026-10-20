@@ -2,6 +2,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
+import type { LeagueActivity, LatestMoves } from '../../types/activity';
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
@@ -137,6 +138,14 @@ export const fantasyApi = createApi({
       query: () => '/league/draft-report',
       keepUnusedDataFor: 3600,
     }),
+    getLeagueActivity: builder.query<LeagueActivity, void>({
+      query: () => '/league/activity',
+      keepUnusedDataFor: 300,
+    }),
+    getLatestMoves: builder.query<LatestMoves, number | void>({
+      query: (limit) => ({ url: '/league/activity/latest', params: { limit: limit ?? 8 } }),
+      keepUnusedDataFor: 300,
+    }),
     getAdp: builder.query<AdpResponse, AdpQueryArgs | void>({
       query: (args) => {
         const a = args ?? {}
@@ -248,6 +257,8 @@ export const fantasyApi = createApi({
 });
 
 export const {
+  useGetLeagueActivityQuery,
+  useGetLatestMovesQuery,
   useGetRankingsQuery,
   useGetTeamDetailQuery,
   useGetLeagueSummaryQuery,
