@@ -24,10 +24,10 @@ PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
 # _fetch_lock for one request apiece. Only a successful ESPN answer (200/304)
 # starts the window, so failures and the DB fallback keep retrying ESPN.
 TOTALS_TTL_SECONDS = 30
-# Lineups move at most a few times a day; this only has to outlast the team
-# detail route's own 60s response cache so a click-through of every team
-# shares one mRoster round trip.
-LINEUP_SLOTS_TTL_SECONDS = 120
+# Kept short so a lineup move on ESPN shows up quickly: past the TTL the
+# request is an ETag revalidation, and ESPN answers an unchanged roster with
+# an empty 304, so a short window costs almost nothing.
+LINEUP_SLOTS_TTL_SECONDS = 30
 
 
 class DataProvider:
