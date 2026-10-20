@@ -203,9 +203,9 @@ const TeamDetail = () => {
     sortable: boolean
     day?: WeekScheduleDay
   }[] = [
+    { key: 'lineup_slot', label: 'Slot', align: 'left', sortable: true },
     { key: 'include', label: 'Include', align: 'center', sortable: false },
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
-    { key: 'lineup_slot', label: 'Slot', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
     ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: true }] : statColumns),
@@ -575,6 +575,11 @@ const TeamDetail = () => {
                 return (
                   <React.Fragment key={idx}>
                     <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {player.lineup_slot === 'IR' ? (
+                          <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200" title="Injured reserve">IR</span>
+                        ) : (player.lineup_slot ?? '—')}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap text-center">
                         <input
                           type="checkbox"
@@ -586,7 +591,6 @@ const TeamDetail = () => {
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-r-gray-200"><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.lineup_slot ?? '—'}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
                       {showSchedule ? (
@@ -649,6 +653,7 @@ const TeamDetail = () => {
                 )
               })}
               <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0">
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 <td className="px-4 py-3 whitespace-nowrap text-center">
                   <span className="text-blue-600">-</span>
                 </td>
@@ -658,7 +663,6 @@ const TeamDetail = () => {
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">
                   {includedPlayers === null ? visiblePlayers.length : includedPlayers.size} players
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 {showSchedule ? (
                   <>
