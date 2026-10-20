@@ -11,7 +11,8 @@ import {
   perGameSummary,
   type TreeStint,
 } from '../../utils/leagueActivity'
-import { Pill, SELECT_CLASS } from './shared'
+import { Pill, SELECT_CLASS, ValueChips } from './shared'
+import { VALUE_EXPLAINER } from './stintValue'
 import { teamAbbrev, teamLookup, type TeamLookup } from './teams'
 
 // Only a guard against runaway chains; real ones are a handful of trades deep.
@@ -78,6 +79,7 @@ function Branch(props: BranchProps) {
           <div className={`${NODE} border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800`}>
             <span className="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900 dark:text-gray-100">
               <PlayerNameLink name={s.name} playerId={s.player_id} className="-my-1 inline-block py-1 hover:underline" />
+              <ValueChips stint={s} />
               {s.games_played < SMALL_SAMPLE_GAMES ? <Pill tone="warn">Small sample</Pill> : missedGames(s) && <Pill tone="warn">Missed games</Pill>}
             </span>
             <span className="text-xs text-gray-600 tabular-nums dark:text-gray-300">
@@ -249,7 +251,7 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
           </button>
           <InfoTip
             title="Trade tree"
-            body={`Follows the players ${abbrev} got in this trade. When one was traded on, the branch continues with what came back. Stats count only games played for ${abbrev}.`}
+            body={`Follows the players ${abbrev} got in this trade. When one was traded on, the branch continues with what came back. Stats count only games played for ${abbrev}. ${VALUE_EXPLAINER}`}
           />
         </h2>
         {/* Both sides of the trade, before the tree follows what came back. */}

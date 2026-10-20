@@ -322,11 +322,13 @@ class TestServiceCaching:
         assert sorted(calls) == ['proTeamSchedules_wl', 'stats']
 
     @pytest.mark.asyncio
-    async def test_only_players_with_transactions_get_stats(self):
+    async def test_players_with_transactions_and_the_value_pool_get_stats(self, monkeypatch):
+        monkeypatch.setattr(las, 'VALUE_POOL_SIZE', 1)
         svc, _ = self.service()
         await svc.get_activity()
         filters = [c.args[1] for c in svc._get.call_args_list if len(c.args) > 1 and c.args[1]]
         stats_filter = next(f for f in filters if 'filterIds' in f)
+        # Card 10 has moves and is also the most-owned; 99 has neither role.
         assert '"value":[10]' in stats_filter.replace(' ', '')
 
     @pytest.mark.asyncio

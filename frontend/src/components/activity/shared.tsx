@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import type { MoveKind } from '../../types/activity'
+import type { MoveKind, PlayerStint } from '../../types/activity'
 import type { StatMode } from '../../utils/leagueActivity'
+import { rankTone, signedZ, valueTitle } from './stintValue'
 
 // The two sides of a trade. Validated as a categorical pair (light and dark)
 // so they stay distinct for color-blind viewers; every use also carries a label.
@@ -72,3 +73,24 @@ export function StatModeToggle({ mode, onChange }: { mode: StatMode; onChange: (
 
 export const SELECT_CLASS =
   'rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100'
+
+const CHIP = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap tabular-nums'
+
+/** Rank and z-score of a stint against the league over the same dates, as two labeled pills. */
+export function ValueChips({ stint }: { stint: PlayerStint }) {
+  const v = stint.value
+  if (!v) return null
+  const title = valueTitle(stint)
+  return (
+    <>
+      <span title={title} className={`${CHIP} ${rankTone(v.rank)}`}>
+        <span className="font-normal opacity-80">Rank</span>
+        <span className="font-semibold">{v.rank}</span>
+      </span>
+      <span title={title} className={`${CHIP} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200`}>
+        <span className="font-normal opacity-80">Z-score</span>
+        <span className="font-semibold">{signedZ(v.z)}</span>
+      </span>
+    </>
+  )
+}

@@ -40,6 +40,17 @@ class PickedUpAfter(BaseModel):
     games_played: int
 
 
+class StintValue(BaseModel):
+    """How a stint's per-game line ranks against the league's player pool over
+    the same scoring periods, scored the way Player Rankings scores (z-scores,
+    top-300 reference pool, percentages weighted by attempts)."""
+    rank: int
+    of: int
+    z: float
+    cat_z: dict[str, float]
+    cat_rank: dict[str, int]
+
+
 class PlayerStint(BaseModel):
     """A player's time on one fantasy roster. Stats are raw totals keyed by
     category code (PTS, REB, FGM, FGA, ...) over the days he was on that roster;
@@ -57,6 +68,7 @@ class PlayerStint(BaseModel):
     exit: StintExit
     exit_trade_id: Optional[str] = None
     picked_up_after: Optional[PickedUpAfter] = None
+    value: Optional[StintValue] = None
 
 
 class OpenRosterSpot(BaseModel):
