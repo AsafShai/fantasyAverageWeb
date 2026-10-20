@@ -125,6 +125,19 @@ describe('League Activity page', () => {
     expect(screen.getByText(/DOR picked him up Mar 30/)).toBeInTheDocument()
   })
 
+  it('opens the tree on my side when my team was in the trade', async () => {
+    localStorage.setItem('fw:myTeam.id', '8')
+    const user = userEvent.setup()
+    renderPage(`/activity?tab=tree&trade=${fixture.trades[0].id}`)
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: /DOR ⇄ ASAF · Mar 17/ })).toBeInTheDocument())
+    const follow = screen.getByRole('group', { name: 'Follow' })
+    expect(within(follow).getByRole('button', { name: /DOR/ })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(within(follow).getByRole('button', { name: /ASAF/ }))
+    expect(screen.getByRole('heading', { name: /ASAF ⇄ DOR · Mar 17/ })).toBeInTheDocument()
+  })
+
   it('lists released players who played elsewhere', async () => {
     renderPage('/activity?tab=released')
     await waitFor(() => expect(screen.getByText('Released players who played elsewhere')).toBeInTheDocument())

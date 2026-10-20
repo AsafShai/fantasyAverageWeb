@@ -57,6 +57,33 @@ describe('TradeTree root', () => {
   })
 })
 
+describe('TradeTree side switch', () => {
+  it('shows both teams as buttons and switches sides', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={1} onChange={onChange} onSelectTrade={vi.fn()} />)
+
+    const follow = screen.getByRole('group', { name: 'Follow' })
+    expect(within(follow).getByRole('button', { name: 'T1' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(follow).getByRole('button', { name: 'T2' })).toHaveAttribute('aria-pressed', 'false')
+    await user.click(within(follow).getByRole('button', { name: 'T2' }))
+    expect(onChange).toHaveBeenCalledWith('t1', 2)
+  })
+
+  it('starts on the first team when no side is asked for and my team is not in the trade', () => {
+    renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={null} onChange={vi.fn()} onSelectTrade={vi.fn()} />)
+    expect(screen.getByRole('heading', { name: /T1 ⇄ T2/ })).toBeInTheDocument()
+  })
+
+  it('lets the default side apply again when another trade is picked', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={2} onChange={onChange} onSelectTrade={vi.fn()} />)
+    await user.selectOptions(screen.getByLabelText('Trade'), 't3')
+    expect(onChange).toHaveBeenCalledWith('t3', 0)
+  })
+})
+
 describe('TradeTree collapsing', () => {
   it('folds a follow-up trade and everything under it, and unfolds it again', async () => {
     const user = userEvent.setup()

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { LeagueActivity } from '../../types/activity'
 import { useMyTeam } from '../../context/MyTeamContext'
-import { fantasyTeamOptionLabel } from '../MyTeamMark'
 import PlayerNameLink from '../PlayerNameLink'
 import InfoTip from '../InfoTip'
 import {
@@ -155,11 +154,14 @@ function Branch(props: BranchProps) {
 }
 
 const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: TradeTreeProps) => {
-  const { isMyTeam } = useMyTeam()
+  const { myTeamId } = useMyTeam()
   const teams = useMemo(() => teamLookup(activity.teams), [activity.teams])
   const trades = activity.trades
   const trade = trades.find(t => t.id === tradeId) ?? trades[trades.length - 1]
-  const follow = trade?.sides.some(s => s.team_id === teamId) ? (teamId as number) : trade?.sides[0]?.team_id
+  // The side asked for in the URL; otherwise my team's side when it was in the
+  // trade (usually the question), otherwise the first team.
+  const inTrade = (id: number | null) => id != null && !!trade?.sides.some(s => s.team_id === id)
+  const follow = inTrade(teamId) ? (teamId as number) : inTrade(myTeamId) ? (myTeamId as number) : trade?.sides[0]?.team_id
   const tree = useMemo(
     () => (trade && follow != null ? buildTradeTree(trades, trade.id, follow, MAX_DEPTH) : null),
     [trades, trade, follow],
@@ -208,7 +210,7 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
             id="tree-trade"
             className={`${SELECT_CLASS} max-w-[16rem]`}
             value={trade.id}
-            onChange={e => onChange(e.target.value, follow)}
+            onChange={e => onChange(e.target.value, 0)}
           >
             {[...trades].reverse().map(t => (
               <option key={t.id} value={t.id}>
@@ -217,16 +219,26 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2">
-          Follow
-          <select id="tree-team" className={SELECT_CLASS} value={follow} onChange={e => onChange(trade.id, Number(e.target.value))}>
+        <div className="flex items-center gap-2">
+          <span id="tree-follow-label">Follow</span>
+          <div role="group" aria-labelledby="tree-follow-label" className="flex overflow-hidden rounded-lg border border-gray-300 dark:border-gray-600">
             {trade.sides.map(s => (
-              <option key={s.team_id} value={s.team_id}>
-                {fantasyTeamOptionLabel(teams.get(s.team_id)?.name ?? abbrev, isMyTeam(s.team_id))}
-              </option>
+              <button
+                key={s.team_id}
+                type="button"
+                aria-pressed={s.team_id === follow}
+                title={teams.get(s.team_id)?.name}
+                onClick={() => onChange(trade.id, s.team_id)}
+                className={`min-w-[4.5rem] px-3 py-1.5 font-medium ${
+                  s.team_id === follow ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                }`}
+              >
+                {teamAbbrev(teams, s.team_id)}
+                {s.team_id === myTeamId && <span className="ml-1 text-[10px] font-semibold uppercase opacity-80">you</span>}
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
       </div>
 
       {/* The followed trade is the title; what came back hangs under it. */}
