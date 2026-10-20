@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test'
+import { fixture } from './support/mockApi'
 
 // League Activity (FF_LEAGUE_ACTIVITY), against a trimmed copy of the real
 // 2025-26 response: team 1 (ASAF) and team 8 (DOR) traded on Mar 17, and
@@ -21,7 +22,9 @@ const tableRow = (page: Page, cat: string) =>
 test('Activity feed lists moves, highlights my team and filters by type', async ({ page }) => {
   await page.goto('/activity')
   await expect(page.getByRole('heading', { level: 1, name: 'League Activity' })).toBeVisible()
-  await expect(page.getByText(/49 moves · .* 19 trades/)).toBeVisible()
+  const { moves } = fixture<{ moves: { kind: string }[] }>('league-activity')
+  const trades = moves.filter((m) => m.kind === 'trade').length
+  await expect(page.getByText(new RegExp(`^${moves.length} moves · .* ${trades} trades$`))).toBeVisible()
   await expect(page.locator('li[data-mine]').first()).toBeVisible()
 
   await page.getByLabel('Type').selectOption('trade')

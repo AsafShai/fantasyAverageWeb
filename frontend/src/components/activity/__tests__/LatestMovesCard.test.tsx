@@ -14,7 +14,8 @@ describe('LatestMovesCard', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('shows the latest moves and links to the full page', async () => {
-    const fetchMock = stub({ teams: fixture.teams, moves: fixture.moves.slice(0, 8) })
+    const trade = fixture.moves.find(m => m.kind === 'trade')!
+    const fetchMock = stub({ teams: fixture.teams, moves: [trade, ...fixture.moves.filter(m => m !== trade).slice(0, 7)] })
     renderWithProviders(<LatestMovesCard />)
 
     await waitFor(() => expect(screen.getByText('ASAF ⇄ DOR')).toBeInTheDocument())

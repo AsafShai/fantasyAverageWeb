@@ -42,7 +42,7 @@ describe('League Activity page', () => {
 
   it('lists every move with counts and highlights my team', async () => {
     renderPage()
-    await waitFor(() => expect(screen.getByText(/12 moves/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(new RegExp(`^${fixture.moves.length} moves`))).toBeInTheDocument())
     expect(screen.getByText(/1 trades/)).toBeInTheDocument()
 
     const tradeRow = screen.getByText('ASAF ⇄ DOR').closest('li') as HTMLElement
@@ -53,11 +53,11 @@ describe('League Activity page', () => {
   it('filters the feed by type', async () => {
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(screen.getByText(/12 moves/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(new RegExp(`^${fixture.moves.length} moves`))).toBeInTheDocument())
 
     await user.selectOptions(screen.getByLabelText('Type'), 'trade')
     expect(screen.getAllByRole('listitem').filter(li => li.textContent?.includes('⇄'))).toHaveLength(1)
-    expect(screen.queryByText('Oscar Tshiebwe')).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Added$/)).not.toBeInTheDocument()
   })
 
   it('shows what each side got, with GP, and lets me leave a player out', async () => {
@@ -126,11 +126,11 @@ describe('League Activity page', () => {
   it('lists released players who played elsewhere', async () => {
     renderPage('/activity?tab=released')
     await waitFor(() => expect(screen.getByText('Released players who played elsewhere')).toBeInTheDocument())
-    // Same player as a phone card and a desktop table row; CSS shows one.
-    const [card, tableLink] = screen.getAllByRole('link', { name: 'John Collins' })
-    expect(card.closest('li')).toHaveTextContent(/Released by ASAF.*picked up by DOR/)
-    const row = tableLink.closest('tr') as HTMLElement
-    expect(within(row).getByText(/^ASAF/)).toBeInTheDocument()
+    // Each released player is both a phone card and a desktop table row; CSS shows one.
+    const links = screen.getAllByRole('link', { name: 'John Collins' })
+    const card = links.map(l => l.closest('li')).find(li => li && /Released by ASAF/.test(li.textContent ?? ''))
+    expect(card).toHaveTextContent(/Released by ASAF.*picked up by DOR/)
+    const row = links.map(l => l.closest('tr')).find(tr => tr && within(tr).queryByText(/^ASAF/)) as HTMLElement
     expect(within(row).getByText(/^DOR/)).toBeInTheDocument()
   })
 
