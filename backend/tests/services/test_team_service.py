@@ -76,6 +76,7 @@ class TestTeamService:
         )
         team_service.data_provider.get_players_df.return_value = team_service_players_df
         team_service.data_provider.get_slot_usage.return_value = {}
+        team_service.data_provider.get_lineup_slots.return_value = {}
         team_service.response_builder.build_players_list.return_value = []
         team_service.response_builder.build_team_detail_response.return_value = expected_team_detail
         from app.utils.constants import RANKING_CATEGORIES
@@ -108,6 +109,7 @@ class TestTeamService:
         )
         team_service.data_provider.get_players_df.return_value = team_service_players_df
         team_service.data_provider.get_slot_usage.return_value = {}
+        team_service.data_provider.get_lineup_slots.return_value = {}
         agg_df = pd.DataFrame([{
             'player_id': 1, 'player_name': 'Player A', 'gp': 2,
             'pts': 50.0, 'reb': 10.0, 'ast': 6.0, 'stl': 2.0, 'blk': 1.0,
@@ -255,6 +257,7 @@ class TestTeamServiceResponseBuilding:
             )
             service.data_provider.get_players_df.return_value = team_service_players_df
             service.data_provider.get_slot_usage.return_value = {}
+            service.data_provider.get_lineup_slots.return_value = {}
             service.data_provider.get_data_date = MagicMock(return_value=None)
             service.data_provider.db_service.aggregate_player_games = AsyncMock(
                 return_value=(pd.DataFrame(), None, None)
@@ -291,6 +294,18 @@ class TestTeamServiceResponseBuilding:
         assert hasattr(team_detail, 'raw_averages'), "Should have raw_averages"
         assert hasattr(team_detail, 'ranking_stats'), "Should have ranking_stats"
     
+    @pytest.mark.asyncio
+    async def test_get_team_detail_sets_lineup_slot(self, response_building_team_service, team_service_players_df):
+        """Each roster player carries the slot ESPN has them in."""
+        players_df = team_service_players_df.assign(player_id=[101, 102, 103, 104, 105])
+        response_building_team_service.data_provider.get_players_df.return_value = players_df
+        response_building_team_service.data_provider.get_lineup_slots.return_value = {101: 'PG', 105: 'BE'}
+
+        team_detail = await response_building_team_service.get_team_detail(1)
+
+        slots = {p.player_id: p.lineup_slot for p in team_detail.players}
+        assert slots == {101: 'PG', 102: None}
+
     @pytest.mark.asyncio
     async def test_get_team_players_response_building(self, response_building_team_service):
         """Integration test: Verify real TeamPlayers response building"""

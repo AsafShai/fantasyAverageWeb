@@ -1,9 +1,10 @@
 import { Outlet, Link, useLocation } from 'react-router'
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Footer from './Footer'
 import { MyTeamSelect } from './MyTeamSelect'
 import CommandPalette from './CommandPalette'
-import { FF_PLAYER_RANKINGS, FF_FEATURE_STORE, FF_PROJECTIONS, FF_NAV_REORG, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_TRENDS, FF_MINIGAMES, FF_GLOBAL_SEARCH, FF_SCHEDULE, FF_TODAY_HUB } from '../config/featureFlags'
+import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
+import { FF_FEATURE_STORE, FF_PROJECTIONS, FF_DRAFT_REPORT, FF_DRAFT_PAGES } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
 import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
@@ -50,7 +51,6 @@ const prefetchRoute = (path: string) => {
 
 function useGlobalSearchShortcut(setSearchOpen: (open: boolean) => void) {
   useEffect(() => {
-    if (!FF_GLOBAL_SEARCH) return
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       const isTyping =
@@ -74,7 +74,6 @@ const SearchIcon = () => (
 )
 
 const SearchButton = ({ onClick }: { onClick: () => void }) => {
-  if (!FF_GLOBAL_SEARCH) return null
   return (
     <button
       type="button"
@@ -92,13 +91,12 @@ const SearchButton = ({ onClick }: { onClick: () => void }) => {
 }
 
 const MobileSearchIconButton = ({ onClick }: { onClick: () => void }) => {
-  if (!FF_GLOBAL_SEARCH) return null
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label="Search"
-      className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
     >
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.6" />
@@ -109,11 +107,7 @@ const MobileSearchIconButton = ({ onClick }: { onClick: () => void }) => {
 }
 
 const Layout = () => {
-  const location = useLocation()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [openGroup, setOpenGroup] = useState<string | null>(null)
-  const [mobileOpenGroup, setMobileOpenGroup] = useState<string | null>(null)
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark'
   })
@@ -130,164 +124,15 @@ const Layout = () => {
     }
   }, [darkMode])
 
-  const navItems = [
-    { path: '/', label: FF_TODAY_HUB ? 'Today' : 'Dashboard', icon: '📊' },
-    { path: '/teams', label: 'Teams', icon: '👥' },
-    { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
-    { path: '/shots', label: 'Shots', icon: '🎯' },
-    { path: '/analytics', label: 'Analytics', icon: '📈' },
-    { path: '/estimator', label: 'Estimator', icon: '🔮' },
-    { path: '/players', label: 'Players', icon: '⛹️' },
-    { path: '/injuries', label: 'Injuries', icon: '🩺' },
-    { path: '/trade', label: 'Trade', icon: '🔄' },
-    { path: '/nba-teams', label: 'NBA', icon: '🏀' },
-    ...(FF_MINIGAMES ? [{ path: '/minigames', label: 'Minigames', icon: '🎮' }] : []),
-    ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
-    ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
-    ...(FF_PROJECTIONS ? [{ path: '/projections', label: 'Projections', icon: '🔭' }] : []),
-    ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
-    ...(FF_TRENDS ? [{ path: '/trends', label: 'Trends', icon: '📈' }] : []),
-  ]
-
-  const closeMobileMenu = () => {
-    setMobileMenuOpen(false)
-    setMobileOpenGroup(null)
-  }
-
-  if (FF_NAV_REORG) {
-    return (
-      <>
-        {FF_GLOBAL_SEARCH && <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />}
-        <ReorgLayout darkMode={darkMode} setDarkMode={setDarkMode} setSearchOpen={setSearchOpen} />
-      </>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex flex-col">
-      {FF_GLOBAL_SEARCH && <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />}
-      <nav className="sticky top-0 z-40 bg-white dark:bg-gray-900 shadow-lg border-b border-gray-200 dark:border-gray-700">
-        <div className="w-full px-3">
-          <div className="flex items-center justify-between h-14 gap-2">
-            <h1 className="text-sm font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent whitespace-nowrap shrink-0">
-              🏀 Fantasy League
-            </h1>
-
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-0.5 min-w-0 overflow-x-auto">
-              {navItems.map((item) => (
-                <Fragment key={item.path}>
-                  <Link
-                    to={item.path}
-                    onMouseEnter={() => prefetchRoute(item.path)}
-                    onTouchStart={() => prefetchRoute(item.path)}
-                    className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-200 ${
-                      location.pathname === item.path
-                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
-                    }`}
-                    title={item.label}
-                  >
-                    <span className="text-xl xl:text-sm">{item.icon}</span>
-                    <span className="hidden xl:inline">{item.label}</span>
-                  </Link>
-                  {item.path === '/players' && FF_DRAFT_PAGES && (
-                    <DesktopNavGroup
-                      group={DRAFT_NAV_GROUP}
-                      openKey={openGroup}
-                      setOpenKey={setOpenGroup}
-                      isActive={DRAFT_NAV_GROUP.items.some((d) => d.path === location.pathname)}
-                    />
-                  )}
-                </Fragment>
-              ))}
-              <div className="mx-3 h-6 w-0.5 bg-gray-300 dark:bg-gray-500 shrink-0 rounded-full" />
-              <MyTeamSelect />
-              <SearchButton onClick={() => setSearchOpen(true)} />
-              <button
-                onClick={() => setDarkMode(d => !d)}
-                className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
-                aria-label="Toggle dark mode"
-                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                <span className="text-sm">{darkMode ? '☀️' : '🌙'}</span>
-              </button>
-            </div>
-
-            {/* Mobile: search + dark toggle + hamburger */}
-            <div className="md:hidden flex items-center gap-1">
-              <MobileSearchIconButton onClick={() => setSearchOpen(true)} />
-              <button
-                onClick={() => setDarkMode(d => !d)}
-                className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                aria-label="Toggle dark mode"
-              >
-                <span className="text-base">{darkMode ? '☀️' : '🌙'}</span>
-              </button>
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all"
-                aria-expanded={mobileMenuOpen}
-                aria-label="Toggle navigation menu"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                  {mobileMenuOpen ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                  )}
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Mobile Navigation Menu */}
-          {mobileMenuOpen && (
-            <div className="md:hidden pb-4">
-              <MyTeamSelect fullWidth onNavigate={closeMobileMenu} />
-              <div className="flex flex-col space-y-1">
-                {navItems.map((item) => (
-                  <Fragment key={item.path}>
-                    <Link
-                      to={item.path}
-                      onClick={closeMobileMenu}
-                      onTouchStart={() => prefetchRoute(item.path)}
-                      className={`inline-flex items-center px-4 py-3 rounded-md text-base font-medium transition-all duration-200 ${
-                        location.pathname === item.path
-                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shadow-sm'
-                          : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <span className="mr-3 text-xl">{item.icon}</span>
-                      {item.label}
-                    </Link>
-                    {item.path === '/players' && FF_DRAFT_PAGES && (
-                      <MobileNavGroup
-                        group={DRAFT_NAV_GROUP}
-                        openKey={mobileOpenGroup}
-                        setOpenKey={setMobileOpenGroup}
-                        isActive={DRAFT_NAV_GROUP.items.some((d) => d.path === location.pathname)}
-                        onNavigate={closeMobileMenu}
-                      />
-                    )}
-                  </Fragment>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </nav>
-
-      <main className="py-8 flex-1">
-        <Outlet />
-      </main>
-
-      <Footer />
-    </div>
+    <>
+      <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+      <NavShell darkMode={darkMode} setDarkMode={setDarkMode} setSearchOpen={setSearchOpen} />
+    </>
   )
 }
 
-interface ReorgLayoutProps {
+interface NavShellProps {
   darkMode: boolean
   setDarkMode: React.Dispatch<React.SetStateAction<boolean>>
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
@@ -346,6 +191,9 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // True while the menu is open only because the pointer hovered the group, so the
+  // click that usually follows the hover keeps it open instead of toggling it shut.
+  const openedByHoverRef = useRef(false)
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const isOpen = openKey === group.key
 
@@ -372,7 +220,16 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
     }, 150)
   }
 
+  const handleGroupMouseEnter = () => {
+    if (!isOpen) openedByHoverRef.current = true
+    openMenu()
+  }
+
   useEffect(() => () => clearCloseTimeout(), [])
+
+  useEffect(() => {
+    if (!isOpen) openedByHoverRef.current = false
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -439,7 +296,7 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
     <div
       ref={groupRef}
       className="relative h-14 flex items-center"
-      onMouseEnter={openMenu}
+      onMouseEnter={handleGroupMouseEnter}
       onMouseLeave={scheduleCloseMenu}
     >
       <button
@@ -449,7 +306,9 @@ const DesktopNavGroup = ({ group, openKey, setOpenKey, isActive }: DesktopNavGro
         aria-expanded={isOpen}
         onClick={() => {
           clearCloseTimeout()
-          setOpenKey(isOpen ? null : group.key)
+          const keepOpen = isOpen && openedByHoverRef.current
+          openedByHoverRef.current = false
+          setOpenKey(isOpen && !keepOpen ? null : group.key)
         }}
         onKeyDown={handleButtonKeyDown}
         className={desktopItemClass(isActive)}
@@ -548,7 +407,7 @@ const MobileNavGroup = ({ group, openKey, setOpenKey, isActive, onNavigate }: Mo
   )
 }
 
-const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps) => {
+const NavShell = ({ darkMode, setDarkMode, setSearchOpen }: NavShellProps) => {
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openGroup, setOpenGroup] = useState<string | null>(null)
@@ -560,9 +419,10 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
       label: 'League',
       icon: '👥',
       items: [
-        ...(FF_TODAY_HUB ? [{ path: '/', label: 'Today', icon: '📊' }] : []),
+        { path: '/', label: 'Today', icon: '📊' },
         { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
         { path: '/teams', label: 'Teams', icon: '👥' },
+        ...(FF_LEAGUE_ACTIVITY ? [{ path: '/activity', label: 'Activity', icon: '🔁' }] : []),
         ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
       ],
     },
@@ -572,7 +432,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
       icon: '⛹️',
       items: [
         { path: '/players', label: 'Players', icon: '⛹️' },
-        ...(FF_PLAYER_RANKINGS ? [{ path: '/player-rankings', label: 'Player Rankings', icon: '📋' }] : []),
+        { path: '/player-rankings', label: 'Player Rankings', icon: '📋' },
       ],
     },
     ...(FF_DRAFT_PAGES ? [DRAFT_NAV_GROUP] : []),
@@ -582,7 +442,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
       icon: '📈',
       items: [
         { path: '/analytics', label: 'League Analytics', icon: '📈' },
-        ...(FF_TRENDS ? [{ path: '/trends', label: 'Player Trends', icon: '📉' }] : []),
+        { path: '/trends', label: 'Player Trends', icon: '📉' },
         ...(FF_PROJECTIONS ? [{ path: '/projections', label: 'Projections', icon: '🔭' }] : []),
         { path: '/estimator', label: 'Standings Estimator', icon: '🔮' },
         ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
@@ -596,29 +456,25 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
         { path: '/trade', label: 'Trade Analyzer', icon: '🔄' },
       ],
     },
-    ...(FF_MINIGAMES
-      ? [
-          {
-            key: 'minigames',
-            label: 'Minigames',
-            icon: '🎮',
-            items: [
-              { path: '/minigames', label: 'All Games', icon: '🎮' },
-              { path: '/minigames/hangman', label: 'Hangman', icon: '🔤' },
-              { path: '/minigames/who-he-play-for', label: 'Who He Play For?', icon: '🏟️' },
-              { path: '/minigames/who-am-i', label: 'Who Am I?', icon: '🕵️' },
-              { path: '/minigames/now-you-see-me', label: 'Now You See Me', icon: '👁️' },
-            ],
-          },
-        ]
-      : []),
+    {
+      key: 'minigames',
+      label: 'Minigames',
+      icon: '🎮',
+      items: [
+        { path: '/minigames', label: 'All Games', icon: '🎮' },
+        { path: '/minigames/hangman', label: 'Hangman', icon: '🔤' },
+        { path: '/minigames/who-he-play-for', label: 'Who He Play For?', icon: '🏟️' },
+        { path: '/minigames/who-am-i', label: 'Who Am I?', icon: '🕵️' },
+        { path: '/minigames/now-you-see-me', label: 'Now You See Me', icon: '👁️' },
+      ],
+    },
     {
       key: 'nba',
       label: 'NBA',
       icon: '🏀',
       items: [
         { path: '/nba-teams', label: 'NBA Teams', icon: '🏀' },
-        ...(FF_SCHEDULE ? [{ path: '/schedule', label: 'Season Schedule', icon: '🗓️' }] : []),
+        { path: '/schedule', label: 'Season Schedule', icon: '🗓️' },
         { path: '/injuries', label: 'Injuries', icon: '🩺' },
       ],
     },
@@ -673,7 +529,7 @@ const ReorgLayout = ({ darkMode, setDarkMode, setSearchOpen }: ReorgLayoutProps)
               <MobileSearchIconButton onClick={() => setSearchOpen(true)} />
               <button
                 onClick={() => setDarkMode(d => !d)}
-                className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 aria-label="Toggle dark mode"
               >
                 <span className="text-base">{darkMode ? '☀️' : '🌙'}</span>

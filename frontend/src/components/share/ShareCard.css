@@ -1,0 +1,109 @@
+/* Share-card layouts rendered off-screen and exported to PNG. Colors are
+   explicit per theme instead of Tailwind classes, so the global `.dark`
+   overrides in index.css can't leak into the exported image. */
+.share-card {
+  --sc-bg: #ffffff;
+  --sc-fg: #0f172a;
+  --sc-muted: #64748b;
+  --sc-line: #e2e8f0;
+  --sc-raised: #f8fafc;
+  --sc-accent: #2563eb;
+  --sc-me: #eff6ff;
+  --sc-good: rgba(22, 163, 74, 0.16);
+  --sc-good-fg: #15803d;
+  --sc-bad: rgba(220, 38, 38, 0.13);
+  --sc-bad-fg: #b91c1c;
+  --sc-head: linear-gradient(120deg, #2563eb 0%, #1d4ed8 55%, #6d28d9 100%);
+
+  width: 400px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--sc-bg);
+  color: var(--sc-fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.share-card--dark {
+  --sc-bg: #111827;
+  --sc-fg: #f3f4f6;
+  --sc-muted: #9ca3af;
+  --sc-line: #2b3646;
+  --sc-raised: #172131;
+  --sc-accent: #60a5fa;
+  --sc-me: #1e3a5f;
+  --sc-good: rgba(34, 197, 94, 0.2);
+  --sc-good-fg: #4ade80;
+  --sc-bad: rgba(248, 113, 113, 0.18);
+  --sc-bad-fg: #fca5a5;
+  --sc-head: linear-gradient(120deg, #1e3a8a 0%, #1e40af 55%, #4c1d95 100%);
+}
+
+.share-card__head { background: var(--sc-head); color: #ffffff; padding: 14px 16px 12px; }
+.share-card__brand { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; opacity: 0.9; }
+/* html-to-image freezes each element's measured width onto the clone, and
+   Safari draws text slightly wider inside the exported image than the DOM
+   measured it. A shrink-to-fit label (flex item) then no longer fits its own
+   width and wraps onto the line below, so single-line labels never wrap. */
+.share-card__brand > span,
+.share-card__foot > span { white-space: nowrap; }
+.share-card__title { margin-top: 6px; font-size: 19px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.share-card__subtitle { margin-top: 3px; font-size: 11.5px; color: #dbeafe; }
+.share-card__body { padding: 10px 12px 6px; }
+.share-card__foot {
+  display: flex; justify-content: space-between; gap: 8px;
+  padding: 8px 14px 11px; border-top: 1px solid var(--sc-line);
+  font-size: 10px; color: var(--sc-muted);
+}
+
+/* compact table */
+.share-card table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10.5px; }
+.share-card th {
+  padding: 4px 0 5px; border-bottom: 1px solid var(--sc-line);
+  font-size: 9px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--sc-muted); text-align: center; white-space: nowrap; overflow: hidden;
+}
+.share-card td { padding: 4px 0; border-bottom: 1px solid var(--sc-line); text-align: center; white-space: nowrap; }
+.share-card tbody tr:last-child td { border-bottom: 0; }
+.share-card .sc-left { text-align: left; overflow: hidden; text-overflow: ellipsis; padding-right: 4px; }
+.share-card .sc-rank { color: var(--sc-accent); font-weight: 800; }
+.share-card .sc-strong { font-weight: 800; }
+.share-card tr.sc-me td { background: var(--sc-me); }
+.share-card tr.sc-me td:first-child { box-shadow: inset 3px 0 0 var(--sc-accent); }
+.share-card .sc-chip { display: inline-block; min-width: 18px; padding: 1px 2px; border-radius: 4px; font-weight: 600; }
+.share-card .sc-good { background: var(--sc-good); color: var(--sc-good-fg); }
+.share-card .sc-bad { background: var(--sc-bad); color: var(--sc-bad-fg); }
+.share-card .sc-win { color: var(--sc-good-fg); font-weight: 800; }
+.share-card .sc-lose { color: var(--sc-muted); }
+
+/* tiles + side boxes */
+.share-card__tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 12px 4px; }
+.share-card__tile { min-width: 0; padding: 8px 10px; border: 1px solid var(--sc-line); border-radius: 10px; background: var(--sc-raised); }
+.share-card__tile--me { border-color: var(--sc-accent); }
+.share-card__label { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sc-muted); }
+.share-card__big { font-size: 22px; font-weight: 800; color: var(--sc-accent); }
+.share-card__of { font-size: 11px; color: var(--sc-muted); }
+.share-card__list { margin: 3px 0 0; padding: 0; list-style: none; font-size: 11.5px; }
+.share-card__list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-card__verdict {
+  margin: 8px 12px 4px; padding: 8px 10px; border-radius: 10px; text-align: center;
+  font-size: 12px; font-weight: 700; background: var(--sc-raised); color: var(--sc-fg);
+}
+.share-card__verdict--win { background: var(--sc-good); color: var(--sc-good-fg); }
+
+/* category bars (team card) */
+.share-card__bars { display: grid; gap: 5px; padding: 6px 12px 10px; }
+.share-card__bar { display: grid; grid-template-columns: 38px 1fr 54px 30px; align-items: center; gap: 8px; font-size: 11.5px; }
+.share-card__bar-key { font-size: 10.5px; font-weight: 700; color: var(--sc-muted); }
+.share-card__track { height: 8px; overflow: hidden; border: 1px solid var(--sc-line); border-radius: 4px; background: var(--sc-raised); }
+.share-card__fill { height: 100%; border-radius: 4px; background: var(--sc-accent); }
+.share-card__fill--good { background: #22c55e; }
+.share-card__fill--bad { background: #ef4444; }
+.share-card__bar-value { text-align: right; }
+.share-card__bar-rank { text-align: right; font-weight: 800; }
+
+/* Exported node: a solid margin around the rounded card, because WhatsApp
+   re-encodes photos as JPEG and transparent corners would turn black. */
+.share-card-canvas { display: inline-block; padding: 12px; background: #e8eef7; }
+.share-card-canvas--dark { background: #0b1220; }

@@ -13,7 +13,8 @@ os.environ.update({
     "CORS_ORIGINS": "http://localhost:3000,http://localhost:5173",
     "ENVIRONMENT": "test",
     "LOG_LEVEL": "WARNING",
-    "PORT": "8000"
+    "PORT": "8000",
+    "LEAGUE_ACTIVITY_WARM": "false",
 })
 
 # Import after setting environment variables
@@ -150,6 +151,9 @@ class MockDataProvider:
         return None
 
     async def get_slot_usage(self, raw=None):
+        return {}
+
+    async def get_lineup_slots(self):
         return {}
 
     async def get_draft_detail_raw(self):

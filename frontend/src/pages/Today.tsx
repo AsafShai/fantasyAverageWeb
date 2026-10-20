@@ -7,6 +7,8 @@ import RosterHealth from '../components/today/RosterHealth'
 import LeagueAverages from '../components/today/LeagueAverages'
 import TopTeams from '../components/today/TopTeams'
 import { getErrorMessage } from '../utils/errorMessage'
+import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
+import LatestMovesCard from '../components/activity/LatestMovesCard'
 
 function formatSlate(slateDate: string | null): string {
   if (!slateDate) return 'No games scheduled'
@@ -61,6 +63,8 @@ const Today = () => {
           </div>
         </div>
       )}
+
+      {FF_LEAGUE_ACTIVITY && <LatestMovesCard />}
 
       {summary && <LeagueAverages summary={summary} />}
 

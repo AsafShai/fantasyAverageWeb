@@ -18,9 +18,12 @@ import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
 import { MyTeamMark } from '../components/MyTeamMark'
+import { ShareCardButton } from '../components/share/ShareCardButton'
+import { TeamShareCard } from '../components/share/TeamShareCard'
+import { formatAsOf } from '../components/share/shareCardFormat'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
-import { FF_MATCHUP_QUALITY, FF_PROJECTIONS, FF_SCHEDULE } from '../config/featureFlags'
+import { FF_PROJECTIONS } from '../config/featureFlags'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -42,7 +45,8 @@ const TEAM_DETAIL_URL_SCHEMA = {
   period: enumParam<TimePeriod>(TIME_PERIODS, 'season'),
   from: isoDateParam(),
   to: isoDateParam(),
-  sort: stringParam(),
+  // Default to ESPN lineup order (PG, SG, SF, PF, C, G, F, UTIL, BE, IR).
+  sort: stringParam('lineup_slot'),
   order: enumParam(['asc', 'desc'] as const, 'asc'),
 }
 
@@ -90,8 +94,8 @@ const TeamDetail = () => {
   const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
   const [activeCoverageDate, setActiveCoverageDate] = useState<string | null>(null)
-  const showSchedule = FF_SCHEDULE && tableMode === 'schedule'
-  const { data: schedule } = useGetScheduleQuery(undefined, { skip: !FF_SCHEDULE })
+  const showSchedule = tableMode === 'schedule'
+  const { data: schedule } = useGetScheduleQuery()
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
   const opponents = useMemo(
     () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
@@ -100,16 +104,16 @@ const TeamDetail = () => {
   const [integerMode, setIntegerMode] = usePersistedState('teamDetail.integerMode', true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
   const coverageSlate = !showSchedule && coverageDate ? coverageDate.replaceAll('-', '') : undefined
-  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !FF_MATCHUP_QUALITY || !!coverageSlate })
+  const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !!coverageSlate })
   const { currentData: datedMatchups } = useGetMatchupsTodayQuery(coverageSlate, {
-    skip: !FF_MATCHUP_QUALITY || !coverageSlate,
+    skip: !coverageSlate,
   })
   const datedMatchupReady = datedMatchups !== undefined
   const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
-  const matchupMap = useMemo(() => {
-    if (!FF_MATCHUP_QUALITY) return new Map<string, PlayerMatchup>()
-    return new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m]))
-  }, [matchupRows])
+  const matchupMap = useMemo(
+    () => new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m])),
+    [matchupRows],
+  )
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {
@@ -203,18 +207,26 @@ const TeamDetail = () => {
     sortable: boolean
     day?: WeekScheduleDay
   }[] = [
+    { key: 'lineup_slot', label: 'Slot', align: 'left', sortable: true },
     { key: 'include', label: 'Include', align: 'center', sortable: false },
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
     ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: true }] : statColumns),
-    ...(FF_MATCHUP_QUALITY && !showSchedule ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
+    ...(!showSchedule ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
   ]
 
   const getPositionOrder = (positions: string[]): number => {
     const positionRank = { 'PG': 1, 'SG': 2, 'SF': 3, 'PF': 4, 'C': 5 }
     const firstPos = positions[0]
     return positionRank[firstPos as keyof typeof positionRank] ?? 99
+  }
+
+  // ESPN lineup order: starters, flex, UTIL, then bench and IR.
+  const lineupSlotOrder = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'SG/SF', 'G/F', 'PF/C', 'F/C', 'UTIL', 'BE', 'IR']
+  const getLineupSlotOrder = (slot?: string | null): number => {
+    const idx = slot ? lineupSlotOrder.indexOf(slot) : -1
+    return idx === -1 ? 99 : idx
   }
 
   const allPlayers = team_detail.players ?? []
@@ -228,6 +240,9 @@ const TeamDetail = () => {
         if (sortBy === 'player_name') {
           aVal = a.player_name
           bVal = b.player_name
+        } else if (sortBy === 'lineup_slot') {
+          const diff = getLineupSlotOrder(a.lineup_slot) - getLineupSlotOrder(b.lineup_slot)
+          return sortOrder === 'asc' ? diff : -diff
         } else if (sortBy === 'positions') {
           const aPosOrder = getPositionOrder(a.positions)
           const bPosOrder = getPositionOrder(b.positions)
@@ -362,17 +377,42 @@ const TeamDetail = () => {
             </h1>
             <DataDateBadge dataDate={team_detail.data_date} />
           </div>
-          <a
-            href={team_detail.espn_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-medium rounded-lg shadow hover:from-red-700 hover:to-red-800 transition-all duration-200"
-          >
-            View on ESPN
-            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
+          <div className="flex items-center gap-2">
+            <ShareCardButton
+              title={`${team_detail.team.team_name} Report`}
+              renderCard={({ dark }) => {
+                const points = team_detail.category_ranks
+                const teamCount = leagueSummary?.total_teams ?? Math.max(...Object.values(points), 1)
+                return (
+                  <TeamShareCard
+                    dark={dark}
+                    teamName={team_detail.team.team_name}
+                    rank={team_detail.ranking_stats.rank ?? 0}
+                    totalPoints={team_detail.ranking_stats.total_points}
+                    teamCount={teamCount}
+                    categories={Object.entries(points).map(([category, categoryPoints]) => ({
+                      category,
+                      points: categoryPoints,
+                      value: team_detail.ranking_stats.stats?.[category] ?? team_detail.raw_averages.stats?.[category],
+                    }))}
+                    gp={team_detail.raw_averages.gp}
+                    asOf={formatAsOf(team_detail.data_date)}
+                  />
+                )
+              }}
+            />
+            <a
+              href={team_detail.espn_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-medium rounded-lg shadow hover:from-red-700 hover:to-red-800 transition-all duration-200"
+            >
+              View on ESPN
+              <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
         </div>
       </div>
 
@@ -433,16 +473,14 @@ const TeamDetail = () => {
           gameDaysLeft={leagueSummary?.nba_game_days_left}
         />
       )}
-      {FF_SCHEDULE && (
-        <RosterCoverage
-          players={team_detail.players ?? []}
-          teamId={teamIdNumber}
-          horizon={scheduleHorizon}
-          onHorizonChange={setScheduleHorizon}
-          onSelectDate={setCoverageDate}
-          onActiveDate={setActiveCoverageDate}
-        />
-      )}
+      <RosterCoverage
+        players={team_detail.players ?? []}
+        teamId={teamIdNumber}
+        horizon={scheduleHorizon}
+        onHorizonChange={setScheduleHorizon}
+        onSelectDate={setCoverageDate}
+        onActiveDate={setActiveCoverageDate}
+      />
 
       <div className="bg-white rounded-lg shadow p-4 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -452,11 +490,9 @@ const TeamDetail = () => {
           )}
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-              {FF_SCHEDULE && (
-                <div className="order-1 w-full sm:order-3 sm:w-auto">
-                  <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
-                </div>
-              )}
+              <div className="order-1 w-full sm:order-3 sm:w-auto">
+                <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
+              </div>
               {!showSchedule && (
                 <div className="order-2 flex w-full overflow-hidden rounded border border-gray-300 sm:order-2 sm:w-auto">
                   <button
@@ -564,6 +600,13 @@ const TeamDetail = () => {
                 return (
                   <React.Fragment key={idx}>
                     <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                        {player.lineup_slot === 'IR' ? (
+                          <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200" title="Injured reserve">IR</span>
+                        ) : player.lineup_slot && player.lineup_slot !== 'BE' ? (
+                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-sky-400/15 dark:text-sky-300 dark:ring-sky-400/40" title="Active lineup slot">{player.lineup_slot}</span>
+                        ) : (player.lineup_slot ?? '—')}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap text-center">
                         <input
                           type="checkbox"
@@ -613,7 +656,7 @@ const TeamDetail = () => {
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">{player.stats.gp}</td>
                         </>
                       )}
-                      {FF_MATCHUP_QUALITY && !showSchedule && (
+                      {!showSchedule && (
                         <td className="px-4 py-3 whitespace-nowrap">
                           {awaitingCoverageMatchup ? (
                             coverageOpponent
@@ -630,13 +673,14 @@ const TeamDetail = () => {
                         </td>
                       )}
                     </tr>
-                    {FF_MATCHUP_QUALITY && !showSchedule && isExpanded && matchup && (
+                    {!showSchedule && isExpanded && matchup && (
                       <MatchupExpandRow matchup={matchup} colSpan={columns.length} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
                     )}
                   </React.Fragment>
                 )
               })}
               <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0">
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 <td className="px-4 py-3 whitespace-nowrap text-center">
                   <span className="text-blue-600">-</span>
                 </td>
@@ -668,7 +712,7 @@ const TeamDetail = () => {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-blue-900">{teamAverage.gp}</td>
                   </>
                 )}
-                {FF_MATCHUP_QUALITY && !showSchedule && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
+                {!showSchedule && <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900">—</td>}
               </tr>
             </tbody>
           </table>

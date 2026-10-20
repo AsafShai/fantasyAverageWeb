@@ -3,7 +3,6 @@ import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
 import TrendGameLogChart from './TrendGameLogChart'
 import DateRangePicker from './DateRangePicker'
 import type { RegressionStat, CustomDateRange } from '../types/api'
-import { FF_TRENDS } from '../config/featureFlags'
 import { LOW_SAMPLE_GP } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import { STAT_FIELDS, seasonAttempts, summarize, fmtValue, fmtDelta, type CardMode } from '../utils/playerTrendsSummary'
@@ -124,8 +123,6 @@ export default function PlayerTrendsCard({ playerId }: Props) {
     setWindowDays(days)
     setCustomOpen(false)
   }
-
-  if (!FF_TRENDS) return null
 
   const is404 = error && 'status' in error && error.status === 404
 

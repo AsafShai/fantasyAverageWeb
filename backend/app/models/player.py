@@ -96,6 +96,14 @@ class Player(BaseModel):
     # fallback exists for custom); stats is a zeroed placeholder in that case.
     has_data: bool = True
 
+class TeamRosterPlayer(Player):
+    """A Player as listed on a fantasy team's roster (team detail), with the
+    slot they currently occupy in that team's lineup. Kept off Player so the
+    ~1000-row /players payload doesn't carry a field that is always null there."""
+    # PG, G, UTIL, BE, IR, ... (see LINEUP_SLOT_MAP); None when ESPN's roster
+    # view is unavailable or doesn't list the player.
+    lineup_slot: Optional[str] = None
+
 class PaginatedPlayers(BaseModel):
     players: List[Player]
     total_count: int

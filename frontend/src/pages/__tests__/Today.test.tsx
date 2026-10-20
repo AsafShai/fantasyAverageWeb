@@ -7,17 +7,6 @@ import type { TodayHub } from '../../types/api';
 import { createTestStore, renderWithProviders } from '../../test/helpers';
 import Today from '../Today';
 
-const flagState = vi.hoisted(() => ({ FF_TODAY_HUB: true }));
-vi.mock('../../config/featureFlags', async importOriginal => {
-  const actual = await importOriginal<typeof import('../../config/featureFlags')>();
-  return {
-    ...actual,
-    get FF_TODAY_HUB() {
-      return flagState.FF_TODAY_HUB;
-    },
-  };
-});
-
 const summary = {
   total_teams: 12,
   total_games_played: 400,
@@ -111,7 +100,6 @@ function stubApi(hub: TodayHub) {
 describe('Today page', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    flagState.FF_TODAY_HUB = true;
   });
 
   it('renders all five sections: deadline, heading, panels, averages, top 5', async () => {
@@ -282,14 +270,12 @@ describe('Today page', () => {
   });
 });
 
-describe('index route gating', () => {
+describe('index route', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    flagState.FF_TODAY_HUB = true;
   });
 
-  it('renders Today at "/" when the flag is on', async () => {
-    flagState.FF_TODAY_HUB = true;
+  it('renders Today at "/"', async () => {
     stubApi(fullHub);
 
     const { default: App } = await import('../../App');
@@ -304,28 +290,5 @@ describe('index route gating', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument());
     expect(screen.getByText('Rank movers')).toBeInTheDocument();
-  });
-
-  it('renders the old Dashboard at "/" when the flag is off, and never calls getTodayHub', async () => {
-    flagState.FF_TODAY_HUB = false;
-    stubApi(fullHub);
-
-    const { default: App } = await import('../../App');
-    const store = createTestStore();
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <Provider store={store}>
-          <App />
-        </Provider>
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => expect(screen.getByText('League Overview')).toBeInTheDocument());
-    expect(screen.queryByRole('heading', { name: 'Today' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Rank movers')).not.toBeInTheDocument();
-
-    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
-    const calledUrls = calls.map(([input]) => requestUrl(input as RequestInfo | URL));
-    expect(calledUrls.some(url => url.includes('/league/today'))).toBe(false);
   });
 });
