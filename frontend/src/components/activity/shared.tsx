@@ -86,7 +86,6 @@ export function ValueChips({ stint }: { stint: PlayerStint }) {
       <span title={title} className={`${CHIP} ${rankTone(v.rank)}`}>
         <span className="font-normal opacity-80">Rank</span>
         <span className="font-semibold">{v.rank}</span>
-        <span className="font-normal opacity-80">of {v.of}</span>
       </span>
       <span title={title} className={`${CHIP} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200`}>
         <span className="font-normal opacity-80">Z-score</span>
