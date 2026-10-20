@@ -45,7 +45,8 @@ const TEAM_DETAIL_URL_SCHEMA = {
   period: enumParam<TimePeriod>(TIME_PERIODS, 'season'),
   from: isoDateParam(),
   to: isoDateParam(),
-  sort: stringParam(),
+  // Default to ESPN lineup order (PG, SG, SF, PF, C, G, F, UTIL, BE, IR).
+  sort: stringParam('lineup_slot'),
   order: enumParam(['asc', 'desc'] as const, 'asc'),
 }
 
