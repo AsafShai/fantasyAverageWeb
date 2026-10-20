@@ -24,6 +24,7 @@ class CacheManager:
             self.draft_detail_cache: Optional[Dict] = None
             self.players_directory_cache: Optional[Dict[int, str]] = None
             self.pro_team_schedules_cache: Dict = {'etag': None, 'data': None, 'fetched_at': 0.0}
+            self.lineup_slots_cache: Dict = {'etag': None, 'data': None, 'fetched_at': 0.0}
             self._initialized = True
     
     def invalidate_cache(self):
@@ -31,6 +32,7 @@ class CacheManager:
         self.totals_cache = {'etag': None, 'data': None, 'fetched_at': None}
         self.players_cache = {'etag': None, 'data': None}
         self.pro_team_schedules_cache = {'etag': None, 'data': None, 'fetched_at': 0.0}
+        self.lineup_slots_cache = {'etag': None, 'data': None, 'fetched_at': 0.0}
 
     def get_cache_info(self) -> dict:
         """Get cache status information"""

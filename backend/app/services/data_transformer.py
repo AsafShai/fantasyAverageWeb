@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional
 from app.utils.constants import (
-    ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP,
+    ESPN_COLUMN_MAP, ALL_CATEGORIES, INTEGER_COLUMNS, PRO_TEAM_MAP, POSITION_MAP, LINEUP_SLOT_MAP,
     RANKING_CATEGORIES, RATIO_CATEGORIES
 )
 from app.services.stats_calculator import StatsCalculator
@@ -142,6 +142,21 @@ class DataTransformer:
                             result[team_id][slot_name] = int(slot_data.get('value', 0))
         except Exception as e:
             self.logger.warning(f"Error parsing slot usage data: {e}")
+        return result
+
+    def parse_lineup_slots(self, espn_data: Dict) -> Dict[int, str]:
+        """Parse each rostered player's current lineup slot from mRoster data.
+        Returns {espn_player_id: slot_label}; unknown slot ids are skipped."""
+        result: Dict[int, str] = {}
+        try:
+            for team in (espn_data or {}).get('teams', []):
+                for entry in (team.get('roster') or {}).get('entries', []):
+                    player_id = entry.get('playerId')
+                    slot = LINEUP_SLOT_MAP.get(entry.get('lineupSlotId'))
+                    if player_id is not None and slot:
+                        result[int(player_id)] = slot
+        except Exception as e:
+            self.logger.warning(f"Error parsing lineup slots: {e}")
         return result
 
     def raw_all_players_to_df(self, espn_data: Dict, stat_split_type_id: int = 0, fantasy_team_map: Dict[int, str] = None,

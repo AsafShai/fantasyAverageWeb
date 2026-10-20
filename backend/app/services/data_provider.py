@@ -24,6 +24,10 @@ PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
 # _fetch_lock for one request apiece. Only a successful ESPN answer (200/304)
 # starts the window, so failures and the DB fallback keep retrying ESPN.
 TOTALS_TTL_SECONDS = 30
+# Lineups move at most a few times a day; this only has to outlast the team
+# detail route's own 60s response cache so a click-through of every team
+# shares one mRoster round trip.
+LINEUP_SLOTS_TTL_SECONDS = 120
 
 
 class DataProvider:
@@ -47,6 +51,7 @@ class DataProvider:
             self._db_sync_lock = asyncio.Lock()
             self._last_synced_period = 0
             self._players_inflight: dict[int, asyncio.Future] = {}
+            self._lineup_slots_lock = asyncio.Lock()
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
@@ -60,6 +65,7 @@ class DataProvider:
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
             self.espn_draft_detail_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mDraftDetail'
             self.espn_players_directory_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/players?view=players_wl'
+            self.espn_roster_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mRoster'
             self.espn_pro_team_schedules_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}?view=proTeamSchedules_wl'
 
     async def get_pro_team_schedules(self) -> Dict:
@@ -398,6 +404,39 @@ class DataProvider:
         if not raw:
             return {}
         return self.data_transformer.parse_slot_usage(raw)
+
+    async def get_lineup_slots(self) -> Dict[int, str]:
+        """{espn_player_id: current lineup slot label} for every rostered player.
+
+        kona_player_info (the players frame) carries no lineup slot, so this is
+        a separate mRoster fetch with its own small cache: only the parsed map
+        is kept, never the raw payload. Serves the last good map if ESPN fails,
+        and {} if there has never been one -- the slot is display-only."""
+        async with self._lineup_slots_lock:
+            cache = self.cache_manager.lineup_slots_cache
+            now = time.monotonic()
+            if cache['data'] is not None and now - cache['fetched_at'] < LINEUP_SLOTS_TTL_SECONDS:
+                return cache['data']
+            try:
+                headers = {}
+                if cache['etag'] and cache['data'] is not None:
+                    headers['If-None-Match'] = cache['etag']
+
+                response = await self._client.get(self.espn_roster_url, headers=headers)
+
+                if response.status_code == 304 and cache['data'] is not None:
+                    cache['fetched_at'] = now
+                    return cache['data']
+
+                response.raise_for_status()
+                slots = self.data_transformer.parse_lineup_slots(response.json())
+                cache['etag'] = response.headers.get('ETag')
+                cache['data'] = slots
+                cache['fetched_at'] = now
+                return slots
+            except Exception as e:
+                self.logger.warning(f"Lineup slots unavailable: {type(e).__name__}: {e}")
+                return cache['data'] if cache['data'] is not None else {}
 
     async def _settings_payload(self) -> Optional[Dict]:
         """The raw standings payload, which carries the league's scoring settings.

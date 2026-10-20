@@ -205,6 +205,7 @@ const TeamDetail = () => {
   }[] = [
     { key: 'include', label: 'Include', align: 'center', sortable: false },
     { key: 'player_name', label: 'Player', align: 'left', sortable: true },
+    { key: 'lineup_slot', label: 'Slot', align: 'left', sortable: true },
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
     ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: true }] : statColumns),
@@ -215,6 +216,13 @@ const TeamDetail = () => {
     const positionRank = { 'PG': 1, 'SG': 2, 'SF': 3, 'PF': 4, 'C': 5 }
     const firstPos = positions[0]
     return positionRank[firstPos as keyof typeof positionRank] ?? 99
+  }
+
+  // ESPN lineup order: starters, flex, UTIL, then bench and IR.
+  const lineupSlotOrder = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'SG/SF', 'G/F', 'PF/C', 'F/C', 'UTIL', 'BE', 'IR']
+  const getLineupSlotOrder = (slot?: string | null): number => {
+    const idx = slot ? lineupSlotOrder.indexOf(slot) : -1
+    return idx === -1 ? 99 : idx
   }
 
   const allPlayers = team_detail.players ?? []
@@ -228,6 +236,9 @@ const TeamDetail = () => {
         if (sortBy === 'player_name') {
           aVal = a.player_name
           bVal = b.player_name
+        } else if (sortBy === 'lineup_slot') {
+          const diff = getLineupSlotOrder(a.lineup_slot) - getLineupSlotOrder(b.lineup_slot)
+          return sortOrder === 'asc' ? diff : -diff
         } else if (sortBy === 'positions') {
           const aPosOrder = getPositionOrder(a.positions)
           const bPosOrder = getPositionOrder(b.positions)
@@ -575,6 +586,7 @@ const TeamDetail = () => {
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-r-gray-200"><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.lineup_slot ?? '—'}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
                       {showSchedule ? (

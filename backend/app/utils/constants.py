@@ -43,6 +43,15 @@ POSITION_MAP = {
     4: 'C'
 }
 
+# ESPN lineupSlotId -> label for the slot a rostered player currently occupies
+# (mRoster roster.entries[].lineupSlotId). Wider than POSITION_MAP: it covers
+# the flex, bench and IR slots too.
+LINEUP_SLOT_MAP = {
+    0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C',
+    5: 'G', 6: 'F', 7: 'SG/SF', 8: 'G/F', 9: 'PF/C', 10: 'F/C',
+    11: 'UTIL', 12: 'BE', 13: 'IR',
+}
+
 # All stat categories in order
 ALL_CATEGORIES = ['FGM', 'FGA', 'FG%', 'FTM', 'FTA', 'FT%', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS', 'GP']
 

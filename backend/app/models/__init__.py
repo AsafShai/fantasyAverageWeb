@@ -29,6 +29,7 @@ __all__ = [
 
     "TeamDetail",
     "Player",
+    "TeamRosterPlayer",
     "PaginatedPlayers",
     "StatTimePeriod",
     "TeamPlayers",
