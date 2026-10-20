@@ -124,6 +124,25 @@ describe('trade tree', () => {
     expect([...tree.truncated]).toEqual(['t2'])
   })
 
+  it('shows a follow-up trade that took two of the team\'s players once', () => {
+    // Team 1 gets P10 and P11, then sends both in t2 for P20 and P21.
+    const pair = [
+      trade('t1', '2026-01-01', [1, [
+        stint(10, 1, { exit: 'traded', exit_trade_id: 't2' }),
+        stint(11, 1, { exit: 'traded', exit_trade_id: 't2' }),
+      ]], [2, [stint(90, 2)]]),
+      trade('t2', '2026-01-10', [1, [stint(20, 1), stint(21, 1)]], [3, [stint(10, 3), stint(11, 3)]]),
+    ]
+    const tree = buildTradeTree(pair, 't1', 1, 5)
+    const [first, second] = tree.root
+    expect(first.next?.shownWith).toBeNull()
+    expect(first.next?.received.map(r => r.stint.player_id)).toEqual([20, 21])
+    expect(second.next?.shownWith).toBe('P10')
+    expect(second.next?.received).toEqual([])
+    expect(tree.stints).toBe(4) // P10, P11, P20, P21: the return is counted once
+    expect(tree.games).toBe(16)
+  })
+
   it('never loops on a cycle', () => {
     const loop = [
       trade('a', '2026-01-01', [1, [stint(10, 1, { exit: 'traded', exit_trade_id: 'b' })]], [2, []]),

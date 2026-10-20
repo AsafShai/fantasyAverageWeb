@@ -68,22 +68,26 @@ test('Trades: picking a trade brings its detail into view', async ({ page }) => 
 
 test('Trade tree: follow-up trades collapse and expand', async ({ page }) => {
   await page.goto(`/activity?tab=tree&trade=${CADE_NOV13}&team=4`)
-  await expect(page.getByRole('heading', { name: /What CADE's side of the Nov 13 trade turned into/ })).toBeVisible()
-  await expect(page.getByText('CJ McCollum')).toBeVisible()
-
-  const toggle = page.getByRole('button', { name: 'Collapse trade to AMI on Dec 5' })
-  await toggle.click()
-  await expect(page.getByText('CJ McCollum')).toBeHidden()
-  await expect(page.getByText(/got back 2 players \(hidden\)/)).toBeVisible()
+  await expect(page.getByRole('heading', { name: /CADE ⇄ RRT · Nov 13/ })).toBeVisible()
+  await expect(page.locator('dt', { hasText: 'Sent to RRT' }).locator('+ dd')).toHaveText('Jerami Grant, Norman Powell')
+  await expect(page.locator('dt', { hasText: 'Got from RRT' }).locator('+ dd')).toHaveText('Nikola Vucevic')
+  // A big tree opens one level of follow-ups: DeRozan (what Vucevic was flipped
+  // for) shows; McCollum, a trade further down, starts folded.
   await expect(page.getByText('DeMar DeRozan')).toBeVisible()
+  await expect(page.getByText('CJ McCollum')).toBeHidden()
+  await expect(page.getByText(/CADE got back 2 players \(\d+ in this branch, hidden\)/).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Expand trade to AMI on Dec 5' }).click()
   await expect(page.getByText('CJ McCollum')).toBeVisible()
+  await page.getByRole('button', { name: 'Collapse trade to AMI on Dec 5' }).click()
+  await expect(page.getByText('CJ McCollum')).toBeHidden()
 
   await page.getByRole('button', { name: 'Collapse all' }).click()
   await expect(page.getByText('DeMar DeRozan')).toBeHidden()
   await page.getByRole('button', { name: 'Expand all' }).click()
-  await expect(page.getByText('DeMar DeRozan')).toBeVisible()
+  // Fully open, DeRozan shows twice: CADE got him back in a later trade.
+  await expect(page.getByText('DeMar DeRozan').first()).toBeVisible()
+  await expect(page.getByText('CJ McCollum').first()).toBeVisible()
   await expectNoHorizontalScroll(page)
 })
 
