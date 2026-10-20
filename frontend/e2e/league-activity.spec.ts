@@ -68,7 +68,8 @@ test('Trades: picking a trade brings its detail into view', async ({ page }) => 
 
 test('Trade tree: follow-up trades collapse and expand', async ({ page }) => {
   await page.goto(`/activity?tab=tree&trade=${CADE_NOV13}&team=4`)
-  await expect(page.getByRole('heading', { name: /What CADE's side of the Nov 13 trade turned into/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /CADE ⇄ RRT · Nov 13/ })).toBeVisible()
+  await expect(page.getByText('CADE sent to RRT: Jerami Grant, Norman Powell')).toBeVisible()
   await expect(page.getByText('CJ McCollum')).toBeVisible()
 
   const toggle = page.getByRole('button', { name: 'Collapse trade to AMI on Dec 5' })

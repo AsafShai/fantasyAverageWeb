@@ -117,8 +117,10 @@ describe('League Activity page', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Tree for ASAF' })).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Tree for ASAF' }))
-    expect(screen.getByRole('heading', { name: /What ASAF's side of the Mar 17 trade turned into/ })).toBeInTheDocument()
-    expect(screen.getByText(/2 player stints/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /ASAF ⇄ DOR · Mar 17/ })).toBeInTheDocument()
+    expect(screen.getByText('ASAF sent to DOR: Evan Mobley')).toBeInTheDocument()
+    expect(screen.getByText('ASAF got')).toBeInTheDocument()
+    expect(screen.getByText(/2 players · 18 GP for ASAF/)).toBeInTheDocument()
     expect(screen.getByText('On ASAF at season end')).toBeInTheDocument()
     expect(screen.getByText(/DOR picked him up Mar 30/)).toBeInTheDocument()
   })

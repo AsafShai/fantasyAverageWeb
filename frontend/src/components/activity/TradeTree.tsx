@@ -3,6 +3,7 @@ import type { LeagueActivity } from '../../types/activity'
 import { useMyTeam } from '../../context/MyTeamContext'
 import { fantasyTeamOptionLabel } from '../MyTeamMark'
 import PlayerNameLink from '../PlayerNameLink'
+import InfoTip from '../InfoTip'
 import {
   SMALL_SAMPLE_GAMES,
   buildTradeTree,
@@ -37,7 +38,9 @@ function countStints(nodes: TreeStint[]): number {
 }
 
 function followUpKeys(nodes: TreeStint[]): string[] {
-  return nodes.flatMap(({ stint, next }) => (next ? [stintKey(stint), ...followUpKeys(next.received)] : []))
+  return nodes.flatMap(({ stint, next }) =>
+    next && !next.shownWith ? [stintKey(stint), ...followUpKeys(next.received)] : [],
+  )
 }
 
 interface BranchProps {
@@ -76,15 +79,17 @@ function Branch(props: BranchProps) {
             <ul className="mt-1 border-l border-gray-300 pl-3 sm:pl-5 dark:border-gray-600">
               <li className="relative pt-1 before:absolute before:top-5 before:-left-3 before:w-2 sm:before:-left-5 sm:before:w-4 before:border-t before:border-gray-300 dark:before:border-gray-600">
                 <div className="flex max-w-full items-start gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => onToggle(key)}
-                    aria-expanded={!isCollapsed}
-                    aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} trade to ${teamAbbrev(teams, next.otherTeamId)} on ${formatDay(next.trade.date)}`}
-                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                  >
-                    <span aria-hidden="true" className={`inline-block text-xs transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▼</span>
-                  </button>
+                  {!next.shownWith && (
+                    <button
+                      type="button"
+                      onClick={() => onToggle(key)}
+                      aria-expanded={!isCollapsed}
+                      aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} trade to ${teamAbbrev(teams, next.otherTeamId)} on ${formatDay(next.trade.date)}`}
+                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      <span aria-hidden="true" className={`inline-block text-xs transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▼</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onSelectTrade(next.trade.id)}
@@ -94,17 +99,17 @@ function Branch(props: BranchProps) {
                       Traded to {teamAbbrev(teams, next.otherTeamId)} · {formatDay(next.trade.date)}
                     </span>
                     <span className="text-xs text-gray-600 dark:text-gray-300">
-                      {next.sentAlongside.length > 0 && `sent with ${next.sentAlongside.map(p => p.name).join(', ')}; `}
-                      {abbrev} got back
+                      {!next.shownWith && next.sentAlongside.length > 0 && `sent with ${next.sentAlongside.map(p => p.name).join(', ')}; `}
+                      {next.shownWith ? `Same trade as ${next.shownWith} (shown above)` : <>{abbrev} got back
                       {isCollapsed
                         ? truncated.has(next.trade.id)
                           ? ' (hidden)'
                           : ` ${hidden} ${hidden === 1 ? 'player' : 'players'} (hidden)`
-                        : ':'}
+                        : ':'}</>}
                     </span>
                   </button>
                 </div>
-                {isCollapsed ? null : truncated.has(next.trade.id) ? (
+                {isCollapsed || next.shownWith ? null : truncated.has(next.trade.id) ? (
                   <div className="mt-1 pl-3 sm:pl-5">
                     <button
                       type="button"
@@ -222,64 +227,53 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
         </label>
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold text-balance text-gray-900 dark:text-gray-100">
-          What {abbrev}&apos;s side of the {formatDay(trade.date)} trade turned into
+      {/* The followed trade is the title; what came back hangs under it. */}
+      <div className="space-y-1">
+        <h2 className="flex items-center gap-1 text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <button type="button" onClick={() => onSelectTrade(trade.id)} className="text-left hover:underline">
+            {abbrev} ⇄ {teamAbbrev(teams, other?.team_id ?? 0)} · {formatDay(trade.date)}
+          </button>
+          <InfoTip
+            title="Trade tree"
+            body={`Follows the players ${abbrev} got in this trade. When one was traded on, the branch continues with what came back. Stats count only games played for ${abbrev}.`}
+          />
         </h2>
-        <p className="mt-1 max-w-prose text-sm text-gray-600 dark:text-gray-300">
-          Follows only players who stayed with {abbrev}. When one was traded on, the branch continues with what came back.
-          Each stint counts only the games played for {abbrev}.
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          {abbrev} sent to {teamAbbrev(teams, other?.team_id ?? 0)}: {sent.length ? sent.map(p => p.name).join(', ') : 'no players'}
         </p>
-        <p className="mt-2 text-sm text-gray-700 tabular-nums dark:text-gray-300">
-          {tree.stints} player stints · {tree.games} games played for {abbrev}
-          {tree.truncated.size > 0 && ' so far'}
-        </p>
-        {allFollowUps.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setCollapsed(new Set(allFollowUps))}
-              disabled={collapsed.size === allFollowUps.length}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              Collapse all
-            </button>
-            <button
-              type="button"
-              onClick={() => setCollapsed(new Set())}
-              disabled={collapsed.size === 0}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              Expand all
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
-        <span><span className="mr-1.5 inline-block h-3 w-5 rounded border border-gray-400 align-[-2px]" />Stint on {abbrev}</span>
-        <span><span className="mr-1.5 inline-block h-3 w-5 rounded border border-gray-400 bg-gray-100 align-[-2px] dark:bg-gray-700" />Trade</span>
-        <span><span className="mr-1.5 inline-block h-3 w-5 rounded border border-dashed border-gray-400 align-[-2px]" />Released</span>
-        <span><span className="mr-1.5 inline-block h-3 w-5 rounded border border-dotted border-gray-400 align-[-2px]" />Played elsewhere after release</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <p className="text-sm text-gray-600 tabular-nums dark:text-gray-400">
+            {tree.stints} players · {tree.games} GP for {abbrev}{tree.truncated.size > 0 && ' so far'}
+          </p>
+          {allFollowUps.length > 0 && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCollapsed(new Set(allFollowUps))}
+                disabled={collapsed.size === allFollowUps.length}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Collapse all
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollapsed(new Set())}
+                disabled={collapsed.size === 0}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Expand all
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto pb-1">
-        {/* The trade being followed is the root; what came back hangs under it. */}
-        <button
-          type="button"
-          onClick={() => onSelectTrade(trade.id)}
-          className={`${NODE} border-gray-300 bg-gray-50 text-left hover:border-blue-400 dark:border-gray-600 dark:bg-gray-700`}
-        >
-          <span className="font-semibold text-gray-900 dark:text-gray-100">
-            Trade with {teamAbbrev(teams, other?.team_id ?? 0)} · {formatDay(trade.date)}
-          </span>
-          <span className="text-xs text-gray-600 dark:text-gray-300">
-            {abbrev} sent {sent.length ? sent.map(p => p.name).join(', ') : 'no players'}
-            {tree.root.length ? '; got:' : ' and got no players back.'}
-          </span>
-        </button>
-        {tree.root.length > 0 && (
-          <div className="mt-1 pl-3 sm:pl-5">
+        {tree.root.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{abbrev} got no players back.</p>
+        ) : (
+          <>
+            <p className="mb-1 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">{abbrev} got</p>
             <Branch
               nodes={tree.root}
               teams={teams}
@@ -291,7 +285,7 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
               onExpand={() => setDepth(d => d + INITIAL_DEPTH)}
               onSelectTrade={onSelectTrade}
             />
-          </div>
+          </>
         )}
       </div>
     </div>

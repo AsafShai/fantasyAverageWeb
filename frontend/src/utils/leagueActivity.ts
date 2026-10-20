@@ -164,6 +164,9 @@ export interface TreeTrade {
   otherTeamId: number
   sentAlongside: PlayerStint[]
   received: TreeStint[]
+  // Set when another player this team sent in the same trade already shows
+  // its return: that player's name. `received` is then empty.
+  shownWith: string | null
 }
 
 /** What `teamId`'s side of a trade turned into: each player it received, and,
@@ -177,6 +180,9 @@ export function buildTradeTree(
 ): { root: TreeStint[]; truncated: Set<string>; stints: number; games: number } {
   const byId = new Map(trades.map(t => [t.id, t]))
   const truncated = new Set<string>()
+  // Onward trade id -> the player whose branch shows its return. Two players
+  // sent in one trade would otherwise repeat (and double-count) that return.
+  const shownUnder = new Map<string, string>()
   let stints = 0
   let games = 0
 
@@ -194,9 +200,16 @@ export function buildTradeTree(
           otherTeamId: other?.team_id ?? 0,
           sentAlongside: (other?.received ?? []).filter(s => s.player_id !== stint.player_id),
           received: [],
+          shownWith: shownUnder.get(onward.id) ?? null,
         }
-        if (depth >= maxDepth) truncated.add(onward.id)
-        else next.received = walk(onward, depth + 1, new Set([...seen, onward.id]))
+        if (next.shownWith === null) {
+          if (depth >= maxDepth) {
+            truncated.add(onward.id)
+          } else {
+            shownUnder.set(onward.id, stint.name)
+            next.received = walk(onward, depth + 1, new Set([...seen, onward.id]))
+          }
+        }
       }
       return { stint, next }
     })

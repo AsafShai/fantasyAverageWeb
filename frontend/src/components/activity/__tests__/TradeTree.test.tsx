@@ -41,15 +41,17 @@ describe('TradeTree root', () => {
     const onSelectTrade = vi.fn()
     renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={1} onChange={vi.fn()} onSelectTrade={onSelectTrade} />)
 
-    const root = screen.getByRole('button', { name: /Trade with T2 · Jan 5/ })
-    expect(root).toHaveTextContent('T1 sent Player 90; got:')
+    const root = screen.getByRole('button', { name: 'T1 ⇄ T2 · Jan 5' })
+    expect(screen.getByRole('heading', { name: /T1 ⇄ T2 · Jan 5/ })).toBeInTheDocument()
+    expect(screen.getByText('T1 sent to T2: Player 90')).toBeInTheDocument()
     await user.click(root)
     expect(onSelectTrade).toHaveBeenCalledWith('t1')
   })
 
   it('names what the other side sent when following it', () => {
     renderWithProviders(<TradeTree activity={activity} tradeId="t1" teamId={2} onChange={vi.fn()} onSelectTrade={vi.fn()} />)
-    expect(screen.getByRole('button', { name: /Trade with T1 · Jan 5/ })).toHaveTextContent('T2 sent Player 10, Player 11; got:')
+    expect(screen.getByRole('button', { name: 'T2 ⇄ T1 · Jan 5' })).toBeInTheDocument()
+    expect(screen.getByText('T2 sent to T1: Player 10, Player 11')).toBeInTheDocument()
   })
 })
 
