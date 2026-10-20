@@ -604,7 +604,7 @@ const TeamDetail = () => {
                         {player.lineup_slot === 'IR' ? (
                           <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200" title="Injured reserve">IR</span>
                         ) : player.lineup_slot && player.lineup_slot !== 'BE' ? (
-                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200" title="Active lineup slot">{player.lineup_slot}</span>
+                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-sky-400/15 dark:text-sky-300 dark:ring-sky-400/40" title="Active lineup slot">{player.lineup_slot}</span>
                         ) : (player.lineup_slot ?? '—')}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-center">
