@@ -659,6 +659,7 @@ const TeamDetail = () => {
                   {includedPlayers === null ? visiblePlayers.length : includedPlayers.size} players
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700">-</td>
                 {showSchedule ? (
                   <>
                     {weekDays.map(day => (
