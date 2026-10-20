@@ -193,6 +193,8 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
   const allFollowUps = followUpKeys(tree.root)
   const other = trade.sides.find(s => s.team_id !== follow)
   const sent = other?.received ?? []
+  const otherAbbrev = teamAbbrev(teams, other?.team_id ?? 0)
+  const names = (stints: { name: string }[]) => (stints.length ? stints.map(p => p.name).join(', ') : 'No players')
 
   return (
     <div className="space-y-4 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
@@ -231,16 +233,20 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
       <div className="space-y-1">
         <h2 className="flex items-center gap-1 text-lg font-semibold text-gray-900 dark:text-gray-100">
           <button type="button" onClick={() => onSelectTrade(trade.id)} className="text-left hover:underline">
-            {abbrev} ⇄ {teamAbbrev(teams, other?.team_id ?? 0)} · {formatDay(trade.date)}
+            {abbrev} ⇄ {otherAbbrev} · {formatDay(trade.date)}
           </button>
           <InfoTip
             title="Trade tree"
             body={`Follows the players ${abbrev} got in this trade. When one was traded on, the branch continues with what came back. Stats count only games played for ${abbrev}.`}
           />
         </h2>
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          {abbrev} sent to {teamAbbrev(teams, other?.team_id ?? 0)}: {sent.length ? sent.map(p => p.name).join(', ') : 'no players'}
-        </p>
+        {/* Both sides of the trade, before the tree follows what came back. */}
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-700">
+          <dt className="font-semibold whitespace-nowrap text-gray-500 dark:text-gray-400">Sent to {otherAbbrev}</dt>
+          <dd className="min-w-0 text-gray-900 dark:text-gray-100">{names(sent)}</dd>
+          <dt className="font-semibold whitespace-nowrap text-gray-500 dark:text-gray-400">Got from {otherAbbrev}</dt>
+          <dd className="min-w-0 text-gray-900 dark:text-gray-100">{names(tree.root.map(n => n.stint))}</dd>
+        </dl>
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <p className="text-sm text-gray-600 tabular-nums dark:text-gray-400">
             {tree.stints} players · {tree.games} GP for {abbrev}{tree.truncated.size > 0 && ' so far'}
@@ -273,7 +279,6 @@ const TradeTree = ({ activity, tradeId, teamId, onChange, onSelectTrade }: Trade
           <p className="text-sm text-gray-500 dark:text-gray-400">{abbrev} got no players back.</p>
         ) : (
           <>
-            <p className="mb-1 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">{abbrev} got</p>
             <Branch
               nodes={tree.root}
               teams={teams}

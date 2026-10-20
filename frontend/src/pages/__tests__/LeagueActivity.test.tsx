@@ -118,8 +118,8 @@ describe('League Activity page', () => {
 
     await user.click(screen.getByRole('button', { name: 'Tree for ASAF' }))
     expect(screen.getByRole('heading', { name: /ASAF ⇄ DOR · Mar 17/ })).toBeInTheDocument()
-    expect(screen.getByText('ASAF sent to DOR: Evan Mobley')).toBeInTheDocument()
-    expect(screen.getByText('ASAF got')).toBeInTheDocument()
+    expect(screen.getByText('Sent to DOR').nextElementSibling).toHaveTextContent('Evan Mobley')
+    expect(screen.getByText('Got from DOR').nextElementSibling).toHaveTextContent('Bam Adebayo, John Collins')
     expect(screen.getByText(/2 players · 18 GP for ASAF/)).toBeInTheDocument()
     expect(screen.getByText('On ASAF at season end')).toBeInTheDocument()
     expect(screen.getByText(/DOR picked him up Mar 30/)).toBeInTheDocument()
