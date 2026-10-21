@@ -615,7 +615,12 @@ export interface SurpriseRow {
   score: number;
   metric_z: number | null;
   metric_err: number | null;
-  has_estimate: boolean;
+  has_estimate: boolean
+  /** Fantasy context that night: team abbrev (null = free agent), lineup slot, and
+   * whether that slot counted (false = bench / IR; null when unknown). */
+  fantasy_team: string | null
+  lineup_slot: string | null
+  started: boolean | null;
   reasons: SurpriseReason[];
   /** The server's own call at the default thresholds; '' when the row crosses neither bar. */
   verdict: 'good' | 'bad' | '';

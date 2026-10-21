@@ -8,7 +8,7 @@ import type { SurpriseRow } from '../../../types/api'
 const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
   player_id: 1, player_name: 'Paul George', team_abbr: 'BOS', opponent_abbr: 'DET', is_home: false,
   minutes: 31, pts: 38, reb: 5, ast: 3, fg3m: 7, stl: 5, blk: 0, fgm: 12, fga: 21, ftm: 7, fta: 8,
-  score: 2.64, metric_z: 0.7, metric_err: 1.6, has_estimate: true, verdict: 'good',
+  score: 2.64, metric_z: 0.7, metric_err: 1.6, has_estimate: true, verdict: 'good', fantasy_team: 'DOR', lineup_slot: 'SF', started: true,
   reasons: [{ stat: 'STL', value: 5, avg: 1.6, z: 1.8 }, { stat: 'PTS', value: 38, avg: 20.7, z: 1.4 }],
   ...over,
 })
@@ -48,8 +48,8 @@ describe('buildShareMessage', () => {
     const msg = buildShareMessage('Oct 20, 2026', [boom], [bust], 'https://app.example/boom-or-bust')
     expect(msg.split('\n')).toEqual([
       '💥 *Boom or Bust* · Oct 20, 2026',
-      '🚀 Booms: *Paul George* +2.6 (5 STL, 38 PTS)',
-      '💩 Busts: *Jayson Tatum* −1.9 (26% FG%)',
+      '🚀 Booms: *Paul George* +2.6 (5 STL, 38 PTS) · DOR',
+      '💩 Busts: *Jayson Tatum* −1.9 (26% FG%) · DOR',
       '🔗 https://app.example/boom-or-bust',
     ])
   })

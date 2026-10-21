@@ -89,11 +89,14 @@ def test_to_tuple_matches_insert_columns(history):
     night = score_night(history, _evals({1: 14.0}), NIGHT, surprise.load_calibration())
     row = night[night["PLAYER_NAME"] == "Cold Night"].iloc[0]
     t = surprise_service._to_tuple(row, NIGHT)
-    assert len(t) == 24
+    assert len(t) == 27
+    assert t[-3:] == (None, None, None)          # no roster given: free agent / unknown
     assert t[:3] == ("night", 2, NIGHT)
     assert t[5] == 2 and t[6] is False          # opponent from the matchup string, away
-    assert t[-2] == "bad"
-    assert isinstance(t[-1], list)
+    assert t[-5] == "bad"
+    assert isinstance(t[-4], list)
+    t2 = surprise_service._to_tuple(row, NIGHT, {2: {"team_id": 7, "team": "AAT", "team_name": "Alon", "slot": "BE"}})
+    assert t2[-3:] == (7, "AAT", "BE")
 
 
 @pytest.mark.asyncio
@@ -109,6 +112,8 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
             "metric_z": score, "metric_err": None, "score": score, "has_estimate": est,
             "verdict": verdict, "reasons": '[{"stat": "PTS", "value": 10.0, "avg": 5.0, "z": 1.0}]',
             "created_at": created,
+            "fantasy_team_id": 7 if pid % 2 else None, "fantasy_team": "AAT" if pid % 2 else None,
+            "lineup_slot": ("BE" if pid == 51 else "PG") if pid % 2 else None,
         }
 
     rows = [row(i, 3.0 - i * 0.1, "good") for i in range(1, 20)]
@@ -131,6 +136,9 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     assert out["bad"][1]["has_estimate"] is False
     assert out["good"][0]["team_abbr"] == "BOS" and out["good"][0]["opponent_abbr"] == "NYK"
     assert out["good"][0]["reasons"][0]["stat"] == "PTS"
+    assert out["good"][0]["fantasy_team"] == "AAT" and out["good"][0]["started"] is True     # PG slot
+    assert out["good"][1]["fantasy_team"] is None and out["good"][1]["started"] is None      # free agent
+    assert out["bad"][0]["lineup_slot"] == "BE" and out["bad"][0]["started"] is False
     assert out["thresholds"] == {"good": settings.surprise_good_threshold, "bad": settings.surprise_bad_threshold}
     assert out["computed_at"].startswith("2025-12-02T07:00")
 

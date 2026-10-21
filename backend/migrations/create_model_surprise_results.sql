@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS model_surprise_results (
     has_estimate BOOLEAN NOT NULL DEFAULT FALSE,
     verdict      TEXT    NOT NULL DEFAULT '',
     reasons      JSONB   NOT NULL DEFAULT '[]',
+    -- Where he was in the league that night: the fantasy team's id and abbrev
+    -- (NULL = free agent) and the lineup slot he sat in (BE / IR = not started).
+    fantasy_team_id BIGINT,
+    fantasy_team    TEXT,
+    lineup_slot     TEXT,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (game_id, player_id)
 );

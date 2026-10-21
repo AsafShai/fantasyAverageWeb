@@ -16,7 +16,7 @@ const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
   score: 2.4,
   metric_z: 2.0,
   metric_err: 1.0,
-  has_estimate: true,
+  has_estimate: true, fantasy_team: 'DOR', lineup_slot: 'SF', started: true,
   reasons: [{ stat: 'PTS', value: 31, avg: 18.2, z: 2.5 }],
   verdict: 'good',
   ...over,

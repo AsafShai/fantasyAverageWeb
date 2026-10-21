@@ -36,6 +36,11 @@ class SurpriseRow(BaseModel):
     # The server's own call at the default thresholds: 'good' | 'bad' | ''.
     verdict: str
     reasons: list[SurpriseReason]
+    # Where he was in the league that night: fantasy team abbrev (None = free
+    # agent), the lineup slot, and whether that slot counted (not BE / IR).
+    fantasy_team: Optional[str] = None
+    lineup_slot: Optional[str] = None
+    started: Optional[bool] = None
 
 
 class SurpriseThresholds(BaseModel):

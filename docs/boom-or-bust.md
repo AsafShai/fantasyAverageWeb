@@ -37,6 +37,14 @@ assist night. Shooting needs volume to be marked (FGA ≥ 4, FTA ≥ 3: a 1-of-1
 nothing). The strongest stat matching the score's sign is the headline next to
 the name. Stored per row as `reasons`, at most 5.
 
+**Where he was in the league that night:** under each name, next to his NBA team, a
+small bullet with the fantasy team's abbrev and whether he started (a slot other
+than BE / IR) or sat, or "FA". It is the roster **as it was on that night**: one ESPN
+request per night for that scoring period (`scoringPeriodId`, period 1 = the season's
+first day), stored with the row when the night is scored, so later pickups, drops and
+lineup changes never rewrite it (Drummond: FA on Oct 20, picked up on Oct 21). Columns
+`fantasy_team_id`, `fantasy_team`, `lineup_slot`; NULL = free agent / unknown.
+
 Weights and blend: `backend/model_stats_inference/serving/surprise.py` (module constants).
 Reference season: `surprise_calibration.json` next to it, built by
 `scripts/build_surprise_calibration.py` from the walk-forward parquet. Thresholds

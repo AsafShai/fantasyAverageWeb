@@ -27,6 +27,25 @@ const STAT_COLS: [keyof SurpriseRow, string][] = [
   ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['fg3m', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
 ];
 
+/** "· DOR ● started", "· AAT ○ bench", "· FA": where he was in the league that night. */
+function FantasyBullet({ row }: { row: SurpriseRow }) {
+  if (row.fantasy_team === undefined) return null;
+  if (row.fantasy_team === null) return <span className="text-gray-400 dark:text-gray-500">· FA</span>;
+  const state = row.started === null ? null : row.started ? 'started' : row.lineup_slot === 'IR' ? 'IR' : 'bench';
+  const dot = state === 'started' ? 'bg-emerald-500' : state === 'IR' ? 'bg-amber-400' : 'bg-gray-400';
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span>· {row.fantasy_team}</span>
+      {state && (
+        <span className="inline-flex items-center gap-1 font-normal">
+          <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot}`} />
+          {state}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** Headshot + name link + team abbr, without the position pills PlayerIdentityCell always renders. */
 function PlayerCell({ row }: { row: SurpriseRow }) {
   const src = toListHeadshotUrl(`https://a.espncdn.com/i/headshots/nba/players/full/${row.player_id}.png`);
@@ -59,7 +78,10 @@ function PlayerCell({ row }: { row: SurpriseRow }) {
         <div className="truncate">
           <PlayerNameLink name={row.player_name} playerId={row.player_id} />
         </div>
-        <div className="mt-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{row.team_abbr}</div>
+        <div className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+          <span>{row.team_abbr}</span>
+          <FantasyBullet row={row} />
+        </div>
       </div>
     </div>
   );

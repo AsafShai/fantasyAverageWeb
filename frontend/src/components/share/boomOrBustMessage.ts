@@ -27,7 +27,8 @@ function names(rows: SurpriseRow[]): string {
   if (rows.length === 0) return '_nobody_'
   const shown = rows.slice(0, MAX_NAMES).map((r) => {
     const why = drivers(r)
-    return `*${r.player_name}* ${fmtScore(r.score)}${why ? ` (${why})` : ''}`
+    const owner = r.fantasy_team === null ? ' · FA' : r.fantasy_team ? ` · ${r.fantasy_team}${r.started === false ? ' (bench)' : ''}` : ''
+    return `*${r.player_name}* ${fmtScore(r.score)}${why ? ` (${why})` : ''}${owner}`
   })
   const more = rows.length - shown.length
   return shown.join(', ') + (more > 0 ? ` +${more} more` : '')

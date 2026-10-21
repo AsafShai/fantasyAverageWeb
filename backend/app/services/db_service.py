@@ -1758,6 +1758,7 @@ class DBService:
             "opponent_team_id", "is_home", "minutes",
             "pts", "reb", "ast", "fg3m", "stl", "blk", "fgm", "fga", "ftm", "fta",
             "metric_z", "metric_err", "score", "has_estimate", "verdict", "reasons",
+            "fantasy_team_id", "fantasy_team", "lineup_slot",
         ]
         updates = ",\n".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("game_id", "player_id"))
         try:

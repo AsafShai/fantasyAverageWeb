@@ -23,8 +23,12 @@ from datetime import date, datetime, timezone
 import numpy as np
 import pandas as pd
 
+import httpx
+
 from app.config import settings
+from app.services import schedule_service
 from app.services.db_service import DBService
+from app.utils.constants import LINEUP_SLOT_MAP
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR
 from model_stats_inference.serving import surprise
 
@@ -32,6 +36,47 @@ logger = logging.getLogger(__name__)
 
 # The line stored and shown; turnovers play no part in the score and are left out.
 _LINE_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
+
+
+NOT_STARTED_SLOTS = {"BE", "IR"}
+
+
+async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
+    """{espn_player_id: {team_id, team, team_name, slot}} for the league's
+    rosters on that night, from one ESPN request for that scoring period
+    (period 1 = the season's first day). Only the few fields the row needs are
+    kept; the ~1 MB payload is dropped. {} when the night is before the season
+    or ESPN is unavailable: the rows then just carry no fantasy context."""
+    season_start = await schedule_service.get_season_start_date() or settings.season_start
+    period = (game_date - season_start).days + 1
+    if period < 1:
+        return {}
+    url = (
+        f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}"
+        f"/segments/0/leagues/{settings.league_id}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(url, params=[("view", "mRoster"), ("view", "mTeam"), ("scoringPeriodId", str(period))])
+            resp.raise_for_status()
+            payload = resp.json()
+    except Exception as e:
+        logger.warning(f"Fantasy rosters for {game_date} (period {period}) unavailable: {type(e).__name__}: {e}")
+        return {}
+    if isinstance(payload, list):
+        payload = payload[0] if payload else {}
+    out: dict[int, dict] = {}
+    for team in payload.get("teams", []):
+        team_id = team.get("id")
+        abbrev = team.get("abbrev") or str(team_id)
+        name = team.get("name") or f"{team.get('location', '')} {team.get('nickname', '')}".strip() or abbrev
+        for entry in (team.get("roster") or {}).get("entries", []):
+            pid = entry.get("playerId")
+            slot = LINEUP_SLOT_MAP.get(entry.get("lineupSlotId"))
+            if pid is not None:
+                out[int(pid)] = {"team_id": team_id, "team": abbrev, "team_name": name, "slot": slot}
+    logger.info(f"Fantasy rosters for {game_date}: period {period}, {len(out)} rostered players")
+    return out
 
 
 def _verdict(score: float) -> str:
@@ -93,9 +138,10 @@ def _opponent(row: pd.Series) -> tuple[int, bool]:
     return int(opp), bool(is_home)
 
 
-def _to_tuple(row: pd.Series, game_date: date) -> tuple:
+def _to_tuple(row: pd.Series, game_date: date, roster: dict[int, dict] | None = None) -> tuple:
     opp, is_home = _opponent(row)
     score = float(row["SCORE"]) if pd.notna(row["SCORE"]) else float("nan")
+    owner = (roster or {}).get(int(row["PLAYER_ID"]))
     return (
         str(row["GAME_ID"]), int(row["PLAYER_ID"]), game_date, str(row.get("PLAYER_NAME", "")),
         int(row["TEAM_ID"]), opp, is_home, float(row["MIN"]),
@@ -106,6 +152,9 @@ def _to_tuple(row: pd.Series, game_date: date) -> tuple:
         bool(row["HAS_ESTIMATE"]),
         _verdict(score),
         row["REASONS"],
+        owner["team_id"] if owner else None,
+        owner["team"] if owner else None,
+        owner["slot"] if owner else None,
     )
 
 
@@ -135,7 +184,8 @@ class SurpriseService:
         night = await asyncio.to_thread(score_night, history, evals_df, game_date, self.calibration)
         del history, evals, evals_df   # the step runs after the feature-store build; keep its peak low
         gc.collect()
-        rows = [_to_tuple(r, game_date) for _, r in night.iterrows()]
+        roster = await fantasy_roster_for(game_date)
+        rows = [_to_tuple(r, game_date, roster) for _, r in night.iterrows()]
         if not await db.insert_model_surprise_rows(rows):
             return "db_write_failed"
         n_scored = int(night["SCORE"].notna().sum())
@@ -202,6 +252,10 @@ class SurpriseService:
             "has_estimate": r["has_estimate"],
             "verdict": r["verdict"],
             "reasons": reasons,
+            # fantasy context that night: None = free agent
+            "fantasy_team": r.get("fantasy_team"),
+            "lineup_slot": r.get("lineup_slot"),
+            "started": (r.get("lineup_slot") not in NOT_STARTED_SLOTS) if r.get("lineup_slot") else None,
         }
 
 
