@@ -80,7 +80,7 @@ one migration, one 52 kB JSON, one page on the frontend. Tests: 16 backend, 4 fr
    - `SURPRISE_NIGHTLY_ENABLED` (default true): kill switch for the nightly step.
    - `SURPRISE_GOOD_THRESHOLD` / `SURPRISE_BAD_THRESHOLD` (1.8 / 1.8): the server's
      verdict and the sliders' default position.
-   - `SURPRISE_MIN_MINUTES` (0), `SURPRISE_TOP_N` (15 rows shown per card).
+   - `SURPRISE_MIN_MINUTES` (0), `SURPRISE_TOP_N` (10 rows shown per card).
 3. **Nightly:** the step runs inside `ModelNightlyService._run_for_date` after the
    night's rows are committed, so it needs `MODEL_NIGHTLY_ENABLED=true` (it already is
    wherever the model nightly runs).
