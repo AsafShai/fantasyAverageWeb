@@ -28,7 +28,7 @@ export const DEFAULT_API: Record<string, () => MockResponse> = {
   },
   '/rankings': () => fixture('rankings'),
   '/analytics/heatmap': () => fixture('heatmap'),
-  '/players': () => fixture('players'),
+  '/players/': () => fixture('players'),
   '/teams/': () => fixture('teams'),
   '/teams/1': () => fixture('team-detail'),
   '/nba/schedule': () => fixture('schedule'),
