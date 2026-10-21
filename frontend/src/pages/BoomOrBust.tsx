@@ -5,7 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { SurpriseTable } from '../components/boomOrBust/SurpriseTable';
 import { ShareCardButton } from '../components/share/ShareCardButton';
-import { BoomOrBustShareCard } from '../components/share/BoomOrBustShareCard';
+import { BoomOrBustShareCard, SHARE_ROWS } from '../components/share/BoomOrBustShareCard';
 import { buildShareMessage } from '../components/share/boomOrBustMessage';
 
 /** Parse YYYY-MM-DD as a local calendar date (no timezone shift). */
@@ -138,6 +138,13 @@ function SurpriseCard({
   title, kind, threshold, shown,
 }: { title: string; kind: 'good' | 'bad'; threshold: Threshold; shown: SurpriseRow[] }) {
   const [page, setPage] = useState(0);
+  // A new threshold starts the card on its first page: a viewer on page 2 who
+  // raises the bar and lowers it again should not land back on page 2.
+  const [pagedFor, setPagedFor] = useState(threshold.value);
+  if (threshold.value !== pagedFor) {
+    setPagedFor(threshold.value);
+    setPage(0);
+  }
   const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const current = Math.min(page, pages - 1);   // the slider can shrink the list under the viewer
   const start = current * PAGE_SIZE;
@@ -180,7 +187,7 @@ function NightBody({ night }: { night: NightSurprises }) {
   const busts = useMemo(() => shownRows(night.bad, 'bad', bad.value, night.max_rows), [night, bad.value]);
   const dateLabel = fmtDay(night.game_date, false);
   const shareText = useMemo(
-    () => buildShareMessage(dateLabel, booms, busts, `${window.location.origin}/boom-or-bust`),
+    () => buildShareMessage(dateLabel, booms.slice(0, SHARE_ROWS), busts.slice(0, SHARE_ROWS), `${window.location.origin}/boom-or-bust`),
     [dateLabel, booms, busts],
   );
   return (
@@ -250,7 +257,7 @@ export default function BoomOrBust() {
   } else if (error || !night) {
     body = <ErrorMessage message="Failed to load last night's surprises." />;
   } else {
-    body = <NightBody night={night} />;
+    body = <NightBody key={night.game_date} night={night} />;
   }
 
   return (

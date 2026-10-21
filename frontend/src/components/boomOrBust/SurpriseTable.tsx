@@ -104,8 +104,14 @@ export function SurpriseTable({
   // deeper the further the stat sits from his norm (see markClass).
   const th = 'px-2 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap';
   const td = 'px-2 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300 text-center';
-  const stickyRank = share ? '' : 'sticky left-0 z-10 w-8 min-w-[2rem]';
-  const stickyPlayer = share ? '' : 'sticky left-8 z-10 border-r border-gray-200 dark:border-gray-700';
+  // Pinned columns: the rank cell is exactly 2.25rem (fits "10" at the table's
+  // text size) and the player cell pins right after it; rem units, so both scale
+  // with the OS font. The divider is an inset shadow, which travels with a
+  // sticky cell (a collapsed table border does not).
+  const stickyRank = share ? '' : 'sticky left-0 z-10 w-9 min-w-[2.25rem] max-w-[2.25rem]';
+  const stickyPlayer = share
+    ? ''
+    : 'sticky left-9 z-10 shadow-[inset_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_-1px_0_0_rgb(55_65_81)]';
   const stickyHead = share ? '' : 'bg-gray-50 dark:bg-gray-800';
   const stickyCell = share ? '' : 'bg-white dark:bg-gray-900 group-hover:bg-gray-50 dark:group-hover:bg-gray-800';
   return (

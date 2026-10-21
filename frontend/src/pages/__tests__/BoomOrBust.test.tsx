@@ -135,6 +135,11 @@ describe('Boom or Bust page', () => {
     fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '2.2' } })
     fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
     await waitFor(() => expect(screen.queryByLabelText('Next page')).not.toBeInTheDocument())
+    // ...and lowering it again starts on the first page, not back on page 2
+    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '1.4' } })
+    fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
+    await waitFor(() => expect(screen.getByText('1–5 of 7')).toBeInTheDocument())
+    expect(screen.getByText('Boom 0')).toBeInTheDocument()
   })
 
   it('shows the empty state on 404', async () => {
