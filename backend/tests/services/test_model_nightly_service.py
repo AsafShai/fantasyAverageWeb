@@ -1,7 +1,7 @@
 """Orchestration tests for ModelNightlyService (fake DB + fake fetch, no network)."""
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pandas as pd
@@ -39,6 +39,24 @@ class FakeDB:
         self.vectors_written = None
         self.vector_feature_keys = None   # union across the 3 vector tables; None = unknown
         self.keys_after_upsert = None     # what a successful rebuild writes, if set
+        # Incremental path inputs: the vectors' as-of night vs the latest raw night.
+        self.vectors_as_of = None         # None = no vectors yet -> full rebuild path
+        self.latest_fs_date = GAME_DATE - timedelta(days=1)
+        self.vector_rows = ([{"player_id": 1}], [{"team_id": 10}], [{"team_id": 10}])
+        self.players_asked = None         # player ids the incremental history load got
+
+    async def get_vectors_as_of(self):
+        return self.vectors_as_of
+
+    async def get_latest_fs_date_before(self, d):
+        return self.latest_fs_date
+
+    async def get_fs_rows_before_for_players(self, d, player_ids):
+        self.players_asked = list(player_ids)
+        return self.player_recs, self.team_recs
+
+    async def load_feature_vectors(self):
+        return self.vector_rows
 
     async def get_feature_vector_keys(self):
         return self.vector_feature_keys
@@ -129,6 +147,21 @@ def _allow_predict(monkeypatch, evals):
     monkeypatch.setattr(
         ModelNightlyService, "_process_sync",
         staticmethod(lambda p, t, n: (evals, _night_players_frame(), _DUMMY_VECTORS)),
+    )
+    monkeypatch.setattr(
+        ModelNightlyService, "_process_sync_incremental",
+        staticmethod(lambda *a: pytest.fail("incremental path must not run here")),
+    )
+
+
+def _allow_predict_incremental(monkeypatch, evals, calls):
+    def incremental(pv, tav, tov, players, team_games, night):
+        calls.append((pv, tav, tov, len(players), len(team_games)))
+        return evals, _night_players_frame(), _DUMMY_VECTORS
+    monkeypatch.setattr(ModelNightlyService, "_process_sync_incremental", staticmethod(incremental))
+    monkeypatch.setattr(
+        ModelNightlyService, "_process_sync",
+        staticmethod(lambda *a: pytest.fail("full rebuild must not run here")),
     )
 
 
@@ -221,6 +254,66 @@ async def test_happy_path_processes_ingests_and_writes_vectors(service, monkeypa
     assert len(player_rows[0]) == len(_FS_PLAYER_COLS)
     assert len(team_rows[0]) == len(_FS_TEAM_COLS)
     assert service._db.vectors_written == _DUMMY_VECTORS
+
+
+@pytest.mark.asyncio
+async def test_incremental_path_when_stored_vectors_are_current(service, monkeypatch):
+    """Vectors through last night == raw rows through last night: score from the
+    stored vectors, load only tonight's players' history, write the night."""
+    night = _night()
+    night.player_games = _night_players_frame()
+    _allow_fetch(monkeypatch, night)
+    calls = []
+    _allow_predict_incremental(monkeypatch, [_eval_row()], calls)
+    service._db.vectors_as_of = service._db.latest_fs_date = GAME_DATE - timedelta(days=1)
+
+    assert await service.run_for_date(GAME_DATE) == "processed"
+    assert len(calls) == 1
+    assert calls[0][:3] == service._db.vector_rows
+    assert service._db.players_asked == [1]
+    assert service._db.marked == [(GAME_DATE, "processed", 2, 1)]
+    assert service._db.vectors_written == _DUMMY_VECTORS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("as_of_offset", [None, 2])
+async def test_full_rebuild_when_vectors_missing_or_stale(service, monkeypatch, as_of_offset):
+    """No vectors yet, or vectors older than the raw rows (a crashed run): rebuild
+    from the full history, which also heals the vectors."""
+    _allow_fetch(monkeypatch, _night())
+    _allow_predict(monkeypatch, [_eval_row()])
+    service._db.vectors_as_of = (
+        None if as_of_offset is None else GAME_DATE - timedelta(days=as_of_offset)
+    )
+    assert await service.run_for_date(GAME_DATE) == "processed"
+    assert service._db.players_asked is None
+    assert service._db.marked == [(GAME_DATE, "processed", 2, 1)]
+
+
+@pytest.mark.asyncio
+async def test_incremental_path_without_vector_rows_requires_bootstrap(service, monkeypatch):
+    night = _night()
+    night.player_games = _night_players_frame()
+    _allow_fetch(monkeypatch, night)
+    _allow_predict_incremental(monkeypatch, [_eval_row()], [])
+    service._db.vectors_as_of = service._db.latest_fs_date = GAME_DATE - timedelta(days=1)
+    service._db.vector_rows = ([], [], [])
+    assert await service.run_for_date(GAME_DATE) == "store_not_bootstrapped"
+
+
+def test_serialize_vectors_can_limit_to_given_players():
+    pv = pd.DataFrame({
+        "PLAYER_ID": [1, 2, 3], "PLAYER_NAME": ["a", "b", "c"], "TEAM_ID": [10, 10, 20],
+        "POSITION": ["G", "F", "C"], "last_game_date": [pd.Timestamp(GAME_DATE)] * 3,
+        "games_count": [12, 3, 40], "F1": [0.1, 0.2, 0.3],
+    })
+    teams = pd.DataFrame({"TEAM_ID": [10, 20], "T1": [1.0, 2.0]})
+    store = SimpleNamespace(player_vectors=pv, team_allowed_vectors=teams, team_own_vectors=teams)
+    all_rows, _, _ = _serialize_vectors(store)
+    some_rows, tav, tov = _serialize_vectors(store, player_ids=[3, 1])
+    assert [r[0] for r in all_rows] == [1, 2, 3]
+    assert [r[0] for r in some_rows] == [1, 3]
+    assert len(tav) == len(tov) == 2
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 import json
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pandas as pd
@@ -19,6 +20,17 @@ class FakeConn:
         self.executemany = AsyncMock(return_value=None)
         # Answers the information_schema probe for the dynamic-category columns.
         self.fetchval = AsyncMock(return_value=dynamic_columns)
+        # Server-side cursor (chunked frame loads): one chunk with fetch_result, then empty.
+        self.cursor_chunks = [list(fetch_result or [])]
+        self.cursor = AsyncMock(side_effect=self._make_cursor)
+        self.transaction = lambda: FakeAcquireCtx(self)
+
+    async def _make_cursor(self, *args, **kwargs):
+        chunks = list(self.cursor_chunks)
+
+        async def fetch(n):
+            return chunks.pop(0) if chunks else []
+        return SimpleNamespace(fetch=fetch)
 
 
 @pytest.fixture(autouse=True)
@@ -187,9 +199,34 @@ async def test_get_fs_rows_before_filters_min_minutes(db_service, monkeypatch):
 
     await db_service.get_fs_rows_before(date(2026, 1, 10))
 
-    args = conn.fetch.call_args_list[0][0]
+    # The player history streams through a cursor (chunked), the gate is on that query.
+    args = conn.cursor.call_args_list[0][0]
     assert "min >= $2" in args[0]
     assert args[2] == rconfig.MIN_MINUTES
+
+
+@pytest.mark.asyncio
+async def test_fetch_frame_chunked_concatenates_chunks_in_order(db_service, monkeypatch):
+    """Chunks come back as one frame, rows in cursor order, with the usual
+    uppercase pipeline columns — the same frame a single fetch produced."""
+    from app.services.db_service import _fetch_frame_chunked
+
+    class Rec(dict):
+        def keys(self):
+            return super().keys()
+
+    conn = FakeConn()
+    conn.cursor_chunks = [
+        [Rec(player_id=1, game_date=date(2026, 1, 1), pts=10.0)],
+        [Rec(player_id=2, game_date=date(2026, 1, 2), pts=20.0), Rec(player_id=3, game_date=date(2026, 1, 3), pts=30.0)],
+    ]
+    df = await _fetch_frame_chunked(conn, "SELECT 1")
+    assert list(df.columns) == ["PLAYER_ID", "GAME_DATE", "PTS"]
+    assert df["PLAYER_ID"].tolist() == [1, 2, 3]
+    assert str(df["GAME_DATE"].dtype).startswith("datetime64")
+
+    conn.cursor_chunks = []
+    assert (await _fetch_frame_chunked(conn, "SELECT 1")).empty
 
 
 @pytest.mark.asyncio

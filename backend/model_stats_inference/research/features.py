@@ -404,7 +404,10 @@ def feature_columns(matrix: pd.DataFrame) -> list[str]:
 # Players per batch when materializing the serving vectors. Bounds the transient
 # memory of a full rebuild (see build_current_state); output is identical to any
 # other value because every player feature is computed within its own group.
-PLAYER_VECTOR_CHUNK = 100
+# Measured on four seasons (full 15-game night, nightly recompute of 292 players):
+# 100 -> 409 MB peak, 50 -> 385, 25 -> 373, 10 -> 365, for +0.3 s at 25 and
+# +0.8 s at 10 — 25 is the knee.
+PLAYER_VECTOR_CHUNK = 25
 
 
 def _asof_features(
