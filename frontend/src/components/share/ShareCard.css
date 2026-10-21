@@ -90,6 +90,8 @@
 .share-card__person-text { min-width: 0; }
 .share-card__player { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
 .share-card__why { font-size: 9.5px; color: var(--sc-muted); overflow: hidden; text-overflow: ellipsis; }
+.share-card__shooting { display: inline-flex; flex-direction: column; line-height: 1.1; }
+.share-card__shooting-frac { font-size: 8.5px; color: var(--sc-muted); }
 .share-card__empty { padding: 6px 0 8px; font-size: 11px; color: var(--sc-muted); }
 .share-card__body + .share-card__body { padding-top: 4px; }
 

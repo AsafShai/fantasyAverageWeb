@@ -23,6 +23,9 @@ describe('BoomOrBustShareCard', () => {
     expect(screen.getByText('Paul George')).toBeInTheDocument()
     expect(screen.getByText('BOS · 5 STL (avg 1.6)')).toBeInTheDocument()
     expect(screen.getByText('+2.6')).toBeInTheDocument()
+    expect(screen.getAllByText('57%')).toHaveLength(2)        // 12-21 FG, both rows share the fixture line
+    expect(screen.getAllByText('12-21')).toHaveLength(2)
+    expect(screen.getAllByText('88%')).toHaveLength(2)        // 7-8 FT
     expect(document.querySelectorAll('img.share-card__avatar')).toHaveLength(2)
     expect(document.querySelector('img.share-card__avatar')?.getAttribute('src')).toContain('/i/headshots/nba/players/full/1.png')
     expect(screen.getByText('Jayson Tatum')).toBeInTheDocument()

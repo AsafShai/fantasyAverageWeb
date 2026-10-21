@@ -65,6 +65,7 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('Bad Guy')).toBeInTheDocument()
     expect(screen.getByText('31 PTS (avg 18.2)')).toBeInTheDocument()
     expect(screen.getByText('25% FG%')).toBeInTheDocument()
+    expect(screen.getAllByText('53%').length).toBeGreaterThan(0)   // 8-15 FG as a percentage
     expect(screen.getAllByText('history only')).toHaveLength(1)
     expect(screen.getByText(/Friday, Jan 5, 2024 · 3 games · 50 of 60 players scored · 40 with a model estimate/)).toBeInTheDocument()
     expect(screen.getByText(/No games last night — showing the latest night with results \(Jan 5, 2024\)/)).toBeInTheDocument()

@@ -52,6 +52,20 @@ function isNotFound(error: unknown): boolean {
   return e.status === 404 || e.originalStatus === 404;
 }
 
+/** "57%" with the makes over attempts beneath it, as the Projections table shows shooting. */
+function ShootingCell({ made, att }: { made: number; att: number }) {
+  if (!(att > 0)) return <span className="text-gray-400">—</span>;
+  return (
+    <span className="tabular-nums">
+      {Math.round((made / att) * 100)}%
+      <span className="inline-flex flex-col items-center leading-[0.9] text-xs align-middle ml-1 text-gray-500 dark:text-gray-400">
+        <span className="border-b border-current px-0.5">{made}</span>
+        <span>{att}</span>
+      </span>
+    </span>
+  );
+}
+
 const STAT_COLS: [keyof SurpriseRow, string][] = [
   ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['fg3m', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
 ];
@@ -111,8 +125,8 @@ function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good' | 'ba
             <th className={`${th} text-left`}>Matchup</th>
             <th className={th}>MIN</th>
             {STAT_COLS.map(([, label]) => <th key={label} className={th}>{label}</th>)}
-            <th className={th}>FG</th>
-            <th className={th}>FT</th>
+            <th className={th}>FG%</th>
+            <th className={th}>FT%</th>
             <th className={`${th} text-left`}>Score</th>
             <th className={`${th} text-left`}>Why</th>
           </tr>
@@ -127,8 +141,8 @@ function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good' | 'ba
               <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>
               <td className={td}>{Math.round(row.minutes)}</td>
               {STAT_COLS.map(([key, label]) => <td key={label} className={td}>{row[key] as number}</td>)}
-              <td className={td}>{row.fgm}-{row.fga}</td>
-              <td className={td}>{row.ftm}-{row.fta}</td>
+              <td className={td}><ShootingCell made={row.fgm} att={row.fga} /></td>
+              <td className={td}><ShootingCell made={row.ftm} att={row.fta} /></td>
               <td className="px-2 py-2 whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100 w-10">{fmtScore(row.score)}</span>

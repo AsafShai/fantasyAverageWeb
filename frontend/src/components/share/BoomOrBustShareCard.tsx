@@ -19,6 +19,15 @@ const COLS: [keyof SurpriseRow, string][] = [
   ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['fg3m', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
 ]
 
+/** "57%" over "12-21": the shooting line the way the page shows it, compact. */
+const Shooting = ({ made, att }: { made: number; att: number }) =>
+  att > 0 ? (
+    <span className="share-card__shooting">
+      <span>{Math.round((made / att) * 100)}%</span>
+      <span className="share-card__shooting-frac">{Math.round(made)}-{Math.round(att)}</span>
+    </span>
+  ) : <span>—</span>
+
 const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string }) => (
   <div className="share-card__body">
     <div className="share-card__section">
@@ -30,11 +39,13 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
     ) : (
       <table>
         <colgroup>
-          <col style={{ width: 16 }} />
-          <col style={{ width: 150 }} />
-          <col style={{ width: 38 }} />
-          {COLS.map(([k]) => <col key={k} style={{ width: 23 }} />)}
+          <col style={{ width: 14 }} />
+          <col style={{ width: 122 }} />
           <col style={{ width: 36 }} />
+          {COLS.map(([k]) => <col key={k} style={{ width: 22 }} />)}
+          <col style={{ width: 34 }} />
+          <col style={{ width: 34 }} />
+          <col style={{ width: 34 }} />
         </colgroup>
         <thead>
           <tr>
@@ -42,6 +53,8 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
             <th className="sc-left">Player</th>
             <th>Opp</th>
             {COLS.map(([k, label]) => <th key={k}>{label}</th>)}
+            <th>FG%</th>
+            <th>FT%</th>
             <th>Score</th>
           </tr>
         </thead>
@@ -68,6 +81,8 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
                 </td>
                 <td>{row.is_home ? 'vs' : '@'} {row.opponent_abbr}</td>
                 {COLS.map(([k]) => <td key={k}>{Math.round(Number(row[k]))}</td>)}
+                <td><Shooting made={row.fgm} att={row.fga} /></td>
+                <td><Shooting made={row.ftm} att={row.fta} /></td>
                 <td><span className={`sc-chip sc-${kind}`}>{fmtScore(row.score)}</span></td>
               </tr>
             )
