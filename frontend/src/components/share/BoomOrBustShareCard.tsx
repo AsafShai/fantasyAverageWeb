@@ -1,7 +1,7 @@
 import type { SurpriseRow } from '../../types/api'
 import { toListHeadshotUrl } from '../../utils/adp'
 import { ShareCard, type ShareCardTheme } from './ShareCard'
-import { driverColumns, shortName, shortReason } from './boomOrBustMessage'
+import { driverColumns, shortName } from './boomOrBustMessage'
 
 interface BoomOrBustShareCardProps extends ShareCardTheme {
   /** "Tuesday, Oct 20, 2026" */
@@ -65,7 +65,6 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
         </thead>
         <tbody>
           {rows.map((row, index) => {
-            const reason = shortReason(row)
             // The stats that made the night, each in its own colour: green above
             // his norm, red below, whichever table the row is in.
             const drivers = driverColumns(row)
@@ -84,10 +83,10 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
                     />
                     <div className="share-card__person-text">
                       <div className="share-card__player">{shortName(row.player_name, 20)}</div>
-                      {/* team, opponent and the headline stat on one muted line: an
-                          opponent column would squeeze the names at 400px */}
+                      {/* team and opponent on one muted line; the marked cells say
+                          what made the night, so no headline stat here */}
                       <div className="share-card__why">
-                        {row.team_abbr} {row.is_home ? 'vs' : '@'} {row.opponent_abbr}{reason ? ` · ${reason}` : ''}
+                        {row.team_abbr} {row.is_home ? 'vs' : '@'} {row.opponent_abbr}
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useGetLatestSurprisesQuery, useGetSurprisesForDateQuery, useGetSurpriseDatesQuery } from '../store/api/fantasyApi';
-import type { NightSurprises, SurpriseReason, SurpriseRow } from '../types/api';
+import type { NightSurprises, SurpriseRow } from '../types/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import PlayerNameLink from '../components/PlayerNameLink';
@@ -34,22 +34,6 @@ function fmtScore(score: number): string {
   const s = Math.abs(score).toFixed(1);
   return score < 0 ? `−${s}` : `+${s}`;
 }
-
-const STAT_LABELS: Record<string, string> = { FG3M: '3PM', FG_PCT: 'FG%', FT_PCT: 'FT%' };
-const PCT_STATS = new Set(['FG_PCT', 'FT_PCT']);
-
-/** "38 PTS (avg 20.7)": the headline stat of the night, with his usual number. */
-function reasonText(r: SurpriseReason): string {
-  const label = STAT_LABELS[r.stat] ?? r.stat;
-  if (PCT_STATS.has(r.stat)) return `${Math.round(r.value * 100)}% ${label}`;
-  const value = Number.isInteger(r.value) ? String(r.value) : r.value.toFixed(1);
-  return r.avg == null ? `${value} ${label}` : `${value} ${label} (avg ${r.avg.toFixed(1)})`;
-}
-
-const CHIP = {
-  good: 'inline-block px-1.5 py-0.5 rounded text-xs whitespace-nowrap bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  bad: 'inline-block px-1.5 py-0.5 rounded text-xs whitespace-nowrap bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-} as const;
 
 /** RTK reports a JSON 404 as `status: 404`, a plain-text one as PARSING_ERROR with `originalStatus: 404`. */
 function isNotFound(error: unknown): boolean {
@@ -108,11 +92,7 @@ function PlayerCell({ row }: { row: SurpriseRow }) {
         <div className="truncate">
           <PlayerNameLink name={row.player_name} playerId={row.player_id} />
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-          {row.team_abbr}
-          {/* the biggest stat that put him here, in its own colour */}
-          {row.reasons[0] && <span className={CHIP[row.reasons[0].z >= 0 ? 'good' : 'bad']}>{reasonText(row.reasons[0])}</span>}
-        </div>
+        <div className="mt-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{row.team_abbr}</div>
       </div>
     </div>
   );

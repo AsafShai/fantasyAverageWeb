@@ -63,8 +63,8 @@ describe('Boom or Bust page', () => {
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
     expect(screen.getByText('Bad Guy')).toBeInTheDocument()
-    expect(screen.getByText('31 PTS (avg 18.2)')).toBeInTheDocument()
-    expect(screen.getByText('25% FG%')).toBeInTheDocument()
+    expect(screen.queryByText('31 PTS (avg 18.2)')).not.toBeInTheDocument()   // no stat text by the name either
+    expect(screen.queryByText('25% FG%')).not.toBeInTheDocument()   // no stat text by the name: the cells carry the colour
     expect(screen.getAllByText('53%').length).toBeGreaterThan(0)   // 8-15 FG as a percentage
     expect(screen.getAllByText('history only')).toHaveLength(1)
     expect(screen.getByText(/Friday, Jan 5, 2024 · 3 games · 50 of 60 players scored · 40 with a model estimate/)).toBeInTheDocument()
