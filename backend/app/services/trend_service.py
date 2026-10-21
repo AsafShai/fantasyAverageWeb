@@ -203,7 +203,7 @@ def compute_regression_groups(
         player_name = str(current_row['player_name'])
         espn_row = espn_by_name.get(resolve_join_key(player_name))
         if espn_row is None:
-            logger.warning(f"No ESPN roster match for '{player_name}' — skipped from Shooting Regression")
+            logger.warning(f"No ESPN roster match for '{player_name}' - skipped from Shooting Regression")
             continue
 
         stats.sort(key=(lambda s: s.drift_score) if mode == 'form' else (lambda s: abs(s.dev)), reverse=True)
@@ -262,7 +262,7 @@ def compute_minutes_movers(
         player_name = str(season_row['player_name'])
         espn_row = espn_by_name.get(resolve_join_key(player_name))
         if espn_row is None:
-            logger.warning(f"No ESPN roster match for '{player_name}' — skipped from Minutes Movers")
+            logger.warning(f"No ESPN roster match for '{player_name}' - skipped from Minutes Movers")
             continue
 
         season_mpg = season_row['min'] / season_gp if season_gp else 0.0
@@ -352,7 +352,7 @@ def compute_usage_role(
         player_name = str(group.iloc[0]['player_name'])
         espn_row = espn_by_name.get(resolve_join_key(player_name))
         if espn_row is None:
-            logger.warning(f"No ESPN roster match for '{player_name}' — skipped from Usage & Role")
+            logger.warning(f"No ESPN roster match for '{player_name}' - skipped from Usage & Role")
             continue
 
         usg_series = group.apply(_usg_per_game, axis=1)

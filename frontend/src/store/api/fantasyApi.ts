@@ -65,7 +65,7 @@ export const fantasyApi = createApi({
     }),
     getAllPlayers: builder.query<PaginatedPlayers, { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string }>({
       query: ({ page = 1, limit = 500, time_period = 'season', start, end } = {}) => ({
-        url: '/players',
+        url: '/players/',
         params: { page, limit, time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) },
       }),
       keepUnusedDataFor: 300,

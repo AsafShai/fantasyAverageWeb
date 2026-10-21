@@ -11,6 +11,7 @@ from app.builders.response_builder import ResponseBuilder
 from app.utils.name_matching import resolve_join_key
 from app.utils.constants import RATIO_CATEGORIES
 from app.config import settings
+from app.utils.log_once import warn_on_change
 
 logger = logging.getLogger(__name__)
 
@@ -190,9 +191,10 @@ def merge_windowed_players_df(
     unmatched = ~known
     if unmatched.any():
         missed = merged.loc[unmatched, 'Name'].tolist()
-        logger.warning(
+        warn_on_change(
+            logger, f"players-unresolved:{time_period.value}", missed,
             f"{len(missed)} players did not resolve to a current-season NBA player "
-            f"(time_period={time_period.value}): {missed[:20]}"
+            f"(time_period={time_period.value}): {missed[:20]}",
         )
 
     merged['GP'] = merged['GP'].astype(int)

@@ -39,7 +39,10 @@ export const DEFAULT_API: Record<string, () => MockResponse> = {
 }
 
 function matches(pattern: string, path: string) {
-  return pattern.endsWith('*') ? path.startsWith(pattern.slice(0, -1)) : path === pattern
+  if (pattern.endsWith('*')) return path.startsWith(pattern.slice(0, -1))
+  // FastAPI serves '/players' and '/players/' alike (307), so the mock does too.
+  const trim = (p: string) => (p.length > 1 ? p.replace(/\/$/, '') : p)
+  return trim(path) === trim(pattern)
 }
 
 /**

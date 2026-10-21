@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.services.model_nightly_service import ModelNightlyService
+from app.utils.request_context import start_job_run
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,10 @@ async def start_scheduler():
             f"{next_trigger.strftime('%H:%M')} IL"
         )
         await asyncio.sleep(sleep_seconds)
+        start_job_run("model-nightly")
         logger.info("Model nightly scheduler triggered")
         try:
             statuses = await service.run_catchup()
             logger.info(f"Model nightly catch-up finished: {statuses}")
         except Exception as e:
-            logger.error(f"Model nightly pipeline failed: {type(e).__name__}: {e}; will retry at next slot")
-            logger.exception("Model nightly pipeline failure traceback")
+            logger.exception(f"Model nightly pipeline failed: {type(e).__name__}: {e}; will retry at next slot")

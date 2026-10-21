@@ -18,6 +18,7 @@ from app.services.model_nightly_service import ModelNightlyService
 from app.services.nba_matchup_service import GameInfo
 from app.utils.name_matching import normalize_player_name
 from app.utils.team_abbr_map import team_id_for_abbr
+from app.utils.log_once import warn_on_change
 from model_stats_inference.serving.feature_store import FeatureStore
 from model_stats_inference.serving.inference import LiveInference, PredictionRequest
 
@@ -96,9 +97,11 @@ class LiveProjectionService:
             meta.append((name, pid, default_min))
 
         if unmatched:
-            logger.warning(
+            warn_on_change(
+                logger, f"live-projection-unmatched:{today}", unmatched,
                 f"No feature-store match for {len(unmatched)} player(s) with a game today, "
-                f"skipped: {', '.join(unmatched)}"
+                f"skipped: {', '.join(unmatched[:20])}"
+                + (f" (+{len(unmatched) - 20} more)" if len(unmatched) > 20 else ""),
             )
         if not reqs:
             return {}
@@ -119,7 +122,7 @@ class LiveProjectionService:
             return None
         pid = self._name_index.get(normalize_player_name(player_name))
         if pid is None:
-            logger.warning(f"No feature-store match for '{player_name}' — next-game projection skipped")
+            logger.warning(f"No feature-store match for '{player_name}' - next-game projection skipped")
             return None
         opp_id = _opponent_team_id(opponent)
         if opp_id is None:
@@ -142,7 +145,7 @@ class LiveProjectionService:
             return None
         pid = self._name_index.get(normalize_player_name(player_name))
         if pid is None:
-            logger.warning(f"No feature-store match for '{player_name}' — projection request skipped")
+            logger.warning(f"No feature-store match for '{player_name}' - projection request skipped")
             return None
         opp_id = _opponent_team_id(opponent)
         if opp_id is None:
