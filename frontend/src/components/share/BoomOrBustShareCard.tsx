@@ -1,7 +1,7 @@
 import type { SurpriseRow } from '../../types/api'
 import { toListHeadshotUrl } from '../../utils/adp'
 import { ShareCard, type ShareCardTheme } from './ShareCard'
-import { topReason } from './boomOrBustMessage'
+import { shortReason } from './boomOrBustMessage'
 
 interface BoomOrBustShareCardProps extends ShareCardTheme {
   /** "Tuesday, Oct 20, 2026" */
@@ -60,7 +60,7 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
         </thead>
         <tbody>
           {rows.map((row, index) => {
-            const reason = topReason(row)
+            const reason = shortReason(row)
             return (
               <tr key={row.player_id}>
                 <td className="sc-rank">{index + 1}</td>

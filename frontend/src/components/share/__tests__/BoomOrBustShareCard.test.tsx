@@ -21,7 +21,7 @@ describe('BoomOrBustShareCard', () => {
     expect(screen.getByText('💥 Boom or Bust')).toBeInTheDocument()
     expect(screen.getByText('Tuesday, Oct 20, 2026 · 3 games')).toBeInTheDocument()
     expect(screen.getByText('Paul George')).toBeInTheDocument()
-    expect(screen.getByText('BOS · 5 STL (avg 1.6)')).toBeInTheDocument()
+    expect(screen.getByText('BOS · 5 STL')).toBeInTheDocument()
     expect(screen.getByText('+2.6')).toBeInTheDocument()
     expect(screen.getAllByText('57%')).toHaveLength(2)        // 12-21 FG, both rows share the fixture line
     expect(screen.getAllByText('12-21')).toHaveLength(2)

@@ -13,6 +13,15 @@ export function topReason(row: SurpriseRow): string | null {
   return r.avg == null ? `${value} ${label}` : `${value} ${label} (avg ${r.avg.toFixed(1)})`
 }
 
+/** "38 PTS": the first driver without the average, for the narrow share card. */
+export function shortReason(row: SurpriseRow): string | null {
+  const r = row.reasons[0]
+  if (!r) return null
+  const label = STAT_LABELS[r.stat] ?? r.stat
+  if (r.stat === 'FG_PCT' || r.stat === 'FT_PCT') return `${Math.round(r.value * 100)}% ${label}`
+  return `${Number.isInteger(r.value) ? r.value : r.value.toFixed(1)} ${label}`
+}
+
 const fmtScore = (score: number) => `${score < 0 ? '−' : '+'}${Math.abs(score).toFixed(1)}`
 
 /** "38 PTS, 5 STL": the two stats that drove the score, compact. */
