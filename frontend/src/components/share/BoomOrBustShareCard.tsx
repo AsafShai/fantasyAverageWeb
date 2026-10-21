@@ -13,6 +13,9 @@ interface BoomOrBustShareCardProps extends ShareCardTheme {
   thresholds: { good: number; bad: number }
 }
 
+/** Wider than the roto cards: eleven columns with headshots and two-line shooting cells. */
+export const CARD_WIDTH = 480
+
 const fmtScore = (score: number) => `${score < 0 ? '−' : '+'}${Math.abs(score).toFixed(1)}`
 
 const COLS: [keyof SurpriseRow, string][] = [
@@ -31,7 +34,7 @@ const Shooting = ({ made, att, mark }: { made: number; att: number; mark?: strin
 const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string }) => (
   <div className="share-card__body">
     <div className="share-card__section">
-      <span className="share-card__section-title">{title}</span>
+      <span className="share-card__section-title">{title} <span className="share-card__section-count">{rows.length}</span></span>
       <span className="share-card__section-rule">{rule}</span>
     </div>
     {rows.length === 0 ? (
@@ -39,15 +42,16 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
     ) : (
       <table>
         <colgroup>
-          {/* Widths sum to 364 (14 + 138 + 6 x 20 + 30 + 30 + 32): the body is 376 wide (400 - 2 x 12 padding) and
-              table-layout: fixed grows the table past 100% when the columns ask
-              for more, which clipped the Score column in the exported image. */}
-          <col style={{ width: 14 }} />
-          <col style={{ width: 138 }} />
-          {COLS.map(([k]) => <col key={k} style={{ width: 20 }} />)}
-          <col style={{ width: 30 }} />
-          <col style={{ width: 30 }} />
-          <col style={{ width: 32 }} />
+          {/* Widths sum to 450 (16 + 172 + 6 x 25 + 36 + 36 + 40): the body is 456
+              wide (CARD_WIDTH - 2 x 12 padding) and table-layout: fixed grows the
+              table past 100% when the columns ask for more, which would clip the
+              Score column in the exported image. */}
+          <col style={{ width: 16 }} />
+          <col style={{ width: 172 }} />
+          {COLS.map(([k]) => <col key={k} style={{ width: 25 }} />)}
+          <col style={{ width: 36 }} />
+          <col style={{ width: 36 }} />
+          <col style={{ width: 40 }} />
         </colgroup>
         <thead>
           <tr>
@@ -79,7 +83,7 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
                       crossOrigin="anonymous"
                     />
                     <div className="share-card__person-text">
-                      <div className="share-card__player">{shortName(row.player_name)}</div>
+                      <div className="share-card__player">{shortName(row.player_name, 20)}</div>
                       {/* team, opponent and the headline stat on one muted line: an
                           opponent column would squeeze the names at 400px */}
                       <div className="share-card__why">
@@ -109,7 +113,9 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
 export const BoomOrBustShareCard = ({ dark, dateLabel, games, booms, busts, thresholds }: BoomOrBustShareCardProps) => (
   <ShareCard
     dark={dark}
-    kicker="boom or bust"
+    width={CARD_WIDTH}
+    className="share-card--boom"
+    kicker="last night"
     title="💥 Boom or Bust"
     subtitle={`${dateLabel} · ${games} game${games === 1 ? '' : 's'}`}
     footer={<><span>Score = how unexpected vs his own history and the model</span><span>+ boom · − bust</span></>}
