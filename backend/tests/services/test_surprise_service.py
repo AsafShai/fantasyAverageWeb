@@ -73,8 +73,10 @@ def test_score_night_scores_only_the_night_and_flags_estimates(history):
     assert by_name.at["Cold Night", "SCORE"] < -1.5
     assert bool(by_name.at["Big Night", "HAS_ESTIMATE"]) is True
     assert bool(by_name.at["Cold Night", "HAS_ESTIMATE"]) is False
-    assert by_name.at["Big Night", "REASONS"][0]["stat"] == "PTS"
-    assert by_name.at["Big Night", "REASONS"][0]["value"] == 45.0
+    lead = by_name.at["Big Night", "REASONS"][0]
+    assert lead["z"] > 0 and lead["stat"] in ("PTS", "FGM", "REB", "AST", "FG3M", "STL", "BLK", "FTM")
+    assert all(r["z"] > 0 for r in by_name.at["Big Night", "REASONS"])     # everything was up tonight
+    assert by_name.at["Cold Night", "REASONS"][0]["z"] < 0
 
 
 def test_score_night_without_eval_rows_scores_on_history_alone(history):

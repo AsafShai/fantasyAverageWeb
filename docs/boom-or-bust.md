@@ -26,6 +26,17 @@ reference season. Positive = surprise, negative = disappointment. A player witho
 model estimate yet (fewer than 10 games) is scored on metric 1 alone, against its own
 reference, and tagged "history only" on the page.
 
+**Per-stat verdicts** (the coloured cells): for every stat of a scored row the same
+two ingredients are blended for that stat alone, its z against his own windows and
+the model's standardized error for it (makes, not percentages, for FG/FT), with the
+same sign-piecewise weights; z alone without an estimate. A stat is marked when
+that per-stat surprise is at least 1.0 either way (median cell 0.6, 90th
+percentile 1.8 on two real nights): green above his norm, red below, whichever
+table the row is in, so a boom can show a cold free-throw line and a bust a good
+assist night. Shooting needs volume to be marked (FGA ≥ 4, FTA ≥ 3: a 1-of-1 is
+nothing). The strongest stat matching the score's sign is the headline next to
+the name. Stored per row as `reasons`, at most 5.
+
 Weights and blend: `backend/model_stats_inference/serving/surprise.py` (module constants).
 Reference season: `surprise_calibration.json` next to it, built by
 `scripts/build_surprise_calibration.py` from the walk-forward parquet. Thresholds

@@ -149,21 +149,24 @@ class TestScoring:
         assert scored["HAS_ESTIMATE"].sum() == 1
         assert scored.at[idx, "METRIC_ERR"] > 0
 
-    def test_reasons_follow_the_verdict_sign(self):
+    def test_reasons_lead_with_the_verdict_and_keep_both_signs(self):
         hist = pd.concat([_history(p, 12, 15.0, seed=p) for p in range(1, 5)], ignore_index=True)
-        hist.loc[hist["GAME_ID"] == "1-011", ["PTS", "REB"]] = [40, 15]
+        # a big night on points and rebounds, with a cold free-throw line on volume
+        hist.loc[hist["GAME_ID"] == "1-011", ["PTS", "REB", "FTM", "FTA"]] = [40, 15, 0, 8]
+        # and a 1-of-1 FG night elsewhere: no shooting verdict without volume
+        hist.loc[hist["GAME_ID"] == "2-011", ["FGM", "FGA"]] = [1, 1]
         z = surprise.compute_zscores(hist, with_means=True)
         df = hist.merge(z, on=["PLAYER_ID", "GAME_ID"])
         calibration, df = _calibration(df)
         scored = surprise.score_frame(df, calibration)
         reasons = surprise.reasons_for(df, scored, calibration)
-        idx = df.index[df["GAME_ID"] == "1-011"][0]
-        stats = [r["stat"] for r in reasons[idx]]
-        assert stats[:2] in (["PTS", "REB"], ["REB", "PTS"])
-        assert all(r["z"] > 0 for r in reasons[idx])
-        assert reasons[idx][0]["value"] in (40.0, 15.0)
-        assert reasons[idx][0]["avg"] is not None
-        assert len(reasons[idx]) <= surprise.N_REASONS
+        big = reasons[df.index[df["GAME_ID"] == "1-011"][0]]
+        assert big[0]["stat"] in ("PTS", "REB") and big[0]["z"] > 0      # headline matches the boom
+        assert {r["stat"]: r["z"] for r in big}.get("FT_PCT", 0) < 0     # the cold line is kept, negative
+        assert big[0]["avg"] is not None and len(big) <= surprise.N_REASONS
+        assert all(abs(r["z"]) >= surprise.MIN_REASON for r in big)
+        small = reasons[df.index[df["GAME_ID"] == "2-011"][0]]
+        assert "FG_PCT" not in {r["stat"] for r in small}
 
     def test_calibration_lists_every_required_column(self):
         hist = pd.concat([_history(p, 12, 15.0, seed=p) for p in range(1, 4)], ignore_index=True)
@@ -179,6 +182,16 @@ class TestScoring:
         assert calibration["settings"]["err_weights"] == surprise.ERR_WEIGHTS
         assert calibration["settings"]["blend"] == surprise.BLEND
         assert set(surprise.required_columns()) <= set(calibration["norm"])
+
+
+def test_per_stat_surprise_blends_like_the_final_and_falls_back_to_z():
+    uz = pd.DataFrame({"PTS": [2.0, -2.0, 1.0], "REB": [0.0, 0.0, 0.5]})
+    ue = pd.DataFrame({"PTS": [1.0, -1.0, np.nan], "REB": [np.nan, np.nan, np.nan]})
+    out = surprise.per_stat_surprise(uz, ue)
+    b = surprise.BLEND
+    assert out.at[0, "PTS"] == pytest.approx((b["w1_pos"] * 2 + b["w2_pos"] * 1) / (b["w1_pos"] + b["w2_pos"]))
+    assert out.at[1, "PTS"] == pytest.approx((b["w1_neg"] * -2 + b["w2_neg"] * -1) / (b["w1_neg"] + b["w2_neg"]))
+    assert out.at[2, "PTS"] == 1.0 and out.at[2, "REB"] == 0.5     # no estimate: z alone
 
 
 def test_weighted_metric_ignores_missing_components_but_not_all_missing():

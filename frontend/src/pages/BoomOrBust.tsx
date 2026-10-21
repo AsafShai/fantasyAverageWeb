@@ -7,7 +7,7 @@ import PlayerNameLink from '../components/PlayerNameLink';
 import { toListHeadshotUrl } from '../utils/adp';
 import { ShareCardButton } from '../components/share/ShareCardButton';
 import { BoomOrBustShareCard } from '../components/share/BoomOrBustShareCard';
-import { buildShareMessage } from '../components/share/boomOrBustMessage';
+import { buildShareMessage, driverColumns } from '../components/share/boomOrBustMessage';
 
 /** Parse YYYY-MM-DD as a local calendar date (no timezone shift). */
 function parseDay(s: string): Date {
@@ -38,12 +38,18 @@ function fmtScore(score: number): string {
 const STAT_LABELS: Record<string, string> = { FG3M: '3PM', FG_PCT: 'FG%', FT_PCT: 'FT%' };
 const PCT_STATS = new Set(['FG_PCT', 'FT_PCT']);
 
+/** "38 PTS (avg 20.7)": the headline stat of the night, with his usual number. */
 function reasonText(r: SurpriseReason): string {
   const label = STAT_LABELS[r.stat] ?? r.stat;
   if (PCT_STATS.has(r.stat)) return `${Math.round(r.value * 100)}% ${label}`;
   const value = Number.isInteger(r.value) ? String(r.value) : r.value.toFixed(1);
   return r.avg == null ? `${value} ${label}` : `${value} ${label} (avg ${r.avg.toFixed(1)})`;
 }
+
+const CHIP = {
+  good: 'inline-block px-1.5 py-0.5 rounded text-xs whitespace-nowrap bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  bad: 'inline-block px-1.5 py-0.5 rounded text-xs whitespace-nowrap bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+} as const;
 
 /** RTK reports a JSON 404 as `status: 404`, a plain-text one as PARSING_ERROR with `originalStatus: 404`. */
 function isNotFound(error: unknown): boolean {
@@ -53,10 +59,10 @@ function isNotFound(error: unknown): boolean {
 }
 
 /** "57%" with the makes over attempts beneath it, as the Projections table shows shooting. */
-function ShootingCell({ made, att }: { made: number; att: number }) {
+function ShootingCell({ made, att, mark }: { made: number; att: number; mark?: string }) {
   if (!(att > 0)) return <span className="text-gray-400">—</span>;
   return (
-    <span className="tabular-nums">
+    <span className={`tabular-nums${mark ? ` ${mark}` : ''}`}>
       {Math.round((made / att) * 100)}%
       <span className="inline-flex flex-col items-center leading-[0.9] text-xs align-middle ml-1 text-gray-500 dark:text-gray-400">
         <span className="border-b border-current px-0.5">{made}</span>
@@ -102,7 +108,11 @@ function PlayerCell({ row }: { row: SurpriseRow }) {
         <div className="truncate">
           <PlayerNameLink name={row.player_name} playerId={row.player_id} />
         </div>
-        <div className="mt-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">{row.team_abbr}</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+          {row.team_abbr}
+          {/* the biggest stat that put him here, in its own colour */}
+          {row.reasons[0] && <span className={CHIP[row.reasons[0].z >= 0 ? 'good' : 'bad']}>{reasonText(row.reasons[0])}</span>}
+        </div>
       </div>
     </div>
   );
@@ -113,6 +123,12 @@ function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good' | 'ba
     return <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Nobody crossed the bar tonight.</p>;
   }
   const barColor = kind === 'good' ? 'bg-blue-500' : 'bg-red-500';
+  // The stats that made the night, marked in the row in their own colour:
+  // green above the player's norm, red below, whichever table this is.
+  const MARK = {
+    good: 'inline-block rounded px-1.5 py-0.5 font-bold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
+    bad: 'inline-block rounded px-1.5 py-0.5 font-bold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
+  } as const;
   const th = 'px-2 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap';
   const td = 'px-2 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300 text-center';
   return (
@@ -128,11 +144,13 @@ function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good' | 'ba
             <th className={th}>FG%</th>
             <th className={th}>FT%</th>
             <th className={`${th} text-left`}>Score</th>
-            <th className={`${th} text-left`}>Why</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-          {rows.map((row, i) => (
+          {rows.map((row, i) => {
+            const drivers = driverColumns(row);
+            const markOf = (col: string) => (drivers.has(col) ? MARK[drivers.get(col)!] : undefined);
+            return (
             <tr key={row.player_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
               <td className={`${td} text-right text-gray-400 dark:text-gray-500`}>{i + 1}</td>
               <td className="px-2 py-2 min-w-[12rem]">
@@ -140,9 +158,13 @@ function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good' | 'ba
               </td>
               <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>
               <td className={td}>{Math.round(row.minutes)}</td>
-              {STAT_COLS.map(([key, label]) => <td key={label} className={td}>{row[key] as number}</td>)}
-              <td className={td}><ShootingCell made={row.fgm} att={row.fga} /></td>
-              <td className={td}><ShootingCell made={row.ftm} att={row.fta} /></td>
+              {STAT_COLS.map(([key, label]) => (
+                <td key={label} className={td}>
+                  {markOf(key) ? <span className={markOf(key)}>{row[key] as number}</span> : (row[key] as number)}
+                </td>
+              ))}
+              <td className={td}><ShootingCell made={row.fgm} att={row.fga} mark={markOf('fg')} /></td>
+              <td className={td}><ShootingCell made={row.ftm} att={row.fta} mark={markOf('ft')} /></td>
               <td className="px-2 py-2 whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100 w-10">{fmtScore(row.score)}</span>
@@ -159,20 +181,9 @@ function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good' | 'ba
                   )}
                 </div>
               </td>
-              <td className="px-2 py-2">
-                <div className="flex flex-wrap gap-1">
-                  {row.reasons.map((r, j) => (
-                    <span
-                      key={`${r.stat}-${j}`}
-                      className="inline-block px-1.5 py-0.5 rounded text-xs whitespace-nowrap bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-                    >
-                      {reasonText(r)}
-                    </span>
-                  ))}
-                </div>
-              </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

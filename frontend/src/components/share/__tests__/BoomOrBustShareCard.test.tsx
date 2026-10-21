@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { BoomOrBustShareCard } from '../BoomOrBustShareCard'
-import { buildShareMessage, topReason } from '../boomOrBustMessage'
+import { buildShareMessage, shortName, topReason } from '../boomOrBustMessage'
 import type { SurpriseRow } from '../../../types/api'
 
 const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
@@ -21,7 +21,7 @@ describe('BoomOrBustShareCard', () => {
     expect(screen.getByText('💥 Boom or Bust')).toBeInTheDocument()
     expect(screen.getByText('Tuesday, Oct 20, 2026 · 3 games')).toBeInTheDocument()
     expect(screen.getByText('Paul George')).toBeInTheDocument()
-    expect(screen.getByText('BOS · 5 STL')).toBeInTheDocument()
+    expect(screen.getByText('BOS @ DET · 5 STL')).toBeInTheDocument()
     expect(screen.getByText('+2.6')).toBeInTheDocument()
     expect(screen.getAllByText('57%')).toHaveLength(2)        // 12-21 FG, both rows share the fixture line
     expect(screen.getAllByText('12-21')).toHaveLength(2)
@@ -29,7 +29,7 @@ describe('BoomOrBustShareCard', () => {
     expect(document.querySelectorAll('img.share-card__avatar')).toHaveLength(2)
     expect(document.querySelector('img.share-card__avatar')?.getAttribute('src')).toContain('/i/headshots/nba/players/full/1.png')
     expect(screen.getByText('Jayson Tatum')).toBeInTheDocument()
-    expect(screen.getByText('BOS · 26% FG%')).toBeInTheDocument()
+    expect(screen.getByText('BOS @ DET · 26% FG%')).toBeInTheDocument()
     expect(screen.getByText('−1.9')).toBeInTheDocument()
     expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
     expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
@@ -39,6 +39,14 @@ describe('BoomOrBustShareCard', () => {
     render(<BoomOrBustShareCard dark={true} dateLabel="Oct 20, 2026" games={1} booms={[]} busts={[bust]} thresholds={{ good: 1.8, bad: 1.8 }} />)
     expect(screen.getByText('Nobody crossed the bar')).toBeInTheDocument()
     expect(screen.getByText('Oct 20, 2026 · 1 game')).toBeInTheDocument()
+  })
+
+  it('shortName keeps short names and initials long ones', () => {
+    expect(shortName('Paul George')).toBe('Paul George')
+    expect(shortName('Baylor Scheierman')).toBe('B. Scheierman')
+    expect(shortName('Ron Harper Jr.')).toBe('Ron Harper Jr.')
+    expect(shortName('Giannis Antetokounmpo')).toBe('G. Antetokounmpo')
+    expect(shortName('Shai Gilgeous-Alexander')).toBe('Gilgeous-Alexander')
   })
 
   it('topReason reads the first driver', () => {

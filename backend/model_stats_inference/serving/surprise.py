@@ -70,7 +70,26 @@ BOX_COLUMNS = ["PLAYER_ID", "GAME_ID", "SEASON", "GAME_DATE", "MIN",
                "PTS", "REB", "AST", "FG3M", "FG3A", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
 
 CALIBRATION_PATH = Path(__file__).parent / "surprise_calibration.json"
-N_REASONS = 3
+# Per-stat verdicts on a row ("reasons"): every stat whose per-stat surprise is
+# at least MIN_REASON either way, strongest first, at most N_REASONS. The
+# per-stat surprise blends the two ingredients the final score blends, for
+# that stat alone: its z against the player's own windows and its standardized
+# model error (actual minus what the model expected for his minutes), with the
+# same sign-piecewise weights; z alone when he has no estimate. Measured on
+# two real nights: the median cell is 0.6, the 90th percentile 1.8; at 1.0 a
+# flagged row carries about five marks and one in seven carries both colours.
+N_REASONS = 5
+MIN_REASON = 1.0
+# The model-error column that backs each stat's verdict. Shooting uses the
+# makes error (volume-inherent), never the percentage error.
+REASON_ERR_COLUMN = {
+    "PTS": "PTS", "REB": "REB", "AST": "AST", "STL": "STL", "BLK": "BLK", "FG3M": "FG3M",
+    "FGM": "FGM", "FTM": "FTM", "FG_PCT": "FGM", "FT_PCT": "FTM",
+}
+# A shooting verdict needs volume: the binomial z of a 1-of-1 night is ~1 on
+# its own, so FG needs this many attempts and FT this many to be marked.
+MIN_FGA_FOR_REASON = 4
+MIN_FTA_FOR_REASON = 3
 
 
 # --- Z-scores (every played game counts; windows strictly before tonight) ----
@@ -375,23 +394,56 @@ def score_frame(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
     return out
 
 
+def per_stat_surprise(uz: pd.DataFrame, ue: pd.DataFrame) -> pd.DataFrame:
+    """The final score's blend, applied per stat: z against his own history
+    and the model's error for that stat, positive-side weights when the
+    blend is positive, negative-side when not; z alone where the model has
+    no estimate (NaN error)."""
+    b = BLEND
+    ue = ue.reindex(columns=uz.columns)
+    has_err = ue.notna()
+    fp = (b["w1_pos"] * uz + b["w2_pos"] * ue.fillna(0.0)) / (abs(b["w1_pos"]) + abs(b["w2_pos"]))
+    fn = (b["w1_neg"] * uz + b["w2_neg"] * ue.fillna(0.0)) / (abs(b["w1_neg"]) + abs(b["w2_neg"]))
+    blended = fp.where(fp >= 0, fn)
+    return blended.where(has_err, uz)
+
+
 def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> list[list[dict]]:
-    """Per row, the stats that drove the score: the largest window-weighted,
-    standardized z contributions whose sign matches the verdict, with tonight's
-    value and the strictly-prior season average."""
+    """Per row, the stats that made the night, each with its own sign.
+
+    A stat is listed when its per-stat surprise (``per_stat_surprise``: z
+    against his own windows blended with the model's error for that stat, NOT
+    weighted by the metric's stat weights, so a 7-three night is a reason
+    whatever FG3M's weight) is at least MIN_REASON either way: positive =
+    better than his norm and the model's expectation, negative = worse. A boom
+    can carry a cold stat and a bust a good one. The first entry matches the
+    score's sign so the headline reads right; the rest come strongest first.
+    Shooting stats also need the volume gates. Each entry: stat, tonight's
+    value, his season (or all-time) average, z (the per-stat surprise).
+    """
     normed = standardize(df, calibration)
     total_ww = sum(WINDOW_WEIGHTS.values())
-    contributions = {}
-    for stat, sw in Z_WEIGHTS.items():
+    strength = {}
+    for stat in Z_WEIGHTS:
         acc = pd.Series(0.0, index=df.index)
+        have = pd.Series(0.0, index=df.index)
         for win, ww in WINDOW_WEIGHTS.items():
             col = f"NORM_{BASIS}_{win}_{stat}"
             if col in normed.columns:
                 acc = acc + normed[col].fillna(0.0) * ww
-        # Window-averaged standardized z, times the stat's weight: ranks the
-        # drivers the way the metric does, on a scale a reader can place.
-        contributions[stat] = acc / total_ww * sw
-    contrib = pd.DataFrame(contributions)
+                have = have + normed[col].notna() * ww
+        strength[stat] = (acc / total_ww).where(have > 0)
+    uz = pd.DataFrame(strength)
+    # the model's side of each stat, standardized; NaN without an estimate
+    ue = pd.DataFrame({
+        stat: normed[f"NORM_ERR_{err}"] if f"NORM_ERR_{err}" in normed.columns else np.nan
+        for stat, err in REASON_ERR_COLUMN.items() if stat in uz.columns
+    }, index=df.index)
+    u = per_stat_surprise(uz, ue)
+    # volume gates on the shooting verdicts
+    for stat, att_col, floor in (("FG_PCT", "FGA", MIN_FGA_FOR_REASON), ("FT_PCT", "FTA", MIN_FTA_FOR_REASON)):
+        if stat in u.columns and att_col in df.columns:
+            u[stat] = u[stat].where(df[att_col] >= floor)
 
     out: list[list[dict]] = []
     for idx in df.index:
@@ -399,14 +451,13 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
         if pd.isna(score):
             out.append([])
             continue
-        row = contrib.loc[idx]
-        ranked = row.sort_values(ascending=score < 0)
+        row = u.loc[idx].dropna()
+        strong = row[row.abs() >= MIN_REASON]
+        ranked = strong.reindex(strong.abs().sort_values(ascending=False).index)
+        lead = ranked[(ranked > 0) if score >= 0 else (ranked < 0)].head(1)
+        ranked = pd.concat([lead, ranked.drop(lead.index)])
         picked = []
-        for stat, c in ranked.items():
-            if (c <= 0) if score >= 0 else (c >= 0):
-                break
-            if len(picked) == N_REASONS:
-                break
+        for stat, c in ranked.head(N_REASONS).items():
             # His average this season; before his first game of it, over all his games.
             avg = np.nan
             for win in ("SEASON", "ALL"):
