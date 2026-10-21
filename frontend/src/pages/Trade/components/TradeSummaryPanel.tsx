@@ -15,7 +15,7 @@ import { useMyTeam } from '../../../context/MyTeamContext';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
 import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
 import { formatAsOf, type TradeShareRow } from '../../../components/share/shareCardFormat';
-import type { PlayerValueLookup } from '../utils/playerValues';
+import { averageZ, type PlayerValueLookup } from '../utils/playerValues';
 
 interface TradeSummaryPanelProps {
   teamA: Team | null;
@@ -26,7 +26,7 @@ interface TradeSummaryPanelProps {
   tradeMode: TradeMode;
   /** Time window of the stats, e.g. "Season" or "Last 30 days"; shown on the share card. */
   periodLabel?: string;
-  /** Rank and z-score of each player, shown on the share card. */
+  /** Rank and z-score of each player, shown on the share card and averaged per side in the table. */
   playerValue?: PlayerValueLookup;
 }
 
@@ -107,6 +107,24 @@ const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage =
   );
 };
 
+const ZValue: React.FC<{ value: number | null; comparedTo: number | null }> = ({ value, comparedTo }) => {
+  if (value === null) {
+    return <div className="bg-gray-100 rounded p-1 text-center flex items-center justify-center min-h-[44px] text-xs text-gray-500">—</div>;
+  }
+  const styles = comparedTo === null || value === comparedTo
+    ? { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' }
+    : value > comparedTo
+      ? { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' }
+      : { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
+  return (
+    <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px] ring-1 ring-inset ring-indigo-200`}>
+      <span className={`font-bold ${styles.text} text-xs leading-tight`}>
+        {value > 0 ? '+' : ''}{value.toFixed(2)}
+      </span>
+      <span className={`${styles.text} text-[10px]`}>{styles.indicator}</span>
+    </div>
+  );
+};
 
 export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   teamA,
@@ -205,6 +223,10 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   const aggregateExtras = viewMode === 'averages' ? aggregateExtraAverages : aggregateExtraTotals;
   const extraStatsA = aggregateExtras(playersA, extraCategories);
   const extraStatsB = aggregateExtras(playersB, extraCategories);
+
+  const showZ = playerValue !== undefined;
+  const zA = averageZ(playersA, playerValue);
+  const zB = averageZ(playersB, playerValue);
 
   const valueOf = (column: Column, fixed: typeof displayStatsA, extras: Record<string, number>) =>
     column.extraCategory !== undefined
@@ -355,9 +377,18 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
           </div>
 
           <div className="w-full overflow-x-auto">
-            <div className="grid gap-1" style={{ gridTemplateColumns: `220px repeat(${visibleColumns.length}, minmax(60px, 1fr))` }}>
+            <div className="grid gap-1" style={{ gridTemplateColumns: `220px${showZ ? ' minmax(60px, 1fr)' : ''} repeat(${visibleColumns.length}, minmax(60px, 1fr))` }}>
               {/* Header row */}
               <div className="font-semibold text-gray-700 p-2 text-sm">Team</div>
+              {showZ && (
+                <div
+                  className="font-semibold text-indigo-700 p-2 text-center text-xs leading-tight"
+                  title="Average z-score of the players on this side (per game, all categories weighted equally, as in Player Rankings)"
+                >
+                  <div className="text-sm">⚖️</div>
+                  <div>Avg Z</div>
+                </div>
+              )}
               {visibleColumns.map(({ key, label, icon }) => (
                 <div key={key} className="font-semibold text-gray-700 p-2 text-center text-xs leading-tight">
                   <div className="text-sm">{icon}</div>
@@ -370,6 +401,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   {teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
                 </span>
               </div>
+              {showZ && <ZValue value={zA} comparedTo={zB} />}
               {renderRow(displayStatsA, extraStatsA, displayStatsB, extraStatsB)}
 
               <div className="bg-green-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
@@ -377,6 +409,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   {tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
                 </span>
               </div>
+              {showZ && <ZValue value={zB} comparedTo={zA} />}
               {renderRow(displayStatsB, extraStatsB, displayStatsA, extraStatsA)}
             </div>
           </div>
