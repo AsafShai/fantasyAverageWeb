@@ -1781,6 +1781,32 @@ class DBService:
             logger.error(f"Failed to fetch latest surprise date: {type(e).__name__}: {e}")
             return None
 
+    async def get_unscored_processed_nights(self, since: date) -> list[date]:
+        """Nights the nightly marked processed on or after ``since`` that have no
+        surprise rows yet: what a backfill has to score (a deploy that landed
+        after the nightly ran, or a night the step failed on)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT r.game_date
+                    FROM model_nightly_runs r
+                    WHERE r.status = 'processed' AND r.game_date >= $1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM model_surprise_results s WHERE s.game_date = r.game_date
+                      )
+                    ORDER BY r.game_date
+                    """,
+                    since,
+                )
+                return [r["game_date"] for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch unscored nights: {type(e).__name__}: {e}")
+            return []
+
     async def insert_model_surprise_rows(self, rows: list[tuple]) -> bool:
         """Upsert scored player-games. Tuple order must match the columns below."""
         pool = await self._get_pool()

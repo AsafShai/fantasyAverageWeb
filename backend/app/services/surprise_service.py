@@ -1,9 +1,11 @@
 """Surprises of the night: score one night's player-games and serve them.
 
 Runs right after the nightly job has ingested a night (model_nightly_service),
-and can backfill any ingested night by hand:
+and can backfill by hand: one ingested night, or every night this season the
+nightly processed before the step existed (or failed on):
 
     uv run python -m app.services.surprise_service --date YYYY-MM-DD
+    uv run python -m app.services.surprise_service --missing
 
 Inputs are all in Postgres already: fs_player_games (the night's lines plus
 every player's history, for the z-scores) and model_eval_results (the model's
@@ -211,6 +213,25 @@ class SurpriseService:
         )
         return "processed"
 
+    async def backfill_missing(self) -> dict[date, str]:
+        """Score every night this season the nightly marked processed that has no
+        surprise rows yet, oldest first; one status per night. Nothing is
+        rescored, so it is safe to run any time."""
+        season_start = await schedule_service.get_season_start_date() or settings.season_start
+        nights = await self._db.get_unscored_processed_nights(season_start)
+        if not nights:
+            logger.info("Surprises backfill: every processed night is scored")
+            return {}
+        logger.info(f"Surprises backfill: {len(nights)} nights to score, {nights[0]} .. {nights[-1]}")
+        results: dict[date, str] = {}
+        for night in nights:
+            try:
+                results[night] = await self.compute_and_store(night)
+            except Exception as e:
+                logger.error(f"Surprises backfill {night}: {type(e).__name__}: {e}")
+                results[night] = "failed"
+        return results
+
     # --- read side ------------------------------------------------------------
 
     async def dates(self) -> list[str]:
@@ -283,13 +304,20 @@ class SurpriseService:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Score an ingested night's surprises")
-    parser.add_argument("--date", required=True, help="YYYY-MM-DD of an ingested night")
+    parser = argparse.ArgumentParser(description="Score ingested nights' surprises")
+    which = parser.add_mutually_exclusive_group(required=True)
+    which.add_argument("--date", help="YYYY-MM-DD of an ingested night")
+    which.add_argument("--missing", action="store_true",
+                       help="every processed night this season without surprise rows")
     args = parser.parse_args()
 
     async def _main() -> str:
         try:
-            return await SurpriseService().compute_and_store(date.fromisoformat(args.date))
+            svc = SurpriseService()
+            if args.missing:
+                done = await svc.backfill_missing()
+                return "\n".join(f"{d}: {status}" for d, status in done.items()) or "nothing to score"
+            return await svc.compute_and_store(date.fromisoformat(args.date))
         finally:
             await DBService().close()
 
