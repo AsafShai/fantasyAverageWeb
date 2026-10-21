@@ -5,6 +5,8 @@ before it. Heavy jobs call ``log_memory`` at each step so that line names the
 step and how close the container was to its limit.
 """
 
+import ctypes
+import gc
 import logging
 from pathlib import Path
 from typing import Optional
@@ -76,3 +78,19 @@ def log_memory(step: str, log: logging.Logger = logger) -> None:
                 level = logging.WARNING
                 msg += " — near memory limit"
     log.log(level, msg)
+
+
+def release_memory(step: str, log: logging.Logger = logger) -> None:
+    """Give freed memory back to the OS, then log where we stand.
+
+    pandas frees its temporaries, but glibc keeps the freed arenas mapped, so a
+    process that built a feature store stays at its peak RSS for the rest of the
+    day — and that is what the container's OOM killer counts. ``malloc_trim``
+    returns those arenas (Linux/glibc only; a no-op elsewhere).
+    """
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+    log_memory(step, log)

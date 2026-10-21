@@ -76,6 +76,34 @@ def fs_records_to_frame(records) -> pd.DataFrame:
     return df
 
 
+# Rows per cursor fetch when streaming a big table into a frame. Small enough
+# that only one chunk of boxed asyncpg records is alive at a time, large enough
+# that the per-chunk frame overhead stays negligible.
+FS_FETCH_CHUNK_ROWS = 10_000
+
+
+async def _fetch_frame_chunked(conn: asyncpg.Connection, query: str, *args) -> pd.DataFrame:
+    """Stream a query into a pipeline frame through a server-side cursor.
+
+    ``conn.fetch`` materializes every row as a Record before the frame exists,
+    so a ~90k-row history peaks at ~160 MB over the 22 MB frame it becomes —
+    the spike that pushed the nightly over a 512 MB container. Fetching
+    FS_FETCH_CHUNK_ROWS at a time converts each chunk to a frame and frees its
+    records before the next arrives, so the peak is one chunk plus the frame
+    (~57 MB measured on the same history). Same columns, same rows, same order
+    as a single fetch.
+    """
+    parts: list[pd.DataFrame] = []
+    async with conn.transaction():
+        cursor = await conn.cursor(query, *args)
+        while chunk := await cursor.fetch(FS_FETCH_CHUNK_ROWS):
+            parts.append(fs_records_to_frame(chunk))
+            del chunk
+    if not parts:
+        return pd.DataFrame()
+    return pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0]
+
+
 async def _init_connection(conn: asyncpg.Connection) -> None:
     """asyncpg hands back jsonb as str without this, so every read site would
     have to json.loads by hand."""
@@ -1031,17 +1059,73 @@ class DBService:
             return pd.DataFrame(), pd.DataFrame()
         try:
             async with pool.acquire() as conn:
-                players = await conn.fetch(
+                players = await _fetch_frame_chunked(
+                    conn,
                     "SELECT * FROM fs_player_games WHERE game_date < $1 AND min >= $2",
                     game_date, rconfig.MIN_MINUTES,
                 )
                 teams = await conn.fetch(
                     "SELECT * FROM fs_team_games WHERE game_date < $1", game_date
                 )
-                return fs_records_to_frame(players), fs_records_to_frame(teams)
+                return players, fs_records_to_frame(teams)
         except Exception as e:
             logger.error(f"Failed to fetch fs rows before {game_date}: {type(e).__name__}: {e}")
             return pd.DataFrame(), pd.DataFrame()
+
+    async def get_fs_rows_before_for_players(
+        self, game_date: date, player_ids: list[int]
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Same read boundary and MIN_MINUTES gate as ``get_fs_rows_before``, but
+        only the given players' history. The nightly recompute needs exactly the
+        players who played tonight; everyone else's vector is already stored.
+        Team rows come whole: every team's vector is rebuilt each night and they
+        are small (~10k rows for four seasons)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame(), pd.DataFrame()
+        try:
+            async with pool.acquire() as conn:
+                players = await _fetch_frame_chunked(
+                    conn,
+                    "SELECT * FROM fs_player_games "
+                    "WHERE game_date < $1 AND min >= $2 AND player_id = ANY($3::bigint[])",
+                    game_date, rconfig.MIN_MINUTES, [int(p) for p in player_ids],
+                )
+                teams = await conn.fetch(
+                    "SELECT * FROM fs_team_games WHERE game_date < $1", game_date
+                )
+                return players, fs_records_to_frame(teams)
+        except Exception as e:
+            logger.error(f"Failed to fetch fs rows for players before {game_date}: {type(e).__name__}: {e}")
+            return pd.DataFrame(), pd.DataFrame()
+
+    async def get_vectors_as_of(self) -> Optional[date]:
+        """The latest game folded into the stored player vectors (max last_game_date),
+        None when there are no vectors or the DB is unavailable."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetchval("SELECT MAX(last_game_date) FROM fs_player_vectors")
+        except Exception as e:
+            logger.error(f"Failed to read vectors as-of date: {type(e).__name__}: {e}")
+            return None
+
+    async def get_latest_fs_date_before(self, game_date: date) -> Optional[date]:
+        """Latest qualifying game night in the store strictly before ``game_date``."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetchval(
+                    "SELECT MAX(game_date) FROM fs_player_games WHERE game_date < $1 AND min >= $2",
+                    game_date, rconfig.MIN_MINUTES,
+                )
+        except Exception as e:
+            logger.error(f"Failed to read latest fs date before {game_date}: {type(e).__name__}: {e}")
+            return None
 
     async def aggregate_player_games(
         self, start: date, end: date, season: str
@@ -1513,14 +1597,24 @@ class DBService:
             return None
         return keys or None
 
-    async def load_feature_vectors(self) -> tuple[list[dict], list[dict], list[dict]]:
-        """(player_vectors, team_allowed_vectors, team_own_vectors) rows for serving."""
+    async def load_feature_vectors(
+        self, player_ids: Optional[list[int]] = None
+    ) -> tuple[list[dict], list[dict], list[dict]]:
+        """(player_vectors, team_allowed_vectors, team_own_vectors) rows for serving.
+        ``player_ids`` limits the player rows (the nightly scores only the players
+        who played); team rows always come whole."""
         pool = await self._get_pool()
         if pool is None:
             return [], [], []
         try:
             async with pool.acquire() as conn:
-                pv = await conn.fetch("SELECT * FROM fs_player_vectors")
+                if player_ids is None:
+                    pv = await conn.fetch("SELECT * FROM fs_player_vectors")
+                else:
+                    pv = await conn.fetch(
+                        "SELECT * FROM fs_player_vectors WHERE player_id = ANY($1::bigint[])",
+                        [int(p) for p in player_ids],
+                    )
                 tav = await conn.fetch("SELECT * FROM fs_team_allowed_vectors")
                 tov = await conn.fetch("SELECT * FROM fs_team_own_vectors")
                 return [dict(r) for r in pv], [dict(r) for r in tav], [dict(r) for r in tov]
