@@ -299,13 +299,9 @@ class FantasyEstimator:
         date_min, date_max = df[c.DATE].min(), df[c.DATE].max()
         total_gp = int(df[c.GP].sum())
         self.logger.info(
-            "Input snapshot: rows=%d, unique_teams=%d, unique_scoring_period_ids=%d",
-            n_rows,
-            n_teams,
-            n_periods,
+            "Input snapshot: %d rows, %d teams, %d scoring period(s), dates %s..%s (%d), %d GP",
+            n_rows, n_teams, n_periods, date_min, date_max, n_dates, total_gp,
         )
-        self.logger.info("Unique dates: %d, range: %s to %s", n_dates, date_min, date_max)
-        self.logger.info("Total GP (games played) across snapshot: %d", total_gp)
 
     def estimate(
         self,

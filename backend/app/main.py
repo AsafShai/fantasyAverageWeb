@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -43,21 +44,23 @@ from app.services import nba_players_scheduler
 from app.services import adp_snapshot_scheduler
 from app.services import health_service
 from app.utils.timing_middleware import add_timing_middleware
-from app.utils.request_context import RequestIdFilter
+from app.utils.request_context import ContextFilter, DropDuplicateAsgiTraceback, HttpxTallyFilter, log_format
 from app.utils.http_cache import HttpCacheMiddleware
 from app.utils import background_tasks
 from app.utils.memory import log_memory
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
-# Configure logging. [request_id] ties every line logged while serving a
-# request to that request's access-log line ("-" outside a request).
+# Each line reads "LEVEL [request_id trigger] module: message" -- trigger is
+# the endpoint or scheduled job on our side that caused it.
 _log_handler = logging.StreamHandler()
-_log_handler.addFilter(RequestIdFilter())
+_log_handler.addFilter(ContextFilter())
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] %(message)s',
+    format=log_format(),
     handlers=[_log_handler]
 )
+logging.getLogger("httpx").addFilter(HttpxTallyFilter())
+logging.getLogger("uvicorn.error").addFilter(DropDuplicateAsgiTraceback())
 logger = logging.getLogger(__name__)
 
 limiter = Limiter(key_func=get_remote_address)
@@ -79,7 +82,10 @@ async def derive_season_start():
 async def lifespan(app: FastAPI):
     """Manage application lifespan for proper resource cleanup"""
     # Startup
-    logger.info("Starting Fantasy League Dashboard API")
+    logger.info(
+        f"Starting Fantasy League Dashboard API: commit={os.environ.get('RENDER_GIT_COMMIT', 'local')[:7]} "
+        f"season={settings.season_id} league={settings.league_id}"
+    )
     logger.info(
         "Flags: "
         f"INJURY_SCHEDULER_ENABLED={settings.injury_scheduler_enabled}, "
@@ -171,7 +177,8 @@ async def data_source_error_handler(request: Request, exc: DataSourceError):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception in {request.url}: {type(exc).__name__}: {exc}", exc_info=True)
+    if not getattr(request.state, "exception_logged", False):
+        logger.error(f"Unhandled exception in {request.url}: {type(exc).__name__}: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={

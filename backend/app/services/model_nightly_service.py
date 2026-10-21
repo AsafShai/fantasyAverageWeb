@@ -284,7 +284,7 @@ class ModelNightlyService:
             # rewrites theirs; nobody else's row is touched.
             pv, tav, tov = await db.load_feature_vectors(player_ids=night_ids)
             if not tav or not tov or team_games.empty:
-                logger.error("Feature-store tables are empty — run --bootstrap first")
+                logger.error("Feature-store tables are empty - run --bootstrap first")
                 return "store_not_bootstrapped"
             logger.info(
                 f"Nightly {game_date}: stored vectors are current (through {vectors_as_of}); "
@@ -309,7 +309,7 @@ class ModelNightlyService:
                 logger,
             )
             if players.empty or team_games.empty:
-                logger.error("Feature-store tables are empty — run --bootstrap first")
+                logger.error("Feature-store tables are empty - run --bootstrap first")
                 return "store_not_bootstrapped"
 
             evals, night_players, vectors = await asyncio.to_thread(
