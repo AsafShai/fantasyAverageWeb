@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { Player } from '../../../../types/api';
 import { TradeSummaryPanel } from '../TradeSummaryPanel';
@@ -53,5 +54,83 @@ describe('TradeSummaryPanel categories', () => {
     const nineCell = screen.getByText('9').parentElement!;
     expect(sevenCell.className).toContain('bg-green-100');
     expect(nineCell.className).toContain('bg-red-100');
+  });
+});
+
+describe('TradeSummaryPanel categories-only shortcut', () => {
+  const labels = () => [...headers()].map(h => h.textContent).slice(1);
+  const EIGHT = ['📈FG%', '📊FT%', '🎯3PM', '🏀REB', '🤝AST', '🥷STL', '🛡️BLK', '🏀PTS'];
+
+  it('shows just the 8 scoring categories, then brings the columns back', async () => {
+    const user = userEvent.setup();
+    renderPanel([player('a', {})], [player('b', {})]);
+    const toggle = screen.getByRole('button', { name: '8 cats only' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(labels()).toEqual(EIGHT);
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(labels()).toHaveLength(14);
+  });
+
+  it('restores a custom column choice and leaves the manual checkboxes working', async () => {
+    const user = userEvent.setup();
+    renderPanel([player('a', {})], [player('b', {})]);
+    await user.click(screen.getByRole('button', { name: /Show\/Hide Columns/ }));
+    await user.click(screen.getByRole('checkbox', { name: /MIN/ }));
+    await user.click(screen.getByRole('checkbox', { name: /GP/ }));
+    const custom = labels();
+    expect(custom).not.toContain('⏰MIN');
+
+    const toggle = screen.getByRole('button', { name: '8 cats only' });
+    await user.click(toggle);
+    expect(labels()).toEqual(EIGHT);
+    expect(screen.getByRole('checkbox', { name: /FGM/ })).not.toBeChecked();
+
+    // A manual tweak while on just turns the shortcut off.
+    await user.click(screen.getByRole('checkbox', { name: /FGM/ }));
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(labels()).toEqual(['🎯FGM', ...EIGHT].sort((a, b) => custom.indexOf(a) - custom.indexOf(b)));
+
+    await user.click(toggle);
+    await user.click(toggle);
+    expect(labels()).toEqual(['🎯FGM', ...EIGHT].sort((a, b) => custom.indexOf(a) - custom.indexOf(b)));
+  });
+
+  it('counts an extra league category such as TO', async () => {
+    const user = userEvent.setup();
+    renderPanel([player('a', { TO: 3 })], [player('b', { TO: 2 })]);
+    await user.click(screen.getByRole('button', { name: '9 cats only' }));
+    expect(labels()).toEqual([...EIGHT, '➕TO']);
+  });
+});
+
+describe('TradeSummaryPanel average z-score', () => {
+  const Z: Record<string, number> = { a1: 1, a2: -0.5, b: 0.4 };
+  const playerValue = (p: Player) => (p.player_name in Z ? { rank: 1, of: 3, z: Z[p.player_name] } : undefined);
+
+  it('averages the z-scores of each side and marks the higher one', () => {
+    render(
+      <TradeSummaryPanel
+        teamA={{ team_id: 1, team_name: 'A' }}
+        teamB={{ team_id: 2, team_name: 'B' }}
+        playersA={[player('a1', {}), player('a2', {}), player('unknown', {})]}
+        playersB={[player('b', {})]}
+        viewMode="totals"
+        tradeMode="team"
+        playerValue={playerValue}
+      />,
+    );
+    expect([...headers()].map(h => h.textContent)[1]).toBe('⚖️Avg Z');
+    expect(screen.getByText('+0.25').parentElement!.className).toContain('bg-red-100');
+    expect(screen.getByText('+0.40').parentElement!.className).toContain('bg-green-100');
+  });
+
+  it('omits the column without a z-score lookup', () => {
+    renderPanel([player('a1', {})], [player('b', {})]);
+    expect(screen.queryByText('Avg Z')).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import { useMyTeam } from '../../../context/MyTeamContext';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
 import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
 import { formatAsOf, type TradeShareRow } from '../../../components/share/shareCardFormat';
+import { averageZ, type PlayerValueLookup } from '../utils/playerValues';
 
 interface TradeSummaryPanelProps {
   teamA: Team | null;
@@ -25,6 +26,8 @@ interface TradeSummaryPanelProps {
   tradeMode: TradeMode;
   /** Time window of the stats, e.g. "Season" or "Last 30 days"; shown on the share card. */
   periodLabel?: string;
+  /** Rank and z-score of each player, shown on the share card and averaged per side in the table. */
+  playerValue?: PlayerValueLookup;
 }
 
 interface StatValueProps {
@@ -104,6 +107,24 @@ const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage =
   );
 };
 
+const ZValue: React.FC<{ value: number | null; comparedTo: number | null }> = ({ value, comparedTo }) => {
+  if (value === null) {
+    return <div className="bg-gray-100 rounded p-1 text-center flex items-center justify-center min-h-[44px] text-xs text-gray-500">—</div>;
+  }
+  const styles = comparedTo === null || value === comparedTo
+    ? { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' }
+    : value > comparedTo
+      ? { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' }
+      : { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
+  return (
+    <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px] ring-1 ring-inset ring-indigo-200`}>
+      <span className={`font-bold ${styles.text} text-xs leading-tight`}>
+        {value > 0 ? '+' : ''}{value.toFixed(2)}
+      </span>
+      <span className={`${styles.text} text-[10px]`}>{styles.indicator}</span>
+    </div>
+  );
+};
 
 export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   teamA,
@@ -113,6 +134,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   viewMode,
   tradeMode,
   periodLabel = 'Season',
+  playerValue,
 }) => {
   const { myTeamId } = useMyTeam();
   const [shownColumns, setShownColumns] = useState<Record<string, boolean>>(() => {
@@ -158,6 +180,22 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
     setShownColumns(allHidden);
   };
 
+  // Shortcut to just the scoring categories (the fixed 8 plus any extra
+  // league category); clicking again brings back the columns shown before.
+  const categoryKeys = new Set<string>([...SHARE_CATEGORIES.map(c => c.field), ...extraColumns.map(c => c.key)]);
+  const categoriesOnly = columns.every(({ key }) => isShown(key) === categoryKeys.has(key));
+  const [beforeCategoriesOnly, setBeforeCategoriesOnly] = useState<Record<string, boolean> | null>(null);
+  const toggleCategoriesOnly = () => {
+    if (categoriesOnly) {
+      if (beforeCategoriesOnly) setShownColumns(beforeCategoriesOnly);
+      else showAllColumns();
+      setBeforeCategoriesOnly(null);
+      return;
+    }
+    setBeforeCategoriesOnly(shownColumns);
+    setShownColumns(Object.fromEntries(columns.map(({ key }) => [key, categoryKeys.has(key)])));
+  };
+
   const visibleColumns = columns.filter(({ key }) => isShown(key));
 
   if (playersA.length === 0 && playersB.length === 0) {
@@ -185,6 +223,10 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   const aggregateExtras = viewMode === 'averages' ? aggregateExtraAverages : aggregateExtraTotals;
   const extraStatsA = aggregateExtras(playersA, extraCategories);
   const extraStatsB = aggregateExtras(playersB, extraCategories);
+
+  const showZ = playerValue !== undefined;
+  const zA = averageZ(playersA, playerValue);
+  const zB = averageZ(playersB, playerValue);
 
   const valueOf = (column: Column, fixed: typeof displayStatsA, extras: Record<string, number>) =>
     column.extraCategory !== undefined
@@ -225,15 +267,15 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
       lowerIsBetter: KNOWN_REVERSE_CATEGORIES.has(category),
     })),
   ];
-  const names = (players: Player[]) => players.map(p => p.player_name);
+  const sharePlayers = (players: Player[]) => players.map(p => ({ name: p.player_name, value: playerValue?.(p) }));
   const shareSides: [TradeShareSide, TradeShareSide] = isTeamTrade
     ? [
-      { heading: `${teamAName} gets`, players: names(playersB), verdict: `${teamAName} gets the better side` },
-      { heading: `${teamBName} gets`, players: names(playersA), verdict: `${teamBName} gets the better side` },
+      { heading: `${teamAName} gets`, players: sharePlayers(playersB) },
+      { heading: `${teamBName} gets`, players: sharePlayers(playersA) },
     ]
     : [
-      { heading: 'Drop', players: names(playersA), verdict: 'Keeping wins' },
-      { heading: 'Add', players: names(playersB), verdict: 'The pickup wins' },
+      { heading: 'Drop', players: sharePlayers(playersA) },
+      { heading: 'Add', players: sharePlayers(playersB) },
     ];
   const mySide = !isTeamTrade || myTeamId === null ? null
     : teamA?.team_id === myTeamId ? 0 : teamB?.team_id === myTeamId ? 1 : null;
@@ -270,13 +312,28 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
 
           {/* Show/Hide Columns Control */}
           <div className="mb-6">
-            <button
-              onClick={() => setIsColumnControlsOpen(!isColumnControlsOpen)}
-              className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-            >
-              <span>{isColumnControlsOpen ? '▼' : '▶'}</span>
-              <span>Show/Hide Columns</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setIsColumnControlsOpen(!isColumnControlsOpen)}
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                <span>{isColumnControlsOpen ? '▼' : '▶'}</span>
+                <span>Show/Hide Columns</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleCategoriesOnly}
+                aria-pressed={categoriesOnly}
+                title="Show only the scoring categories; click again for the columns you had before"
+                className={`px-3 py-1 text-xs font-semibold rounded-full border transition-colors ${
+                  categoriesOnly
+                    ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {categoryKeys.size} cats only
+              </button>
+            </div>
 
             {isColumnControlsOpen && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -320,9 +377,18 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
           </div>
 
           <div className="w-full overflow-x-auto">
-            <div className="grid gap-1" style={{ gridTemplateColumns: `220px repeat(${visibleColumns.length}, minmax(60px, 1fr))` }}>
+            <div className="grid gap-1" style={{ gridTemplateColumns: `220px${showZ ? ' minmax(60px, 1fr)' : ''} repeat(${visibleColumns.length}, minmax(60px, 1fr))` }}>
               {/* Header row */}
               <div className="font-semibold text-gray-700 p-2 text-sm">Team</div>
+              {showZ && (
+                <div
+                  className="font-semibold text-indigo-700 p-2 text-center text-xs leading-tight"
+                  title="Average z-score of the players on this side (per game, all categories weighted equally, as in Player Rankings)"
+                >
+                  <div className="text-sm">⚖️</div>
+                  <div>Avg Z</div>
+                </div>
+              )}
               {visibleColumns.map(({ key, label, icon }) => (
                 <div key={key} className="font-semibold text-gray-700 p-2 text-center text-xs leading-tight">
                   <div className="text-sm">{icon}</div>
@@ -335,6 +401,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   {teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
                 </span>
               </div>
+              {showZ && <ZValue value={zA} comparedTo={zB} />}
               {renderRow(displayStatsA, extraStatsA, displayStatsB, extraStatsB)}
 
               <div className="bg-green-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
@@ -342,6 +409,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   {tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
                 </span>
               </div>
+              {showZ && <ZValue value={zB} comparedTo={zA} />}
               {renderRow(displayStatsB, extraStatsB, displayStatsA, extraStatsA)}
             </div>
           </div>

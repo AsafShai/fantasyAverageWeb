@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Player } from '../../../types/api';
 import { PlayerStatsCard } from './PlayerStatsCard';
+import type { PlayerValueLookup } from '../utils/playerValues';
 import { PlayerSearchInput } from '../../../components/PlayerSearchInput';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import ErrorMessage from '../../../components/ErrorMessage';
@@ -14,6 +15,7 @@ interface FreeAgentSectionProps {
   isLoading: boolean;
   error: unknown;
   viewMode: 'totals' | 'averages';
+  playerValue?: PlayerValueLookup;
 }
 
 export const FreeAgentSection: React.FC<FreeAgentSectionProps> = ({
@@ -24,6 +26,7 @@ export const FreeAgentSection: React.FC<FreeAgentSectionProps> = ({
   isLoading,
   error,
   viewMode,
+  playerValue,
 }) => {
   const freeAgentCount = players.length;
 
@@ -72,6 +75,7 @@ export const FreeAgentSection: React.FC<FreeAgentSectionProps> = ({
                 onRemove={() => onPlayerRemove(player)}
                 showStats={true}
                 viewMode={viewMode}
+                value={playerValue?.(player)}
               />
             ))}
           </div>

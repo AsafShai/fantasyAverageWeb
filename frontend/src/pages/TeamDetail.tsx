@@ -18,12 +18,12 @@ import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
 import { MyTeamMark } from '../components/MyTeamMark'
+import { nameCellWrapClass, wrapFriendlyName } from '../utils/wrapName'
 import { ShareCardButton } from '../components/share/ShareCardButton'
 import { TeamShareCard } from '../components/share/TeamShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
-import { FF_PROJECTIONS } from '../config/featureFlags'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -49,12 +49,6 @@ const TEAM_DETAIL_URL_SCHEMA = {
   sort: stringParam('lineup_slot'),
   order: enumParam(['asc', 'desc'] as const, 'asc'),
 }
-
-// On mobile, only names this long wrap onto a second line, and only between
-// words: hyphenated surnames (Alexander-Walker) get a non-breaking hyphen.
-const LONG_NAME_CHARS = 16
-const isLongName = (name: string) => name.length > LONG_NAME_CHARS
-const wrapFriendlyName = (name: string) => name.replaceAll('-', '\u2011')
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
@@ -516,7 +510,7 @@ const TeamDetail = () => {
                   </button>
                 </div>
               )}
-              {FF_PROJECTIONS && !showSchedule && (
+              {!showSchedule && (
                 <label className="order-3 flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none sm:order-1">
                   <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
                   Integer projections
@@ -626,7 +620,7 @@ const TeamDetail = () => {
                         />
                       </td>
                       )}
-                      <td className={`px-4 py-3 ${isLongName(player.player_name) ? 'max-w-[38vw] whitespace-normal sm:max-w-none sm:whitespace-nowrap' : 'whitespace-nowrap'} text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-r-gray-200`}><PlayerNameLink name={wrapFriendlyName(player.player_name)} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
+                      <td className={`px-4 py-3 ${nameCellWrapClass(player.player_name)} text-sm font-medium text-gray-900 sticky left-0 z-10 bg-white border-r border-r-gray-200`}><PlayerNameLink name={wrapFriendlyName(player.player_name)} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
                       {showSchedule ? (
@@ -683,7 +677,7 @@ const TeamDetail = () => {
                       )}
                     </tr>
                     {!showSchedule && isExpanded && matchup && (
-                      <MatchupExpandRow matchup={matchup} colSpan={columns.length} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
+                      <MatchupExpandRow matchup={matchup} colSpan={columns.length} integerMode={integerMode} onCollapse={() => toggleExpand(player.player_name)} />
                     )}
                   </React.Fragment>
                 )

@@ -56,6 +56,7 @@ export const Trade: React.FC = () => {
     freeAgents,
     isFetchingFreeAgents,
     freeAgentsError,
+    playerValue,
   } = useTradeData(teamA, teamB, tradeMode, timePeriod, customRange);
 
   const { myTeamId } = useMyTeam();
@@ -146,6 +147,7 @@ export const Trade: React.FC = () => {
           teamsError={teamsError}
           playersError={teamAError}
           viewMode={viewMode}
+          playerValue={playerValue}
           categoryRanks={teamAData?.category_ranks}
         />
 
@@ -165,6 +167,7 @@ export const Trade: React.FC = () => {
             teamsError={teamsError}
             playersError={teamBError}
             viewMode={viewMode}
+            playerValue={playerValue}
             categoryRanks={teamBData?.category_ranks}
           />
         ) : (
@@ -176,6 +179,7 @@ export const Trade: React.FC = () => {
             isLoading={isFetchingFreeAgents}
             error={freeAgentsError}
             viewMode={viewMode}
+            playerValue={playerValue}
           />
         )}
       </div>
@@ -189,6 +193,7 @@ export const Trade: React.FC = () => {
           playersB={tradeMode === 'team' ? currentSelectedPlayersB : currentSelectedFreeAgents}
           viewMode={viewMode}
           tradeMode={tradeMode}
+          playerValue={playerValue}
           periodLabel={timePeriod === 'custom'
             ? (customRange ? `${formatShort(customRange.start)} – ${formatShort(customRange.end)}` : 'Custom range')
             : PERIOD_LABELS[timePeriod]}
