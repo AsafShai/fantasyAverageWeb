@@ -25,6 +25,7 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
   return (
     <ShareCard
       dark={dark}
+      wide
       kicker={`${categories.length}-cat roto`}
       title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
       subtitle={`${period} ${modeLabel} · as of ${asOf}`}
@@ -34,10 +35,10 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
         <table>
           <colgroup>
             <col style={{ width: 20 }} />
-            <col style={{ width: isStandings ? 92 : 104 }} />
+            <col style={{ width: isStandings ? 118 : 128 }} />
             {categories.map(c => <col key={c} />)}
-            <col style={{ width: 32 }} />
-            <col style={{ width: 30 }} />
+            <col style={{ width: 38 }} />
+            <col style={{ width: 36 }} />
           </colgroup>
           <thead>
             <tr>

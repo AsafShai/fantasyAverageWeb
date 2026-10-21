@@ -128,6 +128,8 @@ async function expectMenuLayout(page: Page) {
 
 // 400px card + 12px margin each side, exported at 2x.
 const CARD_PNG_WIDTH = (400 + 24) * 2
+// The roto table card is wider: 8 categories plus Tot and GP.
+const WIDE_CARD_PNG_WIDTH = (500 + 24) * 2
 
 test.beforeEach(async ({ page }) => setup(page))
 
@@ -151,7 +153,7 @@ test('Rankings: share menu previews and downloads the roto card', async ({ page 
     dialog.getByRole('button', { name: 'Download PNG' }).click(),
   ])
   expect(download.suggestedFilename()).toBe('roto-rankings-2026-10-19.png')
-  expect((await pngSize(download)).width).toBe(CARD_PNG_WIDTH)
+  expect((await pngSize(download)).width).toBe(WIDE_CARD_PNG_WIDTH)
   await expect(dialog.getByRole('status')).toHaveText('Saved roto-rankings-2026-10-19.png')
 
   await page.keyboard.press('Escape')

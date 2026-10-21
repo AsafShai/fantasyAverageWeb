@@ -36,7 +36,7 @@ export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSi
       subtitle={subtitle}
       footer={<>
         <span>{mode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>
-        {hasValues && <span>#rank · Z per game</span>}
+        {hasValues && <span>#rank · Z-score, per game</span>}
       </>}
     >
       <div className="share-card__tiles">
@@ -47,7 +47,7 @@ export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSi
               {side.players.map(({ name, value }) => (
                 <li key={name} className={value ? 'share-card__player' : undefined}>
                   <span className="share-card__player-name">{name}</span>
-                  {value && <span className="share-card__player-value">#{value.rank} · {signedZ(value.z)}</span>}
+                  {value && <span className="share-card__player-value">#{value.rank} · Z {signedZ(value.z)}</span>}
                 </li>
               ))}
             </ul>

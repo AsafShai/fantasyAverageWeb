@@ -85,6 +85,11 @@ describe('RankingsShareCard', () => {
     }
   });
 
+  it('uses the wide card so ten columns have room', () => {
+    const { container } = renderCard('standings');
+    expect(container.querySelector('.share-card')).toHaveClass('share-card--wide');
+  });
+
   it('lets a long team name wrap instead of cutting it off', () => {
     renderCard('standings');
     expect(screen.getByText('Mo Bamba Mix')).toHaveClass('sc-wrap');
@@ -146,10 +151,10 @@ describe('TradeShareCard', () => {
         highlightSide={null}
       />,
     );
-    expect(screen.getByText('#12 · +1.23')).toBeInTheDocument();
-    expect(screen.getByText('#140 · -0.50')).toBeInTheDocument();
+    expect(screen.getByText('#12 · Z +1.23')).toBeInTheDocument();
+    expect(screen.getByText('#140 · Z -0.50')).toBeInTheDocument();
     expect(screen.getByText('No Data Guy').parentElement).toHaveTextContent(/^No Data Guy$/);
-    expect(screen.getByText('#rank · Z per game')).toBeInTheDocument();
+    expect(screen.getByText('#rank · Z-score, per game')).toBeInTheDocument();
   });
 
   it('leaves out the rank legend when no player has a value', () => {
@@ -164,6 +169,6 @@ describe('TradeShareCard', () => {
         highlightSide={null}
       />,
     );
-    expect(screen.queryByText('#rank · Z per game')).toBeNull();
+    expect(screen.queryByText('#rank · Z-score, per game')).toBeNull();
   });
 });

@@ -25,6 +25,7 @@
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
+.share-card--wide { width: 500px; }
 .share-card--dark {
   --sc-bg: #111827;
   --sc-fg: #f3f4f6;
@@ -90,11 +91,11 @@
 .share-card__list { margin: 3px 0 0; padding: 0; list-style: none; font-size: 11.5px; }
 .share-card__list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* player row with its rank and z-score on the right */
-.share-card__list li.share-card__player { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; white-space: normal; }
-/* A long name takes a second line rather than being cut off by the value. */
-.share-card__player-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
-.share-card__player-value { flex-shrink: 0; white-space: nowrap; font-size: 10.5px; font-weight: 700; color: var(--sc-muted); }
-.share-card__list li.share-card__player + li.share-card__player { margin-top: 2px; }
+/* name on its own line, rank and z-score in small type under it */
+.share-card__list li.share-card__player { white-space: normal; }
+.share-card__player-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-card__player-value { display: block; font-size: 10.5px; font-weight: 700; color: var(--sc-muted); }
+.share-card__list li.share-card__player + li.share-card__player { margin-top: 4px; }
 
 /* category bars (team card) */
 .share-card__bars { display: grid; gap: 5px; padding: 6px 12px 10px; }
