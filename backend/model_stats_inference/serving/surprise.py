@@ -79,7 +79,13 @@ CALIBRATION_PATH = Path(__file__).parent / "surprise_calibration.json"
 # two real nights: the median cell is 0.6, the 90th percentile 1.8; at 1.0 a
 # flagged row carries about five marks and one in seven carries both colours.
 N_REASONS = 5
+# The bad side is compressed by construction (a counting stat cannot go below
+# zero): on two real nights the 95th percentile of the per-stat surprise is
+# 2.9 on the good side and 1.4 on the bad side. The bars are therefore set per
+# sign at the same rarity: 1.0 marks the top 38% of good cells, 0.7 the top 38%
+# of bad cells. The page's three colour steps follow the same percentiles.
 MIN_REASON = 1.0
+MIN_REASON_BAD = 0.7
 # The model-error column that backs each stat's verdict. Shooting uses the
 # makes error (volume-inherent), never the percentage error.
 REASON_ERR_COLUMN = {
@@ -454,7 +460,7 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
             out.append([])
             continue
         row = u.loc[idx].dropna()
-        strong = row[row.abs() >= MIN_REASON]
+        strong = row[(row >= MIN_REASON) | (row <= -MIN_REASON_BAD)]
         ranked = strong.reindex(strong.abs().sort_values(ascending=False).index)
         lead = ranked[(ranked > 0) if score >= 0 else (ranked < 0)].head(1)
         ranked = pd.concat([lead, ranked.drop(lead.index)])

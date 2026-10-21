@@ -164,7 +164,7 @@ class TestScoring:
         assert big[0]["stat"] in ("PTS", "REB") and big[0]["z"] > 0      # headline matches the boom
         assert {r["stat"]: r["z"] for r in big}.get("FT_PCT", 0) < 0     # the cold line is kept, negative
         assert big[0]["avg"] is not None and len(big) <= surprise.N_REASONS
-        assert all(abs(r["z"]) >= surprise.MIN_REASON for r in big)
+        assert all(r["z"] >= surprise.MIN_REASON or r["z"] <= -surprise.MIN_REASON_BAD for r in big)
         small = reasons[df.index[df["GAME_ID"] == "2-011"][0]]
         assert "FG_PCT" not in {r["stat"] for r in small}
 

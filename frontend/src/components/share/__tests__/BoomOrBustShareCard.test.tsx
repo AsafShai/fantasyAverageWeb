@@ -29,11 +29,11 @@ describe('BoomOrBustShareCard', () => {
     expect(screen.getByText('−1.9')).toBeInTheDocument()
     expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
     expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
-    // the marks: STL (z 1.8, strong) and PTS (z 1.4, clear) green on the boom; FG (z -1.2, clear) red on the bust
+    // the marks: STL (z 1.8, strong) and PTS (z 1.4, clear) green on the boom; FG (z -1.2, extreme on the bad scale) red on the bust
     const stl = screen.getAllByText('5').find((el) => el.className.includes('bg-emerald-100'))
     expect(stl).toBeTruthy()
     expect(screen.getAllByText('38').some((el) => el.className.includes('bg-emerald-50'))).toBe(true)
-    expect(screen.getAllByText(/^57%/).some((el) => el.className.includes('rose'))).toBe(true)   // the bust row's FG mark
+    expect(screen.getAllByText(/^57%/).some((el) => el.className.includes('bg-rose-700'))).toBe(true)   // the bust row's FG mark, solid
   })
 
   it('says so when a section is empty', () => {
