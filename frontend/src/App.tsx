@@ -4,7 +4,7 @@ import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
-import { FF_FEATURE_STORE, FF_PROJECTIONS, FF_DRAFT_REPORT, FF_DRAFT_PAGES } from './config/featureFlags'
+import { FF_FEATURE_STORE, FF_DRAFT_REPORT, FF_DRAFT_PAGES } from './config/featureFlags'
 import { FF_LEAGUE_ACTIVITY } from './config/featureFlags'
 import { MyTeamProvider } from './context/MyTeamContext'
 
@@ -63,7 +63,7 @@ function App() {
               {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}
               {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
               <Route path="player-rankings" element={<PlayerRankings />} />
-              {FF_PROJECTIONS && <Route path="projections" element={<Projections />} />}
+              <Route path="projections" element={<Projections />} />
               {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
               {FF_DRAFT_PAGES && <Route path="draft/rankings-adp" element={<AdpPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/adp" element={<Navigate to="/draft/rankings-adp" replace />} />}

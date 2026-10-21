@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGetPlayerNextGameProjectionQuery, usePredictProjectionMutation } from '../store/api/fantasyApi'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { FF_PAST_SLATES, FF_PROJECTIONS } from '../config/featureFlags'
+import { FF_PAST_SLATES } from '../config/featureFlags'
 import type { ProjectionStats, ProjectionStatus } from '../types/api'
 import { coherentInts } from '../utils/coherentRound'
 
@@ -57,7 +57,7 @@ function Skeleton() {
 }
 
 const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
-  const { data, isLoading, isError } = useGetPlayerNextGameProjectionQuery(playerId, { skip: !playerId || !FF_PROJECTIONS })
+  const { data, isLoading, isError } = useGetPlayerNextGameProjectionQuery(playerId, { skip: !playerId })
   const [predict] = usePredictProjectionMutation()
   const [integerMode, setIntegerMode] = usePersistedState('playerProjection.integerMode', true)
   const [minutes, setMinutes] = useState(0)
@@ -77,8 +77,6 @@ const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
   }
   // A slider re-predict still pending from the previous game must not land on this one.
   useEffect(() => () => clearTimeout(timer.current), [slateKey])
-
-  if (!FF_PROJECTIONS) return null
 
   // No line to show = no block at all. Covers every "can't project" case the
   // backend can return: unknown player, insufficient history (<10 games,
