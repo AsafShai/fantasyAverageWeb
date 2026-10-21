@@ -107,3 +107,30 @@ describe('TradeSummaryPanel categories-only shortcut', () => {
     expect(labels()).toEqual([...EIGHT, '➕TO']);
   });
 });
+
+describe('TradeSummaryPanel average z-score', () => {
+  const Z: Record<string, number> = { a1: 1, a2: -0.5, b: 0.4 };
+  const playerValue = (p: Player) => (p.player_name in Z ? { rank: 1, of: 3, z: Z[p.player_name] } : undefined);
+
+  it('averages the z-scores of each side and marks the higher one', () => {
+    render(
+      <TradeSummaryPanel
+        teamA={{ team_id: 1, team_name: 'A' }}
+        teamB={{ team_id: 2, team_name: 'B' }}
+        playersA={[player('a1', {}), player('a2', {}), player('unknown', {})]}
+        playersB={[player('b', {})]}
+        viewMode="totals"
+        tradeMode="team"
+        playerValue={playerValue}
+      />,
+    );
+    expect([...headers()].map(h => h.textContent)[1]).toBe('⚖️Avg Z');
+    expect(screen.getByText('+0.25').parentElement!.className).toContain('bg-red-100');
+    expect(screen.getByText('+0.40').parentElement!.className).toContain('bg-green-100');
+  });
+
+  it('omits the column without a z-score lookup', () => {
+    renderPanel([player('a1', {})], [player('b', {})]);
+    expect(screen.queryByText('Avg Z')).toBeNull();
+  });
+});

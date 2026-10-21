@@ -1718,6 +1718,126 @@ class DBService:
             logger.error(f"Failed to fetch model eval rows for {game_date}: {type(e).__name__}: {e}")
             return []
 
+    # --- surprises of the night (model_surprise_results) -----------------------
+
+    async def get_fs_player_rows_through(self, game_date: date) -> pd.DataFrame:
+        """Every played row up to and including the night, for the players who
+        played that night only, with no MIN_MINUTES gate: the surprise z-scores
+        rank tonight among ALL of a player's games. Restricting to the night's
+        players keeps a 3-game night at a few thousand rows instead of the
+        whole ~100k-row history, and only the numeric columns the z-scores read
+        come back: the names and matchups are needed for the night's rows alone
+        (get_fs_night_rows)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame()
+        try:
+            async with pool.acquire() as conn:
+                return await _fetch_frame_chunked(
+                    conn,
+                    """
+                    SELECT player_id, game_id, season, game_date,
+                           min, pts, reb, ast, fg3m, stl, blk, fgm, fga, ftm, fta
+                    FROM fs_player_games
+                    WHERE game_date <= $1 AND min > 0
+                      AND player_id IN (
+                        SELECT player_id FROM fs_player_games WHERE game_date = $1
+                      )
+                    """,
+                    game_date,
+                )
+        except Exception as e:
+            logger.error(f"Failed to fetch fs rows through {game_date}: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+
+    async def get_fs_night_rows(self, game_date: date) -> pd.DataFrame:
+        """The night's played rows with the display fields the scored rows carry
+        (name, NBA team, matchup); a few hundred rows."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT player_id, game_id, game_date, player_name, team_id, matchup "
+                    "FROM fs_player_games WHERE game_date = $1 AND min > 0",
+                    game_date,
+                )
+                return fs_records_to_frame(rows)
+        except Exception as e:
+            logger.error(f"Failed to fetch fs night rows for {game_date}: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+
+    async def get_latest_surprise_date(self) -> Optional[date]:
+        """The newest scored night: MAX over the game_date index, not a scan of
+        every distinct date."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetchval("SELECT MAX(game_date) FROM model_surprise_results")
+        except Exception as e:
+            logger.error(f"Failed to fetch latest surprise date: {type(e).__name__}: {e}")
+            return None
+
+    async def insert_model_surprise_rows(self, rows: list[tuple]) -> bool:
+        """Upsert scored player-games. Tuple order must match the columns below."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        cols = [
+            "game_id", "player_id", "game_date", "player_name", "team_id",
+            "opponent_team_id", "is_home", "minutes",
+            "pts", "reb", "ast", "fg3m", "stl", "blk", "fgm", "fga", "ftm", "fta",
+            "metric_z", "metric_err", "score", "has_estimate", "verdict", "reasons",
+            "fantasy_team_id", "fantasy_team", "lineup_slot",
+        ]
+        updates = ",\n".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("game_id", "player_id"))
+        try:
+            async with pool.acquire() as conn:
+                await conn.executemany(
+                    f"INSERT INTO model_surprise_results ({', '.join(cols)}) VALUES "
+                    f"({', '.join(f'${i + 1}' for i in range(len(cols)))}) "
+                    f"ON CONFLICT (game_id, player_id) DO UPDATE SET {updates}, created_at = NOW()",
+                    rows,
+                )
+            logger.info(f"Upserted {len(rows)} model surprise rows")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to insert model surprise rows: {type(e).__name__}: {e}")
+            return False
+
+    async def get_surprise_dates(self) -> list[date]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT DISTINCT game_date FROM model_surprise_results ORDER BY game_date DESC"
+                )
+                return [r["game_date"] for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch surprise dates: {type(e).__name__}: {e}")
+            return []
+
+    async def get_surprises_for_date(self, game_date: date) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT * FROM model_surprise_results WHERE game_date = $1 "
+                    "ORDER BY score DESC NULLS LAST",
+                    game_date,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch surprises for {game_date}: {type(e).__name__}: {e}")
+            return []
+
     async def close(self) -> None:
         if self._pool is not None:
             await self._pool.close()

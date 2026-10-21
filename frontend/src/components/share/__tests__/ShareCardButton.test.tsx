@@ -5,6 +5,8 @@ import { toBlob } from 'html-to-image';
 import { ShareCardButton, ShareCardMenu, type ShareCardOptions } from '../ShareCardButton';
 
 vi.mock('html-to-image', () => ({ toBlob: vi.fn() }));
+// The flag comes from .env, which may be on for local QA; the gate test needs it off.
+vi.mock('../../../config/featureFlags', () => ({ FF_SHARE_CARDS: false }));
 
 const renderCard = vi.fn((options: ShareCardOptions) => (
   <div data-testid="card">{options.dark ? 'dark' : 'light'}|{options.highlightMyTeam ? 'mine' : 'plain'}</div>
@@ -139,5 +141,29 @@ describe('ShareCardMenu', () => {
     fireEvent.mouseDown(screen.getByText('outside'));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByTestId('card')).toBeNull();
+  });
+});
+
+describe('ShareCardMenu with a message', () => {
+  it('sends the message to WhatsApp and puts the image on the clipboard first', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { write, writeText: vi.fn() }, configurable: true });
+    vi.stubGlobal('ClipboardItem', class { constructor(public items: Record<string, Blob>) {} });
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await openMenu({ shareText: '💥 *Boom or Bust*\nhello' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send on WhatsApp' }));
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(`https://wa.me/?text=${encodeURIComponent('💥 *Boom or Bust*\nhello')}`, '_blank', 'noopener');
+    expect(await screen.findByRole('status')).toHaveTextContent('the image is on your clipboard');
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument();
+    open.mockRestore();
+  });
+
+  it('offers neither WhatsApp nor Copy message without a message', async () => {
+    await openMenu();
+    expect(screen.queryByRole('button', { name: 'Send on WhatsApp' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy message' })).not.toBeInTheDocument();
   });
 });

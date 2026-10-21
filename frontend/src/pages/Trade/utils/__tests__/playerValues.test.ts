@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Player } from '../../../../types/api';
 import { computePlayerRankings, DEFAULT_CATEGORIES } from '../../../../utils/playerRankings';
-import { computePlayerValues, playerValueLookup } from '../playerValues';
+import { averageZ, computePlayerValues, playerValueLookup } from '../playerValues';
 
 // Player i gets a stat line that grows with i, so a higher index is a better player.
 const player = (i: number, overrides: Partial<Player> = {}): Player => {
@@ -75,5 +75,18 @@ describe('computePlayerValues', () => {
 
   it('returns nothing for an empty pool', () => {
     expect(computePlayerValues([]).size).toBe(0);
+  });
+});
+
+describe('averageZ', () => {
+  const lookup = (p: Player) => (p.player_id === 1001 ? { rank: 1, of: 2, z: 2 } : p.player_id === 1002 ? { rank: 2, of: 2, z: -1 } : undefined);
+
+  it('averages only the players that have a z-score', () => {
+    expect(averageZ([player(1), player(2), player(3)], lookup)).toBe(0.5);
+  });
+
+  it('is null when no player has one', () => {
+    expect(averageZ([player(3)], lookup)).toBeNull();
+    expect(averageZ([player(1)], undefined)).toBeNull();
   });
 });

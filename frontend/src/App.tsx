@@ -4,7 +4,7 @@ import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
-import { FF_FEATURE_STORE, FF_DRAFT_REPORT, FF_DRAFT_PAGES } from './config/featureFlags'
+import { FF_FEATURE_STORE, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_BOOM_OR_BUST } from './config/featureFlags'
 import { FF_LEAGUE_ACTIVITY } from './config/featureFlags'
 import { MyTeamProvider } from './context/MyTeamContext'
 
@@ -23,6 +23,7 @@ const FeatureStore = lazy(() => import('./pages/FeatureStore'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const PlayerRankings = lazy(() => import('./pages/PlayerRankings'))
 const Projections = lazy(() => import('./pages/Projections'))
+const BoomOrBust = lazy(() => import('./pages/BoomOrBust'))
 const DraftReport = lazy(() => import('./pages/DraftReport'))
 const Trends = lazy(() => import('./pages/Trends'))
 const Minigames = lazy(() => import('./pages/Minigames'))
@@ -64,6 +65,7 @@ function App() {
               {/* <Route path="trade-suggestions" element={<TradeSuggestions />} /> */}
               <Route path="player-rankings" element={<PlayerRankings />} />
               <Route path="projections" element={<Projections />} />
+              {FF_BOOM_OR_BUST && <Route path="boom-or-bust" element={<BoomOrBust />} />}
               {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
               {FF_DRAFT_PAGES && <Route path="draft/rankings-adp" element={<AdpPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/adp" element={<Navigate to="/draft/rankings-adp" replace />} />}
