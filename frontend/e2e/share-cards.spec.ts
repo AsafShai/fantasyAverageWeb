@@ -87,7 +87,7 @@ async function setup(page: Page) {
     '/teams/': TEAMS,
     '/teams/1': teamDetail(0, ['Alpha Star', 'Bench Guy']),
     '/teams/2': teamDetail(1, ['Gamma Guard', 'Delta Big']),
-    '/players': playerPool(),
+    '/players/': playerPool(),
   })
 }
 
