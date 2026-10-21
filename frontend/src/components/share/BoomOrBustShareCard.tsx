@@ -39,13 +39,16 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
     ) : (
       <table>
         <colgroup>
+          {/* Widths sum to 370: the body is 376 wide (400 - 2 x 12 padding) and
+              table-layout: fixed grows the table past 100% when the columns ask
+              for more, which clipped the Score column in the exported image. */}
           <col style={{ width: 14 }} />
-          <col style={{ width: 122 }} />
-          <col style={{ width: 36 }} />
-          {COLS.map(([k]) => <col key={k} style={{ width: 22 }} />)}
+          <col style={{ width: 108 }} />
           <col style={{ width: 34 }} />
-          <col style={{ width: 34 }} />
-          <col style={{ width: 34 }} />
+          {COLS.map(([k]) => <col key={k} style={{ width: 20 }} />)}
+          <col style={{ width: 31 }} />
+          <col style={{ width: 31 }} />
+          <col style={{ width: 32 }} />
         </colgroup>
         <thead>
           <tr>
