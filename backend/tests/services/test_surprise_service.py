@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -64,7 +64,7 @@ def _evals(predicted_pts: dict[int, float]) -> pd.DataFrame:
 
 def test_score_night_scores_only_the_night_and_flags_estimates(history):
     calibration = surprise.load_calibration()
-    night = score_night(history, _evals({1: 14.0}), NIGHT, calibration)
+    night = score_night(history, None, _evals({1: 14.0}), NIGHT, calibration)
 
     assert len(night) == 4 and (night["GAME_DATE"].dt.date == NIGHT).all()
     by_name = night.set_index("PLAYER_NAME")
@@ -80,13 +80,13 @@ def test_score_night_scores_only_the_night_and_flags_estimates(history):
 
 
 def test_score_night_without_eval_rows_scores_on_history_alone(history):
-    night = score_night(history, pd.DataFrame(), NIGHT, surprise.load_calibration())
+    night = score_night(history, None, pd.DataFrame(), NIGHT, surprise.load_calibration())
     assert not night["HAS_ESTIMATE"].any()
     assert night["SCORE"].notna().all()
 
 
 def test_to_tuple_matches_insert_columns(history):
-    night = score_night(history, _evals({1: 14.0}), NIGHT, surprise.load_calibration())
+    night = score_night(history, history[["PLAYER_ID", "GAME_ID", "PLAYER_NAME", "TEAM_ID", "MATCHUP"]], _evals({1: 14.0}), NIGHT, surprise.load_calibration())
     row = night[night["PLAYER_NAME"] == "Cold Night"].iloc[0]
     t = surprise_service._to_tuple(row, NIGHT)
     assert len(t) == 27
@@ -121,9 +121,11 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     rows.append({**row(70, None, ""), "metric_z": None})
     svc = SurpriseService()
     monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return(rows))
+    monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return({"game_date": NIGHT + timedelta(days=1), "status": "no_games"}))
     monkeypatch.setattr(settings, "surprise_top_n", 5)
 
     out = await svc.night(NIGHT)
+    assert out["latest_run"] == {"game_date": "2025-12-02", "status": "no_games"}
 
     assert out["game_date"] == "2025-12-01" and out["games"] == 2
     assert out["players_played"] == 24 and out["players_scored"] == 23
@@ -148,6 +150,14 @@ async def test_night_response_is_none_without_rows(monkeypatch):
     svc = SurpriseService()
     monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return([]))
     assert await svc.night(NIGHT) is None
+
+
+@pytest.mark.asyncio
+async def test_latest_date_is_a_max_not_a_scan(monkeypatch):
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_latest_surprise_date", _async_return(NIGHT))
+    monkeypatch.setattr(svc._db, "get_surprise_dates", _async_return(pytest.fail))
+    assert await svc.latest_date() == NIGHT
 
 
 def _async_return(value):

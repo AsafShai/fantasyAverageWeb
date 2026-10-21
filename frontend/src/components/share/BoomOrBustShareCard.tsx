@@ -25,7 +25,7 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
       </h2>
       <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{rule}</span>
     </div>
-    <SurpriseTable rows={rows} kind={kind} />
+    <SurpriseTable rows={rows} kind={kind} eager />
   </div>
 )
 

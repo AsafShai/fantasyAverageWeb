@@ -89,10 +89,14 @@ def _verdict(score: float) -> str:
     return ""
 
 
-def score_night(history: pd.DataFrame, evals: pd.DataFrame, game_date: date, calibration: dict) -> pd.DataFrame:
+def score_night(
+    history: pd.DataFrame, night_info: pd.DataFrame | None, evals: pd.DataFrame, game_date: date, calibration: dict
+) -> pd.DataFrame:
     """Pure scoring of one night. ``history`` holds every played row up to and
-    including the night (uppercase columns, as fs_records_to_frame returns);
-    ``evals`` the night's model_eval_results rows (lowercase columns)."""
+    including the night, numeric columns only (uppercase, as
+    fs_records_to_frame returns); ``night_info`` the night's rows' display
+    fields (PLAYER_NAME, TEAM_ID, MATCHUP), which may already sit in
+    ``history``; ``evals`` the night's model_eval_results rows (lowercase)."""
     night_mask = history["GAME_DATE"].dt.date == game_date
     night_ids = history.loc[night_mask, "PLAYER_ID"].unique()
     rows = history[history["PLAYER_ID"].isin(night_ids)]
@@ -100,6 +104,15 @@ def score_night(history: pd.DataFrame, evals: pd.DataFrame, game_date: date, cal
     # row, without walking every row of the history (memory and time).
     z = surprise.night_zscores(rows, game_date)
     night = rows[night_mask & history["PLAYER_ID"].isin(night_ids)].merge(z, on=["PLAYER_ID", "GAME_ID"], how="left")
+    if night_info is not None and not night_info.empty:
+        info = night_info[["PLAYER_ID", "GAME_ID", "PLAYER_NAME", "TEAM_ID", "MATCHUP"]].copy()
+        info["GAME_ID"] = info["GAME_ID"].astype(str)
+        night["GAME_ID"] = night["GAME_ID"].astype(str)
+        night = night.drop(columns=[c for c in ("PLAYER_NAME", "TEAM_ID", "MATCHUP") if c in night.columns])
+        night = night.merge(info, on=["PLAYER_ID", "GAME_ID"], how="left")
+    for col, default in (("PLAYER_NAME", ""), ("TEAM_ID", -1), ("MATCHUP", "")):
+        if col not in night.columns:
+            night[col] = default
 
     if not evals.empty:
         ev = evals.rename(columns={c: c.upper() for c in evals.columns})
@@ -173,16 +186,17 @@ class SurpriseService:
     async def compute_and_store(self, game_date: date) -> str:
         """Score an ingested night and upsert model_surprise_results."""
         db = self._db
-        history, evals = await asyncio.gather(
+        history, night_info, evals = await asyncio.gather(
             db.get_fs_player_rows_through(game_date),
+            db.get_fs_night_rows(game_date),
             db.get_model_eval_for_date(game_date),
         )
         if history.empty or not (history["GAME_DATE"].dt.date == game_date).any():
             logger.warning(f"Surprises {game_date}: no ingested rows for that night")
             return "no_rows"
         evals_df = pd.DataFrame(evals)
-        night = await asyncio.to_thread(score_night, history, evals_df, game_date, self.calibration)
-        del history, evals, evals_df   # the step runs after the feature-store build; keep its peak low
+        night = await asyncio.to_thread(score_night, history, night_info, evals_df, game_date, self.calibration)
+        del history, night_info, evals, evals_df   # the step runs after the feature-store build; keep its peak low
         gc.collect()
         roster = await fantasy_roster_for(game_date)
         rows = [_to_tuple(r, game_date, roster) for _, r in night.iterrows()]
@@ -203,8 +217,7 @@ class SurpriseService:
         return [d.isoformat() for d in await self._db.get_surprise_dates()]
 
     async def latest_date(self) -> date | None:
-        dates = await self._db.get_surprise_dates()
-        return dates[0] if dates else None
+        return await self._db.get_latest_surprise_date()
 
     async def night(self, game_date: date) -> dict | None:
         rows = await self._db.get_surprises_for_date(game_date)
@@ -217,7 +230,15 @@ class SurpriseService:
         bad = [self._row_out(r) for r in scored if r["score"] < 0]
         bad.sort(key=lambda r: r["score"])
         computed = max(r["created_at"] for r in rows)
+        # The nightly's newest ledger row, so the page can tell "no games last
+        # night" (the ledger says no_games for a newer date) from "the night
+        # hasn't been scored yet", without looking at the viewer's clock.
+        run = await self._db.get_latest_model_nightly_run()
+        latest_run = (
+            {"game_date": run["game_date"].isoformat(), "status": run["status"]} if run else None
+        )
         return {
+            "latest_run": latest_run,
             "game_date": game_date.isoformat(),
             "games": len({r["game_id"] for r in rows}),
             "players_played": len(rows),

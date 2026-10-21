@@ -627,6 +627,9 @@ export interface SurpriseRow {
 }
 
 export interface NightSurprises {
+  /** The nightly's newest ledger row: which night it last handled and how
+   * ('processed', 'no_games', ...); null before the first run. */
+  latest_run: { game_date: string; status: string } | null
   game_date: string;
   games: number;
   players_played: number;

@@ -47,7 +47,7 @@ function FantasyBullet({ row }: { row: SurpriseRow }) {
 }
 
 /** Headshot + name link + team abbr, without the position pills PlayerIdentityCell always renders. */
-function PlayerCell({ row }: { row: SurpriseRow }) {
+function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean }) {
   const src = toListHeadshotUrl(`https://a.espncdn.com/i/headshots/nba/players/full/${row.player_id}.png`);
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
@@ -59,7 +59,7 @@ function PlayerCell({ row }: { row: SurpriseRow }) {
               alt=""
               width={32}
               height={32}
-              loading="lazy"
+              loading={eager ? 'eager' : 'lazy'}
               decoding="async"
               className="w-full h-full object-cover object-top"
               onError={(e) => {
@@ -87,7 +87,9 @@ function PlayerCell({ row }: { row: SurpriseRow }) {
   );
 }
 
-export function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good' | 'bad' }) {
+/** `eager` loads the headshots at once: the share card renders off-screen, where
+ * a lazy image may never load before the PNG is taken. */
+export function SurpriseTable({ rows, kind, eager = false }: { rows: SurpriseRow[]; kind: 'good' | 'bad'; eager?: boolean }) {
   if (rows.length === 0) {
     return <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Nobody crossed the bar tonight.</p>;
   }
@@ -123,7 +125,7 @@ export function SurpriseTable({ rows, kind }: { rows: SurpriseRow[]; kind: 'good
             <tr key={row.player_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
               <td className={`${td} text-right text-gray-400 dark:text-gray-500`}>{i + 1}</td>
               <td className="px-2 py-2 min-w-[12rem]">
-                <PlayerCell row={row} />
+                <PlayerCell row={row} eager={eager} />
               </td>
               <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>
               <td className={td}>{Math.round(row.minutes)}</td>

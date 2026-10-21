@@ -23,6 +23,7 @@ const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
 })
 
 const night: NightSurprises = {
+  latest_run: { game_date: '2024-01-06', status: 'no_games' },
   game_date: '2024-01-05',
   games: 3,
   players_played: 60,
@@ -68,7 +69,7 @@ describe('Boom or Bust page', () => {
     expect(screen.getAllByText('53%').length).toBeGreaterThan(0)   // 8-15 FG as a percentage
     expect(screen.getAllByText('history only')).toHaveLength(1)
     expect(screen.getByText(/Friday, Jan 5, 2024 · 3 games · 50 of 60 players scored · 40 with a model estimate/)).toBeInTheDocument()
-    expect(screen.getByText(/No games last night — showing the latest night with results \(Jan 5, 2024\)/)).toBeInTheDocument()
+    expect(screen.getByText(/No games on Jan 6, 2024 — showing the latest night with results \(Jan 5, 2024\)/)).toBeInTheDocument()
   })
 
   it('filters each list by its slider and remembers the value', async () => {

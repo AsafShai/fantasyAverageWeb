@@ -48,7 +48,15 @@ class SurpriseThresholds(BaseModel):
     bad: float
 
 
+class LatestRun(BaseModel):
+    """The nightly's newest ledger row: which night it last handled and how
+    ('processed', 'no_games', ...)."""
+    game_date: str
+    status: str
+
+
 class NightSurprises(BaseModel):
+    latest_run: Optional[LatestRun] = None
     game_date: str
     games: int
     players_played: int

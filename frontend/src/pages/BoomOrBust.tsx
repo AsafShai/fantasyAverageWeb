@@ -23,12 +23,6 @@ function fmtDay(s: string, withWeekday: boolean): string {
   });
 }
 
-/** True when `gameDate` is before yesterday (local time). */
-function isOlderThanYesterday(gameDate: string, now = new Date()): boolean {
-  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  return parseDay(gameDate).getTime() < yesterday.getTime();
-}
-
 /** RTK reports a JSON 404 as `status: 404`, a plain-text one as PARSING_ERROR with `originalStatus: 404`. */
 function isNotFound(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
@@ -186,22 +180,27 @@ export default function BoomOrBust() {
   const { data: dates = [] } = useGetSurpriseDatesQuery();
   const latest = useGetLatestSurprisesQuery(undefined, { skip: selectedDate !== null });
   const forDate = useGetSurprisesForDateQuery(selectedDate ?? '', { skip: selectedDate === null });
-  const { data: night, isLoading, error } = selectedDate === null ? latest : forDate;
+  // currentData, not data: data keeps the previous night while the next one
+  // loads, and a second ‹ click during that window would pick the same date again.
+  const { currentData: night, isLoading, isFetching, error } = selectedDate === null ? latest : forDate;
 
-  const shownDate = night?.game_date ?? selectedDate;
+  const shownDate = selectedDate ?? night?.game_date ?? null;
   const idx = shownDate ? dates.indexOf(shownDate) : -1;
   const prevDate = idx >= 0 && idx + 1 < dates.length ? dates[idx + 1] : null;
   const nextDate = idx > 0 ? dates[idx - 1] : null;
   const onLatest = selectedDate === null || (dates.length > 0 && shownDate === dates[0]);
-  const stale = useMemo(
-    () => (night && selectedDate === null ? isOlderThanYesterday(night.game_date) : false),
-    [night, selectedDate],
-  );
+  // "No games last night" comes from the nightly's own ledger, not the viewer's
+  // clock: the newest run handled a later night than the one shown and found no
+  // games. Before the nightly has run for a night, nothing is claimed.
+  const noGamesRun = useMemo(() => {
+    const run = night?.latest_run;
+    return run && run.status === 'no_games' && run.game_date > night.game_date ? run : null;
+  }, [night]);
 
   const navBtn = 'px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed';
 
   let body;
-  if (isLoading) {
+  if (isLoading || (isFetching && !night)) {
     body = <LoadingSpinner />;
   } else if (error && isNotFound(error)) {
     body = (
@@ -235,9 +234,9 @@ export default function BoomOrBust() {
         </div>
       </div>
 
-      {night && stale && (
+      {night && noGamesRun && selectedDate === null && (
         <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 rounded-lg px-4 py-3 text-sm">
-          No games last night — showing the latest night with results ({fmtDay(night.game_date, false)}).
+          No games on {fmtDay(noGamesRun.game_date, false)} — showing the latest night with results ({fmtDay(night.game_date, false)}).
         </div>
       )}
 

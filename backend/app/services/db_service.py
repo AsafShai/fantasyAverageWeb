@@ -1725,7 +1725,9 @@ class DBService:
         played that night only, with no MIN_MINUTES gate: the surprise z-scores
         rank tonight among ALL of a player's games. Restricting to the night's
         players keeps a 3-game night at a few thousand rows instead of the
-        whole ~100k-row history."""
+        whole ~100k-row history, and only the numeric columns the z-scores read
+        come back: the names and matchups are needed for the night's rows alone
+        (get_fs_night_rows)."""
         pool = await self._get_pool()
         if pool is None:
             return pd.DataFrame()
@@ -1734,8 +1736,8 @@ class DBService:
                 return await _fetch_frame_chunked(
                     conn,
                     """
-                    SELECT player_id, game_id, season, game_date, player_name, team_id, matchup,
-                           min, pts, reb, ast, fg3m, fg3a, stl, blk, fgm, fga, ftm, fta
+                    SELECT player_id, game_id, season, game_date,
+                           min, pts, reb, ast, fg3m, stl, blk, fgm, fga, ftm, fta
                     FROM fs_player_games
                     WHERE game_date <= $1 AND min > 0
                       AND player_id IN (
@@ -1747,6 +1749,37 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to fetch fs rows through {game_date}: {type(e).__name__}: {e}")
             return pd.DataFrame()
+
+    async def get_fs_night_rows(self, game_date: date) -> pd.DataFrame:
+        """The night's played rows with the display fields the scored rows carry
+        (name, NBA team, matchup); a few hundred rows."""
+        pool = await self._get_pool()
+        if pool is None:
+            return pd.DataFrame()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT player_id, game_id, game_date, player_name, team_id, matchup "
+                    "FROM fs_player_games WHERE game_date = $1 AND min > 0",
+                    game_date,
+                )
+                return fs_records_to_frame(rows)
+        except Exception as e:
+            logger.error(f"Failed to fetch fs night rows for {game_date}: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+
+    async def get_latest_surprise_date(self) -> Optional[date]:
+        """The newest scored night: MAX over the game_date index, not a scan of
+        every distinct date."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetchval("SELECT MAX(game_date) FROM model_surprise_results")
+        except Exception as e:
+            logger.error(f"Failed to fetch latest surprise date: {type(e).__name__}: {e}")
+            return None
 
     async def insert_model_surprise_rows(self, rows: list[tuple]) -> bool:
         """Upsert scored player-games. Tuple order must match the columns below."""
