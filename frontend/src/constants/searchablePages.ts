@@ -1,5 +1,6 @@
 import {
   FF_FEATURE_STORE,
+  FF_BOOM_OR_BUST,
   FF_DRAFT_REPORT,
   FF_DRAFT_PAGES,
 } from '../config/featureFlags'
@@ -37,6 +38,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'League Analytics', path: '/analytics', icon: '📈', group: 'Insights' },
   { label: 'Player Trends', path: '/trends', icon: '📉', group: 'Insights' },
   { label: 'Projections', path: '/projections', icon: '🔭', group: 'Insights' },
+  ...(FF_BOOM_OR_BUST ? [{ label: 'Boom or Bust', path: '/boom-or-bust', icon: '💥', group: 'Insights' }] : []),
   { label: 'Standings Estimator', path: '/estimator', icon: '🔮', group: 'Insights' },
   ...(FF_FEATURE_STORE ? [{ label: 'Feature Store', path: '/feature-store', icon: '🗄️', group: 'Insights' }] : []),
   { label: 'Trade Analyzer', path: '/trade', icon: '🔄', group: 'Tools' },

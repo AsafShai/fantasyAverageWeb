@@ -8,7 +8,9 @@ const PIXEL_RATIO = 2;
 
 /** Renders a DOM node to a PNG blob. The card uses the system font stack, so
  * web-font embedding is skipped: it's slow and can trip over cross-origin
- * stylesheets. */
+ * stylesheets. No cache-busting: it would append a random query to every
+ * image (the Boom or Bust card carries ~20 headshots) and re-download them on
+ * each render, bypassing the browser and CDN caches. */
 // Loaded on first use so the renderer stays out of the page bundles; one
 // shared promise so overlapping renders don't each start an import.
 let htmlToImage: Promise<typeof import('html-to-image')> | null = null;
@@ -16,7 +18,7 @@ let htmlToImage: Promise<typeof import('html-to-image')> | null = null;
 export async function renderNodeToPng(node: HTMLElement): Promise<Blob> {
   htmlToImage ??= import('html-to-image');
   const { toBlob } = await htmlToImage;
-  const blob = await toBlob(node, { pixelRatio: PIXEL_RATIO, cacheBust: true, skipFonts: true });
+  const blob = await toBlob(node, { pixelRatio: PIXEL_RATIO, cacheBust: false, skipFonts: true });
   if (!blob) throw new Error('Could not create the image');
   return blob;
 }
@@ -62,7 +64,7 @@ const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'A
  * click: the share sheet and clipboard both need a recent user gesture, and
  * mobile Safari drops it if we spend a few hundred ms rendering first.
  */
-export function useShareImage(fileName: string, title: string) {
+export function useShareImage(fileName: string, title: string, text?: string) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [status, setStatus] = useState<ShareImageStatus>('idle');
@@ -100,13 +102,18 @@ export function useShareImage(fileName: string, title: string) {
       return 'downloaded';
     }
     try {
-      await navigator.share({ files: [shareFile], title });
+      // WhatsApp on Android keeps `text` as the image caption; iOS drops it,
+      // so the caption is also put on the clipboard: one paste in the chat.
+      if (text) {
+        try { await navigator.clipboard?.writeText(text); } catch { /* clipboard blocked: "Copy message" remains */ }
+      }
+      await navigator.share({ files: [shareFile], title, ...(text ? { text } : {}) });
       return 'shared';
     } catch (err) {
       if (isAbort(err)) return 'cancelled';
       throw err;
     }
-  }, [blob, fileName, title]);
+  }, [blob, fileName, title, text]);
 
   const copy = useCallback(async (): Promise<ShareImageResult> => {
     if (!blob) throw new Error('The image is not ready yet');
