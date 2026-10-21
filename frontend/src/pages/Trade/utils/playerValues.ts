@@ -61,3 +61,9 @@ export function computePlayerValues(
 export function playerValueLookup(values: Map<string, PlayerValue>): PlayerValueLookup {
   return player => values.get(keyOf(player)) ?? values.get(`name:${player.player_name}`);
 }
+
+/** Mean z-score of the players that have one; null when none do. */
+export function averageZ(players: Player[], playerValue?: PlayerValueLookup): number | null {
+  const scores = players.map(p => playerValue?.(p)?.z).filter((z): z is number => z !== undefined);
+  return scores.length === 0 ? null : scores.reduce((sum, z) => sum + z, 0) / scores.length;
+}
