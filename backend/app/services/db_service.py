@@ -707,7 +707,7 @@ class DBService:
                             float(row['variance_pts']),
                             float(row['nba_avg_pace']),
                         )
-            logger.info(f"Upserted estimator_prediction for league_id={league_id} season_id={season_id}")
+            logger.debug(f"Upserted estimator_prediction for league_id={league_id} season_id={season_id}")
         except Exception as e:
             logger.error(f"Failed to upsert estimator_prediction: {type(e).__name__}: {e}")
 
@@ -761,7 +761,7 @@ class DBService:
                             float(row['expected_pts_pts']),
                             float(row['projected_total_gp']),
                         )
-            logger.info(f"Upserted estimator_ranking for league_id={league_id} season_id={season_id}")
+            logger.debug(f"Upserted estimator_ranking for league_id={league_id} season_id={season_id}")
         except Exception as e:
             logger.error(f"Failed to upsert estimator_ranking: {type(e).__name__}: {e}")
 
@@ -786,7 +786,7 @@ class DBService:
                             for _, row in df.iterrows()
                         ],
                     )
-            logger.info(f"Upserted estimator_rank_probability for league_id={league_id} season_id={season_id}")
+            logger.debug(f"Upserted estimator_rank_probability for league_id={league_id} season_id={season_id}")
         except Exception as e:
             logger.error(f"Failed to upsert estimator_rank_probability: {type(e).__name__}: {e}")
 

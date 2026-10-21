@@ -76,7 +76,7 @@ def classify_status(status: str) -> str:
     alias = _STATUS_ALIASES.get(normalized)
     if alias is not None:
         return alias
-    logger.warning(f'Unknown injury status {status!r} — counted as questionable')
+    logger.warning(f'Unknown injury status {status!r} - counted as questionable')
     return QUESTIONABLE
 
 

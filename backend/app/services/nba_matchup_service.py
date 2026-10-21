@@ -88,7 +88,7 @@ class NbaMatchupService:
             return
         rows = await self._db.get_team_defense_aggregates(_season_str(settings.season_id))
         if not rows:
-            self.logger.warning('No team defense aggregates (store empty?) — matchup ranks unavailable')
+            self.logger.warning('No team defense aggregates (store empty?) - matchup ranks unavailable')
         self._def_cache.update({
             'ranks': self._build_ranks(rows),
             'values': self._build_values(rows),

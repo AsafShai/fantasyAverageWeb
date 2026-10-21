@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from app.services.estimator_service import EstimatorService, ISRAEL_TZ
 from app.services.data_provider import DataProvider
+from app.utils.request_context import start_job_run
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ async def start_scheduler():
         sleep_seconds = (next_trigger - now).total_seconds()
         logger.info(f"Estimator scheduler sleeping {sleep_seconds:.0f}s until {next_trigger.strftime('%H:%M')} IL")
         await asyncio.sleep(sleep_seconds)
+        start_job_run("estimator")
         logger.info("Estimator scheduler triggered - syncing snapshot tables")
         # The snapshot may already have been written by a page load since ESPN
         # rolled the period over, so run regardless of whether this sync wrote

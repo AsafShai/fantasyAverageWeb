@@ -3,9 +3,17 @@ import time
 from collections import deque
 
 from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from slowapi.util import get_remote_address
 
-from app.utils.request_context import REQUEST_ID_HEADER, new_request_id, request_id_var
+from app.utils.request_context import (
+    REQUEST_ID_HEADER,
+    UpstreamCalls,
+    new_request_id,
+    request_id_var,
+    trigger_var,
+    upstream_var,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +42,17 @@ def reset_slow_requests() -> None:
     _slow_requests.clear()
 
 
-def _target(request: Request) -> str:
-    query = request.url.query
-    return f"{request.url.path}?{query}" if query else request.url.path
+def _describe(status: int | str, elapsed_ms: float, request: Request, calls: UpstreamCalls, extra: str = "") -> str:
+    parts = [f"-> {status} {elapsed_ms:.0f}ms"]
+    if extra:
+        parts.append(extra)
+    if request.url.query:
+        parts.append(f"query={request.url.query}")
+    upstream = calls.summary()
+    if upstream:
+        parts.append(upstream)
+    parts.append(f"ip={get_remote_address(request)}")
+    return " ".join(parts)
 
 
 def add_timing_middleware(app: FastAPI) -> None:
@@ -48,36 +64,54 @@ def add_timing_middleware(app: FastAPI) -> None:
         # carry the id.
         request_id = new_request_id(request.headers.get(REQUEST_ID_HEADER))
         request_id_var.set(request_id)
+        trigger_var.set(f"{request.method} {request.url.path}")
+        calls = UpstreamCalls()
+        upstream_var.set(calls)
 
         started = time.perf_counter()
         try:
             response = await call_next(request)
-        except Exception:
+        except RuntimeError as exc:
+            # Starlette raises this when the client hangs up before the
+            # response starts (typically an SSE tab closed); nothing failed.
+            if str(exc) != "No response returned." or not await request.is_disconnected():
+                _log_unhandled(request, calls, started)
+                raise
             elapsed_ms = (time.perf_counter() - started) * 1000
-            logger.error(
-                "request %s %s -> unhandled exception %.0fms %s",
-                request.method, _target(request), elapsed_ms, get_remote_address(request),
-            )
+            logger.info(_describe("client disconnected", elapsed_ms, request, calls))
+            return Response(status_code=499)
+        except Exception:
+            _log_unhandled(request, calls, started)
             raise
         elapsed_ms = (time.perf_counter() - started) * 1000
         response.headers["X-Process-Time"] = f"{elapsed_ms:.1f}"
         response.headers[REQUEST_ID_HEADER] = request_id
 
+        if response.headers.get("content-type", "").startswith("text/event-stream"):
+            logger.info(_describe(response.status_code, elapsed_ms, request, calls, "stream opened"))
+            return response
+
         # Set by the exception handlers in main.py so a 4xx/5xx line says why.
         detail = getattr(request.state, "error_detail", None)
-        suffix = f" detail={detail!r}" if detail else ""
-        args = (
-            request.method, _target(request), response.status_code, elapsed_ms,
-            get_remote_address(request), suffix,
-        )
-
-        if elapsed_ms >= SLOW_REQUEST_MS:
+        extra = f"detail={detail!r}" if detail else ""
+        is_slow = elapsed_ms >= SLOW_REQUEST_MS
+        if is_slow:
             record_slow_request()
-            logger.warning("slow_request %s %s -> %d %.0fms %s%s", *args)
-        elif response.status_code >= 500:
-            logger.warning("request %s %s -> %d %.0fms %s%s", *args)
+            extra = f"SLOW {extra}".strip()
+        line = _describe(response.status_code, elapsed_ms, request, calls, extra)
+
+        if is_slow or response.status_code >= 500:
+            logger.warning(line)
         elif request.url.path in _QUIET_PATHS:
-            logger.debug("request %s %s -> %d %.0fms %s%s", *args)
+            logger.debug(line)
         else:
-            logger.info("request %s %s -> %d %.0fms %s%s", *args)
+            logger.info(line)
         return response
+
+
+def _log_unhandled(request: Request, calls: UpstreamCalls, started: float) -> None:
+    """Logs the failing request once, with its traceback; the app-level
+    handler in main.py sees the flag and skips its own copy."""
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    logger.exception(_describe("unhandled exception", elapsed_ms, request, calls))
+    request.state.exception_logged = True

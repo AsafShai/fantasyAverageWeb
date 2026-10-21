@@ -42,6 +42,21 @@ async def _sync_and_run(service: EstimatorService, provider: DataProvider) -> No
     await service.run_and_store()
 
 
+# Before the first games are final there is nothing to estimate; without this
+# every page view re-synced ESPN and re-ran the estimator just to 404 again.
+_INLINE_RUN_COOLDOWN_S = 600.0
+_last_inline_run: float | None = None
+
+
+def _inline_run_due() -> bool:
+    global _last_inline_run
+    now = time.monotonic()
+    if _last_inline_run is not None and now - _last_inline_run < _INLINE_RUN_COOLDOWN_S:
+        return False
+    _last_inline_run = now
+    return True
+
+
 @router.get("/results", response_model=EstimatorResults)
 async def get_estimator_results():
     start = time.perf_counter()
@@ -51,12 +66,13 @@ async def get_estimator_results():
 
         data = await service.get_latest()
         if data is None:
-            logger.info("No stored estimator results; syncing ESPN and running estimator inline")
-            # Run even when the sync wrote nothing: the snapshot may already be
-            # current with no estimator results computed from it yet.
-            await provider.sync_db_now()
-            if await service.run_and_store(wait=True):
-                data = await service.get_latest()
+            if _inline_run_due():
+                logger.info("No stored estimator results; syncing ESPN and running estimator inline")
+                # Run even when the sync wrote nothing: the snapshot may already be
+                # current with no estimator results computed from it yet.
+                await provider.sync_db_now()
+                if await service.run_and_store(wait=True):
+                    data = await service.get_latest()
         elif _refresh_due():
             background_tasks.spawn(_sync_and_run(service, provider), name="estimator-refresh")
 
