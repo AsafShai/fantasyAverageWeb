@@ -25,6 +25,7 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
   return (
     <ShareCard
       dark={dark}
+      wide
       kicker={`${categories.length}-cat roto`}
       title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
       subtitle={`${period} ${modeLabel} · as of ${asOf}`}
@@ -34,9 +35,10 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
         <table>
           <colgroup>
             <col style={{ width: 20 }} />
-            <col style={{ width: isStandings ? 100 : 116 }} />
+            <col style={{ width: isStandings ? 118 : 128 }} />
             {categories.map(c => <col key={c} />)}
-            <col style={{ width: 32 }} />
+            <col style={{ width: 38 }} />
+            <col style={{ width: 36 }} />
           </colgroup>
           <thead>
             <tr>
@@ -44,13 +46,14 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
               <th className="sc-left">Team</th>
               {categories.map(c => <th key={c}>{c}</th>)}
               <th>Tot</th>
+              <th className="sc-gp">GP</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, index) => (
               <tr key={row.team.team_id} className={row.team.team_id === highlightTeamId ? 'sc-me' : undefined}>
                 <td className="sc-rank">{row.rank || index + 1}</td>
-                <td className="sc-left">{row.team.team_name}</td>
+                <td className="sc-left sc-wrap">{row.team.team_name}</td>
                 {categories.map(c => {
                   const points = row.category_ranks?.[c]
                   const value = row.stats?.[c]
@@ -65,6 +68,7 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
                   )
                 })}
                 <td className="sc-strong">{formatPoints(row.total_points)}</td>
+                <td className="sc-gp">{row.gp}</td>
               </tr>
             ))}
           </tbody>

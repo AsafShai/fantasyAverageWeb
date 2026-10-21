@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useGetTeamsListQuery, useGetTeamDetailQuery, useGetAllPlayersQuery } from '../store/api/fantasyApi';
 import type { Team, TeamDetail, Player, TimePeriod, CustomDateRange } from '../types/api';
 import type { TradeMode } from './useTradeState';
+import { DEFAULT_CATEGORIES } from '../utils/playerRankings';
+import { computePlayerValues, playerValueLookup, type PlayerValueLookup } from '../pages/Trade/utils/playerValues';
 
 interface UseTradeDataReturn {
   teams: Team[];
@@ -19,6 +21,9 @@ interface UseTradeDataReturn {
   freeAgents: Player[];
   isFetchingFreeAgents: boolean;
   freeAgentsError: unknown;
+
+  /** Rank and z-score of a player among every player in the same period. */
+  playerValue: PlayerValueLookup;
 }
 
 function withoutNoDataPlayers(team: TeamDetail | undefined): TeamDetail | undefined {
@@ -55,7 +60,7 @@ export const useTradeData = (
     data: allPlayersData,
     isFetching: isFetchingAllPlayers,
     error: allPlayersError
-  } = useGetAllPlayersQuery({ page: 1, limit: 1200, time_period: timePeriod, ...customParams }, { skip: tradeMode !== 'freeAgent' });
+  } = useGetAllPlayersQuery({ page: 1, limit: 1200, time_period: timePeriod, ...customParams });
 
   const teamAData = useMemo(() => withoutNoDataPlayers(teamADataRaw), [teamADataRaw]);
   const teamBData = useMemo(() => withoutNoDataPlayers(teamBDataRaw), [teamBDataRaw]);
@@ -66,6 +71,16 @@ export const useTradeData = (
       player => player.has_data !== false && (player.status === 'FREEAGENT' || player.status === 'WAIVERS')
     );
   }, [tradeMode, allPlayersData]);
+
+  // Every player in the period, also behind the rank and z-score shown for
+  // each player in the trade (team mode included).
+  const playerValue = useMemo(() => {
+    const categories = allPlayersData?.categories?.length ? allPlayersData.categories : DEFAULT_CATEGORIES;
+    const values = computePlayerValues(
+      allPlayersData?.players ?? [], categories, new Set(allPlayersData?.reverse_categories ?? []),
+    );
+    return playerValueLookup(values);
+  }, [allPlayersData]);
 
   return {
     teams,
@@ -80,5 +95,6 @@ export const useTradeData = (
     freeAgents,
     isFetchingFreeAgents: isFetchingAllPlayers,
     freeAgentsError: allPlayersError,
+    playerValue,
   };
 };

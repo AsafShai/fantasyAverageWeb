@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Player, Team } from '../../../types/api';
 import { PlayerStatsCard } from './PlayerStatsCard';
+import type { PlayerValueLookup } from '../utils/playerValues';
 import { PlayerDropdown } from './PlayerDropdown';
 import { TeamRankingsBar } from './TeamRankingsBar';
 import LoadingSpinner from '../../../components/LoadingSpinner';
@@ -23,6 +24,7 @@ interface TeamTradeSectionProps {
   teamsError: unknown;
   playersError: unknown;
   viewMode: 'totals' | 'averages';
+  playerValue?: PlayerValueLookup;
   categoryRanks?: Record<string, number>;
 }
 
@@ -40,6 +42,7 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
   teamsError,
   playersError,
   viewMode,
+  playerValue,
   categoryRanks,
 }) => {
   const { myTeamId, isMyTeam } = useMyTeam();
@@ -127,6 +130,7 @@ export const TeamTradeSection: React.FC<TeamTradeSectionProps> = ({
                 onRemove={() => onPlayerRemove(player)}
                 showStats={true}
                 viewMode={viewMode}
+                value={playerValue?.(player)}
               />
             ))}
           </div>
