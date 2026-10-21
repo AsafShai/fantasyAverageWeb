@@ -88,9 +88,14 @@ def release_memory(step: str, log: logging.Logger = logger) -> None:
     day — and that is what the container's OOM killer counts. ``malloc_trim``
     returns those arenas (Linux/glibc only; a no-op elsewhere).
     """
+    trim_memory()
+    log_memory(step, log)
+
+
+def trim_memory() -> None:
+    """``release_memory`` without the log line, for jobs that run all day."""
     gc.collect()
     try:
         ctypes.CDLL("libc.so.6").malloc_trim(0)
     except (OSError, AttributeError):
         pass
-    log_memory(step, log)

@@ -60,6 +60,7 @@ async def test_lifespan_keeps_schedulers_referenced_and_cancels_them_on_shutdown
          patch.object(main.model_nightly_scheduler, "start_scheduler", fake_scheduler("nightly")), \
          patch.object(main.nba_players_scheduler, "start_scheduler", fake_scheduler("players")), \
          patch.object(main.adp_snapshot_scheduler, "start_scheduler", fake_scheduler("adp")), \
+         patch.object(main.LiveProjectionService, "warm", lambda self: fake_scheduler("model-warm")()), \
          patch.object(main.settings, "injury_scheduler_enabled", True), \
          patch.object(main.settings, "model_nightly_enabled", True), \
          patch.object(main.settings, "nba_players_refresh_enabled", True), \
@@ -71,10 +72,10 @@ async def test_lifespan_keeps_schedulers_referenced_and_cancels_them_on_shutdown
             names = {t.get_name() for t in background_tasks._tasks}
             assert {"injury-scheduler", "estimator-scheduler",
                     "model-nightly-scheduler", "nba-players-scheduler",
-                    "adp-snapshot-scheduler"} <= names
+                    "adp-snapshot-scheduler", "projection-model-warm"} <= names
             tasks = list(background_tasks._tasks)
 
-    assert sorted(started) == ["adp", "estimator", "injury", "nightly", "players"]
+    assert sorted(started) == ["adp", "estimator", "injury", "model-warm", "nightly", "players"]
     assert all(t.cancelled() for t in tasks)
     assert not background_tasks._tasks
 
@@ -93,6 +94,7 @@ async def test_lifespan_skips_adp_scheduler_when_disabled():
          patch.object(main.settings, "adp_scheduler_enabled", False), \
          patch.object(main.estimator_scheduler, "start_scheduler", AsyncMock()), \
          patch.object(main.adp_snapshot_scheduler, "start_scheduler", adp_start), \
+         patch.object(main.LiveProjectionService, "warm", AsyncMock()), \
          patch.object(main.DataProvider, "close", AsyncMock()), \
          patch.object(main.NBAStatsService, "close", AsyncMock()):
         async with main.lifespan(main.app):

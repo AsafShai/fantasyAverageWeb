@@ -52,6 +52,10 @@ class DataProvider:
             self._last_synced_period = 0
             self._players_inflight: dict[int, asyncio.Future] = {}
             self._lineup_slots_lock = asyncio.Lock()
+            # Averages/rankings are pure functions of the cached totals frame;
+            # see _averages_for / _rankings_for.
+            self._averages_memo: Optional[tuple] = None
+            self._rankings_memo: Optional[tuple] = None
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
@@ -482,27 +486,49 @@ class DataProvider:
             return None
         return self.data_transformer.resolve_trade_deadline(raw)
 
+    # Rankings, heatmap, summary and team pages all rebuild averages/rankings
+    # from the same totals frame, which only changes when ESPN returns new
+    # standings. Both are pure functions of their inputs, so each is computed
+    # once per input and handed out as a copy (callers may modify what they get).
+    def _averages_for(self, totals_df: pd.DataFrame, categories: list) -> pd.DataFrame:
+        memo = self._averages_memo
+        if memo is None or memo[0] is not totals_df or memo[1] != categories:
+            memo = (totals_df, list(categories),
+                    self.data_transformer.totals_to_averages_df(totals_df, categories))
+            self._averages_memo = memo
+        return memo[2]
+
+    def _rankings_for(self, averages_df: pd.DataFrame, reverse_categories: set) -> pd.DataFrame:
+        memo = self._rankings_memo
+        if memo is None or memo[0] is not averages_df or memo[1] != reverse_categories:
+            memo = (averages_df, set(reverse_categories),
+                    self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories))
+            self._rankings_memo = memo
+        return memo[2]
+
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""
         totals_df = await self.get_totals_df()
         categories = await self.get_ranking_categories()
-        return self.data_transformer.totals_to_averages_df(totals_df, categories)
+        return self._averages_for(totals_df, categories).copy()
 
     async def get_rankings_df(self) -> pd.DataFrame:
         """Get rankings DataFrame with caching"""
-        averages_df = await self.get_averages_df()
+        totals_df = await self.get_totals_df()
+        categories = await self.get_ranking_categories()
+        averages_df = self._averages_for(totals_df, categories)
         reverse_categories = await self.get_reverse_categories()
-        return self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories)
+        return self._rankings_for(averages_df, reverse_categories).copy()
 
     async def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Get all three main DataFrames at once (optimized for endpoints that need multiple)"""
         totals_df = await self.get_totals_df()
         categories = await self.get_ranking_categories()
         reverse_categories = await self.get_reverse_categories()
-        averages_df = self.data_transformer.totals_to_averages_df(totals_df, categories)
-        rankings_df = self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories)
+        averages_df = self._averages_for(totals_df, categories)
+        rankings_df = self._rankings_for(averages_df, reverse_categories)
 
-        return totals_df, averages_df, rankings_df
+        return totals_df, averages_df.copy(), rankings_df.copy()
     
     def _extra_rank_payloads(self, df: pd.DataFrame, categories: list, reverse_categories: set) -> Optional[dict]:
         """{team_id: {category: rank, ..., TOTAL: all-category total}} for the

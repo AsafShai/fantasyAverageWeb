@@ -13,6 +13,7 @@ from app.models.injury_models import InjuryRecord, InjuryNotification
 from app.services.db_service import get_db_service
 from app.utils.request_context import start_job_run
 from app.utils.ssl_context import shared_ssl_context
+from app.utils.memory import trim_memory
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +305,19 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
     return records
 
 
+def _parse_and_trim(pdf_bytes: bytes) -> list[InjuryRecord]:
+    """parse_injury_pdf, then hand pdfminer's garbage back to the OS.
+
+    pdfminer leaves its page objects in reference cycles, so they linger until
+    a full collection, and glibc keeps the freed arenas mapped afterwards. This
+    runs every 15 minutes all day; without the trim each parse left ~18 MB
+    resident (measured on a real report: +26 MB vs +8 MB).
+    """
+    records = parse_injury_pdf(pdf_bytes)
+    trim_memory()
+    return records
+
+
 def compute_diff(
     old_store: dict[str, InjuryRecord],
     new_records: list[InjuryRecord],
@@ -437,7 +451,7 @@ async def _try_update_injury_data(attempt_note: str = "") -> bool:
         return False
 
     now_il = get_utc_now_str()
-    new_records = await asyncio.to_thread(parse_injury_pdf, pdf_bytes)
+    new_records = await asyncio.to_thread(_parse_and_trim, pdf_bytes)
     notifications = compute_diff(injury_store, new_records, now_il)
     new_store = build_updated_store(injury_store, new_records, notifications, now_il)
 
@@ -527,7 +541,7 @@ async def initialize() -> None:
             db_timestamps[key] = str(ts)
 
     now_il = get_utc_now_str()
-    records = await asyncio.to_thread(parse_injury_pdf, pdf_bytes)
+    records = await asyncio.to_thread(_parse_and_trim, pdf_bytes)
     for record in records:
         key = f"{record.team}|{record.player}"
         last_update = db_timestamps.get(key, now_il)
