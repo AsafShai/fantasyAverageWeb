@@ -90,8 +90,12 @@
 .share-card__person-text { min-width: 0; }
 .share-card__player { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
 .share-card__why { font-size: 9.5px; color: var(--sc-muted); overflow: hidden; text-overflow: ellipsis; }
-.share-card__shooting { display: inline-flex; flex-direction: column; line-height: 1.1; }
-.share-card__shooting-frac { font-size: 8.5px; color: var(--sc-muted); }
+/* Two lines, percentage over makes-attempts. Declared with two classes so it
+   still wins when the cell is marked (.sc-chip is inline-block, which would put
+   the two lines side by side and spill the chip into the next column). */
+.share-card .share-card__shooting { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; min-width: 0; padding: 1px 1px; font-size: 10px; }
+.share-card .share-card__shooting-frac { font-size: 8.5px; color: var(--sc-muted); }
+.share-card .share-card__shooting.sc-chip .share-card__shooting-frac { color: inherit; opacity: 0.8; }
 .share-card__empty { padding: 6px 0 8px; font-size: 11px; color: var(--sc-muted); }
 .share-card__body + .share-card__body { padding-top: 4px; }
 
