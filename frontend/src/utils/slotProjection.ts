@@ -66,6 +66,8 @@ export interface SlotProjection {
 export interface PaceContext {
   avgPace: number | null | undefined
   gameDaysLeft: number | null | undefined
+  /** Regular-season game days already played; optional so callers without it fall back to method 1. */
+  gameDaysElapsed?: number | null
 }
 
 /** Colours are meaningless in the first couple of weeks — everything is 0/82 then. */
@@ -76,7 +78,7 @@ export function canColor({ avgPace }: PaceContext): boolean {
 export function projectSlot(
   gamesUsed: number,
   slot: SlotName,
-  { avgPace, gameDaysLeft }: PaceContext,
+  { avgPace, gameDaysLeft, gameDaysElapsed }: PaceContext,
 ): SlotProjection {
   const multiplicity = SLOT_MULTIPLICITY[slot]
   const cap = SLOT_CAPS[slot]
@@ -109,8 +111,13 @@ export function projectSlot(
   // Worked on the column total against the column cap, exactly as the backend estimator does.
   // Method 1 — extrapolate the current rate over a full 82-game season.
   const m1 = Math.min(gamesUsed * (GAMES_PER_SLOT / avgPace), cap)
-  // Method 2 — apply the current rate to the game days actually left.
-  const m2 = daysLeft === null ? null : Math.min(gamesUsed + (gamesUsed / avgPace) * daysLeft, cap)
+  // Method 2 — the column's fill rate per game day, applied to the game days actually left.
+  // The rate is per game day, not per NBA team game, since there are about two game days per team game.
+  const daysElapsed = typeof gameDaysElapsed === 'number' && gameDaysElapsed > 0 ? gameDaysElapsed : null
+  const m2 =
+    daysLeft === null || daysElapsed === null
+      ? null
+      : Math.min(gamesUsed + (gamesUsed / daysElapsed) * daysLeft, cap)
 
   // Method 2 takes over as the season progresses.
   const w2 = avgPace / GAMES_PER_SLOT

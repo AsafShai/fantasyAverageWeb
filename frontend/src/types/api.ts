@@ -89,6 +89,7 @@ export interface LeagueSummary {
   total_games_played: number;
   nba_avg_pace?: number;
   nba_game_days_left?: number;
+  nba_game_days_elapsed?: number;
   category_leaders: Record<string, RankingStats>;
   league_averages: AverageStats;
   last_updated: string;

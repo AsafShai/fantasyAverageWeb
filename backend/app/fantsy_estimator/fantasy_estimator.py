@@ -129,6 +129,18 @@ class FantasyEstimator:
         cov_10 = full_cov_remaining.loc[stat_cols, stat_cols].values.astype(float)
         return out, mean_10, cov_10
 
+    @staticmethod
+    def _fallback_total_gp(games_played_now: float, nba_avg_pace: float, season_cap: float) -> float:
+        """
+        Season-end games for a team with no slot projection (slot usage came back empty,
+        or the team is missing from it): its own games so far stretched to a full 82-game
+        season, capped at the league's games limit. A full season's cap scaled by pace
+        would be the games an on-pace team has played by today, leaving no games to come.
+        """
+        if nba_avg_pace <= 0:
+            return season_cap
+        return min(games_played_now * (82 / nba_avg_pace), season_cap)
+
     def _estimate_per_team(
         self,
         df_team: pd.DataFrame,
@@ -160,14 +172,17 @@ class FantasyEstimator:
         )
         mean_gp_per_period = float(df_team[PreprocessColumns.GP_IN_PERIOD].mean())
 
-        if slot_proj_df is not None and not slot_proj_df.empty:
-            team_row = slot_proj_df[slot_proj_df['team_id'] == team_id]
-            if not team_row.empty:
-                projected_total_gp = float(team_row['proj_total'].iloc[0])
-            else:
-                projected_total_gp = float(sum(SLOT_CAPS.values()) * (nba_avg_pace / 82))
+        team_row = (
+            slot_proj_df[slot_proj_df['team_id'] == team_id]
+            if slot_proj_df is not None and not slot_proj_df.empty
+            else None
+        )
+        if team_row is not None and not team_row.empty:
+            projected_total_gp = float(team_row['proj_total'].iloc[0])
         else:
-            projected_total_gp = float(sum(SLOT_CAPS.values()) * (nba_avg_pace / 82))
+            projected_total_gp = self._fallback_total_gp(
+                float(last_row[c.GP]), nba_avg_pace, float(sum(SLOT_CAPS.values()))
+            )
 
         row, mean_10, cov_10 = self._compute_final_and_variance(
             mean_vector, covariance_matrix, last_row, nba_avg_pace, mean_gp_per_period,

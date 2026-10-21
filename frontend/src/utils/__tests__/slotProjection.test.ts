@@ -72,26 +72,45 @@ describe('projectSlot', () => {
   it('matches the backend blend formula', () => {
     const used = 40
     const avgPace = 41
-    const daysLeft = 41
+    const daysElapsed = 82
+    const daysLeft = 83
     const m1 = Math.min(used * (82 / avgPace), 82)
-    const m2 = Math.min(used + (used / avgPace) * daysLeft, 82)
+    const m2 = Math.min(used + (used / daysElapsed) * daysLeft, 82)
     const w2 = avgPace / 82
     const expected = (1 - w2) * m1 + w2 * m2
 
-    const { estimated } = projectSlot(used, 'PG', { avgPace, gameDaysLeft: daysLeft })
+    const { estimated } = projectSlot(used, 'PG', { avgPace, gameDaysLeft: daysLeft, gameDaysElapsed: daysElapsed })
     expect(estimated).toBeCloseTo(expected, 6)
   })
 
+  it('projects method 2 with the fill rate per game day, not per NBA team game', () => {
+    // 60 games in 140 game days is 0.43 a night; 25 nights left adds 10.7, not 21.4.
+    const ctx = { avgPace: 70, gameDaysLeft: 25, gameDaysElapsed: 140 }
+    const m1 = 60 * (82 / 70)
+    const m2 = 60 + (60 / 140) * 25
+    const w2 = 70 / 82
+    const { estimated } = projectSlot(60, 'PG', ctx)
+    expect(estimated).toBeCloseTo((1 - w2) * m1 + w2 * m2, 6)
+    expect(estimated).toBeCloseTo(70.7, 1)
+  })
+
+  it('falls back to method 1 alone without game days elapsed', () => {
+    const { estimated } = projectSlot(40, 'PG', { avgPace: 41, gameDaysLeft: 41 })
+    expect(estimated).toBeCloseTo(80, 6)
+    const opening = projectSlot(0, 'PG', { avgPace: 0.5, gameDaysLeft: 165, gameDaysElapsed: 0 })
+    expect(opening.estimated).toBe(0)
+  })
+
   it('rounds an estimate of 81.7 up to a full 82', () => {
-    const ctx = { avgPace: 41.3, gameDaysLeft: 82 }
-    const { estimated, estimatedRounded } = projectSlot(41, 'PG', ctx)
+    const ctx = { avgPace: 41, gameDaysLeft: 82 }
+    const { estimated, estimatedRounded } = projectSlot(40.85, 'PG', ctx)
     expect(estimated).toBeCloseTo(81.7, 1)
     expect(estimatedRounded).toBe(82)
   })
 
   it('rounds an estimate of 81.1 down to 81', () => {
-    const ctx = { avgPace: 60.4, gameDaysLeft: 44 }
-    const { estimated, estimatedRounded } = projectSlot(58, 'PG', ctx)
+    const ctx = { avgPace: 41, gameDaysLeft: 82 }
+    const { estimated, estimatedRounded } = projectSlot(40.55, 'PG', ctx)
     expect(estimated).toBeCloseTo(81.1, 1)
     expect(estimatedRounded).toBe(81)
   })
@@ -106,13 +125,14 @@ describe('projectSlot', () => {
   it('matches the backend UTIL projection, which works on the 248 cap', () => {
     const usedTotal = 120
     const avgPace = 41
-    const daysLeft = 41
+    const daysElapsed = 82
+    const daysLeft = 83
     const m1 = Math.min(usedTotal * (82 / avgPace), 248)
-    const m2 = Math.min(usedTotal + (usedTotal / avgPace) * daysLeft, 248)
+    const m2 = Math.min(usedTotal + (usedTotal / daysElapsed) * daysLeft, 248)
     const w2 = avgPace / 82
     const expected = (1 - w2) * m1 + w2 * m2
 
-    const { estimated } = projectSlot(usedTotal, 'UTIL', { avgPace, gameDaysLeft: daysLeft })
+    const { estimated } = projectSlot(usedTotal, 'UTIL', { avgPace, gameDaysLeft: daysLeft, gameDaysElapsed: daysElapsed })
     expect(estimated).toBeCloseTo(expected, 6)
   })
 
@@ -176,8 +196,8 @@ describe('slotStatus', () => {
   })
 
   it('rounds the projection before calling it short, so 81.7 is a full season', () => {
-    expect(status(41, 'PG', { avgPace: 41.3, gameDaysLeft: 82 }).short).toBeNull()
-    expect(status(58, 'PG', { avgPace: 60.4, gameDaysLeft: 44 }).short).toBe(1)
+    expect(status(40.85, 'PG', { avgPace: 41, gameDaysLeft: 82 }).short).toBeNull()
+    expect(status(40.55, 'PG', { avgPace: 41, gameDaysLeft: 82 }).short).toBe(1)
   })
 
   it('stays silent while the season is too young to judge', () => {

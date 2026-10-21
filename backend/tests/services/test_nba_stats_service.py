@@ -595,14 +595,17 @@ class TestNBAStatsServiceSeasonBoundariesFromFixtures:
             _fixture('nba_day_season_types_2026_trimmed.json'),
             _fixture('nba_season_types_2026_trimmed.json'),
         )
-        nba_stats_service._days_left_cache = {'season_id': None, 'value': None, 'ts': None}
+        nba_stats_service._game_days_cache = {'season_id': None, 'value': None, 'ts': None}
         with patch.object(nba_stats_service._client, 'get', client), \
              patch('app.services.nba_stats_service.datetime', _FrozenDatetime):
             start = await nba_stats_service.get_regular_season_start_date(2026)
             days_left = await nba_stats_service.get_nba_game_days_remaining(2026)
-        nba_stats_service._days_left_cache = {'season_id': None, 'value': None, 'ts': None}
+            days_elapsed = await nba_stats_service.get_nba_game_days_elapsed(2026)
+        nba_stats_service._game_days_cache = {'season_id': None, 'value': None, 'ts': None}
 
         dates = [datetime.fromisoformat(d.replace('Z', '+00:00')).date()
                  for d in calendar['leagues'][0]['calendar']]
         assert start == date(2025, 10, 21)
         assert days_left == len([d for d in dates[16:182] if d >= date(2026, 3, 1)])
+        assert days_elapsed == len([d for d in dates[16:182] if d < date(2026, 3, 1)])
+        assert days_elapsed + days_left == 182 - 16

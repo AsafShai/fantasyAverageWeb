@@ -40,14 +40,15 @@ class LeagueService:
                 return await asyncio.gather(
                     nba_service.get_nba_average_pace(settings.season_id),
                     nba_service.get_nba_game_days_remaining(settings.season_id),
+                    nba_service.get_nba_game_days_elapsed(settings.season_id),
                 )
             except Exception as e:
                 self.logger.warning(f"Failed to fetch NBA stats: {e}")
-                return None, None
+                return None, None, None
 
         # The ESPN league fetch and the NBA-wide stats fetch are independent —
         # overlap them instead of paying both round trips serially.
-        (averages_df, category_leaders, league_averages), (nba_avg_pace, nba_game_days_left) = \
+        (averages_df, category_leaders, league_averages), (nba_avg_pace, nba_game_days_left, nba_game_days_elapsed) = \
             await asyncio.gather(_fetch_league_averages(), _fetch_nba_stats())
 
         trade_deadline = await self.data_provider.get_trade_deadline()
@@ -59,6 +60,7 @@ class LeagueService:
             league_averages=league_averages,
             nba_avg_pace=nba_avg_pace,
             nba_game_days_left=nba_game_days_left,
+            nba_game_days_elapsed=nba_game_days_elapsed,
             data_date=self.data_provider.get_data_date(),
             trade_deadline=trade_deadline,
         )
