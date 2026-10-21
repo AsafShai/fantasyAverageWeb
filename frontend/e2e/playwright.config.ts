@@ -31,7 +31,6 @@ export default defineConfig({
       VITE_API_BASE_URL: API_BASE_URL,
       VITE_FF_FEATURE_STORE: 'false',
       VITE_FF_PAST_SLATES: 'false',
-      VITE_FF_PROJECTIONS: 'false',
       VITE_FF_DRAFT_REPORT: 'false',
       VITE_FF_DRAFT_PAGES: 'false',
       VITE_FF_DRAFT_STEALS_BUSTS: 'false',

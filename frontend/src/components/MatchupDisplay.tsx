@@ -142,13 +142,11 @@ export function MatchupExpandRow({
   matchup,
   colSpan,
   integerMode = true,
-  showProjection = false,
   onCollapse,
 }: {
   matchup: PlayerMatchup;
   colSpan: number;
   integerMode?: boolean;
-  showProjection?: boolean;
   onCollapse?: () => void;
 }) {
   const paceLabel = paceBadge(matchup.pace, matchup.league_avg_pace);
@@ -175,7 +173,7 @@ export function MatchupExpandRow({
   }
   // A slider re-predict still pending from the previous slate must not land on this one.
   useEffect(() => () => clearTimeout(timer.current), [slateKey]);
-  const projActive = showProjection && !!proj && proj.status !== 'red' && !!stats;
+  const projActive = !!proj && proj.status !== 'red' && !!stats;
 
   const onSlider = (v: number) => {
     setMinutes(v);
@@ -265,31 +263,29 @@ export function MatchupExpandRow({
             </>
           )}
 
-          {showProjection && (
-            <div className="mq-proj-footer">
-              {!projActive && (
-                <span className="mq-proj-insufficient">{proj ? `no projection — ${proj.reason || 'insufficient data'}` : 'no projection available'}</span>
-              )}
-              {projActive && (
-                <div className="mq-proj-slider-row">
-                  <span className="mq-proj-slider-label">Minutes</span>
-                  <input
-                    type="range" min={0} max={48} step={1} value={Math.round(minutes)}
-                    onChange={(e) => onSlider(Number(e.target.value))}
-                  />
-                  <span className="mq-proj-slider-value">{Math.round(minutes)}</span>
-                  <button
-                    onClick={resetToDefault}
-                    aria-label="Reset to default minutes"
-                    title={`Reset to default (${Math.round(proj!.default_minutes)} min)`}
-                    className={`mq-proj-slider-reset ${isAdjusted ? '' : 'mq-invisible'}`}
-                  >
-                    ↺
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="mq-proj-footer">
+            {!projActive && (
+              <span className="mq-proj-insufficient">{proj ? `no projection — ${proj.reason || 'insufficient data'}` : 'no projection available'}</span>
+            )}
+            {projActive && (
+              <div className="mq-proj-slider-row">
+                <span className="mq-proj-slider-label">Minutes</span>
+                <input
+                  type="range" min={0} max={48} step={1} value={Math.round(minutes)}
+                  onChange={(e) => onSlider(Number(e.target.value))}
+                />
+                <span className="mq-proj-slider-value">{Math.round(minutes)}</span>
+                <button
+                  onClick={resetToDefault}
+                  aria-label="Reset to default minutes"
+                  title={`Reset to default (${Math.round(proj!.default_minutes)} min)`}
+                  className={`mq-proj-slider-reset ${isAdjusted ? '' : 'mq-invisible'}`}
+                >
+                  ↺
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </td>
     </tr>

@@ -23,7 +23,7 @@ import { useMyTeam } from '../context/MyTeamContext';
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';
 import PlayerNameLink from '../components/PlayerNameLink';
-import { FF_PROJECTIONS, FF_PAST_SLATES } from '../config/featureFlags';
+import { FF_PAST_SLATES } from '../config/featureFlags';
 import './Players.css';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
@@ -314,12 +314,10 @@ const Players = () => {
             </span>
             <span className="whitespace-nowrap font-medium">Only playing on slate</span>
           </label>
-          {FF_PROJECTIONS && (
-            <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none">
-              <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
-              Integer projections
-            </label>
-          )}
+          <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+            <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
+            Integer projections
+          </label>
           </div>
           <div className="order-1 flex w-full flex-col gap-2 sm:order-2 sm:w-auto sm:flex-row sm:items-center">
           <div className="w-full sm:order-2 sm:w-auto">
@@ -755,7 +753,7 @@ const PlayerTable = ({
                 )}
               </tr>
               {showMatchup && isExpanded && matchup && (
-                <MatchupExpandRow matchup={matchup} colSpan={4 + statColumnCount + matchupColumnCount} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
+                <MatchupExpandRow matchup={matchup} colSpan={4 + statColumnCount + matchupColumnCount} integerMode={integerMode} onCollapse={() => toggleExpand(player.player_name)} />
               )}
             </React.Fragment>
           );

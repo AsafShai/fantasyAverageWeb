@@ -23,7 +23,6 @@ import { TeamShareCard } from '../components/share/TeamShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
-import { FF_PROJECTIONS } from '../config/featureFlags'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -516,7 +515,7 @@ const TeamDetail = () => {
                   </button>
                 </div>
               )}
-              {FF_PROJECTIONS && !showSchedule && (
+              {!showSchedule && (
                 <label className="order-3 flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none sm:order-1">
                   <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
                   Integer projections
@@ -683,7 +682,7 @@ const TeamDetail = () => {
                       )}
                     </tr>
                     {!showSchedule && isExpanded && matchup && (
-                      <MatchupExpandRow matchup={matchup} colSpan={columns.length} integerMode={integerMode} showProjection={FF_PROJECTIONS} onCollapse={() => toggleExpand(player.player_name)} />
+                      <MatchupExpandRow matchup={matchup} colSpan={columns.length} integerMode={integerMode} onCollapse={() => toggleExpand(player.player_name)} />
                     )}
                   </React.Fragment>
                 )
