@@ -32,6 +32,7 @@ import pandas as pd
 
 from app.config import settings
 from app.services.db_service import DBService
+from app.utils.memory import log_memory, release_memory
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
 from model_stats_inference.serving import config as sconfig
@@ -93,18 +94,30 @@ def _eval_to_tuple(ev: EvalRow, game_date: date) -> tuple:
 
 # --- feature-vector (de)serialization --------------------------------------
 
-def _features_json(series: pd.Series, feature_cols: list[str]) -> str:
-    """One vector row's features as a JSON object (NaN -> null)."""
+def _features_dict(series: pd.Series, feature_cols: list[str]) -> dict[str, Optional[float]]:
+    """One vector row's features as a dict (NaN -> None).
+
+    Returned as a dict, not a JSON string: the pool's jsonb codec already runs
+    json.dumps, so a pre-dumped string would be stored as a JSON string scalar
+    instead of an object (and jsonb_object_keys / ``?`` then fail on it).
+    """
     out = {}
     for c in feature_cols:
         v = series[c]
         out[c] = None if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
-    return json.dumps(out)
+    return out
 
 
-def _serialize_vectors(store: FeatureStore) -> tuple[list[tuple], list[tuple], list[tuple]]:
-    """FeatureStore vectors -> DB row tuples for upsert_feature_vectors."""
+def _serialize_vectors(
+    store: FeatureStore, player_ids: list[int] | None = None
+) -> tuple[list[tuple], list[tuple], list[tuple]]:
+    """FeatureStore vectors -> DB row tuples for upsert_feature_vectors.
+
+    ``player_ids`` limits the player rows to those (the nightly recompute only
+    changes the players who played); team rows always come whole."""
     pv = store.player_vectors
+    if player_ids is not None:
+        pv = pv[pv["PLAYER_ID"].isin(player_ids)]
     pfeat = [c for c in pv.columns if c not in _PLAYER_META]
     player_rows = []
     for _, row in pv.iterrows():
@@ -114,12 +127,12 @@ def _serialize_vectors(store: FeatureStore) -> tuple[list[tuple], list[tuple], l
         player_rows.append((
             int(row["PLAYER_ID"]), str(row.get("PLAYER_NAME", "")), int(row["TEAM_ID"]),
             str(row.get("POSITION", "")), last, games,
-            games >= sconfig.MIN_INFERENCE_GAMES, _features_json(row, pfeat),
+            games >= sconfig.MIN_INFERENCE_GAMES, _features_dict(row, pfeat),
         ))
 
     def team_rows(tv: pd.DataFrame) -> list[tuple]:
         feat = [c for c in tv.columns if c != "TEAM_ID"]
-        return [(int(row["TEAM_ID"]), _features_json(row, feat)) for _, row in tv.iterrows()]
+        return [(int(row["TEAM_ID"]), _features_dict(row, feat)) for _, row in tv.iterrows()]
 
     return player_rows, team_rows(store.team_allowed_vectors), team_rows(store.team_own_vectors)
 
@@ -198,6 +211,7 @@ class ModelNightlyService:
                 break
         if missing == "vectors_refreshed" or _INVALIDATING_STATUSES.intersection(statuses.values()):
             await self._prewarm_inference_store()
+            release_memory("nightly catch-up: inference store prewarmed", logger)
         return statuses
 
     async def run_for_date(self, game_date: date, force: bool = False) -> str:
@@ -227,7 +241,15 @@ class ModelNightlyService:
             await db.upsert_model_nightly_run(game_date, "store_already_ingested", 0, 0)
             return "store_already_ingested"
 
+        # Step markers: an OOM kill leaves no traceback, so the last [mem] line
+        # names the step that ran out of memory.
+        log_memory(f"nightly {game_date}: fetching night", logger)
         night = await asyncio.to_thread(nightly.fetch_night, game_date)
+        logger.info(
+            f"Nightly {game_date}: fetched night (complete={night.complete}, "
+            f"expected_games={night.expected_games}, "
+            f"player_rows={len(night.player_games)}, team_rows={len(night.team_games)})"
+        )
         if not night.complete:
             # Checked before the expected_games==0 branch below: a zero-events
             # scoreboard that ESPN's whitelist says should have games comes back
@@ -241,19 +263,66 @@ class ModelNightlyService:
             await db.upsert_model_nightly_run(game_date, "no_games", 0, 0)
             return "no_games"
 
-        players, team_games = await db.get_fs_rows_before(game_date)
-        if players.empty or team_games.empty:
-            logger.error("Feature-store tables are empty — run --bootstrap first")
-            return "store_not_bootstrapped"
-
-        evals, night_players, vectors = await asyncio.to_thread(
-            self._process_sync, players, team_games, night
+        # Two ways to get the pre-night store. The stored vectors ARE the state
+        # through the last ingested night (each night folds itself in), so when
+        # they are current they can be loaded as-is (~1 MB) instead of rebuilt
+        # from the whole history (~90k rows, the step that OOM-killed a 512 MB
+        # container). Only the players who played tonight need recomputing, from
+        # their own rows. If the vectors lag the raw rows (a crashed run, a
+        # re-seed), fall back to the full rebuild, which heals them.
+        vectors_as_of, latest_fs = await asyncio.gather(
+            db.get_vectors_as_of(), db.get_latest_fs_date_before(game_date)
         )
+        incremental = (
+            vectors_as_of is not None and latest_fs is not None and vectors_as_of == latest_fs
+        )
+        if incremental:
+            night_ids = [int(p) for p in night.player_games["PLAYER_ID"].unique()]
+            log_memory(f"nightly {game_date}: loading history of tonight's players", logger)
+            players, team_games = await db.get_fs_rows_before_for_players(game_date, night_ids)
+            # Only tonight's players' vectors: predictions read theirs, the fold-in
+            # rewrites theirs; nobody else's row is touched.
+            pv, tav, tov = await db.load_feature_vectors(player_ids=night_ids)
+            if not tav or not tov or team_games.empty:
+                logger.error("Feature-store tables are empty — run --bootstrap first")
+                return "store_not_bootstrapped"
+            logger.info(
+                f"Nightly {game_date}: stored vectors are current (through {vectors_as_of}); "
+                f"scoring from them, recomputing {len(night_ids)} players from "
+                f"{len(players)} history rows (incremental path)"
+            )
+            evals, night_players, vectors = await asyncio.to_thread(
+                self._process_sync_incremental, pv, tav, tov, players, team_games, night
+            )
+            del pv, tav, tov
+        else:
+            logger.warning(
+                f"Nightly {game_date}: stored vectors are through {vectors_as_of} but the "
+                f"store holds games through {latest_fs}; rebuilding from the full history "
+                f"(full path)"
+            )
+            log_memory(f"nightly {game_date}: loading feature-store history", logger)
+            players, team_games = await db.get_fs_rows_before(game_date)
+            log_memory(
+                f"nightly {game_date}: loaded history "
+                f"({len(players)} player rows, {len(team_games)} team rows)",
+                logger,
+            )
+            if players.empty or team_games.empty:
+                logger.error("Feature-store tables are empty — run --bootstrap first")
+                return "store_not_bootstrapped"
+
+            evals, night_players, vectors = await asyncio.to_thread(
+                self._process_sync, players, team_games, night
+            )
+        del players, team_games
+        release_memory(f"nightly {game_date}: processed ({len(evals)} evals)", logger)
 
         eval_rows = [_eval_to_tuple(ev, game_date) for ev in evals]
         if not await db.insert_model_eval_rows(eval_rows):
             return "db_write_failed"
 
+        log_memory(f"nightly {game_date}: writing raw rows", logger)
         if not await db.insert_fs_rows(
             _frame_to_tuples(night_players, _FS_PLAYER_COLS),
             _frame_to_tuples(night.team_games, _FS_TEAM_COLS),
@@ -263,6 +332,7 @@ class ModelNightlyService:
         # Post-night vectors (include the night just ingested). If this fails the
         # raw rows are already committed, so the run is left unmarked; the retry
         # hits the leakage-guard branch above and refreshes vectors from the DB.
+        log_memory(f"nightly {game_date}: writing vectors", logger)
         if not await db.upsert_feature_vectors(*vectors):
             return "db_write_failed"
         self._invalidate_inference_store()
@@ -275,6 +345,8 @@ class ModelNightlyService:
             f"Model nightly {game_date}: {night.expected_games} games, "
             f"{len(eval_rows)} players evaluated ({eligible} eligible)"
         )
+        del vectors, night_players, eval_rows, evals
+        release_memory(f"nightly {game_date}: done", logger)
         return "processed"
 
     async def _refresh_vectors_through(self, game_date: date) -> Optional[bool]:
@@ -385,13 +457,16 @@ class ModelNightlyService:
         the night (leakage-safe), then fold the night in to materialize post-night
         vectors."""
         players = players.sort_values(["PLAYER_ID", "GAME_DATE"])
+        log_memory("nightly: building feature store", logger)
         store = FeatureStore.build(
             players.reset_index(drop=True),
             rdata.build_team_allowed(team_games),
             rdata.build_team_own(team_games),
         )
+        log_memory("nightly: built feature store; evaluating night", logger)
         inference = LiveInference(store)
         evals = nightly.evaluate_night(store, inference, night)
+        log_memory("nightly: evaluated; folding night into store", logger)
         night_players = nightly.attach_positions(store, night.player_games)
         # Fold last night in so the stored vectors are current for tonight's games.
         # Sub-MIN_MINUTES rows are still persisted (storage keeps every played
@@ -400,6 +475,36 @@ class ModelNightlyService:
         qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
         store.update_with_nightly_results(qualifying, night.team_games)
         return evals, night_players, _serialize_vectors(store)
+
+    @staticmethod
+    def _process_sync_incremental(
+        pv: list[dict], tav: list[dict], tov: list[dict],
+        players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch,
+    ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
+        """Same as ``_process_sync`` with the pre-night store loaded from the
+        stored vectors (tonight's players only) instead of rebuilt: predictions
+        read the stored vectors;
+        the fold-in recomputes tonight's players from their own full history
+        (``players``) and every team from the team rows, exactly what a full
+        rebuild computes for them (``build_current_state`` is per player).
+        Only tonight's players' vectors are returned for the upsert."""
+        log_memory("nightly: loading pre-night store from stored vectors", logger)
+        store = FeatureStore.from_vectors(
+            _player_vectors_df(pv) if pv else pd.DataFrame(columns=_PLAYER_META[:6]),
+            _team_vectors_df(tav), _team_vectors_df(tov),
+        )
+        # The raw rows the fold-in needs: tonight's players' history, all teams.
+        store.players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
+        store.team_allowed = rdata.build_team_allowed(team_games)
+        store.team_own = rdata.build_team_own(team_games)
+        inference = LiveInference(store)
+        evals = nightly.evaluate_night(store, inference, night)
+        log_memory("nightly: evaluated; folding night into store", logger)
+        night_players = nightly.attach_positions(store, night.player_games)
+        qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
+        store.update_with_nightly_results(qualifying, night.team_games)
+        changed = [int(p) for p in qualifying["PLAYER_ID"].unique()]
+        return evals, night_players, _serialize_vectors(store, player_ids=changed)
 
 
     # --- serving: resident in-memory store (for a future inference tab) -------

@@ -17,6 +17,7 @@ async def get_team_slot_pace_df() -> pd.DataFrame:
     Returns a DataFrame with one row per fantasy team:
       team_id, team_name,
       PG, SG, SF, PF, C, G, F, UTIL  (games used per roster slot this season),
+      nba_game_days_elapsed            (game days already played this regular season),
       nba_game_days_remaining          (game days left in the regular season),
       nba_avg_pace                     (avg games played per NBA team so far)
     """
@@ -30,8 +31,9 @@ async def get_team_slot_pace_df() -> pd.DataFrame:
     # main.py's lifespan) — must not be closed here, since other concurrent
     # callers (e.g. estimator_service's own pace fetch, run via the same
     # asyncio.gather) may still be using its httpx client.
-    nba_avg_pace, game_days_remaining = await asyncio.gather(
+    nba_avg_pace, game_days_elapsed, game_days_remaining = await asyncio.gather(
         nba_service.get_nba_average_pace(settings.season_id),
+        nba_service.get_nba_game_days_elapsed(settings.season_id),
         nba_service.get_nba_game_days_remaining(settings.season_id),
     )
 
@@ -43,6 +45,7 @@ async def get_team_slot_pace_df() -> pd.DataFrame:
             'team_id': team_id,
             'team_name': team_name_map.get(team_id, f'Team {team_id}'),
             **{s: slots.get(s, 0) for s in _SLOT_NAMES},
+            'nba_game_days_elapsed': game_days_elapsed,
             'nba_game_days_remaining': game_days_remaining,
             'nba_avg_pace': resolved_pace,
         }

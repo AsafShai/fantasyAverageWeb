@@ -1,7 +1,7 @@
 """Orchestration tests for ModelNightlyService (fake DB + fake fetch, no network)."""
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pandas as pd
@@ -39,6 +39,25 @@ class FakeDB:
         self.vectors_written = None
         self.vector_feature_keys = None   # union across the 3 vector tables; None = unknown
         self.keys_after_upsert = None     # what a successful rebuild writes, if set
+        # Incremental path inputs: the vectors' as-of night vs the latest raw night.
+        self.vectors_as_of = None         # None = no vectors yet -> full rebuild path
+        self.latest_fs_date = GAME_DATE - timedelta(days=1)
+        self.vector_rows = ([{"player_id": 1}], [{"team_id": 10}], [{"team_id": 10}])
+        self.players_asked = None         # player ids the incremental history load got
+
+    async def get_vectors_as_of(self):
+        return self.vectors_as_of
+
+    async def get_latest_fs_date_before(self, d):
+        return self.latest_fs_date
+
+    async def get_fs_rows_before_for_players(self, d, player_ids):
+        self.players_asked = list(player_ids)
+        return self.player_recs, self.team_recs
+
+    async def load_feature_vectors(self, player_ids=None):
+        self.vector_ids_asked = player_ids
+        return self.vector_rows
 
     async def get_feature_vector_keys(self):
         return self.vector_feature_keys
@@ -129,6 +148,21 @@ def _allow_predict(monkeypatch, evals):
     monkeypatch.setattr(
         ModelNightlyService, "_process_sync",
         staticmethod(lambda p, t, n: (evals, _night_players_frame(), _DUMMY_VECTORS)),
+    )
+    monkeypatch.setattr(
+        ModelNightlyService, "_process_sync_incremental",
+        staticmethod(lambda *a: pytest.fail("incremental path must not run here")),
+    )
+
+
+def _allow_predict_incremental(monkeypatch, evals, calls):
+    def incremental(pv, tav, tov, players, team_games, night):
+        calls.append((pv, tav, tov, len(players), len(team_games)))
+        return evals, _night_players_frame(), _DUMMY_VECTORS
+    monkeypatch.setattr(ModelNightlyService, "_process_sync_incremental", staticmethod(incremental))
+    monkeypatch.setattr(
+        ModelNightlyService, "_process_sync",
+        staticmethod(lambda *a: pytest.fail("full rebuild must not run here")),
     )
 
 
@@ -224,6 +258,67 @@ async def test_happy_path_processes_ingests_and_writes_vectors(service, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_incremental_path_when_stored_vectors_are_current(service, monkeypatch):
+    """Vectors through last night == raw rows through last night: score from the
+    stored vectors, load only tonight's players' history, write the night."""
+    night = _night()
+    night.player_games = _night_players_frame()
+    _allow_fetch(monkeypatch, night)
+    calls = []
+    _allow_predict_incremental(monkeypatch, [_eval_row()], calls)
+    service._db.vectors_as_of = service._db.latest_fs_date = GAME_DATE - timedelta(days=1)
+
+    assert await service.run_for_date(GAME_DATE) == "processed"
+    assert len(calls) == 1
+    assert calls[0][:3] == service._db.vector_rows
+    assert service._db.players_asked == [1]
+    assert service._db.vector_ids_asked == [1]        # only tonight's players' vectors
+    assert service._db.marked == [(GAME_DATE, "processed", 2, 1)]
+    assert service._db.vectors_written == _DUMMY_VECTORS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("as_of_offset", [None, 2])
+async def test_full_rebuild_when_vectors_missing_or_stale(service, monkeypatch, as_of_offset):
+    """No vectors yet, or vectors older than the raw rows (a crashed run): rebuild
+    from the full history, which also heals the vectors."""
+    _allow_fetch(monkeypatch, _night())
+    _allow_predict(monkeypatch, [_eval_row()])
+    service._db.vectors_as_of = (
+        None if as_of_offset is None else GAME_DATE - timedelta(days=as_of_offset)
+    )
+    assert await service.run_for_date(GAME_DATE) == "processed"
+    assert service._db.players_asked is None
+    assert service._db.marked == [(GAME_DATE, "processed", 2, 1)]
+
+
+@pytest.mark.asyncio
+async def test_incremental_path_without_vector_rows_requires_bootstrap(service, monkeypatch):
+    night = _night()
+    night.player_games = _night_players_frame()
+    _allow_fetch(monkeypatch, night)
+    _allow_predict_incremental(monkeypatch, [_eval_row()], [])
+    service._db.vectors_as_of = service._db.latest_fs_date = GAME_DATE - timedelta(days=1)
+    service._db.vector_rows = ([], [], [])          # no team vectors at all
+    assert await service.run_for_date(GAME_DATE) == "store_not_bootstrapped"
+
+
+def test_serialize_vectors_can_limit_to_given_players():
+    pv = pd.DataFrame({
+        "PLAYER_ID": [1, 2, 3], "PLAYER_NAME": ["a", "b", "c"], "TEAM_ID": [10, 10, 20],
+        "POSITION": ["G", "F", "C"], "last_game_date": [pd.Timestamp(GAME_DATE)] * 3,
+        "games_count": [12, 3, 40], "F1": [0.1, 0.2, 0.3],
+    })
+    teams = pd.DataFrame({"TEAM_ID": [10, 20], "T1": [1.0, 2.0]})
+    store = SimpleNamespace(player_vectors=pv, team_allowed_vectors=teams, team_own_vectors=teams)
+    all_rows, _, _ = _serialize_vectors(store)
+    some_rows, tav, tov = _serialize_vectors(store, player_ids=[3, 1])
+    assert [r[0] for r in all_rows] == [1, 2, 3]
+    assert [r[0] for r in some_rows] == [1, 3]
+    assert len(tav) == len(tov) == 2
+
+
+@pytest.mark.asyncio
 async def test_processing_invalidates_in_memory_store(service, monkeypatch):
     _allow_fetch(monkeypatch, _night())
     _allow_predict(monkeypatch, [_eval_row()])
@@ -261,7 +356,12 @@ def test_vector_serialize_roundtrip():
     # eligibility computed from games_count vs MIN_INFERENCE_GAMES (10)
     assert prows[0][6] is True and prows[1][6] is False
 
-    # simulate what DBService.load_feature_vectors returns (lowercase cols, json str)
+    # dicts, not JSON strings: the pool's jsonb codec encodes them (a pre-dumped
+    # string would be stored as a JSON string scalar)
+    assert all(isinstance(p[7], dict) for p in prows)
+    assert all(isinstance(t[1], dict) for t in tarows + torows)
+
+    # simulate what DBService.load_feature_vectors returns (lowercase cols, decoded jsonb)
     precs = [{"player_id": p[0], "player_name": p[1], "team_id": p[2], "position": p[3],
               "last_game_date": p[4], "games_count": p[5], "eligible": p[6],
               "features": p[7]} for p in prows]
@@ -273,8 +373,15 @@ def test_vector_serialize_roundtrip():
     assert pv2.loc[1, "REB_w5_mean"] == 5.0
     tav2 = _team_vectors_df(tacs).set_index("TEAM_ID")
     assert tav2.loc[10, "OPP_ALLOWED_PTS_global_mean"] == 110.0
-    # features JSON is valid and NaN was stored as null
-    assert json.loads(prows[1][7])["PTS_global_mean"] is None
+    # NaN is serialized as None (null in jsonb)
+    assert prows[1][7]["PTS_global_mean"] is None
+
+    # Rows written before the fix were double-encoded: the codec decodes them to
+    # a JSON *string*. They must still load until the next run rewrites them.
+    legacy = [{**r, "features": json.dumps(r["features"])} for r in precs]
+    pv3 = _player_vectors_df(legacy).set_index("PLAYER_ID")
+    assert pv3.loc[1, "PTS_global_mean"] == 20.0
+    assert pd.isna(pv3.loc[2, "PTS_global_mean"])
 
 
 # --- missing features: healing the store after a deploy --------------------
@@ -300,8 +407,8 @@ def _real_stored_keys() -> tuple[set[str], set[str]]:
         players, rdata.build_team_allowed(team_logs), rdata.build_team_own(team_logs)
     )
     prows, tarows, torows = _serialize_vectors(store)
-    player = set(json.loads(prows[0][7]))
-    team = set(json.loads(tarows[0][1])) | set(json.loads(torows[0][1]))
+    player = set(prows[0][7])
+    team = set(tarows[0][1]) | set(torows[0][1])
     return player | team, player
 
 

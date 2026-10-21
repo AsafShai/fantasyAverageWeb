@@ -26,6 +26,7 @@ def mock_nba_service(monkeypatch):
     service = MagicMock()
     service.get_nba_average_pace = AsyncMock(return_value=99.5)
     service.get_nba_game_days_remaining = AsyncMock(return_value=42)
+    service.get_nba_game_days_elapsed = AsyncMock(return_value=120)
     service.close = AsyncMock()
     monkeypatch.setattr(team_slot_pace_module, 'NBAStatsService', lambda: service)
     return service
@@ -54,6 +55,7 @@ async def test_get_team_slot_pace_df_builds_rows_per_team(mock_data_provider, mo
     assert row1['C'] == 0  # slot with no usage defaults to 0
     assert row1['nba_avg_pace'] == 99.5
     assert row1['nba_game_days_remaining'] == 42
+    assert row1['nba_game_days_elapsed'] == 120
 
 
 @pytest.mark.asyncio

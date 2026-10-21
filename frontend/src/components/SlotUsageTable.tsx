@@ -14,6 +14,7 @@ interface SlotUsageTableProps {
   slotUsage: Record<string, SlotUsage>
   avgPace?: number | null
   gameDaysLeft?: number | null
+  gameDaysElapsed?: number | null
 }
 
 type GapTone = 'neutral' | 'short' | 'lost'
@@ -76,8 +77,8 @@ function HeadCell({ label, gloss }: { label: string; gloss: string }) {
   )
 }
 
-export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft }: SlotUsageTableProps) {
-  const pace: PaceContext = { avgPace, gameDaysLeft }
+export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft, gameDaysElapsed }: SlotUsageTableProps) {
+  const pace: PaceContext = { avgPace, gameDaysLeft, gameDaysElapsed }
   const rows = SLOT_NAMES.map(slot => {
     const usage = slotUsage[slot]
     const projection = usage ? projectSlot(usage.games_used, slot, pace) : null
