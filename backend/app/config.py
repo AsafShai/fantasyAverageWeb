@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     # Build the league activity view in the background at startup, so the first
     # visitor doesn't wait for one ESPN roster snapshot per day of the season.
     league_activity_warm: bool = Field(default=True, alias="LEAGUE_ACTIVITY_WARM")
+    # Surprises of the night ("Boom or Bust" tab). Scores are on an N(0,1) scale
+    # against the reference season; a player is worth mentioning past these
+    # thresholds. Server-side on purpose — the UI only shows what crossed the bar.
+    # Kill switch for the nightly scoring step (the tab then keeps its last night).
+    surprise_nightly_enabled: bool = Field(default=True, alias="SURPRISE_NIGHTLY_ENABLED")
+    surprise_good_threshold: float = Field(default=1.8, alias="SURPRISE_GOOD_THRESHOLD")
+    surprise_bad_threshold: float = Field(default=1.8, alias="SURPRISE_BAD_THRESHOLD")
+    surprise_min_minutes: float = Field(default=0.0, alias="SURPRISE_MIN_MINUTES")
+    surprise_top_n: int = Field(default=15, alias="SURPRISE_TOP_N")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

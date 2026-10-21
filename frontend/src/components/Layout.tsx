@@ -4,7 +4,7 @@ import Footer from './Footer'
 import { MyTeamSelect } from './MyTeamSelect'
 import CommandPalette from './CommandPalette'
 import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
-import { FF_FEATURE_STORE, FF_DRAFT_REPORT, FF_DRAFT_PAGES } from '../config/featureFlags'
+import { FF_FEATURE_STORE, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_BOOM_OR_BUST } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
 import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
@@ -12,6 +12,7 @@ import { DEFAULT_DRAFT_METRIC, defaultAdpIndexArgs } from '../utils/adp'
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/trends': () => import('../pages/Trends'),
   '/projections': () => import('../pages/Projections'),
+  '/boom-or-bust': () => import('../pages/BoomOrBust'),
   '/feature-store': () => import('../pages/FeatureStore'),
   '/analytics': () => import('../pages/Analytics'),
   '/players': () => import('../pages/Players'),
@@ -444,6 +445,7 @@ const NavShell = ({ darkMode, setDarkMode, setSearchOpen }: NavShellProps) => {
         { path: '/analytics', label: 'League Analytics', icon: '📈' },
         { path: '/trends', label: 'Player Trends', icon: '📉' },
         { path: '/projections', label: 'Projections', icon: '🔭' },
+        ...(FF_BOOM_OR_BUST ? [{ path: '/boom-or-bust', label: 'Boom or Bust', icon: '💥' }] : []),
         { path: '/estimator', label: 'Standings Estimator', icon: '🔮' },
         ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
       ],

@@ -81,6 +81,18 @@
 .share-card .sc-win { color: var(--sc-good-fg); font-weight: 800; }
 .share-card .sc-lose { color: var(--sc-muted); }
 
+/* sections (boom or bust card: two tables in one card) */
+.share-card__section { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 2px 0 4px; }
+.share-card__section-title { font-size: 13px; font-weight: 800; white-space: nowrap; }
+.share-card__section-rule { font-size: 10px; color: var(--sc-muted); white-space: nowrap; }
+.share-card__person { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.share-card__avatar { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--sc-raised); border: 1px solid var(--sc-line); }
+.share-card__person-text { min-width: 0; }
+.share-card__player { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.share-card__why { font-size: 9.5px; color: var(--sc-muted); overflow: hidden; text-overflow: ellipsis; }
+.share-card__empty { padding: 6px 0 8px; font-size: 11px; color: var(--sc-muted); }
+.share-card__body + .share-card__body { padding-top: 4px; }
+
 /* tiles + side boxes */
 .share-card__tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 12px 4px; }
 .share-card__tile { min-width: 0; padding: 8px 10px; border: 1px solid var(--sc-line); border-radius: 10px; background: var(--sc-raised); }

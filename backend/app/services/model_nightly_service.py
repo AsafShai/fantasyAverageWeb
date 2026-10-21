@@ -347,6 +347,17 @@ class ModelNightlyService:
         )
         del vectors, night_players, eval_rows, evals
         release_memory(f"nightly {game_date}: done", logger)
+        # Surprises of the night need the raw rows and eval rows just written.
+        # Runs after the night's memory is released; a failure here is logged,
+        # not fatal: the night itself is processed, and
+        # `python -m app.services.surprise_service --date` backfills it.
+        if settings.surprise_nightly_enabled:
+            try:
+                from app.services.surprise_service import SurpriseService
+                await SurpriseService(db=db).compute_and_store(game_date)
+            except Exception as e:
+                logger.error(f"Surprises {game_date} failed: {type(e).__name__}: {e}", exc_info=True)
+            release_memory(f"nightly {game_date}: surprises done", logger)
         return "processed"
 
     async def _refresh_vectors_through(self, game_date: date) -> Optional[bool]:

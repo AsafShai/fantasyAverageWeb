@@ -588,6 +588,56 @@ export interface Projection {
   stats: ProjectionStats | null;
 }
 
+export interface SurpriseReason {
+  stat: string;
+  value: number;
+  avg: number | null;
+  z: number;
+}
+
+export interface SurpriseRow {
+  player_id: number;
+  player_name: string;
+  team_abbr: string;
+  opponent_abbr: string;
+  is_home: boolean;
+  minutes: number;
+  pts: number;
+  reb: number;
+  ast: number;
+  fg3m: number;
+  stl: number;
+  blk: number;
+  fgm: number;
+  fga: number;
+  ftm: number;
+  fta: number;
+  score: number;
+  metric_z: number | null;
+  metric_err: number | null;
+  has_estimate: boolean;
+  reasons: SurpriseReason[];
+  /** The server's own call at the default thresholds; '' when the row crosses neither bar. */
+  verdict: 'good' | 'bad' | '';
+}
+
+export interface NightSurprises {
+  game_date: string;
+  games: number;
+  players_played: number;
+  players_scored: number;
+  players_with_estimate: number;
+  /** Server default thresholds; the page lets each viewer move them. */
+  thresholds: { good: number; bad: number };
+  /** Most rows to show per list after filtering. */
+  max_rows: number;
+  /** Every scored row with score >= 0, best first (not pre-filtered). */
+  good: SurpriseRow[];
+  /** Every scored row with score < 0, worst first (not pre-filtered). */
+  bad: SurpriseRow[];
+  computed_at: string;
+}
+
 export interface PlayerNextGameProjection {
   player_name: string;
   team: string;

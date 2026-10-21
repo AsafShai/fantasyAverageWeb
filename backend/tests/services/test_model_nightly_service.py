@@ -128,6 +128,8 @@ def service(monkeypatch):
     ModelNightlyService._instance = None
     svc = ModelNightlyService()
     svc._db = FakeDB()
+    # The surprise step has its own tests; here it would only hit the fake DB.
+    monkeypatch.setattr(mns.settings, "surprise_nightly_enabled", False)
     monkeypatch.setattr(
         mns.nightly, "fetch_night", lambda d: pytest.fail("fetch_night should not be called")
     )

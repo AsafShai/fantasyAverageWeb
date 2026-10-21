@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { FF_SHARE_CARDS } from '../../config/featureFlags'
 import { usePersistedState } from '../../hooks/usePersistedState'
-import { canCopyImage, canShareFile, shareFileName, useShareImage, type ShareImageResult } from '../../hooks/useShareImage'
+import { canCopyImage, canShareFile, downloadBlob, shareFileName, useShareImage, type ShareImageResult } from '../../hooks/useShareImage'
 import { todayIso } from '../../utils/dateRange'
 import './ShareCard.css'
 
@@ -20,6 +20,9 @@ interface ShareCardButtonProps {
   highlightOption?: boolean
   /** `onBlue` for the blue gradient page headers, `neutral` elsewhere. */
   variant?: 'neutral' | 'onBlue'
+  /** A ready-made message to go with the image: sent as the share-sheet text
+   * and offered as "Copy message" for apps that take the image alone. */
+  shareText?: string
 }
 
 const BUTTON_STYLES = {
@@ -32,6 +35,7 @@ const RESULT_MESSAGES: Partial<Record<ShareImageResult, string>> = {
 }
 
 const PRIMARY_ACTION = 'bg-blue-600 text-white hover:bg-blue-700'
+const WHATSAPP_ACTION = 'bg-[#25D366] text-white hover:bg-[#1ebe5d]'
 const SECONDARY_ACTION = 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
 
 const isDarkTheme = () => document.documentElement.classList.contains('dark')
@@ -52,7 +56,7 @@ const ShareIcon = () => (
 export const ShareCardButton = (props: ShareCardButtonProps) =>
   FF_SHARE_CARDS ? <ShareCardMenu {...props} /> : null
 
-export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral' }: ShareCardButtonProps) => {
+export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral', shareText }: ShareCardButtonProps) => {
   const [open, setOpen] = useState(false)
   const [dark, setDark] = useState(false)
   const [highlightMyTeam, setHighlightMyTeam] = usePersistedState('share.highlightMyTeam', false)
@@ -60,7 +64,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
   const [zoomed, setZoomed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const fileName = shareFileName(title, todayIso())
-  const { cardRef, blob, file, status, error, render, share, copy, download } = useShareImage(fileName, title)
+  const { cardRef, blob, file, status, error, render, share, copy, download } = useShareImage(fileName, title, shareText)
   const highlight = highlightOption && highlightMyTeam
 
   // Re-render the PNG whenever the menu opens or an option changes, so the
@@ -99,6 +103,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
       setDark(isDarkTheme())
       setMessage(null)
       setZoomed(false)
+      setWhatsAppStep(null)
     }
     setOpen(!open)
   }
@@ -107,7 +112,11 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
     setMessage(null)
     try {
       const result = await action()
-      if (result === 'shared') setOpen(false)
+      if (result === 'shared') {
+        // The caption rides along on Android; on iOS it is on the clipboard now.
+        if (shareText) setMessage('Shared. If the message is missing, paste it: it is copied.')
+        else setOpen(false)
+      }
       else if (result === 'downloaded') setMessage(`Saved ${fileName}`)
       else setMessage(RESULT_MESSAGES[result] ?? null)
     } catch (err) {
@@ -115,7 +124,39 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
     }
   }
 
+  /** Direct to WhatsApp: a wa.me link carries the message but no file (no web
+   * page can hand WhatsApp Desktop/Web a file), so the image goes on the
+   * clipboard first and one paste in the chat attaches it with the message as
+   * its caption. If the clipboard is blocked, the PNG is downloaded instead. */
+  const [whatsAppStep, setWhatsAppStep] = useState<'pasted' | 'downloaded' | null>(null)
+  const openWhatsApp = async () => {
+    if (!shareText || !blob) return
+    setMessage(null)
+    let imageCopied = false
+    if (canCopyImage()) {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        imageCopied = true
+      } catch { /* clipboard blocked: fall through to the download */ }
+    }
+    if (!imageCopied) downloadBlob(blob, fileName)
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener')
+    setWhatsAppStep(imageCopied ? 'pasted' : 'downloaded')
+  }
+
+  const copyText = async () => {
+    if (!shareText) return
+    setMessage(null)
+    try {
+      await navigator.clipboard.writeText(shareText)
+      setMessage('Message copied. Paste it with the image.')
+    } catch {
+      setMessage("Couldn't copy the message")
+    }
+  }
+
   const ready = status === 'ready'
+  const showCopyText = !!shareText && typeof navigator.clipboard?.writeText === 'function'
   const showShare = typeof navigator.canShare === 'function' && (file ? canShareFile(file) : true)
   const showCopy = canCopyImage()
   const actionClass = 'w-full min-h-11 sm:min-h-0 px-3 py-2 rounded-md text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -184,6 +225,11 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
                 Share…
               </button>
             )}
+            {shareText && (
+              <button type="button" disabled={!ready} onClick={openWhatsApp} className={`${actionClass} ${WHATSAPP_ACTION}`}>
+                Send on WhatsApp
+              </button>
+            )}
             <div className="flex gap-2">
               {showCopy && (
                 <button type="button" disabled={!ready} onClick={() => runAction(copy, "Copy isn't available here. Use Download instead")} className={`${actionClass} ${showShare ? SECONDARY_ACTION : PRIMARY_ACTION}`}>
@@ -195,6 +241,23 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
               </button>
             </div>
           </div>
+
+          {showCopyText && (
+            <button type="button" onClick={copyText} className={`${actionClass} mt-2 ${SECONDARY_ACTION}`}>
+              Copy message
+            </button>
+          )}
+
+          {whatsAppStep && (
+            <div role="status" className="mt-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-2 text-xs text-emerald-900 dark:text-emerald-100">
+              <div className="font-semibold">WhatsApp opened with the message.</div>
+              {whatsAppStep === 'pasted' ? (
+                <div className="mt-1">Pick the chat, then press <kbd className="rounded border border-emerald-300 dark:border-emerald-700 px-1 font-mono">{navigator.platform.startsWith('Mac') ? '⌘V' : 'Ctrl+V'}</kbd> in it: the image is on your clipboard and attaches with the message as its caption.</div>
+              ) : (
+                <div className="mt-1">The clipboard is blocked here, so the image was saved as <span className="font-mono">{fileName}</span>: drag it into the chat.</div>
+              )}
+            </div>
+          )}
 
           {message && <p role="status" className="mt-2 text-xs text-gray-600 dark:text-gray-300">{message}</p>}
         </div>

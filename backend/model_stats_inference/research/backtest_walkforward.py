@@ -49,6 +49,7 @@ from sklearn.model_selection import KFold, cross_val_predict
 from ..serving.feature_store import FeatureStore
 from ..serving.inference import LiveInference, PredictionRequest
 from ..serving import nightly
+from ..serving import surprise
 from ..training import config as tconfig
 from ..training import reconcile
 from . import config, data, features
@@ -249,113 +250,14 @@ def replay_season(players_raw: pd.DataFrame, team_logs: pd.DataFrame) -> pd.Data
 # --- 3) Z-scores (DNP-only filtering, strictly-prior windows) ----------------
 
 def compute_zscores(players_raw: pd.DataFrame) -> pd.DataFrame:
-    """Per player-game surprise scores for Z_STATS over played games (MIN > 0).
-
-    Every base excludes tonight's game: *_ALL uses the expanding 4-season
-    history, *_SEASON the expanding current-season history, *_L10/*_L5 the
-    previous 10/5 played games (full window required). Three families per
-    window, addressing "bad players always win raw z" (their tiny stds explode
-    the score):
-
-      Z_    raw z              (x - mean) / std                — rarity vs his own noise
-      PZ_   Pearson z          (x - mean) / sqrt(mean + 1)     — variance follows the
-            mean (Poisson-like), so a scrub's collapsed std can't inflate it;
-            same convention as training's Pearson residual
-      QZ_   percentile probit  norm.ppf((#prior below + ties/2 + 0.5)/(n + 1))
-            — distribution-free "how rare was tonight among HIS OWN games",
-            bounded by sample size so small windows can't make extreme claims
-    """
-    from scipy.stats import norm as _norm
-
-    zdf = players_raw[players_raw["MIN"].notna() & (players_raw["MIN"] > 0)]
-    zdf = zdf.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-
-    out = zdf[["PLAYER_ID", "GAME_ID"]].copy()
-    pid = zdf["PLAYER_ID"]
-    season_keys = [pid, zdf["SEASON"]]
-    n_all = zdf.groupby("PLAYER_ID").cumcount().astype(float)          # prior games
-    n_season = zdf.groupby(["PLAYER_ID", "SEASON"]).cumcount().astype(float)
-
-    for stat in Z_STATS:
-        s = zdf[stat].astype(float)
-        prior = s.groupby(pid).shift(1)                 # value of the previous game
-        gp = prior.groupby(pid)
-        prior_season = s.groupby(season_keys).shift(1)
-        gps = prior_season.groupby(season_keys)
-
-        def z(mean: pd.Series, std: pd.Series) -> pd.Series:
-            return (s - mean) / std.replace(0.0, np.nan)
-
-        def pearson(mean: pd.Series) -> pd.Series:
-            return (s - mean) / np.sqrt(mean.clip(lower=0.0) + 1.0)
-
-        def probit(rank_incl: pd.Series, n_prior) -> pd.Series:
-            # rank of tonight within (priors + tonight), average-tie method:
-            # rank - 1 == (#priors strictly below) + (#tied priors)/2
-            pct = (rank_incl - 1.0 + 0.5) / (n_prior + 1.0)
-            return pd.Series(_norm.ppf(pct), index=s.index)
-
-        bases = {
-            "ALL": (gp.expanding().mean().droplevel(0),
-                    gp.expanding().std().droplevel(0)),
-            "SEASON": (gps.expanding().mean().droplevel([0, 1]),
-                       gps.expanding().std().droplevel([0, 1])),
-            "L10": (gp.rolling(10, min_periods=10).mean().droplevel(0),
-                    gp.rolling(10, min_periods=10).std().droplevel(0)),
-            "L5": (gp.rolling(5, min_periods=5).mean().droplevel(0),
-                   gp.rolling(5, min_periods=5).std().droplevel(0)),
-        }
-        for win, (mean, std) in bases.items():
-            out[f"Z_{win}_{stat}"] = z(mean, std)
-            out[f"PZ_{win}_{stat}"] = pearson(mean)
-
-        # Percentile ranks: window INCLUDES tonight (rank - 1 scores vs priors).
-        out[f"QZ_ALL_{stat}"] = probit(
-            s.groupby(pid).expanding(min_periods=2).rank().droplevel(0), n_all)
-        out[f"QZ_SEASON_{stat}"] = probit(
-            s.groupby(season_keys).expanding(min_periods=2).rank().droplevel([0, 1]),
-            n_season)
-        out[f"QZ_L10_{stat}"] = probit(
-            s.groupby(pid).rolling(11, min_periods=11).rank().droplevel(0), 10.0)
-        out[f"QZ_L5_{stat}"] = probit(
-            s.groupby(pid).rolling(6, min_periods=6).rank().droplevel(0), 5.0)
-
-    # --- FG% / FT% efficiency surprise (volume-aware) -----------------------
-    # BINOMIAL z-score of tonight's shooting vs his prior make rate. A raw % z is
-    # junk (1/1 == "100%!"). Instead: with prior make rate p (over the window) and
-    # tonight's n attempts, the makes are Binomial(n, p) — expected n·p, std
-    # √(n·p(1−p)). The luck-adjusted surprise is
-    #   z = (makes − n·p) / √(n·p(1−p))
-    # Rewards volume (a 6/6 beats a 2/2) and penalizes cold high-volume nights,
-    # while the √ denominator down-weights small-sample flukes. p is the strictly-
-    # prior Σmakes/Σattempts per window (leakage-safe). NaN when n=0 or p∈{0,1}
-    # (no variance to normalize by). Stored identically under Z/PZ/QZ so the
-    # dashboard basis toggle is a no-op for these categories.
-    for num, den, name in [("FGM", "FGA", "FG_PCT"), ("FTM", "FTA", "FT_PCT"),
-                           ("FG3M", "FG3A", "FG3_PCT")]:
-        made, att = zdf[num].astype(float), zdf[den].astype(float)
-        pn, pd_ = zdf.groupby(pid)[num].shift(1), zdf.groupby(pid)[den].shift(1)
-        gpn, gpd = pn.groupby(pid), pd_.groupby(pid)
-        pns, pds = zdf.groupby(season_keys)[num].shift(1), zdf.groupby(season_keys)[den].shift(1)
-        gpns, gpds = pns.groupby(season_keys), pds.groupby(season_keys)
-
-        sums = {
-            "ALL": (gpn.expanding().sum().droplevel(0), gpd.expanding().sum().droplevel(0)),
-            "SEASON": (gpns.expanding().sum().droplevel([0, 1]),
-                       gpds.expanding().sum().droplevel([0, 1])),
-            "L10": (gpn.rolling(10, min_periods=10).sum().droplevel(0),
-                    gpd.rolling(10, min_periods=10).sum().droplevel(0)),
-            "L5": (gpn.rolling(5, min_periods=5).sum().droplevel(0),
-                   gpd.rolling(5, min_periods=5).sum().droplevel(0)),
-        }
-        for win, (msum, asum) in sums.items():
-            p = msum / asum.replace(0.0, np.nan)               # prior make rate
-            sd = np.sqrt(att * p * (1.0 - p))                  # binomial std of makes
-            binom_z = (made - att * p) / sd.replace(0.0, np.nan)
-            out[f"Z_{win}_{name}"] = binom_z
-            out[f"PZ_{win}_{name}"] = binom_z
-            out[f"QZ_{win}_{name}"] = binom_z
-    return out
+    """Per player-game surprise scores for Z_STATS (all three families, four
+    windows) plus the binomial shooting z's — the serving implementation, so the
+    research parquet and the nightly job agree to the digit."""
+    return surprise.compute_zscores(
+        players_raw, stats=Z_STATS,
+        pct_stats=[("FGM", "FGA", "FG_PCT"), ("FTM", "FTA", "FT_PCT"), ("FG3M", "FG3A", "FG3_PCT")],
+        families=("Z", "PZ", "QZ"),
+    )
 
 
 # --- Normalized columns (surprise-method inputs) -----------------------------
