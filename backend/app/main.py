@@ -33,6 +33,7 @@ from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
 from app.services.nba_matchup_service import get_shared_matchup_service
 from app.services.league_activity_service import get_league_activity_service
+from app.services.live_projection_service import LiveProjectionService
 from app.services import schedule_service
 from app.services import injury_service
 from app.services import estimator_scheduler
@@ -118,6 +119,8 @@ async def lifespan(app: FastAPI):
         logger.info("ADP snapshot scheduler disabled via ADP_SCHEDULER_ENABLED=false")
     if settings.league_activity_warm:
         background_tasks.spawn(get_league_activity_service().warm(), name="league-activity-warm")
+    # After startup rather than at import, so the server is healthy sooner.
+    background_tasks.spawn(LiveProjectionService().warm(), name="projection-model-warm")
     yield
     # Shutdown
     await background_tasks.cancel_all()
