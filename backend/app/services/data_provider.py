@@ -173,19 +173,32 @@ class DataProvider:
         """Fetch from ESPN and synchronously await the DB sync. Returns True if new data was written."""
         async with self._fetch_lock:
             try:
-                response = await self._client.get(self.espn_standings_url)
-                response.raise_for_status()
-                api_data = response.json()
-                categories = self.data_transformer.resolve_ranking_categories(api_data)
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
-                scoring_period_id = api_data.get('scoringPeriodId', 0)
-                self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
-                self.cache_manager.totals_cache['data'] = totals_df
-                self.cache_manager.totals_cache['raw'] = api_data
-                self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
-                self.cache_manager.totals_cache['data_date'] = None
-                self.cache_manager.totals_cache['fetched_at'] = datetime.now()
-                self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
+                cache = self.cache_manager.totals_cache
+                # Conditional only when the cached frame came from ESPN (a DB
+                # fallback has no ETag): a 304 keeps that same frame, so the
+                # rankings/heatmap built from it stay valid.
+                headers = {}
+                if cache.get('etag') and cache.get('data') is not None and cache.get('raw') is not None:
+                    headers['If-None-Match'] = cache['etag']
+                response = await self._client.get(self.espn_standings_url, headers=headers)
+                if headers and response.status_code == 304:
+                    totals_df = cache['data']
+                    scoring_period_id = cache.get('scoring_period_id', cache['raw'].get('scoringPeriodId', 0))
+                    cache['fetched_at'] = datetime.now()
+                    cache['espn_checked_at'] = time.monotonic()
+                else:
+                    response.raise_for_status()
+                    api_data = response.json()
+                    categories = self.data_transformer.resolve_ranking_categories(api_data)
+                    totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
+                    scoring_period_id = api_data.get('scoringPeriodId', 0)
+                    cache['etag'] = response.headers.get('ETag')
+                    cache['data'] = totals_df
+                    cache['raw'] = api_data
+                    cache['scoring_period_id'] = scoring_period_id
+                    cache['data_date'] = None
+                    cache['fetched_at'] = datetime.now()
+                    cache['espn_checked_at'] = time.monotonic()
             except Exception as e:
                 self.logger.error(f"sync_db_now: ESPN fetch failed: {type(e).__name__}: {e}")
                 return False
