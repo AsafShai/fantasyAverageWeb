@@ -1597,14 +1597,24 @@ class DBService:
             return None
         return keys or None
 
-    async def load_feature_vectors(self) -> tuple[list[dict], list[dict], list[dict]]:
-        """(player_vectors, team_allowed_vectors, team_own_vectors) rows for serving."""
+    async def load_feature_vectors(
+        self, player_ids: Optional[list[int]] = None
+    ) -> tuple[list[dict], list[dict], list[dict]]:
+        """(player_vectors, team_allowed_vectors, team_own_vectors) rows for serving.
+        ``player_ids`` limits the player rows (the nightly scores only the players
+        who played); team rows always come whole."""
         pool = await self._get_pool()
         if pool is None:
             return [], [], []
         try:
             async with pool.acquire() as conn:
-                pv = await conn.fetch("SELECT * FROM fs_player_vectors")
+                if player_ids is None:
+                    pv = await conn.fetch("SELECT * FROM fs_player_vectors")
+                else:
+                    pv = await conn.fetch(
+                        "SELECT * FROM fs_player_vectors WHERE player_id = ANY($1::bigint[])",
+                        [int(p) for p in player_ids],
+                    )
                 tav = await conn.fetch("SELECT * FROM fs_team_allowed_vectors")
                 tov = await conn.fetch("SELECT * FROM fs_team_own_vectors")
                 return [dict(r) for r in pv], [dict(r) for r in tav], [dict(r) for r in tov]

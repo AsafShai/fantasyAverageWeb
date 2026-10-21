@@ -55,7 +55,8 @@ class FakeDB:
         self.players_asked = list(player_ids)
         return self.player_recs, self.team_recs
 
-    async def load_feature_vectors(self):
+    async def load_feature_vectors(self, player_ids=None):
+        self.vector_ids_asked = player_ids
         return self.vector_rows
 
     async def get_feature_vector_keys(self):
@@ -271,6 +272,7 @@ async def test_incremental_path_when_stored_vectors_are_current(service, monkeyp
     assert len(calls) == 1
     assert calls[0][:3] == service._db.vector_rows
     assert service._db.players_asked == [1]
+    assert service._db.vector_ids_asked == [1]        # only tonight's players' vectors
     assert service._db.marked == [(GAME_DATE, "processed", 2, 1)]
     assert service._db.vectors_written == _DUMMY_VECTORS
 
@@ -297,7 +299,7 @@ async def test_incremental_path_without_vector_rows_requires_bootstrap(service, 
     _allow_fetch(monkeypatch, night)
     _allow_predict_incremental(monkeypatch, [_eval_row()], [])
     service._db.vectors_as_of = service._db.latest_fs_date = GAME_DATE - timedelta(days=1)
-    service._db.vector_rows = ([], [], [])
+    service._db.vector_rows = ([], [], [])          # no team vectors at all
     assert await service.run_for_date(GAME_DATE) == "store_not_bootstrapped"
 
 

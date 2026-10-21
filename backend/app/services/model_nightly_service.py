@@ -280,8 +280,10 @@ class ModelNightlyService:
             night_ids = [int(p) for p in night.player_games["PLAYER_ID"].unique()]
             log_memory(f"nightly {game_date}: loading history of tonight's players", logger)
             players, team_games = await db.get_fs_rows_before_for_players(game_date, night_ids)
-            pv, tav, tov = await db.load_feature_vectors()
-            if not pv or team_games.empty:
+            # Only tonight's players' vectors: predictions read theirs, the fold-in
+            # rewrites theirs; nobody else's row is touched.
+            pv, tav, tov = await db.load_feature_vectors(player_ids=night_ids)
+            if not tav or not tov or team_games.empty:
                 logger.error("Feature-store tables are empty — run --bootstrap first")
                 return "store_not_bootstrapped"
             logger.info(
@@ -480,14 +482,16 @@ class ModelNightlyService:
         players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch,
     ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
         """Same as ``_process_sync`` with the pre-night store loaded from the
-        stored vectors instead of rebuilt: predictions read the stored vectors;
+        stored vectors (tonight's players only) instead of rebuilt: predictions
+        read the stored vectors;
         the fold-in recomputes tonight's players from their own full history
         (``players``) and every team from the team rows, exactly what a full
         rebuild computes for them (``build_current_state`` is per player).
         Only tonight's players' vectors are returned for the upsert."""
         log_memory("nightly: loading pre-night store from stored vectors", logger)
         store = FeatureStore.from_vectors(
-            _player_vectors_df(pv), _team_vectors_df(tav), _team_vectors_df(tov)
+            _player_vectors_df(pv) if pv else pd.DataFrame(columns=_PLAYER_META[:6]),
+            _team_vectors_df(tav), _team_vectors_df(tov),
         )
         # The raw rows the fold-in needs: tonight's players' history, all teams.
         store.players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
