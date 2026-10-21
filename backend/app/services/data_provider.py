@@ -56,6 +56,8 @@ class DataProvider:
             # see _averages_for / _rankings_for.
             self._averages_memo: Optional[tuple] = None
             self._rankings_memo: Optional[tuple] = None
+            # Built responses per (name, request params); see memo_response.
+            self._response_memo: dict = {}
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
@@ -505,6 +507,23 @@ class DataProvider:
                     self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories))
             self._rankings_memo = memo
         return memo[2]
+
+    async def memo_response(self, name: str, params: tuple, build):
+        """``await build()``, reused until the standings frame or the league's
+        categories change: rankings and heatmap are built from nothing else.
+        A reused response gets a fresh ``last_updated``, as a rebuild would."""
+        totals_df = await self.get_totals_df()
+        key = (
+            tuple(await self.get_ranking_categories()),
+            frozenset(await self.get_reverse_categories()),
+            self.get_data_date(),
+        )
+        hit = self._response_memo.get((name, params))
+        if hit is not None and hit[0] is totals_df and hit[1] == key:
+            return hit[2].model_copy(update={'last_updated': datetime.now()})
+        result = await build()
+        self._response_memo[(name, params)] = (totals_df, key, result)
+        return result
 
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""

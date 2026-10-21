@@ -23,7 +23,11 @@ class RankingService:
         """Get league rankings. If dates provided, compute from DB snapshot deltas."""
         if start_date is not None and end_date is not None:
             return await self._get_rankings_for_range(start_date, end_date, sort_by, order)
+        return await self.data_provider.memo_response(
+            'rankings', (sort_by, order), lambda: self._get_season_rankings(sort_by, order)
+        )
 
+    async def _get_season_rankings(self, sort_by: Optional[str], order: str) -> LeagueRankings:
         totals_df, averages_df, averages_rankings_df = await self.data_provider.get_all_dataframes()
         if totals_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
