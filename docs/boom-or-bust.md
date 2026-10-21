@@ -44,6 +44,10 @@ request per night for that scoring period (`scoringPeriodId`, period 1 = the sea
 first day), stored with the row when the night is scored, so later pickups, drops and
 lineup changes never rewrite it (Drummond: FA on Oct 20, picked up on Oct 21). Columns
 `fantasy_team_id`, `fantasy_team`, `lineup_slot`; NULL = free agent / unknown.
+Cost of that request, measured: ~200 KB on the wire (gzip; ESPN embeds the player
+objects and no filter trims them), once per night, parsed and dropped: +4–10 MB on
+the step's peak (200–207 MB vs 196 MB without it) and +0.7 s. For scale, the Players
+page pulls 364 KB from ESPN on every visit.
 
 Weights and blend: `backend/model_stats_inference/serving/surprise.py` (module constants).
 Reference season: `surprise_calibration.json` next to it, built by
