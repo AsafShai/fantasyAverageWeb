@@ -277,7 +277,7 @@ class TestServiceCaching:
     def service(self, fail=False):
         calls = []
 
-        async def fake_get(params, fantasy_filter=None, url=None):
+        async def fake_get(params, fantasy_filter=None, url=None, etag_key=None):
             views = tuple(v for k, v in params if k == 'view')
             calls.append(views[0] if 'kona_playercard' not in views else
                          ('stats' if 'filterIds' in (fantasy_filter or '') else 'cards'))
@@ -344,6 +344,99 @@ class TestServiceCaching:
         las._cache.cards_at -= las.CARDS_TTL_SECONDS + 1
         failing, _ = self.service(fail=True)
         assert await failing.get_activity() is good
+
+
+class TestConditionalRefresh:
+    """Refreshes send the last ETag; a 304 keeps what was parsed and the built result."""
+    LEAGUE = TestServiceCaching.LEAGUE
+    CARD = TestServiceCaching.CARD
+
+    @pytest.fixture(autouse=True)
+    def fresh_cache(self):
+        las._cache.clear()
+        yield
+        las._cache.clear()
+
+    def service(self):
+        svc = LeagueActivityService(season_id=2026, league_id=1)
+        sent = []
+        state = {'unchanged': False}
+
+        async def fake_http_get(url, params=None, headers=None):
+            headers = headers or {}
+            views = tuple(v for k, v in params if k == 'view')
+            flt = headers.get('x-fantasy-filter') or ''
+            kind = ('stats' if 'filterIds' in flt else 'cards') if 'kona_playercard' in views else views[0]
+            sent.append((kind, headers.get('If-None-Match')))
+            req = httpx.Request('GET', url)
+            if state['unchanged'] and headers.get('If-None-Match'):
+                return httpx.Response(304, request=req)
+            if kind == 'mSettings':
+                body = self.LEAGUE
+            elif kind == 'proTeamSchedules_wl':
+                body = {'settings': {'proTeams': []}}
+            elif kind == 'stats':
+                body = {'players': [{'id': 10, 'player': {'stats': []}}]}
+            else:
+                body = {'players': [self.CARD]}
+            return httpx.Response(200, json=body, headers={'ETag': f'W/"{kind}"'}, request=req)
+
+        client = AsyncMock()
+        client.get.side_effect = fake_http_get
+        svc._client = client
+        return svc, sent, state
+
+    def expire_all(self):
+        las._cache.cards_at -= las.CARDS_TTL_SECONDS + 1
+        las._cache.stats_at -= las.STATS_TTL_SECONDS + 1
+        las._cache.schedule_at -= las.SCHEDULE_TTL_SECONDS + 1
+
+    @pytest.mark.asyncio
+    async def test_first_fetch_is_unconditional(self):
+        svc, sent, _ = self.service()
+        await svc.get_activity()
+        assert sorted(sent) == [('cards', None), ('mSettings', None), ('proTeamSchedules_wl', None), ('stats', None)]
+
+    @pytest.mark.asyncio
+    async def test_unchanged_sources_keep_data_and_result(self):
+        svc, sent, state = self.service()
+        first = await svc.get_activity()
+        sent.clear()
+        state['unchanged'] = True
+        self.expire_all()
+        second = await svc.get_activity()
+        assert second.model_dump(exclude={'last_updated'}) == first.model_dump(exclude={'last_updated'})
+        assert second.last_updated >= first.last_updated
+        assert await svc.get_activity() is second  # no new check, no new copy
+        assert sorted(sent) == [('cards', 'W/"cards"'), ('mSettings', 'W/"mSettings"'),
+                                ('proTeamSchedules_wl', 'W/"proTeamSchedules_wl"'), ('stats', 'W/"stats"')]
+        assert las._cache.stats[10] == []
+
+    @pytest.mark.asyncio
+    async def test_changed_source_rebuilds(self):
+        svc, sent, state = self.service()
+        first = await svc.get_activity()
+        self.expire_all()
+        second = await svc.get_activity()  # every source answers 200 again
+        assert second is not first
+        assert second.model_dump(exclude={'last_updated'}) == first.model_dump(exclude={'last_updated'})
+
+    @pytest.mark.asyncio
+    async def test_failed_stats_round_drops_its_etags(self):
+        svc, sent, state = self.service()
+        await svc.get_activity()
+        las._cache.stats_at -= las.STATS_TTL_SECONDS + 1
+        original = svc._client.get.side_effect
+
+        async def failing(url, params=None, headers=None):
+            if 'filterIds' in ((headers or {}).get('x-fantasy-filter') or ''):
+                raise httpx.ConnectError('down')
+            return await original(url, params=params, headers=headers)
+
+        svc._client.get.side_effect = failing
+        with patch.object(las.asyncio, 'sleep', new=AsyncMock()):
+            await svc.get_activity()  # serves the last good result
+        assert not any(k[0] == 'stats' for k in las._cache.etags if isinstance(k, tuple))
 
 
 class TestFetchRetry:
