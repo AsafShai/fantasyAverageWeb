@@ -477,6 +477,7 @@ const TeamDetail = () => {
           slotUsage={team_detail.slot_usage}
           avgPace={leagueSummary?.nba_avg_pace}
           gameDaysLeft={leagueSummary?.nba_game_days_left}
+          gameDaysElapsed={leagueSummary?.nba_game_days_elapsed}
         />
       )}
       <RosterCoverage

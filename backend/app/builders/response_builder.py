@@ -115,6 +115,7 @@ class ResponseBuilder:
                                     league_averages: AverageStats,
                                     nba_avg_pace: Optional[float] = None,
                                     nba_game_days_left: Optional[int] = None,
+                                    nba_game_days_elapsed: Optional[int] = None,
                                     data_date=None,
                                     trade_deadline=None) -> LeagueSummary:
         """Build LeagueSummary response from calculated data"""
@@ -123,6 +124,7 @@ class ResponseBuilder:
             total_games_played=total_games_played,
             nba_avg_pace=nba_avg_pace,
             nba_game_days_left=nba_game_days_left,
+            nba_game_days_elapsed=nba_game_days_elapsed,
             category_leaders=category_leaders,
             league_averages=league_averages,
             last_updated=datetime.now(),

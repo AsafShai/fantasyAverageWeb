@@ -3,12 +3,16 @@ import pandas as pd
 from app.services.slot_games_estimator import SlotGamesEstimator, SLOT_CAPS, SLOTS
 
 
-def make_df(avg_pace: float, days_remaining: int, slot_values: dict | None = None) -> pd.DataFrame:
+def make_df(avg_pace: float, days_remaining: int, slot_values: dict | None = None,
+            days_elapsed: float | None = None) -> pd.DataFrame:
     slots = slot_values or {s: 40 for s in SLOTS}
+    # About two NBA game days pass per team game unless a test says otherwise.
+    elapsed = 2 * avg_pace if days_elapsed is None else days_elapsed
     return pd.DataFrame([{
         'team_id': 1,
         'team_name': 'Test Team',
         'nba_avg_pace': avg_pace,
+        'nba_game_days_elapsed': elapsed,
         'nba_game_days_remaining': days_remaining,
         **slots,
     }])
@@ -19,6 +23,7 @@ def make_multi_team_df(avg_pace: float, days_remaining: int, teams: list[dict]) 
     for t in teams:
         rows.append({
             'nba_avg_pace': avg_pace,
+            'nba_game_days_elapsed': 2 * avg_pace,
             'nba_game_days_remaining': days_remaining,
             **t,
         })
@@ -42,7 +47,7 @@ class TestSlotGamesEstimatorEarlySeason:
         w1 = 1 - avg_pace / 82
         w2 = avg_pace / 82
         m1 = gp * (82 / avg_pace)           # = 41, within cap
-        m2 = gp + (gp / avg_pace) * days_remaining  # = 25, within cap
+        m2 = gp + (gp / (2 * avg_pace)) * days_remaining  # = 15, within cap
         expected_pg = w1 * m1 + w2 * m2
 
         assert result['proj_PG'].iloc[0] == pytest.approx(expected_pg, rel=1e-6)
@@ -70,7 +75,7 @@ class TestSlotGamesEstimatorLateSeason:
         w1 = 1 - avg_pace / 82
         w2 = avg_pace / 82
         m1 = min(gp * (82 / avg_pace), SLOT_CAPS['PG'])
-        m2 = min(gp + (gp / avg_pace) * days_remaining, SLOT_CAPS['PG'])
+        m2 = min(gp + (gp / (2 * avg_pace)) * days_remaining, SLOT_CAPS['PG'])
         expected_pg = w1 * m1 + w2 * m2
 
         assert result['proj_PG'].iloc[0] == pytest.approx(expected_pg, rel=1e-6)
@@ -82,7 +87,7 @@ class TestSlotGamesEstimatorLateSeason:
         w2 = 80.0 / 82
         assert w2 > 0.9
 
-        m2_pg = min(80 + (80 / 80.0) * 3, SLOT_CAPS['PG'])
+        m2_pg = min(80 + (80 / 160.0) * 3, SLOT_CAPS['PG'])
         assert result['proj_PG'].iloc[0] == pytest.approx(m2_pg, rel=0.15)
 
 
@@ -176,3 +181,46 @@ class TestSlotGamesEstimatorEdgeCases:
         expected = w1 * m1 + w2 * m2
 
         assert result['proj_PG'].iloc[0] == pytest.approx(expected, rel=1e-6)
+
+
+class TestSlotGamesEstimatorMethod2Rate:
+    def test_method2_uses_fill_rate_per_game_day(self, estimator):
+        """60 games over 140 game days is 0.43 a night: 25 nights left add 10.7
+        games, not the 21.4 a per-team-game rate (60 / 70) would add."""
+        df = make_df(avg_pace=70.0, days_remaining=25, days_elapsed=140,
+                     slot_values={s: 60 for s in SLOTS})
+        result = estimator.estimate(df)
+
+        w2 = 70.0 / 82
+        m1 = 60 * (82 / 70.0)
+        m2 = 60 + (60 / 140) * 25
+        assert result['proj_PG'].iloc[0] == pytest.approx((1 - w2) * m1 + w2 * m2, rel=1e-6)
+        assert result['proj_PG'].iloc[0] == pytest.approx(70.7, abs=0.05)
+
+    def test_util_rate_covers_all_three_slots(self, estimator):
+        df = make_df(avg_pace=70.0, days_remaining=25, days_elapsed=140,
+                     slot_values={**{s: 60 for s in SLOTS}, 'UTIL': 180})
+        result = estimator.estimate(df)
+
+        assert result['proj_UTIL'].iloc[0] == pytest.approx(3 * result['proj_PG'].iloc[0], rel=1e-6)
+
+    @pytest.mark.parametrize('days_elapsed', [None, 0])
+    def test_falls_back_to_method1_without_elapsed_days(self, estimator, days_elapsed):
+        df = make_df(avg_pace=41.0, days_remaining=40, slot_values={s: 30 for s in SLOTS})
+        df['nba_game_days_elapsed'] = days_elapsed
+        result = estimator.estimate(df)
+
+        assert result['proj_PG'].iloc[0] == pytest.approx(30 * (82 / 41.0), rel=1e-6)
+
+    def test_falls_back_to_method1_without_remaining_days(self, estimator):
+        df = make_df(avg_pace=41.0, days_remaining=40, slot_values={s: 30 for s in SLOTS})
+        df['nba_game_days_remaining'] = None
+        result = estimator.estimate(df)
+
+        assert result['proj_PG'].iloc[0] == pytest.approx(30 * (82 / 41.0), rel=1e-6)
+
+    def test_missing_elapsed_column_falls_back_to_method1(self, estimator):
+        df = make_df(avg_pace=41.0, days_remaining=40, slot_values={s: 30 for s in SLOTS})
+        result = estimator.estimate(df.drop(columns=['nba_game_days_elapsed']))
+
+        assert result['proj_PG'].iloc[0] == pytest.approx(30 * (82 / 41.0), rel=1e-6)

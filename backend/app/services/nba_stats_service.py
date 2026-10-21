@@ -34,7 +34,7 @@ class NBAStatsService:
             verify=shared_ssl_context()
         )
         self._pace_cache: dict = {'season_id': None, 'value': None, 'ts': None}
-        self._days_left_cache: dict = {'season_id': None, 'value': None, 'ts': None}
+        self._game_days_cache: dict = {'season_id': None, 'value': None, 'ts': None}
         NBAStatsService._initialized = True
 
     async def get_nba_average_pace(self, season_id: int) -> Optional[float]:
@@ -125,7 +125,23 @@ class NBAStatsService:
         Returns:
             Number of days with NBA games remaining until end of regular season, or None if fetch fails
         """
-        cache = self._days_left_cache
+        game_days = await self._get_game_days(season_id)
+        return game_days[1] if game_days else None
+
+    async def get_nba_game_days_elapsed(self, season_id: int) -> Optional[int]:
+        """
+        Regular-season game days already played (before today), cached 30 min
+        together with the remaining count — elapsed + remaining = the whole season.
+
+        Returns:
+            Number of days with NBA games so far this regular season, or None if fetch fails
+        """
+        game_days = await self._get_game_days(season_id)
+        return game_days[0] if game_days else None
+
+    async def _get_game_days(self, season_id: int) -> Optional[tuple[int, int]]:
+        """(elapsed, remaining) regular-season game days, one calendar fetch per 30 min."""
+        cache = self._game_days_cache
         if (
             cache['season_id'] == season_id
             and cache['ts'] is not None
@@ -133,8 +149,8 @@ class NBAStatsService:
         ):
             return cache['value']
 
-        value = await self._fetch_nba_game_days_remaining(season_id)
-        self._days_left_cache = {'season_id': season_id, 'value': value, 'ts': datetime.now()}
+        value = await self._fetch_nba_game_days(season_id)
+        self._game_days_cache = {'season_id': season_id, 'value': value, 'ts': datetime.now()}
         return value
 
     async def get_regular_season_start_date(self, season_id: int):
@@ -293,13 +309,13 @@ class NBAStatsService:
             self.logger.warning(f"Failed to fetch season boundaries for {season_id}: {type(e).__name__}: {e}")
             return None
 
-    async def _fetch_nba_game_days_remaining(self, season_id: int) -> Optional[int]:
+    async def _fetch_nba_game_days(self, season_id: int) -> Optional[tuple[int, int]]:
         try:
             all_game_dates, start_idx, end_idx = await self._get_regular_season_calendar(season_id)
             today = datetime.now().date()
             regular_season_dates = all_game_dates[start_idx:end_idx + 1]
             future_game_dates = [d for d in regular_season_dates if d >= today]
-            return len(future_game_dates)
+            return len(regular_season_dates) - len(future_game_dates), len(future_game_dates)
         except httpx.RequestError as e:
             self.logger.warning(f"Failed to fetch NBA calendar: {type(e).__name__}: {e}")
             return None
