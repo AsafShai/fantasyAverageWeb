@@ -55,7 +55,7 @@ export function useInjuryData(): {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/injuries`);
+      const res = await fetch(`${API_BASE}/injuries/`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: InjuryRecord[] = await res.json();
       setRecords(data);

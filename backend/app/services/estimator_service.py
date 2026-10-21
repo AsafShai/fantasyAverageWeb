@@ -121,9 +121,8 @@ class EstimatorService:
             slot_proj_df = SlotGamesEstimator().estimate(slot_pace_df)
 
             from app.fantsy_estimator import FantasyEstimator
-            loop = asyncio.get_event_loop()
-            prediction_df, ranking_df, rank_prob_df = await loop.run_in_executor(
-                None, lambda: FantasyEstimator().estimate(df, nba_avg_pace, slot_proj_df)
+            prediction_df, ranking_df, rank_prob_df = await asyncio.to_thread(
+                FantasyEstimator().estimate, df, nba_avg_pace, slot_proj_df
             )
 
             await asyncio.gather(

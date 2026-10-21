@@ -11,6 +11,7 @@ import pdfplumber
 
 from app.models.injury_models import InjuryRecord, InjuryNotification
 from app.services.db_service import get_db_service
+from app.utils.request_context import start_job_run
 from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
@@ -49,18 +50,25 @@ def compute_next_trigger() -> datetime:
     return (now_ny + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
 
+# Why the latest fetch_pdf_bytes returned None; the scheduler reports it only
+# once every retry for a mark has failed (the CDN 403s briefly at most marks).
+last_fetch_error: str | None = None
+
+
 async def fetch_pdf_bytes(url: str) -> bytes | None:
     """Fetch PDF bytes. Returns None if unavailable."""
+    global last_fetch_error
     try:
         async with httpx.AsyncClient(timeout=30.0, verify=shared_ssl_context()) as client:
             response = await client.get(url, follow_redirects=True)
             if response.status_code == 200:
+                last_fetch_error = None
                 return response.content
-            logger.warning(f"Injury PDF fetch got HTTP {response.status_code}: {url}")
-            return None
+            last_fetch_error = f"HTTP {response.status_code}"
     except httpx.HTTPError as e:
-        logger.warning(f"Injury PDF fetch failed: {type(e).__name__}: {e} (url={url})")
-        return None
+        last_fetch_error = f"{type(e).__name__}: {e}"
+    logger.debug(f"Injury PDF fetch failed ({last_fetch_error}): {url}")
+    return None
 
 
 _GAME_TIME_RE = re.compile(r'^(\d{1,2}:\d{2})\s*(?:\(ET\))?\s*', re.IGNORECASE)
@@ -417,14 +425,15 @@ def _patch_cached_matchups(
     apply_injury_changes(changes)
 
 
-async def _try_update_injury_data() -> bool:
+def _report_name(url: str) -> str:
+    return url.rsplit("Injury-Report_", 1)[-1].removesuffix(".pdf")
+
+
+async def _try_update_injury_data(attempt_note: str = "") -> bool:
     """Like update_injury_data but returns True on success, False if PDF unavailable."""
     url = get_current_pdf_url()
-    logger.info(f"Fetching injury report: {url}")
-
     pdf_bytes = await fetch_pdf_bytes(url)
     if pdf_bytes is None:
-        logger.warning("Keeping stale injury data — PDF unavailable")
         return False
 
     now_il = get_utc_now_str()
@@ -472,9 +481,12 @@ async def _try_update_injury_data() -> bool:
                     timestamp=now_il,
                 ))
 
+    logger.info(
+        f"Injury report {_report_name(url)} applied: {len(new_records)} entries, "
+        f"{len(notifications)} change(s){attempt_note}"
+    )
     if notifications:
         _patch_cached_matchups(notifications, new_store)
-        logger.info(f"Broadcasting {len(notifications)} injury update(s)")
         await broadcast_notifications(notifications)
 
     now_ny = datetime.now(NY_TZ)
@@ -500,7 +512,7 @@ async def initialize() -> None:
     logger.info(f"Fetching injury PDF: {url}")
     pdf_bytes = await fetch_pdf_bytes(url)
     if pdf_bytes is None:
-        logger.warning("Starting with empty injury store — initial PDF unavailable")
+        logger.warning(f"Starting with empty injury store - initial PDF unavailable ({last_fetch_error}): {url}")
         return
 
     db_service = get_db_service()
@@ -536,7 +548,7 @@ _RETRY_OFFSETS = [0, 5, 15, 30, 45, 60]
 
 async def start_scheduler() -> None:
     """On each :00, :15, :30, :45 mark, retry at +0s, +5s, +15s, +30s, +45s, +60s until PDF is fetched."""
-    logger.info("Injury report scheduler started")
+    logger.info("Injury report scheduler started (every :00/:15/:30/:45 ET)")
     while True:
         next_trigger = compute_next_trigger()
         sleep_secs = (next_trigger - datetime.now(NY_TZ)).total_seconds()
@@ -544,14 +556,23 @@ async def start_scheduler() -> None:
             logger.debug(f"Next injury update at {next_trigger} (in {sleep_secs:.1f}s)")
             await asyncio.sleep(sleep_secs)
 
+        start_job_run("injury-poll")
         prev_offset = 0
-        for offset in _RETRY_OFFSETS:
+        success = False
+        for attempt, offset in enumerate(_RETRY_OFFSETS, start=1):
             await asyncio.sleep(offset - prev_offset)
             prev_offset = offset
+            note = f" (attempt {attempt}, +{offset}s)" if attempt > 1 else ""
             try:
-                success = await _try_update_injury_data()
+                success = await _try_update_injury_data(note)
             except Exception as e:
                 logger.error(f"Injury update cycle error at +{offset}s: {type(e).__name__}: {e}", exc_info=True)
                 success = False
             if success:
                 break
+        if not success:
+            logger.warning(
+                f"Injury report {_report_name(get_current_pdf_url())} unavailable after "
+                f"{len(_RETRY_OFFSETS)} attempts (last: {last_fetch_error}); "
+                f"keeping report from {last_report_time}"
+            )

@@ -10,6 +10,7 @@ from app.models.estimator import TeamRanking
 def _reset_refresh_cooldown(monkeypatch):
     # module-level cooldown stamp: don't let one test's refresh suppress the next
     monkeypatch.setattr(estimator_route, "_last_refresh_at", None)
+    monkeypatch.setattr(estimator_route, "_last_inline_run", None)
 
 
 def _sample_ranking() -> dict:
@@ -142,3 +143,19 @@ def test_inline_path_waits_for_in_flight_run(mock_svc_cls, mock_prov_cls, test_c
 
     assert test_client.get("/api/estimator/results").status_code == 200
     mock_svc.run_and_store.assert_awaited_once_with(wait=True)
+
+
+def test_empty_results_rerun_inline_at_most_once_per_cooldown(test_client):
+    with (
+        patch("app.routes.estimator.EstimatorService") as service_cls,
+        patch("app.routes.estimator.DataProvider") as provider_cls,
+    ):
+        service = service_cls.return_value
+        service.get_latest = AsyncMock(return_value=None)
+        service.run_and_store = AsyncMock(return_value=False)
+        provider_cls.return_value.sync_db_now = AsyncMock(return_value=False)
+
+        assert test_client.get("/api/estimator/results").status_code == 404
+        assert test_client.get("/api/estimator/results").status_code == 404
+
+    assert service.run_and_store.await_count == 1

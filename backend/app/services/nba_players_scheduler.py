@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.services.nba_players_refresh import refresh_nba_players_json
+from app.utils.request_context import start_job_run
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +41,14 @@ async def start_scheduler() -> None:
         )
         if sleep_seconds > 0:
             await asyncio.sleep(sleep_seconds)
+        start_job_run("nba-players-refresh")
         logger.info("NBA players refresh triggered")
         try:
             count = await refresh_nba_players_json()
             logger.info("NBA players refresh finished: %d players", count)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "NBA players refresh failed: %s: %s; will retry tomorrow",
                 type(e).__name__,
                 e,
             )
-            logger.exception("NBA players refresh failure traceback")

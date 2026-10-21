@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -147,3 +148,16 @@ class TestPatchesCachedMatchups:
         await inj._try_update_injury_data()
 
         apply.assert_not_called()
+
+
+class TestInjuryPollLogging:
+    @pytest.mark.asyncio
+    async def test_unavailable_pdf_is_not_a_warning_per_attempt(self, monkeypatch, caplog):
+        async def forbidden(url):
+            inj.last_fetch_error = "HTTP 403"
+            return None
+
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", forbidden)
+        with caplog.at_level(logging.INFO, logger=inj.__name__):
+            assert await inj._try_update_injury_data() is False
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]

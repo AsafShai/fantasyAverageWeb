@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from app.services.adp_service import ensure_daily_snapshot
+from app.utils.request_context import start_job_run
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ async def start_scheduler() -> None:
     logger.info("ADP snapshot scheduler started (hourly)")
     await asyncio.sleep(INITIAL_DELAY_SECONDS)
     while True:
+        start_job_run("adp-snapshot")
         try:
             await ensure_daily_snapshot()
         except Exception as e:

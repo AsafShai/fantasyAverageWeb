@@ -39,6 +39,9 @@ async def injury_stream(request: Request):
 
     async def event_generator():
         try:
+            # GZipMiddleware holds the response headers until the first body
+            # chunk; without this the client waits up to 30s for the first ping.
+            yield ": connected\n\n"
             while True:
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=30.0)
