@@ -73,11 +73,24 @@ function useThreshold(kind: 'good' | 'bad', serverDefault: number) {
   return { value, set, reset, isDefault: override === null || Math.abs(override - serverDefault) < 1e-9 };
 }
 
+/** The threshold applies when the thumb is released, not on every tick: while
+ * dragging only the label follows the thumb, so the table under the pointer
+ * (and the card below it) stays put until the viewer has chosen a value.
+ * Keyboard steps apply on key release, a programmatic change on the next
+ * blur. */
 function ThresholdSlider({
   kind, value, isDefault, onChange, onReset,
 }: { kind: 'good' | 'bad'; value: number; isDefault: boolean; onChange: (v: number) => void; onReset: () => void }) {
   const id = `threshold-${kind}`;
-  const label = kind === 'good' ? `score ≥ ${value.toFixed(1)}` : `score ≤ −${value.toFixed(1)}`;
+  // null = no drag in progress: the thumb and label show the applied value
+  // (so Reset, or a value restored from storage, shows at once).
+  const [draft, setDraft] = useState<number | null>(null);
+  const shown = draft ?? value;
+  const commit = () => {
+    if (draft !== null && draft !== value) onChange(draft);
+    setDraft(null);
+  };
+  const label = kind === 'good' ? `score ≥ ${shown.toFixed(1)}` : `score ≤ −${shown.toFixed(1)}`;
   const accent = kind === 'good' ? 'accent-blue-500' : 'accent-red-500';
   return (
     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -88,8 +101,11 @@ function ThresholdSlider({
         min={SLIDER_MIN}
         max={SLIDER_MAX}
         step={SLIDER_STEP}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        value={shown}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
         aria-label={kind === 'good' ? 'Surprise threshold' : 'Disappointment threshold'}
         className={`w-24 sm:w-32 ${accent}`}
       />
@@ -108,9 +124,8 @@ function ThresholdSlider({
 
 type Threshold = ReturnType<typeof useThreshold>;
 
-/** A card pages its rows five at a time, and only when there are more than five:
- * the two cards keep a steady height while the slider moves, instead of the
- * Booms card growing and shoving Busts down the page. */
+/** A card pages its rows five at a time, and only when there are more than
+ * five; the footer is always there so a card's chrome never changes shape. */
 const PAGE_SIZE = 5;
 
 /** The rows a card shows: past the viewer's threshold, capped at the server's max. */
@@ -143,13 +158,17 @@ function SurpriseCard({
         />
       </div>
       <SurpriseTable rows={pageRows} kind={kind} startRank={start + 1} />
-      {pages > 1 && (
-        <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-          <span>{start + 1}–{start + pageRows.length} of {shown.length}</span>
-          <button type="button" className={pageBtn} onClick={() => setPage(current - 1)} disabled={current === 0} aria-label="Previous page">‹</button>
-          <button type="button" className={pageBtn} onClick={() => setPage(current + 1)} disabled={current >= pages - 1} aria-label="Next page">›</button>
-        </div>
-      )}
+      <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 min-h-[2.25rem]">
+        {pages > 1 ? (
+          <>
+            <span>{start + 1}–{start + pageRows.length} of {shown.length}</span>
+            <button type="button" className={pageBtn} onClick={() => setPage(current - 1)} disabled={current === 0} aria-label="Previous page">‹</button>
+            <button type="button" className={pageBtn} onClick={() => setPage(current + 1)} disabled={current >= pages - 1} aria-label="Next page">›</button>
+          </>
+        ) : (
+          <span>{shown.length === 1 ? '1 player' : `${shown.length} players`}</span>
+        )}
+      </div>
     </div>
   );
 }

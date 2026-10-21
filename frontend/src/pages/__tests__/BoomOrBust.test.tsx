@@ -85,8 +85,12 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
 
-    // (b) moving the good slider down reveals the row and updates the count
+    // (b) while dragging only the label follows; the row appears when the thumb is released
     fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '1.4' } })
+    expect(screen.getByText('score ≥ 1.4')).toBeInTheDocument()
+    expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
+    fireEvent.pointerUp(screen.getByLabelText('Surprise threshold'))
     expect(screen.getByText('Almost Good')).toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
     expect(screen.getByText('score ≥ 1.4')).toBeInTheDocument()
@@ -129,6 +133,7 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('7')).toBeInTheDocument()   // the rank keeps counting on the second page
     // raising the bar under the viewer drops the list to one page: the card falls back to it
     fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '2.2' } })
+    fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
     await waitFor(() => expect(screen.queryByLabelText('Next page')).not.toBeInTheDocument())
   })
 
