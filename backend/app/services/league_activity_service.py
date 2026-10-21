@@ -620,6 +620,11 @@ class LeagueActivityService:
         missing = [i for i in ids if i not in _cache.stats]
         if now - _cache.stats_at >= STATS_TTL_SECONDS:
             missing, _cache.stats_at = ids, now
+            # Batch boundaries move when the card list changes; drop the ETags
+            # of batches this refresh no longer asks for, or they pile up.
+            live = {('stats', tuple(ids[i:i + STATS_BATCH])) for i in range(0, len(ids), STATS_BATCH)}
+            for key in [k for k in _cache.etags if isinstance(k, tuple) and k not in live]:
+                del _cache.etags[key]
         if missing:
             cards, changed = await self._stat_cards(missing)
             _cache.stats.update(parse_game_logs(cards, self.season_id))

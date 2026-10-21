@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -437,6 +438,17 @@ class TestConditionalRefresh:
         with patch.object(las.asyncio, 'sleep', new=AsyncMock()):
             await svc.get_activity()  # serves the last good result
         assert not any(k[0] == 'stats' for k in las._cache.etags if isinstance(k, tuple))
+
+    @pytest.mark.asyncio
+    async def test_stats_refresh_drops_etags_of_batches_no_longer_requested(self):
+        svc, sent, state = self.service()
+        await svc.get_activity()
+        assert ('stats', (10,)) in las._cache.etags
+        las._cache.pool_ids = [11]  # the card list moved: the batch is now (10, 11)
+        las._cache.cards_at = las._cache.schedule_at = time.monotonic()
+        las._cache.stats_at -= las.STATS_TTL_SECONDS + 1
+        await svc.get_activity()
+        assert [k for k in las._cache.etags if isinstance(k, tuple)] == [('stats', (10, 11))]
 
 
 class TestFetchRetry:
