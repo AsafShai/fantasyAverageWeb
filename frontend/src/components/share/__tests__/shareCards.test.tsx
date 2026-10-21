@@ -71,7 +71,23 @@ describe('RankingsShareCard', () => {
     expect(screen.getByText('Season averages · as of Oct 19, 2026')).toBeInTheDocument();
     const bodyRows = screen.getAllByRole('row').slice(1);
     expect(bodyRows.map(r => within(r).getAllByRole('cell')[1].textContent)).toEqual(['Wemby Szn', 'Brick City', 'Dunk Tank', 'Mo Bamba Mix']);
-    expect(within(bodyRows[1]).getAllByRole('cell').map(c => c.textContent)).toEqual(['2', 'Brick City', '4', '1', '18']);
+    expect(within(bodyRows[1]).getAllByRole('cell').map(c => c.textContent)).toEqual(['2', 'Brick City', '4', '1', '18', '100']);
+  });
+
+  it('ends each row with the team\'s games played, in both views', () => {
+    for (const view of ['rankings', 'standings'] as const) {
+      const { unmount } = renderCard(view);
+      const headerCells = within(screen.getAllByRole('row')[0]).getAllByRole('columnheader');
+      expect(headerCells.at(-1)).toHaveTextContent('GP');
+      const bodyRows = screen.getAllByRole('row').slice(1);
+      expect(bodyRows.map(r => within(r).getAllByRole('cell').at(-1)!.textContent)).toEqual(['100', '100', '100', '100']);
+      unmount();
+    }
+  });
+
+  it('lets a long team name wrap instead of cutting it off', () => {
+    renderCard('standings');
+    expect(screen.getByText('Mo Bamba Mix')).toHaveClass('sc-wrap');
   });
 
   it('shows compact values in the Standings view', () => {
@@ -91,15 +107,15 @@ describe('RankingsShareCard', () => {
 });
 
 describe('TradeShareCard', () => {
-  it('names the side that wins more categories', () => {
-    render(
+  it('marks the better value per category without a which-side-wins verdict', () => {
+    const { container } = render(
       <TradeShareCard
         dark
         title="Brick City ⇄ Dunk Tank"
         subtitle="Season · averages"
         sides={[
-          { heading: 'Brick City gets', players: ['Tyrese Haliburton'], verdict: 'Brick City gets the better side' },
-          { heading: 'Dunk Tank gets', players: ['Jalen Brunson'], verdict: 'Dunk Tank gets the better side' },
+          { heading: 'Brick City gets', players: [{ name: 'Tyrese Haliburton', value: { rank: 12, z: 1.234 } }] },
+          { heading: 'Dunk Tank gets', players: [{ name: 'Jalen Brunson', value: { rank: 140, z: -0.5 } }] },
         ]}
         rows={[
           { category: 'AST', values: [11.6, 7.9] },
@@ -110,7 +126,44 @@ describe('TradeShareCard', () => {
         highlightSide={null}
       />,
     );
-    expect(screen.getByText('Brick City gets the better side · 2 of 3 categories')).toBeInTheDocument();
     expect(screen.getByText('2.1 ▲')).toHaveClass('sc-win');
+    expect(screen.queryByText(/better side|categories|even split/i)).toBeNull();
+    expect(container.querySelector('.share-card__verdict')).toBeNull();
+  });
+
+  it('shows each player\'s rank and z-score when known', () => {
+    render(
+      <TradeShareCard
+        dark={false}
+        title="Brick City ⇄ Dunk Tank"
+        subtitle="Season · averages"
+        sides={[
+          { heading: 'Brick City gets', players: [{ name: 'Tyrese Haliburton', value: { rank: 12, z: 1.234 } }] },
+          { heading: 'Dunk Tank gets', players: [{ name: 'Jalen Brunson', value: { rank: 140, z: -0.5 } }, { name: 'No Data Guy' }] },
+        ]}
+        rows={[{ category: 'PTS', values: [20, 25] }]}
+        mode="averages"
+        highlightSide={null}
+      />,
+    );
+    expect(screen.getByText('#12 · +1.23')).toBeInTheDocument();
+    expect(screen.getByText('#140 · -0.50')).toBeInTheDocument();
+    expect(screen.getByText('No Data Guy').parentElement).toHaveTextContent(/^No Data Guy$/);
+    expect(screen.getByText('#rank · Z per game')).toBeInTheDocument();
+  });
+
+  it('leaves out the rank legend when no player has a value', () => {
+    render(
+      <TradeShareCard
+        dark={false}
+        title="A ⇄ B"
+        subtitle="Season · totals"
+        sides={[{ heading: 'A gets', players: [{ name: 'X' }] }, { heading: 'B gets', players: [{ name: 'Y' }] }]}
+        rows={[{ category: 'PTS', values: [20, 25] }]}
+        mode="totals"
+        highlightSide={null}
+      />,
+    );
+    expect(screen.queryByText('#rank · Z per game')).toBeNull();
   });
 });

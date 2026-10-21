@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { Player } from '../../../../types/api';
 import { TradeSummaryPanel } from '../TradeSummaryPanel';
@@ -53,5 +54,56 @@ describe('TradeSummaryPanel categories', () => {
     const nineCell = screen.getByText('9').parentElement!;
     expect(sevenCell.className).toContain('bg-green-100');
     expect(nineCell.className).toContain('bg-red-100');
+  });
+});
+
+describe('TradeSummaryPanel categories-only shortcut', () => {
+  const labels = () => [...headers()].map(h => h.textContent).slice(1);
+  const EIGHT = ['📈FG%', '📊FT%', '🎯3PM', '🏀REB', '🤝AST', '🥷STL', '🛡️BLK', '🏀PTS'];
+
+  it('shows just the 8 scoring categories, then brings the columns back', async () => {
+    const user = userEvent.setup();
+    renderPanel([player('a', {})], [player('b', {})]);
+    const toggle = screen.getByRole('button', { name: '8 cats only' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(labels()).toEqual(EIGHT);
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(labels()).toHaveLength(14);
+  });
+
+  it('restores a custom column choice and leaves the manual checkboxes working', async () => {
+    const user = userEvent.setup();
+    renderPanel([player('a', {})], [player('b', {})]);
+    await user.click(screen.getByRole('button', { name: /Show\/Hide Columns/ }));
+    await user.click(screen.getByRole('checkbox', { name: /MIN/ }));
+    await user.click(screen.getByRole('checkbox', { name: /GP/ }));
+    const custom = labels();
+    expect(custom).not.toContain('⏰MIN');
+
+    const toggle = screen.getByRole('button', { name: '8 cats only' });
+    await user.click(toggle);
+    expect(labels()).toEqual(EIGHT);
+    expect(screen.getByRole('checkbox', { name: /FGM/ })).not.toBeChecked();
+
+    // A manual tweak while on just turns the shortcut off.
+    await user.click(screen.getByRole('checkbox', { name: /FGM/ }));
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(labels()).toEqual(['🎯FGM', ...EIGHT].sort((a, b) => custom.indexOf(a) - custom.indexOf(b)));
+
+    await user.click(toggle);
+    await user.click(toggle);
+    expect(labels()).toEqual(['🎯FGM', ...EIGHT].sort((a, b) => custom.indexOf(a) - custom.indexOf(b)));
+  });
+
+  it('counts an extra league category such as TO', async () => {
+    const user = userEvent.setup();
+    renderPanel([player('a', { TO: 3 })], [player('b', { TO: 2 })]);
+    await user.click(screen.getByRole('button', { name: '9 cats only' }));
+    expect(labels()).toEqual([...EIGHT, '➕TO']);
   });
 });

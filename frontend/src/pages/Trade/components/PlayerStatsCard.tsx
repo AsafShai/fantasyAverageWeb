@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Player, PlayerStats } from '../../../types/api';
 import { calculatePlayerAverages, formatStatValue, getStatColor } from '../utils/tradeCalculations';
+import type { PlayerValue } from '../utils/playerValues';
+import { rankTone, signedZ } from '../../../components/activity/stintValue';
 
 interface PlayerStatsCardProps {
   player: Player;
@@ -9,6 +11,8 @@ interface PlayerStatsCardProps {
   onRemove: () => void;
   showStats?: boolean;
   viewMode?: 'totals' | 'averages';
+  /** Rank and z-score among every player over the same dates. */
+  value?: PlayerValue;
 }
 
 interface StatsItemData {
@@ -40,6 +44,16 @@ const StatItem: React.FC<StatItemProps> = ({
   </div>
 );
 
+export const PlayerValueChips: React.FC<{ value: PlayerValue }> = ({ value }) => (
+  <span
+    className="flex items-center gap-1"
+    title={`Rank ${value.rank} of ${value.of} players over these dates, Z-score ${signedZ(value.z)} (per game, as on Player Rankings)`}
+  >
+    <span className={`rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${rankTone(value.rank)}`}>#{value.rank}</span>
+    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-gray-700">Z {signedZ(value.z)}</span>
+  </span>
+);
+
 export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
   player,
   isSelected,
@@ -47,6 +61,7 @@ export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
   onRemove,
   showStats = false,
   viewMode = 'totals',
+  value,
 }) => {
   const displayStats = viewMode === 'averages' 
     ? calculatePlayerAverages(player.stats)
@@ -98,6 +113,7 @@ export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
               <span className="text-xs text-gray-500">{player.pro_team}</span>
               <span className="text-xs text-gray-400">•</span>
               <span className="text-xs text-gray-500">{player.stats.gp} GP</span>
+              {value && <PlayerValueChips value={value} />}
             </div>
           </div>
         </div>

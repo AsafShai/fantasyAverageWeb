@@ -53,6 +53,33 @@ const teamDetail = (index: number, playerNames: [string, string]) => {
   }
 }
 
+type PlayerFixture = { player_name: string; player_id?: number; team_id: number; stats: Record<string, number> } & Record<string, unknown>
+
+// Every player in the period (the Trade Analyzer ranks the traded players
+// against these): the four roster players above plus 20 others, so Alpha Star
+// (scaled up) ranks first and Bench Guy (scaled down) last.
+const playerPool = () => {
+  const [base] = fixture<{ players: PlayerFixture[] }>('players').players
+  const scaled = (name: string, teamId: number, k: number): PlayerFixture => ({
+    ...base,
+    player_name: name,
+    team_id: teamId,
+    stats: Object.fromEntries(Object.entries(base.stats).map(([key, v]) =>
+      [key, key === 'gp' || key.endsWith('percentage') ? v : Math.round(v * k)])),
+  })
+  return {
+    players: [
+      scaled('Alpha Star', 1, 2),
+      scaled('Bench Guy', 1, 0.3),
+      scaled('Gamma Guard', 2, 1.2),
+      scaled('Delta Big', 2, 1.1),
+      ...Array.from({ length: 20 }, (_, i) => scaled(`Pool Player ${i}`, 0, 0.5 + i * 0.04)),
+    ],
+    total_count: 24, page: 1, limit: 1200, has_more: false,
+    categories: CATEGORIES, reverse_categories: [],
+  }
+}
+
 async function setup(page: Page) {
   await page.addInitScript(() => localStorage.setItem('fw:myTeam.id', '1'))
   await mockApi(page, {
@@ -60,6 +87,7 @@ async function setup(page: Page) {
     '/teams/': TEAMS,
     '/teams/1': teamDetail(0, ['Alpha Star', 'Bench Guy']),
     '/teams/2': teamDetail(1, ['Gamma Guard', 'Delta Big']),
+    '/players': playerPool(),
   })
 }
 
@@ -183,6 +211,36 @@ test('Trade Analyzer: Share appears once both sides have players', async ({ page
     dialog.getByRole('button', { name: 'Download PNG' }).click(),
   ])
   expect(download.suggestedFilename()).toBe('trade-analysis-2026-10-19.png')
+})
+
+test('Trade Analyzer: each traded player shows his rank and z-score, and the 8-cat shortcut trims the comparison', async ({ page }) => {
+  await page.goto('/trade')
+  const teamSelects = page.locator('select:has(option:text-is("Choose a team..."))')
+  await teamSelects.nth(0).selectOption('1')
+  await teamSelects.nth(1).selectOption('2')
+  const playerSelects = page.locator('select:has(option:text-is("Select a player to add..."))')
+  const addButtons = page.getByRole('button', { name: 'Add', exact: true })
+  await playerSelects.nth(0).selectOption('Alpha Star')
+  await addButtons.nth(0).click()
+  await playerSelects.nth(1).selectOption('Gamma Guard')
+  await addButtons.nth(1).click()
+
+  // 24 players in the pool; Alpha Star's line is the best of them.
+  await expect(page.getByTitle(/^Rank 1 of 24 players/)).toBeVisible()
+  await expect(page.getByText('#1', { exact: true })).toBeVisible()
+  await expect(page.getByTitle(/^Rank \d+ of 24 players/)).toHaveCount(2)
+
+  const comparison = page.getByText('Team', { exact: true }).locator('..')
+  const headerCount = () => comparison.locator(':scope > div.font-semibold').count()
+  expect(await headerCount()).toBe(15)
+  const shortcut = page.getByRole('button', { name: '8 cats only' })
+  await shortcut.click()
+  await expect(shortcut).toHaveAttribute('aria-pressed', 'true')
+  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(9)
+  await expect(comparison.getByText('MIN', { exact: true })).toHaveCount(0)
+  await shortcut.click()
+  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(15)
+  await expectNoHorizontalScroll(page)
 })
 
 test('phones with Web Share get the share sheet with the PNG attached', async ({ page }) => {

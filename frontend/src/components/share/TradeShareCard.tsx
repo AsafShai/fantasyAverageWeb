@@ -1,13 +1,19 @@
 import { ShareCard, type ShareCardTheme } from './ShareCard'
 import { formatCardValue, rowWinner, type TradeShareRow } from './shareCardFormat'
 
+export interface TradeSharePlayer {
+  name: string
+  /** Rank and z-score among every player over the same dates, when known. */
+  value?: { rank: number; z: number }
+}
+
 export interface TradeShareSide {
   /** Column/box heading, e.g. "Brick City gets" or "Add". */
   heading: string
-  players: string[]
-  /** Verdict when this side wins more categories, e.g. "Brick City gets the better side". */
-  verdict: string
+  players: TradeSharePlayer[]
 }
+
+const signedZ = (z: number) => `${z >= 0 ? '+' : ''}${z.toFixed(2)}`
 
 interface TradeShareCardProps extends ShareCardTheme {
   title: string
@@ -20,15 +26,7 @@ interface TradeShareCardProps extends ShareCardTheme {
 }
 
 export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSide, dark }: TradeShareCardProps) => {
-  const wins = [0, 0]
-  rows.forEach(row => {
-    const winner = rowWinner(row)
-    if (winner !== null) wins[winner]++
-  })
-  const leader = wins[0] === wins[1] ? null : wins[0] > wins[1] ? 0 : 1
-  const verdict = leader === null
-    ? `Even split · ${wins[0]}–${wins[1]}`
-    : `${sides[leader].verdict} · ${wins[leader]} of ${rows.length} categories`
+  const hasValues = sides.some(side => side.players.some(p => p.value))
 
   return (
     <ShareCard
@@ -36,14 +34,22 @@ export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSi
       kicker="Trade Analyzer"
       title={title}
       subtitle={subtitle}
-      footer={<span>{mode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>}
+      footer={<>
+        <span>{mode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>
+        {hasValues && <span>#rank · Z per game</span>}
+      </>}
     >
       <div className="share-card__tiles">
         {sides.map((side, i) => (
           <div key={side.heading} className={`share-card__tile${highlightSide === i ? ' share-card__tile--me' : ''}`}>
             <div className="share-card__label">{side.heading}</div>
             <ul className="share-card__list">
-              {side.players.map(name => <li key={name}>{name}</li>)}
+              {side.players.map(({ name, value }) => (
+                <li key={name} className={value ? 'share-card__player' : undefined}>
+                  <span className="share-card__player-name">{name}</span>
+                  {value && <span className="share-card__player-value">#{value.rank} · {signedZ(value.z)}</span>}
+                </li>
+              ))}
             </ul>
           </div>
         ))}
@@ -75,7 +81,6 @@ export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSi
           </tbody>
         </table>
       </div>
-      <div className={`share-card__verdict${leader === null ? '' : ' share-card__verdict--win'}`}>{verdict}</div>
     </ShareCard>
   )
 }

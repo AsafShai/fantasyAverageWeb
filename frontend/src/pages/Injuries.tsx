@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useInjuryData } from '../hooks/useInjuryData';
 import { useDebounce } from '../hooks/useDebounce';
 import InjuryFilters from '../components/injuries/InjuryFilters';
@@ -21,11 +21,11 @@ export default function Injuries() {
   const [filters, setFilters] = useState<Filters>({ search: '', teams: [], statuses: [] });
   const [notifOpen, setNotifOpen] = useState(false);
   const { myTeam, myTeamId } = useMyTeam();
-  const [myRosterOnly, setMyRosterOnly] = useState(true);
-  useEffect(() => { setMyRosterOnly(true) }, [myTeamId]);
+  // Every team's injuries by default; "My roster" narrows to My Team on request.
+  const [myRosterOnly, setMyRosterOnly] = useState(false);
   const rosterQuery = useGetTeamDetailQuery(
     { teamId: myTeamId ?? 0 },
-    { skip: myTeamId == null },
+    { skip: myTeamId == null || !myRosterOnly },
   );
   const debouncedSearch = useDebounce(filters.search, 300);
 
