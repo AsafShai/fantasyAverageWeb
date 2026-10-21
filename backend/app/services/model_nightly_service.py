@@ -94,13 +94,18 @@ def _eval_to_tuple(ev: EvalRow, game_date: date) -> tuple:
 
 # --- feature-vector (de)serialization --------------------------------------
 
-def _features_json(series: pd.Series, feature_cols: list[str]) -> str:
-    """One vector row's features as a JSON object (NaN -> null)."""
+def _features_dict(series: pd.Series, feature_cols: list[str]) -> dict[str, Optional[float]]:
+    """One vector row's features as a dict (NaN -> None).
+
+    Returned as a dict, not a JSON string: the pool's jsonb codec already runs
+    json.dumps, so a pre-dumped string would be stored as a JSON string scalar
+    instead of an object (and jsonb_object_keys / ``?`` then fail on it).
+    """
     out = {}
     for c in feature_cols:
         v = series[c]
         out[c] = None if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
-    return json.dumps(out)
+    return out
 
 
 def _serialize_vectors(store: FeatureStore) -> tuple[list[tuple], list[tuple], list[tuple]]:
@@ -115,12 +120,12 @@ def _serialize_vectors(store: FeatureStore) -> tuple[list[tuple], list[tuple], l
         player_rows.append((
             int(row["PLAYER_ID"]), str(row.get("PLAYER_NAME", "")), int(row["TEAM_ID"]),
             str(row.get("POSITION", "")), last, games,
-            games >= sconfig.MIN_INFERENCE_GAMES, _features_json(row, pfeat),
+            games >= sconfig.MIN_INFERENCE_GAMES, _features_dict(row, pfeat),
         ))
 
     def team_rows(tv: pd.DataFrame) -> list[tuple]:
         feat = [c for c in tv.columns if c != "TEAM_ID"]
-        return [(int(row["TEAM_ID"]), _features_json(row, feat)) for _, row in tv.iterrows()]
+        return [(int(row["TEAM_ID"]), _features_dict(row, feat)) for _, row in tv.iterrows()]
 
     return player_rows, team_rows(store.team_allowed_vectors), team_rows(store.team_own_vectors)
 

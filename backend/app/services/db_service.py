@@ -1429,7 +1429,8 @@ class DBService:
     ) -> bool:
         """Upsert the materialized 'as of now' vectors. player_rows tuple order:
         (player_id, player_name, team_id, position, last_game_date, games_count,
-         eligible, features_json). team rows: (team_id, features_json)."""
+         eligible, features). team rows: (team_id, features). ``features`` is a dict;
+         the jsonb codec encodes it, so never pass a pre-dumped JSON string."""
         pool = await self._get_pool()
         if pool is None:
             return False
