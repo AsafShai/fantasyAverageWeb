@@ -81,24 +81,6 @@
 .share-card .sc-win { color: var(--sc-good-fg); font-weight: 800; }
 .share-card .sc-lose { color: var(--sc-muted); }
 
-/* sections (boom or bust card: two tables in one card) */
-.share-card__section { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 2px 0 4px; }
-.share-card__section-title { font-size: 13px; font-weight: 800; white-space: nowrap; }
-.share-card__section-rule { font-size: 10px; color: var(--sc-muted); white-space: nowrap; }
-.share-card__person { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.share-card__avatar { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--sc-raised); border: 1px solid var(--sc-line); }
-.share-card__person-text { min-width: 0; }
-.share-card__player { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
-.share-card__why { font-size: 9.5px; color: var(--sc-muted); overflow: hidden; text-overflow: ellipsis; }
-/* Two lines, percentage over makes-attempts. Declared with two classes so it
-   still wins when the cell is marked (.sc-chip is inline-block, which would put
-   the two lines side by side and spill the chip into the next column). */
-.share-card .share-card__shooting { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; min-width: 0; padding: 1px 2px; font-size: 10.5px; }
-.share-card .share-card__shooting-frac { font-size: 9px; color: var(--sc-muted); }
-.share-card .share-card__shooting.sc-chip .share-card__shooting-frac { color: inherit; opacity: 0.8; }
-.share-card__empty { padding: 6px 0 8px; font-size: 11px; color: var(--sc-muted); }
-.share-card__body + .share-card__body { padding-top: 4px; }
-
 /* tiles + side boxes */
 .share-card__tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 12px 4px; }
 .share-card__tile { min-width: 0; padding: 8px 10px; border: 1px solid var(--sc-line); border-radius: 10px; background: var(--sc-raised); }
@@ -130,26 +112,3 @@
    re-encodes photos as JPEG and transparent corners would turn black. */
 .share-card-canvas { display: inline-block; padding: 12px; background: #e8eef7; }
 .share-card-canvas--dark { background: #0b1220; }
-
-/* Boom or Bust card: eleven columns, so it is wider (480) and has its own rhythm. */
-.share-card--boom table { font-size: 11px; }
-.share-card--boom th { padding: 6px 0 7px; font-size: 9px; letter-spacing: 0.06em; color: var(--sc-muted); font-weight: 700; }
-.share-card--boom td { padding: 7px 0; }
-.share-card--boom .share-card__body { padding: 10px 12px 8px; }
-.share-card--boom .share-card__body + .share-card__body { padding-top: 2px; }
-.share-card--boom .share-card__section { margin: 4px 0 2px; padding-bottom: 6px; border-bottom: 2px solid var(--sc-line); }
-.share-card--boom .share-card__section-title { font-size: 14px; }
-.share-card--boom .share-card__section-count { font-size: 11px; font-weight: 600; color: var(--sc-muted); margin-left: 2px; }
-.share-card--boom .share-card__section-rule { font-size: 10px; }
-.share-card--boom .share-card__person { gap: 8px; }
-.share-card--boom .share-card__avatar { width: 28px; height: 28px; flex-basis: 28px; }
-.share-card--boom .share-card__player { font-size: 12px; letter-spacing: -0.01em; }
-.share-card--boom .share-card__why { font-size: 9.5px; margin-top: 1px; }
-.share-card--boom .sc-rank { font-size: 11px; }
-/* one chip size for every marked stat, so the eye reads the colour, not the shape */
-.share-card--boom .sc-chip { min-width: 24px; padding: 2px 3px; border-radius: 6px; font-weight: 700; }
-.share-card--boom .share-card .share-card__shooting,
-.share-card--boom .share-card__shooting { font-size: 10.5px; padding: 2px 3px; }
-.share-card--boom td:last-child .sc-chip { min-width: 36px; padding: 3px 4px; font-size: 11.5px; font-weight: 800; }
-.share-card--boom .share-card__foot { font-size: 10px; padding: 9px 14px 12px; }
-.share-card--boom tbody tr:nth-child(even) td { background: var(--sc-raised); }

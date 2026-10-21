@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { BoomOrBustShareCard } from '../BoomOrBustShareCard'
-import { buildShareMessage, shortName, topReason } from '../boomOrBustMessage'
+import { buildShareMessage } from '../boomOrBustMessage'
 import type { SurpriseRow } from '../../../types/api'
 
 const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
@@ -16,41 +17,29 @@ const bust = row({ player_id: 2, player_name: 'Jayson Tatum', score: -1.91, verd
   reasons: [{ stat: 'FG_PCT', value: 0.261, avg: 0.47, z: -1.2 }] })
 
 describe('BoomOrBustShareCard', () => {
-  it('shows both sections with the line, the driver and the score', () => {
-    render(<BoomOrBustShareCard dark={false} dateLabel="Tuesday, Oct 20, 2026" games={3} booms={[boom]} busts={[bust]} thresholds={{ good: 1.8, bad: 1.8 }} />)
+  it('renders the page tables in one image: names, marks, shooting, score', () => {
+    render(<MemoryRouter><BoomOrBustShareCard dark={false} dateLabel="Tuesday, Oct 20, 2026" games={3} booms={[boom]} busts={[bust]} thresholds={{ good: 1.8, bad: 1.8 }} /></MemoryRouter>)
     expect(screen.getByText('💥 Boom or Bust')).toBeInTheDocument()
     expect(screen.getByText('Tuesday, Oct 20, 2026 · 3 games')).toBeInTheDocument()
     expect(screen.getByText('Paul George')).toBeInTheDocument()
-    expect(screen.getAllByText('BOS @ DET')).toHaveLength(2)
-    expect(screen.getByText('+2.6')).toBeInTheDocument()
-    expect(screen.getAllByText('57%')).toHaveLength(2)        // 12-21 FG, both rows share the fixture line
-    expect(screen.getAllByText('12-21')).toHaveLength(2)
-    expect(screen.getAllByText('88%')).toHaveLength(2)        // 7-8 FT
-    expect(document.querySelectorAll('img.share-card__avatar')).toHaveLength(2)
-    expect(document.querySelector('img.share-card__avatar')?.getAttribute('src')).toContain('/i/headshots/nba/players/full/1.png')
     expect(screen.getByText('Jayson Tatum')).toBeInTheDocument()
+    expect(screen.getAllByText('@ DET')).toHaveLength(2)
+    expect(screen.getAllByText(/^57%/).length).toBeGreaterThan(0)   // 12-21 FG
+    expect(screen.getByText('+2.6')).toBeInTheDocument()
     expect(screen.getByText('−1.9')).toBeInTheDocument()
     expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
     expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
+    // the marks: STL (z 1.8, strong) and PTS (z 1.4, clear) green on the boom; FG (z -1.2, clear) red on the bust
+    const stl = screen.getAllByText('5').find((el) => el.className.includes('bg-emerald-100'))
+    expect(stl).toBeTruthy()
+    expect(screen.getAllByText('38').some((el) => el.className.includes('bg-emerald-50'))).toBe(true)
+    expect(screen.getAllByText(/^57%/).some((el) => el.className.includes('rose'))).toBe(true)   // the bust row's FG mark
   })
 
   it('says so when a section is empty', () => {
-    render(<BoomOrBustShareCard dark={true} dateLabel="Oct 20, 2026" games={1} booms={[]} busts={[bust]} thresholds={{ good: 1.8, bad: 1.8 }} />)
-    expect(screen.getByText('Nobody crossed the bar')).toBeInTheDocument()
+    render(<MemoryRouter><BoomOrBustShareCard dark={true} dateLabel="Oct 20, 2026" games={1} booms={[]} busts={[bust]} thresholds={{ good: 1.8, bad: 1.8 }} /></MemoryRouter>)
+    expect(screen.getByText('Nobody crossed the bar tonight.')).toBeInTheDocument()
     expect(screen.getByText('Oct 20, 2026 · 1 game')).toBeInTheDocument()
-  })
-
-  it('shortName keeps short names and initials long ones', () => {
-    expect(shortName('Paul George')).toBe('Paul George')
-    expect(shortName('Baylor Scheierman')).toBe('B. Scheierman')
-    expect(shortName('Ron Harper Jr.')).toBe('Ron Harper Jr.')
-    expect(shortName('Giannis Antetokounmpo')).toBe('G. Antetokounmpo')
-    expect(shortName('Shai Gilgeous-Alexander')).toBe('Gilgeous-Alexander')
-  })
-
-  it('topReason reads the first driver', () => {
-    expect(topReason(boom)).toBe('5 STL (avg 1.6)')
-    expect(topReason(row({ reasons: [] }))).toBeNull()
   })
 })
 

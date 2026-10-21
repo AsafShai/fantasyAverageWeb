@@ -422,7 +422,6 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
     value, his season (or all-time) average, z (the per-stat surprise).
     """
     normed = standardize(df, calibration)
-    total_ww = sum(WINDOW_WEIGHTS.values())
     strength = {}
     for stat in Z_WEIGHTS:
         acc = pd.Series(0.0, index=df.index)
@@ -432,7 +431,10 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
             if col in normed.columns:
                 acc = acc + normed[col].fillna(0.0) * ww
                 have = have + normed[col].notna() * ww
-        strength[stat] = (acc / total_ww).where(have > 0)
+        # Average over the windows that exist: on opening night the season
+        # window is empty for everyone, and dividing by all four weights would
+        # dilute every verdict by a third.
+        strength[stat] = (acc / have.replace(0.0, np.nan))
     uz = pd.DataFrame(strength)
     # the model's side of each stat, standardized; NaN without an estimate
     ue = pd.DataFrame({

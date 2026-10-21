@@ -3,16 +3,6 @@ import type { SurpriseRow } from '../../types/api'
 const STAT_LABELS: Record<string, string> = { FG3M: '3PM', FG_PCT: 'FG%', FT_PCT: 'FT%' }
 const MAX_NAMES = 5
 
-/** "38 PTS (avg 20.7)": the stat that drove the score, for the line under a name. */
-export function topReason(row: SurpriseRow): string | null {
-  const r = row.reasons[0]
-  if (!r) return null
-  const label = STAT_LABELS[r.stat] ?? r.stat
-  if (r.stat === 'FG_PCT' || r.stat === 'FT_PCT') return `${Math.round(r.value * 100)}% ${label}`
-  const value = Number.isInteger(r.value) ? String(r.value) : r.value.toFixed(1)
-  return r.avg == null ? `${value} ${label}` : `${value} ${label} (avg ${r.avg.toFixed(1)})`
-}
-
 /** "38 PTS": the first driver without the average, for the narrow share card. */
 export function shortReason(row: SurpriseRow): string | null {
   const r = row.reasons[0]
@@ -20,17 +10,6 @@ export function shortReason(row: SurpriseRow): string | null {
   const label = STAT_LABELS[r.stat] ?? r.stat
   if (r.stat === 'FG_PCT' || r.stat === 'FT_PCT') return `${Math.round(r.value * 100)}% ${label}`
   return `${Number.isInteger(r.value) ? r.value : r.value.toFixed(1)} ${label}`
-}
-
-/** "Baylor Scheierman" → "B. Scheierman" when the full name would not fit a
- * narrow column; short names stay as they are. Suffixes stay with the surname. */
-export function shortName(name: string, maxLen = 16): string {
-  if (name.length <= maxLen) return name
-  const parts = name.trim().split(/\s+/)
-  if (parts.length < 2) return name
-  const initialled = `${parts[0][0]}. ${parts.slice(1).join(' ')}`
-  // "S. Gilgeous-Alexander" is still too long: the surname alone, then.
-  return initialled.length <= maxLen ? initialled : parts.slice(1).join(' ')
 }
 
 const fmtScore = (score: number) => `${score < 0 ? '−' : '+'}${Math.abs(score).toFixed(1)}`
@@ -74,11 +53,11 @@ const DRIVER_COLUMN: Record<string, string> = {
 
 /** The columns to mark in a row and the sign of each: 'good' when the stat was
  * above the player's norm, 'bad' when below, whatever table the row is in. */
-export function driverColumns(row: SurpriseRow): Map<string, 'good' | 'bad'> {
-  const out = new Map<string, 'good' | 'bad'>()
+export function driverColumns(row: SurpriseRow): Map<string, { sign: 'good' | 'bad'; z: number }> {
+  const out = new Map<string, { sign: 'good' | 'bad'; z: number }>()
   for (const r of row.reasons) {
     const col = DRIVER_COLUMN[r.stat]
-    if (col && !out.has(col)) out.set(col, r.z >= 0 ? 'good' : 'bad')
+    if (col && !out.has(col)) out.set(col, { sign: r.z >= 0 ? 'good' : 'bad', z: r.z })
   }
   return out
 }
