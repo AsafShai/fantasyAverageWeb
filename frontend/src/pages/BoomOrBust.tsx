@@ -30,9 +30,11 @@ function isNotFound(error: unknown): boolean {
   return e.status === 404 || e.originalStatus === 404;
 }
 
-// 1.0 is already "a clearly good/bad night"; past 2.3 almost nobody is left.
-const SLIDER_MIN = 1.0;
-const SLIDER_MAX = 2.3;
+// 1.4 is already a clearly good/bad night; past 2.2 almost nobody is left.
+// The server default (1.8) sits in the middle. A stored value outside the
+// range (from an older range) is ignored and the default takes over.
+const SLIDER_MIN = 1.4;
+const SLIDER_MAX = 2.2;
 const SLIDER_STEP = 0.1;
 const STORAGE_KEYS = { good: 'boomOrBust.goodThreshold', bad: 'boomOrBust.badThreshold' } as const;
 
@@ -106,6 +108,11 @@ function ThresholdSlider({
 
 type Threshold = ReturnType<typeof useThreshold>;
 
+/** A card pages its rows five at a time, and only when there are more than five:
+ * the two cards keep a steady height while the slider moves, instead of the
+ * Booms card growing and shoving Busts down the page. */
+const PAGE_SIZE = 5;
+
 /** The rows a card shows: past the viewer's threshold, capped at the server's max. */
 function shownRows(rows: SurpriseRow[], kind: 'good' | 'bad', threshold: number, maxRows: number): SurpriseRow[] {
   const kept = kind === 'good' ? rows.filter((r) => r.score >= threshold) : rows.filter((r) => r.score <= -threshold);
@@ -115,6 +122,12 @@ function shownRows(rows: SurpriseRow[], kind: 'good' | 'bad', threshold: number,
 function SurpriseCard({
   title, kind, threshold, shown,
 }: { title: string; kind: 'good' | 'bad'; threshold: Threshold; shown: SurpriseRow[] }) {
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const current = Math.min(page, pages - 1);   // the slider can shrink the list under the viewer
+  const start = current * PAGE_SIZE;
+  const pageRows = shown.slice(start, start + PAGE_SIZE);
+  const pageBtn = 'px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed';
   return (
     <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -129,7 +142,14 @@ function SurpriseCard({
           onReset={threshold.reset}
         />
       </div>
-      <SurpriseTable rows={shown} kind={kind} />
+      <SurpriseTable rows={pageRows} kind={kind} startRank={start + 1} />
+      {pages > 1 && (
+        <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+          <span>{start + 1}–{start + pageRows.length} of {shown.length}</span>
+          <button type="button" className={pageBtn} onClick={() => setPage(current - 1)} disabled={current === 0} aria-label="Previous page">‹</button>
+          <button type="button" className={pageBtn} onClick={() => setPage(current + 1)} disabled={current >= pages - 1} aria-label="Next page">›</button>
+        </div>
+      )}
     </div>
   );
 }

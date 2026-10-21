@@ -6,7 +6,8 @@ interface BoomOrBustShareCardProps extends ShareCardTheme {
   /** "Tuesday, Oct 20, 2026" */
   dateLabel: string
   games: number
-  /** The rows the page shows, already filtered by the viewer's sliders and capped. */
+  /** The rows the page shows, already filtered by the viewer's sliders; the
+   * image takes the first SHARE_ROWS of each. */
   booms: SurpriseRow[]
   busts: SurpriseRow[]
   thresholds: { good: number; bad: number }
@@ -16,30 +17,38 @@ interface BoomOrBustShareCardProps extends ShareCardTheme {
  * headshots and the score bar measure ~925 px with the longest names, and
  * the card pads 17 px a side. */
 export const CARD_WIDTH = 980
+/** The image shows the top of each table only: five rows read well on a phone. */
+export const SHARE_ROWS = 5
 
-const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string }) => (
-  <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-    <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-        {title} <span className="text-sm font-normal text-gray-500 dark:text-gray-400 whitespace-nowrap">({rows.length})</span>
-      </h2>
-      <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{rule}</span>
+const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string }) => {
+  const shown = rows.slice(0, SHARE_ROWS)
+  const count = rows.length > SHARE_ROWS ? `top ${SHARE_ROWS} of ${rows.length}` : `${rows.length}`
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+          {title} <span className="text-sm font-normal text-gray-500 dark:text-gray-400 whitespace-nowrap">({count})</span>
+        </h2>
+        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{rule}</span>
+      </div>
+      <SurpriseTable rows={shown} kind={kind} share />
     </div>
-    <SurpriseTable rows={rows} kind={kind} eager />
-  </div>
-)
+  )
+}
 
 /**
  * The page's own two cards, as they look on the site, in one image: the same
  * table component the page renders (headshots, graded green/red marks, score
- * bars), under a small title bar. Tailwind styles apply because the card is
- * rendered in the page's document; `dark` follows the site theme through the
- * html element's class.
+ * bars), under a small title bar, the top SHARE_ROWS of each. Tailwind styles
+ * apply because the card is rendered in the page's document; `dark` follows
+ * the site theme through the html element's class. The card is at least
+ * CARD_WIDTH wide and grows with the table (wider system fonts), never
+ * scrolls: the PNG is taken at the card's full size.
  */
 export const BoomOrBustShareCard = ({ dateLabel, games, booms, busts, thresholds }: BoomOrBustShareCardProps) => (
   <div
     className="overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans"
-    style={{ width: CARD_WIDTH }}
+    style={{ minWidth: CARD_WIDTH, width: 'max-content' }}
   >
     <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-violet-700 px-5 py-4 text-white">
       <div className="flex items-center justify-between text-xs font-semibold opacity-90 whitespace-nowrap">

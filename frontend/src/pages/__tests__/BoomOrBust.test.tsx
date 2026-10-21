@@ -34,11 +34,11 @@ const night: NightSurprises = {
   // Every scored row, best first / worst first — the page filters by its own sliders.
   good: [
     row({ player_id: 11, player_name: 'Good Guy', score: 2.4 }),
-    row({ player_id: 12, player_name: 'Almost Good', score: 1.2, verdict: '' }),
+    row({ player_id: 12, player_name: 'Almost Good', score: 1.5, verdict: '' }),
   ],
   bad: [
     row({ player_id: 22, player_name: 'Bad Guy', score: -2.1, verdict: 'bad', has_estimate: false, reasons: [{ stat: 'FG_PCT', value: 0.25, avg: null, z: -2 }] }),
-    row({ player_id: 23, player_name: 'Almost Bad', score: -1.1, verdict: '' }),
+    row({ player_id: 23, player_name: 'Almost Bad', score: -1.5, verdict: '' }),
   ],
   computed_at: '2024-01-06T09:00:00Z',
 }
@@ -86,12 +86,12 @@ describe('Boom or Bust page', () => {
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
 
     // (b) moving the good slider down reveals the row and updates the count
-    fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '1.0' } })
+    fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '1.4' } })
     expect(screen.getByText('Almost Good')).toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
-    expect(screen.getByText('score ≥ 1.0')).toBeInTheDocument()
+    expect(screen.getByText('score ≥ 1.4')).toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
-    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBe('1.0')
+    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBe('1.4')
 
     // (c) Reset restores the server default and clears the stored value
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
@@ -103,13 +103,33 @@ describe('Boom or Bust page', () => {
   })
 
   it('a stored threshold wins over the server default on load', async () => {
-    localStorage.setItem('boomOrBust.badThreshold', '1.0')
+    localStorage.setItem('boomOrBust.badThreshold', '1.4')
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Almost Bad')).toBeInTheDocument())
     expect(screen.getByText('💩 Busts')).toHaveTextContent('(2)')
-    expect(screen.getByText('score ≤ −1.0')).toBeInTheDocument()
+    expect(screen.getByText('score ≤ −1.4')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument()
+  })
+
+  it('pages a card five at a time, only when there are more than five', async () => {
+    const many = Array.from({ length: 7 }, (_, i) => row({ player_id: 100 + i, player_name: `Boom ${i}`, score: 2.6 - i * 0.1 }))
+    stubApi(() => Response.json({ ...night, good: many }))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await waitFor(() => expect(screen.getByText('Boom 0')).toBeInTheDocument())
+    expect(screen.getByText('Boom 4')).toBeInTheDocument()
+    expect(screen.queryByText('Boom 5')).not.toBeInTheDocument()
+    expect(screen.getByText('1–5 of 7')).toBeInTheDocument()
+    // the busts card has two rows: no pager there
+    expect(screen.getAllByLabelText('Next page')).toHaveLength(1)
+    fireEvent.click(screen.getByLabelText('Next page'))
+    expect(screen.getByText('Boom 6')).toBeInTheDocument()
+    expect(screen.queryByText('Boom 0')).not.toBeInTheDocument()
+    expect(screen.getByText('6–7 of 7')).toBeInTheDocument()
+    expect(screen.getByText('7')).toBeInTheDocument()   // the rank keeps counting on the second page
+    // raising the bar under the viewer drops the list to one page: the card falls back to it
+    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '2.2' } })
+    await waitFor(() => expect(screen.queryByLabelText('Next page')).not.toBeInTheDocument())
   })
 
   it('shows the empty state on 404', async () => {
