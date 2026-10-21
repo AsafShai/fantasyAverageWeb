@@ -164,3 +164,32 @@ def _async_return(value):
     async def _f(*_a, **_k):
         return value
     return _f
+
+
+@pytest.mark.asyncio
+async def test_backfill_scores_each_unscored_night_and_keeps_going(monkeypatch):
+    """Oldest first, one status per night, a failing night does not stop the rest."""
+    svc = SurpriseService()
+    nights = [NIGHT, NIGHT + timedelta(days=1), NIGHT + timedelta(days=2)]
+    monkeypatch.setattr(surprise_service.schedule_service, "get_season_start_date", _async_return(NIGHT))
+    monkeypatch.setattr(svc._db, "get_unscored_processed_nights", _async_return(nights))
+    scored: list[date] = []
+
+    async def _compute(game_date):
+        scored.append(game_date)
+        if game_date == nights[1]:
+            raise RuntimeError("espn down")
+        return "processed"
+
+    monkeypatch.setattr(svc, "compute_and_store", _compute)
+    assert await svc.backfill_missing() == {nights[0]: "processed", nights[1]: "failed", nights[2]: "processed"}
+    assert scored == nights
+
+
+@pytest.mark.asyncio
+async def test_backfill_with_nothing_missing_scores_nothing(monkeypatch):
+    svc = SurpriseService()
+    monkeypatch.setattr(surprise_service.schedule_service, "get_season_start_date", _async_return(NIGHT))
+    monkeypatch.setattr(svc._db, "get_unscored_processed_nights", _async_return([]))
+    monkeypatch.setattr(svc, "compute_and_store", _async_return(pytest.fail))
+    assert await svc.backfill_missing() == {}
