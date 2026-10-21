@@ -474,7 +474,13 @@ class _ActivityCache:
     """Process-wide. League settings and transactions refresh every
     CARDS_TTL_SECONDS, per-game stats every STATS_TTL_SECONDS, the schedule daily.
     Per-game stats are kept parsed: ESPN's raw stat cards are several times
-    bigger and nothing else in them is read."""
+    bigger and nothing else in them is read.
+
+    A refresh is a conditional request: ESPN answers 304 with no body when the
+    ETag still matches, so an unchanged source costs neither the download nor
+    the JSON parse (the per-game stats alone are ~25 MB). The *_version
+    counters move only when a source's content changed, so the built result is
+    reused until something it depends on did."""
 
     def __init__(self):
         self.league: Optional[dict] = None
@@ -487,6 +493,12 @@ class _ActivityCache:
         self.schedule_at = 0.0
         self.result: Optional[LeagueActivity] = None
         self.result_key: Optional[tuple] = None
+        self.result_checked: Optional[tuple] = None
+        # ESPN ETag per request (see LeagueActivityService._get's etag_key).
+        self.etags: dict = {}
+        self.cards_version = 0
+        self.stats_version = 0
+        self.schedule_version = 0
         self.lock = asyncio.Lock()
 
     def clear(self) -> None:
@@ -513,56 +525,116 @@ class LeagueActivityService:
             )
         return self._client
 
-    async def _get(self, params: list[tuple[str, str]], fantasy_filter: Optional[str] = None, url: Optional[str] = None) -> dict:
-        headers = {'x-fantasy-filter': fantasy_filter} if fantasy_filter else None
+    async def _get(
+        self, params: list[tuple[str, str]], fantasy_filter: Optional[str] = None,
+        url: Optional[str] = None, etag_key=None,
+    ) -> Optional[dict]:
+        """The parsed JSON. With ``etag_key`` the request is conditional on the
+        ETag ESPN sent last time for that key, and None means 304: unchanged
+        since then. The caller must still hold what it parsed from that response."""
+        headers = {'x-fantasy-filter': fantasy_filter} if fantasy_filter else {}
+        if etag_key is not None and etag_key in _cache.etags:
+            headers['If-None-Match'] = _cache.etags[etag_key]
         for attempt in range(FETCH_RETRIES + 1):
             try:
-                response = await self._http().get(url or self.url, params=params, headers=headers)
+                response = await self._http().get(url or self.url, params=params, headers=headers or None)
                 break
             except httpx.TransportError:
                 if attempt == FETCH_RETRIES:
                     raise
                 await asyncio.sleep(0.5 * 2 ** attempt)
+        if etag_key is not None and response.status_code == 304:
+            return None
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        if etag_key is not None:
+            if response.headers.get('etag'):
+                _cache.etags[etag_key] = response.headers['etag']
+            else:
+                _cache.etags.pop(etag_key, None)
+        return data
 
-    async def _cards(self) -> tuple[list[dict], list[int]]:
+    async def _cards(self) -> Optional[tuple[list[dict], list[int]]]:
         """Every player card with a transaction this season, plus the ids of the
-        most-owned players (the valuation pool), in one call."""
+        most-owned players (the valuation pool), in one call. None: unchanged."""
         f = ('{"players":{"limit":%d,"sortPercOwned":{"sortPriority":1,"sortAsc":false}}}' % CARD_LIMIT)
-        players = (await self._get([('view', 'kona_playercard')], f)).get('players', [])
+        data = await self._get([('view', 'kona_playercard')], f, etag_key='cards')
+        if data is None:
+            return None
+        players = data.get('players', [])
         return [c for c in players if c.get('transactions')], [c['id'] for c in players[:VALUE_POOL_SIZE]]
 
-    async def _stat_cards(self, ids: list[int]) -> list[dict]:
+    async def _stat_cards(self, ids: list[int]) -> tuple[list[dict], bool]:
+        """Stat cards for ``ids``, skipping batches ESPN reports unchanged (their
+        players' parsed stats are already cached), and whether any batch changed."""
         sem = asyncio.Semaphore(FETCH_CONCURRENCY)
 
-        async def batch(chunk: list[int]) -> list[dict]:
+        async def batch(chunk: list[int]) -> Optional[list[dict]]:
             f = ('{"players":{"filterIds":{"value":%s},"filterStatsForTopScoringPeriodIds":'
                  '{"value":200,"additionalValue":["00%d"]}}}' % (chunk, self.season_id))
+            # Only a batch already parsed into _cache.stats may come back as 304.
+            key = ('stats', tuple(chunk))
+            if not all(i in _cache.stats for i in chunk):
+                _cache.etags.pop(key, None)
             async with sem:
-                return (await self._get([('view', 'kona_playercard')], f)).get('players', [])
+                data = await self._get([('view', 'kona_playercard')], f, etag_key=key)
+            return None if data is None else data.get('players', [])
 
         chunks = [ids[i:i + STATS_BATCH] for i in range(0, len(ids), STATS_BATCH)]
-        return [c for part in await asyncio.gather(*(batch(c) for c in chunks)) for c in part]
+        try:
+            parts = await asyncio.gather(*(batch(c) for c in chunks))
+        except BaseException:
+            # The batches that did arrive are dropped with this error, so their
+            # new ETags must not let the retry skip them.
+            for c in chunks:
+                _cache.etags.pop(('stats', tuple(c)), None)
+            raise
+        changed = [p for p in parts if p is not None]
+        return [c for part in changed for c in part], bool(changed)
 
     async def _refresh(self) -> None:
         now = time.monotonic()
         if _cache.cards is None or now - _cache.cards_at >= CARDS_TTL_SECONDS:
-            _cache.league = await self._get([('view', 'mSettings'), ('view', 'mTeam')])
-            _cache.cards, _cache.pool_ids = await self._cards()
+            if _cache.league is None:
+                _cache.etags.pop('league', None)
+            league = await self._get([('view', 'mSettings'), ('view', 'mTeam')], etag_key='league')
+            if league is not None:
+                _cache.league = league
+                _cache.cards_version += 1
+            if _cache.cards is None:
+                _cache.etags.pop('cards', None)
+            cards = await self._cards()
+            if cards is not None:
+                _cache.cards, _cache.pool_ids = cards
+                _cache.cards_version += 1
             _cache.cards_at = now
         if _cache.schedule is None or now - _cache.schedule_at >= SCHEDULE_TTL_SECONDS:
-            _cache.schedule = await self._get([('view', 'proTeamSchedules_wl')], url=self.season_url)
+            if _cache.schedule is None:
+                _cache.etags.pop('schedule', None)
+            schedule = await self._get([('view', 'proTeamSchedules_wl')], url=self.season_url, etag_key='schedule')
+            if schedule is not None:
+                _cache.schedule = schedule
+                _cache.schedule_version += 1
             _cache.schedule_at = now
         ids = list(dict.fromkeys([c['id'] for c in _cache.cards] + _cache.pool_ids))
         missing = [i for i in ids if i not in _cache.stats]
         if now - _cache.stats_at >= STATS_TTL_SECONDS:
             missing, _cache.stats_at = ids, now
+            # Batch boundaries move when the card list changes; drop the ETags
+            # of batches this refresh no longer asks for, or they pile up.
+            live = {('stats', tuple(ids[i:i + STATS_BATCH])) for i in range(0, len(ids), STATS_BATCH)}
+            for key in [k for k in _cache.etags if isinstance(k, tuple) and k not in live]:
+                del _cache.etags[key]
         if missing:
-            _cache.stats.update(parse_game_logs(await self._stat_cards(missing), self.season_id))
+            cards, changed = await self._stat_cards(missing)
+            _cache.stats.update(parse_game_logs(cards, self.season_id))
             # A player ESPN returns nothing for isn't asked for again until the next stats refresh.
             for i in missing:
-                _cache.stats.setdefault(i, [])
+                if i not in _cache.stats:
+                    _cache.stats[i] = []
+                    changed = True
+            if changed:
+                _cache.stats_version += 1
 
     async def close(self) -> None:
         if self._client is not None:
@@ -586,8 +658,14 @@ class LeagueActivityService:
                     return _cache.result
                 raise DataSourceError("Error fetching league activity from ESPN API") from e
 
-            result_key = (self.season_id, _cache.cards_at, _cache.stats_at, _cache.schedule_at)
+            result_key = (self.season_id, _cache.cards_version, _cache.stats_version, _cache.schedule_version)
+            checked = (_cache.cards_at, _cache.stats_at, _cache.schedule_at)
             if _cache.result is not None and _cache.result_key == result_key:
+                if _cache.result_checked != checked:
+                    # ESPN confirmed nothing changed: same result, stamped with
+                    # this check the way a rebuild would have been.
+                    _cache.result = _cache.result.model_copy(update={'last_updated': datetime.now(timezone.utc)})
+                    _cache.result_checked = checked
                 return _cache.result
 
             league = _cache.league or {}
@@ -615,7 +693,7 @@ class LeagueActivityService:
                 pool_logs={i: logs[i] for i in _cache.pool_ids if i in logs},
                 reverse_categories=transformer.resolve_reverse_categories(league),
             )
-            _cache.result, _cache.result_key = result, result_key
+            _cache.result, _cache.result_key, _cache.result_checked = result, result_key, checked
             logger.info(
                 f"League activity built: {len(result.moves)} moves, {len(result.trades)} trades, "
                 f"{len(_cache.cards or [])} players"

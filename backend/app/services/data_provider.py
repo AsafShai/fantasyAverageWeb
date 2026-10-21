@@ -56,6 +56,8 @@ class DataProvider:
             # see _averages_for / _rankings_for.
             self._averages_memo: Optional[tuple] = None
             self._rankings_memo: Optional[tuple] = None
+            # Built responses per (name, request params); see memo_response.
+            self._response_memo: dict = {}
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
@@ -171,19 +173,32 @@ class DataProvider:
         """Fetch from ESPN and synchronously await the DB sync. Returns True if new data was written."""
         async with self._fetch_lock:
             try:
-                response = await self._client.get(self.espn_standings_url)
-                response.raise_for_status()
-                api_data = response.json()
-                categories = self.data_transformer.resolve_ranking_categories(api_data)
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
-                scoring_period_id = api_data.get('scoringPeriodId', 0)
-                self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
-                self.cache_manager.totals_cache['data'] = totals_df
-                self.cache_manager.totals_cache['raw'] = api_data
-                self.cache_manager.totals_cache['scoring_period_id'] = scoring_period_id
-                self.cache_manager.totals_cache['data_date'] = None
-                self.cache_manager.totals_cache['fetched_at'] = datetime.now()
-                self.cache_manager.totals_cache['espn_checked_at'] = time.monotonic()
+                cache = self.cache_manager.totals_cache
+                # Conditional only when the cached frame came from ESPN (a DB
+                # fallback has no ETag): a 304 keeps that same frame, so the
+                # rankings/heatmap built from it stay valid.
+                headers = {}
+                if cache.get('etag') and cache.get('data') is not None and cache.get('raw') is not None:
+                    headers['If-None-Match'] = cache['etag']
+                response = await self._client.get(self.espn_standings_url, headers=headers)
+                if headers and response.status_code == 304:
+                    totals_df = cache['data']
+                    scoring_period_id = cache.get('scoring_period_id', cache['raw'].get('scoringPeriodId', 0))
+                    cache['fetched_at'] = datetime.now()
+                    cache['espn_checked_at'] = time.monotonic()
+                else:
+                    response.raise_for_status()
+                    api_data = response.json()
+                    categories = self.data_transformer.resolve_ranking_categories(api_data)
+                    totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
+                    scoring_period_id = api_data.get('scoringPeriodId', 0)
+                    cache['etag'] = response.headers.get('ETag')
+                    cache['data'] = totals_df
+                    cache['raw'] = api_data
+                    cache['scoring_period_id'] = scoring_period_id
+                    cache['data_date'] = None
+                    cache['fetched_at'] = datetime.now()
+                    cache['espn_checked_at'] = time.monotonic()
             except Exception as e:
                 self.logger.error(f"sync_db_now: ESPN fetch failed: {type(e).__name__}: {e}")
                 return False
@@ -505,6 +520,23 @@ class DataProvider:
                     self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories))
             self._rankings_memo = memo
         return memo[2]
+
+    async def memo_response(self, name: str, params: tuple, build):
+        """``await build()``, reused until the standings frame or the league's
+        categories change: rankings and heatmap are built from nothing else.
+        A reused response gets a fresh ``last_updated``, as a rebuild would."""
+        totals_df = await self.get_totals_df()
+        key = (
+            tuple(await self.get_ranking_categories()),
+            frozenset(await self.get_reverse_categories()),
+            self.get_data_date(),
+        )
+        hit = self._response_memo.get((name, params))
+        if hit is not None and hit[0] is totals_df and hit[1] == key:
+            return hit[2].model_copy(update={'last_updated': datetime.now()})
+        result = await build()
+        self._response_memo[(name, params)] = (totals_df, key, result)
+        return result
 
     async def get_averages_df(self) -> pd.DataFrame:
         """Get averages DataFrame with caching"""

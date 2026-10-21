@@ -1,8 +1,17 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, NightSurprises } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves } from '../../types/activity';
+
+type AllPlayersArgs = { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string };
+
+// The request getAllPlayers sends for these args, defaults filled in. Pages ask
+// for the same list with and without the default page/time_period spelled out;
+// keying the cache on this instead of the raw args lets them share one fetch.
+function allPlayersParams({ page = 1, limit = 500, time_period = 'season', start, end }: AllPlayersArgs = {}) {
+  return { page, limit, time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) };
+}
 
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
@@ -63,11 +72,13 @@ export const fantasyApi = createApi({
       query: (teamId) => `/trades/suggestions/${teamId}`,
       keepUnusedDataFor: 0,
     }),
-    getAllPlayers: builder.query<PaginatedPlayers, { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string }>({
-      query: ({ page = 1, limit = 500, time_period = 'season', start, end } = {}) => ({
+    getAllPlayers: builder.query<PaginatedPlayers, AllPlayersArgs>({
+      query: (args) => ({
         url: '/players/',
-        params: { page, limit, time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) },
+        params: allPlayersParams(args),
       }),
+      serializeQueryArgs: ({ queryArgs, endpointDefinition, endpointName }) =>
+        defaultSerializeQueryArgs({ queryArgs: allPlayersParams(queryArgs), endpointDefinition, endpointName }),
       keepUnusedDataFor: 300,
     }),
     getRankingsOverTime: builder.query<RankingsOverTimeResponse, { source?: OverTimeSource; teamIds?: number[] }>({

@@ -69,7 +69,9 @@ class LeagueService:
         """Get data for heatmap visualization"""
         if start_date is not None and end_date is not None:
             return await self._get_heatmap_for_range(start_date, end_date)
+        return await self.data_provider.memo_response('heatmap', (), self._get_season_heatmap)
 
+    async def _get_season_heatmap(self) -> HeatmapData:
         averages_df = await self.data_provider.get_averages_df()
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")

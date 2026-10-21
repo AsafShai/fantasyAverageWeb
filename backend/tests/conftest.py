@@ -124,6 +124,9 @@ class MockDataProvider:
     
     async def get_totals_df(self):
         return self.sample_totals_df
+
+    async def memo_response(self, name, params, build):
+        return await build()
     
     async def get_averages_df(self):
         return self.sample_averages_df
