@@ -87,9 +87,14 @@ function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean 
   );
 }
 
-/** `eager` loads the headshots at once: the share card renders off-screen, where
- * a lazy image may never load before the PNG is taken. */
-export function SurpriseTable({ rows, kind, eager = false }: { rows: SurpriseRow[]; kind: 'good' | 'bad'; eager?: boolean }) {
+/** `share` renders the table for the share image: headshots load at once (the
+ * card sits off-screen, where a lazy image may never load before the PNG is
+ * taken), no scroll box (a scrollbar would be painted into the image) and no
+ * pinned columns. `startRank` numbers the rows on a later page. */
+export function SurpriseTable({
+  rows, kind, share = false, startRank = 1,
+}: { rows: SurpriseRow[]; kind: 'good' | 'bad'; share?: boolean; startRank?: number }) {
+  const eager = share;
   if (rows.length === 0) {
     return <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Nobody crossed the bar tonight.</p>;
   }
@@ -99,13 +104,26 @@ export function SurpriseTable({ rows, kind, eager = false }: { rows: SurpriseRow
   // deeper the further the stat sits from his norm (see markClass).
   const th = 'px-2 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap';
   const td = 'px-2 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300 text-center';
+  // Pinned columns: the rank cell is exactly 2.25rem (fits "10" at the table's
+  // text size) and the player cell pins right after it; rem units, so both scale
+  // with the OS font. The divider is an inset shadow, which travels with a
+  // sticky cell (a collapsed table border does not).
+  const stickyRank = share ? '' : 'sticky left-0 z-10 w-9 min-w-[2.25rem] max-w-[2.25rem]';
+  const stickyPlayer = share
+    ? ''
+    : 'sticky left-9 z-10 shadow-[inset_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_-1px_0_0_rgb(55_65_81)]';
+  const stickyHead = share ? '' : 'bg-gray-50 dark:bg-gray-800';
+  const stickyCell = share ? '' : 'bg-white dark:bg-gray-900 group-hover:bg-gray-50 dark:group-hover:bg-gray-800';
   return (
-    <div className="overflow-x-auto">
+    // Each table scrolls on its own: overscroll-x-contain stops a fast swipe
+    // past its edge from spilling into the page (or the browser's back
+    // gesture), and the rank + player columns stay pinned while the stats scroll.
+    <div className={share ? 'overflow-visible' : 'overflow-x-auto overscroll-x-contain'}>
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
-            <th className={`${th} text-right`}>#</th>
-            <th className={`${th} text-left`}>Player</th>
+            <th className={`${th} text-right ${stickyRank} ${stickyHead}`}>#</th>
+            <th className={`${th} text-left ${stickyPlayer} ${stickyHead}`}>Player</th>
             <th className={`${th} text-left`}>Matchup</th>
             <th className={th}>MIN</th>
             {STAT_COLS.map(([, label]) => <th key={label} className={th}>{label}</th>)}
@@ -122,9 +140,9 @@ export function SurpriseTable({ rows, kind, eager = false }: { rows: SurpriseRow
               return d ? markClass(d.sign, d.z) : undefined;
             };
             return (
-            <tr key={row.player_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-              <td className={`${td} text-right text-gray-400 dark:text-gray-500`}>{i + 1}</td>
-              <td className="px-2 py-2 min-w-[12rem]">
+            <tr key={row.player_id} className="group hover:bg-gray-50 dark:hover:bg-gray-800">
+              <td className={`${td} text-right text-gray-400 dark:text-gray-500 ${stickyRank} ${stickyCell}`}>{startRank + i}</td>
+              <td className={`px-2 py-2 min-w-[12rem] ${stickyPlayer} ${stickyCell}`}>
                 <PlayerCell row={row} eager={eager} />
               </td>
               <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>

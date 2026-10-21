@@ -36,6 +36,18 @@ describe('BoomOrBustShareCard', () => {
     expect(screen.getAllByText(/^57%/).some((el) => el.className.includes('bg-rose-700'))).toBe(true)   // the bust row's FG mark, solid
   })
 
+  it('shows the top five of a table and says how many there were', () => {
+    const many = Array.from({ length: 8 }, (_, i) => row({ player_id: 10 + i, player_name: `Boom ${i}`, score: 2.6 - i * 0.1 }))
+    render(<MemoryRouter><BoomOrBustShareCard dark={false} dateLabel="Oct 20, 2026" games={3} booms={many} busts={[bust]} thresholds={{ good: 1.8, bad: 1.8 }} /></MemoryRouter>)
+    expect(screen.getByText('(top 5 of 8)')).toBeInTheDocument()
+    expect(screen.getByText('Boom 4')).toBeInTheDocument()
+    expect(screen.queryByText('Boom 5')).not.toBeInTheDocument()
+    expect(screen.getByText('(1)')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Next page')).not.toBeInTheDocument()
+    // no scroll box in the image: a scrollbar would be painted into the PNG
+    expect(document.querySelector('.overflow-x-auto')).toBeNull()
+  })
+
   it('says so when a section is empty', () => {
     render(<MemoryRouter><BoomOrBustShareCard dark={true} dateLabel="Oct 20, 2026" games={1} booms={[]} busts={[bust]} thresholds={{ good: 1.8, bad: 1.8 }} /></MemoryRouter>)
     expect(screen.getByText('Nobody crossed the bar tonight.')).toBeInTheDocument()
