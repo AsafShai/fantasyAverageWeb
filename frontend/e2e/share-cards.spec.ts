@@ -234,14 +234,15 @@ test('Trade Analyzer: each traded player shows his rank and z-score, and the 8-c
 
   const comparison = page.getByText('Team', { exact: true }).locator('..')
   const headerCount = () => comparison.locator(':scope > div.font-semibold').count()
-  expect(await headerCount()).toBe(15)
+  expect(await headerCount()).toBe(16)
+  await expect(comparison.getByText('Avg Z', { exact: true })).toBeVisible()
   const shortcut = page.getByRole('button', { name: '8 cats only' })
   await shortcut.click()
   await expect(shortcut).toHaveAttribute('aria-pressed', 'true')
-  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(9)
+  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(10)
   await expect(comparison.getByText('MIN', { exact: true })).toHaveCount(0)
   await shortcut.click()
-  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(15)
+  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(16)
   await expectNoHorizontalScroll(page)
 })
 
