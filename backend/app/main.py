@@ -191,7 +191,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Level 6 instead of Starlette's default 9: measured at 0.15 CPU, cached
+# /nba/schedule went 183 -> 72 ms for ~9% bigger payloads.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)
 
 add_timing_middleware(app)
 
