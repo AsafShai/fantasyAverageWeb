@@ -261,7 +261,12 @@ def test_vector_serialize_roundtrip():
     # eligibility computed from games_count vs MIN_INFERENCE_GAMES (10)
     assert prows[0][6] is True and prows[1][6] is False
 
-    # simulate what DBService.load_feature_vectors returns (lowercase cols, json str)
+    # dicts, not JSON strings: the pool's jsonb codec encodes them (a pre-dumped
+    # string would be stored as a JSON string scalar)
+    assert all(isinstance(p[7], dict) for p in prows)
+    assert all(isinstance(t[1], dict) for t in tarows + torows)
+
+    # simulate what DBService.load_feature_vectors returns (lowercase cols, decoded jsonb)
     precs = [{"player_id": p[0], "player_name": p[1], "team_id": p[2], "position": p[3],
               "last_game_date": p[4], "games_count": p[5], "eligible": p[6],
               "features": p[7]} for p in prows]
@@ -273,8 +278,15 @@ def test_vector_serialize_roundtrip():
     assert pv2.loc[1, "REB_w5_mean"] == 5.0
     tav2 = _team_vectors_df(tacs).set_index("TEAM_ID")
     assert tav2.loc[10, "OPP_ALLOWED_PTS_global_mean"] == 110.0
-    # features JSON is valid and NaN was stored as null
-    assert json.loads(prows[1][7])["PTS_global_mean"] is None
+    # NaN is serialized as None (null in jsonb)
+    assert prows[1][7]["PTS_global_mean"] is None
+
+    # Rows written before the fix were double-encoded: the codec decodes them to
+    # a JSON *string*. They must still load until the next run rewrites them.
+    legacy = [{**r, "features": json.dumps(r["features"])} for r in precs]
+    pv3 = _player_vectors_df(legacy).set_index("PLAYER_ID")
+    assert pv3.loc[1, "PTS_global_mean"] == 20.0
+    assert pd.isna(pv3.loc[2, "PTS_global_mean"])
 
 
 # --- missing features: healing the store after a deploy --------------------
@@ -300,8 +312,8 @@ def _real_stored_keys() -> tuple[set[str], set[str]]:
         players, rdata.build_team_allowed(team_logs), rdata.build_team_own(team_logs)
     )
     prows, tarows, torows = _serialize_vectors(store)
-    player = set(json.loads(prows[0][7]))
-    team = set(json.loads(tarows[0][1])) | set(json.loads(torows[0][1]))
+    player = set(prows[0][7])
+    team = set(tarows[0][1]) | set(torows[0][1])
     return player | team, player
 
 
