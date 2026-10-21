@@ -29,3 +29,18 @@ async def test_unmatched_players_are_logged_once_per_slate(caplog):
     assert warnings == [
         'No feature-store match for 2 player(s) with a game today, skipped: Aday Mara, Tacko Fall'
     ]
+
+
+@pytest.mark.asyncio
+async def test_warm_loads_models_and_never_raises():
+    service = LiveProjectionService()
+
+    ensure = AsyncMock(return_value=MagicMock())
+    with patch.object(service, '_ensure_inference', ensure):
+        await service.warm()
+    ensure.assert_awaited_once()
+
+    # Runs as a background task at startup; the projection request that needs
+    # the models retries and reports the failure itself.
+    with patch.object(service, '_ensure_inference', AsyncMock(side_effect=RuntimeError('db down'))):
+        await service.warm()

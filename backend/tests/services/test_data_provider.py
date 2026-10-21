@@ -746,6 +746,42 @@ async def test_sync_db_now_ignores_totals_ttl(ttl_provider):
 
 
 @pytest.mark.asyncio
+async def test_sync_db_now_304_keeps_the_cached_frame(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    ttl_provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=99)
+    first = await ttl_provider.get_totals_df()
+
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
+    assert await ttl_provider.sync_db_now() is False
+
+    sent = ttl_provider._client.get.await_args.kwargs["headers"]
+    assert sent == {"If-None-Match": "e1"}
+    assert await ttl_provider.get_totals_df() is first
+    assert ttl_provider._client.get.await_count == 1  # the 304 restarted the TTL
+
+
+@pytest.mark.asyncio
+async def test_sync_db_now_304_still_syncs_a_behind_snapshot(ttl_provider):
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    ttl_provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=0)
+    first = await ttl_provider.get_totals_df()
+    ttl_provider._sync_db_if_needed = AsyncMock()
+
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
+    assert await ttl_provider.sync_db_now() is True
+    ttl_provider._sync_db_if_needed.assert_awaited_once_with(5, first)
+
+
+@pytest.mark.asyncio
+async def test_sync_db_now_fetches_unconditionally_after_db_fallback(ttl_provider):
+    ttl_provider.cache_manager.totals_cache = {"etag": None, "data": pd.DataFrame({"team_id": [1]}), "fetched_at": None}
+    ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
+    ttl_provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=99)
+    await ttl_provider.sync_db_now()
+    assert ttl_provider._client.get.await_args.kwargs["headers"] == {}
+
+
+@pytest.mark.asyncio
 async def test_sync_db_now_fresh_fetch_restarts_totals_ttl(ttl_provider):
     ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
     ttl_provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=99)
@@ -834,3 +870,39 @@ async def test_get_lineup_slots_failure_serves_last_good_or_empty(lineup_provide
     lineup_provider.clock["now"] += data_provider_module.LINEUP_SLOTS_TTL_SECONDS + 1
     lineup_provider._client.get = AsyncMock(side_effect=httpx.ConnectError("down"))
     assert await lineup_provider.get_lineup_slots() is good
+
+
+class _Built:
+    """Stands in for a response model: memo_response only needs model_copy."""
+
+    def __init__(self, n, last_updated=None):
+        self.n, self.last_updated = n, last_updated
+
+    def model_copy(self, update):
+        return _Built(self.n, update['last_updated'])
+
+
+@pytest.mark.asyncio
+async def test_memo_response_reuses_until_standings_change(provider):
+    totals = [pd.DataFrame({"team_id": [1]})]
+    provider.get_totals_df = AsyncMock(side_effect=lambda: totals[0])
+    provider.get_ranking_categories = AsyncMock(return_value=["PTS"])
+    provider.get_reverse_categories = AsyncMock(return_value=set())
+    builds = []
+
+    async def build():
+        builds.append(1)
+        return _Built(len(builds))
+
+    first = await provider.memo_response("rankings", ("PTS", "asc"), build)
+    again = await provider.memo_response("rankings", ("PTS", "asc"), build)
+    assert len(builds) == 1 and again.n == first.n and again.last_updated is not None
+
+    await provider.memo_response("rankings", (None, "desc"), build)  # other params: own entry
+    assert len(builds) == 2
+
+    totals[0] = pd.DataFrame({"team_id": [1]})  # ESPN returned new standings
+    assert (await provider.memo_response("rankings", ("PTS", "asc"), build)).n == 3
+
+    provider.get_ranking_categories = AsyncMock(return_value=["PTS", "TO"])
+    assert (await provider.memo_response("rankings", ("PTS", "asc"), build)).n == 4

@@ -7,10 +7,14 @@ history filter) so training and research never drift apart.
 from __future__ import annotations
 
 from pathlib import Path
-
-from sklearn.base import BaseEstimator
+from typing import TYPE_CHECKING
 
 from ..research import config as rconfig
+
+# Type-only: importing sklearn costs ~75 MB of RSS, and the web process only
+# needs it once the models are actually unpickled.
+if TYPE_CHECKING:
+    from sklearn.base import BaseEstimator
 
 # --- Paths -----------------------------------------------------------------
 

@@ -7,6 +7,10 @@ from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats
 from app.exceptions import ResourceNotFoundError
 
 
+async def _no_memo(name, params, build):
+    return await build()
+
+
 @pytest.fixture
 def league_service():
     """Create LeagueService instance with mocked dependencies"""
@@ -15,6 +19,7 @@ def league_service():
          patch('app.services.league_service.ResponseBuilder') as mock_response_builder:
         service = LeagueService()
         service.data_provider = AsyncMock()
+        service.data_provider.memo_response = _no_memo
         service.data_provider.get_data_date = MagicMock(return_value=None)
         service.stats_calculator = mock_stats_calculator.return_value
         service.response_builder = mock_response_builder.return_value
@@ -118,6 +123,7 @@ class TestLeagueServiceResponseBuilding:
              patch('app.services.league_service.StatsCalculator') as mock_stats_calculator:
             service = LeagueService()
             service.data_provider = AsyncMock()
+            service.data_provider.memo_response = _no_memo
             service.stats_calculator = mock_stats_calculator.return_value
 
             # Mock data provider

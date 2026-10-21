@@ -64,6 +64,15 @@ class LiveProjectionService:
             self._name_index = _build_name_index(store)
             return self._inference
 
+    async def warm(self) -> None:
+        """Load the models now instead of on the first projection request. At
+        0.15 CPU the sklearn import + unpickling adds ~6s to whichever request
+        pays for it. A failure here resurfaces on that request instead."""
+        try:
+            await self._ensure_inference()
+        except Exception as e:
+            logger.warning(f"Projection model warm-up failed: {type(e).__name__}: {e}")
+
     async def project_today(
         self, players_df: pd.DataFrame, games_today: dict[str, GameInfo]
     ) -> dict[str, dict]:
