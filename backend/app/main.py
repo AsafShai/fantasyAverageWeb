@@ -44,6 +44,7 @@ from app.utils.timing_middleware import add_timing_middleware
 from app.utils.request_context import RequestIdFilter
 from app.utils.http_cache import HttpCacheMiddleware
 from app.utils import background_tasks
+from app.utils.memory import log_memory
 from app.exceptions import ResourceNotFoundError, DataSourceError
 
 # Configure logging. [request_id] ties every line logged while serving a
@@ -77,6 +78,17 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan for proper resource cleanup"""
     # Startup
     logger.info("Starting Fantasy League Dashboard API")
+    logger.info(
+        "Flags: "
+        f"INJURY_SCHEDULER_ENABLED={settings.injury_scheduler_enabled}, "
+        f"MODEL_NIGHTLY_ENABLED={settings.model_nightly_enabled}, "
+        f"MODEL_FEATURE_HEAL_AUTO={settings.model_feature_heal_auto}, "
+        f"NBA_PLAYERS_REFRESH_ENABLED={settings.nba_players_refresh_enabled}, "
+        f"ADP_SCHEDULER_ENABLED={settings.adp_scheduler_enabled}, "
+        f"LEAGUE_ACTIVITY_WARM={settings.league_activity_warm}, "
+        f"ENVIRONMENT={settings.environment}, LOG_LEVEL={settings.log_level}"
+    )
+    log_memory("startup")
     try:
         derived_start = await derive_season_start()
         if derived_start is not None:

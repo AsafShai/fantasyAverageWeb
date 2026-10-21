@@ -32,6 +32,7 @@ import pandas as pd
 
 from app.config import settings
 from app.services.db_service import DBService
+from app.utils.memory import log_memory
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
 from model_stats_inference.serving import config as sconfig
@@ -227,7 +228,15 @@ class ModelNightlyService:
             await db.upsert_model_nightly_run(game_date, "store_already_ingested", 0, 0)
             return "store_already_ingested"
 
+        # Step markers: an OOM kill leaves no traceback, so the last [mem] line
+        # names the step that ran out of memory.
+        log_memory(f"nightly {game_date}: fetching night", logger)
         night = await asyncio.to_thread(nightly.fetch_night, game_date)
+        logger.info(
+            f"Nightly {game_date}: fetched night (complete={night.complete}, "
+            f"expected_games={night.expected_games}, "
+            f"player_rows={len(night.player_games)}, team_rows={len(night.team_games)})"
+        )
         if not night.complete:
             # Checked before the expected_games==0 branch below: a zero-events
             # scoreboard that ESPN's whitelist says should have games comes back
@@ -241,7 +250,13 @@ class ModelNightlyService:
             await db.upsert_model_nightly_run(game_date, "no_games", 0, 0)
             return "no_games"
 
+        log_memory(f"nightly {game_date}: loading feature-store history", logger)
         players, team_games = await db.get_fs_rows_before(game_date)
+        log_memory(
+            f"nightly {game_date}: loaded history "
+            f"({len(players)} player rows, {len(team_games)} team rows)",
+            logger,
+        )
         if players.empty or team_games.empty:
             logger.error("Feature-store tables are empty — run --bootstrap first")
             return "store_not_bootstrapped"
@@ -249,11 +264,13 @@ class ModelNightlyService:
         evals, night_players, vectors = await asyncio.to_thread(
             self._process_sync, players, team_games, night
         )
+        log_memory(f"nightly {game_date}: processed ({len(evals)} evals)", logger)
 
         eval_rows = [_eval_to_tuple(ev, game_date) for ev in evals]
         if not await db.insert_model_eval_rows(eval_rows):
             return "db_write_failed"
 
+        log_memory(f"nightly {game_date}: writing raw rows", logger)
         if not await db.insert_fs_rows(
             _frame_to_tuples(night_players, _FS_PLAYER_COLS),
             _frame_to_tuples(night.team_games, _FS_TEAM_COLS),
@@ -263,6 +280,7 @@ class ModelNightlyService:
         # Post-night vectors (include the night just ingested). If this fails the
         # raw rows are already committed, so the run is left unmarked; the retry
         # hits the leakage-guard branch above and refreshes vectors from the DB.
+        log_memory(f"nightly {game_date}: writing vectors", logger)
         if not await db.upsert_feature_vectors(*vectors):
             return "db_write_failed"
         self._invalidate_inference_store()
@@ -270,6 +288,7 @@ class ModelNightlyService:
         await db.upsert_model_nightly_run(
             game_date, "processed", night.expected_games, len(eval_rows)
         )
+        log_memory(f"nightly {game_date}: done", logger)
         eligible = sum(1 for ev in evals if ev.eligible)
         logger.info(
             f"Model nightly {game_date}: {night.expected_games} games, "
@@ -385,13 +404,16 @@ class ModelNightlyService:
         the night (leakage-safe), then fold the night in to materialize post-night
         vectors."""
         players = players.sort_values(["PLAYER_ID", "GAME_DATE"])
+        log_memory("nightly: building feature store", logger)
         store = FeatureStore.build(
             players.reset_index(drop=True),
             rdata.build_team_allowed(team_games),
             rdata.build_team_own(team_games),
         )
+        log_memory("nightly: built feature store; evaluating night", logger)
         inference = LiveInference(store)
         evals = nightly.evaluate_night(store, inference, night)
+        log_memory("nightly: evaluated; folding night into store", logger)
         night_players = nightly.attach_positions(store, night.player_games)
         # Fold last night in so the stored vectors are current for tonight's games.
         # Sub-MIN_MINUTES rows are still persisted (storage keeps every played
