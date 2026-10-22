@@ -274,12 +274,40 @@ class SurpriseService:
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
         }
 
+    async def period(self, start: date, end: date, good_pct: float, bad_pct: float) -> dict | None:
+        """The booms and busts of a range of nights, ranked against each other:
+        a boom is a player-night at or above the ``good_pct`` percentile of
+        every scored player-night in the range, a bust at or below the
+        ``100 - bad_pct`` percentile. One row per player-night."""
+        summary, rows = await self._db.get_surprise_period(start, end, good_pct / 100, 1 - bad_pct / 100)
+        if summary is None:
+            return None
+        good = [self._row_out(r) for r in rows if r["score"] > 0]
+        bad = sorted((self._row_out(r) for r in rows if r["score"] < 0), key=lambda r: r["score"])
+        computed = summary["computed_at"]
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "nights": summary["nights"],
+            "games": summary["games"],
+            "players_played": summary["players_played"],
+            "players_scored": summary["players_scored"],
+            "players_with_estimate": summary["players_with_estimate"],
+            "percentiles": {"good": good_pct, "bad": bad_pct},
+            # the scores those percentiles fell on, both as magnitudes
+            "thresholds": {"good": summary["good_cut"] or 0.0, "bad": abs(summary["bad_cut"] or 0.0)},
+            "good": good,
+            "bad": bad,
+            "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
+        }
+
     @staticmethod
     def _row_out(r: dict) -> dict:
         reasons = r["reasons"]
         if isinstance(reasons, str):
             reasons = json.loads(reasons)
         return {
+            "game_date": r["game_date"].isoformat(),
             "player_id": r["player_id"],
             "player_name": r["player_name"],
             "team_abbr": TEAM_ID_TO_ABBR.get(r["team_id"], str(r["team_id"])),

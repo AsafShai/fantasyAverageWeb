@@ -596,6 +596,8 @@ export interface SurpriseReason {
 }
 
 export interface SurpriseRow {
+  /** The night of this line (YYYY-MM-DD). */
+  game_date: string;
   player_id: number;
   player_name: string;
   team_abbr: string;
@@ -640,6 +642,28 @@ export interface NightSurprises {
   /** Every scored row with score >= 0, best first (not pre-filtered). */
   good: SurpriseRow[];
   /** Every scored row with score < 0, worst first (not pre-filtered). */
+  bad: SurpriseRow[];
+  computed_at: string;
+}
+
+/** A range of nights: one row per player-night past the period's percentile
+ * cuts, ranked against every scored player-night in the range. */
+export interface PeriodSurprises {
+  start: string;
+  end: string;
+  nights: number;
+  games: number;
+  /** Player-nights in the range, and how many of them were scored. */
+  players_played: number;
+  players_scored: number;
+  players_with_estimate: number;
+  /** The percentiles asked for (95 = top 5%). */
+  percentiles: { good: number; bad: number };
+  /** The scores those percentiles fell on, both as magnitudes. */
+  thresholds: { good: number; bad: number };
+  /** Best first. */
+  good: SurpriseRow[];
+  /** Worst first. */
   bad: SurpriseRow[];
   computed_at: string;
 }

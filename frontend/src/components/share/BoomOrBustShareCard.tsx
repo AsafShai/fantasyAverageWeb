@@ -3,14 +3,18 @@ import { SurpriseTable } from '../boomOrBust/SurpriseTable'
 import type { ShareCardTheme } from './ShareCard'
 
 interface BoomOrBustShareCardProps extends ShareCardTheme {
-  /** "Tuesday, Oct 20, 2026" */
-  dateLabel: string
-  games: number
+  /** Top right of the header: "last night", "last 7 days", "Oct 15 – Oct 21". */
+  kicker: string
+  /** Under the title: "Tuesday, Oct 20, 2026 · 3 games". */
+  subtitle: string
   /** The rows the page shows, already filtered by the viewer's sliders; the
    * image takes the first SHARE_ROWS of each. */
   booms: SurpriseRow[]
   busts: SurpriseRow[]
-  thresholds: { good: number; bad: number }
+  /** What each card's bar is: "score ≥ 1.8", "top 5% of 292 nights". */
+  rules: { good: string; bad: string }
+  /** A period of several nights: each row carries its night. */
+  showDate?: boolean
 }
 
 /** Wide enough for the page's own table at its real size: 13 columns with
@@ -20,7 +24,7 @@ export const CARD_WIDTH = 980
 /** The image shows the top of each table only: five rows read well on a phone. */
 export const SHARE_ROWS = 5
 
-const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string }) => {
+const Section = ({ title, rows, kind, rule, showDate }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string; showDate: boolean }) => {
   const shown = rows.slice(0, SHARE_ROWS)
   const count = rows.length > SHARE_ROWS ? `top ${SHARE_ROWS} of ${rows.length}` : `${rows.length}`
   return (
@@ -31,7 +35,7 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
         </h2>
         <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{rule}</span>
       </div>
-      <SurpriseTable rows={shown} kind={kind} share />
+      <SurpriseTable rows={shown} kind={kind} share showDate={showDate} />
     </div>
   )
 }
@@ -45,7 +49,7 @@ const Section = ({ title, rows, kind, rule }: { title: string; rows: SurpriseRow
  * CARD_WIDTH wide and grows with the table (wider system fonts), never
  * scrolls: the PNG is taken at the card's full size.
  */
-export const BoomOrBustShareCard = ({ dateLabel, games, booms, busts, thresholds }: BoomOrBustShareCardProps) => (
+export const BoomOrBustShareCard = ({ kicker, subtitle, booms, busts, rules, showDate = false }: BoomOrBustShareCardProps) => (
   <div
     className="overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans"
     style={{ minWidth: CARD_WIDTH, width: 'max-content' }}
@@ -53,14 +57,14 @@ export const BoomOrBustShareCard = ({ dateLabel, games, booms, busts, thresholds
     <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-violet-700 px-5 py-4 text-white">
       <div className="flex items-center justify-between text-xs font-semibold opacity-90 whitespace-nowrap">
         <span className="whitespace-nowrap">🏀 Fantasy League</span>
-        <span className="whitespace-nowrap">last night</span>
+        <span className="whitespace-nowrap">{kicker}</span>
       </div>
       <div className="mt-1 text-2xl font-extrabold tracking-tight whitespace-nowrap">💥 Boom or Bust</div>
-      <div className="mt-0.5 text-sm text-blue-100 whitespace-nowrap">{dateLabel} · {games} game{games === 1 ? '' : 's'}</div>
+      <div className="mt-0.5 text-sm text-blue-100 whitespace-nowrap">{subtitle}</div>
     </div>
     <div className="space-y-4 p-4">
-      <Section title="💥 Booms" rows={booms} kind="good" rule={`score ≥ ${thresholds.good.toFixed(1)}`} />
-      <Section title="💩 Busts" rows={busts} kind="bad" rule={`score ≤ −${thresholds.bad.toFixed(1)}`} />
+      <Section title="💥 Booms" rows={booms} kind="good" rule={rules.good} showDate={showDate} />
+      <Section title="💩 Busts" rows={busts} kind="bad" rule={rules.bad} showDate={showDate} />
       <p className="px-1 text-xs text-gray-500 dark:text-gray-400">
         Score = how unexpected the night was against the player's own history and what the model expected for his minutes.
         Green = above his norm, red = below; deeper colour, bigger gap.

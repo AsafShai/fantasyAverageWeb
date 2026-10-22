@@ -87,16 +87,23 @@ function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean 
   );
 }
 
+/** "Oct 21" for a row's night. */
+const fmtNight = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 /** `share` renders the table for the share image: headshots load at once (the
  * card sits off-screen, where a lazy image may never load before the PNG is
  * taken), no scroll box (a scrollbar would be painted into the image) and no
- * pinned columns. `startRank` numbers the rows on a later page. */
+ * pinned columns. `startRank` numbers the rows on a later page. `showDate`
+ * adds each row's night, for a period of several nights. */
 export function SurpriseTable({
-  rows, kind, share = false, startRank = 1,
-}: { rows: SurpriseRow[]; kind: 'good' | 'bad'; share?: boolean; startRank?: number }) {
+  rows, kind, share = false, startRank = 1, showDate = false,
+}: { rows: SurpriseRow[]; kind: 'good' | 'bad'; share?: boolean; startRank?: number; showDate?: boolean }) {
   const eager = share;
   if (rows.length === 0) {
-    return <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Nobody crossed the bar tonight.</p>;
+    return <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">{showDate ? 'Nobody crossed the bar in this period.' : 'Nobody crossed the bar tonight.'}</p>;
   }
   const barColor = kind === 'good' ? 'bg-blue-500' : 'bg-red-500';
   // The stats that made the night, marked in the row in their own colour:
@@ -124,6 +131,7 @@ export function SurpriseTable({
           <tr>
             <th className={`${th} text-right ${stickyRank} ${stickyHead}`}>#</th>
             <th className={`${th} text-left ${stickyPlayer} ${stickyHead}`}>Player</th>
+            {showDate && <th className={`${th} text-left`}>Date</th>}
             <th className={`${th} text-left`}>Matchup</th>
             <th className={th}>MIN</th>
             {STAT_COLS.map(([, label]) => <th key={label} className={th}>{label}</th>)}
@@ -145,6 +153,7 @@ export function SurpriseTable({
               <td className={`px-2 py-2 min-w-[12rem] ${stickyPlayer} ${stickyCell}`}>
                 <PlayerCell row={row} eager={eager} />
               </td>
+              {showDate && <td className={`${td} text-left tabular-nums`}>{fmtNight(row.game_date)}</td>}
               <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>
               <td className={td}>{Math.round(row.minutes)}</td>
               {STAT_COLS.map(([key, label]) => (

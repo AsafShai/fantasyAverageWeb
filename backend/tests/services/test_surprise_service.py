@@ -105,7 +105,7 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
 
     def row(pid, score, verdict, est=True):
         return {
-            "game_id": "g1" if pid % 2 else "g2", "player_id": pid, "player_name": f"P{pid}",
+            "game_id": "g1" if pid % 2 else "g2", "game_date": NIGHT, "player_id": pid, "player_name": f"P{pid}",
             "team_id": 2, "opponent_team_id": 18, "is_home": True, "minutes": 30.0,
             "pts": 10.0, "reb": 1.0, "ast": 1.0, "fg3m": 0.0, "stl": 0.0, "blk": 0.0,
             "fgm": 4.0, "fga": 9.0, "ftm": 2.0, "fta": 2.0,
@@ -191,3 +191,49 @@ async def test_backfill_with_nothing_missing_scores_nothing(monkeypatch):
     monkeypatch.setattr(svc._db, "get_unscored_processed_nights", _async_return([]))
     monkeypatch.setattr(svc, "compute_and_store", _async_return(pytest.fail))
     assert await svc.backfill_missing() == {}
+
+
+@pytest.mark.asyncio
+async def test_period_ranks_player_nights_against_the_range(monkeypatch):
+    """The DB hands back the rows past the cuts; the service splits them by
+    sign (busts worst first), keeps each row's own night, and reports the
+    percentiles asked for and the scores they fell on, as magnitudes."""
+    created = datetime(2025, 12, 3, 9, 0)
+
+    def row(pid, night, score):
+        return {
+            "game_id": f"g{pid}", "game_date": night, "player_id": pid, "player_name": f"P{pid}",
+            "team_id": 2, "opponent_team_id": 18, "is_home": False, "minutes": 30.0,
+            **{s.lower(): 1.0 for s in ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]},
+            "metric_z": score, "metric_err": None, "score": score, "has_estimate": True,
+            "verdict": "", "reasons": [], "created_at": created,
+            "fantasy_team_id": None, "fantasy_team": None, "lineup_slot": None,
+        }
+
+    later = NIGHT + timedelta(days=1)
+    summary = {"players_played": 300, "players_scored": 280, "players_with_estimate": 270, "games": 14,
+               "nights": 2, "computed_at": created, "good_cut": 1.37, "bad_cut": -1.23}
+    asked = {}
+
+    async def fake_period(start, end, good_q, bad_q):
+        asked.update(start=start, end=end, good_q=good_q, bad_q=bad_q)
+        return summary, [row(1, NIGHT, 2.6), row(2, later, 1.5), row(3, later, -1.3), row(4, NIGHT, -2.1)]
+
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprise_period", fake_period)
+    out = await svc.period(NIGHT, later, 95.0, 90.0)
+
+    assert asked == {"start": NIGHT, "end": later, "good_q": 0.95, "bad_q": pytest.approx(0.10)}
+    assert out["start"] == "2025-12-01" and out["end"] == "2025-12-02"
+    assert (out["nights"], out["games"], out["players_scored"]) == (2, 14, 280)
+    assert out["percentiles"] == {"good": 95.0, "bad": 90.0}
+    assert out["thresholds"] == {"good": 1.37, "bad": 1.23}
+    assert [(r["player_id"], r["game_date"]) for r in out["good"]] == [(1, "2025-12-01"), (2, "2025-12-02")]
+    assert [r["player_id"] for r in out["bad"]] == [4, 3]   # worst first
+
+
+@pytest.mark.asyncio
+async def test_period_without_rows_is_none(monkeypatch):
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprise_period", _async_return((None, [])))
+    assert await svc.period(NIGHT, NIGHT + timedelta(days=3), 95.0, 95.0) is None
