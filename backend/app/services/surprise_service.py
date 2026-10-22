@@ -20,7 +20,7 @@ import asyncio
 import gc
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 
 # The line stored and shown; turnovers play no part in the score and are left out.
 _LINE_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
+# Per-game line on a span: the same columns, averaged over the games he played.
+_PER_GAME_STATS = ["minutes", *[s.lower() for s in _LINE_STATS]]
+WINDOW_DAYS = (7, 14, 28)
 
 
 NOT_STARTED_SLOTS = {"BE", "IR"}
@@ -79,6 +82,36 @@ async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
                 out[int(pid)] = {"team_id": team_id, "team": abbrev, "team_name": name, "slot": slot}
     logger.info(f"Fantasy rosters for {game_date}: period {period}, {len(out)} rostered players")
     return out
+
+
+def _per_game(total, games: int) -> float:
+    return round(float(total) / games, 1)
+
+
+def _window_row(r: dict) -> dict:
+    """One player's span: nightly scores averaged by games played, box score
+    likewise per game so the line reads like a night."""
+    games = int(r["games"])
+    score = float(r["score_sum"]) / games
+    return {
+        "player_id": int(r["player_id"]),
+        "player_name": r.get("player_name") or "",
+        "team_abbr": TEAM_ID_TO_ABBR.get(int(r["team_id"]), str(r["team_id"])),
+        "opponent_abbr": "",
+        "is_home": True,
+        **{stat: _per_game(r[stat], games) for stat in _PER_GAME_STATS},
+        "score": score,
+        "metric_z": None,
+        "metric_err": None,
+        "has_estimate": bool(r["has_estimate"]),
+        "verdict": _verdict(score),
+        "reasons": [],
+        "fantasy_team": r.get("fantasy_team"),
+        "fantasy_team_id": None if r.get("fantasy_team_id") is None else int(r["fantasy_team_id"]),
+        "lineup_slot": None,
+        "started": None,
+        "games": games,
+    }
 
 
 def _verdict(score: float) -> str:
@@ -240,6 +273,48 @@ class SurpriseService:
     async def latest_date(self) -> date | None:
         return await self._db.get_latest_surprise_date()
 
+    async def window(self, days: int, end: date | None) -> dict | None:
+        """Average nightly scores over the ``days`` calendar days ending on ``end``
+        (the latest scored night when ``end`` is omitted). Score is the sum of
+        his nightly scores divided by the games he played in the span."""
+        if days not in WINDOW_DAYS:
+            raise ValueError(f"days must be one of {WINDOW_DAYS}")
+        if end is None:
+            end = await self.latest_date()
+        if end is None:
+            return None
+        start = end - timedelta(days=days - 1)
+        summary, grouped = await self._db.get_surprise_window(start, end)
+        if not summary or not summary.get("players_scored"):
+            return None
+        rows = [_window_row(r) for r in grouped]
+        good = [r for r in rows if r["score"] >= 0]
+        bad = [r for r in rows if r["score"] < 0]
+        good.sort(key=lambda r: (-r["score"], r["player_name"]))
+        bad.sort(key=lambda r: (r["score"], r["player_name"]))
+        computed = summary["computed_at"]
+        run = await self._db.get_latest_model_nightly_run()
+        latest_run = (
+            {"game_date": run["game_date"].isoformat(), "status": run["status"]} if run else None
+        )
+        return {
+            "latest_run": latest_run,
+            "game_date": end.isoformat(),
+            "start_date": start.isoformat(),
+            "days": days,
+            "games": int(summary["games"]),
+            "players_played": int(summary["players_played"]),
+            "players_scored": int(summary["players_scored"]),
+            "players_with_estimate": int(summary["players_with_estimate"]),
+            "thresholds": {
+                "good": settings.surprise_good_threshold,
+                "bad": settings.surprise_bad_threshold,
+            },
+            "good": good,
+            "bad": bad,
+            "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
+        }
+
     async def night(self, game_date: date) -> dict | None:
         rows = await self._db.get_surprises_for_date(game_date)
         if not rows:
@@ -269,7 +344,6 @@ class SurpriseService:
                 "good": settings.surprise_good_threshold,
                 "bad": settings.surprise_bad_threshold,
             },
-            "max_rows": settings.surprise_top_n,
             "good": good,
             "bad": bad,
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
@@ -296,6 +370,7 @@ class SurpriseService:
             "reasons": reasons,
             # fantasy context that night: None = free agent
             "fantasy_team": r.get("fantasy_team"),
+            "fantasy_team_id": None if r.get("fantasy_team_id") is None else int(r["fantasy_team_id"]),
             "lineup_slot": r.get("lineup_slot"),
             "started": (r.get("lineup_slot") not in NOT_STARTED_SLOTS) if r.get("lineup_slot") else None,
         }

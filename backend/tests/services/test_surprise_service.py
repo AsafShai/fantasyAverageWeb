@@ -122,15 +122,13 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     svc = SurpriseService()
     monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return(rows))
     monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return({"game_date": NIGHT + timedelta(days=1), "status": "no_games"}))
-    monkeypatch.setattr(settings, "surprise_top_n", 5)
-
     out = await svc.night(NIGHT)
     assert out["latest_run"] == {"game_date": "2025-12-02", "status": "no_games"}
 
     assert out["game_date"] == "2025-12-01" and out["games"] == 2
     assert out["players_played"] == 24 and out["players_scored"] == 23
     assert out["players_with_estimate"] == 23
-    assert out["max_rows"] == 5
+    assert "max_rows" not in out
     # every scored row, split by sign: the page's sliders do the filtering
     assert [r["player_id"] for r in out["good"]] == list(range(1, 20)) + [60]
     assert [r["player_id"] for r in out["bad"]] == [51, 50, 61]    # worst first
@@ -164,6 +162,57 @@ def _async_return(value):
     async def _f(*_a, **_k):
         return value
     return _f
+
+
+def _window_player(pid, name, team, games, score_sum, pts, **over):
+    base = {
+        "player_id": pid, "player_name": name, "team_id": team, "fantasy_team": None,
+        "games": games, "score_sum": score_sum, "has_estimate": True,
+        "minutes": 30.0 * games, "pts": pts, "reb": 5.0 * games, "ast": 4.0 * games,
+        "fg3m": 1.0 * games, "stl": 1.0 * games, "blk": 0.0, "fgm": 8.0 * games,
+        "fga": 15.0 * games, "ftm": 2.0 * games, "fta": 2.0 * games,
+    }
+    base.update(over)
+    return base
+
+
+@pytest.mark.asyncio
+async def test_window_averages_nightly_scores_by_games_played(monkeypatch):
+    """A one-game +3 outranks two games that add up to +4 (average +2). The span
+    is the calendar days ending on the night, and a missing end uses the latest."""
+    svc = SurpriseService()
+    grouped = [
+        _window_player(1, "Steady", 2, 2, 4.0, 40.0, fantasy_team="DOR", fantasy_team_id=8),
+        _window_player(2, "Once", 18, 1, 3.0, 30.0, has_estimate=False),
+        _window_player(3, "Cold", 2, 2, -3.0, 10.0),
+    ]
+    summary = {
+        "games": 5, "players_played": 4, "players_scored": 3, "players_with_estimate": 2,
+        "computed_at": datetime(2025, 12, 2, 7, 0, tzinfo=timezone.utc),
+    }
+    seen: dict = {}
+
+    async def _fetch(start, end):
+        seen["start"], seen["end"] = start, end
+        return summary, grouped
+
+    monkeypatch.setattr(svc._db, "get_surprise_window", _fetch)
+    monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return(None))
+
+    out = await svc.window(7, NIGHT)
+    assert seen == {"start": date(2025, 11, 25), "end": NIGHT}
+    assert out["days"] == 7 and out["start_date"] == "2025-11-25" and out["game_date"] == "2025-12-01"
+    assert out["games"] == 5 and out["players_scored"] == 3
+    assert [r["player_name"] for r in out["good"]] == ["Once", "Steady"]
+    assert out["good"][0]["score"] == 3 and out["good"][0]["games"] == 1
+    assert out["good"][0]["has_estimate"] is False and out["good"][0]["started"] is None
+    assert out["good"][1]["score"] == 2 and out["good"][1]["pts"] == 20 and out["good"][1]["games"] == 2
+    assert out["good"][1]["fantasy_team"] == "DOR" and out["good"][1]["fantasy_team_id"] == 8
+    assert out["bad"][0]["player_name"] == "Cold" and out["bad"][0]["score"] == -1.5
+
+    monkeypatch.setattr(svc._db, "get_latest_surprise_date", _async_return(NIGHT))
+    await svc.window(28, None)
+    assert seen["start"] == NIGHT - timedelta(days=27) and seen["end"] == NIGHT
 
 
 @pytest.mark.asyncio

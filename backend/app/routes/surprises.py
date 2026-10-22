@@ -1,9 +1,9 @@
 from datetime import date
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.models.surprise_models import NightSurprises
-from app.services.surprise_service import SurpriseService
+from app.services.surprise_service import WINDOW_DAYS, SurpriseService
 
 router = APIRouter()
 _service = SurpriseService()
@@ -13,6 +13,21 @@ _service = SurpriseService()
 async def get_dates() -> list[str]:
     """Nights with results, newest first."""
     return await _service.dates()
+
+
+@router.get('/range', response_model=NightSurprises)
+async def get_range(
+    days: int = Query(..., description="7, 14, or 28 calendar days ending on end"),
+    end: date | None = None,
+) -> NightSurprises:
+    """Average nightly scores over a span ending on ``end`` (latest scored night
+    when omitted). One row per player: sum of his scores divided by games played."""
+    if days not in WINDOW_DAYS:
+        raise HTTPException(status_code=400, detail="days must be 7, 14, or 28")
+    window = await _service.window(days, end)
+    if window is None:
+        raise HTTPException(status_code=404, detail="No results in that span")
+    return NightSurprises(**window)
 
 
 @router.get('/latest', response_model=NightSurprises)

@@ -1,12 +1,18 @@
 import type { SurpriseRow } from '../../types/api';
 import PlayerNameLink from '../PlayerNameLink';
 import { toListHeadshotUrl } from '../../utils/adp';
+import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName';
 import { driverColumns } from '../share/boomOrBustMessage';
 import { markClass } from './marks';
+import { scoreBarClass, scoreTextClass } from './scoreBands';
 
 function fmtScore(score: number): string {
   const s = Math.abs(score).toFixed(1);
   return score < 0 ? `−${s}` : `+${s}`;
+}
+
+function fmtStat(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
 /** "57%" with the makes over attempts beneath it, as the Projections table shows shooting. */
@@ -16,8 +22,8 @@ function ShootingCell({ made, att, mark }: { made: number; att: number; mark?: s
     <span className={`tabular-nums${mark ? ` ${mark}` : ''}`}>
       {Math.round((made / att) * 100)}%
       <span className={`inline-flex flex-col items-center leading-[0.9] text-xs align-middle ml-1 ${mark?.includes('text-white') ? 'text-white/85' : 'text-gray-500 dark:text-gray-400'}`}>
-        <span className="border-b border-current px-0.5">{made}</span>
-        <span>{att}</span>
+        <span className="border-b border-current px-0.5">{fmtStat(made)}</span>
+        <span>{fmtStat(att)}</span>
       </span>
     </span>
   );
@@ -46,12 +52,13 @@ function FantasyBullet({ row }: { row: SurpriseRow }) {
   );
 }
 
-/** Headshot + name link + team abbr, without the position pills PlayerIdentityCell always renders. */
-function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean }) {
+/** Headshot + name link + team abbr, without the position pills PlayerIdentityCell always renders.
+ * On a narrow screen the headshot is left out so the pinned cell is only the name and the line under it. */
+function PlayerCell({ row, eager = false, badge, share = false }: { row: SurpriseRow; eager?: boolean; badge?: 'boom' | 'bust'; share?: boolean }) {
   const src = toListHeadshotUrl(`https://a.espncdn.com/i/headshots/nba/players/full/${row.player_id}.png`);
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
-      <div className="shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+      <div className={`shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 ${share ? '' : 'hidden sm:block'}`}>
         {src ? (
           <>
             <img
@@ -75,10 +82,15 @@ function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean 
         )}
       </div>
       <div className="min-w-0">
-        <div className="truncate">
-          <PlayerNameLink name={row.player_name} playerId={row.player_id} />
+        <div className="flex items-center gap-1 min-w-0">
+          {badge && (
+            <span aria-label={badge === 'boom' ? 'Boom' : 'Bust'} className="shrink-0">
+              {badge === 'boom' ? '💥' : '💩'}
+            </span>
+          )}
+          <PlayerNameLink name={wrapFriendlyName(row.player_name)} playerId={row.player_id} />
         </div>
-        <div className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+        <div className={`mt-0.5 flex items-center gap-x-1 gap-y-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400 ${share ? 'whitespace-nowrap' : 'flex-wrap sm:flex-nowrap sm:whitespace-nowrap'}`}>
           <span>{row.team_abbr}</span>
           <FantasyBullet row={row} />
         </div>
@@ -92,39 +104,54 @@ function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean 
  * taken), no scroll box (a scrollbar would be painted into the image) and no
  * pinned columns. `startRank` numbers the rows on a later page. */
 export function SurpriseTable({
-  rows, kind, share = false, startRank = 1,
-}: { rows: SurpriseRow[]; kind: 'good' | 'bad'; share?: boolean; startRank?: number }) {
+  rows, share = false, startRank = 1, perGame = false, emptyText, badges,
+}: {
+  rows: SurpriseRow[]
+  kind: 'good' | 'bad'
+  share?: boolean
+  startRank?: number
+  perGame?: boolean
+  emptyText?: string
+  /** Players who also sit in the boom or bust list. */
+  badges?: ReadonlyMap<number, 'boom' | 'bust'>
+  /** Kept so a team list can ask for a per-row bar. The bar follows the score band. */
+  tone?: 'card' | 'score'
+}) {
   const eager = share;
   if (rows.length === 0) {
-    return <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Nobody crossed the bar tonight.</p>;
+    return (
+      <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+        {emptyText ?? (perGame ? 'Nobody crossed the bar in this span.' : 'Nobody crossed the bar tonight.')}
+      </p>
+    );
   }
-  const barColor = kind === 'good' ? 'bg-blue-500' : 'bg-red-500';
   // The stats that made the night, marked in the row in their own colour:
   // green above the player's norm, red below, whichever table this is, and
   // deeper the further the stat sits from his norm (see markClass).
   const th = 'px-2 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap';
   const td = 'px-2 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300 text-center';
-  // Pinned columns: the rank cell is exactly 2.25rem (fits "10" at the table's
-  // text size) and the player cell pins right after it; rem units, so both scale
-  // with the OS font. The divider is an inset shadow, which travels with a
-  // sticky cell (a collapsed table border does not).
-  const stickyRank = share ? '' : 'sticky left-0 z-10 w-9 min-w-[2.25rem] max-w-[2.25rem]';
+  // From `sm` up, the rank stays pinned and the player cell (photo included)
+  // sits just after it. On a narrow screen only the name and the line under
+  // it stay pinned, at the left edge, and a long name wraps inside 38% of the
+  // screen the way the other player tables do. The divider is an inset
+  // shadow, which travels with a sticky cell.
+  const stickyRank = share ? '' : 'sm:sticky sm:left-0 sm:z-10 w-9 min-w-[2.25rem] max-w-[2.25rem]';
   const stickyPlayer = share
     ? ''
-    : 'sticky left-9 z-10 shadow-[inset_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_-1px_0_0_rgb(55_65_81)]';
+    : 'sticky left-0 z-10 sm:left-9 shadow-[inset_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_-1px_0_0_rgb(55_65_81)]';
   const stickyHead = share ? '' : 'bg-gray-50 dark:bg-gray-800';
   const stickyCell = share ? '' : 'bg-white dark:bg-gray-900 group-hover:bg-gray-50 dark:group-hover:bg-gray-800';
   return (
     // Each table scrolls on its own: overscroll-x-contain stops a fast swipe
     // past its edge from spilling into the page (or the browser's back
-    // gesture), and the rank + player columns stay pinned while the stats scroll.
+    // gesture). On a phone the name stays pinned while the rank scrolls away.
     <div className={share ? 'overflow-visible' : 'overflow-x-auto overscroll-x-contain'}>
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th className={`${th} text-right ${stickyRank} ${stickyHead}`}>#</th>
             <th className={`${th} text-left ${stickyPlayer} ${stickyHead}`}>Player</th>
-            <th className={`${th} text-left`}>Matchup</th>
+            <th className={`${th} text-left`}>{perGame ? 'GP' : 'Matchup'}</th>
             <th className={th}>MIN</th>
             {STAT_COLS.map(([, label]) => <th key={label} className={th}>{label}</th>)}
             <th className={th}>FG%</th>
@@ -142,23 +169,27 @@ export function SurpriseTable({
             return (
             <tr key={row.player_id} className="group hover:bg-gray-50 dark:hover:bg-gray-800">
               <td className={`${td} text-right text-gray-400 dark:text-gray-500 ${stickyRank} ${stickyCell}`}>{startRank + i}</td>
-              <td className={`px-2 py-2 min-w-[12rem] ${stickyPlayer} ${stickyCell}`}>
-                <PlayerCell row={row} eager={eager} />
+              <td className={`px-1.5 py-2 sm:px-2 sm:min-w-[12rem] ${share ? '' : nameCellWrapClass(row.player_name)} ${stickyPlayer} ${stickyCell}`}>
+                <PlayerCell row={row} eager={eager} badge={badges?.get(row.player_id)} share={share} />
               </td>
-              <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>
-              <td className={td}>{Math.round(row.minutes)}</td>
-              {STAT_COLS.map(([key, label]) => (
-                <td key={label} className={td}>
-                  {markOf(key) ? <span className={markOf(key)}>{row[key] as number}</span> : (row[key] as number)}
-                </td>
-              ))}
+              <td className={`${td} text-left`}>{perGame ? row.games : (row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`)}</td>
+              <td className={td}>{perGame ? fmtStat(row.minutes) : Math.round(row.minutes)}</td>
+              {STAT_COLS.map(([key, label]) => {
+                const value = perGame ? fmtStat(row[key] as number) : row[key] as number;
+                const mark = markOf(key);
+                return (
+                  <td key={label} className={td}>
+                    {mark ? <span className={mark}>{value}</span> : value}
+                  </td>
+                );
+              })}
               <td className={td}><ShootingCell made={row.fgm} att={row.fga} mark={markOf('fg')} /></td>
               <td className={td}><ShootingCell made={row.ftm} att={row.fta} mark={markOf('ft')} /></td>
               <td className="px-2 py-2 whitespace-nowrap">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100 w-10">{fmtScore(row.score)}</span>
+                  <span className={`font-semibold tabular-nums w-10 ${scoreTextClass(row.score)}`}>{fmtScore(row.score)}</span>
                   <div className="w-16 h-1.5 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                    <div className={`h-full ${barColor}`} style={{ width: `${Math.min(Math.abs(row.score) / 4, 1) * 100}%` }} />
+                    <div className={`h-full ${scoreBarClass(row.score)}`} style={{ width: `${Math.min(Math.abs(row.score) / 4, 1) * 100}%` }} />
                   </div>
                   {!row.has_estimate && (
                     <span

@@ -247,6 +247,13 @@ export const fantasyApi = createApi({
       query: () => '/surprises/dates',
       keepUnusedDataFor: 600,
     }),
+    getSurpriseRange: builder.query<NightSurprises, { days: 7 | 14 | 28; end: string | null }>({
+      query: ({ days, end }) => ({
+        url: '/surprises/range',
+        params: { days, ...(end ? { end } : {}) },
+      }),
+      keepUnusedDataFor: 600,
+    }),
     getMinigamePlayers: builder.query<MinigamePlayerBundle, void>({
       query: () => '/minigames/players',
       keepUnusedDataFor: 3600,
@@ -322,6 +329,7 @@ export const {
   useGetLatestSurprisesQuery,
   useGetSurprisesForDateQuery,
   useGetSurpriseDatesQuery,
+  useGetSurpriseRangeQuery,
   useGetMinigamePlayersQuery,
   useGetMinigameLeaderboardQuery,
   useCheckMinigameQualifyMutation,

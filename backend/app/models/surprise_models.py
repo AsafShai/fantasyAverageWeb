@@ -39,8 +39,11 @@ class SurpriseRow(BaseModel):
     # Where he was in the league that night: fantasy team abbrev (None = free
     # agent), the lineup slot, and whether that slot counted (not BE / IR).
     fantasy_team: Optional[str] = None
+    fantasy_team_id: Optional[int] = None
     lineup_slot: Optional[str] = None
     started: Optional[bool] = None
+    # Scored games inside a 7/14/28-day span. Absent on a single night.
+    games: Optional[int] = None
 
 
 class SurpriseThresholds(BaseModel):
@@ -64,7 +67,10 @@ class NightSurprises(BaseModel):
     players_with_estimate: int
     # Default thresholds; every scored row is sent and the page filters with its sliders.
     thresholds: SurpriseThresholds
-    max_rows: int
     good: list[SurpriseRow]
     bad: list[SurpriseRow]
     computed_at: str
+    # Set on a span (7, 14, or 28). game_date is the last night of that span
+    # and start_date the first calendar day included. Absent on a single night.
+    days: Optional[int] = None
+    start_date: Optional[str] = None

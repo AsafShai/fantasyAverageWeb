@@ -619,11 +619,15 @@ export interface SurpriseRow {
   /** Fantasy context that night: team abbrev (null = free agent), lineup slot, and
    * whether that slot counted (false = bench / IR; null when unknown). */
   fantasy_team: string | null
+  /** League team id that night, when he was rostered. */
+  fantasy_team_id?: number | null
   lineup_slot: string | null
   started: boolean | null;
   reasons: SurpriseReason[];
   /** The server's own call at the default thresholds; '' when the row crosses neither bar. */
   verdict: 'good' | 'bad' | '';
+  /** Scored games inside a 7/14/28-day span. Absent on a single night. */
+  games?: number;
 }
 
 export interface NightSurprises {
@@ -637,13 +641,14 @@ export interface NightSurprises {
   players_with_estimate: number;
   /** Server default thresholds; the page lets each viewer move them. */
   thresholds: { good: number; bad: number };
-  /** Most rows to show per list after filtering. */
-  max_rows: number;
   /** Every scored row with score >= 0, best first (not pre-filtered). */
   good: SurpriseRow[];
   /** Every scored row with score < 0, worst first (not pre-filtered). */
   bad: SurpriseRow[];
   computed_at: string;
+  /** Set on a span. game_date is the last night; start_date the first day included. */
+  days?: number | null;
+  start_date?: string | null;
 }
 
 export interface PlayerNextGameProjection {
