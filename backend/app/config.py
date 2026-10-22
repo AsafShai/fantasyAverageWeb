@@ -40,7 +40,6 @@ class Settings(BaseSettings):
     surprise_good_threshold: float = Field(default=1.8, alias="SURPRISE_GOOD_THRESHOLD")
     surprise_bad_threshold: float = Field(default=1.8, alias="SURPRISE_BAD_THRESHOLD")
     surprise_min_minutes: float = Field(default=0.0, alias="SURPRISE_MIN_MINUTES")
-    surprise_top_n: int = Field(default=10, alias="SURPRISE_TOP_N")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

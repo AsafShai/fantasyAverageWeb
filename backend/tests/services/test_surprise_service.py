@@ -138,7 +138,6 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     monkeypatch.setattr(svc, "_team_abbrevs", _async_return({7: "AAT"}))
     monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return(rows))
     monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return({"game_date": NIGHT + timedelta(days=1), "status": "no_games"}))
-    monkeypatch.setattr(settings, "surprise_top_n", 5)
 
     out = await svc.night(NIGHT)
     assert out["latest_run"] == {"game_date": "2025-12-02", "status": "no_games"}
@@ -146,7 +145,6 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     assert out["game_date"] == "2025-12-01" and out["games"] == 2
     assert out["players_played"] == 25 and out["players_scored"] == 24
     assert out["players_with_estimate"] == 24
-    assert out["max_rows"] == 5
     # every scored row, split by sign: the page's sliders do the filtering
     assert [r["player_id"] for r in out["good"]] == list(range(1, 20)) + [60]
     assert [r["player_id"] for r in out["bad"]] == [51, 50, 61, 81]    # worst first

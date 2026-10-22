@@ -64,7 +64,6 @@ class NightSurprises(BaseModel):
     players_with_estimate: int
     # Default thresholds; every scored row is sent and the page filters with its sliders.
     thresholds: SurpriseThresholds
-    max_rows: int
     good: list[SurpriseRow]
     bad: list[SurpriseRow]
     computed_at: str

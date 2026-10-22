@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toBlob } from 'html-to-image';
-import { canCopyImage, canShareFile, shareFileName, useShareImage } from '../useShareImage';
+import { canCopyImage, canShareFile, renderNodeToPng, shareFileName, useShareImage } from '../useShareImage';
 
 vi.mock('html-to-image', () => ({ toBlob: vi.fn() }));
 const toBlobMock = vi.mocked(toBlob);
@@ -31,6 +31,33 @@ afterEach(() => {
   setNavigator({ share: undefined, canShare: undefined, clipboard: undefined });
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+describe('renderNodeToPng', () => {
+  const SAFARI = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  const CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  const card = () => {
+    const node = document.createElement('div');
+    node.appendChild(document.createElement('img'));
+    return node;
+  };
+  afterEach(() => setNavigator({ userAgent: CHROME }));
+
+  it('keys embedded images by their full URL: ESPN headshots differ only in the query', async () => {
+    setNavigator({ userAgent: CHROME });
+    await renderNodeToPng(card());
+    expect(toBlobMock).toHaveBeenCalledTimes(1);
+    expect(toBlobMock.mock.calls[0][1]).toMatchObject({ includeQueryParams: true, cacheBust: false });
+  });
+
+  it('renders twice on WebKit so the photos have decoded by the kept pass', async () => {
+    setNavigator({ userAgent: SAFARI });
+    await renderNodeToPng(card());
+    expect(toBlobMock).toHaveBeenCalledTimes(2);
+    toBlobMock.mockClear();
+    await renderNodeToPng(document.createElement('div'));   // nothing to decode: one pass
+    expect(toBlobMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('shareFileName', () => {
