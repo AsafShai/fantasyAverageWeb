@@ -10,12 +10,8 @@ from app.services.nba_stats_service import NBAStatsService
 
 @pytest.fixture
 def nba_stats_service():
-    """Create NBAStatsService instance (a singleton, so its caches start empty)"""
-    service = NBAStatsService()
-    service._pace_cache = {'season_id': None, 'value': None, 'ts': None}
-    service._game_days_cache = {'season_id': None, 'value': None, 'ts': None}
-    service._calendar_cache = {'season_id': None, 'value': None, 'ts': None}
-    return service
+    """Create NBAStatsService instance"""
+    return NBAStatsService()
 
 
 @pytest.fixture

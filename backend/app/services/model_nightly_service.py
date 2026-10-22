@@ -238,7 +238,7 @@ class ModelNightlyService:
             if await self._refresh_vectors_through(game_date) is False:
                 return "db_write_failed"
             self._invalidate_inference_store()
-            await db.upsert_model_nightly_run(game_date, "store_already_ingested", 0, 0)
+            await self._record_run(db, game_date, "store_already_ingested", 0, 0)
             return "store_already_ingested"
 
         # Step markers: an OOM kill leaves no traceback, so the last [mem] line
@@ -260,7 +260,7 @@ class ModelNightlyService:
             )
             return "incomplete_data"
         if night.expected_games == 0:
-            await db.upsert_model_nightly_run(game_date, "no_games", 0, 0)
+            await self._record_run(db, game_date, "no_games", 0, 0)
             return "no_games"
 
         # Two ways to get the pre-night store. The stored vectors ARE the state
@@ -337,8 +337,8 @@ class ModelNightlyService:
             return "db_write_failed"
         self._invalidate_inference_store()
 
-        await db.upsert_model_nightly_run(
-            game_date, "processed", night.expected_games, len(eval_rows)
+        await self._record_run(
+            db, game_date, "processed", night.expected_games, len(eval_rows)
         )
         eligible = sum(1 for ev in evals if ev.eligible)
         logger.info(
@@ -563,6 +563,17 @@ class ModelNightlyService:
             pdf = pdf.assign(MIN_LAST5_ALL=pdf["PLAYER_ID"].map(last5_min))
             return FeatureStore.from_vectors(pdf, _team_vectors_df(tav), _team_vectors_df(tov))
         return await asyncio.to_thread(_build)
+
+    @staticmethod
+    async def _record_run(db, game_date, status: str, num_games: int, num_rows: int) -> bool:
+        """Write the night's ledger row; the surprises page reports the newest one,
+        so its in-memory copy is dropped."""
+        from app.services.surprise_service import clear_surprise_read_cache
+
+        try:
+            return await db.upsert_model_nightly_run(game_date, status, num_games, num_rows)
+        finally:
+            clear_surprise_read_cache()
 
     def _invalidate_inference_store(self) -> None:
         """Drop the resident store so the next prediction reloads the fresh vectors.

@@ -207,6 +207,14 @@ def reset_windowed_players_cache():
     _windowed_players_cache.clear()
 
 @pytest.fixture(autouse=True)
+def reset_surprise_read_cache():
+    """The surprises read side is a module-level cache with a multi-hour TTL."""
+    from app.services.surprise_service import clear_surprise_read_cache
+    clear_surprise_read_cache()
+    yield
+    clear_surprise_read_cache()
+
+@pytest.fixture(autouse=True)
 def reset_nba_stats_service_singleton():
     """NBAStatsService is a singleton (pooled httpx client + TTL caches
     persisting across requests in production) — reset it every test so

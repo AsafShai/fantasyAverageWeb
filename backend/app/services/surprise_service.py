@@ -20,6 +20,7 @@ import asyncio
 import gc
 import json
 import logging
+import time
 from datetime import date, datetime, timezone
 
 import numpy as np
@@ -41,6 +42,40 @@ _LINE_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "
 
 
 NOT_STARTED_SLOTS = {"BE", "IR"}
+
+# Read side, kept in memory between nightly runs: the nights list, the latest
+# night and that night's response only change when the nightly writes (scored
+# rows or a ledger row), which clears this. The expiry covers writes from
+# another process (a manual backfill from the command line).
+_READ_CACHE_TTL_S = 6 * 60 * 60
+_MISS = object()
+_read_cache: dict = {"ts": None, "values": {}}
+# Bumped on every clear so a read that started before a write never stores
+# what it read.
+_read_generation = 0
+
+
+def clear_surprise_read_cache() -> None:
+    global _read_generation
+    _read_generation += 1
+    _read_cache.update({"ts": None, "values": {}})
+
+
+def _cache_fresh() -> bool:
+    ts = _read_cache["ts"]
+    return ts is not None and time.monotonic() - ts < _READ_CACHE_TTL_S
+
+
+def _cache_get(key: str):
+    return _read_cache["values"].get(key, _MISS) if _cache_fresh() else _MISS
+
+
+def _cache_put(key: str, value, generation: int) -> None:
+    if generation != _read_generation:
+        return
+    if not _cache_fresh():
+        _read_cache.update({"ts": time.monotonic(), "values": {}})
+    _read_cache["values"][key] = value
 
 
 async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
@@ -202,7 +237,9 @@ class SurpriseService:
         gc.collect()
         roster = await fantasy_roster_for(game_date)
         rows = [_to_tuple(r, game_date, roster) for _, r in night.iterrows()]
-        if not await db.insert_model_surprise_rows(rows):
+        written = await db.insert_model_surprise_rows(rows)
+        clear_surprise_read_cache()
+        if not written:
             return "db_write_failed"
         n_scored = int(night["SCORE"].notna().sum())
         n_good = int((night["SCORE"] >= settings.surprise_good_threshold).sum())
@@ -235,12 +272,36 @@ class SurpriseService:
     # --- read side ------------------------------------------------------------
 
     async def dates(self) -> list[str]:
-        return [d.isoformat() for d in await self._db.get_surprise_dates()]
+        cached = _cache_get("dates")
+        if cached is not _MISS:
+            return list(cached)
+        generation = _read_generation
+        dates = [d.isoformat() for d in await self._db.get_surprise_dates()]
+        _cache_put("dates", dates, generation)
+        return list(dates)
 
     async def latest_date(self) -> date | None:
-        return await self._db.get_latest_surprise_date()
+        cached = _cache_get("latest")
+        if cached is not _MISS:
+            return cached
+        generation = _read_generation
+        latest = await self._db.get_latest_surprise_date()
+        _cache_put("latest", latest, generation)
+        return latest
 
     async def night(self, game_date: date) -> dict | None:
+        """One night's response. Only the latest night is kept in memory: it is
+        what the page opens on, and older nights are rarely revisited."""
+        cached = _cache_get("night")
+        if cached is not _MISS and cached[0] == game_date:
+            return cached[1]
+        generation = _read_generation
+        result = await self._build_night(game_date)
+        if result is not None and _cache_get("latest") == game_date:
+            _cache_put("night", (game_date, result), generation)
+        return result
+
+    async def _build_night(self, game_date: date) -> dict | None:
         rows = await self._db.get_surprises_for_date(game_date)
         if not rows:
             return None
