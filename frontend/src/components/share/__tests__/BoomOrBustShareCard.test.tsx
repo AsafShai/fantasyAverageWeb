@@ -65,9 +65,9 @@ describe('BoomOrBustShareCard', () => {
     render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Oct 20, 2026 · 3 games" booms={[boom, long, coded]} busts={[]} rules={{ good: 'score ≥ 1.8', bad: 'score ≤ −1.8' }} /></MemoryRouter>)
     expect(screen.getByText("Dor's Injured Team")).toBeInTheDocument()
     const name = screen.getByText("Amihai's Awesome Team 🏆")
-    expect(name).toHaveAttribute('title', "Amihai's Awesome Team 🏆")
+    expect(name.closest('[title]')).toHaveAttribute('title', "Amihai's Awesome Team 🏆 · started")
     expect(name.className).toContain('truncate')
-    expect(name.className).toContain('max-w-[8.5rem]')
+    expect(name.className).toContain('sm:max-w-[8.5rem]')   // tighter on a phone, 8.5rem from sm up
     expect(screen.getByText('NEW')).toBeInTheDocument()   // no name known: the code
   })
 

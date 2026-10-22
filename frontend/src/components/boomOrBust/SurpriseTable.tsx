@@ -1,6 +1,7 @@
 import type { SurpriseRow } from '../../types/api';
 import PlayerNameLink from '../PlayerNameLink';
 import { toListHeadshotUrl } from '../../utils/adp';
+import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName';
 import { driverColumns } from '../share/boomOrBustMessage';
 import { markClass } from './marks';
 
@@ -30,33 +31,43 @@ const STAT_COLS: [keyof SurpriseRow, string][] = [
 /** "· DOR ● started", "· AAT ○ bench", "· FA": where he was in the league that night. */
 function FantasyBullet({ row }: { row: SurpriseRow }) {
   if (row.fantasy_team === undefined) return null;
-  if (row.fantasy_team === null) return <span className="text-gray-400 dark:text-gray-500">· FA</span>;
+  if (row.fantasy_team === null) {
+    return <span className="text-gray-400 dark:text-gray-500 max-sm:basis-full"><span className="max-sm:hidden">· </span>FA</span>;
+  }
   const state = row.started === null ? null : row.started ? 'started' : row.lineup_slot === 'IR' ? 'IR' : 'bench';
   const dot = state === 'started' ? 'bg-emerald-500' : state === 'IR' ? 'bg-amber-400' : 'bg-gray-400';
   // The team's full name, capped so a long one ("Amihai's Awesome Team 🏆")
   // ends in "…" instead of widening the player column (and the share image);
-  // the whole name is on hover.
+  // the whole name is on hover. On a phone the team (with its dot) always
+  // takes its own line under the NBA team, the "·" and the word for the dot go (the
+  // word stays for screen readers and in the tooltip) and the cap is tighter,
+  // so the pinned column stays narrow and two lines tall.
   const name = row.fantasy_team_name || row.fantasy_team;
   return (
-    <span className="inline-flex items-center gap-1 min-w-0">
-      <span className="shrink-0">·</span>
-      <span className="truncate max-w-[8.5rem]" title={name}>{name}</span>
-      {state && (
-        <span className="inline-flex items-center gap-1 font-normal shrink-0">
-          <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot}`} />
-          {state}
-        </span>
-      )}
+    <span className="inline-flex items-center gap-1 min-w-0 max-sm:contents">
+      <span className="shrink-0 max-sm:hidden">·</span>
+      <span className="inline-flex items-center gap-1 min-w-0 max-sm:basis-full" title={state ? `${name} · ${state}` : name ?? undefined}>
+        <span className="truncate max-w-[6.5rem] sm:max-w-[8.5rem]">{name}</span>
+        {state && (
+          <span className="inline-flex items-center gap-1 font-normal shrink-0">
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot}`} />
+            <span className="max-sm:sr-only">{state}</span>
+          </span>
+        )}
+      </span>
     </span>
   );
 }
 
-/** Headshot + name link + team abbr, without the position pills PlayerIdentityCell always renders. */
-function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean }) {
+/** Headshot + name link + team abbr, without the position pills PlayerIdentityCell always renders.
+ * On a phone (after Dor Zilberman's layout) the headshot is left out and the line under the name
+ * wraps, so the pinned cell is narrow and the stats have room beside it. The share image keeps
+ * the full desktop cell. */
+function PlayerCell({ row, eager = false, share = false }: { row: SurpriseRow; eager?: boolean; share?: boolean }) {
   const src = toListHeadshotUrl(`https://a.espncdn.com/i/headshots/nba/players/full/${row.player_id}.png`);
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
-      <div className="shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+      <div className={`shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 ${share ? '' : 'hidden sm:block'}`}>
         {src ? (
           <>
             <img
@@ -80,10 +91,10 @@ function PlayerCell({ row, eager = false }: { row: SurpriseRow; eager?: boolean 
         )}
       </div>
       <div className="min-w-0">
-        <div className="truncate">
-          <PlayerNameLink name={row.player_name} playerId={row.player_id} />
+        <div className={share ? 'truncate' : ''}>
+          <PlayerNameLink name={share ? row.player_name : wrapFriendlyName(row.player_name)} playerId={row.player_id} />
         </div>
-        <div className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+        <div className={`mt-0.5 flex items-center gap-x-1 gap-y-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400 ${share ? 'whitespace-nowrap' : 'flex-wrap sm:flex-nowrap sm:whitespace-nowrap'}`}>
           <span>{row.team_abbr}</span>
           <FantasyBullet row={row} />
         </div>
@@ -116,14 +127,15 @@ export function SurpriseTable({
   // deeper the further the stat sits from his norm (see markClass).
   const th = 'px-2 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap';
   const td = 'px-2 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300 text-center';
-  // Pinned columns: the rank cell is exactly 2.25rem (fits "10" at the table's
-  // text size) and the player cell pins right after it; rem units, so both scale
-  // with the OS font. The divider is an inset shadow, which travels with a
-  // sticky cell (a collapsed table border does not).
-  const stickyRank = share ? '' : 'sticky left-0 z-10 w-9 min-w-[2.25rem] max-w-[2.25rem]';
+  // Pinned columns. From `sm` up the rank cell (exactly 2.25rem, rem so it
+  // scales with the OS font) and the player cell pin side by side; on a phone
+  // only the player cell pins, at the left edge, and the rank scrolls away. The
+  // divider is an inset shadow, which travels with a sticky cell (a collapsed
+  // table border does not).
+  const stickyRank = share ? '' : 'sm:sticky sm:left-0 sm:z-10 w-9 min-w-[2.25rem] max-w-[2.25rem]';
   const stickyPlayer = share
     ? ''
-    : 'sticky left-9 z-10 shadow-[inset_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_-1px_0_0_rgb(55_65_81)]';
+    : 'sticky left-0 z-10 sm:left-9 shadow-[inset_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_-1px_0_0_rgb(55_65_81)]';
   const stickyHead = share ? '' : 'bg-gray-50 dark:bg-gray-800';
   const stickyCell = share ? '' : 'bg-white dark:bg-gray-900 group-hover:bg-gray-50 dark:group-hover:bg-gray-800';
   return (
@@ -156,8 +168,8 @@ export function SurpriseTable({
             // One player can have two rows over a period (two big nights): the key is the player-night.
             <tr key={`${row.player_id}-${row.game_date}`} className="group hover:bg-gray-50 dark:hover:bg-gray-800">
               <td className={`${td} text-right text-gray-400 dark:text-gray-500 ${stickyRank} ${stickyCell}`}>{startRank + i}</td>
-              <td className={`px-2 py-2 min-w-[12rem] ${stickyPlayer} ${stickyCell}`}>
-                <PlayerCell row={row} eager={eager} />
+              <td className={`px-1.5 py-2 sm:px-2 ${share ? 'min-w-[12rem]' : `sm:min-w-[12rem] ${nameCellWrapClass(row.player_name)}`} ${stickyPlayer} ${stickyCell}`}>
+                <PlayerCell row={row} eager={eager} share={share} />
               </td>
               {showDate && <td className={`${td} text-left tabular-nums`}>{fmtNight(row.game_date)}</td>}
               <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>
