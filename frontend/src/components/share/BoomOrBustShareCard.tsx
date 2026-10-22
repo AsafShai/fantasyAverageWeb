@@ -15,6 +15,10 @@ interface BoomOrBustShareCardProps extends ShareCardTheme {
   rules: { good: string; bad: string }
   /** A period of several nights: each row carries its night. */
   showDate?: boolean
+  /** Form over a span: games played and the line per game. */
+  perGame?: boolean
+  /** The note under the tables. */
+  note?: string
 }
 
 /** Wide enough for the page's own table at its real size: 13 columns with
@@ -24,7 +28,7 @@ export const CARD_WIDTH = 980
 /** The image shows the top of each table only: five rows read well on a phone. */
 export const SHARE_ROWS = 5
 
-const Section = ({ title, rows, kind, rule, showDate }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string; showDate: boolean }) => {
+const Section = ({ title, rows, kind, rule, showDate, perGame }: { title: string; rows: SurpriseRow[]; kind: 'good' | 'bad'; rule: string; showDate: boolean; perGame: boolean }) => {
   const shown = rows.slice(0, SHARE_ROWS)
   const count = rows.length > SHARE_ROWS ? `top ${SHARE_ROWS} of ${rows.length}` : `${rows.length}`
   return (
@@ -35,7 +39,7 @@ const Section = ({ title, rows, kind, rule, showDate }: { title: string; rows: S
         </h2>
         <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{rule}</span>
       </div>
-      <SurpriseTable rows={shown} kind={kind} share showDate={showDate} />
+      <SurpriseTable rows={shown} kind={kind} share showDate={showDate} perGame={perGame} />
     </div>
   )
 }
@@ -49,7 +53,9 @@ const Section = ({ title, rows, kind, rule, showDate }: { title: string; rows: S
  * CARD_WIDTH wide and grows with the table (wider system fonts), never
  * scrolls: the PNG is taken at the card's full size.
  */
-export const BoomOrBustShareCard = ({ kicker, subtitle, booms, busts, rules, showDate = false }: BoomOrBustShareCardProps) => (
+const NIGHT_NOTE = "Score = how unexpected the night was against the player's own history and what the model expected for his minutes. Green = above his norm, red = below; deeper colour, bigger gap."
+
+export const BoomOrBustShareCard = ({ kicker, subtitle, booms, busts, rules, showDate = false, perGame = false, note = NIGHT_NOTE }: BoomOrBustShareCardProps) => (
   <div
     className="overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans"
     style={{ minWidth: CARD_WIDTH, width: 'max-content' }}
@@ -63,12 +69,9 @@ export const BoomOrBustShareCard = ({ kicker, subtitle, booms, busts, rules, sho
       <div className="mt-0.5 text-sm text-blue-100 whitespace-nowrap">{subtitle}</div>
     </div>
     <div className="space-y-4 p-4">
-      <Section title="💥 Booms" rows={booms} kind="good" rule={rules.good} showDate={showDate} />
-      <Section title="💩 Busts" rows={busts} kind="bad" rule={rules.bad} showDate={showDate} />
-      <p className="px-1 text-xs text-gray-500 dark:text-gray-400">
-        Score = how unexpected the night was against the player's own history and what the model expected for his minutes.
-        Green = above his norm, red = below; deeper colour, bigger gap.
-      </p>
+      <Section title="💥 Booms" rows={booms} kind="good" rule={rules.good} showDate={showDate} perGame={perGame} />
+      <Section title="💩 Busts" rows={busts} kind="bad" rule={rules.bad} showDate={showDate} perGame={perGame} />
+      <p className="px-1 text-xs text-gray-500 dark:text-gray-400">{note}</p>
     </div>
   </div>
 )

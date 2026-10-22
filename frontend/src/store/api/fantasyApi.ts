@@ -1,5 +1,5 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, NightSurprises, PeriodSurprises } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, NightSurprises, PeriodSurprises, FormSurprises } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves } from '../../types/activity';
@@ -249,6 +249,9 @@ export const fantasyApi = createApi({
         params: { start, end, good_pct: goodPct, bad_pct: badPct },
       }),
     }),
+    getSurprisesForm: builder.query<FormSurprises, { start: string; end: string }>({
+      query: ({ start, end }) => ({ url: '/surprises/form', params: { start, end } }),
+    }),
     getSurpriseDates: builder.query<string[], void>({
       query: () => '/surprises/dates',
       keepUnusedDataFor: 600,
@@ -328,6 +331,7 @@ export const {
   useGetLatestSurprisesQuery,
   useGetSurprisesForDateQuery,
   useGetSurprisesForPeriodQuery,
+  useGetSurprisesFormQuery,
   useGetSurpriseDatesQuery,
   useGetMinigamePlayersQuery,
   useGetMinigameLeaderboardQuery,

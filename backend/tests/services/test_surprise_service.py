@@ -271,3 +271,45 @@ async def test_rows_carry_the_fantasy_teams_current_name(monkeypatch):
     out = await svc.night(NIGHT)
     got = {r["player_id"]: (r["fantasy_team"], r["fantasy_team_name"]) for r in out["good"]}
     assert got == {1: ("HHT", "Trust the process"), 2: ("NEW", "NEW"), 3: (None, None)}
+
+
+@pytest.mark.asyncio
+async def test_form_combines_each_players_nights(monkeypatch):
+    """One row per player: score = sum / sqrt(games) (stays on the night's
+    scale), avg_score the plain average, the line per game, the latest
+    night's teams with the fantasy team's name."""
+    created = datetime(2025, 12, 3, 9, 0)
+
+    def grouped(pid, games, score_sum, team_id=7):
+        return {
+            "player_id": pid, "game_date": NIGHT + timedelta(days=games), "player_name": f"P{pid}", "team_id": 2,
+            "fantasy_team": "HHT" if team_id else None, "fantasy_team_id": team_id,
+            "games": games, "score_sum": score_sum, "has_estimate": True,
+            "minutes": 30.0 * games, **{s.lower(): 10.0 * games for s in ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]},
+        }
+
+    summary = {"games": 20, "nights": 4, "players_played": 120, "players_scored": 110,
+               "players_with_estimate": 100, "computed_at": created}
+    # three steady +1.2 nights beat one lucky +2.0 night: 3.6 / sqrt(3) = 2.08
+    rows = [grouped(1, 3, 3.6), grouped(2, 1, 2.0), grouped(3, 4, -4.0, team_id=None)]
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprise_form", _async_return((summary, rows)))
+    out = await svc.form(NIGHT, NIGHT + timedelta(days=6))
+
+    assert (out["nights"], out["games"], out["players_scored"]) == (4, 20, 110)
+    assert [r["player_id"] for r in out["good"]] == [1, 2]
+    steady, lucky = out["good"]
+    assert steady["score"] == pytest.approx(3.6 / 3 ** 0.5) and steady["avg_score"] == pytest.approx(1.2)
+    assert lucky["score"] == pytest.approx(2.0) and lucky["avg_score"] == pytest.approx(2.0)
+    assert (steady["games"], steady["pts"], steady["minutes"]) == (3, 10.0, 30.0)
+    assert (steady["fantasy_team_id"], steady["fantasy_team_name"]) == (7, "Trust the process")
+    assert steady["game_date"] == (NIGHT + timedelta(days=3)).isoformat()
+    (bust,) = out["bad"]
+    assert bust["score"] == pytest.approx(-2.0) and bust["fantasy_team_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_form_without_rows_is_none(monkeypatch):
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprise_form", _async_return(({"players_scored": 0}, [])))
+    assert await svc.form(NIGHT, NIGHT) is None

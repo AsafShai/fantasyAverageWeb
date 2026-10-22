@@ -2,7 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models.surprise_models import NightSurprises, PeriodSurprises
+from app.models.surprise_models import FormSurprises, NightSurprises, PeriodSurprises
 from app.services.surprise_service import SurpriseService
 
 router = APIRouter()
@@ -49,6 +49,20 @@ async def get_period(
     if period is None:
         raise HTTPException(status_code=404, detail=f'No results from {start} to {end}')
     return PeriodSurprises(**period)
+
+
+@router.get('/form', response_model=FormSurprises)
+async def get_form(start: date, end: date) -> FormSurprises:
+    """Form from ``start`` to ``end`` (inclusive): one row per player who
+    played, his nightly scores combined over his games."""
+    if end < start:
+        raise HTTPException(status_code=422, detail='end is before start')
+    if (end - start).days >= MAX_PERIOD_DAYS:
+        raise HTTPException(status_code=422, detail=f'a period is at most {MAX_PERIOD_DAYS} days')
+    form = await _service.form(start, end)
+    if form is None:
+        raise HTTPException(status_code=404, detail=f'No results from {start} to {end}')
+    return FormSurprises(**form)
 
 
 @router.get('/{game_date}', response_model=NightSurprises)

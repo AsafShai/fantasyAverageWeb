@@ -20,6 +20,7 @@ import asyncio
 import gc
 import json
 import logging
+import math
 from datetime import date, datetime, timezone
 
 import numpy as np
@@ -41,6 +42,45 @@ _LINE_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "
 
 
 NOT_STARTED_SLOTS = {"BE", "IR"}
+# Per-game line on a span: the same columns, averaged over the games he played.
+_PER_GAME_STATS = ["minutes", *[s.lower() for s in _LINE_STATS]]
+
+
+def _form_row(r: dict, team_names: dict[int, str]) -> dict:
+    """One player's span (after Dor Zilberman's window rows): the box score per
+    game, so the line reads like a night, and two scores.
+
+    ``score`` = sum of his nightly scores / sqrt(games) (Stouffer). Each nightly
+    score is ~N(0, 1) against his own norm, so this stays ~N(0, 1) however many
+    games he played and the night bands (+-1.8) keep their meaning; measured on
+    the 2025-26 walk-forward: sd 0.96 over 28-day windows and 4.0% at >= +1.8,
+    against sd 0.37 and 0.08% for a plain average, whose top was crowded with
+    one-game players. ``avg_score`` = the plain average per game, for reading."""
+    games = int(r["games"])
+    total = float(r["score_sum"])
+    team_id = r.get("fantasy_team_id")
+    return {
+        "game_date": r["game_date"].isoformat(),
+        "player_id": int(r["player_id"]),
+        "player_name": r.get("player_name") or "",
+        "team_abbr": TEAM_ID_TO_ABBR.get(int(r["team_id"]), str(r["team_id"])),
+        "opponent_abbr": "",
+        "is_home": True,
+        **{stat: round(float(r[stat]) / games, 1) for stat in _PER_GAME_STATS},
+        "score": total / math.sqrt(games),
+        "avg_score": total / games,
+        "metric_z": None,
+        "metric_err": None,
+        "has_estimate": bool(r["has_estimate"]),
+        "verdict": "",
+        "reasons": [],
+        "fantasy_team": r.get("fantasy_team"),
+        "fantasy_team_id": None if team_id is None else int(team_id),
+        "fantasy_team_name": team_names.get(team_id) or r.get("fantasy_team"),
+        "lineup_slot": None,
+        "started": None,
+        "games": games,
+    }
 
 
 async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
@@ -275,6 +315,35 @@ class SurpriseService:
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
         }
 
+    async def form(self, start: date, end: date) -> dict | None:
+        """Every player who played from ``start`` to ``end``, one row each: his
+        nightly scores combined (see _form_row), best first / worst first. The
+        page filters by minimum games and its score slider."""
+        summary, grouped = await self._db.get_surprise_form(start, end)
+        if not summary or not summary.get("players_scored"):
+            return None
+        names = await self._team_names()
+        rows = [_form_row(r, names) for r in grouped]
+        good = sorted((r for r in rows if r["score"] >= 0), key=lambda r: (-r["score"], r["player_name"]))
+        bad = sorted((r for r in rows if r["score"] < 0), key=lambda r: (r["score"], r["player_name"]))
+        computed = summary["computed_at"]
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "nights": int(summary["nights"]),
+            "games": int(summary["games"]),
+            "players_played": int(summary["players_played"]),
+            "players_scored": int(summary["players_scored"]),
+            "players_with_estimate": int(summary["players_with_estimate"]),
+            "thresholds": {
+                "good": settings.surprise_good_threshold,
+                "bad": settings.surprise_bad_threshold,
+            },
+            "good": good,
+            "bad": bad,
+            "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
+        }
+
     async def period(self, start: date, end: date, good_pct: float, bad_pct: float) -> dict | None:
         """The booms and busts of a range of nights, ranked against each other:
         a boom is a player-night at or above the ``good_pct`` percentile of
@@ -337,6 +406,7 @@ class SurpriseService:
             "reasons": reasons,
             # fantasy context that night: None = free agent
             "fantasy_team": r.get("fantasy_team"),
+            "fantasy_team_id": None if r.get("fantasy_team_id") is None else int(r["fantasy_team_id"]),
             "fantasy_team_name": (team_names or {}).get(r.get("fantasy_team_id")) or r.get("fantasy_team"),
             "lineup_slot": r.get("lineup_slot"),
             "started": (r.get("lineup_slot") not in NOT_STARTED_SLOTS) if r.get("lineup_slot") else None,

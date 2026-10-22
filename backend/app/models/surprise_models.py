@@ -40,10 +40,15 @@ class SurpriseRow(BaseModel):
     # Where he was in the league that night: fantasy team abbrev (None = free
     # agent), the lineup slot, and whether that slot counted (not BE / IR).
     fantasy_team: Optional[str] = None
+    fantasy_team_id: Optional[int] = None
     # The team's current full name ("Trust the process"); the code when unknown.
     fantasy_team_name: Optional[str] = None
     lineup_slot: Optional[str] = None
     started: Optional[bool] = None
+    # Form over a span only: games scored, and his plain average per game
+    # (``score`` is then the combined sum / sqrt(games)).
+    games: Optional[int] = None
+    avg_score: Optional[float] = None
 
 
 class SurpriseThresholds(BaseModel):
@@ -89,6 +94,22 @@ class PeriodSurprises(BaseModel):
     players_scored: int
     players_with_estimate: int
     percentiles: SurprisePercentiles
+    thresholds: SurpriseThresholds
+    good: list[SurpriseRow]
+    bad: list[SurpriseRow]
+    computed_at: str
+
+
+class FormSurprises(BaseModel):
+    """A range of nights, one row per player: his combined score over the games
+    he played, his per-game line, and the night's score bands still apply."""
+    start: str
+    end: str
+    nights: int
+    games: int
+    players_played: int
+    players_scored: int
+    players_with_estimate: int
     thresholds: SurpriseThresholds
     good: list[SurpriseRow]
     bad: list[SurpriseRow]

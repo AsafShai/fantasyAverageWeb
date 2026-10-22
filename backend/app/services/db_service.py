@@ -1864,6 +1864,63 @@ class DBService:
             logger.error(f"Failed to fetch surprises for {game_date}: {type(e).__name__}: {e}")
             return []
 
+    async def get_surprise_form(self, start: date, end: date) -> tuple[Optional[dict], list[dict]]:
+        """Players who played between ``start`` and ``end`` (inclusive), one row
+        each: totals of the scored games, the latest night's name and teams, and
+        a slate-wide summary. A night he sat out has no row, so it is not a zero.
+        (Dor Zilberman's span query, for any range.)"""
+        pool = await self._get_pool()
+        if pool is None:
+            return None, []
+        summary_sql = """
+            SELECT COUNT(DISTINCT game_id) AS games,
+                   COUNT(DISTINCT game_date) AS nights,
+                   COUNT(DISTINCT player_id) AS players_played,
+                   COUNT(DISTINCT player_id) FILTER (WHERE score IS NOT NULL) AS players_scored,
+                   COUNT(DISTINCT player_id) FILTER (WHERE score IS NOT NULL AND has_estimate) AS players_with_estimate,
+                   MAX(created_at) AS computed_at
+            FROM model_surprise_results
+            WHERE game_date BETWEEN $1 AND $2
+        """
+        players_sql = """
+            SELECT player_id,
+                   MAX(game_date) FILTER (WHERE score IS NOT NULL) AS game_date,
+                   (array_agg(player_name ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS player_name,
+                   (array_agg(team_id ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS team_id,
+                   (array_agg(fantasy_team ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS fantasy_team,
+                   (array_agg(fantasy_team_id ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS fantasy_team_id,
+                   COUNT(*) FILTER (WHERE score IS NOT NULL) AS games,
+                   SUM(score) FILTER (WHERE score IS NOT NULL) AS score_sum,
+                   BOOL_OR(has_estimate) FILTER (WHERE score IS NOT NULL) AS has_estimate,
+                   SUM(minutes) FILTER (WHERE score IS NOT NULL) AS minutes,
+                   SUM(pts) FILTER (WHERE score IS NOT NULL) AS pts,
+                   SUM(reb) FILTER (WHERE score IS NOT NULL) AS reb,
+                   SUM(ast) FILTER (WHERE score IS NOT NULL) AS ast,
+                   SUM(fg3m) FILTER (WHERE score IS NOT NULL) AS fg3m,
+                   SUM(stl) FILTER (WHERE score IS NOT NULL) AS stl,
+                   SUM(blk) FILTER (WHERE score IS NOT NULL) AS blk,
+                   SUM(fgm) FILTER (WHERE score IS NOT NULL) AS fgm,
+                   SUM(fga) FILTER (WHERE score IS NOT NULL) AS fga,
+                   SUM(ftm) FILTER (WHERE score IS NOT NULL) AS ftm,
+                   SUM(fta) FILTER (WHERE score IS NOT NULL) AS fta
+            FROM model_surprise_results
+            WHERE game_date BETWEEN $1 AND $2
+            GROUP BY player_id
+            HAVING COUNT(*) FILTER (WHERE score IS NOT NULL) > 0
+        """
+        try:
+            async with pool.acquire() as conn:
+                summary = await conn.fetchrow(summary_sql, start, end)
+                rows = await conn.fetch(players_sql, start, end)
+                return (dict(summary) if summary else None), [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch surprise form {start}..{end}: {type(e).__name__}: {e}")
+            return None, []
+
     async def get_surprise_period(
         self, start: date, end: date, good_q: float, bad_q: float
     ) -> tuple[Optional[dict], list[dict]]:
