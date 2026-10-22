@@ -333,6 +333,23 @@ class TestServiceCaching:
         assert '"value":[10]' in stats_filter.replace(' ', '')
 
     @pytest.mark.asyncio
+    async def test_stats_ask_for_this_seasons_periods_and_cards_for_no_stats(self):
+        svc, _ = self.service()
+        await svc.get_activity()
+        filters = [json.loads(c.args[1]) for c in svc._get.call_args_list if len(c.args) > 1 and c.args[1]]
+        stats = next(f for f in filters if 'filterIds' in f['players'])['players']
+        cards = next(f for f in filters if 'filterIds' not in f['players'])['players']
+        # Every period of the season (final is 10), so no earlier season's games.
+        assert stats['filterStatsForScoringPeriodIds'] == {'value': list(range(1, 11))}
+        assert 'filterStatsForTopScoringPeriodIds' not in stats
+        assert cards['filterStatsForSourceIds'] == {'value': [99]}
+
+    def test_stats_filter_without_league_settings_falls_back_to_top_periods(self):
+        svc = LeagueActivityService(season_id=2026, league_id=1)
+        flt = json.loads(svc._stats_filter([10]))['players']
+        assert flt['filterStatsForTopScoringPeriodIds'] == {'value': 200, 'additionalValue': ['002026']}
+
+    @pytest.mark.asyncio
     async def test_failure_without_cache_raises(self):
         svc, _ = self.service(fail=True)
         with pytest.raises(DataSourceError):
