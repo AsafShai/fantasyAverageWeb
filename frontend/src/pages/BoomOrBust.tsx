@@ -182,7 +182,8 @@ function SurpriseCard({
   const current = Math.min(page, pages - 1);   // the slider can shrink the list under the viewer
   const start = current * PAGE_SIZE;
   const pageRows = shown.slice(start, start + PAGE_SIZE);
-  const unit = showDate ? 'night' : 'player';
+  // Over a period a row is one player's game: a performance.
+  const unit = showDate ? 'performance' : 'player';
   const pageBtn = 'px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed';
   return (
     <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -282,7 +283,7 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {`${period.nights} night${period.nights === 1 ? '' : 's'} · ${period.games} games · ${period.players_scored.toLocaleString('en-US')} player-nights scored`}
+          {`${period.nights} night${period.nights === 1 ? '' : 's'} · ${period.games} games · ${period.players_scored.toLocaleString('en-US')} performances scored`}
         </p>
         <ShareCardButton
           title="Boom or Bust"
@@ -305,8 +306,8 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
         <SurpriseCard title="💩 Busts" kind="bad" slider={<ScoreSlider kind="bad" threshold={bad} />} resetKey={bad.value} shown={busts} showDate />
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        Every night between {label} with a score past the bar, the same bar as a single night. A player with more than one
-        such night appears once per night.
+        Every performance between {label} with a score past the bar, the same bar as a single night. A player with
+        more than one such game appears once per game.
         {' '}Computed {new Date(period.computed_at).toLocaleString('en-US')}.
       </p>
     </>

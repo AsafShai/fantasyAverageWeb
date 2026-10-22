@@ -176,7 +176,8 @@ describe('Boom or Bust page', () => {
     await waitFor(() => expect(screen.getByText('Week Star')).toBeInTheDocument())
     expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&min_score=1.4')
     expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
-    expect(screen.getByText(/2 nights · 7 games · 100 player-nights scored/)).toBeInTheDocument()
+    expect(screen.getByText(/2 nights · 7 games · 100 performances scored/)).toBeInTheDocument()
+    expect(screen.getByText('1 performance')).toBeInTheDocument()   // the busts card's footer: a row is one player's game
     expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()   // the night's bar, not a percentile
     expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
     expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
