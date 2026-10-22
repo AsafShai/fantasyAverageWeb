@@ -55,6 +55,25 @@ Reference season: `surprise_calibration.json` next to it, built by
 for "worth mentioning": server settings (below). The page has two sliders that only
 filter what the viewer sees; the server's verdict is stored per row.
 
+## Periods
+
+Besides one night, the page shows a range: Last 7 days, Last 30 days, Season,
+or a custom From–To (a one-day custom range is just that night's normal view).
+
+- **One row per player-night**, with a Date column: a player with two huge
+  nights appears twice. Nothing is rescored; the rows are the nightly's own.
+- **The bar is a percentile, not a score.** Every scored player-night in the
+  range is ranked together: Booms are at or above the p95 score (top 5%),
+  Busts at or below p5. Each card's slider moves its percentile from p80
+  (top 20%) to p99.9 (top 0.1%), in steps that get finer towards the top
+  (80, 85, 90, 95, 97.5, 99, 99.5, 99.9); default p95, not remembered.
+- `GET /api/surprises/period?start&end&good_pct&bad_pct`: Postgres computes
+  both cuts with `percentile_cont` over the range and returns only the rows
+  past them, so a season-long range at p80 is still a bounded list. A range is
+  at most 366 days; percentiles outside 80–99.9 are rejected.
+- Share works the same: the top 5 of each side, the period in the header,
+  each row's night in the table.
+
 ## Cost
 
 Measured on 2026-10-21 against the local Docker Postgres (4 seasons of history,

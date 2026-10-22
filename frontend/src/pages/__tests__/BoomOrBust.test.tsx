@@ -1,10 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/helpers'
-import type { NightSurprises, SurpriseRow } from '../../types/api'
+import type { NightSurprises, PeriodSurprises, SurpriseRow } from '../../types/api'
 import BoomOrBust from '../BoomOrBust'
 
 const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
+  game_date: '2024-01-05',
   player_id: 1,
   player_name: 'Player',
   team_abbr: 'BOS',
@@ -42,12 +43,40 @@ const night: NightSurprises = {
   computed_at: '2024-01-06T09:00:00Z',
 }
 
+const period: PeriodSurprises = {
+  start: '2023-12-30',
+  end: '2024-01-05',
+  nights: 2,
+  games: 7,
+  players_played: 120,
+  players_scored: 100,
+  players_with_estimate: 90,
+  percentiles: { good: 95, bad: 95 },
+  thresholds: { good: 1.4, bad: 1.2 },
+  good: [
+    row({ player_id: 31, player_name: 'Week Star', score: 2.9, game_date: '2024-01-04' }),
+    row({ player_id: 32, player_name: 'Week Second', score: 2.1 }),
+  ],
+  bad: [row({ player_id: 41, player_name: 'Week Dud', score: -2.4, verdict: 'bad', game_date: '2024-01-04' })],
+  computed_at: '2024-01-06T09:00:00Z',
+}
+
+const requested = (part: string) =>
+  vi.mocked(fetch).mock.calls
+    .map(([input]) => (typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url))
+    .filter((url) => url.includes(part))
+
 function stubApi(latest: Response | (() => Response)) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.includes('/surprises/dates')) return Response.json(['2024-01-05', '2024-01-04'])
+      if (url.includes('/surprises/period')) {
+        const pct = Number(new URL(url, 'http://x').searchParams.get('good_pct'))
+        return Response.json({ ...period, percentiles: { good: pct, bad: 95 }, good: pct > 95 ? period.good.slice(0, 1) : period.good })
+      }
+      if (url.includes('/surprises/2024-01-04')) return Response.json({ ...night, game_date: '2024-01-04', latest_run: null })
       if (url.includes('/surprises/latest')) return typeof latest === 'function' ? latest() : latest
       return new Response('not found', { status: 404 })
     }),
@@ -139,6 +168,48 @@ describe('Boom or Bust page', () => {
     fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
     await waitFor(() => expect(screen.getByText('1–5 of 7')).toBeInTheDocument())
     expect(screen.getByText('Boom 0')).toBeInTheDocument()
+  })
+
+  it('ranks a period by percentile: one row per player-night, each with its date', async () => {
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
+    await waitFor(() => expect(screen.getByText('Week Star')).toBeInTheDocument())
+    expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&good_pct=95&bad_pct=95')
+    expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
+    expect(screen.getByText(/2 nights · 7 games · 100 player-nights scored/)).toBeInTheDocument()
+    expect(screen.getByText('top 5%')).toBeInTheDocument()
+    expect(screen.getByText('bottom 5%')).toBeInTheDocument()
+    expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
+    expect(screen.queryByLabelText('Previous night')).not.toBeInTheDocument()   // ‹ › are for single nights
+
+    // the percentile slider asks the server again on release; top 1% = p99
+    fireEvent.change(screen.getByLabelText('Surprise percentile'), { target: { value: '5' } })
+    expect(screen.getByText('top 1%')).toBeInTheDocument()
+    fireEvent.pointerUp(screen.getByLabelText('Surprise percentile'))
+    await waitFor(() => expect(screen.queryByText('Week Second')).not.toBeInTheDocument())
+    expect(requested('/surprises/period').at(-1)).toContain('good_pct=99')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    await waitFor(() => expect(screen.getByText('Week Second')).toBeInTheDocument())
+
+    // back to one night: the score sliders return
+    fireEvent.click(screen.getByRole('button', { name: 'Last night' }))
+    await waitFor(() => expect(screen.getByLabelText('Surprise threshold')).toBeInTheDocument())
+  })
+
+  it('a one-day custom range is that night, with the score sliders', async () => {
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Custom' }))
+    await waitFor(() => expect(screen.getByLabelText('From')).toHaveValue('2023-12-30'))
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2024-01-04' } })
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2024-01-04' } })
+    await waitFor(() => expect(screen.getByText(/Thursday, Jan 4, 2024/)).toBeInTheDocument())
+    expect(screen.getByLabelText('Surprise threshold')).toBeInTheDocument()
+    expect(requested('/surprises/2024-01-04').length).toBeGreaterThan(0)
   })
 
   it('shows the empty state on 404', async () => {

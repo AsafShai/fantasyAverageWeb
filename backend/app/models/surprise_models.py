@@ -11,6 +11,7 @@ class SurpriseReason(BaseModel):
 
 
 class SurpriseRow(BaseModel):
+    game_date: str
     player_id: int
     player_name: str
     team_abbr: str
@@ -48,6 +49,11 @@ class SurpriseThresholds(BaseModel):
     bad: float
 
 
+class SurprisePercentiles(BaseModel):
+    good: float
+    bad: float
+
+
 class LatestRun(BaseModel):
     """The nightly's newest ledger row: which night it last handled and how
     ('processed', 'no_games', ...)."""
@@ -63,6 +69,24 @@ class NightSurprises(BaseModel):
     players_scored: int
     players_with_estimate: int
     # Default thresholds; every scored row is sent and the page filters with its sliders.
+    thresholds: SurpriseThresholds
+    good: list[SurpriseRow]
+    bad: list[SurpriseRow]
+    computed_at: str
+
+
+class PeriodSurprises(BaseModel):
+    """A range of nights, one row per player-night past the period's percentile
+    cuts. ``percentiles`` is what was asked for, ``thresholds`` the scores they
+    fell on (both magnitudes)."""
+    start: str
+    end: str
+    nights: int
+    games: int
+    players_played: int
+    players_scored: int
+    players_with_estimate: int
+    percentiles: SurprisePercentiles
     thresholds: SurpriseThresholds
     good: list[SurpriseRow]
     bad: list[SurpriseRow]

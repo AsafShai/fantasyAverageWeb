@@ -1864,6 +1864,50 @@ class DBService:
             logger.error(f"Failed to fetch surprises for {game_date}: {type(e).__name__}: {e}")
             return []
 
+    async def get_surprise_period(
+        self, start: date, end: date, good_q: float, bad_q: float
+    ) -> tuple[Optional[dict], list[dict]]:
+        """Every night from ``start`` to ``end``: a summary (player-nights,
+        scored, games, nights, newest write) with the score at quantile
+        ``good_q`` and at ``bad_q`` over all scored player-nights, then the
+        rows past those cuts (above good_q and positive, below bad_q and
+        negative), best first. (None, []) when the range has no rows."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None, []
+        try:
+            async with pool.acquire() as conn:
+                summary = await conn.fetchrow(
+                    """
+                    SELECT count(*) AS players_played,
+                           count(score) AS players_scored,
+                           count(*) FILTER (WHERE has_estimate) AS players_with_estimate,
+                           count(DISTINCT game_id) AS games,
+                           count(DISTINCT game_date) AS nights,
+                           max(created_at) AS computed_at,
+                           percentile_cont($3::float8) WITHIN GROUP (ORDER BY score) AS good_cut,
+                           percentile_cont($4::float8) WITHIN GROUP (ORDER BY score) AS bad_cut
+                    FROM model_surprise_results
+                    WHERE game_date BETWEEN $1 AND $2
+                    """,
+                    start, end, good_q, bad_q,
+                )
+                if summary is None or summary["players_played"] == 0:
+                    return None, []
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM model_surprise_results
+                    WHERE game_date BETWEEN $1 AND $2
+                      AND ((score >= $3 AND score > 0) OR (score <= $4 AND score < 0))
+                    ORDER BY score DESC
+                    """,
+                    start, end, summary["good_cut"], summary["bad_cut"],
+                )
+                return dict(summary), [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch surprises {start}..{end}: {type(e).__name__}: {e}")
+            return None, []
+
     async def close(self) -> None:
         if self._pool is not None:
             await self._pool.close()

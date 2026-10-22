@@ -1,8 +1,8 @@
 from datetime import date
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
-from app.models.surprise_models import NightSurprises
+from app.models.surprise_models import NightSurprises, PeriodSurprises
 from app.services.surprise_service import SurpriseService
 
 router = APIRouter()
@@ -24,6 +24,30 @@ async def get_latest() -> NightSurprises:
     if night is None:
         raise HTTPException(status_code=404, detail='No nights scored yet')
     return NightSurprises(**night)
+
+
+# The period slider's range: p80 (top 20%) to p99.9 (top 0.1%).
+PCT_MIN, PCT_MAX = 80.0, 99.9
+MAX_PERIOD_DAYS = 366
+
+
+@router.get('/period', response_model=PeriodSurprises)
+async def get_period(
+    start: date,
+    end: date,
+    good_pct: float = Query(95.0, ge=PCT_MIN, le=PCT_MAX),
+    bad_pct: float = Query(95.0, ge=PCT_MIN, le=PCT_MAX),
+) -> PeriodSurprises:
+    """Booms and busts from ``start`` to ``end`` (inclusive), ranked against
+    every scored player-night in that range."""
+    if end < start:
+        raise HTTPException(status_code=422, detail='end is before start')
+    if (end - start).days >= MAX_PERIOD_DAYS:
+        raise HTTPException(status_code=422, detail=f'a period is at most {MAX_PERIOD_DAYS} days')
+    period = await _service.period(start, end, good_pct, bad_pct)
+    if period is None:
+        raise HTTPException(status_code=404, detail=f'No results from {start} to {end}')
+    return PeriodSurprises(**period)
 
 
 @router.get('/{game_date}', response_model=NightSurprises)
