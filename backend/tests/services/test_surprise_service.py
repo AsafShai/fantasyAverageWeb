@@ -12,6 +12,15 @@ from model_stats_inference.serving import surprise
 NIGHT = date(2025, 12, 1)
 
 
+@pytest.fixture(autouse=True)
+def _no_team_name_lookup(monkeypatch):
+    """The read side looks up fantasy team names through DataProvider (ESPN);
+    tests get a fixed map instead."""
+    async def names(self):
+        return {7: "Trust the process"}
+    monkeypatch.setattr(SurpriseService, "_team_names", names)
+
+
 def _player(pid: int, name: str, team: int, pts_level: float, tonight: float | None, seed: int) -> pd.DataFrame:
     """14 ordinary games; ``tonight`` scales the whole last line (None = ordinary,
     0 = a scoreless 0/11 night, 3 = three times his usual everything)."""
@@ -355,3 +364,28 @@ async def test_period_without_rows_is_none(monkeypatch):
     svc = SurpriseService()
     monkeypatch.setattr(svc._db, "get_surprise_period", _async_return((None, [])))
     assert await svc.period(NIGHT, NIGHT + timedelta(days=3), 95.0, 95.0) is None
+
+
+@pytest.mark.asyncio
+async def test_rows_carry_the_fantasy_teams_current_name(monkeypatch):
+    """The row keeps the short code and gets the team's current full name;
+    a team the lookup doesn't know falls back to the code, a free agent has
+    neither."""
+    created = datetime(2025, 12, 2, 9, 0)
+    base = {
+        "game_id": "g", "game_date": NIGHT, "player_name": "P", "team_id": 2, "opponent_team_id": 18,
+        "is_home": True, "minutes": 30.0,
+        **{s.lower(): 1.0 for s in ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]},
+        "metric_z": 1.0, "metric_err": None, "has_estimate": True, "verdict": "", "reasons": [], "created_at": created,
+    }
+    rows = [
+        {**base, "player_id": 1, "score": 2.0, "fantasy_team_id": 7, "fantasy_team": "HHT", "lineup_slot": "PG"},
+        {**base, "player_id": 2, "score": 1.5, "fantasy_team_id": 99, "fantasy_team": "NEW", "lineup_slot": "BE"},
+        {**base, "player_id": 3, "score": 1.0, "fantasy_team_id": None, "fantasy_team": None, "lineup_slot": None},
+    ]
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return(rows))
+    monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return(None))
+    out = await svc.night(NIGHT)
+    got = {r["player_id"]: (r["fantasy_team"], r["fantasy_team_name"]) for r in out["good"]}
+    assert got == {1: ("HHT", "Trust the process"), 2: ("NEW", "NEW"), 3: (None, None)}

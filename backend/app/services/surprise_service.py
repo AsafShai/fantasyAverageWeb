@@ -319,9 +319,9 @@ class SurpriseService:
         # Every scored row goes out, split by sign: the page filters with its own
         # sliders, starting from the server thresholds (the verdict on each row).
         scored = [r for r in rows if r["score"] is not None]
-        abbrevs = await self._team_abbrevs()
-        good = [self._row_out(r, abbrevs) for r in scored if r["score"] >= 0]
-        bad = [self._row_out(r, abbrevs) for r in scored if r["score"] < 0]
+        abbrevs, names = await self._team_abbrevs(), await self._team_names()
+        good = [self._row_out(r, abbrevs, names) for r in scored if r["score"] >= 0]
+        bad = [self._row_out(r, abbrevs, names) for r in scored if r["score"] < 0]
         bad.sort(key=lambda r: r["score"])
         computed = max(r["updated_at"] for r in rows)
         # The nightly's newest ledger row, so the page can tell "no games last
@@ -355,8 +355,9 @@ class SurpriseService:
         summary, rows = await self._db.get_surprise_period(start, end, good_pct / 100, 1 - bad_pct / 100)
         if summary is None:
             return None
-        good = [self._row_out(r) for r in rows if r["score"] > 0]
-        bad = sorted((self._row_out(r) for r in rows if r["score"] < 0), key=lambda r: r["score"])
+        abbrevs, names = await self._team_abbrevs(), await self._team_names()
+        good = [self._row_out(r, abbrevs, names) for r in rows if r["score"] > 0]
+        bad = sorted((self._row_out(r, abbrevs, names) for r in rows if r["score"] < 0), key=lambda r: r["score"])
         computed = summary["computed_at"]
         return {
             "start": start.isoformat(),
@@ -375,6 +376,16 @@ class SurpriseService:
         }
 
     @staticmethod
+    async def _team_names() -> dict[int, str]:
+        """Current season's fantasy team id -> full name ("Trust the process"),
+        from the same cached standings as the codes, so a team that renames
+        itself shows its new name. Best effort: the code when it fails."""
+        try:
+            return {int(t["team_id"]): t["team_name"] for t in await get_data_provider().get_team_names()}
+        except DataSourceError:
+            return {}
+
+    @staticmethod
     async def _team_abbrevs() -> dict[int, str]:
         try:
             return await get_data_provider().get_team_abbrevs()
@@ -382,7 +393,7 @@ class SurpriseService:
             return {}
 
     @staticmethod
-    def _row_out(r: dict, abbrevs: dict[int, str]) -> dict:
+    def _row_out(r: dict, abbrevs: dict[int, str], names: dict[int, str] | None = None) -> dict:
         reasons = r["reasons"]
         if isinstance(reasons, str):
             reasons = json.loads(reasons)
@@ -408,6 +419,8 @@ class SurpriseService:
             "reasons": reasons,
             # fantasy context that night: None = free agent
             "fantasy_team": abbrevs.get(team_id, str(team_id)) if team_id is not None else None,
+            # The team's current full name, by the same season-scoped id.
+            "fantasy_team_name": ((names or {}).get(team_id) or abbrevs.get(team_id)) if team_id is not None else None,
             "lineup_slot": slot,
             "started": (slot not in NOT_STARTED_SLOTS) if slot else None,
         }

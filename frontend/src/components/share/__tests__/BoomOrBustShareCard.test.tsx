@@ -8,7 +8,7 @@ import type { SurpriseRow } from '../../../types/api'
 const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
   game_date: '2026-10-20', player_id: 1, player_name: 'Paul George', team_abbr: 'BOS', opponent_abbr: 'DET', is_home: false,
   minutes: 31, pts: 38, reb: 5, ast: 3, fg3m: 7, stl: 5, blk: 0, fgm: 12, fga: 21, ftm: 7, fta: 8,
-  score: 2.64, metric_z: 0.7, metric_err: 1.6, has_estimate: true, verdict: 'good', fantasy_team: 'DOR', lineup_slot: 'SF', started: true,
+  score: 2.64, metric_z: 0.7, metric_err: 1.6, has_estimate: true, verdict: 'good', fantasy_team: 'DOR', fantasy_team_name: "Dor's Injured Team", lineup_slot: 'SF', started: true,
   reasons: [{ stat: 'STL', value: 5, avg: 1.6, z: 1.8 }, { stat: 'PTS', value: 38, avg: 20.7, z: 1.4 }],
   ...over,
 })
@@ -59,6 +59,18 @@ describe('BoomOrBustShareCard', () => {
     expect(screen.getByText('Oct 21')).toBeInTheDocument()
   })
 
+  it('shows the fantasy team\'s full name, capped so a long one cannot widen the column', () => {
+    const long = row({ player_id: 5, player_name: 'Long Team Guy', fantasy_team: 'AMI', fantasy_team_name: "Amihai's Awesome Team 🏆" })
+    const coded = row({ player_id: 6, player_name: 'Code Only', fantasy_team: 'NEW', fantasy_team_name: null })
+    render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Oct 20, 2026 · 3 games" booms={[boom, long, coded]} busts={[]} rules={{ good: 'score ≥ 1.8', bad: 'score ≤ −1.8' }} /></MemoryRouter>)
+    expect(screen.getByText("Dor's Injured Team")).toBeInTheDocument()
+    const name = screen.getByText("Amihai's Awesome Team 🏆")
+    expect(name).toHaveAttribute('title', "Amihai's Awesome Team 🏆")
+    expect(name.className).toContain('truncate')
+    expect(name.className).toContain('max-w-[8.5rem]')
+    expect(screen.getByText('NEW')).toBeInTheDocument()   // no name known: the code
+  })
+
   it('says so when a section is empty', () => {
     render(<MemoryRouter><BoomOrBustShareCard dark={true} kicker="last night" subtitle="Oct 20, 2026 · 1 game" booms={[]} busts={[bust]} rules={{ good: 'score ≥ 1.8', bad: 'score ≤ −1.8' }} /></MemoryRouter>)
     expect(screen.getByText('Nobody crossed the bar tonight.')).toBeInTheDocument()
@@ -71,8 +83,8 @@ describe('buildShareMessage', () => {
     const msg = buildShareMessage('Oct 20, 2026', [boom], [bust], 'https://app.example/boom-or-bust')
     expect(msg.split('\n')).toEqual([
       '💥 *Boom or Bust* · Oct 20, 2026',
-      '🚀 Booms: *Paul George* +2.6 (5 STL, 38 PTS) · DOR',
-      '💩 Busts: *Jayson Tatum* −1.9 (26% FG%) · DOR',
+      '🚀 Booms: *Paul George* +2.6 (5 STL, 38 PTS) · Dor\'s Injured Team',
+      '💩 Busts: *Jayson Tatum* −1.9 (26% FG%) · Dor\'s Injured Team',
       '🔗 https://app.example/boom-or-bust',
     ])
   })
