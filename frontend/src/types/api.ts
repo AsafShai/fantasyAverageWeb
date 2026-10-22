@@ -648,8 +648,7 @@ export interface NightSurprises {
   computed_at: string;
 }
 
-/** A range of nights: one row per player-night past the period's percentile
- * cuts, ranked against every scored player-night in the range. */
+/** A range of nights: one row per player-night, on the same score bar as a night. */
 export interface PeriodSurprises {
   start: string;
   end: string;
@@ -659,9 +658,9 @@ export interface PeriodSurprises {
   players_played: number;
   players_scored: number;
   players_with_estimate: number;
-  /** The percentiles asked for (95 = top 5%). */
-  percentiles: { good: number; bad: number };
-  /** The scores those percentiles fell on, both as magnitudes. */
+  /** Every player-night at least this far from 0 is sent; the sliders start higher. */
+  min_score: number;
+  /** Server default thresholds, the same as a night's. */
   thresholds: { good: number; bad: number };
   /** Best first. */
   good: SurpriseRow[];

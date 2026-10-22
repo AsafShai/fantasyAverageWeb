@@ -321,10 +321,10 @@ async def test_nightly_ledger_write_clears_the_read_cache():
 
 
 @pytest.mark.asyncio
-async def test_period_ranks_player_nights_against_the_range(monkeypatch):
-    """The DB hands back the rows past the cuts; the service splits them by
-    sign (busts worst first), keeps each row's own night, and reports the
-    percentiles asked for and the scores they fell on, as magnitudes."""
+async def test_period_lists_player_nights_past_the_score_floor(monkeypatch):
+    """The DB hands back the player-nights past the floor; the service splits
+    them by sign (busts worst first), keeps each row's own night, and sends
+    the night's default thresholds for the page's sliders."""
     created = datetime(2025, 12, 3, 9, 0)
 
     def row(pid, night, score):
@@ -339,22 +339,22 @@ async def test_period_ranks_player_nights_against_the_range(monkeypatch):
 
     later = NIGHT + timedelta(days=1)
     summary = {"players_played": 300, "players_scored": 280, "players_with_estimate": 270, "games": 14,
-               "nights": 2, "computed_at": created, "good_cut": 1.37, "bad_cut": -1.23}
+               "nights": 2, "computed_at": created}
     asked = {}
 
-    async def fake_period(start, end, good_q, bad_q):
-        asked.update(start=start, end=end, good_q=good_q, bad_q=bad_q)
+    async def fake_period(start, end, min_score):
+        asked.update(start=start, end=end, min_score=min_score)
         return summary, [row(1, NIGHT, 2.6), row(2, later, 1.5), row(3, later, -1.3), row(4, NIGHT, -2.1)]
 
     svc = SurpriseService()
     monkeypatch.setattr(svc._db, "get_surprise_period", fake_period)
-    out = await svc.period(NIGHT, later, 95.0, 90.0)
+    out = await svc.period(NIGHT, later, 1.4)
 
-    assert asked == {"start": NIGHT, "end": later, "good_q": 0.95, "bad_q": pytest.approx(0.10)}
+    assert asked == {"start": NIGHT, "end": later, "min_score": 1.4}
     assert out["start"] == "2025-12-01" and out["end"] == "2025-12-02"
     assert (out["nights"], out["games"], out["players_scored"]) == (2, 14, 280)
-    assert out["percentiles"] == {"good": 95.0, "bad": 90.0}
-    assert out["thresholds"] == {"good": 1.37, "bad": 1.23}
+    assert out["min_score"] == 1.4
+    assert out["thresholds"] == {"good": settings.surprise_good_threshold, "bad": settings.surprise_bad_threshold}
     assert [(r["player_id"], r["game_date"]) for r in out["good"]] == [(1, "2025-12-01"), (2, "2025-12-02")]
     assert [r["player_id"] for r in out["bad"]] == [4, 3]   # worst first
 
@@ -363,7 +363,7 @@ async def test_period_ranks_player_nights_against_the_range(monkeypatch):
 async def test_period_without_rows_is_none(monkeypatch):
     svc = SurpriseService()
     monkeypatch.setattr(svc._db, "get_surprise_period", _async_return((None, [])))
-    assert await svc.period(NIGHT, NIGHT + timedelta(days=3), 95.0, 95.0) is None
+    assert await svc.period(NIGHT, NIGHT + timedelta(days=3), 1.4) is None
 
 
 @pytest.mark.asyncio

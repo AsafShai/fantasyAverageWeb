@@ -51,11 +51,6 @@ class SurpriseThresholds(BaseModel):
     bad: float
 
 
-class SurprisePercentiles(BaseModel):
-    good: float
-    bad: float
-
-
 class LatestRun(BaseModel):
     """The nightly's newest ledger row: which night it last handled and how
     ('processed', 'no_games', ...)."""
@@ -78,9 +73,9 @@ class NightSurprises(BaseModel):
 
 
 class PeriodSurprises(BaseModel):
-    """A range of nights, one row per player-night past the period's percentile
-    cuts. ``percentiles`` is what was asked for, ``thresholds`` the scores they
-    fell on (both magnitudes)."""
+    """A range of nights, one row per player-night at least ``min_score`` from
+    0; the page filters with the same score sliders as a single night,
+    starting from ``thresholds``."""
     start: str
     end: str
     nights: int
@@ -88,7 +83,7 @@ class PeriodSurprises(BaseModel):
     players_played: int
     players_scored: int
     players_with_estimate: int
-    percentiles: SurprisePercentiles
+    min_score: float
     thresholds: SurpriseThresholds
     good: list[SurpriseRow]
     bad: list[SurpriseRow]

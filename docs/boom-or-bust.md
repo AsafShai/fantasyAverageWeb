@@ -62,15 +62,12 @@ or a custom From–To (a one-day custom range is just that night's normal view).
 
 - **One row per player-night**, with a Date column: a player with two huge
   nights appears twice. Nothing is rescored; the rows are the nightly's own.
-- **The bar is a percentile, not a score.** Every scored player-night in the
-  range is ranked together: Booms are at or above the p97.5 score (top 2.5%),
-  Busts at or below p2.5. Each card's slider moves its percentile from p85
-  (top 15%) to p99.9 (top 0.1%), in steps that get finer towards the top
-  (85, 90, 95, 97.5, 99, 99.5, 99.9); default p97.5, not remembered.
-- `GET /api/surprises/period?start&end&good_pct&bad_pct`: Postgres computes
-  both cuts with `percentile_cont` over the range and returns only the rows
-  past them, so a season-long range at p85 is still a bounded list. A range is
-  at most 366 days; percentiles outside 85–99.9 are rejected.
+- **The same bar as a single night.** The sliders are the night's score sliders
+  (1.4–2.2, default 1.8, the same remembered values), applied to every
+  player-night in the period. Moving one filters in place.
+- `GET /api/surprises/period?start&end&min_score=1.4`: every player-night at
+  least ``min_score`` from 0 (the sliders' lowest point) plus a summary, best
+  first; the page filters from there. A range is at most 366 days.
 - Share works the same: the top 5 of each side, the period in the header,
   each row's night in the table.
 

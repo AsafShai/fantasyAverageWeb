@@ -243,10 +243,10 @@ export const fantasyApi = createApi({
       query: (date) => `/surprises/${date}`,
       keepUnusedDataFor: 600,
     }),
-    getSurprisesForPeriod: builder.query<PeriodSurprises, { start: string; end: string; goodPct: number; badPct: number }>({
-      query: ({ start, end, goodPct, badPct }) => ({
+    getSurprisesForPeriod: builder.query<PeriodSurprises, { start: string; end: string; minScore: number }>({
+      query: ({ start, end, minScore }) => ({
         url: '/surprises/period',
-        params: { start, end, good_pct: goodPct, bad_pct: badPct },
+        params: { start, end, min_score: minScore },
       }),
     }),
     getSurpriseDates: builder.query<string[], void>({

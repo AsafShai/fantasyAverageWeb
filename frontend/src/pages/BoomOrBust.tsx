@@ -158,31 +158,6 @@ function ScoreSlider({ kind, threshold }: { kind: 'good' | 'bad'; threshold: Thr
   );
 }
 
-/** Over several nights the bar is a percentile of every scored player-night in
- * the period instead of a score: p97.5 (top 2.5% each side) by default, from
- * p85 (top 15%) to p99.9 (top 0.1%). The steps get finer towards the top,
- * where an even step would jump from 1% straight to nothing. */
-const PCT_STEPS = [85, 90, 95, 97.5, 99, 99.5, 99.9];
-const DEFAULT_PCT = PCT_STEPS.indexOf(97.5);
-const topShare = (pct: number) => `${+(100 - pct).toFixed(1)}%`;
-
-function PercentileSlider({ kind, index, onChange }: { kind: 'good' | 'bad'; index: number; onChange: (i: number) => void }) {
-  return (
-    <CommitSlider
-      kind={kind}
-      value={index}
-      min={0}
-      max={PCT_STEPS.length - 1}
-      step={1}
-      label={(i) => `${kind === 'good' ? 'top' : 'bottom'} ${topShare(PCT_STEPS[i])}`}
-      ariaLabel={kind === 'good' ? 'Surprise percentile' : 'Disappointment percentile'}
-      isDefault={index === DEFAULT_PCT}
-      onChange={onChange}
-      onReset={() => onChange(DEFAULT_PCT)}
-    />
-  );
-}
-
 /** A card pages its rows five at a time, and only when there are more than
  * five; the footer is always there so a card's chrome never changes shape. */
 const PAGE_SIZE = 5;
@@ -276,25 +251,21 @@ function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boole
   );
 }
 
-/** Several nights at once: each boom or bust night is its own row, ranked by
- * percentile against every scored player-night in the period. The server
- * filters at the chosen percentiles, so a slider change is a new request; the
- * previous result stays on screen, dimmed, until it lands. */
+/** Several nights at once: each boom or bust night is its own row, on the
+ * same score bar as a single night, with the same sliders (and the same
+ * remembered values). The server sends every player-night past the sliders'
+ * lowest point, so moving a slider filters in place, like a night. */
 function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker: string }) {
-  const [goodIdx, setGoodIdx] = useState(DEFAULT_PCT);
-  const [badIdx, setBadIdx] = useState(DEFAULT_PCT);
-  const { data, isFetching, error } = useGetSurprisesForPeriodQuery({
-    start, end, goodPct: PCT_STEPS[goodIdx], badPct: PCT_STEPS[badIdx],
-  });
+  const { data, isFetching, error } = useGetSurprisesForPeriodQuery({ start, end, minScore: SLIDER_MIN });
   const period: PeriodSurprises | undefined = data && data.start === start && data.end === end ? data : undefined;
+  const good = useThreshold('good', period?.thresholds.good ?? 1.8);
+  const bad = useThreshold('bad', period?.thresholds.bad ?? 1.8);
+  const booms = useMemo(() => (period ? shownRows(period.good, 'good', good.value) : []), [period, good.value]);
+  const busts = useMemo(() => (period ? shownRows(period.bad, 'bad', bad.value) : []), [period, bad.value]);
   const label = fmtRange(start, end);
-  const rules = period && {
-    good: `top ${topShare(period.percentiles.good)} · score ≥ ${period.thresholds.good.toFixed(1)}`,
-    bad: `bottom ${topShare(period.percentiles.bad)} · score ≤ −${period.thresholds.bad.toFixed(1)}`,
-  };
   const shareText = useMemo(
-    () => (period ? buildShareMessage(label, period.good.slice(0, SHARE_ROWS), period.bad.slice(0, SHARE_ROWS), shareUrl()) : ''),
-    [label, period],
+    () => buildShareMessage(label, booms.slice(0, SHARE_ROWS), busts.slice(0, SHARE_ROWS), shareUrl()),
+    [label, booms, busts],
   );
 
   if (!period && isFetching) return <LoadingSpinner />;
@@ -305,13 +276,13 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
       </div>
     );
   }
-  if (!period || !rules) return <ErrorMessage message="Failed to load this period's surprises." />;
+  if (!period) return <ErrorMessage message="Failed to load this period's surprises." />;
 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {`${period.nights} night${period.nights === 1 ? '' : 's'} · ${period.games} games · ${period.players_scored.toLocaleString('en-US')} player-nights scored · ranked against each other`}
+          {`${period.nights} night${period.nights === 1 ? '' : 's'} · ${period.games} games · ${period.players_scored.toLocaleString('en-US')} player-nights scored`}
         </p>
         <ShareCardButton
           title="Boom or Bust"
@@ -321,21 +292,20 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
               dark={dark}
               kicker={kicker}
               subtitle={`${label} · ${period.nights} nights · ${period.games} games`}
-              booms={period.good}
-              busts={period.bad}
-              rules={rules}
+              booms={booms}
+              busts={busts}
+              rules={{ good: `score ≥ ${good.value.toFixed(1)}`, bad: `score ≤ −${bad.value.toFixed(1)}` }}
               showDate
             />
           )}
         />
       </div>
-      <div className={`space-y-6 transition-opacity ${isFetching ? 'opacity-60' : ''}`}>
-        <SurpriseCard title="💥 Booms" kind="good" slider={<PercentileSlider kind="good" index={goodIdx} onChange={setGoodIdx} />} resetKey={goodIdx} shown={period.good} showDate />
-        <SurpriseCard title="💩 Busts" kind="bad" slider={<PercentileSlider kind="bad" index={badIdx} onChange={setBadIdx} />} resetKey={badIdx} shown={period.bad} showDate />
+      <div className="space-y-6">
+        <SurpriseCard title="💥 Booms" kind="good" slider={<ScoreSlider kind="good" threshold={good} />} resetKey={good.value} shown={booms} showDate />
+        <SurpriseCard title="💩 Busts" kind="bad" slider={<ScoreSlider kind="bad" threshold={bad} />} resetKey={bad.value} shown={busts} showDate />
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        Over several nights the bar is a share of the period: top {topShare(period.percentiles.good)} = the best
-        {' '}{topShare(period.percentiles.good)} of every scored player-night between {label}. A player with more than one
+        Every night between {label} with a score past the bar, the same bar as a single night. A player with more than one
         such night appears once per night.
         {' '}Computed {new Date(period.computed_at).toLocaleString('en-US')}.
       </p>

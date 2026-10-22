@@ -1865,13 +1865,12 @@ class DBService:
             return []
 
     async def get_surprise_period(
-        self, start: date, end: date, good_q: float, bad_q: float
+        self, start: date, end: date, min_score: float
     ) -> tuple[Optional[dict], list[dict]]:
         """Every night from ``start`` to ``end``: a summary (player-nights,
-        scored, games, nights, newest write) with the score at quantile
-        ``good_q`` and at ``bad_q`` over all scored player-nights, then the
-        rows past those cuts (above good_q and positive, below bad_q and
-        negative), best first. (None, []) when the range has no rows."""
+        scored, games, nights, newest write), then the player-nights at least
+        ``min_score`` from 0 either way, best first. (None, []) when the range
+        has no rows."""
         pool = await self._get_pool()
         if pool is None:
             return None, []
@@ -1884,13 +1883,11 @@ class DBService:
                            count(*) FILTER (WHERE has_estimate) AS players_with_estimate,
                            count(DISTINCT game_id) AS games,
                            count(DISTINCT game_date) AS nights,
-                           max(created_at) AS computed_at,
-                           percentile_cont($3::float8) WITHIN GROUP (ORDER BY score) AS good_cut,
-                           percentile_cont($4::float8) WITHIN GROUP (ORDER BY score) AS bad_cut
+                           max(created_at) AS computed_at
                     FROM model_surprise_results
                     WHERE game_date BETWEEN $1 AND $2
                     """,
-                    start, end, good_q, bad_q,
+                    start, end,
                 )
                 if summary is None or summary["players_played"] == 0:
                     return None, []
@@ -1898,10 +1895,10 @@ class DBService:
                     """
                     SELECT * FROM model_surprise_results
                     WHERE game_date BETWEEN $1 AND $2
-                      AND ((score >= $3 AND score > 0) OR (score <= $4 AND score < 0))
+                      AND (score >= $3 OR score <= -$3)
                     ORDER BY score DESC
                     """,
-                    start, end, summary["good_cut"], summary["bad_cut"],
+                    start, end, min_score,
                 )
                 return dict(summary), [dict(r) for r in rows]
         except Exception as e:

@@ -347,12 +347,12 @@ class SurpriseService:
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
         }
 
-    async def period(self, start: date, end: date, good_pct: float, bad_pct: float) -> dict | None:
-        """The booms and busts of a range of nights, ranked against each other:
-        a boom is a player-night at or above the ``good_pct`` percentile of
-        every scored player-night in the range, a bust at or below the
-        ``100 - bad_pct`` percentile. One row per player-night."""
-        summary, rows = await self._db.get_surprise_period(start, end, good_pct / 100, 1 - bad_pct / 100)
+    async def period(self, start: date, end: date, min_score: float) -> dict | None:
+        """The booms and busts of a range of nights, on the same score bar as a
+        single night: every player-night at least ``min_score`` from 0 (the
+        sliders' lowest point), one row per player-night; the page filters
+        with its sliders, starting from the server thresholds."""
+        summary, rows = await self._db.get_surprise_period(start, end, min_score)
         if summary is None:
             return None
         abbrevs, names = await self._team_abbrevs(), await self._team_names()
@@ -367,9 +367,11 @@ class SurpriseService:
             "players_played": summary["players_played"],
             "players_scored": summary["players_scored"],
             "players_with_estimate": summary["players_with_estimate"],
-            "percentiles": {"good": good_pct, "bad": bad_pct},
-            # the scores those percentiles fell on, both as magnitudes
-            "thresholds": {"good": summary["good_cut"] or 0.0, "bad": abs(summary["bad_cut"] or 0.0)},
+            "min_score": min_score,
+            "thresholds": {
+                "good": settings.surprise_good_threshold,
+                "bad": settings.surprise_bad_threshold,
+            },
             "good": good,
             "bad": bad,
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),

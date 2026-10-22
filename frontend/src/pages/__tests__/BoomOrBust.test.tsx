@@ -51,8 +51,8 @@ const period: PeriodSurprises = {
   players_played: 120,
   players_scored: 100,
   players_with_estimate: 90,
-  percentiles: { good: 97.5, bad: 97.5 },
-  thresholds: { good: 1.4, bad: 1.2 },
+  min_score: 1.4,
+  thresholds: { good: 1.8, bad: 1.8 },
   good: [
     row({ player_id: 31, player_name: 'Week Star', score: 2.9, game_date: '2024-01-04' }),
     row({ player_id: 32, player_name: 'Week Second', score: 2.1 }),
@@ -72,10 +72,7 @@ function stubApi(latest: Response | (() => Response)) {
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.includes('/surprises/dates')) return Response.json(['2024-01-05', '2024-01-04'])
-      if (url.includes('/surprises/period')) {
-        const pct = Number(new URL(url, 'http://x').searchParams.get('good_pct'))
-        return Response.json({ ...period, percentiles: { good: pct, bad: 97.5 }, good: pct >= 99 ? period.good.slice(0, 1) : period.good })
-      }
+      if (url.includes('/surprises/period')) return Response.json(period)
       if (url.includes('/surprises/2024-01-04')) return Response.json({ ...night, game_date: '2024-01-04', latest_run: null })
       if (url.includes('/surprises/latest')) return typeof latest === 'function' ? latest() : latest
       return new Response('not found', { status: 404 })
@@ -170,33 +167,35 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('Boom 0')).toBeInTheDocument()
   })
 
-  it('ranks a period by percentile: one row per player-night, each with its date', async () => {
+  it('a period: one row per player-night with its date, on the night\'s score sliders', async () => {
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
     await waitFor(() => expect(screen.getByText('Week Star')).toBeInTheDocument())
-    expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&good_pct=97.5&bad_pct=97.5')
+    expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&min_score=1.4')
     expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
     expect(screen.getByText(/2 nights · 7 games · 100 player-nights scored/)).toBeInTheDocument()
-    expect(screen.getByText('top 2.5%')).toBeInTheDocument()
-    expect(screen.getByText('bottom 2.5%')).toBeInTheDocument()
+    expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()   // the night's bar, not a percentile
+    expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
     expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
     expect(screen.queryByLabelText('Previous night')).not.toBeInTheDocument()   // ‹ › are for single nights
 
-    // the percentile slider asks the server again on release; top 1% = p99
-    fireEvent.change(screen.getByLabelText('Surprise percentile'), { target: { value: '4' } })
-    expect(screen.getByText('top 1%')).toBeInTheDocument()
-    fireEvent.pointerUp(screen.getByLabelText('Surprise percentile'))
-    await waitFor(() => expect(screen.queryByText('Week Second')).not.toBeInTheDocument())
-    expect(requested('/surprises/period').at(-1)).toContain('good_pct=99')
+    // the slider filters in place, like a night: no new request
+    const asked = requested('/surprises/period').length
+    fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '2.2' } })
+    fireEvent.pointerUp(screen.getByLabelText('Surprise threshold'))
+    expect(screen.queryByText('Week Second')).not.toBeInTheDocument()   // 2.1 < 2.2
+    expect(screen.getByText('Week Star')).toBeInTheDocument()            // 2.9
+    expect(requested('/surprises/period')).toHaveLength(asked)
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
-    await waitFor(() => expect(screen.getByText('Week Second')).toBeInTheDocument())
+    expect(screen.getByText('Week Second')).toBeInTheDocument()
 
-    // back to one night: the score sliders return
+    // back to one night: the same sliders
     fireEvent.click(screen.getByRole('button', { name: 'Last night' }))
-    await waitFor(() => expect(screen.getByLabelText('Surprise threshold')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
+    expect(screen.getByLabelText('Surprise threshold')).toBeInTheDocument()
   })
 
   it('a one-day custom range is that night, with the score sliders', async () => {

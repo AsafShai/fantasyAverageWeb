@@ -26,9 +26,9 @@ async def get_latest() -> NightSurprises:
     return NightSurprises(**night)
 
 
-# The period slider's range: p85 (top 15%) to p99.9 (top 0.1%); default p97.5.
-PCT_MIN, PCT_MAX = 85.0, 99.9
-PCT_DEFAULT = 97.5
+# The score sliders' lowest point (the page's SLIDER_MIN): a period sends every
+# player-night at least this far from 0 and the page filters from there.
+PERIOD_MIN_SCORE = 1.4
 MAX_PERIOD_DAYS = 366
 
 
@@ -36,16 +36,15 @@ MAX_PERIOD_DAYS = 366
 async def get_period(
     start: date,
     end: date,
-    good_pct: float = Query(PCT_DEFAULT, ge=PCT_MIN, le=PCT_MAX),
-    bad_pct: float = Query(PCT_DEFAULT, ge=PCT_MIN, le=PCT_MAX),
+    min_score: float = Query(PERIOD_MIN_SCORE, ge=1.0, le=4.0),
 ) -> PeriodSurprises:
-    """Booms and busts from ``start`` to ``end`` (inclusive), ranked against
-    every scored player-night in that range."""
+    """Booms and busts from ``start`` to ``end`` (inclusive): every
+    player-night at least ``min_score`` from 0, one row per player-night."""
     if end < start:
         raise HTTPException(status_code=422, detail='end is before start')
     if (end - start).days >= MAX_PERIOD_DAYS:
         raise HTTPException(status_code=422, detail=f'a period is at most {MAX_PERIOD_DAYS} days')
-    period = await _service.period(start, end, good_pct, bad_pct)
+    period = await _service.period(start, end, min_score)
     if period is None:
         raise HTTPException(status_code=404, detail=f'No results from {start} to {end}')
     return PeriodSurprises(**period)
