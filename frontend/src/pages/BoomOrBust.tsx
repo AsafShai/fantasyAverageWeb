@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useGetLatestSurprisesQuery, useGetSurprisesForDateQuery, useGetSurprisesForPeriodQuery, useGetSurprisesFormQuery, useGetSurpriseDatesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { useGetLatestSurprisesQuery, useGetSurprisesForDateQuery, useGetSurprisesForPeriodQuery, useGetSurprisesFormQuery, useGetSurpriseTeamNightsQuery, useGetSurpriseDatesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import type { FormSurprises, NightSurprises, PeriodSurprises, SurpriseRow } from '../types/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -293,35 +293,60 @@ function badgesFor(booms: SurpriseRow[], busts: SurpriseRow[]): Map<number, 'boo
   return marks;
 }
 
+/** How By team lists a team, following the view above it: one night's
+ * players, the team's nights over a period (one row per player-night, with the
+ * team he was on that night), or its players' form over a period. */
+type TeamMode = 'night' | 'nights' | 'form';
+const TEAM_MODE_TAG: Record<TeamMode, string> = {
+  night: 'that night',
+  nights: 'one row per night',
+  form: 'per player · averaged over the period',
+};
+
 /** Every scored player of one fantasy team (or the best and worst free agents)
- * for the night or period on screen (after Dor Zilberman's team view). */
+ * for the night or period on screen (after Dor Zilberman's team view). In
+ * `nights` mode the rows come from the server (every night of the team's
+ * players, not only those in the lists); otherwise from `rows`. */
 function ByTeam({
-  rows, perGame, badges, teamId, onTeam, when,
+  rows, mode, period, badges, teamId, onTeam, when,
 }: {
-  rows: SurpriseRow[]; perGame: boolean; badges: ReadonlyMap<number, 'boom' | 'bust'>;
+  rows: SurpriseRow[]; mode: TeamMode; period?: { start: string; end: string };
+  badges: ReadonlyMap<number, 'boom' | 'bust'>;
   teamId: TeamPick; onTeam: (id: TeamPick) => void; when: string;
 }) {
   const { data: teams = [] } = useGetTeamsListQuery();
   const ordered = useMemo(() => [...teams].sort((a, b) => a.team_name.localeCompare(b.team_name)), [teams]);
+  const perGame = mode === 'form';
+  const showDate = mode === 'nights';
+  const { data: teamNights = [], isFetching: loadingNights } = useGetSurpriseTeamNightsQuery(
+    { start: period?.start ?? '', end: period?.end ?? '', team: teamId ?? 'fa' },
+    { skip: mode !== 'nights' || !period || teamId == null },
+  );
+  const listed = mode === 'nights' ? teamNights : rows;
   const roster = useMemo(
-    () => (typeof teamId === 'number' ? rows.filter((r) => r.fantasy_team_id === teamId).sort(byScoreDesc) : []),
-    [rows, teamId],
+    () => (typeof teamId === 'number' ? listed.filter((r) => r.fantasy_team_id === teamId).sort(byScoreDesc) : []),
+    [listed, teamId],
   );
   const free = useMemo(() => {
     if (teamId !== 'fa') return null;
-    const fa = rows.filter((r) => r.fantasy_team_id == null);
+    const fa = listed.filter((r) => r.fantasy_team_id == null);
     return {
       up: fa.filter((r) => r.score >= 0).sort(byScoreDesc).slice(0, FA_SIDE),
       down: fa.filter((r) => r.score < 0).sort((a, b) => a.score - b.score).slice(0, FA_SIDE),
     };
-  }, [rows, teamId]);
+  }, [listed, teamId]);
   const count = free ? free.up.length + free.down.length : roster.length;
   return (
     <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          🏀 By team {teamId != null && <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({count})</span>}
-        </h2>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            🏀 By team {teamId != null && <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({count})</span>}
+          </h2>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+            {TEAM_MODE_TAG[mode]}
+          </span>
+        </div>
         <select
           aria-label="Fantasy team"
           value={teamId ?? ''}
@@ -334,20 +359,24 @@ function ByTeam({
         </select>
       </div>
       {teamId == null ? (
-        <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">Pick a team to see every one of its players scored {when}.</p>
+        <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+          Pick a team to see {mode === 'nights' ? 'every night its players were scored' : 'every one of its players scored'} {when}.
+        </p>
+      ) : mode === 'nights' && loadingNights && teamNights.length === 0 ? (
+        <LoadingSpinner />
       ) : free ? (
         <>
           <h3 className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
             Best {FA_SIDE} <span className="font-normal text-gray-500 dark:text-gray-400">({free.up.length})</span>
           </h3>
-          <SurpriseTable rows={free.up} kind="good" perGame={perGame} badges={badges} emptyText={`No free agent scored above zero ${when}.`} />
+          <SurpriseTable rows={free.up} kind="good" perGame={perGame} showDate={showDate} badges={badges} emptyText={`No free agent scored above zero ${when}.`} />
           <h3 className="border-t border-gray-200 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-red-600 dark:border-gray-700 dark:text-red-400">
             Worst {FA_SIDE} <span className="font-normal text-gray-500 dark:text-gray-400">({free.down.length})</span>
           </h3>
-          <SurpriseTable rows={free.down} kind="bad" perGame={perGame} badges={badges} emptyText={`No free agent scored below zero ${when}.`} />
+          <SurpriseTable rows={free.down} kind="bad" perGame={perGame} showDate={showDate} badges={badges} emptyText={`No free agent scored below zero ${when}.`} />
         </>
       ) : (
-        <SurpriseTable rows={roster} kind="good" perGame={perGame} badges={badges} emptyText={`Nobody on this team has a score ${when}.`} />
+        <SurpriseTable rows={roster} kind="good" perGame={perGame} showDate={showDate} badges={badges} emptyText={`Nobody on this team has a score ${when}.`} />
       )}
     </div>
   );
@@ -389,7 +418,7 @@ function NightBody({ night, isLatest, teamId, onTeam }: { night: NightSurprises;
       </div>
       <ByTeam
         rows={allRows}
-        perGame={false}
+        mode="night"
         badges={badges}
         teamId={teamId}
         onTeam={onTeam}
@@ -424,9 +453,6 @@ function PeriodBody({ start, end, kicker, teamId, onTeam }: { start: string; end
     () => (period ? buildShareMessage(label, period.good.slice(0, SHARE_ROWS), period.bad.slice(0, SHARE_ROWS), shareUrl()) : ''),
     [label, period],
   );
-  // By team lists each player once over the period: his form (shared with the Form view's request).
-  const { data: form } = useGetSurprisesFormQuery({ start, end });
-  const teamRows = useMemo(() => (form ? [...form.good, ...form.bad] : []), [form]);
   const badges = useMemo(() => (period ? badgesFor(period.good, period.bad) : new Map<number, 'boom' | 'bust'>()), [period]);
 
   if (!period && isFetching) return <LoadingSpinner />;
@@ -465,7 +491,7 @@ function PeriodBody({ start, end, kicker, teamId, onTeam }: { start: string; end
         <SurpriseCard title="💥 Booms" kind="good" slider={<PercentileSlider kind="good" index={goodIdx} onChange={setGoodIdx} />} resetKey={goodIdx} shown={period.good} showDate />
         <SurpriseCard title="💩 Busts" kind="bad" slider={<PercentileSlider kind="bad" index={badIdx} onChange={setBadIdx} />} resetKey={badIdx} shown={period.bad} showDate />
       </div>
-      <ByTeam rows={teamRows} perGame badges={badges} teamId={teamId} onTeam={onTeam} when={`between ${label}`} />
+      <ByTeam rows={[]} mode="nights" period={{ start, end }} badges={badges} teamId={teamId} onTeam={onTeam} when={`between ${label}`} />
       <p className="text-xs text-gray-500 dark:text-gray-400">
         Over several nights the bar is a share of the period: top {topShare(period.percentiles.good)} = the best
         {' '}{topShare(period.percentiles.good)} of every scored player-night between {label}. A player with more than one
@@ -561,7 +587,7 @@ function FormBody({ start, end, kicker, teamId, onTeam }: { start: string; end: 
         <SurpriseCard title="💥 In form" kind="good" slider={<ScoreSlider kind="good" threshold={good} />} resetKey={`${good.value}:${minGp}`} shown={booms} perGame emptyText={empty} />
         <SurpriseCard title="💩 Out of form" kind="bad" slider={<ScoreSlider kind="bad" threshold={bad} />} resetKey={`${bad.value}:${minGp}`} shown={busts} perGame emptyText={empty} />
       </div>
-      <ByTeam rows={teamRows} perGame badges={badges} teamId={teamId} onTeam={onTeam} when={`between ${label}`} />
+      <ByTeam rows={teamRows} mode="form" badges={badges} teamId={teamId} onTeam={onTeam} when={`between ${label}`} />
       <p className="text-xs text-gray-500 dark:text-gray-400">
         Form adds up a player's nightly scores between {label} and divides by the square root of his games, so it stays on a
         night's scale and rewards a run of good nights over one lucky one; "avg" beside it is his plain average per game. A night he

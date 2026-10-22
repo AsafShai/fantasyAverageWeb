@@ -2,7 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models.surprise_models import FormSurprises, NightSurprises, PeriodSurprises
+from app.models.surprise_models import FormSurprises, NightSurprises, PeriodSurprises, SurpriseRow
 from app.services.surprise_service import SurpriseService
 
 router = APIRouter()
@@ -49,6 +49,21 @@ async def get_period(
     if period is None:
         raise HTTPException(status_code=404, detail=f'No results from {start} to {end}')
     return PeriodSurprises(**period)
+
+
+@router.get('/team-nights', response_model=list[SurpriseRow])
+async def get_team_nights(start: date, end: date, team: str) -> list[SurpriseRow]:
+    """A fantasy team's nights from ``start`` to ``end``, one row per
+    player-night, best first: ``team`` is the league team id, or ``fa`` for
+    the five best and five worst free-agent nights."""
+    if end < start:
+        raise HTTPException(status_code=422, detail='end is before start')
+    if (end - start).days >= MAX_PERIOD_DAYS:
+        raise HTTPException(status_code=422, detail=f'a period is at most {MAX_PERIOD_DAYS} days')
+    if team != 'fa' and not team.isdigit():
+        raise HTTPException(status_code=422, detail="team is a league team id or 'fa'")
+    rows = await _service.team_nights(start, end, None if team == 'fa' else int(team))
+    return [SurpriseRow(**r) for r in rows]
 
 
 @router.get('/form', response_model=FormSurprises)

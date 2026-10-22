@@ -315,6 +315,16 @@ class SurpriseService:
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
         }
 
+    async def team_nights(self, start: date, end: date, fantasy_team_id: int | None) -> list[dict]:
+        """A fantasy team's nights over a period, one row per player-night, with
+        the team he was on that night (``None`` = the five best and five worst
+        free-agent nights)."""
+        rows = await self._db.get_surprise_team_nights(
+            start, end, fantasy_team_id, side_limit=None if fantasy_team_id is not None else 5,
+        )
+        names = await self._team_names()
+        return [self._row_out(r, names) for r in rows]
+
     async def form(self, start: date, end: date) -> dict | None:
         """Every player who played from ``start`` to ``end``, one row each: his
         nightly scores combined (see _form_row), best first / worst first. The

@@ -94,6 +94,12 @@ function stubApi(latest: Response | (() => Response)) {
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.includes('/surprises/dates')) return Response.json(['2024-01-05', '2024-01-04'])
+      if (url.includes('/surprises/team-nights')) {
+        return Response.json([
+          row({ player_id: 71, player_name: 'Team Big Night', score: 2.2, game_date: '2024-01-04', fantasy_team_id: 11, fantasy_team: 'HHT' }),
+          row({ player_id: 71, player_name: 'Team Big Night', score: -0.3, game_date: '2024-01-05', fantasy_team_id: 11, fantasy_team: 'HHT' }),
+        ])
+      }
       if (url.includes('/surprises/form')) return Response.json(form)
       if (url.includes('/teams')) return Response.json([{ team_id: 11, team_name: 'Trust the process' }, { team_id: 4, team_name: 'DORELIT' }])
       if (url.includes('/surprises/period')) {
@@ -275,6 +281,24 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText(/Best 5/)).toBeInTheDocument()
     expect(screen.getByText('Free Riser')).toBeInTheDocument()
     expect(screen.getByText('Free Faller')).toBeInTheDocument()
+  })
+
+  it('by team follows the view: a period of biggest nights lists the team\'s nights', async () => {
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
+    expect(screen.getByText('that night')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+    await waitFor(() => expect(screen.getByText('Week Star')).toBeInTheDocument())
+    expect(screen.getByText('one row per night')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Trust the process' })).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Fantasy team'), { target: { value: '11' } })
+    // both of his nights, each with its date: one row per player-night
+    await waitFor(() => expect(screen.getAllByText('Team Big Night')).toHaveLength(2))
+    expect(requested('/surprises/team-nights').at(-1)).toContain('start=2023-12-30&end=2024-01-05&team=11')
+    expect(screen.getByText('🏀 By team')).toHaveTextContent('(2)')
+    fireEvent.click(screen.getByRole('button', { name: '📈 Form' }))
+    await waitFor(() => expect(screen.getByText('per player · averaged over the period')).toBeInTheDocument())
   })
 
   it('shows the empty state on 404', async () => {

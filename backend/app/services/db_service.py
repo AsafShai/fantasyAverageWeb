@@ -1864,6 +1864,33 @@ class DBService:
             logger.error(f"Failed to fetch surprises for {game_date}: {type(e).__name__}: {e}")
             return []
 
+    async def get_surprise_team_nights(
+        self, start: date, end: date, fantasy_team_id: Optional[int], side_limit: Optional[int] = None
+    ) -> list[dict]:
+        """Every scored night from ``start`` to ``end`` of the players one fantasy
+        team had **that night** (``fantasy_team_id`` None = free agents), best
+        first. With ``side_limit``, only that many from each end (the best and
+        the worst), for the free-agent pool, which is most of the league."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        team = "fantasy_team_id = $3" if fantasy_team_id is not None else "fantasy_team_id IS NULL"
+        args: list = [start, end] + ([fantasy_team_id] if fantasy_team_id is not None else [])
+        base = f"SELECT * FROM model_surprise_results WHERE game_date BETWEEN $1 AND $2 AND score IS NOT NULL AND {team}"
+        if side_limit is None:
+            sql = f"{base} ORDER BY score DESC"
+        else:
+            n = int(side_limit)
+            sql = (f"(({base} AND score >= 0 ORDER BY score DESC LIMIT {n}) "
+                   f"UNION ALL ({base} AND score < 0 ORDER BY score ASC LIMIT {n})) ORDER BY score DESC")
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(sql, *args)
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch team nights {start}..{end} team {fantasy_team_id}: {type(e).__name__}: {e}")
+            return []
+
     async def get_surprise_form(self, start: date, end: date) -> tuple[Optional[dict], list[dict]]:
         """Players who played between ``start`` and ``end`` (inclusive), one row
         each: totals of the scored games, the latest night's name and teams, and

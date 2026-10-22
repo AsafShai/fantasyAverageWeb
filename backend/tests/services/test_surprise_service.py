@@ -313,3 +313,30 @@ async def test_form_without_rows_is_none(monkeypatch):
     svc = SurpriseService()
     monkeypatch.setattr(svc._db, "get_surprise_form", _async_return(({"players_scored": 0}, [])))
     assert await svc.form(NIGHT, NIGHT) is None
+
+
+@pytest.mark.asyncio
+async def test_team_nights_are_player_nights_of_that_team(monkeypatch):
+    """A team asks for all its nights; free agents only the five best and five
+    worst, since that pool is most of the league."""
+    created = datetime(2025, 12, 3, 9, 0)
+    asked = []
+
+    async def fake(start, end, team_id, side_limit=None):
+        asked.append((team_id, side_limit))
+        base = {
+            "game_id": "g", "player_name": "P", "team_id": 2, "opponent_team_id": 18, "is_home": True, "minutes": 30.0,
+            **{s.lower(): 1.0 for s in ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]},
+            "metric_z": 1.0, "metric_err": None, "has_estimate": True, "verdict": "", "reasons": [], "created_at": created,
+            "fantasy_team_id": team_id, "fantasy_team": "HHT" if team_id else None, "lineup_slot": "PG" if team_id else None,
+        }
+        return [{**base, "player_id": 1, "game_date": NIGHT, "score": 2.0},
+                {**base, "player_id": 1, "game_date": NIGHT + timedelta(days=1), "score": -0.5}]
+
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprise_team_nights", fake)
+    rows = await svc.team_nights(NIGHT, NIGHT + timedelta(days=6), 7)
+    assert [(r["player_id"], r["game_date"]) for r in rows] == [(1, "2025-12-01"), (1, "2025-12-02")]
+    assert rows[0]["fantasy_team_name"] == "Trust the process"
+    await svc.team_nights(NIGHT, NIGHT + timedelta(days=6), None)
+    assert asked == [(7, None), (None, 5)]
