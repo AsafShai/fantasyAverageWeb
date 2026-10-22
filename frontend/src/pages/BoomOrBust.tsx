@@ -128,10 +128,9 @@ type Threshold = ReturnType<typeof useThreshold>;
  * five; the footer is always there so a card's chrome never changes shape. */
 const PAGE_SIZE = 5;
 
-/** The rows a card shows: past the viewer's threshold, capped at the server's max. */
-function shownRows(rows: SurpriseRow[], kind: 'good' | 'bad', threshold: number, maxRows: number): SurpriseRow[] {
-  const kept = kind === 'good' ? rows.filter((r) => r.score >= threshold) : rows.filter((r) => r.score <= -threshold);
-  return kept.slice(0, Math.max(0, maxRows));
+/** The rows a card shows: every row past the viewer's threshold (the card pages them). */
+function shownRows(rows: SurpriseRow[], kind: 'good' | 'bad', threshold: number): SurpriseRow[] {
+  return kind === 'good' ? rows.filter((r) => r.score >= threshold) : rows.filter((r) => r.score <= -threshold);
 }
 
 function SurpriseCard({
@@ -183,8 +182,8 @@ function SurpriseCard({
 function NightBody({ night }: { night: NightSurprises }) {
   const good = useThreshold('good', night.thresholds.good);
   const bad = useThreshold('bad', night.thresholds.bad);
-  const booms = useMemo(() => shownRows(night.good, 'good', good.value, night.max_rows), [night, good.value]);
-  const busts = useMemo(() => shownRows(night.bad, 'bad', bad.value, night.max_rows), [night, bad.value]);
+  const booms = useMemo(() => shownRows(night.good, 'good', good.value), [night, good.value]);
+  const busts = useMemo(() => shownRows(night.bad, 'bad', bad.value), [night, bad.value]);
   const dateLabel = fmtDay(night.game_date, false);
   const shareText = useMemo(
     () => buildShareMessage(dateLabel, booms.slice(0, SHARE_ROWS), busts.slice(0, SHARE_ROWS), `${window.location.origin}/boom-or-bust`),

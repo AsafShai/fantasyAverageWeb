@@ -30,7 +30,6 @@ const night: NightSurprises = {
   players_scored: 50,
   players_with_estimate: 40,
   thresholds: { good: 1.8, bad: 1.8 },
-  max_rows: 25,
   // Every scored row, best first / worst first — the page filters by its own sliders.
   good: [
     row({ player_id: 11, player_name: 'Good Guy', score: 2.4 }),

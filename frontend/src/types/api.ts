@@ -637,8 +637,6 @@ export interface NightSurprises {
   players_with_estimate: number;
   /** Server default thresholds; the page lets each viewer move them. */
   thresholds: { good: number; bad: number };
-  /** Most rows to show per list after filtering. */
-  max_rows: number;
   /** Every scored row with score >= 0, best first (not pre-filtered). */
   good: SurpriseRow[];
   /** Every scored row with score < 0, worst first (not pre-filtered). */

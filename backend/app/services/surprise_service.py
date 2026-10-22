@@ -269,7 +269,6 @@ class SurpriseService:
                 "good": settings.surprise_good_threshold,
                 "bad": settings.surprise_bad_threshold,
             },
-            "max_rows": settings.surprise_top_n,
             "good": good,
             "bad": bad,
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
