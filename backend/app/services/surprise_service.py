@@ -247,8 +247,9 @@ class SurpriseService:
         # Every scored row goes out, split by sign: the page filters with its own
         # sliders, starting from the server thresholds (the verdict on each row).
         scored = [r for r in rows if r["score"] is not None]
-        good = [self._row_out(r) for r in scored if r["score"] >= 0]
-        bad = [self._row_out(r) for r in scored if r["score"] < 0]
+        names = await self._team_names()
+        good = [self._row_out(r, names) for r in scored if r["score"] >= 0]
+        bad = [self._row_out(r, names) for r in scored if r["score"] < 0]
         bad.sort(key=lambda r: r["score"])
         computed = max(r["created_at"] for r in rows)
         # The nightly's newest ledger row, so the page can tell "no games last
@@ -282,8 +283,9 @@ class SurpriseService:
         summary, rows = await self._db.get_surprise_period(start, end, good_pct / 100, 1 - bad_pct / 100)
         if summary is None:
             return None
-        good = [self._row_out(r) for r in rows if r["score"] > 0]
-        bad = sorted((self._row_out(r) for r in rows if r["score"] < 0), key=lambda r: r["score"])
+        names = await self._team_names()
+        good = [self._row_out(r, names) for r in rows if r["score"] > 0]
+        bad = sorted((self._row_out(r, names) for r in rows if r["score"] < 0), key=lambda r: r["score"])
         computed = summary["computed_at"]
         return {
             "start": start.isoformat(),
@@ -301,8 +303,20 @@ class SurpriseService:
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
         }
 
+    async def _team_names(self) -> dict[int, str]:
+        """{fantasy team id: its current name}, from the standings DataProvider
+        already caches. Rows store the team's id and short code; the name is
+        looked up when served, so a team that renames itself shows its new
+        name. Best effort: on failure the page shows the short code."""
+        from app.services.data_provider import DataProvider
+        try:
+            return {int(t["team_id"]): t["team_name"] for t in await DataProvider().get_team_names()}
+        except Exception as e:
+            logger.warning(f"Surprises: fantasy team names unavailable, showing codes: {type(e).__name__}: {e}")
+            return {}
+
     @staticmethod
-    def _row_out(r: dict) -> dict:
+    def _row_out(r: dict, team_names: dict[int, str] | None = None) -> dict:
         reasons = r["reasons"]
         if isinstance(reasons, str):
             reasons = json.loads(reasons)
@@ -323,6 +337,7 @@ class SurpriseService:
             "reasons": reasons,
             # fantasy context that night: None = free agent
             "fantasy_team": r.get("fantasy_team"),
+            "fantasy_team_name": (team_names or {}).get(r.get("fantasy_team_id")) or r.get("fantasy_team"),
             "lineup_slot": r.get("lineup_slot"),
             "started": (r.get("lineup_slot") not in NOT_STARTED_SLOTS) if r.get("lineup_slot") else None,
         }

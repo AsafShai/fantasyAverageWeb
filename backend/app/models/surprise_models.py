@@ -40,6 +40,8 @@ class SurpriseRow(BaseModel):
     # Where he was in the league that night: fantasy team abbrev (None = free
     # agent), the lineup slot, and whether that slot counted (not BE / IR).
     fantasy_team: Optional[str] = None
+    # The team's current full name ("Trust the process"); the code when unknown.
+    fantasy_team_name: Optional[str] = None
     lineup_slot: Optional[str] = None
     started: Optional[bool] = None
 

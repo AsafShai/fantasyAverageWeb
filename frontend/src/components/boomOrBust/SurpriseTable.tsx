@@ -33,11 +33,16 @@ function FantasyBullet({ row }: { row: SurpriseRow }) {
   if (row.fantasy_team === null) return <span className="text-gray-400 dark:text-gray-500">· FA</span>;
   const state = row.started === null ? null : row.started ? 'started' : row.lineup_slot === 'IR' ? 'IR' : 'bench';
   const dot = state === 'started' ? 'bg-emerald-500' : state === 'IR' ? 'bg-amber-400' : 'bg-gray-400';
+  // The team's full name, capped so a long one ("Amihai's Awesome Team 🏆")
+  // ends in "…" instead of widening the player column (and the share image);
+  // the whole name is on hover.
+  const name = row.fantasy_team_name || row.fantasy_team;
   return (
-    <span className="inline-flex items-center gap-1">
-      <span>· {row.fantasy_team}</span>
+    <span className="inline-flex items-center gap-1 min-w-0">
+      <span className="shrink-0">·</span>
+      <span className="truncate max-w-[8.5rem]" title={name}>{name}</span>
       {state && (
-        <span className="inline-flex items-center gap-1 font-normal">
+        <span className="inline-flex items-center gap-1 font-normal shrink-0">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot}`} />
           {state}
         </span>
