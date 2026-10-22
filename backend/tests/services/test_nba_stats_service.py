@@ -10,8 +10,12 @@ from app.services.nba_stats_service import NBAStatsService
 
 @pytest.fixture
 def nba_stats_service():
-    """Create NBAStatsService instance"""
-    return NBAStatsService()
+    """Create NBAStatsService instance (a singleton, so its caches start empty)"""
+    service = NBAStatsService()
+    service._pace_cache = {'season_id': None, 'value': None, 'ts': None}
+    service._game_days_cache = {'season_id': None, 'value': None, 'ts': None}
+    service._calendar_cache = {'season_id': None, 'value': None, 'ts': None}
+    return service
 
 
 @pytest.fixture
@@ -316,6 +320,40 @@ class TestNBAStatsServiceGameDaysRemaining:
 
             # window is [02-01, 03-01, 04-01]; all >= 2026-01-15
             assert result == 3
+
+    @pytest.mark.asyncio
+    async def test_calendar_kept_for_a_day_while_counts_follow_today(self, nba_stats_service):
+        """The day counts are recomputed every 30 min against today's date, but
+        the season calendar behind them is fetched once a day."""
+        from datetime import timedelta
+        from app.services import nba_stats_service as module
+        calendar = AsyncMock(return_value=([date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)], 0, 2))
+        nba_stats_service._get_regular_season_calendar = calendar
+        try:
+            assert await nba_stats_service.get_nba_game_days_remaining(2026) is not None
+            nba_stats_service._game_days_cache = {'season_id': None, 'value': None, 'ts': None}
+            await nba_stats_service.get_nba_game_days_remaining(2026)
+            assert calendar.await_count == 1
+
+            stamped = nba_stats_service._calendar_cache['ts']
+            nba_stats_service._calendar_cache['ts'] = stamped - module._CALENDAR_TTL - timedelta(seconds=1)
+            nba_stats_service._game_days_cache = {'season_id': None, 'value': None, 'ts': None}
+            await nba_stats_service.get_nba_game_days_remaining(2026)
+            assert calendar.await_count == 2
+        finally:
+            del nba_stats_service._get_regular_season_calendar
+
+    @pytest.mark.asyncio
+    async def test_failed_calendar_fetch_is_not_cached(self, nba_stats_service):
+        calendar = AsyncMock(side_effect=[httpx.RequestError('down'), ([date(2026, 3, 1)], 0, 0)])
+        nba_stats_service._get_regular_season_calendar = calendar
+        try:
+            assert await nba_stats_service.get_nba_game_days_remaining(2026) is None
+            nba_stats_service._game_days_cache = {'season_id': None, 'value': None, 'ts': None}
+            assert await nba_stats_service.get_nba_game_days_remaining(2026) is not None
+            assert calendar.await_count == 2
+        finally:
+            del nba_stats_service._get_regular_season_calendar
 
     @pytest.mark.asyncio
     async def test_get_nba_game_days_remaining_http_error(self, nba_stats_service):

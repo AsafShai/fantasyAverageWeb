@@ -31,6 +31,8 @@ _UPCOMING_LOOKAHEAD_DAYS = 7
 # map does not change as its games progress, so this only saves repeat fetches
 # (the player card walks up to ~10 dates per view).
 _EXPLICIT_DATE_TTL = timedelta(minutes=5)
+# Freshness of one whitelist day's scoreboard in the default-view scan.
+_DAY_EVENTS_TTL = timedelta(minutes=5)
 # Backstop only: keys are dates the UI offers (upcoming + stored), a few dozen.
 _EXPLICIT_DATE_MAX_ENTRIES = 128
 
@@ -69,10 +71,10 @@ class NbaMatchupService:
             'pace': None,
             'ts': None,
         }
-        # 'fetched' = every candidate day the last fetch covered, including days
-        # whose events were all filtered out (not countable), which have no
-        # by_day key but must still count as cached.
-        self._events_cache: dict = {'by_day': {}, 'fetched': set(), 'ts': None}
+        # Per whitelist day: (fetched_at, [(game_date, slim countable event)]).
+        # A day whose events were all filtered out (not countable) is kept with
+        # an empty list, so it still counts as cached.
+        self._day_events: dict[date, tuple[datetime, list[tuple[date, dict]]]] = {}
         self._explicit_cache: dict[str, tuple[datetime, dict[str, 'GameInfo']]] = {}
         self._resolved_date: str | None = None
         self._whitelist_cache: dict = {'dates': None, 'ts': None}
@@ -171,7 +173,10 @@ class NbaMatchupService:
         # live, tomorrow once the whole slate is final, the next slate across
         # the All-Star break, and empty in the offseason.
         base = datetime.now(ZoneInfo('America/New_York')).date()
-        by_day = await self._countable_events_by_day(base, _UPCOMING_LOOKAHEAD_DAYS)
+        by_day = await self._countable_events_by_day(
+            base, _UPCOMING_LOOKAHEAD_DAYS,
+            enough=lambda found: any(not is_final(e) for events in found.values() for e in events),
+        )
         games: dict[str, GameInfo] = {}
         resolved_date: date | None = None
         for offset in range(_UPCOMING_LOOKAHEAD_DAYS + 1):
@@ -209,7 +214,15 @@ class NbaMatchupService:
         included while its slate is still pending), scanning at most
         ``lookahead_days`` ahead. Offseason -> empty."""
         base = datetime.now(ZoneInfo('America/New_York')).date()
-        by_day = await self._countable_events_by_day(base, lookahead_days)
+
+        def has_enough(by_day: dict[date, list[dict]]) -> bool:
+            days = sum(
+                1 for day, events in by_day.items()
+                if events and (day != base or any(not is_final(e) for e in events))
+            )
+            return days >= count
+
+        by_day = await self._countable_events_by_day(base, lookahead_days, enough=has_enough, first_batch=count + 1)
         found: list[str] = []
         for offset in range(lookahead_days + 1):
             day = base + timedelta(days=offset)
@@ -242,41 +255,71 @@ class NbaMatchupService:
         })
 
     async def _countable_events_by_day(
-        self, start: date, lookahead_days: int
+        self, start: date, lookahead_days: int, enough=None, first_batch: int = 2,
     ) -> dict[date, list[dict]]:
         """Countable events for [start, start + lookahead_days], grouped by
         US/Eastern game date. Candidate days come from the whitelist calendar
         (one cached request for the whole season) — only those specific days
         get fetched, never a whole month just to find out which days have
         games. Empty candidates (offseason) short-circuits with zero
-        day-scoreboard calls. Shared 5-min cache — both get_games_today and
-        get_upcoming_game_dates read/populate the same day-events map, so a
-        page load calling both never double-fetches the overlapping range."""
+        day-scoreboard calls.
+
+        Days are fetched in date order and the scan stops once ``enough(found)``
+        is true for the days read so far (``first_batch`` days first, then the
+        rest of the window at once), so the default view reads today and
+        tomorrow instead of every day of the week ahead. Each day is cached for
+        5 minutes and shared by get_games_today and get_upcoming_game_dates, so
+        a page load calling both never double-fetches a day."""
         await self._ensure_whitelist()
         end = start + timedelta(days=lookahead_days)
         candidates = sorted(d for d in self._whitelist_cache['dates'] if start <= d <= end)
         if not candidates:
             return {}
 
-        cache_fresh = (
-            self._events_cache['ts'] is not None
-            and datetime.now() - self._events_cache['ts'] < timedelta(minutes=5)
-        )
-        if not cache_fresh or not set(candidates) <= self._events_cache['fetched']:
-            responses = await asyncio.gather(
-                *(espn_client.scoreboard_async(self._client, d.strftime('%Y%m%d')) for d in candidates)
-            )
-            by_day: dict[date, list[dict]] = {}
-            for resp in responses:
-                for event in resp.get('events', []):
-                    if not is_countable(event):
-                        continue
-                    day = event_game_date(event)
+        now = datetime.now()
+        self._day_events = {
+            d: entry for d, entry in self._day_events.items() if now - entry[0] < _DAY_EVENTS_TTL
+        }
+        read: list[date] = []
+        by_day: dict[date, list[dict]] = {}
+        batch = first_batch
+        while len(read) < len(candidates):
+            chunk = candidates[len(read):len(read) + batch]
+            missing = [d for d in chunk if d not in self._day_events]
+            if missing:
+                responses = await asyncio.gather(
+                    *(espn_client.scoreboard_async(self._client, d.strftime('%Y%m%d')) for d in missing)
+                )
+                fetched_at = datetime.now()
+                for d, resp in zip(missing, responses):
+                    self._day_events[d] = (fetched_at, [
+                        (event_game_date(event), self._slim_event(event))
+                        for event in resp.get('events', [])
+                        if is_countable(event)
+                    ])
+            read.extend(chunk)
+            for d in chunk:
+                for day, event in self._day_events[d][1]:
                     if start <= day <= end:
                         by_day.setdefault(day, []).append(event)
-            self._events_cache.update({'by_day': by_day, 'fetched': set(candidates), 'ts': datetime.now()})
+            if enough is not None and enough({d: by_day.get(d, []) for d in read}):
+                break
+            batch = len(candidates)
 
-        return {d: self._events_cache['by_day'].get(d, []) for d in candidates}
+        return {d: by_day.get(d, []) for d in read}
+
+    @staticmethod
+    def _slim_event(event: dict) -> dict:
+        """The parts of a scoreboard event read after the countability filter
+        (is_final and _games_from), in the same shape; a full event is ~20 KB."""
+        competitors = event.get('competitions', [{}])[0].get('competitors', [])
+        return {
+            'status': {'type': {'completed': is_final(event)}},
+            'competitions': [{'competitors': [
+                {'homeAway': c.get('homeAway'), 'team': {'abbreviation': c['team']['abbreviation']}}
+                for c in competitors
+            ]}],
+        }
 
     @staticmethod
     def _games_from(events: list[dict]) -> dict[str, GameInfo]:
