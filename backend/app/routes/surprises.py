@@ -26,8 +26,9 @@ async def get_latest() -> NightSurprises:
     return NightSurprises(**night)
 
 
-# The period slider's range: p80 (top 20%) to p99.9 (top 0.1%).
-PCT_MIN, PCT_MAX = 80.0, 99.9
+# The period slider's range: p85 (top 15%) to p99.9 (top 0.1%); default p97.5.
+PCT_MIN, PCT_MAX = 85.0, 99.9
+PCT_DEFAULT = 97.5
 MAX_PERIOD_DAYS = 366
 
 
@@ -35,8 +36,8 @@ MAX_PERIOD_DAYS = 366
 async def get_period(
     start: date,
     end: date,
-    good_pct: float = Query(95.0, ge=PCT_MIN, le=PCT_MAX),
-    bad_pct: float = Query(95.0, ge=PCT_MIN, le=PCT_MAX),
+    good_pct: float = Query(PCT_DEFAULT, ge=PCT_MIN, le=PCT_MAX),
+    bad_pct: float = Query(PCT_DEFAULT, ge=PCT_MIN, le=PCT_MAX),
 ) -> PeriodSurprises:
     """Booms and busts from ``start`` to ``end`` (inclusive), ranked against
     every scored player-night in that range."""

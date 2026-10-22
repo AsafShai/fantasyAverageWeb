@@ -159,11 +159,11 @@ function ScoreSlider({ kind, threshold }: { kind: 'good' | 'bad'; threshold: Thr
 }
 
 /** Over several nights the bar is a percentile of every scored player-night in
- * the period instead of a score: p95 (top 5% each side) by default, from p80
- * (top 20%) to p99.9 (top 0.1%). The steps get finer towards the top, where
- * an even step would jump from 1% straight to nothing. */
-const PCT_STEPS = [80, 85, 90, 95, 97.5, 99, 99.5, 99.9];
-const DEFAULT_PCT = PCT_STEPS.indexOf(95);
+ * the period instead of a score: p97.5 (top 2.5% each side) by default, from
+ * p85 (top 15%) to p99.9 (top 0.1%). The steps get finer towards the top,
+ * where an even step would jump from 1% straight to nothing. */
+const PCT_STEPS = [85, 90, 95, 97.5, 99, 99.5, 99.9];
+const DEFAULT_PCT = PCT_STEPS.indexOf(97.5);
 const topShare = (pct: number) => `${+(100 - pct).toFixed(1)}%`;
 
 function PercentileSlider({ kind, index, onChange }: { kind: 'good' | 'bad'; index: number; onChange: (i: number) => void }) {
