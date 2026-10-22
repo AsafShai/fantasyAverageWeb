@@ -16,6 +16,16 @@ ENV UV_NO_SYNC=1
 # source and threw the bytecode away (measured at 0.15 CPU: app import 25s ->
 # 9s, model load 24s -> 8.5s).
 ENV UV_COMPILE_BYTECODE=1
+# Render gives this container 0.15 CPU, but sklearn's OpenMP and numpy/scipy's
+# OpenBLAS size their thread pools by the host's core count. Extra threads can't
+# run in parallel on a fraction of one core; they only add start-up/spin overhead
+# and per-thread memory. Predictions are identical with one thread (measured at
+# 0.15 CPU: first page visit after a start 18-21 s -> 11-12 s).
+ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+# pandas 3 stores every text column in Arrow, and Arrow's bundled mimalloc pool
+# keeps freed memory mapped. The system allocator hands it back like the rest of
+# the process (measured: ~20 MB less held after the nightly, ~20 MB lower peak).
+ENV ARROW_DEFAULT_MEMORY_POOL=system
 
 # Install dependencies as root, then switch to appuser
 COPY pyproject.toml uv.lock ./
