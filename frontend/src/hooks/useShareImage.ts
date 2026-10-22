@@ -10,15 +10,30 @@ const PIXEL_RATIO = 2;
  * web-font embedding is skipped: it's slow and can trip over cross-origin
  * stylesheets. No cache-busting: it would append a random query to every
  * image (the Boom or Bust card carries ~20 headshots) and re-download them on
- * each render, bypassing the browser and CDN caches. */
+ * each render, bypassing the browser and CDN caches.
+ *
+ * includeQueryParams: html-to-image caches embedded images by URL and by
+ * default cuts the query off the key. Every headshot is ESPN's resizer
+ * (`/combiner/i?img=…/<id>.png`), so without the query they all share one key
+ * and the first photo fetched was painted on every row. */
 // Loaded on first use so the renderer stays out of the page bundles; one
 // shared promise so overlapping renders don't each start an import.
 let htmlToImage: Promise<typeof import('html-to-image')> | null = null;
 
+/** WebKit (Safari, and every browser on iOS) can paint the SVG snapshot
+ * before the photos embedded in it have decoded, leaving them blank on the
+ * first render; the second render paints them. */
+function isWebKit(): boolean {
+  const ua = navigator.userAgent;
+  return /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|Android/.test(ua);
+}
+
 export async function renderNodeToPng(node: HTMLElement): Promise<Blob> {
   htmlToImage ??= import('html-to-image');
   const { toBlob } = await htmlToImage;
-  const blob = await toBlob(node, { pixelRatio: PIXEL_RATIO, cacheBust: false, skipFonts: true });
+  const options = { pixelRatio: PIXEL_RATIO, cacheBust: false, skipFonts: true, includeQueryParams: true };
+  if (isWebKit() && node.querySelector('img')) await toBlob(node, options);
+  const blob = await toBlob(node, options);
   if (!blob) throw new Error('Could not create the image');
   return blob;
 }

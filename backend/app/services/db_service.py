@@ -1864,6 +1864,134 @@ class DBService:
             logger.error(f"Failed to fetch surprises for {game_date}: {type(e).__name__}: {e}")
             return []
 
+    async def get_surprise_team_nights(
+        self, start: date, end: date, fantasy_team_id: Optional[int], side_limit: Optional[int] = None
+    ) -> list[dict]:
+        """Every scored night from ``start`` to ``end`` of the players one fantasy
+        team had **that night** (``fantasy_team_id`` None = free agents), best
+        first. With ``side_limit``, only that many from each end (the best and
+        the worst), for the free-agent pool, which is most of the league."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        team = "fantasy_team_id = $3" if fantasy_team_id is not None else "fantasy_team_id IS NULL"
+        args: list = [start, end] + ([fantasy_team_id] if fantasy_team_id is not None else [])
+        base = f"SELECT * FROM model_surprise_results WHERE game_date BETWEEN $1 AND $2 AND score IS NOT NULL AND {team}"
+        if side_limit is None:
+            sql = f"{base} ORDER BY score DESC"
+        else:
+            n = int(side_limit)
+            sql = (f"(({base} AND score >= 0 ORDER BY score DESC LIMIT {n}) "
+                   f"UNION ALL ({base} AND score < 0 ORDER BY score ASC LIMIT {n})) ORDER BY score DESC")
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(sql, *args)
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch team nights {start}..{end} team {fantasy_team_id}: {type(e).__name__}: {e}")
+            return []
+
+    async def get_surprise_form(self, start: date, end: date) -> tuple[Optional[dict], list[dict]]:
+        """Players who played between ``start`` and ``end`` (inclusive), one row
+        each: totals of the scored games, the latest night's name and teams, and
+        a slate-wide summary. A night he sat out has no row, so it is not a zero.
+        (Dor Zilberman's span query, for any range.)"""
+        pool = await self._get_pool()
+        if pool is None:
+            return None, []
+        summary_sql = """
+            SELECT COUNT(DISTINCT game_id) AS games,
+                   COUNT(DISTINCT game_date) AS nights,
+                   COUNT(DISTINCT player_id) AS players_played,
+                   COUNT(DISTINCT player_id) FILTER (WHERE score IS NOT NULL) AS players_scored,
+                   COUNT(DISTINCT player_id) FILTER (WHERE score IS NOT NULL AND has_estimate) AS players_with_estimate,
+                   MAX(created_at) AS computed_at
+            FROM model_surprise_results
+            WHERE game_date BETWEEN $1 AND $2
+        """
+        players_sql = """
+            SELECT player_id,
+                   MAX(game_date) FILTER (WHERE score IS NOT NULL) AS game_date,
+                   (array_agg(player_name ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS player_name,
+                   (array_agg(team_id ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS team_id,
+                   (array_agg(fantasy_team ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS fantasy_team,
+                   (array_agg(fantasy_team_id ORDER BY game_date DESC, game_id DESC)
+                       FILTER (WHERE score IS NOT NULL))[1] AS fantasy_team_id,
+                   COUNT(*) FILTER (WHERE score IS NOT NULL) AS games,
+                   SUM(score) FILTER (WHERE score IS NOT NULL) AS score_sum,
+                   BOOL_OR(has_estimate) FILTER (WHERE score IS NOT NULL) AS has_estimate,
+                   SUM(minutes) FILTER (WHERE score IS NOT NULL) AS minutes,
+                   SUM(pts) FILTER (WHERE score IS NOT NULL) AS pts,
+                   SUM(reb) FILTER (WHERE score IS NOT NULL) AS reb,
+                   SUM(ast) FILTER (WHERE score IS NOT NULL) AS ast,
+                   SUM(fg3m) FILTER (WHERE score IS NOT NULL) AS fg3m,
+                   SUM(stl) FILTER (WHERE score IS NOT NULL) AS stl,
+                   SUM(blk) FILTER (WHERE score IS NOT NULL) AS blk,
+                   SUM(fgm) FILTER (WHERE score IS NOT NULL) AS fgm,
+                   SUM(fga) FILTER (WHERE score IS NOT NULL) AS fga,
+                   SUM(ftm) FILTER (WHERE score IS NOT NULL) AS ftm,
+                   SUM(fta) FILTER (WHERE score IS NOT NULL) AS fta
+            FROM model_surprise_results
+            WHERE game_date BETWEEN $1 AND $2
+            GROUP BY player_id
+            HAVING COUNT(*) FILTER (WHERE score IS NOT NULL) > 0
+        """
+        try:
+            async with pool.acquire() as conn:
+                summary = await conn.fetchrow(summary_sql, start, end)
+                rows = await conn.fetch(players_sql, start, end)
+                return (dict(summary) if summary else None), [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch surprise form {start}..{end}: {type(e).__name__}: {e}")
+            return None, []
+
+    async def get_surprise_period(
+        self, start: date, end: date, good_q: float, bad_q: float
+    ) -> tuple[Optional[dict], list[dict]]:
+        """Every night from ``start`` to ``end``: a summary (player-nights,
+        scored, games, nights, newest write) with the score at quantile
+        ``good_q`` and at ``bad_q`` over all scored player-nights, then the
+        rows past those cuts (above good_q and positive, below bad_q and
+        negative), best first. (None, []) when the range has no rows."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None, []
+        try:
+            async with pool.acquire() as conn:
+                summary = await conn.fetchrow(
+                    """
+                    SELECT count(*) AS players_played,
+                           count(score) AS players_scored,
+                           count(*) FILTER (WHERE has_estimate) AS players_with_estimate,
+                           count(DISTINCT game_id) AS games,
+                           count(DISTINCT game_date) AS nights,
+                           max(created_at) AS computed_at,
+                           percentile_cont($3::float8) WITHIN GROUP (ORDER BY score) AS good_cut,
+                           percentile_cont($4::float8) WITHIN GROUP (ORDER BY score) AS bad_cut
+                    FROM model_surprise_results
+                    WHERE game_date BETWEEN $1 AND $2
+                    """,
+                    start, end, good_q, bad_q,
+                )
+                if summary is None or summary["players_played"] == 0:
+                    return None, []
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM model_surprise_results
+                    WHERE game_date BETWEEN $1 AND $2
+                      AND ((score >= $3 AND score > 0) OR (score <= $4 AND score < 0))
+                    ORDER BY score DESC
+                    """,
+                    start, end, summary["good_cut"], summary["bad_cut"],
+                )
+                return dict(summary), [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch surprises {start}..{end}: {type(e).__name__}: {e}")
+            return None, []
+
     async def close(self) -> None:
         if self._pool is not None:
             await self._pool.close()

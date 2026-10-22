@@ -596,6 +596,8 @@ export interface SurpriseReason {
 }
 
 export interface SurpriseRow {
+  /** The night of this line (YYYY-MM-DD). */
+  game_date: string;
   player_id: number;
   player_name: string;
   team_abbr: string;
@@ -619,8 +621,16 @@ export interface SurpriseRow {
   /** Fantasy context that night: team abbrev (null = free agent), lineup slot, and
    * whether that slot counted (false = bench / IR; null when unknown). */
   fantasy_team: string | null
+  /** League team id that night, when he was rostered. */
+  fantasy_team_id?: number | null
+  /** The team's current full name ("Trust the process"); the code when unknown. */
+  fantasy_team_name?: string | null
   lineup_slot: string | null
   started: boolean | null;
+  /** Form over a span only: games scored, and his plain average per game
+   * (`score` is then his nightly scores combined, sum / sqrt(games)). */
+  games?: number | null;
+  avg_score?: number | null;
   reasons: SurpriseReason[];
   /** The server's own call at the default thresholds; '' when the row crosses neither bar. */
   verdict: 'good' | 'bad' | '';
@@ -637,11 +647,48 @@ export interface NightSurprises {
   players_with_estimate: number;
   /** Server default thresholds; the page lets each viewer move them. */
   thresholds: { good: number; bad: number };
-  /** Most rows to show per list after filtering. */
-  max_rows: number;
   /** Every scored row with score >= 0, best first (not pre-filtered). */
   good: SurpriseRow[];
   /** Every scored row with score < 0, worst first (not pre-filtered). */
+  bad: SurpriseRow[];
+  computed_at: string;
+}
+
+/** A range of nights: one row per player-night past the period's percentile
+ * cuts, ranked against every scored player-night in the range. */
+export interface PeriodSurprises {
+  start: string;
+  end: string;
+  nights: number;
+  games: number;
+  /** Player-nights in the range, and how many of them were scored. */
+  players_played: number;
+  players_scored: number;
+  players_with_estimate: number;
+  /** The percentiles asked for (95 = top 5%). */
+  percentiles: { good: number; bad: number };
+  /** The scores those percentiles fell on, both as magnitudes. */
+  thresholds: { good: number; bad: number };
+  /** Best first. */
+  good: SurpriseRow[];
+  /** Worst first. */
+  bad: SurpriseRow[];
+  computed_at: string;
+}
+
+/** A range of nights, one row per player who played: his nightly scores
+ * combined over his games, and his line per game. */
+export interface FormSurprises {
+  start: string;
+  end: string;
+  nights: number;
+  games: number;
+  players_played: number;
+  players_scored: number;
+  players_with_estimate: number;
+  /** Server default thresholds (the night's bands apply to the combined score). */
+  thresholds: { good: number; bad: number };
+  good: SurpriseRow[];
   bad: SurpriseRow[];
   computed_at: string;
 }
