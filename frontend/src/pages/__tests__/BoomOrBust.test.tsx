@@ -51,7 +51,7 @@ const period: PeriodSurprises = {
   players_played: 120,
   players_scored: 100,
   players_with_estimate: 90,
-  percentiles: { good: 95, bad: 95 },
+  percentiles: { good: 97.5, bad: 97.5 },
   thresholds: { good: 1.4, bad: 1.2 },
   good: [
     row({ player_id: 31, player_name: 'Week Star', score: 2.9, game_date: '2024-01-04' }),
@@ -74,7 +74,7 @@ function stubApi(latest: Response | (() => Response)) {
       if (url.includes('/surprises/dates')) return Response.json(['2024-01-05', '2024-01-04'])
       if (url.includes('/surprises/period')) {
         const pct = Number(new URL(url, 'http://x').searchParams.get('good_pct'))
-        return Response.json({ ...period, percentiles: { good: pct, bad: 95 }, good: pct > 95 ? period.good.slice(0, 1) : period.good })
+        return Response.json({ ...period, percentiles: { good: pct, bad: 97.5 }, good: pct >= 99 ? period.good.slice(0, 1) : period.good })
       }
       if (url.includes('/surprises/2024-01-04')) return Response.json({ ...night, game_date: '2024-01-04', latest_run: null })
       if (url.includes('/surprises/latest')) return typeof latest === 'function' ? latest() : latest
@@ -177,16 +177,16 @@ describe('Boom or Bust page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
     await waitFor(() => expect(screen.getByText('Week Star')).toBeInTheDocument())
-    expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&good_pct=95&bad_pct=95')
+    expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&good_pct=97.5&bad_pct=97.5')
     expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
     expect(screen.getByText(/2 nights · 7 games · 100 player-nights scored/)).toBeInTheDocument()
-    expect(screen.getByText('top 5%')).toBeInTheDocument()
-    expect(screen.getByText('bottom 5%')).toBeInTheDocument()
+    expect(screen.getByText('top 2.5%')).toBeInTheDocument()
+    expect(screen.getByText('bottom 2.5%')).toBeInTheDocument()
     expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
     expect(screen.queryByLabelText('Previous night')).not.toBeInTheDocument()   // ‹ › are for single nights
 
     // the percentile slider asks the server again on release; top 1% = p99
-    fireEvent.change(screen.getByLabelText('Surprise percentile'), { target: { value: '5' } })
+    fireEvent.change(screen.getByLabelText('Surprise percentile'), { target: { value: '4' } })
     expect(screen.getByText('top 1%')).toBeInTheDocument()
     fireEvent.pointerUp(screen.getByLabelText('Surprise percentile'))
     await waitFor(() => expect(screen.queryByText('Week Second')).not.toBeInTheDocument())
