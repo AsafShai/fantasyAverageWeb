@@ -153,7 +153,8 @@ export function SurpriseTable({
               return d ? markClass(d.sign, d.z) : undefined;
             };
             return (
-            <tr key={row.player_id} className="group hover:bg-gray-50 dark:hover:bg-gray-800">
+            // One player can have two rows over a period (two big nights): the key is the player-night.
+            <tr key={`${row.player_id}-${row.game_date}`} className="group hover:bg-gray-50 dark:hover:bg-gray-800">
               <td className={`${td} text-right text-gray-400 dark:text-gray-500 ${stickyRank} ${stickyCell}`}>{startRank + i}</td>
               <td className={`px-2 py-2 min-w-[12rem] ${stickyPlayer} ${stickyCell}`}>
                 <PlayerCell row={row} eager={eager} />
