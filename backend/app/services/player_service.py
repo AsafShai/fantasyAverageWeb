@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 from datetime import date, datetime, timedelta
@@ -64,6 +65,10 @@ _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 # The cached list is read-only — it is handed out to every request, so it
 # must never be mutated in place. Custom ranges are never cached here — the
 # key space is unbounded (any start/end pair), so caching would grow forever.
+# Past the TTL both inputs are fetched again, but when neither changed (the
+# same ESPN frame object, an equal DB aggregate) the built list is kept, and
+# so is its ETag: 'ts' is when the inputs were last checked, 'built_ts' when
+# the list was last built.
 _WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
 _windowed_players_cache: dict = {}
 
@@ -73,7 +78,7 @@ def players_etag(time_period: StatTimePeriod, page: int, limit: int) -> Optional
     entry = _windowed_players_cache.get(time_period)
     if entry is None or datetime.now() - entry['ts'] >= _WINDOWED_PLAYERS_TTL:
         return None
-    raw = f"{time_period.value}|{page}|{limit}|{entry['ts'].isoformat()}"
+    raw = f"{time_period.value}|{page}|{limit}|{entry['built_ts'].isoformat()}"
     return f'W/"{hashlib.sha1(raw.encode()).hexdigest()[:8]}"'
 
 
@@ -260,25 +265,42 @@ class PlayerService:
             actual_start, actual_end = cached['start'], cached['end']
         else:
             stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
-            espn_players_df = await self.data_provider.get_players_df(stat_split_id)
+            # The two inputs are independent; fetching them together overlaps
+            # the ESPN download with the DB round trips.
+            espn_players_df, (agg_df, actual_start, actual_end) = await asyncio.gather(
+                self.data_provider.get_players_df(stat_split_id),
+                compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
+            )
 
             if espn_players_df is None or espn_players_df.empty:
                 raise ResourceNotFoundError("No players found")
 
-            players_df, actual_start, actual_end = await build_windowed_players_df(
-                time_period, espn_players_df, self.data_provider.db_service, start, end
-            )
-            all_players = self.response_builder.build_all_players_response(players_df, categories)
-            total_count = len(players_df)
-            logger.info(
-                f"Players list built: time_period={time_period.value}, {total_count} players, "
-                f"window {actual_start}..{actual_end}"
-            )
+            previous = _windowed_players_cache.get(time_period) if is_preset else None
+            if (
+                previous is not None
+                and previous['espn_df'] is espn_players_df
+                and previous['categories'] == categories
+                and (previous['start'], previous['end']) == (actual_start, actual_end)
+                and previous['agg_df'].equals(agg_df)
+            ):
+                all_players = previous['players']
+                total_count = previous['total_count']
+                built_ts = previous['built_ts']
+            else:
+                players_df = merge_windowed_players_df(time_period, espn_players_df, agg_df)
+                all_players = self.response_builder.build_all_players_response(players_df, categories)
+                total_count = len(players_df)
+                built_ts = datetime.now()
+                logger.info(
+                    f"Players list built: time_period={time_period.value}, {total_count} players, "
+                    f"window {actual_start}..{actual_end}"
+                )
             if is_preset:
                 _windowed_players_cache[time_period] = {
                     'players': all_players, 'total_count': total_count,
                     'start': actual_start, 'end': actual_end,
-                    'categories': categories, 'ts': datetime.now(),
+                    'categories': categories, 'ts': datetime.now(), 'built_ts': built_ts,
+                    'espn_df': espn_players_df, 'agg_df': agg_df,
                 }
 
         start_idx = (page - 1) * limit

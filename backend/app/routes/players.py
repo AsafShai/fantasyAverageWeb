@@ -51,7 +51,15 @@ async def get_all_players(
 
         result = await player_service.get_all_players(page, limit, time_period, start, end)
 
-        etag = etag or players_etag(time_period, page, limit)
+        if etag is None:
+            # A rebuild check that found nothing changed keeps the old ETag,
+            # so a browser holding that version still gets a 304.
+            etag = players_etag(time_period, page, limit)
+            if etag is not None and request.headers.get("if-none-match") == etag:
+                return Response(
+                    status_code=304,
+                    headers={"ETag": etag, "Cache-Control": PLAYERS_CACHE_CONTROL},
+                )
         if etag is not None:
             response.headers["ETag"] = etag
             response.headers["Cache-Control"] = PLAYERS_CACHE_CONTROL

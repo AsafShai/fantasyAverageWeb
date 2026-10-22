@@ -235,6 +235,20 @@ class TestPlayersETag:
         assert response.status_code == 200
         assert "etag" not in response.headers
 
+    def test_expired_cache_with_unchanged_inputs_still_answers_304(self):
+        from app.services.player_service import _windowed_players_cache, _WINDOWED_PLAYERS_TTL
+        client.get("/api/players/?time_period=season&limit=1200")
+        etag = client.get("/api/players/?time_period=season&limit=1200").headers["etag"]
+        entry = _windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - _WINDOWED_PLAYERS_TTL * 2
+
+        response = client.get(
+            "/api/players/?time_period=season&limit=1200",
+            headers={"If-None-Match": etag},
+        )
+        assert response.status_code == 304
+        assert response.headers["etag"] == etag
+
     def test_if_none_match_ignored_on_cold_cache(self):
         response = client.get(
             "/api/players/?time_period=last_30&limit=1200",
