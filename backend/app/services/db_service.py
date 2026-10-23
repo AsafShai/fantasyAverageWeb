@@ -1883,7 +1883,7 @@ class DBService:
                            count(*) FILTER (WHERE has_estimate) AS players_with_estimate,
                            count(DISTINCT game_id) AS games,
                            count(DISTINCT game_date) AS nights,
-                           max(created_at) AS computed_at
+                           max(updated_at) AS computed_at
                     FROM model_surprise_results
                     WHERE game_date BETWEEN $1 AND $2
                     """,
