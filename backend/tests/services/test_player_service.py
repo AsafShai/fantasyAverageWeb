@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import pandas as pd
@@ -468,7 +469,7 @@ class TestDynamicCategoriesPlayers:
         players_resp = MagicMock()
         players_resp.status_code = 200
         players_resp.headers = {}
-        players_resp.json.return_value = self._players_payload()
+        players_resp.content = json.dumps(self._players_payload()).encode()
         players_resp.raise_for_status = MagicMock()
 
         async def routed_get(url, **kwargs):
@@ -564,7 +565,42 @@ class TestWindowedPlayersCache:
         assert past_end.total_count == total
 
     @pytest.mark.asyncio
-    async def test_expired_entry_rebuilds_players(self, player_service, many_players_df):
+    async def test_expired_entry_rebuilds_players_when_espn_frame_changed(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df.copy())
+
+        second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        assert player_service.response_builder.build_all_players_response.call_count == 2
+        assert first.players[0] is not second.players[0]
+
+    @pytest.mark.asyncio
+    async def test_expired_entry_rebuilds_players_when_db_window_changed(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        player_service.data_provider.db_service.aggregate_player_games = AsyncMock(return_value=(
+            pd.DataFrame({'player_id': [1], 'player_name': ['Player 0'], 'gp': [1], 'pts': [30.0]}),
+            date(2026, 7, 9), date(2026, 7, 9),
+        ))
+
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        assert player_service.response_builder.build_all_players_response.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_expired_entry_reuses_players_when_inputs_unchanged(self, player_service, many_players_df):
+        """Past the TTL both inputs are fetched again; the same ESPN frame
+        object (a 304, or an equal frame) and an equal DB aggregate give the
+        same list, so it is kept instead of rebuilt."""
         player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
         player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
 
@@ -574,8 +610,13 @@ class TestWindowedPlayersCache:
 
         second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
-        assert player_service.response_builder.build_all_players_response.call_count == 2
-        assert first.players[0] is not second.players[0]
+        assert player_service.data_provider.get_players_df.await_count == 2
+        assert player_service.data_provider.db_service.aggregate_player_games.await_count == 2
+        assert player_service.response_builder.build_all_players_response.call_count == 1
+        assert second.players == first.players
+        assert second.players[0] is first.players[0]
+        fresh = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        assert player_service_module.datetime.now() - fresh['ts'] < player_service_module._WINDOWED_PLAYERS_TTL
 
     @pytest.mark.asyncio
     async def test_custom_range_is_never_cached(self, player_service, many_players_df):
@@ -643,7 +684,21 @@ class TestPlayersEtag:
         assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) is None
 
     @pytest.mark.asyncio
-    async def test_changes_when_cache_refills(self, player_service, sample_window_players_df):
+    async def test_changes_when_cache_rebuilds(self, player_service, sample_window_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
+        player_service.response_builder.build_all_players_response.return_value = []
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        before = player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200)
+
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df.copy())
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) != before
+
+    @pytest.mark.asyncio
+    async def test_kept_when_refill_finds_inputs_unchanged(self, player_service, sample_window_players_df):
         player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
         player_service.response_builder.build_all_players_response.return_value = []
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
@@ -653,4 +708,4 @@ class TestPlayersEtag:
         entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
-        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) != before
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) == before
