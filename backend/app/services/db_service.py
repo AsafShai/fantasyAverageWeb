@@ -1817,7 +1817,7 @@ class DBService:
             "opponent_team_id", "is_home", "minutes",
             "pts", "reb", "ast", "fg3m", "stl", "blk", "fgm", "fga", "ftm", "fta",
             "metric_z", "metric_err", "score", "has_estimate", "verdict", "reasons",
-            "fantasy_team_id", "fantasy_team", "lineup_slot",
+            "season_id", "fantasy_team_id", "lineup_slot",
         ]
         updates = ",\n".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("game_id", "player_id"))
         try:
@@ -1825,7 +1825,7 @@ class DBService:
                 await conn.executemany(
                     f"INSERT INTO model_surprise_results ({', '.join(cols)}) VALUES "
                     f"({', '.join(f'${i + 1}' for i in range(len(cols)))}) "
-                    f"ON CONFLICT (game_id, player_id) DO UPDATE SET {updates}, created_at = NOW()",
+                    f"ON CONFLICT (game_id, player_id) DO UPDATE SET {updates}, updated_at = NOW()",
                     rows,
                 )
             logger.info(f"Upserted {len(rows)} model surprise rows")

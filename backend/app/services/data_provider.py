@@ -232,6 +232,13 @@ class DataProvider:
         """team_id/team_name pairs, independent of whether stat totals exist yet.
         Reuses the raw standings payload already cached by get_totals_df when
         possible; falls back to a fresh fetch only if nothing is cached."""
+        return self.data_transformer.raw_standings_to_team_names(await self._raw_standings())
+
+    async def get_team_abbrevs(self) -> Dict[int, str]:
+        """Current season's fantasy team_id -> abbrev, from the same cached payload."""
+        return self.data_transformer.raw_standings_to_team_abbrevs(await self._raw_standings())
+
+    async def _raw_standings(self) -> Dict:
         raw = self.cache_manager.totals_cache.get('raw')
         if raw is None:
             try:
@@ -242,7 +249,7 @@ class DataProvider:
             except (httpx.HTTPError, ValueError) as e:
                 self.logger.error(f"Error fetching team names from ESPN API: {type(e).__name__}: {e}")
                 raise DataSourceError("Error fetching team names from ESPN API")
-        return self.data_transformer.raw_standings_to_team_names(raw)
+        return raw
 
     async def get_players_df(self, stat_split_type_id: int = 0) -> pd.DataFrame:
         """Get ALL players (roster + FA + waivers) DataFrame with caching
