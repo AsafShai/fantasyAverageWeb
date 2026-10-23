@@ -229,7 +229,8 @@ def _night_row():
         "is_home": True, "minutes": 30.0, "pts": 10.0, "reb": 1.0, "ast": 1.0, "fg3m": 0.0, "stl": 0.0,
         "blk": 0.0, "fgm": 4.0, "fga": 9.0, "ftm": 2.0, "fta": 2.0, "metric_z": 1.0, "metric_err": None,
         "score": 1.0, "has_estimate": True, "verdict": "", "reasons": "[]",
-        "created_at": datetime(2025, 12, 2, 7, 0, tzinfo=timezone.utc),
+        "updated_at": datetime(2025, 12, 2, 7, 0, tzinfo=timezone.utc), "season_id": settings.season_id,
+        "fantasy_team_id": None, "lineup_slot": None,
     }
 
 
@@ -243,6 +244,7 @@ async def test_read_side_served_from_memory_until_a_write(monkeypatch):
     svc = SurpriseService()
     latest, dates, rows = _counting(NIGHT), _counting([NIGHT]), _counting([_night_row()])
     run = _counting({"game_date": NIGHT, "status": "processed"})
+    monkeypatch.setattr(svc, "_team_abbrevs", _async_return({}))
     monkeypatch.setattr(svc._db, "get_latest_surprise_date", latest)
     monkeypatch.setattr(svc._db, "get_surprise_dates", dates)
     monkeypatch.setattr(svc._db, "get_surprises_for_date", rows)
@@ -273,6 +275,7 @@ async def test_read_side_expires(monkeypatch):
 async def test_only_the_latest_night_is_kept(monkeypatch):
     svc = SurpriseService()
     rows = _counting([_night_row()])
+    monkeypatch.setattr(svc, "_team_abbrevs", _async_return({}))
     monkeypatch.setattr(svc._db, "get_latest_surprise_date", _async_return(NIGHT))
     monkeypatch.setattr(svc._db, "get_surprises_for_date", rows)
     monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return(None))
