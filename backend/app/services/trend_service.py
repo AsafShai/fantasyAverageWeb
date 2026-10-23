@@ -690,6 +690,9 @@ class TrendService:
                 baseline_seasons=baseline_seasons,
                 mode=mode,
                 last_updated=datetime.now().isoformat(),
+                min_season_attempts={stat: spec['current_min_att'] for stat, spec in _STAT_SPECS.items()},
+                min_window_attempts=FORM_MIN_WINDOW_ATT,
+                min_baseline_attempts=FORM_MIN_BASELINE_ATT,
             )
             self._cache_preset_response(self._regression_cache, window_days, cache_key, response)
             return response
@@ -715,7 +718,13 @@ class TrendService:
             games_last_15d = await self._db.get_games_since(window_start)
 
             items = compute_minutes_movers(season_df, window_df, games_last_15d, players_df)
-            response = MinutesResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
+            response = MinutesResponse(
+                items=items,
+                window_days=window_days,
+                last_updated=datetime.now().isoformat(),
+                min_season_gp=MIN_SEASON_GP,
+                min_window_gp=MIN_WINDOW_GP,
+            )
             self._cache_preset_response(self._minutes_cache, window_days, window_days, response)
             return response
 
@@ -737,7 +746,13 @@ class TrendService:
             games_last_15d = await self._db.get_games_since(window_start)
 
             items = compute_usage_role(games_df, games_last_15d, players_df, window_start)
-            response = UsageResponse(items=items, window_days=window_days, last_updated=datetime.now().isoformat())
+            response = UsageResponse(
+                items=items,
+                window_days=window_days,
+                last_updated=datetime.now().isoformat(),
+                min_season_gp=MIN_SEASON_GP,
+                min_window_gp=MIN_WINDOW_GP,
+            )
             self._cache_preset_response(self._usage_cache, window_days, window_days, response)
             return response
 

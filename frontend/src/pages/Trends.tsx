@@ -183,11 +183,18 @@ function Th({ col, label, sortCol, sortAsc, onSort, className = '', title }: {
   )
 }
 
-function EmptyRow({ colSpan }: { colSpan: number }) {
+// noneQualify: the backend returned nobody (its eligibility gates aren't met
+// yet, typically early season), as opposed to the page's filters hiding rows.
+function EmptyRow({ colSpan, noneQualify, hint }: { colSpan: number; noneQualify: boolean; hint?: string }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="text-center text-gray-400 dark:text-gray-500 py-8 text-sm">
-        No players match current filters.
+      <td colSpan={colSpan} className="text-center text-gray-400 dark:text-gray-500 py-8 px-4 text-sm">
+        {noneQualify ? (
+          <>
+            No players qualify yet.
+            {hint && <p className="mt-1">{hint}</p>}
+          </>
+        ) : 'No players match current filters.'}
       </td>
     </tr>
   )
@@ -241,7 +248,7 @@ function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && <EmptyRow colSpan={9} />}
+          {rows.length === 0 && <EmptyRow colSpan={9} noneQualify={items.length === 0} />}
           {rows.map(r => {
             const open = expanded.has(r.player_id)
             return (
@@ -343,7 +350,7 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <EmptyRow colSpan={9} />}
+            {rows.length === 0 && <EmptyRow colSpan={9} noneQualify={items.length === 0} />}
             {rows.map(r => {
               const open = expanded.has(r.player_id)
               return (
@@ -484,7 +491,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
         {isForm
-          ? `Filter: at least 10 attempts in the last ${windowDays} days, 50 in the baseline, and a gap of at least 1.5 standard errors — so a hot night on thin volume never lists. Ranked by z: the least likely to be luck first.`
+          ? 'Filter: a gap of at least 1.5 standard errors — so a hot night on thin volume never lists. Ranked by z: the least likely to be luck first.'
           : 'Filter: fantasy-relevant swing ≥ 0.35 makes/g-equivalent (attempts/g × |dev|), volume-weighted. Grouped by player: worst-offending stat surfaces first.'}
       </p>
       <div className="overflow-x-auto rounded-lg">
@@ -517,7 +524,13 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
             </tr>
           </thead>
           <tbody>
-            {groups.length === 0 && <EmptyRow colSpan={colCount} />}
+            {groups.length === 0 && (
+              <EmptyRow
+                colSpan={colCount}
+                noneQualify={items.length === 0}
+                hint={isForm && baselineSeasons === 0 ? 'Early in the season, try "Last season only".' : undefined}
+              />
+            )}
             {groups.map(({ group, stats }) => {
               const openStat = expanded[group.player_id]
               const toggle = (stat: RegressionStat) => toggleStat(group.player_id, stat)
@@ -613,7 +626,7 @@ export default function Trends() {
     DEFAULT_WINDOW_DAYS,
     urlKeys.has('window') ? urlState.window : undefined,
   )
-  const [minGames, setMinGames] = usePersistedState('trends.minGames', 3)
+  const [minGames, setMinGames] = usePersistedState('trends.minGames', 2)
   const [ownership, setOwnership] = usePersistedState<Ownership>('trends.ownership', 'all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
   const { myTeam } = useMyTeam()
@@ -702,7 +715,28 @@ export default function Trends() {
     setCustomOpen(false)
   }
 
-  const filters: Filters = { nameFilter, position, minG15: minGames, ownership, fantasyTeam }
+  // Minutes/Usage never return a player under the backend's window-games gate,
+  // so a lower "Min games" there would look like it does something and doesn't.
+  const minGamesFloor = tab === 'minutes'
+    ? minutesQuery.data?.min_window_gp ?? 0
+    : tab === 'usage'
+      ? usageQuery.data?.min_window_gp ?? 0
+      : 0
+  const effectiveMinGames = Math.max(minGames, minGamesFloor)
+
+  const filters: Filters = { nameFilter, position, minG15: effectiveMinGames, ownership, fantasyTeam }
+
+  const gpGates = tab === 'minutes' ? minutesQuery.data : tab === 'usage' ? usageQuery.data : undefined
+  const regressionGates = isShooting ? regressionQuery.data : undefined
+  // Who can appear at all on the active tab — shown above the table always,
+  // so the rule stays visible once players start to qualify.
+  const eligibilityRule = gpGates
+    ? `Shows players with ${gpGates.min_season_gp}+ games this season and ${gpGates.min_window_gp}+ in the last ${windowDays} days.`
+    : regressionGates?.mode === 'form'
+      ? `Shows players with ${regressionGates.min_window_attempts}+ shots in the last ${windowDays} days and ${regressionGates.min_baseline_attempts}+ before that.`
+      : regressionGates
+        ? `Shows players with ${regressionGates.min_season_attempts['3P%']}+ threes, ${regressionGates.min_season_attempts['FT%']}+ free throws or ${regressionGates.min_season_attempts['FG%']}+ field goals attempted this season.`
+        : null
 
   const activeQuery = tab === 'minutes' ? minutesQuery : tab === 'usage' ? usageQuery : regressionQuery
 
@@ -849,10 +883,12 @@ export default function Trends() {
               <span className="w-[72px] sm:w-auto shrink-0">Min games</span>
               <input
                 type="number"
-                min={0}
-                value={minGames}
-                onChange={e => setMinGames(Math.max(0, Number(e.target.value)))}
-                title={`Minimum games played in the last ${windowDays} days`}
+                min={minGamesFloor}
+                value={effectiveMinGames}
+                onChange={e => setMinGames(Math.max(minGamesFloor, Number(e.target.value)))}
+                title={minGamesFloor > 0
+                  ? `Fewest games in the last ${windowDays} days (at least ${minGamesFloor} here)`
+                  : `Fewest games in the last ${windowDays} days`}
                 className="flex-1 sm:flex-none sm:w-16 px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               />
             </label>
@@ -885,6 +921,7 @@ export default function Trends() {
 
           {!activeQuery.isLoading && !activeQuery.error && (
             <>
+              {eligibilityRule && <p className="text-xs text-gray-500 dark:text-gray-400">{eligibilityRule}</p>}
               {tab === 'minutes' && minutesQuery.data && <MinutesTable items={minutesQuery.data.items} filters={filters} windowDays={windowDays} />}
               {tab === 'usage' && usageQuery.data && <UsageTable items={usageQuery.data.items} filters={filters} windowDays={windowDays} />}
               {isShooting && regressionQuery.data && (
