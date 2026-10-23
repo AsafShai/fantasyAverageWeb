@@ -734,6 +734,9 @@ export interface MinutesResponse {
   items: MinutesMoverItem[];
   window_days: number;
   last_updated: string;
+  // eligibility gates — a player needs both to be listed at all
+  min_season_gp: number;
+  min_window_gp: number;
 }
 
 export interface UsageRoleItem {
@@ -758,6 +761,9 @@ export interface UsageResponse {
   items: UsageRoleItem[];
   window_days: number;
   last_updated: string;
+  // eligibility gates — a player needs both to be listed at all
+  min_season_gp: number;
+  min_window_gp: number;
 }
 
 export type RegressionStat = '3P%' | 'FT%' | 'FG%';
@@ -795,6 +801,10 @@ export interface RegressionResponse {
   baseline_seasons: number;
   mode: RegressionMode;
   last_updated: string;
+  // eligibility gates: min_season_attempts for mode='season', the other two for mode='form'
+  min_season_attempts: Record<RegressionStat, number>;
+  min_window_attempts: number;
+  min_baseline_attempts: number;
 }
 
 export interface GameLogEntry {
