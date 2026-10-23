@@ -231,7 +231,7 @@ describe('Rankings page team names', () => {
     vi.unstubAllGlobals();
   });
 
-  it('lets a long team name wrap on phones, like player names on the roster', async () => {
+  it('lets team names wrap within a narrow column on phones', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -257,13 +257,13 @@ describe('Rankings page team names', () => {
     renderWithProviders(<Rankings />);
     const longName = await screen.findByText('Shai‑Gilgeous Alexander Fans');
     const longCell = longName.closest('td')!;
-    expect(longCell.className).toContain('max-w-[38vw]');
+    expect(longCell.className).toContain('max-w-[28vw]');
     expect(longCell.className).toContain('whitespace-normal');
     expect(longCell.className).toContain('sm:whitespace-nowrap');
     expect(longName.closest('a')).toHaveAttribute('href', '/team/2');
 
     const shortCell = screen.getByText('Alpha Squad').closest('td')!;
-    expect(shortCell.className).not.toContain('max-w-[38vw]');
-    expect(shortCell.className).toContain('whitespace-nowrap');
+    expect(shortCell.className).toContain('max-w-[28vw]');
+    expect(shortCell.className).toContain('sm:whitespace-nowrap');
   });
 });
