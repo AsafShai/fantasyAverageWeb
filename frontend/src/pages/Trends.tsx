@@ -749,6 +749,13 @@ export default function Trends() {
     return items.reduce((max, r) => Math.max(max, r.games_last_15d), 0) || null
   }, [minutesQuery.data, usageQuery.data, regressionQuery.data])
 
+  // Picker choices run from the tab's floor up to the window's game nights —
+  // more games than nights played can't exist. With no data yet (early season)
+  // fall back to roughly every other day. The saved value is always offered so
+  // the select never shows a blank.
+  const minGamesCap = Math.max(gameNights ?? Math.ceil(windowDays / 2), effectiveMinGames)
+  const minGamesOptions = Array.from({ length: minGamesCap - minGamesFloor + 1 }, (_, i) => minGamesFloor + i)
+
   const isShootingSeasonTab = tab === 'shooting-season'
 
   const teamOptions = useMemo(() => {
@@ -881,16 +888,16 @@ export default function Trends() {
             </select>
             <label className="col-span-2 flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
               <span className="w-[72px] sm:w-auto shrink-0">Min games</span>
-              <input
-                type="number"
-                min={minGamesFloor}
+              <select
                 value={effectiveMinGames}
-                onChange={e => setMinGames(Math.max(minGamesFloor, Number(e.target.value)))}
+                onChange={e => setMinGames(Number(e.target.value))}
                 title={minGamesFloor > 0
                   ? `Fewest games in the last ${windowDays} days (at least ${minGamesFloor} here)`
                   : `Fewest games in the last ${windowDays} days`}
-                className="flex-1 sm:flex-none sm:w-16 px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              />
+                className="flex-1 sm:flex-none px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+              >
+                {minGamesOptions.map(n => <option key={n} value={n}>{n === 0 ? 'Any' : `${n}+`}</option>)}
+              </select>
             </label>
             {isShooting && (
               <label
