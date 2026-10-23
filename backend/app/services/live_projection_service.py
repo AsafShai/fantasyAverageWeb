@@ -29,6 +29,13 @@ logger = logging.getLogger(__name__)
 # is a coarser proxy for "thin recent form" than Simulation's window-count check.
 _STALE_DAYS = 10
 
+# project_today's model batch is most of a slate rebuild (~270ms CPU for a
+# 58-player slate, ~1.8s at 0.15 CPU), yet its inputs only move on a nightly
+# store refresh, a date change or a roster change. Its output is kept per
+# distinct request list (~1.3 KB a player, ~0.45 MB for a full slate): two
+# entries cover the default view plus one date picked in the slate picker.
+_SLATE_PROJECTIONS_MAX = 2
+
 
 class LiveProjectionService:
     """Singleton: holds one warm LiveInference (models loaded once) built from
@@ -39,6 +46,7 @@ class LiveProjectionService:
     _inference: LiveInference | None
     _store_ref: FeatureStore | None
     _name_index: dict[str, int]
+    _slate_projections: dict[tuple, dict[str, dict]]
     _lock: asyncio.Lock
 
     def __new__(cls):
@@ -47,6 +55,7 @@ class LiveProjectionService:
             cls._instance._inference = None
             cls._instance._store_ref = None
             cls._instance._name_index = {}
+            cls._instance._slate_projections = {}
             cls._instance._lock = asyncio.Lock()
         return cls._instance
 
@@ -62,6 +71,7 @@ class LiveProjectionService:
             self._inference = await asyncio.to_thread(LiveInference, store)
             self._store_ref = store
             self._name_index = _build_name_index(store)
+            self._slate_projections = {}
             return self._inference
 
     async def warm(self) -> None:
@@ -115,10 +125,24 @@ class LiveProjectionService:
         if not reqs:
             return {}
 
+        # Same store, same date and the same requests predict the same lines.
+        # A store refresh rebuilds the inference and empties this cache.
+        key = (id(inference.store), today, tuple(
+            (name, r.player_id, r.opponent_team_id, r.is_home, r.minutes)
+            for (name, _, _), r in zip(meta, reqs)
+        ))
+        cached = self._slate_projections.get(key)
+        if cached is not None:
+            return cached
+
         results, errors = await asyncio.to_thread(inference.predict_many, reqs)
         out: dict[str, dict] = {}
         for (name, pid, default_min), res, err in zip(meta, results, errors):
             out[name] = _to_projection(inference.store, pid, default_min, today, res, err)
+        if inference is self._inference:
+            if len(self._slate_projections) >= _SLATE_PROJECTIONS_MAX:
+                self._slate_projections.pop(next(iter(self._slate_projections)))
+            self._slate_projections[key] = out
         return out
 
     async def project_next_game(
