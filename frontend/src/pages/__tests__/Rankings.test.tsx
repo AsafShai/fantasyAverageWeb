@@ -257,13 +257,14 @@ describe('Rankings page team names', () => {
     renderWithProviders(<Rankings />);
     const longName = await screen.findByText('Shai‑Gilgeous Alexander Fans');
     const longCell = longName.closest('td')!;
-    expect(longCell.className).toContain('max-w-[28vw]');
     expect(longCell.className).toContain('whitespace-normal');
     expect(longCell.className).toContain('sm:whitespace-nowrap');
+    expect(longName.closest('div')!.className).toContain('w-[34vw]');
+    expect(longName.closest('div')!.className).toContain('line-clamp-2');
     expect(longName.closest('a')).toHaveAttribute('href', '/team/2');
 
     const shortCell = screen.getByText('Alpha Squad').closest('td')!;
-    expect(shortCell.className).toContain('max-w-[28vw]');
     expect(shortCell.className).toContain('sm:whitespace-nowrap');
+    expect(screen.getByText('Alpha Squad').closest('div')!.className).toContain('w-[34vw]');
   });
 });
