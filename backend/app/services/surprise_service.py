@@ -48,10 +48,8 @@ NOT_STARTED_SLOTS = {"BE", "IR"}
 # Read side, kept in memory between nightly runs: the nights list, the latest
 # night and that night's response only change when the nightly writes (scored
 # rows or a ledger row), which clears this. The expiry covers writes from
-# another process, which can't clear it: a manual backfill from the command
-# line, or another season's deployment sharing the database. Kept short so
-# those show up within minutes; a miss is a few cheap queries.
-_READ_CACHE_TTL_S = 15 * 60
+# another process (a manual backfill from the command line).
+_READ_CACHE_TTL_S = 6 * 60 * 60
 _MISS = object()
 _read_cache: dict = {"ts": None, "values": {}}
 # Bumped on every clear so a read that started before a write never stores
