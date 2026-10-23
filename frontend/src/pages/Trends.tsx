@@ -730,18 +730,18 @@ export default function Trends() {
   const notEnoughData: NotEnoughData = gpGates
     ? {
         title: 'Not enough games yet',
-        detail: `A player needs ${gpGates.min_season_gp}+ games this season and ${gpGates.min_window_gp}+ in the last ${windowDays} days to be listed. This tab fills in once teams reach ${gpGates.min_season_gp} games.`,
+        detail: `Players show up after ${gpGates.min_season_gp} games this season, with ${gpGates.min_window_gp} in the last ${windowDays} days.`,
       }
     : regressionGates?.mode === 'form'
       ? {
           title: 'Not enough shots yet',
-          detail: `A player needs ${regressionGates.min_window_attempts}+ attempts in the last ${windowDays} days and ${regressionGates.min_baseline_attempts}+ in the baseline.`
-            + (regressionGates.baseline_seasons === 0 ? ' Early in the season "This season" has almost no baseline — try a prior-season baseline.' : ''),
+          detail: `Players show up after ${regressionGates.min_window_attempts} shots in the last ${windowDays} days and ${regressionGates.min_baseline_attempts} before that.`
+            + (regressionGates.baseline_seasons === 0 ? ' Early in the season, try "Last season only".' : ''),
         }
       : {
-          title: 'Not enough shot volume yet',
+          title: 'Not enough shots yet',
           detail: regressionGates
-            ? `A shooting line is listed once a player has ${regressionGates.min_season_attempts['3P%']}+ 3PA, ${regressionGates.min_season_attempts['FT%']}+ FTA or ${regressionGates.min_season_attempts['FG%']}+ FGA this season, plus prior seasons to compare against.`
+            ? `Players show up after ${regressionGates.min_season_attempts['3P%']} threes, ${regressionGates.min_season_attempts['FT%']} free throws or ${regressionGates.min_season_attempts['FG%']} field goals attempted this season.`
             : '',
         }
 
@@ -894,8 +894,8 @@ export default function Trends() {
                 value={effectiveMinGames}
                 onChange={e => setMinGames(Math.max(minGamesFloor, Number(e.target.value)))}
                 title={minGamesFloor > 0
-                  ? `Minimum games played in the last ${windowDays} days — at least ${minGamesFloor} on this tab, fewer never qualify`
-                  : `Minimum games played in the last ${windowDays} days`}
+                  ? `Fewest games in the last ${windowDays} days (at least ${minGamesFloor} here)`
+                  : `Fewest games in the last ${windowDays} days`}
                 className="flex-1 sm:flex-none sm:w-16 px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               />
             </label>
