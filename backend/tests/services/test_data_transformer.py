@@ -176,6 +176,17 @@ class TestRawStandingsToTeamNames:
         assert transformer.raw_standings_to_team_names(None) == []
 
 
+class TestRawStandingsToTeamAbbrevs:
+    def test_maps_id_to_abbrev_falling_back_to_id(self, transformer):
+        payload = {"teams": [{"id": 1, "abbrev": "ASAF"}, {"id": 4, "abbrev": ""}, {"abbrev": "NOID"}]}
+
+        assert transformer.raw_standings_to_team_abbrevs(payload) == {1: "ASAF", 4: "4"}
+
+    def test_missing_payload_returns_empty_dict(self, transformer):
+        assert transformer.raw_standings_to_team_abbrevs(None) == {}
+        assert transformer.raw_standings_to_team_abbrevs({}) == {}
+
+
 class TestTotalsToAverages:
     def test_divides_by_gp(self, transformer, sample_totals_df):
         avg = transformer.totals_to_averages_df(sample_totals_df)

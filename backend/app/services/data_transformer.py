@@ -301,6 +301,15 @@ class DataTransformer:
             if 'id' in team and team.get('name')
         ]
 
+    def raw_standings_to_team_abbrevs(self, espn_standings_data: Dict) -> Dict[int, str]:
+        if not espn_standings_data or 'teams' not in espn_standings_data:
+            return {}
+        return {
+            team['id']: team.get('abbrev') or str(team['id'])
+            for team in espn_standings_data['teams']
+            if 'id' in team
+        }
+
     def raw_standings_to_totals_df(self, espn_standings_data: Dict, categories: list[str] = None) -> pd.DataFrame:
         """
         Convert raw ESPN API standings data to totals DataFrame

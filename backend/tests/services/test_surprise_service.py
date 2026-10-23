@@ -90,13 +90,27 @@ def test_to_tuple_matches_insert_columns(history):
     row = night[night["PLAYER_NAME"] == "Cold Night"].iloc[0]
     t = surprise_service._to_tuple(row, NIGHT)
     assert len(t) == 27
-    assert t[-3:] == (None, None, None)          # no roster given: free agent / unknown
+    assert t[-3:] == (settings.season_id, None, None)    # no roster given: free agent / unknown
     assert t[:3] == ("night", 2, NIGHT)
     assert t[5] == 2 and t[6] is False          # opponent from the matchup string, away
     assert t[-5] == "bad"
     assert isinstance(t[-4], list)
-    t2 = surprise_service._to_tuple(row, NIGHT, {2: {"team_id": 7, "team": "AAT", "team_name": "Alon", "slot": "BE"}})
-    assert t2[-3:] == (7, "AAT", "BE")
+    t2 = surprise_service._to_tuple(row, NIGHT, {2: {"team_id": 7, "slot": "BE"}})
+    assert t2[-3:] == (settings.season_id, 7, "BE")
+
+
+def _roster_payload(season_id: int) -> dict:
+    return {"seasonId": season_id, "teams": [
+        {"id": 7, "abbrev": "AAT", "roster": {"entries": [{"playerId": 2, "lineupSlotId": 12}]}},
+    ]}
+
+
+def test_parse_roster_keeps_team_id_and_slot():
+    assert surprise_service._parse_roster(_roster_payload(settings.season_id)) == {2: {"team_id": 7, "slot": "BE"}}
+
+
+def test_parse_roster_rejects_another_seasons_payload():
+    assert surprise_service._parse_roster(_roster_payload(settings.season_id - 1)) == {}
 
 
 @pytest.mark.asyncio
@@ -111,15 +125,17 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
             "fgm": 4.0, "fga": 9.0, "ftm": 2.0, "fta": 2.0,
             "metric_z": score, "metric_err": None, "score": score, "has_estimate": est,
             "verdict": verdict, "reasons": '[{"stat": "PTS", "value": 10.0, "avg": 5.0, "z": 1.0}]',
-            "created_at": created,
-            "fantasy_team_id": 7 if pid % 2 else None, "fantasy_team": "AAT" if pid % 2 else None,
+            "updated_at": created, "season_id": settings.season_id,
+            "fantasy_team_id": 7 if pid % 2 else None,
             "lineup_slot": ("BE" if pid == 51 else "PG") if pid % 2 else None,
         }
 
     rows = [row(i, 3.0 - i * 0.1, "good") for i in range(1, 20)]
     rows += [row(50, -2.0, "bad", est=False), row(51, -2.5, "bad"), row(60, 0.3, ""), row(61, -0.4, "")]
     rows.append({**row(70, None, ""), "metric_z": None})
+    rows.append({**row(81, -0.2, ""), "season_id": settings.season_id - 1})
     svc = SurpriseService()
+    monkeypatch.setattr(svc, "_team_abbrevs", _async_return({7: "AAT"}))
     monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return(rows))
     monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return({"game_date": NIGHT + timedelta(days=1), "status": "no_games"}))
     monkeypatch.setattr(settings, "surprise_top_n", 5)
@@ -128,12 +144,14 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     assert out["latest_run"] == {"game_date": "2025-12-02", "status": "no_games"}
 
     assert out["game_date"] == "2025-12-01" and out["games"] == 2
-    assert out["players_played"] == 24 and out["players_scored"] == 23
-    assert out["players_with_estimate"] == 23
+    assert out["players_played"] == 25 and out["players_scored"] == 24
+    assert out["players_with_estimate"] == 24
     assert out["max_rows"] == 5
     # every scored row, split by sign: the page's sliders do the filtering
     assert [r["player_id"] for r in out["good"]] == list(range(1, 20)) + [60]
-    assert [r["player_id"] for r in out["bad"]] == [51, 50, 61]    # worst first
+    assert [r["player_id"] for r in out["bad"]] == [51, 50, 61, 81]    # worst first
+    other_season = out["bad"][3]
+    assert (other_season["fantasy_team"], other_season["lineup_slot"], other_season["started"]) == (None, None, None)
     assert out["good"][-1]["verdict"] == "" and out["bad"][0]["verdict"] == "bad"
     assert out["bad"][1]["has_estimate"] is False
     assert out["good"][0]["team_abbr"] == "BOS" and out["good"][0]["opponent_abbr"] == "NYK"

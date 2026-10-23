@@ -557,12 +557,29 @@ class LeagueActivityService:
     async def _cards(self) -> Optional[tuple[list[dict], list[int]]]:
         """Every player card with a transaction this season, plus the ids of the
         most-owned players (the valuation pool), in one call. None: unchanged."""
-        f = ('{"players":{"limit":%d,"sortPercOwned":{"sortPriority":1,"sortAsc":false}}}' % CARD_LIMIT)
+        # The cards are read for their transactions, names and ownership order
+        # only; a stat source no card has drops the stats, ~80% of the bytes.
+        f = ('{"players":{"limit":%d,"sortPercOwned":{"sortPriority":1,"sortAsc":false},'
+             '"filterStatsForSourceIds":{"value":[99]}}}' % CARD_LIMIT)
         data = await self._get([('view', 'kona_playercard')], f, etag_key='cards')
         if data is None:
             return None
         players = data.get('players', [])
         return [c for c in players if c.get('transactions')], [c['id'] for c in players[:VALUE_POOL_SIZE]]
+
+    def _stats_filter(self, chunk: list[int]) -> str:
+        """Per-game lines for ``chunk``. Asking for the season's scoring periods
+        returns this season's games only; the top-200-periods filter it
+        replaces returned each player's last 200 games across seasons, and the
+        earlier seasons (which parse_game_logs drops) were ~95% of the bytes
+        early in a season. Without league settings yet, the old filter."""
+        status = (_cache.league or {}).get('status', {})
+        last = max(status.get('finalScoringPeriod') or 0, status.get('latestScoringPeriod') or 0)
+        if not last:
+            return ('{"players":{"filterIds":{"value":%s},"filterStatsForTopScoringPeriodIds":'
+                    '{"value":200,"additionalValue":["00%d"]}}}' % (chunk, self.season_id))
+        return ('{"players":{"filterIds":{"value":%s},"filterStatsForScoringPeriodIds":{"value":%s}}}'
+                % (chunk, list(range(1, last + 1))))
 
     async def _stat_cards(self, ids: list[int]) -> tuple[list[dict], bool]:
         """Stat cards for ``ids``, skipping batches ESPN reports unchanged (their
@@ -570,8 +587,7 @@ class LeagueActivityService:
         sem = asyncio.Semaphore(FETCH_CONCURRENCY)
 
         async def batch(chunk: list[int]) -> Optional[list[dict]]:
-            f = ('{"players":{"filterIds":{"value":%s},"filterStatsForTopScoringPeriodIds":'
-                 '{"value":200,"additionalValue":["00%d"]}}}' % (chunk, self.season_id))
+            f = self._stats_filter(chunk)
             # Only a batch already parsed into _cache.stats may come back as 304.
             key = ('stats', tuple(chunk))
             if not all(i in _cache.stats for i in chunk):

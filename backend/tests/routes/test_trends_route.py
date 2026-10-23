@@ -37,6 +37,9 @@ _MOCK_RESPONSE = RegressionResponse(
     baseline_seasons=2,
     mode='season',
     last_updated='2026-07-18T12:00:00',
+    min_season_attempts={'3P%': 40, 'FT%': 40, 'FG%': 100},
+    min_window_attempts=10,
+    min_baseline_attempts=50,
 )
 
 
@@ -50,6 +53,8 @@ _MOCK_MINUTES_RESPONSE = MinutesResponse(
     ],
     window_days=15,
     last_updated='2026-07-18T12:00:00',
+    min_season_gp=10,
+    min_window_gp=2,
 )
 
 
@@ -64,6 +69,8 @@ _MOCK_USAGE_RESPONSE = UsageResponse(
     ],
     window_days=15,
     last_updated='2026-07-18T12:00:00',
+    min_season_gp=10,
+    min_window_gp=2,
 )
 
 

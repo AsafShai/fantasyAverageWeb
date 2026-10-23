@@ -420,7 +420,7 @@ class TestDynamicCategoriesTeamDetail:
         players_resp = MagicMock()
         players_resp.status_code = 200
         players_resp.headers = {}
-        players_resp.json.return_value = {"players": []}
+        players_resp.content = b'{"players": []}'
         players_resp.raise_for_status = MagicMock()
 
         async def routed_get(url, **kwargs):

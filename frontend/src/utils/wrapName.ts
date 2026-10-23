@@ -8,3 +8,11 @@ export const wrapFriendlyName = (name: string) => name.replaceAll('-', '‑')
  * the screen on phones and stays on one line from `sm` up. */
 export const nameCellWrapClass = (name: string) =>
   isLongName(name) ? 'max-w-[38vw] whitespace-normal sm:max-w-none sm:whitespace-nowrap' : 'whitespace-nowrap'
+
+/** Standings team-name cell: on phones the name sits in a fixed 34%-wide box and
+ * wraps between words onto at most two lines (the fixed width keeps the table
+ * from squeezing it when there are many stat columns); from `sm` up it stays on
+ * one line. */
+export const TEAM_NAME_CELL_CLASS = 'whitespace-normal px-3 sm:whitespace-nowrap sm:px-6'
+export const TEAM_NAME_BOX_CLASS =
+  'w-[34vw] line-clamp-2 break-words text-[13px] leading-snug sm:w-auto sm:line-clamp-none sm:text-sm'

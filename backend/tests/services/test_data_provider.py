@@ -192,13 +192,40 @@ async def test_get_players_df_sends_if_none_match(provider):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"ETag": "e2"}
-    mock_resp.json.return_value = {"players": []}
+    mock_resp.content = b'{"players": []}'
     provider._client.get = AsyncMock(return_value=mock_resp)
 
     await provider.get_players_df(0)
 
     _, kwargs = provider._client.get.call_args
     assert kwargs["headers"]["If-None-Match"] == "e1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("same_frame", [True, False])
+async def test_get_players_df_keeps_cached_frame_when_new_body_parses_equal(provider, same_frame):
+    """Ownership drift changes ESPN's body but not the frame; the cached
+    object is kept so the players list built from it is reused."""
+    from datetime import timedelta
+    cached = pd.DataFrame({"Name": ["A"], "team_id": [1], "PTS": [10.0]})
+    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.players_0 = {
+        "data": cached, "etag": "e1", "timestamp": datetime.now() - timedelta(minutes=10),
+    }
+    parsed = cached.copy() if same_frame else cached.assign(PTS=[12.0])
+    provider.data_transformer.raw_all_players_to_df.return_value = parsed
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"ETag": "e2"}
+    mock_resp.content = b'{"players": [{"id": 1}]}'
+    provider._client.get = AsyncMock(return_value=mock_resp)
+
+    df = await provider.get_players_df(0)
+
+    assert (df is cached) is same_frame
+    assert provider.cache_manager.players_0["data"] is df
+    assert provider.cache_manager.players_0["etag"] == "e2"
+    assert provider.data_transformer.raw_all_players_to_df.call_args.args[0] == {"players": [{"id": 1}]}
 
 
 @pytest.mark.asyncio
@@ -211,7 +238,7 @@ async def test_get_players_df_asks_espn_for_only_the_split_and_actual_lines_it_r
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"ETag": "e1"}
-    mock_resp.json.return_value = {"players": []}
+    mock_resp.content = b'{"players": []}'
     provider._client.get = AsyncMock(return_value=mock_resp)
 
     await provider.get_players_df(split)
@@ -230,7 +257,7 @@ async def test_get_players_df_concurrent_calls_coalesce(provider):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.headers = {"ETag": "e1"}
-    mock_resp.json.return_value = {"players": []}
+    mock_resp.content = b'{"players": []}'
 
     async def slow_get(*args, **kwargs):
         await asyncio.sleep(0.05)
@@ -255,7 +282,7 @@ async def test_get_players_df_different_splits_do_not_block(provider):
     mock_resp_0 = MagicMock()
     mock_resp_0.status_code = 200
     mock_resp_0.headers = {"ETag": "e-split0"}
-    mock_resp_0.json.return_value = {"players": []}
+    mock_resp_0.content = b'{"players": []}'
 
     calls = []
 
@@ -408,6 +435,16 @@ async def test_get_team_names_raises_data_source_error_on_fetch_failure(provider
 
     with pytest.raises(DataSourceError, match="Error fetching team names"):
         await provider.get_team_names()
+
+
+@pytest.mark.asyncio
+async def test_get_team_abbrevs_reuses_cached_raw_payload(provider):
+    provider.cache_manager.totals_cache["raw"] = {"teams": [{"id": 1, "abbrev": "ASAF"}]}
+    provider.data_transformer.raw_standings_to_team_abbrevs.return_value = {1: "ASAF"}
+    provider._client.get = AsyncMock()
+
+    assert await provider.get_team_abbrevs() == {1: "ASAF"}
+    provider._client.get.assert_not_awaited()
 
 
 @pytest.mark.asyncio

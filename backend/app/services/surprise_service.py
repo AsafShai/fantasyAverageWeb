@@ -29,7 +29,9 @@ import pandas as pd
 import httpx
 
 from app.config import settings
+from app.exceptions import DataSourceError
 from app.services import schedule_service
+from app.services.data_provider import get_data_provider
 from app.services.db_service import DBService
 from app.utils.constants import LINEUP_SLOT_MAP
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR
@@ -79,11 +81,11 @@ def _cache_put(key: str, value, generation: int) -> None:
 
 
 async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
-    """{espn_player_id: {team_id, team, team_name, slot}} for the league's
-    rosters on that night, from one ESPN request for that scoring period
-    (period 1 = the season's first day). Only the few fields the row needs are
-    kept; the ~1 MB payload is dropped. {} when the night is before the season
-    or ESPN is unavailable: the rows then just carry no fantasy context."""
+    """{espn_player_id: {team_id, slot}} for the league's rosters on that night,
+    from one ESPN request for that scoring period (period 1 = the season's first
+    day). Only the few fields the row needs are kept; the ~1 MB payload is
+    dropped. {} when the night is before the season or ESPN is unavailable: the
+    rows then just carry no fantasy context."""
     season_start = await schedule_service.get_season_start_date() or settings.season_start
     period = (game_date - season_start).days + 1
     if period < 1:
@@ -102,17 +104,26 @@ async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
         return {}
     if isinstance(payload, list):
         payload = payload[0] if payload else {}
+    out = _parse_roster(payload)
+    logger.info(
+        f"Fantasy rosters for {game_date}: season {settings.season_id} period {period}, "
+        f"{len(out)} rostered players"
+    )
+    return out
+
+
+def _parse_roster(payload: dict) -> dict[int, dict]:
+    # A team id means a different team in another season (ESPN reuses them), so
+    # a payload for any season but ours must not tag the rows.
+    if payload.get("seasonId") != settings.season_id:
+        logger.warning(f"Fantasy rosters: got season {payload.get('seasonId')}, expected {settings.season_id}")
+        return {}
     out: dict[int, dict] = {}
     for team in payload.get("teams", []):
-        team_id = team.get("id")
-        abbrev = team.get("abbrev") or str(team_id)
-        name = team.get("name") or f"{team.get('location', '')} {team.get('nickname', '')}".strip() or abbrev
         for entry in (team.get("roster") or {}).get("entries", []):
             pid = entry.get("playerId")
-            slot = LINEUP_SLOT_MAP.get(entry.get("lineupSlotId"))
             if pid is not None:
-                out[int(pid)] = {"team_id": team_id, "team": abbrev, "team_name": name, "slot": slot}
-    logger.info(f"Fantasy rosters for {game_date}: period {period}, {len(out)} rostered players")
+                out[int(pid)] = {"team_id": team.get("id"), "slot": LINEUP_SLOT_MAP.get(entry.get("lineupSlotId"))}
     return out
 
 
@@ -202,8 +213,8 @@ def _to_tuple(row: pd.Series, game_date: date, roster: dict[int, dict] | None = 
         bool(row["HAS_ESTIMATE"]),
         _verdict(score),
         row["REASONS"],
+        settings.season_id,
         owner["team_id"] if owner else None,
-        owner["team"] if owner else None,
         owner["slot"] if owner else None,
     )
 
@@ -308,10 +319,11 @@ class SurpriseService:
         # Every scored row goes out, split by sign: the page filters with its own
         # sliders, starting from the server thresholds (the verdict on each row).
         scored = [r for r in rows if r["score"] is not None]
-        good = [self._row_out(r) for r in scored if r["score"] >= 0]
-        bad = [self._row_out(r) for r in scored if r["score"] < 0]
+        abbrevs = await self._team_abbrevs()
+        good = [self._row_out(r, abbrevs) for r in scored if r["score"] >= 0]
+        bad = [self._row_out(r, abbrevs) for r in scored if r["score"] < 0]
         bad.sort(key=lambda r: r["score"])
-        computed = max(r["created_at"] for r in rows)
+        computed = max(r["updated_at"] for r in rows)
         # The nightly's newest ledger row, so the page can tell "no games last
         # night" (the ledger says no_games for a newer date) from "the night
         # hasn't been scored yet", without looking at the viewer's clock.
@@ -337,10 +349,22 @@ class SurpriseService:
         }
 
     @staticmethod
-    def _row_out(r: dict) -> dict:
+    async def _team_abbrevs() -> dict[int, str]:
+        try:
+            return await get_data_provider().get_team_abbrevs()
+        except DataSourceError:
+            return {}
+
+    @staticmethod
+    def _row_out(r: dict, abbrevs: dict[int, str]) -> dict:
         reasons = r["reasons"]
         if isinstance(reasons, str):
             reasons = json.loads(reasons)
+        # Rows scored under another season carry that season's team ids, which
+        # name different teams now: show them without fantasy context.
+        current = r.get("season_id") == settings.season_id
+        team_id = r.get("fantasy_team_id") if current else None
+        slot = r.get("lineup_slot") if current else None
         return {
             "player_id": r["player_id"],
             "player_name": r["player_name"],
@@ -356,9 +380,9 @@ class SurpriseService:
             "verdict": r["verdict"],
             "reasons": reasons,
             # fantasy context that night: None = free agent
-            "fantasy_team": r.get("fantasy_team"),
-            "lineup_slot": r.get("lineup_slot"),
-            "started": (r.get("lineup_slot") not in NOT_STARTED_SLOTS) if r.get("lineup_slot") else None,
+            "fantasy_team": abbrevs.get(team_id, str(team_id)) if team_id is not None else None,
+            "lineup_slot": slot,
+            "started": (slot not in NOT_STARTED_SLOTS) if slot else None,
         }
 
 

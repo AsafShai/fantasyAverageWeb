@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 import pandas as pd
+import pydantic_core
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
 from app.services.db_service import DBService
@@ -232,6 +233,13 @@ class DataProvider:
         """team_id/team_name pairs, independent of whether stat totals exist yet.
         Reuses the raw standings payload already cached by get_totals_df when
         possible; falls back to a fresh fetch only if nothing is cached."""
+        return self.data_transformer.raw_standings_to_team_names(await self._raw_standings())
+
+    async def get_team_abbrevs(self) -> Dict[int, str]:
+        """Current season's fantasy team_id -> abbrev, from the same cached payload."""
+        return self.data_transformer.raw_standings_to_team_abbrevs(await self._raw_standings())
+
+    async def _raw_standings(self) -> Dict:
         raw = self.cache_manager.totals_cache.get('raw')
         if raw is None:
             try:
@@ -242,7 +250,7 @@ class DataProvider:
             except (httpx.HTTPError, ValueError) as e:
                 self.logger.error(f"Error fetching team names from ESPN API: {type(e).__name__}: {e}")
                 raise DataSourceError("Error fetching team names from ESPN API")
-        return self.data_transformer.raw_standings_to_team_names(raw)
+        return raw
 
     async def get_players_df(self, stat_split_type_id: int = 0) -> pd.DataFrame:
         """Get ALL players (roster + FA + waivers) DataFrame with caching
@@ -297,7 +305,9 @@ class DataProvider:
                     return cache['data']
 
                 response.raise_for_status()
-                api_data = response.json()
+                # ~2.5 MB of JSON: pydantic_core's parser builds the same dict
+                # in about half the CPU of response.json().
+                api_data = pydantic_core.from_json(response.content)
 
                 if self.cache_manager.totals_cache.get('data') is None:
                     # Best-effort only: fantasy_team_name is optional enrichment
@@ -320,10 +330,21 @@ class DataProvider:
                     api_data, stat_split_type_id, fantasy_team_map, categories
                 )
 
+                # ESPN's payload changes with ownership drift, which the frame
+                # doesn't carry, so a new body often yields the same frame. Keep
+                # the cached object then: the players list built from it is
+                # reused by identity (see PlayerService.get_all_players).
+                previous = cache.get('data')
+                unchanged = previous is not None and previous.equals(players_df)
+                if unchanged:
+                    players_df = previous
                 cache['etag'] = response.headers.get('ETag')
                 cache['timestamp'] = datetime.now()
                 cache['data'] = players_df
-                self.logger.info(f"ESPN players refreshed: split={stat_split_type_id}, {len(players_df)} players")
+                self.logger.info(
+                    f"ESPN players refreshed: split={stat_split_type_id}, {len(players_df)} players"
+                    + (" (unchanged)" if unchanged else "")
+                )
 
                 return players_df
 
