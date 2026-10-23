@@ -183,11 +183,23 @@ function Th({ col, label, sortCol, sortAsc, onSort, className = '', title }: {
   )
 }
 
-function EmptyRow({ colSpan }: { colSpan: number }) {
+// Why a table is empty: the backend's eligibility gates (nobody qualifies yet,
+// typically early season) vs the page's own filters hiding every row.
+interface NotEnoughData {
+  title: string
+  detail: string
+}
+
+function EmptyRow({ colSpan, notEnoughData }: { colSpan: number; notEnoughData?: NotEnoughData }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="text-center text-gray-400 dark:text-gray-500 py-8 text-sm">
-        No players match current filters.
+      <td colSpan={colSpan} className="text-center text-gray-400 dark:text-gray-500 py-8 px-4 text-sm">
+        {notEnoughData ? (
+          <>
+            <p className="font-semibold text-gray-600 dark:text-gray-300">{notEnoughData.title}</p>
+            <p className="mt-1 max-w-xl mx-auto">{notEnoughData.detail}</p>
+          </>
+        ) : 'No players match current filters.'}
       </td>
     </tr>
   )
@@ -204,7 +216,7 @@ const MIN_SORT_VAL: Record<string, (r: MinutesMoverItem) => number | string> = {
   g15: r => r.games_last_15d,
 }
 
-function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[]; filters: Filters; windowDays: number }) {
+function MinutesTable({ items, filters, windowDays, notEnoughData }: { items: MinutesMoverItem[]; filters: Filters; windowDays: number; notEnoughData: NotEnoughData }) {
   const [sortCol, setSortCol] = useState('delta')
   const [sortAsc, setSortAsc] = useState(false)
   const { open: expanded, toggle } = useExpandedSet()
@@ -241,7 +253,7 @@ function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && <EmptyRow colSpan={9} />}
+          {rows.length === 0 && <EmptyRow colSpan={9} notEnoughData={items.length === 0 ? notEnoughData : undefined} />}
           {rows.map(r => {
             const open = expanded.has(r.player_id)
             return (
@@ -301,7 +313,7 @@ function RoleBadge({ badge }: { badge: string | null }) {
   )
 }
 
-function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; filters: Filters; windowDays: number }) {
+function UsageTable({ items, filters, windowDays, notEnoughData }: { items: UsageRoleItem[]; filters: Filters; windowDays: number; notEnoughData: NotEnoughData }) {
   const [sortCol, setSortCol] = useState('delta')
   const [sortAsc, setSortAsc] = useState(false)
   const { open: expanded, toggle } = useExpandedSet()
@@ -343,7 +355,7 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <EmptyRow colSpan={9} />}
+            {rows.length === 0 && <EmptyRow colSpan={9} notEnoughData={items.length === 0 ? notEnoughData : undefined} />}
             {rows.map(r => {
               const open = expanded.has(r.player_id)
               return (
@@ -417,7 +429,7 @@ function ZCell({ z }: { z: number | null }) {
   )
 }
 
-function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: { items: RegressionPlayerGroup[]; filters: Filters; windowDays: number; baselineSeasons: number; mode: RegressionMode }) {
+function RegressionTable({ items, filters, windowDays, baselineSeasons, mode, notEnoughData }: { items: RegressionPlayerGroup[]; filters: Filters; windowDays: number; baselineSeasons: number; mode: RegressionMode; notEnoughData: NotEnoughData }) {
   const isForm = mode === 'form'
   const colCount = isForm ? 11 : 10
   const [sortCol, setSortCol] = useState(isForm ? 'z' : 'dev')
@@ -517,7 +529,7 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
             </tr>
           </thead>
           <tbody>
-            {groups.length === 0 && <EmptyRow colSpan={colCount} />}
+            {groups.length === 0 && <EmptyRow colSpan={colCount} notEnoughData={items.length === 0 ? notEnoughData : undefined} />}
             {groups.map(({ group, stats }) => {
               const openStat = expanded[group.player_id]
               const toggle = (stat: RegressionStat) => toggleStat(group.player_id, stat)
@@ -613,7 +625,7 @@ export default function Trends() {
     DEFAULT_WINDOW_DAYS,
     urlKeys.has('window') ? urlState.window : undefined,
   )
-  const [minGames, setMinGames] = usePersistedState('trends.minGames', 3)
+  const [minGames, setMinGames] = usePersistedState('trends.minGames', 2)
   const [ownership, setOwnership] = usePersistedState<Ownership>('trends.ownership', 'all')
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
   const { myTeam } = useMyTeam()
@@ -702,7 +714,36 @@ export default function Trends() {
     setCustomOpen(false)
   }
 
-  const filters: Filters = { nameFilter, position, minG15: minGames, ownership, fantasyTeam }
+  // Minutes/Usage never return a player under the backend's window-games gate,
+  // so a lower "Min games" there would look like it does something and doesn't.
+  const minGamesFloor = tab === 'minutes'
+    ? minutesQuery.data?.min_window_gp ?? 0
+    : tab === 'usage'
+      ? usageQuery.data?.min_window_gp ?? 0
+      : 0
+  const effectiveMinGames = Math.max(minGames, minGamesFloor)
+
+  const filters: Filters = { nameFilter, position, minG15: effectiveMinGames, ownership, fantasyTeam }
+
+  const gpGates = tab === 'minutes' ? minutesQuery.data : tab === 'usage' ? usageQuery.data : undefined
+  const regressionGates = regressionQuery.data
+  const notEnoughData: NotEnoughData = gpGates
+    ? {
+        title: 'Not enough games yet',
+        detail: `A player needs ${gpGates.min_season_gp}+ games this season and ${gpGates.min_window_gp}+ in the last ${windowDays} days to be listed. This tab fills in once teams reach ${gpGates.min_season_gp} games.`,
+      }
+    : regressionGates?.mode === 'form'
+      ? {
+          title: 'Not enough shots yet',
+          detail: `A player needs ${regressionGates.min_window_attempts}+ attempts in the last ${windowDays} days and ${regressionGates.min_baseline_attempts}+ in the baseline.`
+            + (regressionGates.baseline_seasons === 0 ? ' Early in the season "This season" has almost no baseline — try a prior-season baseline.' : ''),
+        }
+      : {
+          title: 'Not enough shot volume yet',
+          detail: regressionGates
+            ? `A shooting line is listed once a player has ${regressionGates.min_season_attempts['3P%']}+ 3PA, ${regressionGates.min_season_attempts['FT%']}+ FTA or ${regressionGates.min_season_attempts['FG%']}+ FGA this season, plus prior seasons to compare against.`
+            : '',
+        }
 
   const activeQuery = tab === 'minutes' ? minutesQuery : tab === 'usage' ? usageQuery : regressionQuery
 
@@ -849,10 +890,12 @@ export default function Trends() {
               <span className="w-[72px] sm:w-auto shrink-0">Min games</span>
               <input
                 type="number"
-                min={0}
-                value={minGames}
-                onChange={e => setMinGames(Math.max(0, Number(e.target.value)))}
-                title={`Minimum games played in the last ${windowDays} days`}
+                min={minGamesFloor}
+                value={effectiveMinGames}
+                onChange={e => setMinGames(Math.max(minGamesFloor, Number(e.target.value)))}
+                title={minGamesFloor > 0
+                  ? `Minimum games played in the last ${windowDays} days — at least ${minGamesFloor} on this tab, fewer never qualify`
+                  : `Minimum games played in the last ${windowDays} days`}
                 className="flex-1 sm:flex-none sm:w-16 px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               />
             </label>
@@ -885,8 +928,8 @@ export default function Trends() {
 
           {!activeQuery.isLoading && !activeQuery.error && (
             <>
-              {tab === 'minutes' && minutesQuery.data && <MinutesTable items={minutesQuery.data.items} filters={filters} windowDays={windowDays} />}
-              {tab === 'usage' && usageQuery.data && <UsageTable items={usageQuery.data.items} filters={filters} windowDays={windowDays} />}
+              {tab === 'minutes' && minutesQuery.data && <MinutesTable items={minutesQuery.data.items} filters={filters} windowDays={windowDays} notEnoughData={notEnoughData} />}
+              {tab === 'usage' && usageQuery.data && <UsageTable items={usageQuery.data.items} filters={filters} windowDays={windowDays} notEnoughData={notEnoughData} />}
               {isShooting && regressionQuery.data && (
                 <RegressionTable
                   key={regressionQuery.data.mode}
@@ -895,6 +938,7 @@ export default function Trends() {
                   windowDays={windowDays}
                   baselineSeasons={regressionQuery.data.baseline_seasons}
                   mode={regressionQuery.data.mode}
+                  notEnoughData={notEnoughData}
                 />
               )}
             </>

@@ -39,6 +39,12 @@ class RegressionResponse(BaseModel):
     baseline_seasons: int
     mode: RegressionMode
     last_updated: str
+    # Eligibility gates, echoed so an empty table can say what it is waiting for.
+    # min_season_attempts applies to mode=season (per stat, this season to date);
+    # min_window_attempts / min_baseline_attempts apply to mode=form.
+    min_season_attempts: dict[str, int]
+    min_window_attempts: int
+    min_baseline_attempts: int
 
 
 class MinutesMoverItem(BaseModel):
@@ -60,6 +66,9 @@ class MinutesResponse(BaseModel):
     items: list[MinutesMoverItem]
     window_days: int
     last_updated: str
+    # eligibility gates, echoed so an empty table can say what it is waiting for
+    min_season_gp: int
+    min_window_gp: int
 
 
 class UsageRoleItem(BaseModel):
@@ -84,6 +93,9 @@ class UsageResponse(BaseModel):
     items: list[UsageRoleItem]
     window_days: int
     last_updated: str
+    # eligibility gates, echoed so an empty table can say what it is waiting for
+    min_season_gp: int
+    min_window_gp: int
 
 
 class GameLogEntry(BaseModel):
