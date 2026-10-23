@@ -30,6 +30,8 @@ sys.path.insert(0, str(BACKEND))
 MIGRATIONS = [
     BACKEND / "migrations" / "create_model_surprise_results.sql",
     BACKEND / "migrations" / "add_surprise_fantasy_columns.sql",
+    BACKEND / "migrations" / "add_surprise_season_scope.sql",
+    BACKEND / "migrations" / "drop_surprise_fantasy_team.sql",
 ]
 
 
@@ -46,7 +48,7 @@ async def apply_migrations(db) -> None:
             "WHERE table_name = 'model_surprise_results' ORDER BY ordinal_position"
         )
     names = [c["column_name"] for c in cols]
-    missing = {"fantasy_team_id", "fantasy_team", "lineup_slot"} - set(names)
+    missing = {"season_id", "fantasy_team_id", "lineup_slot", "updated_at"} - set(names)
     if missing:
         raise SystemExit(f"model_surprise_results is missing {sorted(missing)}")
     print(f"model_surprise_results: {len(names)} columns, fantasy columns present")

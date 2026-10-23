@@ -411,6 +411,16 @@ async def test_get_team_names_raises_data_source_error_on_fetch_failure(provider
 
 
 @pytest.mark.asyncio
+async def test_get_team_abbrevs_reuses_cached_raw_payload(provider):
+    provider.cache_manager.totals_cache["raw"] = {"teams": [{"id": 1, "abbrev": "ASAF"}]}
+    provider.data_transformer.raw_standings_to_team_abbrevs.return_value = {1: "ASAF"}
+    provider._client.get = AsyncMock()
+
+    assert await provider.get_team_abbrevs() == {1: "ASAF"}
+    provider._client.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_get_ranking_categories_delegates_to_transformer(provider):
     """get_ranking_categories reads the raw payload already cached by a prior
     get_totals_df() call rather than fetching itself, so callers within the
