@@ -499,3 +499,89 @@ def test_callers_share_one_matchup_service():
     assert matchups_route._matchup_service is shared
     assert TodayService().matchup_service is shared
     assert PlayerNextGameService()._matchups is shared
+
+
+@pytest.mark.asyncio
+async def test_default_view_stops_reading_days_once_a_pending_slate_is_found(service):
+    """Today's slate is still pending: only the first day batch (today and the
+    next game day) is read, not every game day of the week ahead."""
+    today = _today()
+    events_by_day = {
+        today + timedelta(days=offset): [
+            _scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=today + timedelta(days=offset))
+        ]
+        for offset in range(6)
+    }
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+    ) as get:
+        games = await service.get_games_today()
+
+    day_calls = [c for c in get.call_args_list if c.kwargs['params'].get('calendartype') != 'whitelist']
+    assert [c.kwargs['params']['dates'] for c in day_calls] == [
+        today.strftime('%Y%m%d'), (today + timedelta(days=1)).strftime('%Y%m%d'),
+    ]
+    assert games['LAL'].opponent == 'CHA'
+    assert service.get_schedule_date() == today.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_default_view_reads_further_days_until_a_pending_slate(service):
+    """Today and tomorrow have only finished or uncountable games: the scan
+    goes on to the rest of the window and finds the same slate as a full read."""
+    today = _today()
+    events_by_day = {
+        today: [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=True, game_date=today)],
+        today + timedelta(days=1): [
+            _scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=today + timedelta(days=1), season_type=4)
+        ],
+        today + timedelta(days=4): [
+            _scoreboard_event(18, 9, 'NY', 'GS', completed=False, game_date=today + timedelta(days=4))
+        ],
+    }
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+    ):
+        games = await service.get_games_today()
+
+    assert games['NYK'].opponent == 'GSW'
+    assert 'LAL' not in games
+    assert service.get_schedule_date() == (today + timedelta(days=4)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_upcoming_game_dates_reads_only_the_days_it_needs(service):
+    today = _today()
+    events_by_day = {
+        today + timedelta(days=offset): [
+            _scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=today + timedelta(days=offset))
+        ]
+        for offset in range(1, 10)
+    }
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+    ) as get:
+        dates = await service.get_upcoming_game_dates(count=3)
+
+    assert dates == [(today + timedelta(days=offset)).isoformat() for offset in (1, 2, 3)]
+    day_calls = [c for c in get.call_args_list if c.kwargs['params'].get('calendartype') != 'whitelist']
+    assert len(day_calls) == 4  # count + 1, not all 9 game days in the window
+
+
+@pytest.mark.asyncio
+async def test_day_events_refetched_after_ttl(service):
+    from app.services import nba_matchup_service as module
+    today = _today()
+    events_by_day = {today: [_scoreboard_event(13, 30, 'LAL', 'CHA', completed=False, game_date=today)]}
+    with patch.object(
+        service._client, 'get', new_callable=AsyncMock, side_effect=_client_get_by_day(events_by_day),
+    ) as get:
+        await service.get_games_today()
+        calls = get.await_count
+        await service.get_games_today()
+        assert get.await_count == calls
+        stamped, events = service._day_events[today]
+        service._day_events[today] = (stamped - module._DAY_EVENTS_TTL, events)
+        await service.get_games_today()
+
+    assert get.await_count == calls + 1

@@ -8,6 +8,10 @@ import logging
 from app.utils.ssl_context import shared_ssl_context
 
 _CACHE_TTL = timedelta(minutes=30)
+# The season's game-day calendar and its regular-season window are static once
+# published (a season doesn't grow new game days mid-day), so they are kept far
+# longer than the day counts derived from them against today's date.
+_CALENDAR_TTL = timedelta(hours=24)
 
 
 class NBAStatsService:
@@ -35,6 +39,7 @@ class NBAStatsService:
         )
         self._pace_cache: dict = {'season_id': None, 'value': None, 'ts': None}
         self._game_days_cache: dict = {'season_id': None, 'value': None, 'ts': None}
+        self._calendar_cache: dict = {'season_id': None, 'value': None, 'ts': None}
         NBAStatsService._initialized = True
 
     async def get_nba_average_pace(self, season_id: int) -> Optional[float]:
@@ -158,11 +163,26 @@ class NBAStatsService:
         preseason), derived from ESPN's whitelist calendar — not cached here,
         meant to be called once at app startup and stored on settings."""
         try:
-            dates, start_idx, _ = await self._get_regular_season_calendar(season_id)
+            dates, start_idx, _ = await self._get_cached_regular_season_calendar(season_id)
             return dates[start_idx]
         except Exception as e:
             self.logger.warning(f"Failed to derive regular season start for {season_id}: {type(e).__name__}: {e}")
             return None
+
+    async def _get_cached_regular_season_calendar(self, season_id: int) -> tuple[list, int, int]:
+        """_get_regular_season_calendar, kept for _CALENDAR_TTL. Failures are not
+        cached, so the next call retries."""
+        cache = self._calendar_cache
+        if (
+            cache['season_id'] == season_id
+            and cache['ts'] is not None
+            and datetime.now() - cache['ts'] < _CALENDAR_TTL
+        ):
+            return cache['value']
+
+        value = await self._get_regular_season_calendar(season_id)
+        self._calendar_cache = {'season_id': season_id, 'value': value, 'ts': datetime.now()}
+        return value
 
     async def _get_event_season_type(self, day) -> Optional[int]:
         """season.type for the first event on `day` (1=preseason, 2=regular, 3+=postseason/play-in),
@@ -311,7 +331,7 @@ class NBAStatsService:
 
     async def _fetch_nba_game_days(self, season_id: int) -> Optional[tuple[int, int]]:
         try:
-            all_game_dates, start_idx, end_idx = await self._get_regular_season_calendar(season_id)
+            all_game_dates, start_idx, end_idx = await self._get_cached_regular_season_calendar(season_id)
             today = datetime.now().date()
             regular_season_dates = all_game_dates[start_idx:end_idx + 1]
             future_game_dates = [d for d in regular_season_dates if d >= today]

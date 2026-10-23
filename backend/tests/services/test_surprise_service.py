@@ -211,3 +211,103 @@ async def test_backfill_with_nothing_missing_scores_nothing(monkeypatch):
     monkeypatch.setattr(svc._db, "get_unscored_processed_nights", _async_return([]))
     monkeypatch.setattr(svc, "compute_and_store", _async_return(pytest.fail))
     assert await svc.backfill_missing() == {}
+
+
+def _counting(value):
+    calls = []
+
+    async def _f(*_a, **_k):
+        calls.append(1)
+        return value
+    _f.calls = calls
+    return _f
+
+
+def _night_row():
+    return {
+        "game_id": "g1", "player_id": 1, "player_name": "P1", "team_id": 2, "opponent_team_id": 18,
+        "is_home": True, "minutes": 30.0, "pts": 10.0, "reb": 1.0, "ast": 1.0, "fg3m": 0.0, "stl": 0.0,
+        "blk": 0.0, "fgm": 4.0, "fga": 9.0, "ftm": 2.0, "fta": 2.0, "metric_z": 1.0, "metric_err": None,
+        "score": 1.0, "has_estimate": True, "verdict": "", "reasons": "[]",
+        "updated_at": datetime(2025, 12, 2, 7, 0, tzinfo=timezone.utc), "season_id": settings.season_id,
+        "fantasy_team_id": None, "lineup_slot": None,
+    }
+
+
+async def _latest_visit(svc):
+    latest = await svc.latest_date()
+    return latest, await svc.night(latest), await svc.dates()
+
+
+@pytest.mark.asyncio
+async def test_read_side_served_from_memory_until_a_write(monkeypatch):
+    svc = SurpriseService()
+    latest, dates, rows = _counting(NIGHT), _counting([NIGHT]), _counting([_night_row()])
+    run = _counting({"game_date": NIGHT, "status": "processed"})
+    monkeypatch.setattr(svc, "_team_abbrevs", _async_return({}))
+    monkeypatch.setattr(svc._db, "get_latest_surprise_date", latest)
+    monkeypatch.setattr(svc._db, "get_surprise_dates", dates)
+    monkeypatch.setattr(svc._db, "get_surprises_for_date", rows)
+    monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", run)
+
+    first = await _latest_visit(svc)
+    second = await _latest_visit(svc)
+    assert first == second
+    assert (len(latest.calls), len(dates.calls), len(rows.calls), len(run.calls)) == (1, 1, 1, 1)
+
+    surprise_service.clear_surprise_read_cache()     # what a nightly write does
+    await _latest_visit(svc)
+    assert (len(latest.calls), len(dates.calls), len(rows.calls), len(run.calls)) == (2, 2, 2, 2)
+
+
+@pytest.mark.asyncio
+async def test_read_side_expires(monkeypatch):
+    svc = SurpriseService()
+    latest = _counting(NIGHT)
+    monkeypatch.setattr(svc._db, "get_latest_surprise_date", latest)
+    await svc.latest_date()
+    surprise_service._read_cache["ts"] -= surprise_service._READ_CACHE_TTL_S
+    await svc.latest_date()
+    assert len(latest.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_only_the_latest_night_is_kept(monkeypatch):
+    svc = SurpriseService()
+    rows = _counting([_night_row()])
+    monkeypatch.setattr(svc, "_team_abbrevs", _async_return({}))
+    monkeypatch.setattr(svc._db, "get_latest_surprise_date", _async_return(NIGHT))
+    monkeypatch.setattr(svc._db, "get_surprises_for_date", rows)
+    monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return(None))
+    await svc.latest_date()
+    older = NIGHT - timedelta(days=1)
+    await svc.night(older)
+    await svc.night(older)
+    assert len(rows.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_read_started_before_a_write_is_not_kept(monkeypatch):
+    svc = SurpriseService()
+
+    async def _latest_then_write(*_a, **_k):
+        surprise_service.clear_surprise_read_cache()
+        return NIGHT
+    monkeypatch.setattr(svc._db, "get_latest_surprise_date", _latest_then_write)
+    await svc.latest_date()
+    assert surprise_service._read_cache["values"] == {}
+
+
+@pytest.mark.asyncio
+async def test_nightly_ledger_write_clears_the_read_cache():
+    """The night response carries the newest ledger row, so a ledger write
+    (including no_games nights, which store no surprise rows) clears it."""
+    from app.services.model_nightly_service import ModelNightlyService
+
+    class _Db:
+        async def upsert_model_nightly_run(self, *_a):
+            return True
+
+    surprise_service._cache_put("latest", NIGHT, surprise_service._read_generation)
+    assert await ModelNightlyService._record_run(_Db(), NIGHT, "no_games", 0, 0) is True
+    assert surprise_service._read_cache["values"] == {}
