@@ -1,5 +1,7 @@
 CLAUDE.md
 .env
+.env.*
+!.env.example
 fantasy_api.log
 .claude/
 .vscode/
