@@ -110,7 +110,7 @@ class TestNightZscores:
         slow = surprise.compute_zscores(rows, with_means=True)
         slow = slow[slow["GAME_ID"].str.startswith("night-")].set_index("PLAYER_ID")
         cols = [c for c in fast.columns if c != "GAME_ID"]
-        assert set(cols) == {c for c in slow.columns if c.startswith(("PZ_", "AVG_"))}
+        assert set(cols) == {c for c in slow.columns if c.startswith(("PZ_", "AVG_")) or c == "SEASON_GAMES"}
         assert_frame_equal(fast[cols].sort_index(), slow[cols].sort_index(), check_dtype=False, check_names=False)
         assert np.isnan(fast.at[8, "PZ_ALL_PTS"])            # no prior game at all
         assert np.isnan(fast.at[5, "PZ_L10_PTS"])            # only 5 priors: no L10
@@ -176,6 +176,26 @@ class TestScoring:
         assert set(surprise.required_columns()) - set(calibration["norm"]) == set()
         assert len(calibration["final_quantiles"]) == len(calibration["z_only_quantiles"]) == 1001
 
+    def test_rows_without_an_estimate_are_ranked_among_rows_without_one(self):
+        """Players with no model estimate get their own reference: the
+        reference season's rows that had none either, not every row (those
+        players' metric 1 is narrower; ranked among all rows they came out
+        too narrow and leaning to booms)."""
+        hist = pd.concat([_history(p, 30, 10.0 + 4 * p, seed=p) for p in range(1, 5)], ignore_index=True)
+        z = surprise.compute_zscores(hist)
+        df = hist.merge(z, on=["PLAYER_ID", "GAME_ID"])
+        for s in surprise.ERR_TARGETS:
+            df[f"PRED_{s}"] = np.where(df["PLAYER_ID"] <= 2, 1.0, np.nan)     # players 1-2 have an estimate
+        df = surprise.add_errors(df)
+        calibration = surprise.build_calibration(df, source="test")
+        scored = surprise.score_frame(df, calibration)
+        history_only = scored["METRIC_ERR"].isna() & scored["METRIC_Z"].notna()
+        assert 0 < history_only.sum() < scored["METRIC_Z"].notna().sum()
+        assert calibration["z_only_count"] == history_only.sum()
+        own = scored.loc[history_only, "SCORE"]
+        assert abs(own.median()) < 0.1                                          # centred on its own reference
+        assert (own > 0).mean() == pytest.approx(0.5, abs=0.05)                # as many above as below
+
     def test_shipped_calibration_matches_the_frozen_settings(self):
         calibration = surprise.load_calibration()
         assert calibration["settings"]["z_weights"] == surprise.Z_WEIGHTS
@@ -200,3 +220,52 @@ def test_weighted_metric_ignores_missing_components_but_not_all_missing():
     assert m.iloc[0] == pytest.approx(1.0)
     assert m.iloc[1] == pytest.approx(1.0)
     assert np.isnan(m.iloc[2])
+
+
+@pytest.mark.parametrize("prior_this_season", [1, 2, 10, 25])
+def test_season_window_weight_grows_with_its_games(prior_this_season):
+    """The season window always exists after one game, but its weight is
+    min(games, 20)/20 of the full weight; both computations agree on the count,
+    and the shown season average waits for 3 games (career before that)."""
+    last = _history(1, 20, 20.0, season="2025-26", seed=1)
+    this = _history(1, prior_this_season + 1, 20.0, season="2026-27", seed=2)
+    this["GAME_ID"] = [f"new-{i}" for i in range(len(this))]
+    this["GAME_DATE"] = pd.date_range("2026-10-20", periods=len(this), freq="2D")
+    rows = pd.concat([last, this], ignore_index=True)
+    night = this["GAME_DATE"].iloc[-1].date()
+
+    full = surprise.compute_zscores(rows, with_means=True)
+    tonight_full = full[full["GAME_ID"] == this["GAME_ID"].iloc[-1]].iloc[0]
+    tonight_night = surprise.night_zscores(rows, night).iloc[0]
+    for row in (tonight_full, tonight_night):
+        assert row["SEASON_GAMES"] == prior_this_season
+        assert pd.notna(row["PZ_SEASON_PTS"])
+    frame = pd.DataFrame([tonight_night])
+    assert surprise.season_factor(frame).iloc[0] == pytest.approx(min(prior_this_season, 20) / 20)
+
+    # the parquet helper counts the same way
+    counted = surprise.add_season_games(rows.assign(MIN=30.0))
+    assert counted["SEASON_GAMES"].iloc[-1] == prior_this_season
+
+
+def test_season_weight_scales_only_season_columns():
+    """weighted_metric scales the season columns by the row's factor and leaves
+    the others; the denominator stays the full weight."""
+    df = pd.DataFrame({"NORM_PZ_SEASON_PTS": [1.0, 1.0], "NORM_PZ_L10_PTS": [1.0, 1.0], "SEASON_GAMES": [1, 20]})
+    m = surprise.weighted_metric(df, {"PZ_SEASON_PTS": 0.5, "PZ_L10_PTS": 1.0})
+    assert list(m.round(4)) == [round((0.5 * 0.05 + 1.0) / 1.5, 4), 1.0]
+
+
+def test_window_weights_lean_on_recent_form():
+    m1, _ = surprise.metric_columns()
+    assert surprise.WINDOW_WEIGHTS == {"ALL": 0.1, "SEASON": 0.5, "L10": 1.0, "L5": 0.5}
+    assert m1["PZ_ALL_PTS"] == pytest.approx(0.1)
+    assert m1["PZ_SEASON_PTS"] == m1["PZ_L5_PTS"] == 0.5 and m1["PZ_L10_PTS"] == 1.0
+
+
+def test_blend_leans_on_the_model_for_booms_and_on_averages_for_busts():
+    b = surprise.BLEND
+    assert (b["w1_pos"], b["w2_pos"]) == (0.25, 0.75)     # boom: 25% averages, 75% model
+    assert (b["w1_neg"], b["w2_neg"]) == (0.75, 0.25)     # bust: 75% averages, 25% model
+    out = surprise.blend(pd.Series([1.0, -1.0]), pd.Series([2.0, -2.0]))
+    assert list(out) == [pytest.approx(1.75), pytest.approx(-1.25)]

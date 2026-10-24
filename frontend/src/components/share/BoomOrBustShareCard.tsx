@@ -11,7 +11,7 @@ interface BoomOrBustShareCardProps extends ShareCardTheme {
    * image takes the first SHARE_ROWS of each. */
   booms: SurpriseRow[]
   busts: SurpriseRow[]
-  /** What each card's bar is: "score ≥ 1.8", "top 5% of 292 nights". */
+  /** What each card's bar is: "boom score ≥ 1.8", "bust score ≤ −1.8". */
   rules: { good: string; bad: string }
   /** A period of several nights: each row carries its night. */
   showDate?: boolean

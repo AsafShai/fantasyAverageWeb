@@ -37,7 +37,7 @@ const night: NightSurprises = {
     row({ player_id: 12, player_name: 'Almost Good', score: 1.5, verdict: '' }),
   ],
   bad: [
-    row({ player_id: 22, player_name: 'Bad Guy', score: -2.1, verdict: 'bad', has_estimate: false, reasons: [{ stat: 'FG_PCT', value: 0.25, avg: null, z: -2 }] }),
+    row({ player_id: 22, player_name: 'Bad Guy', score: -2.4, verdict: 'bad', has_estimate: false, reasons: [{ stat: 'FG_PCT', value: 0.25, avg: null, z: -2 }] }),
     row({ player_id: 23, player_name: 'Almost Bad', score: -1.5, verdict: '' }),
   ],
   computed_at: '2024-01-06T09:00:00Z',
@@ -106,19 +106,19 @@ describe('Boom or Bust page', () => {
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
-    expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 1.8')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −1.8')).toBeInTheDocument()   // one bell curve, same bar both sides
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
 
     // (b) while dragging only the label follows; the row appears when the thumb is released
     fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '1.4' } })
-    expect(screen.getByText('score ≥ 1.4')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 1.4')).toBeInTheDocument()
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
     fireEvent.pointerUp(screen.getByLabelText('Surprise threshold'))
     expect(screen.getByText('Almost Good')).toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
-    expect(screen.getByText('score ≥ 1.4')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 1.4')).toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
     expect(localStorage.getItem('boomOrBust.goodThreshold')).toBe('1.4')
 
@@ -126,19 +126,33 @@ describe('Boom or Bust page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 1.8')).toBeInTheDocument()
     expect(localStorage.getItem('boomOrBust.goodThreshold')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
   })
 
   it('a stored threshold wins over the server default on load', async () => {
-    localStorage.setItem('boomOrBust.badThreshold', '1.4')
+    localStorage.setItem('boomOrBust.badThreshold', '1.5')
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Almost Bad')).toBeInTheDocument())
     expect(screen.getByText('💩 Busts')).toHaveTextContent('(2)')
-    expect(screen.getByText('score ≤ −1.4')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −1.5')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument()
+  })
+
+  it('both sliders share one range, 1.4 to 2.2; a stored value outside it is ignored', async () => {
+    localStorage.setItem('boomOrBust.badThreshold', '2.7')
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await screen.findByText('Good Guy')
+    expect(screen.getByText('bust score ≤ −1.8')).toBeInTheDocument()   // the server default instead
+    const boom = screen.getByLabelText('Surprise threshold')
+    const bust = screen.getByLabelText('Disappointment threshold')
+    expect(bust).toHaveAttribute('min', '1.4')
+    expect(bust).toHaveAttribute('max', '2.2')
+    expect(boom).toHaveAttribute('min', '1.4')
+    expect(boom).toHaveAttribute('max', '2.2')
   })
 
   it('pages a card five at a time, only when there are more than five', async () => {
@@ -178,8 +192,8 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
     expect(screen.getByText(/2 nights · 7 games · 100 performances scored/)).toBeInTheDocument()
     expect(screen.getByText('1 performance')).toBeInTheDocument()   // the busts card's footer: a row is one player's game
-    expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()   // the night's bar, not a percentile
-    expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 1.8')).toBeInTheDocument()   // the night's bars, not a percentile
+    expect(screen.getByText('bust score ≤ −1.8')).toBeInTheDocument()
     expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
     expect(screen.queryByLabelText('Previous night')).not.toBeInTheDocument()   // ‹ › are for single nights
 

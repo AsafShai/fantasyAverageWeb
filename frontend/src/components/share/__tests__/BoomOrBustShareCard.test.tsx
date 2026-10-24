@@ -18,7 +18,7 @@ const bust = row({ player_id: 2, player_name: 'Jayson Tatum', score: -1.91, verd
 
 describe('BoomOrBustShareCard', () => {
   it('renders the page tables in one image: names, marks, shooting, score', () => {
-    render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Tuesday, Oct 20, 2026 · 3 games" booms={[boom]} busts={[bust]} rules={{ good: 'score ≥ 1.8', bad: 'score ≤ −1.8' }} /></MemoryRouter>)
+    render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Tuesday, Oct 20, 2026 · 3 games" booms={[boom]} busts={[bust]} rules={{ good: 'boom score ≥ 1.8', bad: 'bust score ≤ −1.8' }} /></MemoryRouter>)
     expect(screen.getByText('💥 Boom or Bust')).toBeInTheDocument()
     expect(screen.getByText('Tuesday, Oct 20, 2026 · 3 games')).toBeInTheDocument()
     expect(screen.getByText('Paul George')).toBeInTheDocument()
@@ -27,8 +27,8 @@ describe('BoomOrBustShareCard', () => {
     expect(screen.getAllByText(/^57%/).length).toBeGreaterThan(0)   // 12-21 FG
     expect(screen.getByText('+2.6')).toBeInTheDocument()
     expect(screen.getByText('−1.9')).toBeInTheDocument()
-    expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
-    expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 1.8')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −1.8')).toBeInTheDocument()
     // the marks: STL (z 1.8, strong) and PTS (z 1.4, clear) green on the boom; FG (z -1.2, extreme on the bad scale) red on the bust
     const stl = screen.getAllByText('5').find((el) => el.className.includes('bg-emerald-100'))
     expect(stl).toBeTruthy()
@@ -38,7 +38,7 @@ describe('BoomOrBustShareCard', () => {
 
   it('shows the top five of a table and says how many there were', () => {
     const many = Array.from({ length: 8 }, (_, i) => row({ player_id: 10 + i, player_name: `Boom ${i}`, score: 2.6 - i * 0.1 }))
-    render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Oct 20, 2026 · 3 games" booms={many} busts={[bust]} rules={{ good: 'score ≥ 1.8', bad: 'score ≤ −1.8' }} /></MemoryRouter>)
+    render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Oct 20, 2026 · 3 games" booms={many} busts={[bust]} rules={{ good: 'boom score ≥ 1.8', bad: 'bust score ≤ −1.8' }} /></MemoryRouter>)
     expect(screen.getByText('(top 5 of 8)')).toBeInTheDocument()
     expect(screen.getByText('Boom 4')).toBeInTheDocument()
     expect(screen.queryByText('Boom 5')).not.toBeInTheDocument()
@@ -62,7 +62,7 @@ describe('BoomOrBustShareCard', () => {
   it('shows the fantasy team\'s full name, capped so a long one cannot widen the column', () => {
     const long = row({ player_id: 5, player_name: 'Long Team Guy', fantasy_team: 'AMI', fantasy_team_name: "Amihai's Awesome Team 🏆" })
     const coded = row({ player_id: 6, player_name: 'Code Only', fantasy_team: 'NEW', fantasy_team_name: null })
-    render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Oct 20, 2026 · 3 games" booms={[boom, long, coded]} busts={[]} rules={{ good: 'score ≥ 1.8', bad: 'score ≤ −1.8' }} /></MemoryRouter>)
+    render(<MemoryRouter><BoomOrBustShareCard dark={false} kicker="last night" subtitle="Oct 20, 2026 · 3 games" booms={[boom, long, coded]} busts={[]} rules={{ good: 'boom score ≥ 1.8', bad: 'bust score ≤ −1.8' }} /></MemoryRouter>)
     expect(screen.getByText("Dor's Injured Team")).toBeInTheDocument()
     const name = screen.getByText("Amihai's Awesome Team 🏆")
     expect(name.closest('[title]')).toHaveAttribute('title', "Amihai's Awesome Team 🏆 · started")
@@ -72,7 +72,7 @@ describe('BoomOrBustShareCard', () => {
   })
 
   it('says so when a section is empty', () => {
-    render(<MemoryRouter><BoomOrBustShareCard dark={true} kicker="last night" subtitle="Oct 20, 2026 · 1 game" booms={[]} busts={[bust]} rules={{ good: 'score ≥ 1.8', bad: 'score ≤ −1.8' }} /></MemoryRouter>)
+    render(<MemoryRouter><BoomOrBustShareCard dark={true} kicker="last night" subtitle="Oct 20, 2026 · 1 game" booms={[]} busts={[bust]} rules={{ good: 'boom score ≥ 1.8', bad: 'bust score ≤ −1.8' }} /></MemoryRouter>)
     expect(screen.getByText('Nobody crossed the bar tonight.')).toBeInTheDocument()
     expect(screen.getByText('Oct 20, 2026 · 1 game')).toBeInTheDocument()
   })

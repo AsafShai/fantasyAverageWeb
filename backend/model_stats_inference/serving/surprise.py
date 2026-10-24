@@ -6,20 +6,25 @@ from the walk-forward research parquet) so a night's scores are comparable
 across the season rather than relative to that one night:
 
   Metric 1 — Z-SURPRISE, minutes-blind: Pearson z of each stat against the
-             player's own history over four windows (all data / this season /
-             last 10 / last 5), weighted per stat and per window, then
+             player's own history: last 10 games, last 5 and this season at
+             half weight (the season's growing over its first 20 games), his
+             whole history only as a light anchor; weighted per stat and per
+             window, then
              volume-weighted by sqrt(MIN / 30) so an 8-minute outburst counts
              less than a starter's 36-minute one.
   Metric 2 — MODEL-ERROR SURPRISE: actual minus what the model expected for
              the minutes he actually played, weighted per stat. Only players
              with a model estimate (MIN_INFERENCE_GAMES) have it.
-  FINAL    — a blend that differs by sign (model error adds on the good side,
-             z dominates on the bad side), mapped onto N(0,1) by rank against
+  FINAL    — good side 25% metric 1 + 75% metric 2, bad side 75% metric 1 +
+             25% metric 2, mapped onto N(0,1)
+             by rank against
              the reference season. The sign is the verdict: positive = good
              surprise, negative = disappointment. A player without a model
              estimate yet (early season, rookies) is scored on metric 1 alone,
-             against its own reference distribution, so the first weeks of a
-             season still have a page.
+             ranked among the reference season's rows that had no estimate
+             either (ranked among all rows they came out too narrow and
+             leaning to booms), so the first weeks of a season still have a
+             page.
 
 The weights are the research dashboard's final defaults (July 2026) and live
 here on purpose: they are a server-side decision, not a UI control.
@@ -38,8 +43,18 @@ from scipy.stats import norm
 # --- Frozen research settings -------------------------------------------------
 
 WINDOWS = ("ALL", "SEASON", "L10", "L5")
-# Lean on recent form: all-data is the weakest "who is he" anchor.
-WINDOW_WEIGHTS = {"ALL": 0.5, "SEASON": 1.0, "L10": 1.0, "L5": 0.5}
+# Who he is now: this season and his last 10 games, last 5 at half weight
+# (across seasons, so a veteran has them from opening night). His whole
+# history is a light anchor only; four seasons of a career say little about tonight.
+WINDOW_WEIGHTS = {"ALL": 0.1, "SEASON": 0.5, "L10": 1.0, "L5": 0.5}
+# The season window's weight grows with the games behind it: a single game is
+# not an average (a 3-block opener would make every later night look like a
+# bust), so its weight is WINDOW_WEIGHTS["SEASON"] x min(games, SEASON_FULL_GAMES)
+# / SEASON_FULL_GAMES: 0.025 after one game, 0.25 after ten, 0.5 from the 20th.
+SEASON_FULL_GAMES = 20
+# The season average shown beside a stat ("his average") needs this many games;
+# before that the reason shows his all-time average.
+SEASON_AVG_MIN_GAMES = 3
 # Pearson z — variance follows the mean, so a scrub's tiny std cannot explode
 # his score on any decent night (raw z over-rewards low-volume players).
 BASIS = "PZ"
@@ -57,10 +72,12 @@ ERR_WEIGHTS = {
     "FGA": -0.10, "FTA": -0.10,
 }
 VOLUME_WEIGHT = True
-# Piecewise blend of (z, model-error): positive side lets the model error add
-# value; negative side the z-surprise dominates so 0-fers sink below stars who
-# merely underperformed the model's high bar.
-BLEND = {"w1_pos": 0.49, "w2_pos": 1.20, "w1_neg": 1.10, "w2_neg": 0.20}
+# Blend of (z vs his own averages, model error), by side: a boom is mostly
+# "beat what the model expected for his minutes" (75% model, 25% averages); a
+# bust is mostly "far under his own averages" (75% averages, 25% model), so an
+# empty line sinks below a star who merely missed a high projection. The rank
+# to N(0,1) afterwards makes the two sides equally rare at the same |score|.
+BLEND = {"w1_pos": 0.25, "w2_pos": 0.75, "w1_neg": 0.75, "w2_neg": 0.25}
 
 Z_STATS = sorted(s for s in Z_WEIGHTS if not s.endswith("_PCT"))
 PCT_STATS = [("FGM", "FGA", "FG_PCT"), ("FTM", "FTA", "FT_PCT")]
@@ -70,6 +87,12 @@ BOX_COLUMNS = ["PLAYER_ID", "GAME_ID", "SEASON", "GAME_DATE", "MIN",
                "PTS", "REB", "AST", "FG3M", "FG3A", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
 
 CALIBRATION_PATH = Path(__file__).parent / "surprise_calibration.json"
+# The score maps the blend onto N(0,1) with a trained transform: the rank of
+# the blend among last season's blends (the walk-forward backtest, scored with
+# the same math and weights), stored in the calibration. It is fitted once and
+# re-trained only when the math or a weight changes (build_surprise_calibration),
+# never per night. On 2025-26 it turns a skewed blend (+0.57) into a symmetric
+# score: 3.6% booms / 3.6% busts at +-1.8.
 # Per-stat verdicts on a row ("reasons"): every stat whose per-stat surprise is
 # at least MIN_REASON either way, strongest first, at most N_REASONS. The
 # per-stat surprise blends the two ingredients the final score blends, for
@@ -111,7 +134,8 @@ def compute_zscores(
 
     Every base excludes tonight's game: *_ALL uses the expanding multi-season
     history, *_SEASON the expanding current-season history, *_L10/*_L5 the
-    previous 10/5 played games (full window required). Three families per
+    previous 10/5 played games (full window required). SEASON_GAMES is the
+    number of prior games this season (the season window's weight follows it). Three families per
     window, addressing "bad players always win raw z" (their tiny stds explode
     the score):
 
@@ -227,6 +251,7 @@ def compute_zscores(
                 cols[f"{fam}_{win}_{name}"] = binom_z
             if with_means and win in ("SEASON", "ALL"):
                 cols[f"AVG_{win}_{name}"] = p
+    cols["SEASON_GAMES"] = n_season
     return pd.concat([zdf[["PLAYER_ID", "GAME_ID"]], pd.DataFrame(cols, index=zdf.index)], axis=1)
 
 
@@ -283,6 +308,9 @@ def night_zscores(
             cols[f"PZ_{win}_{name}"] = (made - att * p_rate) / sd.replace(0.0, np.nan)
             if win in ("ALL", "SEASON"):
                 cols[f"AVG_{win}_{name}"] = p_rate
+    cols["SEASON_GAMES"] = (
+        prior[same_season].groupby("PLAYER_ID").size().reindex(tonight.index).fillna(0).astype(float)
+    )
     out = pd.DataFrame(cols, index=tonight.index)
     out.insert(0, "GAME_ID", tonight["GAME_ID"])
     return out.reset_index()
@@ -336,7 +364,9 @@ def standardize(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
 
 def weighted_metric(df: pd.DataFrame, col_weights: dict[str, float]) -> pd.Series:
     """Sum(w · NORM_col) / Sum(|w|); NaN components contribute 0, rows where
-    every weighted component is NaN stay NaN."""
+    every weighted component is NaN stay NaN. Season-window columns are scaled
+    per row by season_factor (their weight grows with the games behind them)."""
+    factor = season_factor(df)
     total = sum(abs(w) for w in col_weights.values() if w)
     if total == 0:
         return pd.Series(np.nan, index=df.index)
@@ -346,7 +376,8 @@ def weighted_metric(df: pd.DataFrame, col_weights: dict[str, float]) -> pd.Serie
         norm_col = f"NORM_{col}"
         if not w or norm_col not in df.columns:
             continue
-        acc = acc + df[norm_col].fillna(0.0) * w
+        weight = w * factor if "_SEASON_" in col else w
+        acc = acc + df[norm_col].fillna(0.0) * weight
         any_valid = any_valid | df[norm_col].notna()
     return (acc / total).where(any_valid)
 
@@ -360,13 +391,19 @@ def final_raw(df: pd.DataFrame) -> pd.DataFrame:
     if VOLUME_WEIGHT:
         mz = mz * np.sqrt(df["MIN"].astype(float) / 30.0)
     me = weighted_metric(df, m2)
+    out["METRIC_Z"] = mz
+    out["METRIC_ERR"] = me
+    out["FINAL_RAW"] = blend(mz, me)
+    return out
+
+
+def blend(mz: pd.Series, me: pd.Series) -> pd.Series:
+    """The final's raw value from metric 1 and metric 2 (BLEND, by sign of the
+    positive-side blend). NaN where metric 2 is (no model estimate)."""
     b = BLEND
     fp = (b["w1_pos"] * mz + b["w2_pos"] * me) / ((abs(b["w1_pos"]) + abs(b["w2_pos"])) or 1.0)
     fn = (b["w1_neg"] * mz + b["w2_neg"] * me) / ((abs(b["w1_neg"]) + abs(b["w2_neg"])) or 1.0)
-    out["METRIC_Z"] = mz
-    out["METRIC_ERR"] = me
-    out["FINAL_RAW"] = fp.where(fp >= 0, fn)
-    return out
+    return fp.where(fp >= 0, fn)
 
 
 def to_standard_normal_with(final: pd.Series, quantiles: list[float], count: int) -> pd.Series:
@@ -389,7 +426,8 @@ def score_frame(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
     """Score a frame of player-games that carries MIN, the raw z columns
     (compute_zscores) and the ERR_ columns (add_errors). Returns METRIC_Z,
     METRIC_ERR, FINAL_RAW and SCORE (the final on the N(0,1) scale)."""
-    normed = pd.concat([df[["MIN"]], standardize(df, calibration)], axis=1)
+    carry = ["MIN"] + (["SEASON_GAMES"] if "SEASON_GAMES" in df.columns else [])
+    normed = pd.concat([df[carry], standardize(df, calibration)], axis=1)
     out = final_raw(normed)
     with_estimate = to_standard_normal(out["FINAL_RAW"], calibration)
     z_only = to_standard_normal_with(
@@ -428,6 +466,7 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
     value, his season (or all-time) average, z (the per-stat surprise).
     """
     normed = standardize(df, calibration)
+    factor = season_factor(df)
     strength = {}
     for stat in Z_WEIGHTS:
         acc = pd.Series(0.0, index=df.index)
@@ -435,8 +474,9 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
         for win, ww in WINDOW_WEIGHTS.items():
             col = f"NORM_{BASIS}_{win}_{stat}"
             if col in normed.columns:
-                acc = acc + normed[col].fillna(0.0) * ww
-                have = have + normed[col].notna() * ww
+                w = ww * factor if win == "SEASON" else ww
+                acc = acc + normed[col].fillna(0.0) * w
+                have = have + normed[col].notna() * w
         # Average over the windows that exist: on opening night the season
         # window is empty for everyone, and dividing by all four weights would
         # dilute every verdict by a third.
@@ -466,10 +506,13 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
         ranked = pd.concat([lead, ranked.drop(lead.index)])
         picked = []
         for stat, c in ranked.head(N_REASONS).items():
-            # His average this season; before his first game of it, over all his games.
+            # His average this season once it has a few games; before that, over all his games.
             avg = np.nan
+            season_games = df.at[idx, "SEASON_GAMES"] if "SEASON_GAMES" in df.columns else SEASON_AVG_MIN_GAMES
             for win in ("SEASON", "ALL"):
                 col = f"AVG_{win}_{stat}"
+                if win == "SEASON" and not season_games >= SEASON_AVG_MIN_GAMES:
+                    continue
                 if col in df.columns and pd.notna(df.at[idx, col]):
                     avg = df.at[idx, col]
                     break
@@ -486,6 +529,23 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
 
 # --- Calibration --------------------------------------------------------------
 
+def add_season_games(df: pd.DataFrame) -> pd.DataFrame:
+    """SEASON_GAMES (prior played games this season) for a frame whose z
+    columns were built before the column existed (the walk-forward parquet)."""
+    df = df.copy()
+    played = df[df["MIN"].fillna(0) > 0].sort_values(["PLAYER_ID", "GAME_DATE"])
+    df["SEASON_GAMES"] = played.groupby(["PLAYER_ID", "SEASON"]).cumcount().astype(float)
+    return df
+
+
+def season_factor(df: pd.DataFrame) -> pd.Series:
+    """min(SEASON_GAMES, SEASON_FULL_GAMES) / SEASON_FULL_GAMES per row: how much
+    of its weight the season window gets (1 where the count is unknown)."""
+    if "SEASON_GAMES" not in df.columns:
+        return pd.Series(1.0, index=df.index)
+    return (df["SEASON_GAMES"].astype(float).clip(lower=0, upper=SEASON_FULL_GAMES) / SEASON_FULL_GAMES).fillna(1.0)
+
+
 def build_calibration(df: pd.DataFrame, source: str, n_quantiles: int = 1001) -> dict:
     """Reference moments and final-metric quantiles from a season frame that
     carries MIN, the raw z columns and the ERR_ columns (the research parquet)."""
@@ -496,23 +556,31 @@ def build_calibration(df: pd.DataFrame, source: str, n_quantiles: int = 1001) ->
         s = df[col].dropna()
         norm_moments[col] = {"mean": float(s.mean()), "std": float(s.std()), "count": int(len(s))}
     calibration = {"source": source, "norm": norm_moments}
-    normed = pd.concat([df[["MIN"]], standardize(df, calibration)], axis=1)
+    carry = ["MIN"] + (["SEASON_GAMES"] if "SEASON_GAMES" in df.columns else [])
+    normed = pd.concat([df[carry], standardize(df, calibration)], axis=1)
     raw = final_raw(normed)
     grid = np.linspace(0, 1, n_quantiles)
-    # Reference for players scored on their own history alone (no model estimate).
-    z_only = raw["METRIC_Z"].dropna()
-    if z_only.empty:
+    if raw["METRIC_Z"].dropna().empty:
         raise ValueError("no scorable rows: the frame carries no z-score columns")
+    # Reference for players scored on their own history alone: the reference
+    # season's rows that had no model estimate either. Fitted on last season,
+    # scored on the next one, that kept them symmetric (3.7% / 3.7% at +-1.8
+    # on 2024-25 and 2025-26); fitted on all rows they came out too narrow
+    # and leaning to booms (1.7% / 1.2%).
+    z_only = raw.loc[raw["METRIC_ERR"].isna(), "METRIC_Z"].dropna()
+    if z_only.empty:   # every row had an estimate (tests)
+        z_only = raw["METRIC_Z"].dropna()
     final = raw["FINAL_RAW"].dropna()
     if final.empty:   # a frame without any model prediction (tests, a bare season)
-        final = z_only
+        final = raw["METRIC_Z"].dropna()
     calibration["final_quantiles"] = [float(v) for v in np.quantile(final, grid)]
     calibration["final_count"] = int(len(final))
     calibration["z_only_quantiles"] = [float(v) for v in np.quantile(z_only, grid)]
     calibration["z_only_count"] = int(len(z_only))
     calibration["built_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     calibration["settings"] = {
-        "basis": BASIS, "window_weights": WINDOW_WEIGHTS, "z_weights": Z_WEIGHTS,
+        "basis": BASIS, "window_weights": WINDOW_WEIGHTS, "season_full_games": SEASON_FULL_GAMES,
+        "z_weights": Z_WEIGHTS,
         "err_weights": ERR_WEIGHTS, "volume_weight": VOLUME_WEIGHT, "blend": BLEND,
     }
     return calibration

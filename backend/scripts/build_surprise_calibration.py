@@ -35,7 +35,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=surprise.CALIBRATION_PATH)
     args = parser.parse_args()
 
-    df = pd.read_parquet(args.parquet)
+    # The parquet predates SEASON_GAMES, which the season window's weight follows.
+    df = surprise.add_season_games(pd.read_parquet(args.parquet))
     missing = [c for c in surprise.required_columns() if c not in df.columns]
     if missing:
         sys.exit(f"parquet lacks the research columns {missing}; re-run the backtest")

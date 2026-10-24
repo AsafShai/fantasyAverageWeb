@@ -45,11 +45,13 @@ function isNotFound(error: unknown): boolean {
 }
 
 // 1.4 is already a clearly good/bad night; past 2.2 almost nobody is left.
-// The server default (1.8) sits in the middle. A stored value outside the
-// range (from an older range) is ignored and the default takes over.
+// The server defaults (boom 2.1, bust 2.2) sit near the top. The score is ranked onto a
+// symmetric bell curve, so both sides share the range. A stored value outside
+// it (from an older range) is ignored and the default takes over.
 const SLIDER_MIN = 1.4;
 const SLIDER_MAX = 2.2;
 const SLIDER_STEP = 0.1;
+const SCORE_LABEL = { good: 'boom score ≥', bad: 'bust score ≤ −' } as const;
 const STORAGE_KEYS = { good: 'boomOrBust.goodThreshold', bad: 'boomOrBust.badThreshold' } as const;
 
 function readStoredThreshold(kind: 'good' | 'bad'): number | null {
@@ -149,7 +151,7 @@ function ScoreSlider({ kind, threshold }: { kind: 'good' | 'bad'; threshold: Thr
       min={SLIDER_MIN}
       max={SLIDER_MAX}
       step={SLIDER_STEP}
-      label={(v) => (kind === 'good' ? `score ≥ ${v.toFixed(1)}` : `score ≤ −${v.toFixed(1)}`)}
+      label={(v) => (kind === 'good' ? `${SCORE_LABEL.good} ${v.toFixed(1)}` : `${SCORE_LABEL.bad}${v.toFixed(1)}`)}
       ariaLabel={kind === 'good' ? 'Surprise threshold' : 'Disappointment threshold'}
       isDefault={threshold.isDefault}
       onChange={threshold.set}
@@ -234,7 +236,7 @@ function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boole
               subtitle={`${fmtDay(night.game_date, true)} · ${night.games} game${night.games === 1 ? '' : 's'}`}
               booms={booms}
               busts={busts}
-              rules={{ good: `score ≥ ${good.value.toFixed(1)}`, bad: `score ≤ −${bad.value.toFixed(1)}` }}
+              rules={{ good: `${SCORE_LABEL.good} ${good.value.toFixed(1)}`, bad: `${SCORE_LABEL.bad}${bad.value.toFixed(1)}` }}
             />
           )}
         />
@@ -259,8 +261,8 @@ function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boole
 function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker: string }) {
   const { data, isFetching, error } = useGetSurprisesForPeriodQuery({ start, end, minScore: SLIDER_MIN });
   const period: PeriodSurprises | undefined = data && data.start === start && data.end === end ? data : undefined;
-  const good = useThreshold('good', period?.thresholds.good ?? 1.8);
-  const bad = useThreshold('bad', period?.thresholds.bad ?? 1.8);
+  const good = useThreshold('good', period?.thresholds.good ?? 2.1);
+  const bad = useThreshold('bad', period?.thresholds.bad ?? 2.2);
   const booms = useMemo(() => (period ? shownRows(period.good, 'good', good.value) : []), [period, good.value]);
   const busts = useMemo(() => (period ? shownRows(period.bad, 'bad', bad.value) : []), [period, bad.value]);
   const label = fmtRange(start, end);
@@ -295,7 +297,7 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
               subtitle={`${label} · ${period.nights} nights · ${period.games} games`}
               booms={booms}
               busts={busts}
-              rules={{ good: `score ≥ ${good.value.toFixed(1)}`, bad: `score ≤ −${bad.value.toFixed(1)}` }}
+              rules={{ good: `${SCORE_LABEL.good} ${good.value.toFixed(1)}`, bad: `${SCORE_LABEL.bad}${bad.value.toFixed(1)}` }}
               showDate
             />
           )}
