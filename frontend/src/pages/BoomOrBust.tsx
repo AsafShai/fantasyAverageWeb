@@ -44,12 +44,12 @@ function isNotFound(error: unknown): boolean {
   return e.status === 404 || e.originalStatus === 404;
 }
 
-// 1.4 is already a clearly good/bad night; past 2.2 almost nobody is left.
-// The server defaults (boom 2.1, bust 2.2) sit near the top. The score is ranked onto a
+// 1.7 is already a clearly good/bad night; past 3 almost nobody is left.
+// The server defaults (boom 2.1, bust 2.2) sit in the lower half. The score is ranked onto a
 // symmetric bell curve, so both sides share the range. A stored value outside
 // it (from an older range) is ignored and the default takes over.
-const SLIDER_MIN = 1.4;
-const SLIDER_MAX = 2.2;
+const SLIDER_MIN = 1.7;
+const SLIDER_MAX = 3;
 const SLIDER_STEP = 0.1;
 const SCORE_LABEL = { good: 'boom score ≥', bad: 'bust score ≤ −' } as const;
 const STORAGE_KEYS = { good: 'boomOrBust.goodThreshold', bad: 'boomOrBust.badThreshold' } as const;

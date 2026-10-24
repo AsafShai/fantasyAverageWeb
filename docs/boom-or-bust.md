@@ -63,9 +63,9 @@ or a custom From–To (a one-day custom range is just that night's normal view).
 - **One row per player-night**, with a Date column: a player with two huge
   nights appears twice. Nothing is rescored; the rows are the nightly's own.
 - **The same bar as a single night.** The sliders are the night's score sliders
-  (1.4–2.2, defaults boom 2.1 / bust 2.2, the same remembered values), applied to every
+  (1.7–3.0, defaults boom 2.1 / bust 2.2, the same remembered values), applied to every
   player-night in the period. Moving one filters in place.
-- `GET /api/surprises/period?start&end&min_score=1.4`: every player-night at
+- `GET /api/surprises/period?start&end&min_score=1.7`: every player-night at
   least ``min_score`` from 0 (the sliders' lowest point) plus a summary, best
   first; the page filters from there. A range is at most 366 days.
 - Share works the same: the top 5 of each side, the period in the header,
@@ -118,7 +118,7 @@ one migration, one 52 kB JSON, one page on the frontend. Tests: 16 backend, 4 fr
 2. **Settings** (all have defaults, none required):
    - `SURPRISE_NIGHTLY_ENABLED` (default true): kill switch for the nightly step.
    - `SURPRISE_GOOD_THRESHOLD` / `SURPRISE_BAD_THRESHOLD` (2.1 / 2.2): the server's
-     verdict and the sliders' default position (both sliders 1.4–2.2; the score is
+     verdict and the sliders' default position (both sliders 1.7–3.0; the score is
      ranked onto a symmetric bell curve, so the same |score| is as rare either way).
    - `SURPRISE_MIN_MINUTES` (0). Every player past the threshold is listed; each card pages five at a time.
 3. **Nightly:** the step runs inside `ModelNightlyService._run_for_date` after the

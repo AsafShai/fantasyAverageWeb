@@ -28,7 +28,7 @@ async def get_latest() -> NightSurprises:
 
 # The score sliders' lowest point (the page's SLIDER_MIN): a period sends every
 # player-night at least this far from 0 and the page filters from there.
-PERIOD_MIN_SCORE = 1.4
+PERIOD_MIN_SCORE = 1.7
 MAX_PERIOD_DAYS = 366
 
 
