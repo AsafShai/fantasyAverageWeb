@@ -120,19 +120,19 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
     expect(screen.getByText('boom score ≥ 1.7')).toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
-    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBe('1.7')
+    expect(localStorage.getItem('boomOrBust.v2.goodThreshold')).toBe('1.7')
 
     // (c) Reset restores the server default and clears the stored value
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
     expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
-    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBeNull()
+    expect(localStorage.getItem('boomOrBust.v2.goodThreshold')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
   })
 
   it('a stored threshold wins over the server default on load', async () => {
-    localStorage.setItem('boomOrBust.badThreshold', '1.7')
+    localStorage.setItem('boomOrBust.v2.badThreshold', '1.7')
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Almost Bad')).toBeInTheDocument())
@@ -141,8 +141,21 @@ describe('Boom or Bust page', () => {
     expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument()
   })
 
+  it('a value saved on the old score scale is dropped: the new defaults apply', async () => {
+    localStorage.setItem('boomOrBust.goodThreshold', '1.8')
+    localStorage.setItem('boomOrBust.badThreshold', '1.8')
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await screen.findByText('Good Guy')
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
+    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBeNull()
+    expect(localStorage.getItem('boomOrBust.badThreshold')).toBeNull()
+  })
+
   it('both sliders share one range, 1.7 to 3; a stored value outside it is ignored', async () => {
-    localStorage.setItem('boomOrBust.badThreshold', '3.5')
+    localStorage.setItem('boomOrBust.v2.badThreshold', '3.5')
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await screen.findByText('Good Guy')

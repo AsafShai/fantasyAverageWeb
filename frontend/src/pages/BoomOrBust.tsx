@@ -53,10 +53,15 @@ const SLIDER_MIN = 1.7;
 const SLIDER_MAX = 3;
 const SLIDER_STEP = 0.1;
 const SCORE_LABEL = { good: 'boom score ≥', bad: 'bust score ≤ −' } as const;
-const STORAGE_KEYS = { good: 'boomOrBust.goodThreshold', bad: 'boomOrBust.badThreshold' } as const;
+// v2: the score's scale changed (Oct 2026), so a value chosen on the old one
+// (still inside the new range, e.g. 1.8) would quietly override the new
+// defaults; the old keys are dropped instead.
+const STORAGE_KEYS = { good: 'boomOrBust.v2.goodThreshold', bad: 'boomOrBust.v2.badThreshold' } as const;
+const LEGACY_STORAGE_KEYS = { good: 'boomOrBust.goodThreshold', bad: 'boomOrBust.badThreshold' } as const;
 
 function readStoredThreshold(kind: 'good' | 'bad'): number | null {
   try {
+    localStorage.removeItem(LEGACY_STORAGE_KEYS[kind]);
     const raw = localStorage.getItem(STORAGE_KEYS[kind]);
     if (raw === null) return null;
     const n = Number(raw);
