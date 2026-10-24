@@ -171,18 +171,18 @@ const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
             <tr className="text-gray-500 dark:text-gray-400">
               <th className="hidden sm:table-cell text-left font-medium pr-2 pb-1.5"></th>
               <th className="px-1 pb-1.5 font-medium">MIN</th>
-              <th className="px-1 pb-1.5 font-medium">PTS</th>
-              <th className="px-1 pb-1.5 font-medium">REB</th>
-              <th className="px-1 pb-1.5 font-medium">AST</th>
-              <th className="px-1 pb-1.5 font-medium">STL</th>
-              <th className="px-1 pb-1.5 font-medium">BLK</th>
-              <th className="px-1 pb-1.5 font-medium">3PM</th>
               <th className="hidden sm:table-cell px-1 pb-1.5 font-medium">FGM</th>
               <th className="hidden sm:table-cell px-1 pb-1.5 font-medium">FGA</th>
               <th className="px-1 pb-1.5 font-medium">FG%</th>
               <th className="hidden sm:table-cell px-1 pb-1.5 font-medium">FTM</th>
               <th className="hidden sm:table-cell px-1 pb-1.5 font-medium">FTA</th>
               <th className="px-1 pb-1.5 font-medium">FT%</th>
+              <th className="px-1 pb-1.5 font-medium">3PM</th>
+              <th className="px-1 pb-1.5 font-medium">REB</th>
+              <th className="px-1 pb-1.5 font-medium">AST</th>
+              <th className="px-1 pb-1.5 font-medium">STL</th>
+              <th className="px-1 pb-1.5 font-medium">BLK</th>
+              <th className="px-1 pb-1.5 font-medium">PTS</th>
             </tr>
           </thead>
           <tbody>
@@ -191,12 +191,6 @@ const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
                 Projected {data.is_home ? 'vs' : '@'} {data.opponent}
               </td>
               <td className="px-1 py-2 text-center tabular-nums font-semibold">{Math.round(minutes)}</td>
-              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('pts')}</td>
-              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('reb')}</td>
-              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('ast')}</td>
-              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('stl')}</td>
-              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('blk')}</td>
-              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('three_pm')}</td>
               <td className="hidden sm:table-cell px-1 py-2 text-center tabular-nums font-semibold">{fgm}</td>
               <td className="hidden sm:table-cell px-1 py-2 text-center tabular-nums font-semibold">{fga}</td>
               <td className="px-1 py-2 text-center tabular-nums font-semibold">
@@ -209,6 +203,12 @@ const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
                 {ft.pct}
                 {ft.frac && <span className="sm:hidden block text-[9px] font-normal text-gray-400">{ft.frac}</span>}
               </td>
+              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('three_pm')}</td>
+              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('reb')}</td>
+              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('ast')}</td>
+              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('stl')}</td>
+              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('blk')}</td>
+              <td className="px-1 py-2 text-center tabular-nums font-semibold">{val('pts')}</td>
             </tr>
           </tbody>
         </table>

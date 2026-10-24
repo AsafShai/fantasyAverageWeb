@@ -180,9 +180,9 @@ export default function DraftReport() {
 
         <section>
           <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">{showHeat ? 'Draft Board — value heat' : 'Draft Board'}</h2>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
             <table className="text-xs border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                 <tr>
                   <th className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">Rd</th>
                   {teamColumns.map(t => (
@@ -219,12 +219,12 @@ export default function DraftReport() {
         {FF_DRAFT_STEALS_BUSTS && (
           <section>
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Team Draft Value — diff vs slot</h2>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
               <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
                   {diffColWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
                 </colgroup>
-                <thead className="bg-gray-50 dark:bg-gray-900">
+                <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     {(['#', 'Team', 'Total Diff', 'Avg Diff', 'Ranked / Picks'] as const).map((label, i) => (
                       <th

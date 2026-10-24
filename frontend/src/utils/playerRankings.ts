@@ -6,7 +6,7 @@ import type { Player, PlayerStats } from '../types/api'
 // API isn't available yet (e.g. before the first response lands).
 export type RankingCategory = string
 
-export const DEFAULT_CATEGORIES: RankingCategory[] = ['FG%', 'FT%', '3PM', 'AST', 'REB', 'STL', 'BLK', 'PTS']
+export const DEFAULT_CATEGORIES: RankingCategory[] = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS']
 
 export const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
 

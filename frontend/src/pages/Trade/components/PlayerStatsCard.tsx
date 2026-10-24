@@ -69,18 +69,18 @@ export const PlayerStatsCard: React.FC<PlayerStatsCardProps> = ({
 
   const statsItemsData: StatsItemData[] = [
     { label: "Min", value: displayStats.minutes, icon: "⏱️", field: "minutes" },
-    { label: "PTS", value: displayStats.pts, icon: "🏀", field: "pts" },
-    { label: "REB", value: displayStats.reb, icon: "🏀", field: "reb" },
-    { label: "AST", value: displayStats.ast, icon: "🤝", field: "ast" },
-    { label: "STL", value: displayStats.stl, icon: "🥷", field: "stl" },
-    { label: "BLK", value: displayStats.blk, icon: "🛡️", field: "blk" },
-    { label: "3PM", value: displayStats.three_pm, icon: "🎯", field: "three_pm" },
     { label: "FGM", value: displayStats.fgm, icon: "🎯", field: "fgm" },
     { label: "FGA", value: displayStats.fga, icon: "🏹", field: "fga" },
     { label: "FG%", value: displayStats.fg_percentage, icon: "📈", isPercentage: true, field: "fg_percentage" },
     { label: "FTM", value: displayStats.ftm, icon: "🆓", field: "ftm" },
     { label: "FTA", value: displayStats.fta, icon: "🎯", field: "fta" },
     { label: "FT%", value: displayStats.ft_percentage, icon: "📊", isPercentage: true, field: "ft_percentage" },
+    { label: "3PM", value: displayStats.three_pm, icon: "🎯", field: "three_pm" },
+    { label: "REB", value: displayStats.reb, icon: "🏀", field: "reb" },
+    { label: "AST", value: displayStats.ast, icon: "🤝", field: "ast" },
+    { label: "STL", value: displayStats.stl, icon: "🥷", field: "stl" },
+    { label: "BLK", value: displayStats.blk, icon: "🛡️", field: "blk" },
+    { label: "PTS", value: displayStats.pts, icon: "🏀", field: "pts" },
     { label: "GP", value: displayStats.gp, icon: "📅", field: "gp" }
   ]
 

@@ -87,7 +87,7 @@ describe('StandingsRace metric options', () => {
     await waitFor(() => expect(screen.getByRole('combobox')).toBeInTheDocument());
     await waitFor(() => expect(metricNames()).toContain('TO'));
     // the familiar categories keep their order, the extra one is appended
-    expect(metricNames()).toEqual(['Total', 'PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%', 'TO']);
+    expect(metricNames()).toEqual(['Total', 'FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PTS']);
   });
 });
 

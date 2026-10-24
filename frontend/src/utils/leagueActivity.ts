@@ -10,20 +10,11 @@ const PCT_PARTS: Record<string, [string, string]> = {
   '3P%': ['3PM', '3PA'],
 }
 
-const DISPLAY_ORDER = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'TO', 'FG%', 'FT%', '3P%']
-
 export function isPctCategory(cat: string): boolean {
   return cat in PCT_PARTS
 }
 
-/** League categories in the order the rest of the app shows them. */
-export function orderCategories(categories: string[]): string[] {
-  const rank = (c: string) => {
-    const i = DISPLAY_ORDER.indexOf(c)
-    return i === -1 ? DISPLAY_ORDER.length : i
-  }
-  return [...categories].sort((a, b) => rank(a) - rank(b))
-}
+export { orderCategories } from './statOrder'
 
 export interface StatLine {
   gp: number

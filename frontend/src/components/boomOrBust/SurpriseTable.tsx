@@ -24,7 +24,7 @@ function ShootingCell({ made, att, mark }: { made: number; att: number; mark?: s
 }
 
 const STAT_COLS: [keyof SurpriseRow, string][] = [
-  ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['fg3m', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
+  ['fg3m', '3PM'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['pts', 'PTS'],
 ];
 
 /** "· DOR ● started", "· AAT ○ bench", "· FA": where he was in the league that night. */
@@ -118,17 +118,17 @@ export function SurpriseTable({
     // Each table scrolls on its own: overscroll-x-contain stops a fast swipe
     // past its edge from spilling into the page (or the browser's back
     // gesture), and the rank + player columns stay pinned while the stats scroll.
-    <div className={share ? 'overflow-visible' : 'overflow-x-auto overscroll-x-contain'}>
+    <div className={share ? 'overflow-visible' : 'overflow-auto max-h-[70vh] overscroll-x-contain'}>
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-800">
+        <thead className={`bg-gray-50 dark:bg-gray-800 ${share ? '' : 'sticky top-0 z-20'}`}>
           <tr>
             <th className={`${th} text-right ${stickyRank} ${stickyHead}`}>#</th>
             <th className={`${th} text-left ${stickyPlayer} ${stickyHead}`}>Player</th>
             <th className={`${th} text-left`}>Matchup</th>
             <th className={th}>MIN</th>
-            {STAT_COLS.map(([, label]) => <th key={label} className={th}>{label}</th>)}
             <th className={th}>FG%</th>
             <th className={th}>FT%</th>
+            {STAT_COLS.map(([, label]) => <th key={label} className={th}>{label}</th>)}
             <th className={`${th} text-left`}>Score</th>
           </tr>
         </thead>
@@ -147,13 +147,13 @@ export function SurpriseTable({
               </td>
               <td className={`${td} text-left`}>{row.is_home ? `vs ${row.opponent_abbr}` : `@ ${row.opponent_abbr}`}</td>
               <td className={td}>{Math.round(row.minutes)}</td>
+              <td className={td}><ShootingCell made={row.fgm} att={row.fga} mark={markOf('fg')} /></td>
+              <td className={td}><ShootingCell made={row.ftm} att={row.fta} mark={markOf('ft')} /></td>
               {STAT_COLS.map(([key, label]) => (
                 <td key={label} className={td}>
                   {markOf(key) ? <span className={markOf(key)}>{row[key] as number}</span> : (row[key] as number)}
                 </td>
               ))}
-              <td className={td}><ShootingCell made={row.fgm} att={row.fga} mark={markOf('fg')} /></td>
-              <td className={td}><ShootingCell made={row.ftm} att={row.fta} mark={markOf('ft')} /></td>
               <td className="px-2 py-2 whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100 w-10">{fmtScore(row.score)}</span>
