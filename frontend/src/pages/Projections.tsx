@@ -7,12 +7,12 @@ import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import InjuryBadge from '../components/InjuryBadge';
-import { fantasyTeamOptionLabel, leadWithMyTeam } from '../components/MyTeamMark';
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display';
 import { useMyTeam } from '../context/MyTeamContext';
 import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam';
 
 const STAT_COLS: [keyof ProjectionStats, string][] = [
-  ['pts', 'PTS'], ['reb', 'REB'], ['ast', 'AST'], ['three_pm', '3PM'], ['stl', 'STL'], ['blk', 'BLK'],
+  ['three_pm', '3PM'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['pts', 'PTS'],
 ];
 
 function fmtStat(n: number, integer: boolean): string {
@@ -137,6 +137,8 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
           </button>
         </div>
       </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</td>
       {STAT_COLS.map(([key]) => (
         <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
           {coherent && (key === 'pts' || key === 'three_pm')
@@ -144,8 +146,6 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
             : fmtStat(stats[key] as number, integerMode)}
         </td>
       ))}
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</td>
     </tr>
   );
 }
@@ -282,16 +282,16 @@ export default function Projections() {
         <span className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} players</span>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
+      <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 overflow-auto max-h-[70vh]">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+          <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
             <tr>
               <th className="text-left px-3 py-2 sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">Player</th>
               <th className="text-left px-3 py-2">Matchup</th>
               <th className="px-3 py-2 w-40">Minutes</th>
-              {STAT_COLS.map(([, label]) => <th key={label} className="px-2 py-2 text-right">{label}</th>)}
               <th className="px-2 py-2 text-right">FG%</th>
               <th className="px-2 py-2 text-right">FT%</th>
+              {STAT_COLS.map(([, label]) => <th key={label} className="px-2 py-2 text-right">{label}</th>)}
             </tr>
           </thead>
           <tbody>

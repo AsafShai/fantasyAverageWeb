@@ -14,7 +14,11 @@ export function useFollowMyTeamValue<T extends string | number>(
 ) {
   const applied = useRef<T | null | undefined | typeof USER_PICK>(undefined)
   const onApplyRef = useRef(onApply)
-  onApplyRef.current = onApply
+  // Kept current in an effect (refs can't be written during render); it runs
+  // before the follow effect below, so that effect always calls the latest.
+  useEffect(() => {
+    onApplyRef.current = onApply
+  })
 
   useEffect(() => {
     const result = resolveFollow(current, target, applied.current)

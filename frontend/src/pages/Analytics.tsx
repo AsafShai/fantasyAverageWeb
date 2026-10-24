@@ -9,8 +9,10 @@ import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
 import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
-import { MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
+import { MyTeamMark } from '../components/MyTeamMark'
+import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
+import { orderCategories } from '../utils/statOrder'
 
 type AnalyticsTab = 'heatmap' | 'rankingsOverTime' | 'shootingStats'
 
@@ -114,7 +116,15 @@ const Analytics = () => {
   const getSortedHeatmapData = (heatmapData: HeatmapData): SortedHeatmapData | null => {
     if (!heatmapData) return null
 
-    const { teams, categories, data, normalized_data, ranks_data } = heatmapData
+    // Reorder the category columns (and every row's cells with them) into the
+    // app-wide stat order; the backend sends them in ESPN's settings order.
+    const columnOrder = orderCategories(heatmapData.categories).map(c => heatmapData.categories.indexOf(c))
+    const pick = (row: number[] | undefined) => row && columnOrder.map(i => row[i])
+    const { teams } = heatmapData
+    const categories = columnOrder.map(i => heatmapData.categories[i])
+    const data = heatmapData.data.map(row => pick(row) ?? [])
+    const normalized_data = heatmapData.normalized_data.map(row => pick(row) ?? [])
+    const ranks_data = heatmapData.ranks_data?.map(row => pick(row) ?? [])
 
     const teamData: TeamDataItem[] = teams.map((team: Team, index: number) => ({
       team,
@@ -256,9 +266,9 @@ const Analytics = () => {
 
         <p className="text-gray-600 mb-4">{description}</p>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="min-w-full">
-            <thead>
+            <thead className="sticky top-0 z-20 bg-white dark:bg-gray-800">
               <tr>
                 <th
                   className="px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"

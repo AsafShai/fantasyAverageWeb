@@ -61,7 +61,7 @@ describe('category values', () => {
 
   it('orders league categories the way the app shows them', () => {
     expect(orderCategories(['PTS', 'BLK', 'STL', 'AST', 'REB', '3PM', 'FG%', 'FT%'])).toEqual([
-      'PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%',
+      'FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS',
     ])
   })
 

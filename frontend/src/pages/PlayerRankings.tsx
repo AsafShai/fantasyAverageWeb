@@ -8,6 +8,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import PlayerNameLink from '../components/PlayerNameLink'
 import { formatShort } from '../utils/dateRange'
+import { orderCategories } from '../utils/statOrder'
 import InfoTip from '../components/InfoTip'
 import { METRIC_GLOSSARY, type MetricInfo } from '../constants/metricGlossary'
 import type { TimePeriod, CustomDateRange } from '../types/api'
@@ -51,8 +52,13 @@ export default function PlayerRankings() {
     [allPlayers]
   )
   // This league's actual scoring categories, from the API response — falls
-  // back to the historical default 8 until the first response lands.
-  const categories = playersData?.categories?.length ? playersData.categories : DEFAULT_CATEGORIES
+  // back to the historical default 8 until the first response lands. Shown
+  // in the app-wide stat order.
+  const apiCategories = playersData?.categories
+  const categories = useMemo(
+    () => orderCategories(apiCategories?.length ? apiCategories : DEFAULT_CATEGORIES),
+    [apiCategories]
+  )
   const reverseCategories = useMemo(
     () => new Set(playersData?.reverse_categories ?? []),
     [playersData?.reverse_categories]
@@ -305,20 +311,20 @@ export default function PlayerRankings() {
         )}
 
         {hasCalculated && sortedPlayers.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                   <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">#</th>
                   <Th col="totalZ" label="Z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} tip={METRIC_GLOSSARY.totalZ} />
                   <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">Player</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
                   <th className="hidden sm:table-cell px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Pos</th>
-                  <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
                   {categories.map(cat => (
                     <Th key={`raw-${cat}`} col={`${cat}_raw` as SortCol} label={CATEGORY_LABELS[cat] ?? cat} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
+                  <Th col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   {categories.map(cat => (
                     <Th key={`z-${cat}`} col={cat} label={`${CATEGORY_LABELS[cat] ?? cat}_z`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
@@ -332,13 +338,13 @@ export default function PlayerRankings() {
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700"><PlayerNameLink name={ranked.player.player_name} playerId={ranked.player.player_id} /></td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.pro_team}</td>
                     <td className="hidden sm:table-cell px-2 py-2 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{ranked.player.positions.join(', ')}</td>
-                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{ranked.player.stats.gp}</td>
                     <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>
                     {categories.map(cat => (
                       <td key={`raw-${cat}`} className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                         {rawDisplay(ranked, cat)}
                       </td>
                     ))}
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{ranked.player.stats.gp}</td>
                     {categories.map(cat => (
                       <td key={`z-${cat}`} className={`px-1.5 sm:px-3 py-1.5 sm:py-2 text-right font-mono text-xs ${isPunted(cat) ? 'text-gray-300 dark:text-gray-600' : ranked.zScores[cat] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                         {fmt(ranked.zScores[cat])}

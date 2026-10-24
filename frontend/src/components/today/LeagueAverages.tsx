@@ -1,15 +1,15 @@
 import type { AverageStats, LeagueSummary } from '../../types/api'
 
 const AVERAGE_TILES: { label: string; value: (a: AverageStats) => string }[] = [
-  { label: 'GP', value: a => a.gp.toFixed(2) },
   { label: 'FG%', value: a => a.fg_percentage.toFixed(3) },
   { label: 'FT%', value: a => a.ft_percentage.toFixed(3) },
   { label: '3PM', value: a => a.three_pm.toFixed(2) },
-  { label: 'AST', value: a => a.ast.toFixed(2) },
   { label: 'REB', value: a => a.reb.toFixed(2) },
+  { label: 'AST', value: a => a.ast.toFixed(2) },
   { label: 'STL', value: a => a.stl.toFixed(2) },
   { label: 'BLK', value: a => a.blk.toFixed(2) },
   { label: 'PTS', value: a => a.pts.toFixed(2) },
+  { label: 'GP', value: a => a.gp.toFixed(2) },
 ]
 
 function StatTile({ label, value }: { label: string; value: string }) {

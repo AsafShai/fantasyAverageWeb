@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats } from '../types/api';
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
 import { coherentInts } from '../utils/coherentRound';
 import './MatchupDisplay.css';
 
 const RANK_LABELS: Record<keyof DefRanks, string> = {
-  pts: 'PTS',
+  fg_pct: 'FG%',
+  three_pm: '3PM',
   reb: 'REB',
   ast: 'AST',
   stl: 'STL',
   blk: 'BLK',
-  three_pm: '3PM',
-  fg_pct: 'FG%',
+  pts: 'PTS',
 };
 
 // Per-game benchmarks for weighting best-cat by player strength
@@ -24,6 +24,12 @@ const LEAGUE_BENCHMARKS: Record<keyof DefRanks, number> = {
   three_pm: 2.5,
   fg_pct: 0.46,
 };
+
+// Opponent-rank keys in the app-wide stat order (RANK_LABELS' order), limited
+// to the ones this matchup carries.
+function rankKeys(ranks: DefRanks): (keyof DefRanks)[] {
+  return (Object.keys(RANK_LABELS) as (keyof DefRanks)[]).filter(k => ranks[k] !== undefined);
+}
 
 function playerPg(stat: keyof DefRanks, s: PlayerStats): number {
   const gp = s.gp || 1;
@@ -222,12 +228,15 @@ export function MatchupExpandRow({
 
           <div className="mq-strip-label">OPPONENT ({matchup.opponent}) DEFENSE</div>
           <div className="mq-strip">
-            {(Object.entries(matchup.def_ranks) as [keyof DefRanks, number][]).map(([key, rank]) => (
+            {rankKeys(matchup.def_ranks).map(key => {
+              const rank = matchup.def_ranks[key];
+              return (
               <span key={key} className="mq-strip-item">
                 <b className={RANK_TEXT_COLOR[rankColor(rank)]}>{RANK_LABELS[key]} #{rank}</b>{' '}
                 <span className="text-gray-500 dark:text-gray-400">{formatDefVal(key, matchup.def_values[key])}</span>
               </span>
-            ))}
+              );
+            })}
             <span className="mq-strip-item">
               <b className={RANK_TEXT_COLOR[paceColor]}>{paceLabel.charAt(0).toUpperCase() + paceLabel.slice(1)}</b>{' '}
               <span className="text-gray-500 dark:text-gray-400">{matchup.pace} vs {matchup.league_avg_pace} avg</span>
@@ -241,24 +250,26 @@ export function MatchupExpandRow({
                 <span>TONIGHT'S PROJECTION</span>
               </div>
               <div className="mq-strip">
-                {(Object.entries(matchup.def_ranks) as [keyof DefRanks, number][]).map(([key]) => (
-                  <span key={key} className="mq-strip-item">
-                    <span className="text-gray-500 dark:text-gray-400">{RANK_LABELS[key]}</span>{' '}
-                    <b>
-                      {key === 'fg_pct' && fg
-                        ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                        : coherent && (key === 'pts' || key === 'three_pm')
-                          ? coherent[key]
-                          : fmtStat(stats![key], integerMode)}
-                    </b>
-                  </span>
+                {rankKeys(matchup.def_ranks).map(key => (
+                  <Fragment key={key}>
+                    <span className="mq-strip-item">
+                      <span className="text-gray-500 dark:text-gray-400">{RANK_LABELS[key]}</span>{' '}
+                      <b>
+                        {key === 'fg_pct' && fg
+                          ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
+                          : coherent && (key === 'pts' || key === 'three_pm')
+                            ? coherent[key]
+                            : fmtStat(stats![key], integerMode)}
+                      </b>
+                    </span>
+                    {key === 'fg_pct' && ft && (
+                      <span className="mq-strip-item">
+                        <span className="text-gray-500 dark:text-gray-400">FT%</span>{' '}
+                        <b>{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</b>
+                      </span>
+                    )}
+                  </Fragment>
                 ))}
-                {ft && (
-                  <span className="mq-strip-item">
-                    <span className="text-gray-500 dark:text-gray-400">FT%</span>{' '}
-                    <b>{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</b>
-                  </span>
-                )}
               </div>
             </>
           )}

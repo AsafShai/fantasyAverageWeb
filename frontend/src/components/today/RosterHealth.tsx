@@ -2,7 +2,8 @@ import { useNavigate } from 'react-router'
 import { useSort } from '../../hooks/useSort'
 import SortableHeaderCell from './SortableHeaderCell'
 import type { TeamRosterHealth } from '../../types/api'
-import { leadWithMyTeam, MyTeamMark, myTeamRowClass } from '../MyTeamMark'
+import { MyTeamMark } from '../MyTeamMark'
+import { leadWithMyTeam, myTeamRowClass } from '../../myTeam/display'
 import { useMyTeam } from '../../context/MyTeamContext'
 
 interface RosterHealthProps {

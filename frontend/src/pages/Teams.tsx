@@ -3,7 +3,8 @@ import { useGetTeamsListQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
-import { leadWithMyTeam, MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
+import { MyTeamMark } from '../components/MyTeamMark'
+import { leadWithMyTeam, myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 
 const Teams = () => {

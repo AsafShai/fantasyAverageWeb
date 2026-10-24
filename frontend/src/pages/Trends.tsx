@@ -16,7 +16,7 @@ import DateRangePicker from '../components/DateRangePicker'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange } from '../types/api'
-import { fantasyTeamOptionLabel } from '../components/MyTeamMark'
+import { fantasyTeamOptionLabel } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam'
 
@@ -232,9 +232,9 @@ function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg">
+    <div className="overflow-auto max-h-[70vh] rounded-lg">
       <table className="w-full text-xs sm:text-sm">
-        <thead>
+        <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
           <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
             <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
@@ -334,9 +334,9 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
         <b>Role ↑/↓</b> = minutes AND usage moved together (≥4 MPG and ≥2pp usage). <b>Minutes ↑/↓</b> = minutes moved, usage didn't.{' '}
         <b>Usage ↑/↓</b> = usage moved on flat minutes. Δ USG / Δ MPG columns show the raw numbers behind each label. Click any row for the game-by-game chart.
       </p>
-      <div className="overflow-x-auto rounded-lg">
+      <div className="overflow-auto max-h-[70vh] rounded-lg">
         <table className="w-full text-xs sm:text-sm">
-          <thead>
+          <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
             <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
               <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
@@ -494,9 +494,9 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
           ? 'Filter: a gap of at least 1.5 standard errors — so a hot night on thin volume never lists. Ranked by z: the least likely to be luck first.'
           : 'Filter: fantasy-relevant swing ≥ 0.35 makes/g-equivalent (attempts/g × |dev|), volume-weighted. Grouped by player: worst-offending stat surfaces first.'}
       </p>
-      <div className="overflow-x-auto rounded-lg">
+      <div className="overflow-auto max-h-[70vh] rounded-lg">
         <table className="w-full text-xs sm:text-sm">
-          <thead>
+          <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
             <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
               <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />

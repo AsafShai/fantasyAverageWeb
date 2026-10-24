@@ -193,17 +193,17 @@ export function formatLastYearStat(value: number | null | undefined, pct = false
 
 export type StatCol = { key: keyof LastYearStats; label: string; pct?: boolean; whole?: boolean }
 
-/** Per-game line shown on the draft pages, games played first for context. */
+/** Per-game line shown on the draft pages, in the app-wide stat order (GP last). */
 export const LAST_YEAR_COLS: StatCol[] = [
-  { key: 'gp', label: 'GP', whole: true },
   { key: 'fg_pct', label: 'FG%', pct: true },
   { key: 'ft_pct', label: 'FT%', pct: true },
-  { key: 'ppg', label: 'PPG' },
+  { key: 'three_pm', label: '3PM' },
   { key: 'rpg', label: 'RPG' },
   { key: 'apg', label: 'APG' },
   { key: 'spg', label: 'SPG' },
   { key: 'bpg', label: 'BPG' },
-  { key: 'three_pm', label: '3PM' },
+  { key: 'ppg', label: 'PPG' },
+  { key: 'gp', label: 'GP', whole: true },
 ]
 
 export function adpDeltaClass(adp: number | null | undefined, blend: number | null | undefined): string {

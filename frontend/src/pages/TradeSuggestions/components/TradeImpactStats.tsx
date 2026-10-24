@@ -52,12 +52,12 @@ export const TradeImpactStats: React.FC<TradeImpactStatsProps> = ({
   const receivingStats = useMemo(() => calculateTotalStats(playersToReceive), [calculateTotalStats, playersToReceive]);
 
   const statCategories = [
-    { key: 'pts', label: 'Points', suffix: '' },
+    { key: 'three_pm', label: '3-Pointers', suffix: '' },
     { key: 'reb', label: 'Rebounds', suffix: '' },
     { key: 'ast', label: 'Assists', suffix: '' },
     { key: 'stl', label: 'Steals', suffix: '' },
     { key: 'blk', label: 'Blocks', suffix: '' },
-    { key: 'three_pm', label: '3-Pointers', suffix: '' },
+    { key: 'pts', label: 'Points', suffix: '' },
   ];
 
   const getImpactColor = (diff: number) => {
