@@ -35,7 +35,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=surprise.CALIBRATION_PATH)
     args = parser.parse_args()
 
-    # The parquet predates SEASON_GAMES, which the season window's weight follows.
+    # Recomputed even when the parquet carries it, so it always counts the same way.
     df = surprise.add_season_games(pd.read_parquet(args.parquet))
     missing = [c for c in surprise.required_columns() if c not in df.columns]
     if missing:

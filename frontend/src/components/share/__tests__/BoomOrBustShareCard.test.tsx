@@ -14,7 +14,7 @@ const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
 })
 const boom = row({})
 const bust = row({ player_id: 2, player_name: 'Jayson Tatum', score: -1.91, verdict: 'bad',
-  reasons: [{ stat: 'FG_PCT', value: 0.261, avg: 0.47, z: -1.2 }] })
+  reasons: [{ stat: 'FG_PCT', value: 0.261, avg: 0.47, z: -1.4 }] })
 
 describe('BoomOrBustShareCard', () => {
   it('renders the page tables in one image: names, marks, shooting, score', () => {

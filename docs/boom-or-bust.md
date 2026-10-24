@@ -23,8 +23,8 @@ Two ingredients per player-game, both standardized against a reference season:
 Final = a blend that differs by sign (research finding: model error adds value on the
 good side, z dominates on the bad side), mapped to N(0,1) by rank against the
 reference season. Positive = surprise, negative = disappointment. A player without a
-model estimate yet (fewer than 10 games) is scored on metric 1 alone, against its own
-reference, and tagged "history only" on the page.
+model estimate yet (fewer than 10 career games, or not yet in the model's data) is
+scored on metric 1 alone, ranked among last season's rows without an estimate, and tagged "history only" on the page.
 
 **Per-stat verdicts** (the coloured cells): for every stat of a scored row the same
 two ingredients are blended for that stat alone, its z against his own windows and
@@ -136,7 +136,7 @@ one migration, one 52 kB JSON, one page on the frontend. Tests: 16 backend, 4 fr
 | Memory on a full night pushes the nightly container over its limit | OOM kill of the nightly, after the night's rows are already committed | The step runs last and is isolated: a failure is logged, the night stays `processed`, the tab keeps its last night. Kill switch `SURPRISE_NIGHTLY_ENABLED=false`. Backfill by hand later. Watch the first full-slate night's `[mem]` lines. |
 | The step raises for any reason | Same as above, no effect on predictions or vectors | `try/except` around the whole step |
 | Table missing on prod (migration not applied) | The step logs an error every night; the tab shows "No nights scored yet" | Apply the migration; nothing else depends on it |
-| Early season: few model estimates | Most players are "history only" (metric 1 only) for ~3 weeks; the SEASON window is empty, so ALL/L10/L5 carry it | Designed in: separate calibration for history-only rows, visible tag on the page |
+| Early season | The model estimates anyone with 10 career games (opening night 2026: 62 of 68), but the calibration's backtest only had estimates from 10 games *this* season, so opening weeks were never in it; the first nights of 2026-27 leaned to busts. The SEASON window is still thin, so ALL/L10/L5 carry it | Rebuild the backtest with the live rule; until then read the first weeks as provisional |
 | Calibration drift | Scores are relative to 2025-26's distribution; a league-wide scoring change shifts how many cross the bars | Yearly refresh; thresholds are settings, not code |
 | Weights are opinion | Someone disagrees with what "surprise" means | They are one dict each in `surprise.py`, mirrored in the research dashboard's defaults; change there, re-run the calibration script, done |
 | Reference season assumes the research z-scores and the nightly's agree | Scores off if they drifted | The backtest now imports the same `compute_zscores`; the shipped calibration is checked against the module's settings in `test_surprise.py` |

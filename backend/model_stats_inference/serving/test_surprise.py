@@ -181,7 +181,8 @@ class TestScoring:
         reference season's rows that had none either, not every row (those
         players' metric 1 is narrower; ranked among all rows they came out
         too narrow and leaning to booms)."""
-        hist = pd.concat([_history(p, 30, 10.0 + 4 * p, seed=p) for p in range(1, 5)], ignore_index=True)
+        # players 3-4 (no estimate) score high, so their Pearson z is narrow next to players 1-2
+        hist = pd.concat([_history(p, 60, 6.0 if p <= 2 else 45.0, seed=p) for p in range(1, 5)], ignore_index=True)
         z = surprise.compute_zscores(hist)
         df = hist.merge(z, on=["PLAYER_ID", "GAME_ID"])
         for s in surprise.ERR_TARGETS:
@@ -195,12 +196,12 @@ class TestScoring:
         own = scored.loc[history_only, "SCORE"]
         assert abs(own.median()) < 0.1                                          # centred on its own reference
         assert (own > 0).mean() == pytest.approx(0.5, abs=0.05)                # as many above as below
+        assert (own.abs() >= 1).mean() == pytest.approx(0.317, abs=0.07)        # the bell curve's width, not squeezed
 
     def test_shipped_calibration_matches_the_frozen_settings(self):
         calibration = surprise.load_calibration()
-        assert calibration["settings"]["z_weights"] == surprise.Z_WEIGHTS
-        assert calibration["settings"]["err_weights"] == surprise.ERR_WEIGHTS
-        assert calibration["settings"]["blend"] == surprise.BLEND
+        # every weight and rule it was trained under, so a change without a rebuild fails here
+        assert calibration["settings"] == surprise.calibration_settings()
         assert set(surprise.required_columns()) <= set(calibration["norm"])
 
 
@@ -214,6 +215,25 @@ def test_per_stat_surprise_blends_like_the_final_and_falls_back_to_z():
     assert out.at[2, "PTS"] == 1.0 and out.at[2, "REB"] == 0.5     # no estimate: z alone
 
 
+def test_blend_never_scores_a_worse_game_higher():
+    """Worse metric 1 or worse model error never raises the score, and it has
+    no jumps: when the two sides disagree they cancel toward 0."""
+    jump = surprise.by_side(pd.Series([2.0, 2.0]), pd.Series([-0.667, -0.70]))
+    assert jump.iloc[1] <= jump.iloc[0]                       # was 0 then 1.33 with a side picked by sign
+    grid = np.linspace(-4, 4, 81)
+    z, e = np.meshgrid(grid, grid, indexing="ij")
+    out = surprise.by_side(pd.DataFrame(z), pd.DataFrame(e)).to_numpy()
+    assert (np.diff(out, axis=0) >= -1e-12).all() and (np.diff(out, axis=1) >= -1e-12).all()
+    step = grid[1] - grid[0]                                  # slope at most 1 either way: no jump
+    assert np.abs(np.diff(out, axis=0)).max() <= step + 1e-9 and np.abs(np.diff(out, axis=1)).max() <= step + 1e-9
+
+
+@pytest.mark.parametrize("season_games, shown", [(0, 20.0), (2, 20.0), (3, 10.0), (12, 10.0)])
+def test_shown_average_waits_for_three_season_games(season_games, shown):
+    row = pd.Series({"SEASON_GAMES": season_games, "AVG_SEASON_PTS": 10.0, "AVG_ALL_PTS": 20.0})
+    assert surprise.shown_average(row, "PTS") == shown
+
+
 def test_weighted_metric_ignores_missing_components_but_not_all_missing():
     df = pd.DataFrame({"NORM_A": [1.0, np.nan, np.nan], "NORM_B": [1.0, 2.0, np.nan]})
     m = surprise.weighted_metric(df, {"A": 1.0, "B": 1.0})
@@ -225,8 +245,7 @@ def test_weighted_metric_ignores_missing_components_but_not_all_missing():
 @pytest.mark.parametrize("prior_this_season", [1, 2, 10, 25])
 def test_season_window_weight_grows_with_its_games(prior_this_season):
     """The season window always exists after one game, but its weight is
-    min(games, 20)/20 of the full weight; both computations agree on the count,
-    and the shown season average waits for 3 games (career before that)."""
+    min(games, 20)/20 of the full weight; both computations agree on the count."""
     last = _history(1, 20, 20.0, season="2025-26", seed=1)
     this = _history(1, prior_this_season + 1, 20.0, season="2026-27", seed=2)
     this["GAME_ID"] = [f"new-{i}" for i in range(len(this))]

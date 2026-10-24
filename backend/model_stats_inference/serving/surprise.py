@@ -26,8 +26,10 @@ across the season rather than relative to that one night:
              leaning to booms), so the first weeks of a season still have a
              page.
 
-The weights are the research dashboard's final defaults (July 2026) and live
-here on purpose: they are a server-side decision, not a UI control.
+The stat weights are the research dashboard's final defaults (July 2026); the
+window weights and the blend were set by the league in October 2026. They live
+here on purpose: a server-side decision, not a UI control. Changing any of
+them means re-training the calibration (scripts/build_surprise_calibration.py).
 """
 
 from __future__ import annotations
@@ -75,8 +77,10 @@ VOLUME_WEIGHT = True
 # Blend of (z vs his own averages, model error), by side: a boom is mostly
 # "beat what the model expected for his minutes" (75% model, 25% averages); a
 # bust is mostly "far under his own averages" (75% averages, 25% model), so an
-# empty line sinks below a star who merely missed a high projection. The rank
-# to N(0,1) afterwards makes the two sides equally rare at the same |score|.
+# empty line sinks below a star who merely missed a high projection. The boom
+# side counts only when positive and the bust side only when negative, added
+# (see by_side), so a better game never scores lower. The rank to N(0,1)
+# afterwards makes the two sides equally rare at the same |score|.
 BLEND = {"w1_pos": 0.25, "w2_pos": 0.75, "w1_neg": 0.75, "w2_neg": 0.25}
 
 Z_STATS = sorted(s for s in Z_WEIGHTS if not s.endswith("_PCT"))
@@ -98,15 +102,14 @@ CALIBRATION_PATH = Path(__file__).parent / "surprise_calibration.json"
 # per-stat surprise blends the two ingredients the final score blends, for
 # that stat alone: its z against the player's own windows and its standardized
 # model error (actual minus what the model expected for his minutes), with the
-# same sign-piecewise weights; z alone when he has no estimate. Measured on
-# two real nights: the median cell is 0.6, the 90th percentile 1.8; at 1.0 a
-# flagged row carries about five marks and one in seven carries both colours.
+# same by_side blend; z alone when he has no estimate. Measured on all of
+# 2025-26 (240k stat cells): the median cell is 0.6, the 90th percentile 1.5.
 N_REASONS = 5
 # The bad side is compressed by construction (a counting stat cannot go below
-# zero): on two real nights the 95th percentile of the per-stat surprise is
-# 2.9 on the good side and 1.4 on the bad side. The bars are therefore set per
-# sign at the same rarity: 1.0 marks the top 38% of good cells, 0.7 the top 38%
-# of bad cells. The page's three colour steps follow the same percentiles.
+# zero): on 2025-26 the 95th percentile of the per-stat surprise is 2.5 on
+# the good side and 1.4 on the bad side. The bars are therefore set per sign
+# at the same rarity: 1.0 marks the top 37% of good cells, 0.7 the top 38% of
+# bad cells. The page's three colour steps follow the same rarity (marks.ts).
 MIN_REASON = 1.0
 MIN_REASON_BAD = 0.7
 # The model-error column that backs each stat's verdict. Shooting uses the
@@ -397,13 +400,23 @@ def final_raw(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def blend(mz: pd.Series, me: pd.Series) -> pd.Series:
-    """The final's raw value from metric 1 and metric 2 (BLEND, by sign of the
-    positive-side blend). NaN where metric 2 is (no model estimate)."""
+def by_side(z, err):
+    """BLEND of metric 1 (or a stat's z) and metric 2 (or its error): the
+    boom-side blend where positive plus the bust-side blend where negative.
+    When both sides agree that is the one side's blend; when they disagree
+    they cancel toward 0. Rising in both inputs and continuous, so a better
+    game never scores lower (picking one side by the sign of the other let a
+    worse model error flip a 0 into +1.3). Works on Series and DataFrames."""
     b = BLEND
-    fp = (b["w1_pos"] * mz + b["w2_pos"] * me) / ((abs(b["w1_pos"]) + abs(b["w2_pos"])) or 1.0)
-    fn = (b["w1_neg"] * mz + b["w2_neg"] * me) / ((abs(b["w1_neg"]) + abs(b["w2_neg"])) or 1.0)
-    return fp.where(fp >= 0, fn)
+    fp = (b["w1_pos"] * z + b["w2_pos"] * err) / ((abs(b["w1_pos"]) + abs(b["w2_pos"])) or 1.0)
+    fn = (b["w1_neg"] * z + b["w2_neg"] * err) / ((abs(b["w1_neg"]) + abs(b["w2_neg"])) or 1.0)
+    return fp.clip(lower=0) + fn.clip(upper=0)
+
+
+def blend(mz: pd.Series, me: pd.Series) -> pd.Series:
+    """The final's raw value from metric 1 and metric 2 (by_side). NaN where
+    metric 2 is (no model estimate)."""
+    return by_side(mz, me)
 
 
 def to_standard_normal_with(final: pd.Series, quantiles: list[float], count: int) -> pd.Series:
@@ -439,32 +452,18 @@ def score_frame(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
 
 
 def per_stat_surprise(uz: pd.DataFrame, ue: pd.DataFrame) -> pd.DataFrame:
-    """The final score's blend, applied per stat: z against his own history
-    and the model's error for that stat, positive-side weights when the
-    blend is positive, negative-side when not; z alone where the model has
+    """The final score's blend (by_side), applied per stat: z against his own
+    history and the model's error for that stat; z alone where the model has
     no estimate (NaN error)."""
-    b = BLEND
     ue = ue.reindex(columns=uz.columns)
-    has_err = ue.notna()
-    fp = (b["w1_pos"] * uz + b["w2_pos"] * ue.fillna(0.0)) / (abs(b["w1_pos"]) + abs(b["w2_pos"]))
-    fn = (b["w1_neg"] * uz + b["w2_neg"] * ue.fillna(0.0)) / (abs(b["w1_neg"]) + abs(b["w2_neg"]))
-    blended = fp.where(fp >= 0, fn)
-    return blended.where(has_err, uz)
+    return by_side(uz, ue.fillna(0.0)).where(ue.notna(), uz)
 
 
-def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> list[list[dict]]:
-    """Per row, the stats that made the night, each with its own sign.
-
-    A stat is listed when its per-stat surprise (``per_stat_surprise``: z
-    against his own windows blended with the model's error for that stat, NOT
-    weighted by the metric's stat weights, so a 7-three night is a reason
-    whatever FG3M's weight) is at least MIN_REASON either way: positive =
-    better than his norm and the model's expectation, negative = worse. A boom
-    can carry a cold stat and a bust a good one. The first entry matches the
-    score's sign so the headline reads right; the rest come strongest first.
-    Shooting stats also need the volume gates. Each entry: stat, tonight's
-    value, his season (or all-time) average, z (the per-stat surprise).
-    """
+def stat_surprises(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
+    """Per row and stat, the per-stat surprise ``reasons_for`` marks: z
+    against his own windows (averaged over the windows that exist) blended
+    with that stat's standardized model error (per_stat_surprise), with the
+    volume gates on the shooting stats (NaN below them)."""
     normed = standardize(df, calibration)
     factor = season_factor(df)
     strength = {}
@@ -492,6 +491,37 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
     for stat, att_col, floor in (("FG_PCT", "FGA", MIN_FGA_FOR_REASON), ("FT_PCT", "FTA", MIN_FTA_FOR_REASON)):
         if stat in u.columns and att_col in df.columns:
             u[stat] = u[stat].where(df[att_col] >= floor)
+    return u
+
+
+def shown_average(row: pd.Series, stat: str) -> float:
+    """The average a reason shows next to tonight's value: his average this
+    season once it has SEASON_AVG_MIN_GAMES games; before that, over all his
+    games (a one-game season average misleads). NaN when neither exists."""
+    season_games = row.get("SEASON_GAMES", SEASON_AVG_MIN_GAMES)
+    for win in ("SEASON", "ALL"):
+        if win == "SEASON" and not season_games >= SEASON_AVG_MIN_GAMES:
+            continue
+        value = row.get(f"AVG_{win}_{stat}", np.nan)
+        if pd.notna(value):
+            return value
+    return np.nan
+
+
+def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> list[list[dict]]:
+    """Per row, the stats that made the night, each with its own sign.
+
+    A stat is listed when its per-stat surprise (``per_stat_surprise``: z
+    against his own windows blended with the model's error for that stat, NOT
+    weighted by the metric's stat weights, so a 7-three night is a reason
+    whatever FG3M's weight) is at least MIN_REASON either way: positive =
+    better than his norm and the model's expectation, negative = worse. A boom
+    can carry a cold stat and a bust a good one. The first entry matches the
+    score's sign so the headline reads right; the rest come strongest first.
+    Shooting stats also need the volume gates. Each entry: stat, tonight's
+    value, his season (or all-time) average, z (the per-stat surprise).
+    """
+    u = stat_surprises(df, calibration)
 
     out: list[list[dict]] = []
     for idx in df.index:
@@ -506,16 +536,7 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
         ranked = pd.concat([lead, ranked.drop(lead.index)])
         picked = []
         for stat, c in ranked.head(N_REASONS).items():
-            # His average this season once it has a few games; before that, over all his games.
-            avg = np.nan
-            season_games = df.at[idx, "SEASON_GAMES"] if "SEASON_GAMES" in df.columns else SEASON_AVG_MIN_GAMES
-            for win in ("SEASON", "ALL"):
-                col = f"AVG_{win}_{stat}"
-                if win == "SEASON" and not season_games >= SEASON_AVG_MIN_GAMES:
-                    continue
-                if col in df.columns and pd.notna(df.at[idx, col]):
-                    avg = df.at[idx, col]
-                    break
+            avg = shown_average(df.loc[idx], stat)
             value = df.at[idx, stat]
             picked.append({
                 "stat": stat,
@@ -578,12 +599,18 @@ def build_calibration(df: pd.DataFrame, source: str, n_quantiles: int = 1001) ->
     calibration["z_only_quantiles"] = [float(v) for v in np.quantile(z_only, grid)]
     calibration["z_only_count"] = int(len(z_only))
     calibration["built_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    calibration["settings"] = {
+    calibration["settings"] = calibration_settings()
+    return calibration
+
+
+def calibration_settings() -> dict:
+    """Everything the calibration was trained under: a shipped calibration
+    whose settings differ from these is stale and must be rebuilt."""
+    return {
         "basis": BASIS, "window_weights": WINDOW_WEIGHTS, "season_full_games": SEASON_FULL_GAMES,
         "z_weights": Z_WEIGHTS,
-        "err_weights": ERR_WEIGHTS, "volume_weight": VOLUME_WEIGHT, "blend": BLEND,
+        "err_weights": ERR_WEIGHTS, "volume_weight": VOLUME_WEIGHT, "blend": BLEND, "blend_rule": "by_side",
     }
-    return calibration
 
 
 def load_calibration(path: Path = CALIBRATION_PATH) -> dict:

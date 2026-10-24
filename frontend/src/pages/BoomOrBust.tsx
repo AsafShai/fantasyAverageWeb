@@ -45,7 +45,8 @@ function isNotFound(error: unknown): boolean {
 }
 
 // 1.7 is already a clearly good/bad night; past 3 almost nobody is left.
-// The server defaults (boom 2.1, bust 2.2) sit in the lower half. The score is ranked onto a
+// The server defaults (boom 2.1, bust 2.2: the league wants busts a step rarer)
+// sit in the lower half. The score is ranked onto a
 // symmetric bell curve, so both sides share the range. A stored value outside
 // it (from an older range) is ignored and the default takes over.
 const SLIDER_MIN = 1.7;
@@ -199,7 +200,7 @@ function SurpriseCard({
       <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 min-h-[2.25rem]">
         {pages > 1 ? (
           <>
-            <span>{start + 1}–{start + pageRows.length} of {shown.length}</span>
+            <span>{pageRows.length === 1 ? start + 1 : `${start + 1}–${start + pageRows.length}`} of {shown.length}</span>
             <button type="button" className={pageBtn} onClick={() => setPage(current - 1)} disabled={current === 0} aria-label="Previous page">‹</button>
             <button type="button" className={pageBtn} onClick={() => setPage(current + 1)} disabled={current >= pages - 1} aria-label="Next page">›</button>
           </>
@@ -247,7 +248,7 @@ function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boole
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400">
         Scores compare each player with his own history and with what the model expected for his minutes.
-        Players without a model estimate yet (fewer than 10 games this season) are scored on their own history only.
+        Players the model can't estimate yet (fewer than 10 career games, or new to its data) are scored on their own history only.
         {' '}Computed {new Date(night.computed_at).toLocaleString('en-US')}.
       </p>
     </>

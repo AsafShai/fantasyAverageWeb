@@ -30,7 +30,7 @@ const night: NightSurprises = {
   players_played: 60,
   players_scored: 50,
   players_with_estimate: 40,
-  thresholds: { good: 1.8, bad: 1.8 },
+  thresholds: { good: 2.1, bad: 2.2 },
   // Every scored row, best first / worst first — the page filters by its own sliders.
   good: [
     row({ player_id: 11, player_name: 'Good Guy', score: 2.4 }),
@@ -52,7 +52,7 @@ const period: PeriodSurprises = {
   players_scored: 100,
   players_with_estimate: 90,
   min_score: 1.7,
-  thresholds: { good: 1.8, bad: 1.8 },
+  thresholds: { good: 2.1, bad: 2.2 },
   good: [
     row({ player_id: 31, player_name: 'Week Star', score: 2.9, game_date: '2024-01-04' }),
     row({ player_id: 32, player_name: 'Week Second', score: 2.1 }),
@@ -106,8 +106,8 @@ describe('Boom or Bust page', () => {
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('boom score ≥ 1.8')).toBeInTheDocument()
-    expect(screen.getByText('bust score ≤ −1.8')).toBeInTheDocument()   // one bell curve, same bar both sides
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()   // the server's own default per side
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
 
     // (b) while dragging only the label follows; the row appears when the thumb is released
@@ -126,7 +126,7 @@ describe('Boom or Bust page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('boom score ≥ 1.8')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
     expect(localStorage.getItem('boomOrBust.goodThreshold')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
   })
@@ -146,7 +146,7 @@ describe('Boom or Bust page', () => {
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await screen.findByText('Good Guy')
-    expect(screen.getByText('bust score ≤ −1.8')).toBeInTheDocument()   // the server default instead
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()   // the server default instead
     const boom = screen.getByLabelText('Surprise threshold')
     const bust = screen.getByLabelText('Disappointment threshold')
     expect(bust).toHaveAttribute('min', '1.7')
@@ -156,28 +156,28 @@ describe('Boom or Bust page', () => {
   })
 
   it('pages a card five at a time, only when there are more than five', async () => {
-    const many = Array.from({ length: 7 }, (_, i) => row({ player_id: 100 + i, player_name: `Boom ${i}`, score: 2.6 - i * 0.1 }))
+    const many = Array.from({ length: 6 }, (_, i) => row({ player_id: 100 + i, player_name: `Boom ${i}`, score: 2.85 - i * 0.1 }))
     stubApi(() => Response.json({ ...night, good: many }))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Boom 0')).toBeInTheDocument())
     expect(screen.getByText('Boom 4')).toBeInTheDocument()
     expect(screen.queryByText('Boom 5')).not.toBeInTheDocument()
-    expect(screen.getByText('1–5 of 7')).toBeInTheDocument()
+    expect(screen.getByText('1–5 of 6')).toBeInTheDocument()
     // the busts card has two rows: no pager there
     expect(screen.getAllByLabelText('Next page')).toHaveLength(1)
     fireEvent.click(screen.getByLabelText('Next page'))
-    expect(screen.getByText('Boom 6')).toBeInTheDocument()
+    expect(screen.getByText('Boom 5')).toBeInTheDocument()
     expect(screen.queryByText('Boom 0')).not.toBeInTheDocument()
-    expect(screen.getByText('6–7 of 7')).toBeInTheDocument()
-    expect(screen.getByText('7')).toBeInTheDocument()   // the rank keeps counting on the second page
+    expect(screen.getByText('6 of 6')).toBeInTheDocument()   // one row on the page: not "6–6"
+    expect(screen.getByText('6')).toBeInTheDocument()   // the rank keeps counting on the second page
     // raising the bar under the viewer drops the list to one page: the card falls back to it
-    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '2.2' } })
+    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '2.6' } })
     fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
     await waitFor(() => expect(screen.queryByLabelText('Next page')).not.toBeInTheDocument())
     // ...and lowering it again starts on the first page, not back on page 2
     fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '1.7' } })
     fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
-    await waitFor(() => expect(screen.getByText('1–5 of 7')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('1–5 of 6')).toBeInTheDocument())
     expect(screen.getByText('Boom 0')).toBeInTheDocument()
   })
 
@@ -192,8 +192,8 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
     expect(screen.getByText(/2 nights · 7 games · 100 performances scored/)).toBeInTheDocument()
     expect(screen.getByText('1 performance')).toBeInTheDocument()   // the busts card's footer: a row is one player's game
-    expect(screen.getByText('boom score ≥ 1.8')).toBeInTheDocument()   // the night's bars, not a percentile
-    expect(screen.getByText('bust score ≤ −1.8')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()   // the night's bars, not a percentile
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()
     expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
     expect(screen.queryByLabelText('Previous night')).not.toBeInTheDocument()   // ‹ › are for single nights
 

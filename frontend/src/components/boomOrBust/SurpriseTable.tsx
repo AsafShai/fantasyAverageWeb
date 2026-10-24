@@ -190,7 +190,7 @@ export function SurpriseTable({
                   {!row.has_estimate && (
                     <span
                       className="text-[10px] uppercase tracking-wide text-gray-400"
-                      title="No model estimate yet (fewer than 10 games this season) — scored on his own history only"
+                      title="No model estimate yet (fewer than 10 career games, or new to the model) — scored on his own history only"
                     >
                       history only
                     </span>

@@ -36,7 +36,7 @@ MAX_PERIOD_DAYS = 366
 async def get_period(
     start: date,
     end: date,
-    min_score: float = Query(PERIOD_MIN_SCORE, ge=1.0, le=4.0),
+    min_score: float = Query(PERIOD_MIN_SCORE, ge=PERIOD_MIN_SCORE, le=4.0),
 ) -> PeriodSurprises:
     """Booms and busts from ``start`` to ``end`` (inclusive): every
     player-night at least ``min_score`` from 0, one row per player-night."""
