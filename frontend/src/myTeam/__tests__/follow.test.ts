@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveFollow, USER_PICK } from '../follow'
 import { normalizePlayerName } from '../../utils/playerName'
-import { leadWithMyTeam } from '../../components/MyTeamMark'
+import { leadWithMyTeam } from '../display'
 
 describe('resolveFollow', () => {
   it('fills an empty control once My Team is known', () => {

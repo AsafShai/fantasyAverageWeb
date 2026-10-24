@@ -4,7 +4,8 @@ import { useSort } from '../../hooks/useSort'
 import SortableHeaderCell from './SortableHeaderCell'
 import MultiSelectFilter from './MultiSelectFilter'
 import type { RankMover } from '../../types/api'
-import { leadWithMyTeam, MyTeamMark, myTeamRowClass } from '../MyTeamMark'
+import { MyTeamMark } from '../MyTeamMark'
+import { leadWithMyTeam, myTeamRowClass } from '../../myTeam/display'
 import { useMyTeam } from '../../context/MyTeamContext'
 
 interface RankMoversProps {

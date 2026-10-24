@@ -7,7 +7,7 @@ import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import InjuryBadge from '../components/InjuryBadge';
-import { fantasyTeamOptionLabel, leadWithMyTeam } from '../components/MyTeamMark';
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display';
 import { useMyTeam } from '../context/MyTeamContext';
 import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam';
 

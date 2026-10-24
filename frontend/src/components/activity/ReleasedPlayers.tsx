@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { LeagueActivity } from '../../types/activity'
 import { useMyTeam } from '../../context/MyTeamContext'
-import { fantasyTeamOptionLabel, myTeamRowClass } from '../MyTeamMark'
+import { fantasyTeamOptionLabel, myTeamRowClass } from '../../myTeam/display'
 import PlayerNameLink from '../PlayerNameLink'
 import { categoryValue, formatCategory, formatDay, stintLine, type StatMode } from '../../utils/leagueActivity'
 import { SELECT_CLASS, StatModeToggle } from './shared'

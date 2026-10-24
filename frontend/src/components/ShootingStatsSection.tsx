@@ -6,7 +6,8 @@ import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from './DataDateBadge'
 import type { TeamShotStats } from '../types/api'
-import { MyTeamMark, myTeamRowClass } from './MyTeamMark'
+import { MyTeamMark } from './MyTeamMark'
+import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 
 const ShootingStatsSection = () => {

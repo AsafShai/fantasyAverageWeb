@@ -16,7 +16,7 @@ import DateRangePicker from '../components/DateRangePicker'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange } from '../types/api'
-import { fantasyTeamOptionLabel } from '../components/MyTeamMark'
+import { fantasyTeamOptionLabel } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam'
 

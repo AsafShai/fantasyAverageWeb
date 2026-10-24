@@ -110,11 +110,10 @@ const TeamDetail = () => {
     skip: !coverageSlate,
   })
   const datedMatchupReady = datedMatchups !== undefined
-  const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
-  const matchupMap = useMemo(
-    () => new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m])),
-    [matchupRows],
-  )
+  const matchupMap = useMemo(() => {
+    const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
+    return new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m]))
+  }, [coverageSlate, datedMatchupReady, datedMatchups, liveMatchups])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {

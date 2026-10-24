@@ -6,7 +6,7 @@ import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { FF_DRAFT_STEALS_BUSTS } from '../config/featureFlags'
 import { buildScoredPicks, buildTeamDiffRanking, topSteals, topBusts, MIN_GP_FOR_RANK, LOW_GP_MIN, type ScoredPick, type DraftBadge } from '../utils/draftReport'
-import { fantasyTeamOptionLabel, leadWithMyTeam } from '../components/MyTeamMark'
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
 

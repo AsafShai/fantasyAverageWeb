@@ -1,5 +1,6 @@
 import type { RankingStats } from '../../types/api'
-import { MyTeamMark, myTeamRowClass } from '../MyTeamMark'
+import { MyTeamMark } from '../MyTeamMark'
+import { myTeamRowClass } from '../../myTeam/display'
 import { useMyTeam } from '../../context/MyTeamContext'
 
 interface TopTeamsProps {
