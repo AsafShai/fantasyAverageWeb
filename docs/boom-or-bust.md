@@ -23,8 +23,8 @@ Two ingredients per player-game, both standardized against a reference season:
 Final = a blend that differs by sign (research finding: model error adds value on the
 good side, z dominates on the bad side), mapped to N(0,1) by rank against the
 reference season. Positive = surprise, negative = disappointment. A player without a
-model estimate yet (fewer than 10 games) is scored on metric 1 alone, against its own
-reference, and tagged "history only" on the page.
+model estimate yet (fewer than 10 career games, or not yet in the model's data) is
+scored on metric 1 alone, ranked among last season's rows without an estimate, and tagged "history only" on the page.
 
 **Per-stat verdicts** (the coloured cells): for every stat of a scored row the same
 two ingredients are blended for that stat alone, its z against his own windows and
@@ -54,6 +54,22 @@ Reference season: `surprise_calibration.json` next to it, built by
 `scripts/build_surprise_calibration.py` from the walk-forward parquet. Thresholds
 for "worth mentioning": server settings (below). The page has two sliders that only
 filter what the viewer sees; the server's verdict is stored per row.
+
+## Periods
+
+Besides one night, the page shows a range: Last 7 days, Last 30 days, Season,
+or a custom From–To (a one-day custom range is just that night's normal view).
+
+- **One row per player-night**, with a Date column: a player with two huge
+  nights appears twice. Nothing is rescored; the rows are the nightly's own.
+- **The same bar as a single night.** The sliders are the night's score sliders
+  (1.7–3.0, defaults boom 2.1 / bust 2.2, the same remembered values), applied to every
+  player-night in the period. Moving one filters in place.
+- `GET /api/surprises/period?start&end&min_score=1.7`: every player-night at
+  least ``min_score`` from 0 (the sliders' lowest point) plus a summary, best
+  first; the page filters from there. A range is at most 366 days.
+- Share works the same: the top 5 of each side, the period in the header,
+  each row's night in the table.
 
 ## Cost
 
@@ -101,9 +117,10 @@ one migration, one 52 kB JSON, one page on the frontend. Tests: 16 backend, 4 fr
    (`CREATE TABLE IF NOT EXISTS`, one table, one index). Nothing else in the schema changes.
 2. **Settings** (all have defaults, none required):
    - `SURPRISE_NIGHTLY_ENABLED` (default true): kill switch for the nightly step.
-   - `SURPRISE_GOOD_THRESHOLD` / `SURPRISE_BAD_THRESHOLD` (1.8 / 1.8): the server's
-     verdict and the sliders' default position.
-   - `SURPRISE_MIN_MINUTES` (0), `SURPRISE_TOP_N` (10 rows shown per card).
+   - `SURPRISE_GOOD_THRESHOLD` / `SURPRISE_BAD_THRESHOLD` (2.1 / 2.2): the server's
+     verdict and the sliders' default position (both sliders 1.7–3.0; the score is
+     ranked onto a symmetric bell curve, so the same |score| is as rare either way).
+   - `SURPRISE_MIN_MINUTES` (0). Every player past the threshold is listed; each card pages five at a time.
 3. **Nightly:** the step runs inside `ModelNightlyService._run_for_date` after the
    night's rows are committed, so it needs `MODEL_NIGHTLY_ENABLED=true` (it already is
    wherever the model nightly runs).
@@ -119,8 +136,8 @@ one migration, one 52 kB JSON, one page on the frontend. Tests: 16 backend, 4 fr
 | Memory on a full night pushes the nightly container over its limit | OOM kill of the nightly, after the night's rows are already committed | The step runs last and is isolated: a failure is logged, the night stays `processed`, the tab keeps its last night. Kill switch `SURPRISE_NIGHTLY_ENABLED=false`. Backfill by hand later. Watch the first full-slate night's `[mem]` lines. |
 | The step raises for any reason | Same as above, no effect on predictions or vectors | `try/except` around the whole step |
 | Table missing on prod (migration not applied) | The step logs an error every night; the tab shows "No nights scored yet" | Apply the migration; nothing else depends on it |
-| Early season: few model estimates | Most players are "history only" (metric 1 only) for ~3 weeks; the SEASON window is empty, so ALL/L10/L5 carry it | Designed in: separate calibration for history-only rows, visible tag on the page |
-| Calibration drift | Scores are relative to 2025-26's distribution; a league-wide scoring change shifts how many cross 1.8 | Yearly refresh; thresholds are settings, not code |
+| Early season | The model estimates anyone with 10 career games (opening night 2026: 62 of 68), but the calibration's backtest only had estimates from 10 games *this* season, so opening weeks were never in it; the first nights of 2026-27 leaned to busts. The SEASON window is still thin, so ALL/L10/L5 carry it | Rebuild the backtest with the live rule; until then read the first weeks as provisional |
+| Calibration drift | Scores are relative to 2025-26's distribution; a league-wide scoring change shifts how many cross the bars | Yearly refresh; thresholds are settings, not code |
 | Weights are opinion | Someone disagrees with what "surprise" means | They are one dict each in `surprise.py`, mirrored in the research dashboard's defaults; change there, re-run the calibration script, done |
 | Reference season assumes the research z-scores and the nightly's agree | Scores off if they drifted | The backtest now imports the same `compute_zscores`; the shipped calibration is checked against the module's settings in `test_surprise.py` |
 | ID space | Player links and headshots use ESPN athlete ids from `fs_player_games`; eval rows from before the ESPN migration do not join and are simply treated as "no estimate" | Nothing to do; new nights are post-migration |

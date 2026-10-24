@@ -1864,6 +1864,47 @@ class DBService:
             logger.error(f"Failed to fetch surprises for {game_date}: {type(e).__name__}: {e}")
             return []
 
+    async def get_surprise_period(
+        self, start: date, end: date, min_score: float
+    ) -> tuple[Optional[dict], list[dict]]:
+        """Every night from ``start`` to ``end``: a summary (player-nights,
+        scored, games, nights, newest write), then the player-nights at least
+        ``min_score`` from 0 either way, best first. (None, []) when the range
+        has no rows."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None, []
+        try:
+            async with pool.acquire() as conn:
+                summary = await conn.fetchrow(
+                    """
+                    SELECT count(*) AS players_played,
+                           count(score) AS players_scored,
+                           count(*) FILTER (WHERE has_estimate) AS players_with_estimate,
+                           count(DISTINCT game_id) AS games,
+                           count(DISTINCT game_date) AS nights,
+                           max(updated_at) AS computed_at
+                    FROM model_surprise_results
+                    WHERE game_date BETWEEN $1 AND $2
+                    """,
+                    start, end,
+                )
+                if summary is None or summary["players_played"] == 0:
+                    return None, []
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM model_surprise_results
+                    WHERE game_date BETWEEN $1 AND $2
+                      AND (score >= $3 OR score <= -$3)
+                    ORDER BY score DESC
+                    """,
+                    start, end, min_score,
+                )
+                return dict(summary), [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch surprises {start}..{end}: {type(e).__name__}: {e}")
+            return None, []
+
     async def close(self) -> None:
         if self._pool is not None:
             await self._pool.close()

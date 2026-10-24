@@ -319,9 +319,9 @@ class SurpriseService:
         # Every scored row goes out, split by sign: the page filters with its own
         # sliders, starting from the server thresholds (the verdict on each row).
         scored = [r for r in rows if r["score"] is not None]
-        abbrevs = await self._team_abbrevs()
-        good = [self._row_out(r, abbrevs) for r in scored if r["score"] >= 0]
-        bad = [self._row_out(r, abbrevs) for r in scored if r["score"] < 0]
+        abbrevs, names = await self._team_abbrevs(), await self._team_names()
+        good = [self._row_out(r, abbrevs, names) for r in scored if r["score"] >= 0]
+        bad = [self._row_out(r, abbrevs, names) for r in scored if r["score"] < 0]
         bad.sort(key=lambda r: r["score"])
         computed = max(r["updated_at"] for r in rows)
         # The nightly's newest ledger row, so the page can tell "no games last
@@ -342,11 +342,50 @@ class SurpriseService:
                 "good": settings.surprise_good_threshold,
                 "bad": settings.surprise_bad_threshold,
             },
-            "max_rows": settings.surprise_top_n,
             "good": good,
             "bad": bad,
             "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
         }
+
+    async def period(self, start: date, end: date, min_score: float) -> dict | None:
+        """The booms and busts of a range of nights, on the same score bar as a
+        single night: every player-night at least ``min_score`` from 0 (the
+        sliders' lowest point), one row per player-night; the page filters
+        with its sliders, starting from the server thresholds."""
+        summary, rows = await self._db.get_surprise_period(start, end, min_score)
+        if summary is None:
+            return None
+        abbrevs, names = await self._team_abbrevs(), await self._team_names()
+        good = [self._row_out(r, abbrevs, names) for r in rows if r["score"] > 0]
+        bad = sorted((self._row_out(r, abbrevs, names) for r in rows if r["score"] < 0), key=lambda r: r["score"])
+        computed = summary["computed_at"]
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "nights": summary["nights"],
+            "games": summary["games"],
+            "players_played": summary["players_played"],
+            "players_scored": summary["players_scored"],
+            "players_with_estimate": summary["players_with_estimate"],
+            "min_score": min_score,
+            "thresholds": {
+                "good": settings.surprise_good_threshold,
+                "bad": settings.surprise_bad_threshold,
+            },
+            "good": good,
+            "bad": bad,
+            "computed_at": (computed if computed.tzinfo else computed.replace(tzinfo=timezone.utc)).isoformat(),
+        }
+
+    @staticmethod
+    async def _team_names() -> dict[int, str]:
+        """Current season's fantasy team id -> full name ("Trust the process"),
+        from the same cached standings as the codes, so a team that renames
+        itself shows its new name. Best effort: the code when it fails."""
+        try:
+            return {int(t["team_id"]): t["team_name"] for t in await get_data_provider().get_team_names()}
+        except DataSourceError:
+            return {}
 
     @staticmethod
     async def _team_abbrevs() -> dict[int, str]:
@@ -356,7 +395,7 @@ class SurpriseService:
             return {}
 
     @staticmethod
-    def _row_out(r: dict, abbrevs: dict[int, str]) -> dict:
+    def _row_out(r: dict, abbrevs: dict[int, str], names: dict[int, str] | None = None) -> dict:
         reasons = r["reasons"]
         if isinstance(reasons, str):
             reasons = json.loads(reasons)
@@ -366,6 +405,7 @@ class SurpriseService:
         team_id = r.get("fantasy_team_id") if current else None
         slot = r.get("lineup_slot") if current else None
         return {
+            "game_date": r["game_date"].isoformat(),
             "player_id": r["player_id"],
             "player_name": r["player_name"],
             "team_abbr": TEAM_ID_TO_ABBR.get(r["team_id"], str(r["team_id"])),
@@ -381,6 +421,8 @@ class SurpriseService:
             "reasons": reasons,
             # fantasy context that night: None = free agent
             "fantasy_team": abbrevs.get(team_id, str(team_id)) if team_id is not None else None,
+            # The team's current full name, by the same season-scoped id.
+            "fantasy_team_name": ((names or {}).get(team_id) or abbrevs.get(team_id, str(team_id))) if team_id is not None else None,
             "lineup_slot": slot,
             "started": (slot not in NOT_STARTED_SLOTS) if slot else None,
         }

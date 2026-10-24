@@ -11,6 +11,7 @@ class SurpriseReason(BaseModel):
 
 
 class SurpriseRow(BaseModel):
+    game_date: str
     player_id: int
     player_name: str
     team_abbr: str
@@ -39,6 +40,8 @@ class SurpriseRow(BaseModel):
     # Where he was in the league that night: fantasy team abbrev (None = free
     # agent), the lineup slot, and whether that slot counted (not BE / IR).
     fantasy_team: Optional[str] = None
+    # The team's current full name ("Trust the process"); the code when unknown.
+    fantasy_team_name: Optional[str] = None
     lineup_slot: Optional[str] = None
     started: Optional[bool] = None
 
@@ -64,7 +67,24 @@ class NightSurprises(BaseModel):
     players_with_estimate: int
     # Default thresholds; every scored row is sent and the page filters with its sliders.
     thresholds: SurpriseThresholds
-    max_rows: int
+    good: list[SurpriseRow]
+    bad: list[SurpriseRow]
+    computed_at: str
+
+
+class PeriodSurprises(BaseModel):
+    """A range of nights, one row per player-night at least ``min_score`` from
+    0; the page filters with the same score sliders as a single night,
+    starting from ``thresholds``."""
+    start: str
+    end: str
+    nights: int
+    games: int
+    players_played: int
+    players_scored: int
+    players_with_estimate: int
+    min_score: float
+    thresholds: SurpriseThresholds
     good: list[SurpriseRow]
     bad: list[SurpriseRow]
     computed_at: str
