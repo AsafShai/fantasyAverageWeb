@@ -20,20 +20,20 @@ function backLabel(from: string | undefined): string {
 }
 
 const STAT_ROWS: { key: PlayerStatKey; label: string; isPct?: boolean }[] = [
-  { key: 'gp', label: 'GP' },
   { key: 'minutes', label: 'MIN' },
-  { key: 'pts', label: 'PTS' },
-  { key: 'reb', label: 'REB' },
-  { key: 'ast', label: 'AST' },
-  { key: 'stl', label: 'STL' },
-  { key: 'blk', label: 'BLK' },
-  { key: 'three_pm', label: '3PM' },
   { key: 'fgm', label: 'FGM' },
   { key: 'fga', label: 'FGA' },
   { key: 'fg_percentage', label: 'FG%', isPct: true },
   { key: 'ftm', label: 'FTM' },
   { key: 'fta', label: 'FTA' },
   { key: 'ft_percentage', label: 'FT%', isPct: true },
+  { key: 'three_pm', label: '3PM' },
+  { key: 'reb', label: 'REB' },
+  { key: 'ast', label: 'AST' },
+  { key: 'stl', label: 'STL' },
+  { key: 'blk', label: 'BLK' },
+  { key: 'pts', label: 'PTS' },
+  { key: 'gp', label: 'GP' },
 ]
 
 function formatStat(value: number, isPct?: boolean): string {

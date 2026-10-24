@@ -14,6 +14,7 @@ import { TEAM_NAME_BOX_CLASS, TEAM_NAME_CELL_CLASS, wrapFriendlyName } from '../
 import { ShareCardButton } from '../components/share/ShareCardButton'
 import { RankingsShareCard } from '../components/share/RankingsShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
+import { orderCategories } from '../utils/statOrder'
 
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -114,9 +115,9 @@ const Rankings = () => {
 
   // This league's actual scoring categories (e.g. FG%, FT%, 3PM, ... or
   // whatever ESPN's league settings resolve to — see backend
-  // resolve_ranking_categories), in display order. TOTAL_POINTS is handled
-  // separately as the fixed "Total" column.
-  const categoryKeys = (data?.categories || []).filter(c => c !== 'TOTAL_POINTS')
+  // resolve_ranking_categories), put in the app-wide stat order. TOTAL_POINTS
+  // is handled separately as the fixed "Total" column.
+  const categoryKeys = orderCategories((data?.categories || []).filter(c => c !== 'TOTAL_POINTS'))
 
   const getSortValue = (team: RankingStats) => {
     if (categoryKeys.includes(sortBy)) {
@@ -361,9 +362,9 @@ const Rankings = () => {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="sticky top-0 z-30 bg-gray-50">
               <tr>
                 {columns.map((column) => (
                   <th

@@ -37,10 +37,11 @@ class Settings(BaseSettings):
     # thresholds. Server-side on purpose — the UI only shows what crossed the bar.
     # Kill switch for the nightly scoring step (the tab then keeps its last night).
     surprise_nightly_enabled: bool = Field(default=True, alias="SURPRISE_NIGHTLY_ENABLED")
-    surprise_good_threshold: float = Field(default=1.8, alias="SURPRISE_GOOD_THRESHOLD")
-    surprise_bad_threshold: float = Field(default=1.8, alias="SURPRISE_BAD_THRESHOLD")
+    # The score is symmetric (equally rare either way at the same |score|); the
+    # league set the bust bar a step stricter on purpose (Oct 2026).
+    surprise_good_threshold: float = Field(default=2.1, alias="SURPRISE_GOOD_THRESHOLD")
+    surprise_bad_threshold: float = Field(default=2.2, alias="SURPRISE_BAD_THRESHOLD")
     surprise_min_minutes: float = Field(default=0.0, alias="SURPRISE_MIN_MINUTES")
-    surprise_top_n: int = Field(default=10, alias="SURPRISE_TOP_N")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

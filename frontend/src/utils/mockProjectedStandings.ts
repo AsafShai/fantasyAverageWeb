@@ -8,11 +8,11 @@ export const STANDING_CATS = [
   { key: 'fg_pct', label: 'FG%', pct: true },
   { key: 'ft_pct', label: 'FT%', pct: true },
   { key: 'three_pm', label: '3PM' },
-  { key: 'pts', label: 'PTS' },
   { key: 'reb', label: 'REB' },
   { key: 'ast', label: 'AST' },
   { key: 'stl', label: 'STL' },
   { key: 'blk', label: 'BLK' },
+  { key: 'pts', label: 'PTS' },
 ] as const
 
 export type StandingCatKey = (typeof STANDING_CATS)[number]['key']

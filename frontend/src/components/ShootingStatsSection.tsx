@@ -6,7 +6,8 @@ import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from './DataDateBadge'
 import type { TeamShotStats } from '../types/api'
-import { MyTeamMark, myTeamRowClass } from './MyTeamMark'
+import { MyTeamMark } from './MyTeamMark'
+import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 
 const ShootingStatsSection = () => {
@@ -94,9 +95,9 @@ const ShootingStatsSection = () => {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[70vh]">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="sticky top-0 z-20 bg-gray-50">
             <tr>
               {columns.map((column) => (
                 <th

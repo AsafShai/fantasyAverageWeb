@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { LeagueActivity } from '../../types/activity'
 import { useMyTeam } from '../../context/MyTeamContext'
-import { fantasyTeamOptionLabel, myTeamRowClass } from '../MyTeamMark'
+import { fantasyTeamOptionLabel, myTeamRowClass } from '../../myTeam/display'
 import PlayerNameLink from '../PlayerNameLink'
 import { categoryValue, formatCategory, formatDay, stintLine, type StatMode } from '../../utils/leagueActivity'
 import { SELECT_CLASS, StatModeToggle } from './shared'
@@ -73,9 +73,9 @@ const ReleasedPlayers = ({ activity, categories, mode, onModeChange }: ReleasedP
           ))
         )}
       </ul>
-      <div className="hidden overflow-x-auto sm:block">
+      <div className="hidden max-h-[70vh] overflow-auto sm:block">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-20 bg-white dark:bg-gray-800">
             <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400">
               <th className="px-2 py-1.5 text-left font-semibold">Player</th>
               <th className="px-2 py-1.5 text-left font-semibold">Released by</th>

@@ -88,7 +88,7 @@ export default function InjuryTable({ records, totalCount }: Props) {
   return (
     <>
       {/* Desktop table */}
-      <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="hidden sm:block overflow-auto max-h-[70vh] rounded-lg border border-gray-200 dark:border-gray-700">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
             <tr>

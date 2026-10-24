@@ -1,4 +1,5 @@
 import type { TeamTimeSeriesPoint } from '../types/api'
+import { orderCategories } from '../utils/statOrder'
 
 export type MetricOption = { value: string; label: string }
 
@@ -17,7 +18,7 @@ const RK_FIELD_BY_CATEGORY: Record<string, keyof TeamTimeSeriesPoint> = {
   'FT%': 'rk_ft_pct',
 }
 
-const FIXED_CATEGORY_ORDER = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%']
+const FIXED_CATEGORY_ORDER = orderCategories(Object.keys(RK_FIELD_BY_CATEGORY))
 
 // A category's rank comes from `ranks` when the league scores something without
 // a field of its own, and from the rk_* field otherwise. rk_total is never read
@@ -42,10 +43,7 @@ export const metricOptionsFor = (points: TeamTimeSeriesPoint[] | undefined): Met
     if (p.ranks) Object.keys(p.ranks).forEach(c => fromRanks.add(c))
   })
   const categories = fromRanks.size > 0
-    ? [
-        ...FIXED_CATEGORY_ORDER.filter(c => fromRanks.has(c)),
-        ...Array.from(fromRanks).filter(c => !FIXED_CATEGORY_ORDER.includes(c)),
-      ]
+    ? orderCategories(Array.from(fromRanks))
     : FIXED_CATEGORY_ORDER
   return [
     { value: TOTAL_METRIC, label: 'Total' },

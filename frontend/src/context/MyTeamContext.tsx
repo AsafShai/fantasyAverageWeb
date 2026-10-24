@@ -48,6 +48,9 @@ export function MyTeamProvider({ children }: { children: ReactNode }) {
   return <MyTeamContext.Provider value={value}>{children}</MyTeamContext.Provider>
 }
 
+// The hook lives beside its provider on purpose; Fast Refresh just reloads
+// this file in full when it changes.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useMyTeam(): MyTeamContextValue {
   return useContext(MyTeamContext) ?? EMPTY
 }

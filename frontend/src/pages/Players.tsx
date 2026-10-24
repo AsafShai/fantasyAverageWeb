@@ -18,7 +18,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector';
 import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns';
-import { fantasyTeamOptionLabel, leadWithMyTeam } from '../components/MyTeamMark';
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display';
 import { useMyTeam } from '../context/MyTeamContext';
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';

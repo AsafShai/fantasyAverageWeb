@@ -596,6 +596,8 @@ export interface SurpriseReason {
 }
 
 export interface SurpriseRow {
+  /** The night of this line (YYYY-MM-DD). */
+  game_date: string;
   player_id: number;
   player_name: string;
   team_abbr: string;
@@ -619,6 +621,8 @@ export interface SurpriseRow {
   /** Fantasy context that night: team abbrev (null = free agent), lineup slot, and
    * whether that slot counted (false = bench / IR; null when unknown). */
   fantasy_team: string | null
+  /** The team's current full name ("Trust the process"); the code when unknown. */
+  fantasy_team_name?: string | null
   lineup_slot: string | null
   started: boolean | null;
   reasons: SurpriseReason[];
@@ -637,11 +641,30 @@ export interface NightSurprises {
   players_with_estimate: number;
   /** Server default thresholds; the page lets each viewer move them. */
   thresholds: { good: number; bad: number };
-  /** Most rows to show per list after filtering. */
-  max_rows: number;
   /** Every scored row with score >= 0, best first (not pre-filtered). */
   good: SurpriseRow[];
   /** Every scored row with score < 0, worst first (not pre-filtered). */
+  bad: SurpriseRow[];
+  computed_at: string;
+}
+
+/** A range of nights: one row per player-night, on the same score bar as a night. */
+export interface PeriodSurprises {
+  start: string;
+  end: string;
+  nights: number;
+  games: number;
+  /** Player-nights in the range, and how many of them were scored. */
+  players_played: number;
+  players_scored: number;
+  players_with_estimate: number;
+  /** Every player-night at least this far from 0 is sent; the sliders start higher. */
+  min_score: number;
+  /** Server default thresholds, the same as a night's. */
+  thresholds: { good: number; bad: number };
+  /** Best first. */
+  good: SurpriseRow[];
+  /** Worst first. */
   bad: SurpriseRow[];
   computed_at: string;
 }

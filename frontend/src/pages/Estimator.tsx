@@ -4,7 +4,8 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import type { TeamRankProbability, TeamRanking, TeamPrediction } from '../types/estimator'
-import { MyTeamMark, myTeamRowClass } from '../components/MyTeamMark'
+import { MyTeamMark } from '../components/MyTeamMark'
+import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
 
@@ -95,9 +96,9 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
         How likely is each team to finish in each place by end of season? Cells show percent chance (0–100%). Teams are ordered by their most likely finishing position.
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[70vh]">
         <table className="min-w-full border-collapse text-sm">
-          <thead>
+          <thead className="sticky top-0 z-20 bg-white dark:bg-gray-800">
             <tr className="border-b border-gray-300 dark:border-gray-600">
               <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">Team</th>
               {rankCols.map(r => (
@@ -172,9 +173,9 @@ function RankingTable({ rankings }: { rankings: TeamRanking[] }) {
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
         Where each team is projected to finish by end of season. Click any column to sort. Higher score in a category means a better projected finish in that stat.
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[70vh]">
         <table className="min-w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-20 bg-white dark:bg-gray-800">
             <tr className="border-b border-gray-200 dark:border-gray-700">
               <th onClick={() => handleSort('rank')} className={`px-3 py-2 text-left font-medium text-xs cursor-pointer select-none hover:text-blue-600 ${sortKey === 'rank' ? 'text-blue-600' : 'text-gray-700 dark:text-gray-200'}`}>#{ arrow('rank')}</th>
               <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-200 text-xs">Team</th>
@@ -255,9 +256,9 @@ function ProjectionSummary({ predictions }: { predictions: TeamPrediction[] }) {
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
         Projected end-of-season totals per team. +/- shows standard deviation (uncertainty).
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[70vh]">
         <table className="min-w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-20 bg-white dark:bg-gray-800">
             <tr className="border-b border-gray-200 dark:border-gray-700">
               <th onClick={() => handleSort('team_name')} className={`px-3 py-2 text-left font-medium text-xs cursor-pointer select-none hover:text-blue-600 ${sortKey === 'team_name' ? 'text-blue-600' : 'text-gray-700 dark:text-gray-200'}`}>
                 Team{arrow('team_name')}

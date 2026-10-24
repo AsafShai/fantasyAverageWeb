@@ -1,10 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/helpers'
-import type { NightSurprises, SurpriseRow } from '../../types/api'
+import type { NightSurprises, PeriodSurprises, SurpriseRow } from '../../types/api'
 import BoomOrBust from '../BoomOrBust'
 
 const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
+  game_date: '2024-01-05',
   player_id: 1,
   player_name: 'Player',
   team_abbr: 'BOS',
@@ -29,19 +30,41 @@ const night: NightSurprises = {
   players_played: 60,
   players_scored: 50,
   players_with_estimate: 40,
-  thresholds: { good: 1.8, bad: 1.8 },
-  max_rows: 25,
+  thresholds: { good: 2.1, bad: 2.2 },
   // Every scored row, best first / worst first — the page filters by its own sliders.
   good: [
     row({ player_id: 11, player_name: 'Good Guy', score: 2.4 }),
-    row({ player_id: 12, player_name: 'Almost Good', score: 1.5, verdict: '' }),
+    row({ player_id: 12, player_name: 'Almost Good', score: 1.75, verdict: '' }),
   ],
   bad: [
-    row({ player_id: 22, player_name: 'Bad Guy', score: -2.1, verdict: 'bad', has_estimate: false, reasons: [{ stat: 'FG_PCT', value: 0.25, avg: null, z: -2 }] }),
-    row({ player_id: 23, player_name: 'Almost Bad', score: -1.5, verdict: '' }),
+    row({ player_id: 22, player_name: 'Bad Guy', score: -2.4, verdict: 'bad', has_estimate: false, reasons: [{ stat: 'FG_PCT', value: 0.25, avg: null, z: -2 }] }),
+    row({ player_id: 23, player_name: 'Almost Bad', score: -1.75, verdict: '' }),
   ],
   computed_at: '2024-01-06T09:00:00Z',
 }
+
+const period: PeriodSurprises = {
+  start: '2023-12-30',
+  end: '2024-01-05',
+  nights: 2,
+  games: 7,
+  players_played: 120,
+  players_scored: 100,
+  players_with_estimate: 90,
+  min_score: 1.7,
+  thresholds: { good: 2.1, bad: 2.2 },
+  good: [
+    row({ player_id: 31, player_name: 'Week Star', score: 2.9, game_date: '2024-01-04' }),
+    row({ player_id: 32, player_name: 'Week Second', score: 2.1 }),
+  ],
+  bad: [row({ player_id: 41, player_name: 'Week Dud', score: -2.4, verdict: 'bad', game_date: '2024-01-04' })],
+  computed_at: '2024-01-06T09:00:00Z',
+}
+
+const requested = (part: string) =>
+  vi.mocked(fetch).mock.calls
+    .map(([input]) => (typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url))
+    .filter((url) => url.includes(part))
 
 function stubApi(latest: Response | (() => Response)) {
   vi.stubGlobal(
@@ -49,6 +72,8 @@ function stubApi(latest: Response | (() => Response)) {
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.includes('/surprises/dates')) return Response.json(['2024-01-05', '2024-01-04'])
+      if (url.includes('/surprises/period')) return Response.json(period)
+      if (url.includes('/surprises/2024-01-04')) return Response.json({ ...night, game_date: '2024-01-04', latest_run: null })
       if (url.includes('/surprises/latest')) return typeof latest === 'function' ? latest() : latest
       return new Response('not found', { status: 404 })
     }),
@@ -81,65 +106,137 @@ describe('Boom or Bust page', () => {
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
-    expect(screen.getByText('score ≤ −1.8')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()   // the server's own default per side
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
 
     // (b) while dragging only the label follows; the row appears when the thumb is released
-    fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '1.4' } })
-    expect(screen.getByText('score ≥ 1.4')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '1.7' } })
+    expect(screen.getByText('boom score ≥ 1.7')).toBeInTheDocument()
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
     fireEvent.pointerUp(screen.getByLabelText('Surprise threshold'))
     expect(screen.getByText('Almost Good')).toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
-    expect(screen.getByText('score ≥ 1.4')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 1.7')).toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
-    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBe('1.4')
+    expect(localStorage.getItem('boomOrBust.v2.goodThreshold')).toBe('1.7')
 
     // (c) Reset restores the server default and clears the stored value
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('score ≥ 1.8')).toBeInTheDocument()
-    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBeNull()
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
+    expect(localStorage.getItem('boomOrBust.v2.goodThreshold')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
   })
 
   it('a stored threshold wins over the server default on load', async () => {
-    localStorage.setItem('boomOrBust.badThreshold', '1.4')
+    localStorage.setItem('boomOrBust.v2.badThreshold', '1.7')
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Almost Bad')).toBeInTheDocument())
     expect(screen.getByText('💩 Busts')).toHaveTextContent('(2)')
-    expect(screen.getByText('score ≤ −1.4')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −1.7')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument()
   })
 
+  it('a value saved on the old score scale is dropped: the new defaults apply', async () => {
+    localStorage.setItem('boomOrBust.goodThreshold', '1.8')
+    localStorage.setItem('boomOrBust.badThreshold', '1.8')
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await screen.findByText('Good Guy')
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
+    expect(localStorage.getItem('boomOrBust.goodThreshold')).toBeNull()
+    expect(localStorage.getItem('boomOrBust.badThreshold')).toBeNull()
+  })
+
+  it('both sliders share one range, 1.7 to 3; a stored value outside it is ignored', async () => {
+    localStorage.setItem('boomOrBust.v2.badThreshold', '3.5')
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await screen.findByText('Good Guy')
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()   // the server default instead
+    const boom = screen.getByLabelText('Surprise threshold')
+    const bust = screen.getByLabelText('Disappointment threshold')
+    expect(bust).toHaveAttribute('min', '1.7')
+    expect(bust).toHaveAttribute('max', '3')
+    expect(boom).toHaveAttribute('min', '1.7')
+    expect(boom).toHaveAttribute('max', '3')
+  })
+
   it('pages a card five at a time, only when there are more than five', async () => {
-    const many = Array.from({ length: 7 }, (_, i) => row({ player_id: 100 + i, player_name: `Boom ${i}`, score: 2.6 - i * 0.1 }))
+    const many = Array.from({ length: 6 }, (_, i) => row({ player_id: 100 + i, player_name: `Boom ${i}`, score: 2.85 - i * 0.1 }))
     stubApi(() => Response.json({ ...night, good: many }))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Boom 0')).toBeInTheDocument())
     expect(screen.getByText('Boom 4')).toBeInTheDocument()
     expect(screen.queryByText('Boom 5')).not.toBeInTheDocument()
-    expect(screen.getByText('1–5 of 7')).toBeInTheDocument()
+    expect(screen.getByText('1–5 of 6')).toBeInTheDocument()
     // the busts card has two rows: no pager there
     expect(screen.getAllByLabelText('Next page')).toHaveLength(1)
     fireEvent.click(screen.getByLabelText('Next page'))
-    expect(screen.getByText('Boom 6')).toBeInTheDocument()
+    expect(screen.getByText('Boom 5')).toBeInTheDocument()
     expect(screen.queryByText('Boom 0')).not.toBeInTheDocument()
-    expect(screen.getByText('6–7 of 7')).toBeInTheDocument()
-    expect(screen.getByText('7')).toBeInTheDocument()   // the rank keeps counting on the second page
+    expect(screen.getByText('6 of 6')).toBeInTheDocument()   // one row on the page: not "6–6"
+    expect(screen.getByText('6')).toBeInTheDocument()   // the rank keeps counting on the second page
     // raising the bar under the viewer drops the list to one page: the card falls back to it
-    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '2.2' } })
+    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '2.6' } })
     fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
     await waitFor(() => expect(screen.queryByLabelText('Next page')).not.toBeInTheDocument())
     // ...and lowering it again starts on the first page, not back on page 2
-    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '1.4' } })
+    fireEvent.change(screen.getAllByLabelText('Surprise threshold')[0], { target: { value: '1.7' } })
     fireEvent.pointerUp(screen.getAllByLabelText('Surprise threshold')[0])
-    await waitFor(() => expect(screen.getByText('1–5 of 7')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('1–5 of 6')).toBeInTheDocument())
     expect(screen.getByText('Boom 0')).toBeInTheDocument()
+  })
+
+  it('a period: one row per player-night with its date, on the night\'s score sliders', async () => {
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
+    await waitFor(() => expect(screen.getByText('Week Star')).toBeInTheDocument())
+    expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&min_score=1.7')
+    expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
+    expect(screen.getByText(/2 nights · 7 games · 100 performances scored/)).toBeInTheDocument()
+    expect(screen.getByText('1 performance')).toBeInTheDocument()   // the busts card's footer: a row is one player's game
+    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()   // the night's bars, not a percentile
+    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()
+    expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
+    expect(screen.queryByLabelText('Previous night')).not.toBeInTheDocument()   // ‹ › are for single nights
+
+    // the slider filters in place, like a night: no new request
+    const asked = requested('/surprises/period').length
+    fireEvent.change(screen.getByLabelText('Surprise threshold'), { target: { value: '2.2' } })
+    fireEvent.pointerUp(screen.getByLabelText('Surprise threshold'))
+    expect(screen.queryByText('Week Second')).not.toBeInTheDocument()   // 2.1 < 2.2
+    expect(screen.getByText('Week Star')).toBeInTheDocument()            // 2.9
+    expect(requested('/surprises/period')).toHaveLength(asked)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(screen.getByText('Week Second')).toBeInTheDocument()
+
+    // back to one night: the same sliders
+    fireEvent.click(screen.getByRole('button', { name: 'Last night' }))
+    await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
+    expect(screen.getByLabelText('Surprise threshold')).toBeInTheDocument()
+  })
+
+  it('a one-day custom range is that night, with the score sliders', async () => {
+    stubApi(() => Response.json(night))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Custom' }))
+    await waitFor(() => expect(screen.getByLabelText('From')).toHaveValue('2023-12-30'))
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2024-01-04' } })
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2024-01-04' } })
+    await waitFor(() => expect(screen.getByText(/Thursday, Jan 4, 2024/)).toBeInTheDocument())
+    expect(screen.getByLabelText('Surprise threshold')).toBeInTheDocument()
+    expect(requested('/surprises/2024-01-04').length).toBeGreaterThan(0)
   })
 
   it('shows the empty state on 404', async () => {

@@ -1061,7 +1061,9 @@ export default function PreDraftRankingsPage() {
         ) : null}
       </div>
 
-      <div ref={listRef} className="card overflow-x-hidden">
+      {/* overflow-x-clip, not hidden: hidden would make the card a scroll
+          container and pin the sticky column header to it instead of the page. */}
+      <div ref={listRef} className="card overflow-x-clip">
         {/* Changing page scrolls the list top into view, so the pager has to exist up here
             too -- otherwise every click leaves the controls off-screen below the fold. */}
         {visible.length > 0 ? (
@@ -1077,12 +1079,12 @@ export default function PreDraftRankingsPage() {
             className="border-b border-gray-200 dark:border-gray-700"
           />
         ) : null}
-        <div className="lg:hidden flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+        <div className="lg:hidden sticky top-14 z-20 flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
           <div className="w-7 shrink-0" />
           <div className="w-6 shrink-0 text-right">Rank</div>
           <div className="min-w-0 flex-1">Player</div>
         </div>
-        <div className="hidden lg:flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+        <div className="hidden lg:flex sticky top-14 z-20 items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
           <div className="w-8 shrink-0" />
           <div className="w-10 shrink-0 text-right">Rank</div>
           <div className="min-w-0 flex-1">Player</div>

@@ -1,10 +1,11 @@
 /** Three steps of green or red by how far the stat sits from the player's norm,
  * at the same rarity on both sides. The bad side is compressed by construction
- * (a stat cannot go below zero): on real nights the 95th percentile is 2.9 for
- * good cells and 1.4 for bad ones, so the bars differ per sign.
+ * (a stat cannot go below zero): on 2025-26 the 95th percentile is 2.5 for
+ * good cells and 1.4 for bad ones, so the bars differ per sign. Each step marks
+ * the same share of cells on both sides (top 37%, 19%, 7%):
  *   good: 1.0 clear, 1.5 strong, 2.25 extreme (solid)
- *   bad:  0.7 clear, 0.95 strong, 1.2 extreme (solid) */
-const STEPS = { good: [1.5, 2.25], bad: [0.95, 1.2] } as const;
+ *   bad:  0.7 clear, 1.0 strong, 1.3 extreme (solid) */
+const STEPS = { good: [1.5, 2.25], bad: [1.0, 1.3] } as const;
 
 export function markClass(sign: 'good' | 'bad', z: number): string {
   const [strong, extreme] = STEPS[sign];

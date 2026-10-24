@@ -12,6 +12,19 @@ from model_stats_inference.serving import surprise
 NIGHT = date(2025, 12, 1)
 
 
+@pytest.fixture(autouse=True)
+def _no_team_name_lookup(monkeypatch):
+    """The read side looks up fantasy team names through DataProvider (ESPN);
+    tests get a fixed map instead."""
+    async def names():
+        return {7: "Trust the process"}
+
+    async def abbrevs():
+        return {7: "HHT"}
+    monkeypatch.setattr(SurpriseService, "_team_names", staticmethod(names))
+    monkeypatch.setattr(SurpriseService, "_team_abbrevs", staticmethod(abbrevs))
+
+
 def _player(pid: int, name: str, team: int, pts_level: float, tonight: float | None, seed: int) -> pd.DataFrame:
     """14 ordinary games; ``tonight`` scales the whole last line (None = ordinary,
     0 = a scoreless 0/11 night, 3 = three times his usual everything)."""
@@ -119,7 +132,7 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
 
     def row(pid, score, verdict, est=True):
         return {
-            "game_id": "g1" if pid % 2 else "g2", "player_id": pid, "player_name": f"P{pid}",
+            "game_id": "g1" if pid % 2 else "g2", "game_date": NIGHT, "player_id": pid, "player_name": f"P{pid}",
             "team_id": 2, "opponent_team_id": 18, "is_home": True, "minutes": 30.0,
             "pts": 10.0, "reb": 1.0, "ast": 1.0, "fg3m": 0.0, "stl": 0.0, "blk": 0.0,
             "fgm": 4.0, "fga": 9.0, "ftm": 2.0, "fta": 2.0,
@@ -138,7 +151,6 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     monkeypatch.setattr(svc, "_team_abbrevs", _async_return({7: "AAT"}))
     monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return(rows))
     monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return({"game_date": NIGHT + timedelta(days=1), "status": "no_games"}))
-    monkeypatch.setattr(settings, "surprise_top_n", 5)
 
     out = await svc.night(NIGHT)
     assert out["latest_run"] == {"game_date": "2025-12-02", "status": "no_games"}
@@ -146,7 +158,6 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     assert out["game_date"] == "2025-12-01" and out["games"] == 2
     assert out["players_played"] == 25 and out["players_scored"] == 24
     assert out["players_with_estimate"] == 24
-    assert out["max_rows"] == 5
     # every scored row, split by sign: the page's sliders do the filtering
     assert [r["player_id"] for r in out["good"]] == list(range(1, 20)) + [60]
     assert [r["player_id"] for r in out["bad"]] == [51, 50, 61, 81]    # worst first
@@ -225,7 +236,7 @@ def _counting(value):
 
 def _night_row():
     return {
-        "game_id": "g1", "player_id": 1, "player_name": "P1", "team_id": 2, "opponent_team_id": 18,
+        "game_id": "g1", "game_date": NIGHT, "player_id": 1, "player_name": "P1", "team_id": 2, "opponent_team_id": 18,
         "is_home": True, "minutes": 30.0, "pts": 10.0, "reb": 1.0, "ast": 1.0, "fg3m": 0.0, "stl": 0.0,
         "blk": 0.0, "fgm": 4.0, "fga": 9.0, "ftm": 2.0, "fta": 2.0, "metric_z": 1.0, "metric_err": None,
         "score": 1.0, "has_estimate": True, "verdict": "", "reasons": "[]",
@@ -311,3 +322,77 @@ async def test_nightly_ledger_write_clears_the_read_cache():
     surprise_service._cache_put("latest", NIGHT, surprise_service._read_generation)
     assert await ModelNightlyService._record_run(_Db(), NIGHT, "no_games", 0, 0) is True
     assert surprise_service._read_cache["values"] == {}
+
+
+@pytest.mark.asyncio
+async def test_period_lists_player_nights_past_the_score_floor(monkeypatch):
+    """The DB hands back the player-nights past the floor; the service splits
+    them by sign (busts worst first), keeps each row's own night, and sends
+    the night's default thresholds for the page's sliders."""
+    created = datetime(2025, 12, 3, 9, 0)
+
+    def row(pid, night, score):
+        return {
+            "game_id": f"g{pid}", "game_date": night, "player_id": pid, "player_name": f"P{pid}",
+            "team_id": 2, "opponent_team_id": 18, "is_home": False, "minutes": 30.0,
+            **{s.lower(): 1.0 for s in ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]},
+            "metric_z": score, "metric_err": None, "score": score, "has_estimate": True,
+            "verdict": "", "reasons": [], "updated_at": created, "season_id": settings.season_id,
+            "fantasy_team_id": None, "lineup_slot": None,
+        }
+
+    later = NIGHT + timedelta(days=1)
+    summary = {"players_played": 300, "players_scored": 280, "players_with_estimate": 270, "games": 14,
+               "nights": 2, "computed_at": created}
+    asked = {}
+
+    async def fake_period(start, end, min_score):
+        asked.update(start=start, end=end, min_score=min_score)
+        return summary, [row(1, NIGHT, 2.6), row(2, later, 1.5), row(3, later, -1.3), row(4, NIGHT, -2.1)]
+
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprise_period", fake_period)
+    out = await svc.period(NIGHT, later, 1.4)
+
+    assert asked == {"start": NIGHT, "end": later, "min_score": 1.4}
+    assert out["start"] == "2025-12-01" and out["end"] == "2025-12-02"
+    assert (out["nights"], out["games"], out["players_scored"]) == (2, 14, 280)
+    assert out["min_score"] == 1.4
+    assert out["thresholds"] == {"good": settings.surprise_good_threshold, "bad": settings.surprise_bad_threshold}
+    assert [(r["player_id"], r["game_date"]) for r in out["good"]] == [(1, "2025-12-01"), (2, "2025-12-02")]
+    assert [r["player_id"] for r in out["bad"]] == [4, 3]   # worst first
+
+
+@pytest.mark.asyncio
+async def test_period_without_rows_is_none(monkeypatch):
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprise_period", _async_return((None, [])))
+    assert await svc.period(NIGHT, NIGHT + timedelta(days=3), 1.4) is None
+
+
+@pytest.mark.asyncio
+async def test_rows_carry_the_fantasy_teams_current_name(monkeypatch):
+    """By the row's season-scoped team id: the current code and full name; a
+    team the lookups don't know shows its id, a free agent has neither, and a
+    row scored under another season shows no fantasy context (its ids name
+    other teams now)."""
+    stamp = datetime(2025, 12, 2, 9, 0, tzinfo=timezone.utc)
+    base = {
+        "game_id": "g", "game_date": NIGHT, "player_name": "P", "team_id": 2, "opponent_team_id": 18,
+        "is_home": True, "minutes": 30.0,
+        **{s.lower(): 1.0 for s in ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]},
+        "metric_z": 1.0, "metric_err": None, "has_estimate": True, "verdict": "", "reasons": [],
+        "updated_at": stamp, "season_id": settings.season_id,
+    }
+    rows = [
+        {**base, "player_id": 1, "score": 2.0, "fantasy_team_id": 7, "lineup_slot": "PG"},
+        {**base, "player_id": 2, "score": 1.5, "fantasy_team_id": 99, "lineup_slot": "BE"},
+        {**base, "player_id": 3, "score": 1.0, "fantasy_team_id": None, "lineup_slot": None},
+        {**base, "player_id": 4, "score": 0.5, "fantasy_team_id": 7, "lineup_slot": "PG", "season_id": settings.season_id - 1},
+    ]
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_surprises_for_date", _async_return(rows))
+    monkeypatch.setattr(svc._db, "get_latest_model_nightly_run", _async_return(None))
+    out = await svc.night(NIGHT)
+    got = {r["player_id"]: (r["fantasy_team"], r["fantasy_team_name"]) for r in out["good"]}
+    assert got == {1: ("HHT", "Trust the process"), 2: ("99", "99"), 3: (None, None), 4: (None, None)}

@@ -539,12 +539,13 @@ export default function AdpPage() {
           )}
         </div>
         ) : (
-        <div className="card overflow-x-auto">
+        <div className="card overflow-hidden">
           {/* Changing page scrolls the list top into view, so the pager has to exist up here
               too -- otherwise every click leaves the controls off-screen below the fold. */}
           {listPager('border-b border-gray-200 dark:border-gray-700')}
+          <div className="overflow-auto max-h-[70vh]">
           <table className="min-w-full">
-            <thead>
+            <thead className="sticky top-0 z-20">
               <tr>
                 <th
                   className="table-header text-right w-12 cursor-pointer select-none whitespace-nowrap"
@@ -595,6 +596,7 @@ export default function AdpPage() {
               ))}
             </tbody>
           </table>
+          </div>
           {players.length === 0 ? (
             <p className="text-center text-sm text-gray-500 py-8">No players match these filters.</p>
           ) : (

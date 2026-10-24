@@ -22,6 +22,7 @@ import { nameCellWrapClass, wrapFriendlyName } from '../utils/wrapName'
 import { ShareCardButton } from '../components/share/ShareCardButton'
 import { TeamShareCard } from '../components/share/TeamShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
+import { orderCategories } from '../utils/statOrder'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 
@@ -109,11 +110,10 @@ const TeamDetail = () => {
     skip: !coverageSlate,
   })
   const datedMatchupReady = datedMatchups !== undefined
-  const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
-  const matchupMap = useMemo(
-    () => new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m])),
-    [matchupRows],
-  )
+  const matchupMap = useMemo(() => {
+    const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
+    return new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m]))
+  }, [coverageSlate, datedMatchupReady, datedMatchups, liveMatchups])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {
@@ -178,8 +178,8 @@ const TeamDetail = () => {
   // This league's actual scoring categories, in order, excluding percentages
   // (shown separately in Shot Chart Stats) — sourced from the API response
   // rather than a hardcoded list.
-  const perGameCategories = Object.keys(team_detail.category_ranks)
-    .filter(key => !PERCENTAGE_CATEGORIES.has(key))
+  const perGameCategories = orderCategories(Object.keys(team_detail.category_ranks)
+    .filter(key => !PERCENTAGE_CATEGORIES.has(key)))
 
   const statColumns = [
     { key: 'minutes', label: showAverages ? 'MPG' : 'Min', align: 'right', sortable: true },
@@ -390,9 +390,9 @@ const TeamDetail = () => {
                     rank={team_detail.ranking_stats.rank ?? 0}
                     totalPoints={team_detail.ranking_stats.total_points}
                     teamCount={teamCount}
-                    categories={Object.entries(points).map(([category, categoryPoints]) => ({
+                    categories={orderCategories(Object.keys(points)).map(category => ({
                       category,
-                      points: categoryPoints,
+                      points: points[category],
                       value: team_detail.ranking_stats.stats?.[category] ?? team_detail.raw_averages.stats?.[category],
                     }))}
                     gp={team_detail.raw_averages.gp}
@@ -546,9 +546,9 @@ const TeamDetail = () => {
             Roster data is currently unavailable. Team stats above are from the last known snapshot.
           </div>
         ) : (
-        <div className="overflow-x-auto mq-scroll-container">
+        <div className="overflow-auto max-h-[70vh] mq-scroll-container">
           <table className="min-w-full border-separate border-spacing-0 [&_th]:border-b [&_td]:border-b [&_th]:border-gray-200 [&_td]:border-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="sticky top-0 z-20 bg-gray-50">
               <tr>
                 {columns.map((column) => (
                   <th

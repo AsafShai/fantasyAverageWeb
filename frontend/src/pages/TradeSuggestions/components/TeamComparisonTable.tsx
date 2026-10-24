@@ -22,15 +22,15 @@ export const TeamComparisonTable: React.FC<TeamComparisonTableProps> = ({
   viewMode,
 }) => {
   const statColumns: StatColumn[] = [
-    { key: 'gp', label: 'GP', mobile: false, isGamesPlayed: true },
-    { key: 'pts', label: 'PTS', mobile: true },
+    { key: 'fg_percentage', label: 'FG%', mobile: false, isPercentage: true },
+    { key: 'ft_percentage', label: 'FT%', mobile: false, isPercentage: true },
+    { key: 'three_pm', label: '3PM', mobile: false },
     { key: 'reb', label: 'REB', mobile: true },
     { key: 'ast', label: 'AST', mobile: true },
     { key: 'stl', label: 'STL', mobile: false },
     { key: 'blk', label: 'BLK', mobile: false },
-    { key: 'three_pm', label: '3PM', mobile: false },
-    { key: 'fg_percentage', label: 'FG%', mobile: false, isPercentage: true },
-    { key: 'ft_percentage', label: 'FT%', mobile: false, isPercentage: true },
+    { key: 'pts', label: 'PTS', mobile: true },
+    { key: 'gp', label: 'GP', mobile: false, isGamesPlayed: true },
   ];
 
   const aggregatedStats = useMemo(() => {
@@ -129,9 +129,9 @@ export const TeamComparisonTable: React.FC<TeamComparisonTableProps> = ({
       defaultExpanded={true}
     >
       
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[70vh]">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 sticky top-0">
+          <thead className="bg-gray-50 sticky top-0 z-20">
             <tr>
               <th className="px-3 py-2 text-left font-medium text-gray-900 border-b">Team</th>
               {statColumns.map((col) => (
