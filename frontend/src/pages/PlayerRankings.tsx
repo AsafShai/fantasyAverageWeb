@@ -24,7 +24,7 @@ import {
   type RankingsConfig,
 } from '../utils/playerRankings'
 
-type SortCol = 'totalZ' | 'gp' | 'mpg' | RankingCategory | `${RankingCategory}_raw`
+type SortCol = 'rank' | 'totalZ' | 'gp' | 'mpg' | RankingCategory | `${RankingCategory}_raw`
 
 const DEFAULT_WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
 
@@ -163,6 +163,7 @@ export default function PlayerRankings() {
     const limited = (displayLimit === null ? filtered : filtered.slice(0, displayLimit))
       .map((ranked, idx) => ({ ranked, rank: idx + 1 }))
     return limited.sort((a, b) => {
+      if (sortCol === 'rank') return sortAsc ? a.rank - b.rank : b.rank - a.rank
       const aVal = getSortVal(a.ranked, sortCol, displayMode)
       const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
@@ -171,7 +172,8 @@ export default function PlayerRankings() {
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
-    else { setSortCol(col); setSortAsc(false) }
+    // Rank 1 is best, so rank starts ascending; every other column starts high-to-low.
+    else { setSortCol(col); setSortAsc(col === 'rank') }
   }
 
   const fmt = (n: number, decimals = 2) => n.toFixed(decimals)
@@ -318,7 +320,7 @@ export default function PlayerRankings() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                  <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">#</th>
+                  <Th col="rank" label="#" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   <Th col="totalZ" label="Z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} tip={METRIC_GLOSSARY.totalZ} />
                   <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">Player</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
