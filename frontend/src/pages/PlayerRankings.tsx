@@ -158,10 +158,13 @@ export default function PlayerRankings() {
     )
     // rankedPlayers is already sorted by totalZ descending, so this keeps
     // "top N by rank" regardless of which column is currently sorted below.
-    const limited = displayLimit === null ? filtered : filtered.slice(0, displayLimit)
-    return [...limited].sort((a, b) => {
-      const aVal = getSortVal(a, sortCol, displayMode)
-      const bVal = getSortVal(b, sortCol, displayMode)
+    // The row number is the totalZ rank, so it stays with the player whichever
+    // column the table is sorted by.
+    const limited = (displayLimit === null ? filtered : filtered.slice(0, displayLimit))
+      .map((ranked, idx) => ({ ranked, rank: idx + 1 }))
+    return limited.sort((a, b) => {
+      const aVal = getSortVal(a.ranked, sortCol, displayMode)
+      const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
   }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, displayMode, displayLimit])
@@ -331,9 +334,9 @@ export default function PlayerRankings() {
                 </tr>
               </thead>
               <tbody>
-                {sortedPlayers.map((ranked, idx) => (
+                {sortedPlayers.map(({ ranked, rank }) => (
                   <tr key={`${ranked.player.player_name}-${ranked.player.team_id}`} className="group border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-center font-mono text-xs">{idx + 1}</td>
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-center font-mono text-xs">{rank}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{fmt(ranked.totalZ)}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700"><PlayerNameLink name={ranked.player.player_name} playerId={ranked.player.player_id} /></td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.pro_team}</td>
