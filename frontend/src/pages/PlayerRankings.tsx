@@ -270,12 +270,13 @@ export default function PlayerRankings() {
               </select>
             </div>
 
-            <div>
+            {/* min-w-0 + w-full keep long team names from pushing the select past the mobile grid cell. */}
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fantasy team</label>
               <select
                 value={fantasyTeam ?? ''}
                 onChange={e => setFantasyTeam(e.target.value === '' ? null : Number(e.target.value))}
-                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                className="w-full sm:w-auto sm:max-w-[14rem] truncate px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               >
                 <option value="">All</option>
                 <option value="0">Free Agents / Waivers</option>
