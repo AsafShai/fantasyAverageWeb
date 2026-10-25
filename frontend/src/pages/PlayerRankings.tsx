@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect, useTransition } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { useGetAllPlayersQuery } from '../store/api/fantasyApi'
+import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
+import { useMyTeam } from '../context/MyTeamContext'
+import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -46,6 +48,8 @@ export default function PlayerRankings() {
     time_period: period,
     ...(period === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   })
+  const { data: teams } = useGetTeamsListQuery()
+  const { myTeamId, isMyTeam } = useMyTeam()
   const allPlayers = useMemo(() => playersData?.players ?? [], [playersData])
   const { available: players, excluded: excludedPlayers } = useMemo(
     () => partitionByDataAvailability(allPlayers),
@@ -69,6 +73,8 @@ export default function PlayerRankings() {
   const [minGp, setMinGp] = usePersistedState('playerRankings.minGp', 0)
   const [minMin, setMinMin] = usePersistedState('playerRankings.minMin', 0)
   const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
+  // Fantasy team_id to show; 0 = free agents / waivers, null = everyone.
+  const [fantasyTeam, setFantasyTeam] = usePersistedState<number | null>('playerRankings.fantasyTeam', null)
   const [weights, setWeights] = usePersistedState<Record<RankingCategory, number>>('playerRankings.weights', { ...DEFAULT_WEIGHTS })
   // A persisted weights object from a previous session (or the default 8)
   // may be missing an entry for a category this league scores (e.g. TO) —
@@ -105,6 +111,7 @@ export default function PlayerRankings() {
     setMinGp(0)
     setMinMin(0)
     setPosition(null)
+    setFantasyTeam(null)
     setWeights({ ...DEFAULT_WEIGHTS })
     setDisplayLimit(null)
     setSliderResetKey(k => k + 1)
@@ -159,16 +166,19 @@ export default function PlayerRankings() {
     // rankedPlayers is already sorted by totalZ descending, so this keeps
     // "top N by rank" regardless of which column is currently sorted below.
     // The row number is the totalZ rank, so it stays with the player whichever
-    // column the table is sorted by.
-    const limited = (displayLimit === null ? filtered : filtered.slice(0, displayLimit))
+    // column the table is sorted by. It's taken before the fantasy-team filter
+    // so a team's players keep their rank among the whole pool.
+    const withRank = filtered
       .map((ranked, idx) => ({ ranked, rank: idx + 1 }))
+      .filter(r => fantasyTeam === null || r.ranked.player.team_id === fantasyTeam)
+    const limited = displayLimit === null ? withRank : withRank.slice(0, displayLimit)
     return limited.sort((a, b) => {
       if (sortCol === 'rank') return sortAsc ? a.rank - b.rank : b.rank - a.rank
       const aVal = getSortVal(a.ranked, sortCol, displayMode)
       const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, displayMode, displayLimit])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, fantasyTeam, displayMode, displayLimit])
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -257,6 +267,24 @@ export default function PlayerRankings() {
               >
                 <option value="">All</option>
                 {ALL_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            {/* min-w-0 + w-full keep long team names from pushing the select past the mobile grid cell. */}
+            <div className="min-w-0">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fantasy team</label>
+              <select
+                value={fantasyTeam ?? ''}
+                onChange={e => setFantasyTeam(e.target.value === '' ? null : Number(e.target.value))}
+                className="w-full sm:w-auto sm:max-w-[14rem] truncate px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+              >
+                <option value="">All</option>
+                <option value="0">Free Agents / Waivers</option>
+                {leadWithMyTeam(teams ?? [], myTeamId).map(team => (
+                  <option key={team.team_id} value={team.team_id}>
+                    {fantasyTeamOptionLabel(team.team_name, isMyTeam(team.team_id))}
+                  </option>
+                ))}
               </select>
             </div>
 
