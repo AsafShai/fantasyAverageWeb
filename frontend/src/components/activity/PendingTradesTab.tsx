@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router'
 import type { LeagueActivity, PendingTrade } from '../../types/activity'
 import { useMyTeam } from '../../context/MyTeamContext'
 import { myTeamRowClass } from '../../myTeam/display'
 import PlayerNameLink from '../PlayerNameLink'
 import { formatCountdown } from '../../utils/leagueActivity'
+import type { TradePreset } from '../../hooks/useTradeState'
 import { Pill, SIDE_PANEL, SideDot } from './shared'
 import { teamAbbrev, teamLookup, teamName, type TeamLookup } from './teams'
 
@@ -39,11 +41,27 @@ function Step({ label, value, note, done }: { label: string; value: string; note
   )
 }
 
+// The analyzer compares what each team gives up, so each team's players are
+// the ones the other side receives. Rosters still hold them until the trade
+// processes, which is why only pending trades get a preview.
+function tradePreset(trade: PendingTrade, teams: TeamLookup): TradePreset | null {
+  if (trade.sides.length !== 2) return null
+  const [a, b] = trade.sides
+  const toPlayers = (side: typeof a) => side.received.map(p => ({ player_name: p.name, player_id: p.player_id }))
+  return {
+    teamA: { team_id: a.team_id, team_name: teamName(teams, a.team_id) },
+    teamB: { team_id: b.team_id, team_name: teamName(teams, b.team_id) },
+    playersA: toPlayers(b),
+    playersB: toPlayers(a),
+  }
+}
+
 function PendingTradeCard({ trade, teams, now }: { trade: PendingTrade; teams: TeamLookup; now: number }) {
   const { isMyTeam } = useMyTeam()
   const mine = trade.sides.some(s => isMyTeam(s.team_id))
   const left = trade.processes_at ? new Date(trade.processes_at).getTime() - now : null
   const other = trade.sides.find(s => s.team_id !== trade.proposed_by)
+  const preset = tradePreset(trade, teams)
 
   return (
     <li className={`space-y-4 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800 ${myTeamRowClass(mine)}`}>
@@ -52,6 +70,15 @@ function PendingTradeCard({ trade, teams, now }: { trade: PendingTrade; teams: T
           {trade.sides.map(s => teamAbbrev(teams, s.team_id)).join(' ⇄ ')}
         </h2>
         {left !== null && <Pill tone="warn">Processes {formatCountdown(left)}</Pill>}
+        {preset && (
+          <Link
+            to="/trade"
+            state={{ tradePreset: preset }}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-blue-600 px-3 text-sm font-medium text-blue-700 hover:bg-blue-50 sm:ml-auto sm:min-h-9 sm:w-auto dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/50"
+          >
+            Preview in Trade Analyzer
+          </Link>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
