@@ -71,6 +71,17 @@ def test_turnovers_count_against_the_line():
     assert zs[0] > 0 > zs[1]
 
 
+def test_zero_minute_lines_get_a_z_but_stay_out_of_the_pool():
+    a = stat_line(_player("1", "A", pts="30", fg="10-20"))
+    b = stat_line(_player("2", "B", pts="10", fg="2-10"))
+    idle = stat_line(_player("3", "C", minutes="0", pts="0", fg="0-0", fg3="0-0", ft="0-0",
+                             reb="0", ast="0", stl="0", tov="0"))
+    with_idle, _ = slate_zscores([a, b, idle], ["PTS"], set())
+    without, _ = slate_zscores([a, b], ["PTS"], set())
+    assert with_idle[:2] == without          # the pool is unchanged by him
+    assert with_idle[2] == -2.0              # 0 pts against mean 20, std 10
+
+
 def test_slate_zscores_with_no_lines():
     assert slate_zscores([], ["PTS"], set()) == ([], ["PTS"])
 
@@ -95,8 +106,10 @@ async def test_slate_values_tags_owner_on_that_night_and_free_agents():
     assert result["complete"] is True
     assert result["categories"] == ["PTS", "FG%"]
     # A 0-minute line that was not a DNP is in the pool too.
-    assert [p["name"] for p in result["players"]] == ["Luka", "Bench Guy", "Quiet"]
-    luka, bench, _ = result["players"]
+    names = [p["name"] for p in result["players"]]
+    assert names[0] == "Luka" and sorted(names) == ["Bench Guy", "Luka", "Quiet"]
+    luka = result["players"][0]
+    bench = next(p for p in result["players"] if p["name"] == "Bench Guy")
     assert luka["z"] > 0 > bench["z"]
     assert luka["fantasy_team"] == "TTP" and luka["fantasy_team_name"] == "Trust the process"
     assert bench["fantasy_team"] is None

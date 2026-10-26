@@ -1,13 +1,15 @@
-"""One slate's player values: a z-score per player line, against every other
-line on the same slate, and the fantasy team that owned him that night.
+"""One slate's player values: a Z per player line, and the fantasy team that
+owned him that night.
 
-The z is computed exactly the way the Player Rankings page computes it
-(frontend/src/utils/playerRankings.ts), with the night's box scores as the
-pool: every player who was not a DNP. Per category, counting stats are plain
-z-scores; FG% and FT% are the z of (player pct - the pool's mean pct) *
-attempts; a reverse category (turnovers) is negated. The line's value is the
-mean across categories. With 300+ lines, the reference pool is the top 300 by
-a first pass, and every line is scored against it (scoreAgainstPool).
+The Z is the value the Player Rankings page gives the same night (its "Last
+night" period, frontend/src/utils/playerRankings.ts with the page's defaults):
+the pool is every player who got on the floor that night, scored per category
+(counting stats as plain z-scores; FG% and FT% as the z of (pct - the pool's
+mean pct) * attempts; a reverse category such as turnovers negated) and
+averaged across the league's categories. With 300+ players the reference pool
+is the top 300 by a first pass. A player listed without minutes (not a DNP)
+is outside the pool, as on the Rankings page, and is scored against it the
+way scoreAgainstPool scores him.
 """
 
 from __future__ import annotations
@@ -110,16 +112,17 @@ def _score(lines: list[dict[str, float]], pool: list[dict[str, float]], categori
 
 
 def slate_zscores(lines: list[dict[str, float]], categories: list[str], reverse: set[str]) -> tuple[list[float], list[str]]:
-    """Each line's z and the categories it was taken over. Categories a box
+    """Each line's Z and the categories it was taken over. Categories a box
     score cannot carry are left out."""
     used = [c for c in categories if c in _PERCENTAGES or c in _COUNTING]
     if not lines or not used:
         return [0.0] * len(lines), used
-    pool = lines
-    if len(lines) >= REFERENCE_POOL_SIZE:
-        first = _score(lines, lines, used, reverse)
-        ranked = sorted(range(len(lines)), key=lambda i: -first[i])
-        pool = [lines[i] for i in ranked[:REFERENCE_POOL_SIZE]]
+    # The Rankings page's night holds only players who logged minutes.
+    pool = [line for line in lines if line["MIN"] > 0] or lines
+    if len(pool) >= REFERENCE_POOL_SIZE:
+        first = _score(pool, pool, used, reverse)
+        ranked = sorted(range(len(pool)), key=lambda i: -first[i])
+        pool = [pool[i] for i in ranked[:REFERENCE_POOL_SIZE]]
     return [round(z, 2) for z in _score(lines, pool, used, reverse)], used
 
 
