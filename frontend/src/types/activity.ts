@@ -86,6 +86,23 @@ export interface ReleasedPlayer {
   stint: PlayerStint
 }
 
+export interface PendingTradeSide {
+  team_id: number
+  received: ActivityPlayer[]
+}
+
+/** A trade both teams accepted that is waiting out the league's review period. */
+export interface PendingTrade {
+  id: string
+  proposed_by: number | null
+  proposed_at: string | null
+  accepted_at: string | null
+  processes_at: string | null
+  sides: PendingTradeSide[]
+  approvals: number
+  vetoes: number
+}
+
 export interface LeagueActivity {
   season_id: number
   season_over: boolean
@@ -95,6 +112,7 @@ export interface LeagueActivity {
   moves: ActivityMove[]
   trades: Trade[]
   released: ReleasedPlayer[]
+  pending_trades?: PendingTrade[]
   last_updated: string
 }
 

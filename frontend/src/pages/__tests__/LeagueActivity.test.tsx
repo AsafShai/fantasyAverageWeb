@@ -5,16 +5,17 @@ import { renderWithProviders } from '../../test/helpers'
 import { MyTeamProvider } from '../../context/MyTeamContext'
 import fixture from '../../test/fixtures/leagueActivity2026.json'
 import LeagueActivity from '../LeagueActivity'
+import { myTeamRowClass } from '../../myTeam/display'
 
 // The fixture is the backend's own output for the trimmed real 2025-26 data:
 // the 2026-03-17 trade between teams 1 and 8 (ASAF and DOR).
 
-function stubApi() {
+function stubApi(activity: object = fixture) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      if (url.includes('/league/activity')) return Response.json(fixture)
+      if (url.includes('/league/activity')) return Response.json(activity)
       if (url.includes('/teams/')) {
         return Response.json(fixture.teams.map(t => ({ team_id: t.team_id, team_name: t.name })))
       }
@@ -147,6 +148,36 @@ describe('League Activity page', () => {
     expect(card).toHaveTextContent(/Released by ASAF.*picked up by DOR/)
     const row = links.map(l => l.closest('tr')).find(tr => tr && within(tr).queryByText(/^ASAF/)) as HTMLElement
     expect(within(row).getByText(/^DOR/)).toBeInTheDocument()
+  })
+
+  it('lists pending trades in their own tab with a count and countdown', async () => {
+    const processes = new Date(Date.now() + 22 * 3600_000 + 5 * 60_000).toISOString()
+    stubApi({
+      ...fixture,
+      pending_trades: [{
+        id: 'p1', proposed_by: 1, proposed_at: '2026-10-26T08:57:37Z', accepted_at: '2026-10-26T09:01:23Z',
+        processes_at: processes, approvals: 1, vetoes: 0,
+        sides: [
+          { team_id: 1, received: [{ player_id: 4066354, name: 'Payton Pritchard' }] },
+          { team_id: 8, received: [{ player_id: 3064290, name: 'Aaron Gordon' }] },
+        ],
+      }],
+    })
+    const user = userEvent.setup()
+    renderPage()
+    const tab = await screen.findByRole('tab', { name: 'Pending trades (1)' })
+    await user.click(tab)
+    const card = (await screen.findByRole('heading', { name: 'ASAF ⇄ DOR' })).closest('li') as HTMLElement
+    expect(within(card).getByRole('link', { name: 'Payton Pritchard' })).toBeInTheDocument()
+    expect(within(card).getByText('Processes in 22h')).toBeInTheDocument()
+    expect(within(card).getByText('1 approve · 0 veto')).toBeInTheDocument()
+    await waitFor(() => expect(card).toHaveClass(myTeamRowClass(true)))
+  })
+
+  it('explains the pending tab when nothing is pending', async () => {
+    renderPage('/activity?tab=pending')
+    expect(await screen.findByText(/No pending trades/)).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Pending trades' })).toBeInTheDocument()
   })
 
   it('shows an error when the activity cannot load', async () => {

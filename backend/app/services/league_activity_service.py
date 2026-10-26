@@ -38,6 +38,8 @@ from app.models.activity_models import (
     ActivityTeam,
     LeagueActivity,
     OpenRosterSpot,
+    PendingTrade,
+    PendingTradeSide,
     PickedUpAfter,
     PlayerStint,
     ReleasedPlayer,
@@ -115,6 +117,42 @@ def merge_card_transactions(cards: list[dict]) -> tuple[list[dict], dict[int, st
                 if item not in kept['items']:
                     kept['items'].append(item)
     return list(txs.values()), names
+
+
+def parse_pending_trades(api_data: dict, names: dict[int, str]) -> list[PendingTrade]:
+    """Accepted trades still in the review period, soonest to process first.
+
+    From the league's mPendingTransactions view. Offers the other team has not
+    accepted yet are left out: they are between the two teams until accepted."""
+    trades = []
+    for tx in api_data.get('pendingTransactions') or []:
+        if tx.get('type') != 'TRADE_ACCEPT' or tx.get('status') != 'PENDING' or 'id' not in tx:
+            continue
+        received: dict[int, list[ActivityPlayer]] = {}
+        for item in tx.get('items') or []:
+            if item.get('type') != 'TRADE' or item.get('toTeamId') is None:
+                continue
+            pid = item['playerId']
+            received.setdefault(item['toTeamId'], []).append(
+                ActivityPlayer(player_id=pid, name=names.get(pid, f'Player {pid}')))
+            received.setdefault(item.get('fromTeamId'), [])
+        received.pop(None, None)
+        if not received:
+            continue
+        proposer = tx.get('teamId')
+        order = sorted(received, key=lambda t: (t != proposer, t))
+        votes = [a for t, a in (tx.get('teamActions') or {}).items() if int(t) not in received]
+        trades.append(PendingTrade(
+            id=tx['id'],
+            proposed_by=proposer if proposer in received else None,
+            proposed_at=_dt(tx['proposedDate']) if tx.get('proposedDate') else None,
+            accepted_at=_dt(tx['acceptedDate']) if tx.get('acceptedDate') else None,
+            processes_at=_dt(tx['processDate']) if tx.get('processDate') else None,
+            sides=[PendingTradeSide(team_id=t, received=received[t]) for t in order],
+            approvals=sum(a == 'APPROVED' for a in votes),
+            vetoes=sum(str(a).startswith('VETO') for a in votes),
+        ))
+    return sorted(trades, key=lambda t: (t.processes_at is None, t.processes_at or datetime.min.replace(tzinfo=timezone.utc)))
 
 
 @dataclass
@@ -449,6 +487,7 @@ def build_league_activity(
     lock_per_game: bool = False,
     pool_logs: Optional[dict[int, list[GameLine]]] = None,
     reverse_categories: Optional[set[str]] = None,
+    pending_trades: Optional[list[PendingTrade]] = None,
 ) -> LeagueActivity:
     valuer = StintValuer(pool_logs, categories, reverse_categories or set(), latest_period) if pool_logs else None
     b = _Builder(transactions, game_logs, schedule, season_start, names or {}, season_over, latest_period, lock_per_game, valuer)
@@ -462,6 +501,7 @@ def build_league_activity(
         moves=b.moves(trades),
         trades=trades,
         released=b.released(),
+        pending_trades=pending_trades or [],
         last_updated=datetime.now(timezone.utc),
     )
 
@@ -486,6 +526,7 @@ class _ActivityCache:
         self.league: Optional[dict] = None
         self.cards: Optional[list[dict]] = None
         self.pool_ids: list[int] = []
+        self.names: dict[int, str] = {}
         self.cards_at = 0.0
         self.stats: dict[int, list[GameLine]] = {}
         self.stats_at = 0.0
@@ -554,9 +595,10 @@ class LeagueActivityService:
                 _cache.etags.pop(etag_key, None)
         return data
 
-    async def _cards(self) -> Optional[tuple[list[dict], list[int]]]:
-        """Every player card with a transaction this season, plus the ids of the
-        most-owned players (the valuation pool), in one call. None: unchanged."""
+    async def _cards(self) -> Optional[tuple[list[dict], list[int], dict[int, str]]]:
+        """Every player card with a transaction this season, the ids of the
+        most-owned players (the valuation pool) and every card's name (a player
+        in a pending trade may have no transaction yet), in one call. None: unchanged."""
         # The cards are read for their transactions, names and ownership order
         # only; a stat source no card has drops the stats, ~80% of the bytes.
         f = ('{"players":{"limit":%d,"sortPercOwned":{"sortPriority":1,"sortAsc":false},'
@@ -565,7 +607,8 @@ class LeagueActivityService:
         if data is None:
             return None
         players = data.get('players', [])
-        return [c for c in players if c.get('transactions')], [c['id'] for c in players[:VALUE_POOL_SIZE]]
+        names = {c['id']: c['player']['fullName'] for c in players if (c.get('player') or {}).get('fullName')}
+        return [c for c in players if c.get('transactions')], [c['id'] for c in players[:VALUE_POOL_SIZE]], names
 
     def _stats_filter(self, chunk: list[int]) -> str:
         """Per-game lines for ``chunk``. Asking for the season's scoring periods
@@ -613,7 +656,8 @@ class LeagueActivityService:
         if _cache.cards is None or now - _cache.cards_at >= CARDS_TTL_SECONDS:
             if _cache.league is None:
                 _cache.etags.pop('league', None)
-            league = await self._get([('view', 'mSettings'), ('view', 'mTeam')], etag_key='league')
+            league = await self._get(
+                [('view', 'mSettings'), ('view', 'mTeam'), ('view', 'mPendingTransactions')], etag_key='league')
             if league is not None:
                 _cache.league = league
                 _cache.cards_version += 1
@@ -621,7 +665,7 @@ class LeagueActivityService:
                 _cache.etags.pop('cards', None)
             cards = await self._cards()
             if cards is not None:
-                _cache.cards, _cache.pool_ids = cards
+                _cache.cards, _cache.pool_ids, _cache.names = cards
                 _cache.cards_version += 1
             _cache.cards_at = now
         if _cache.schedule is None or now - _cache.schedule_at >= SCHEDULE_TTL_SECONDS:
@@ -708,10 +752,12 @@ class LeagueActivityService:
                 lock_per_game=roster_lock == 'INDIVIDUAL_GAME',
                 pool_logs={i: logs[i] for i in _cache.pool_ids if i in logs},
                 reverse_categories=transformer.resolve_reverse_categories(league),
+                pending_trades=parse_pending_trades(league, {**_cache.names, **names}),
             )
             _cache.result, _cache.result_key, _cache.result_checked = result, result_key, checked
             logger.info(
                 f"League activity built: {len(result.moves)} moves, {len(result.trades)} trades, "
+                f"{len(result.pending_trades)} pending, "
                 f"{len(_cache.cards or [])} players"
             )
             return result

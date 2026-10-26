@@ -256,3 +256,14 @@ export function filterMoves(moves: ActivityMove[], q: MoveQuery): ActivityMove[]
 export function formatDay(isoDate: string, opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }): string {
   return new Date(`${isoDate}T12:00:00`).toLocaleDateString('en-US', opts)
 }
+
+/** "in 22h", "in 1d 3h", "in 45m"; "any moment" once the time has passed. */
+export function formatCountdown(ms: number): string {
+  if (ms <= 0) return 'any moment'
+  const minutes = Math.ceil(ms / 60_000)
+  if (minutes < 60) return `in ${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `in ${hours}h`
+  const rest = hours % 24
+  return `in ${Math.floor(hours / 24)}d${rest ? ` ${rest}h` : ''}`
+}

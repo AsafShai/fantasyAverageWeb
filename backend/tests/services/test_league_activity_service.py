@@ -17,6 +17,7 @@ from app.services.league_activity_service import (
     build_league_activity,
     merge_card_transactions,
     parse_game_logs,
+    parse_pending_trades,
     parse_schedule,
     parse_teams,
 )
@@ -186,6 +187,49 @@ class TestRealTrade:
         trade_move = next(m for m in result.moves if m.trade_id == MAR17)
         assert {trade_move.team_id, trade_move.other_team_id} == {ASAF, DOR}
         assert {m.kind for m in result.moves} <= {'add', 'drop', 'waiver', 'trade_drop', 'trade'}
+
+
+class TestPendingTrades:
+    # The real mPendingTransactions entry from 2026-10-26: LA (4) and MT (15)
+    # accepted, DOR (8) voted to approve, processing a day after acceptance.
+    PENDING = {'pendingTransactions': [{
+        'acceptedDate': 1793005283870, 'expirationDate': 1793177739536, 'id': '0759883a-ffe5-45ca-a359-02ac21513d75',
+        'isPending': True, 'processDate': 1793091683870, 'proposedDate': 1793005057011, 'scoringPeriodId': 7,
+        'status': 'PENDING', 'teamActions': {'4': 'ACCEPTED', '15': 'ACCEPTED', '8': 'APPROVED'},
+        'teamId': 4, 'type': 'TRADE_ACCEPT', 'items': [
+            {'fromLineupSlotId': 5, 'fromTeamId': 15, 'playerId': 4066354, 'toLineupSlotId': -1, 'toTeamId': 4, 'type': 'TRADE'},
+            {'fromLineupSlotId': 3, 'fromTeamId': 4, 'playerId': 3064290, 'toLineupSlotId': -1, 'toTeamId': 15, 'type': 'TRADE'},
+        ]}]}
+    NAMES = {4066354: 'Payton Pritchard', 3064290: 'Aaron Gordon'}
+
+    def test_accepted_trade_with_sides_times_and_votes(self):
+        [t] = parse_pending_trades(self.PENDING, self.NAMES)
+        assert t.proposed_by == 4
+        assert [(s.team_id, [p.name for p in s.received]) for s in t.sides] == [
+            (4, ['Payton Pritchard']), (15, ['Aaron Gordon'])]
+        assert t.accepted_at == datetime(2026, 10, 26, 9, 1, 23, 870000, tzinfo=timezone.utc)
+        assert t.processes_at == datetime(2026, 10, 27, 9, 1, 23, 870000, tzinfo=timezone.utc)
+        assert (t.approvals, t.vetoes) == (1, 0)
+
+    def test_unaccepted_offers_and_other_pending_moves_are_left_out(self):
+        base = self.PENDING['pendingTransactions'][0]
+        data = {'pendingTransactions': [
+            {**base, 'id': 'offer', 'type': 'TRADE_PROPOSAL'},
+            {**base, 'id': 'claim', 'type': 'WAIVER'},
+            {**base, 'id': 'done', 'status': 'EXECUTED'},
+        ]}
+        assert parse_pending_trades(data, self.NAMES) == []
+        assert parse_pending_trades({}, {}) == []
+
+    def test_side_that_gives_without_receiving_is_kept_and_order_is_soonest_first(self):
+        base = self.PENDING['pendingTransactions'][0]
+        one_way = {**base, 'id': 'one-way', 'processDate': base['processDate'] - 1, 'teamActions': {'8': 'VETOED'},
+                   'items': [base['items'][0]]}
+        sooner, later = parse_pending_trades({'pendingTransactions': [base, one_way]}, {})
+        assert sooner.id == 'one-way' and later.id == base['id']
+        assert [(s.team_id, s.received) for s in sooner.sides][1] == (15, [])
+        assert sooner.sides[0].received[0].name == 'Player 4066354'
+        assert (sooner.approvals, sooner.vetoes) == (0, 1)
 
 
 class TestOwnership:
