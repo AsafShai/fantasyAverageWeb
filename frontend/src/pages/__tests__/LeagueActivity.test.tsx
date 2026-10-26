@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/helpers'
 import { MyTeamProvider } from '../../context/MyTeamContext'
 import fixture from '../../test/fixtures/leagueActivity2026.json'
+import { Route, Routes, useLocation } from 'react-router'
 import LeagueActivity from '../LeagueActivity'
 import { myTeamRowClass } from '../../myTeam/display'
 
@@ -24,10 +25,17 @@ function stubApi(activity: object = fixture) {
   )
 }
 
+function TradeStateProbe() {
+  return <pre data-testid="trade-state">{JSON.stringify(useLocation().state)}</pre>
+}
+
 function renderPage(route = '/activity') {
   return renderWithProviders(
     <MyTeamProvider>
-      <LeagueActivity />
+      <Routes>
+        <Route path="/activity" element={<LeagueActivity />} />
+        <Route path="/trade" element={<TradeStateProbe />} />
+      </Routes>
     </MyTeamProvider>,
     { route },
   )
@@ -172,6 +180,16 @@ describe('League Activity page', () => {
     expect(within(card).getByText('Processes in 22h')).toBeInTheDocument()
     expect(within(card).getByText('1 approve · 0 veto')).toBeInTheDocument()
     await waitFor(() => expect(card).toHaveClass(myTeamRowClass(true)))
+
+    // The preview opens the analyzer with each team giving up what the other receives.
+    await user.click(within(card).getByRole('link', { name: 'Preview in Trade Analyzer' }))
+    const preset = JSON.parse((await screen.findByTestId('trade-state')).textContent ?? '{}').tradePreset
+    expect(preset).toEqual({
+      teamA: { team_id: 1, team_name: fixture.teams.find(t => t.team_id === 1)!.name },
+      teamB: { team_id: 8, team_name: fixture.teams.find(t => t.team_id === 8)!.name },
+      playersA: [{ player_name: 'Aaron Gordon', player_id: 3064290 }],
+      playersB: [{ player_name: 'Payton Pritchard', player_id: 4066354 }],
+    })
   })
 
   it('explains the pending tab when nothing is pending', async () => {

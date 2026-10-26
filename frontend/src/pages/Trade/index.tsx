@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router';
 import { useMyTeam } from '../../context/MyTeamContext';
 import { useFollowMyTeamValue } from '../../hooks/useFollowMyTeam';
 import type { TimePeriod, CustomDateRange } from '../../types/api';
@@ -7,7 +8,8 @@ import { TradeStatsToggle } from './components/TradeStatsToggle';
 import { TradeModeToggle } from './components/TradeModeToggle';
 import { FreeAgentSection } from './components/FreeAgentSection';
 import { TradeSummaryPanel } from './components/TradeSummaryPanel';
-import { useTradeState } from '../../hooks/useTradeState';
+import { useTradeState, type TradePreset } from '../../hooks/useTradeState';
+import { samePlayer } from './utils/tradeShare';
 import { useTradeData } from '../../hooks/useTradeData';
 import TimePeriodSelector from '../../components/TimePeriodSelector';
 import { formatShort } from '../../utils/dateRange';
@@ -20,6 +22,8 @@ const PERIOD_LABELS: Record<Exclude<TimePeriod, 'custom'>, string> = {
 };
 
 export const Trade: React.FC = () => {
+  // Set by "Preview in Trade Analyzer" on a pending trade.
+  const preset = (useLocation().state as { tradePreset?: TradePreset } | null)?.tradePreset ?? null;
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season');
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null);
 
@@ -41,7 +45,7 @@ export const Trade: React.FC = () => {
     handlePlayerBRemove,
     handleFreeAgentSelect,
     handleFreeAgentRemove,
-  } = useTradeState();
+  } = useTradeState(preset);
 
   const {
     teams,
@@ -74,14 +78,14 @@ export const Trade: React.FC = () => {
   const currentSelectedPlayersA = useMemo(() => {
     if (!teamAData?.players || selectedPlayersA.length === 0) return [];
     return selectedPlayersA
-      .map(selected => teamAData.players!.find(p => p.player_name === selected.player_name))
+      .map(selected => teamAData.players!.find(p => samePlayer(p, selected)))
       .filter((p): p is NonNullable<typeof p> => p !== undefined);
   }, [selectedPlayersA, teamAData]);
 
   const currentSelectedPlayersB = useMemo(() => {
     if (!teamBData?.players || selectedPlayersB.length === 0) return [];
     return selectedPlayersB
-      .map(selected => teamBData.players!.find(p => p.player_name === selected.player_name))
+      .map(selected => teamBData.players!.find(p => samePlayer(p, selected)))
       .filter((p): p is NonNullable<typeof p> => p !== undefined);
   }, [selectedPlayersB, teamBData]);
 

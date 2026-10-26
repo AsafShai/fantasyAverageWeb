@@ -23,6 +23,9 @@ interface ShareCardButtonProps {
   /** A ready-made message to go with the image: sent as the share-sheet text
    * and offered as "Copy message" for apps that take the image alone. */
   shareText?: string
+  /** Changes when the card's data changes after the menu opened (e.g. stats
+   * that were still loading), so the image is made again. */
+  contentKey?: string
 }
 
 const BUTTON_STYLES = {
@@ -56,7 +59,7 @@ const ShareIcon = () => (
 export const ShareCardButton = (props: ShareCardButtonProps) =>
   FF_SHARE_CARDS ? <ShareCardMenu {...props} /> : null
 
-export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral', shareText }: ShareCardButtonProps) => {
+export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral', shareText, contentKey }: ShareCardButtonProps) => {
   const [open, setOpen] = useState(false)
   const [dark, setDark] = useState(false)
   const [highlightMyTeam, setHighlightMyTeam] = usePersistedState('share.highlightMyTeam', false)
@@ -71,7 +74,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
   // image is ready by the time an action is tapped.
   useEffect(() => {
     if (open) void render()
-  }, [open, dark, highlight, render])
+  }, [open, dark, highlight, render, contentKey])
 
   const previewUrl = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob])
   useEffect(() => () => {
