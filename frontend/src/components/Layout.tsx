@@ -476,6 +476,7 @@ const NavShell = ({ darkMode, setDarkMode, setSearchOpen }: NavShellProps) => {
       icon: '🏀',
       items: [
         { path: '/nba-teams', label: 'NBA Teams', icon: '🏀' },
+        { path: '/box-scores', label: 'Box Scores', icon: '📋' },
         { path: '/schedule', label: 'Season Schedule', icon: '🗓️' },
         { path: '/injuries', label: 'Injuries', icon: '🩺' },
       ],
