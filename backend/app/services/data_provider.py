@@ -522,6 +522,15 @@ class DataProvider:
             return None
         return self.data_transformer.resolve_trade_deadline(raw)
 
+    async def get_standings_updated_at(self) -> Optional[datetime]:
+        """When ESPN last updated the league's stats. None while serving the DB
+        fallback: the cached payload no longer describes the data served, and
+        the "data as of" badge covers that case."""
+        raw = await self._settings_payload()
+        if not raw or self.get_data_date() is not None:
+            return None
+        return self.data_transformer.resolve_standings_updated_at(raw)
+
     # Rankings, heatmap, summary and team pages all rebuild averages/rankings
     # from the same totals frame, which only changes when ESPN returns new
     # standings. Both are pure functions of their inputs, so each is computed

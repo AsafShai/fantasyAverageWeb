@@ -16,6 +16,7 @@ import { formatShort } from '../../utils/dateRange';
 
 const PERIOD_LABELS: Record<Exclude<TimePeriod, 'custom'>, string> = {
   season: 'Season',
+  last_night: 'Last night',
   last_7: 'Last 7 days',
   last_15: 'Last 15 days',
   last_30: 'Last 30 days',

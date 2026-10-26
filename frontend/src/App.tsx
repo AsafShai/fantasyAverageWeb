@@ -18,6 +18,7 @@ const Trade = lazy(() => import('./pages/Trade').then(m => ({ default: m.Trade }
 const Players = lazy(() => import('./pages/Players'))
 const Injuries = lazy(() => import('./pages/Injuries'))
 const NbaTeams = lazy(() => import('./pages/NbaTeams'))
+const BoxScores = lazy(() => import('./pages/BoxScores'))
 const Schedule = lazy(() => import('./pages/Schedule'))
 const FeatureStore = lazy(() => import('./pages/FeatureStore'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -59,6 +60,7 @@ function App() {
               <Route path="players" element={<Players />} />
               <Route path="injuries" element={<Injuries />} />
               <Route path="nba-teams" element={<NbaTeams />} />
+              <Route path="box-scores" element={<BoxScores />} />
               <Route path="schedule" element={<Schedule />} />
               <Route path="player/:playerId" element={<PlayerProfile />} />
               {FF_FEATURE_STORE && <Route path="feature-store" element={<FeatureStore />} />}

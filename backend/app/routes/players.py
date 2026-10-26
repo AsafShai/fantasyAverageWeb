@@ -25,7 +25,7 @@ async def get_all_players(
     limit: int = Query(500, ge=10, le=1200, description="Players per page"),
     time_period: StatTimePeriod = Query(
         StatTimePeriod.SEASON,
-        description="Time period for stats: season, last_7, last_15, last_30, custom"
+        description="Time period for stats: season, last_night, last_7, last_15, last_30, custom"
     ),
     start: Optional[date] = Query(None, description="Start date, required when time_period=custom"),
     end: Optional[date] = Query(None, description="End date, required when time_period=custom"),

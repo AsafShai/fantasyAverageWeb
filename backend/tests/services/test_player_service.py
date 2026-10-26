@@ -226,6 +226,34 @@ class TestBuildWindowedPlayersDf:
             assert col not in merged.columns
 
     @pytest.mark.asyncio
+    async def test_last_night_is_one_date_and_drops_players_who_sat(
+        self, sample_window_players_df
+    ):
+        agg_df = pd.DataFrame([{
+            'player_id': 1, 'player_name': 'Player X', 'gp': 1,
+            'pts': 28.0, 'reb': 6.0, 'ast': 4.0, 'stl': 1.0, 'blk': 0.0,
+            'fgm': 10.0, 'fga': 18.0, 'ftm': 6.0, 'fta': 7.0,
+            'three_pm': 2.0, 'min': 34.0,
+            'fg_pct': 10.0 / 18.0, 'ft_pct': 6.0 / 7.0,
+        }])
+        db = self._db_service(agg_df)
+
+        merged, _, _ = await build_windowed_players_df(
+            StatTimePeriod.LAST_NIGHT, sample_window_players_df, db
+        )
+
+        start, end, _season = db.aggregate_player_games.await_args.args
+        assert start == end == date(2026, 7, 10)
+        played = merged[merged['Name'] == 'Player X'].iloc[0]
+        assert played['PTS'] == 28.0
+        assert played['GP'] == 1
+        assert bool(played['has_data']) is True
+        sat = merged[merged['Name'] == 'Player Y'].iloc[0]
+        assert sat['GP'] == 0
+        assert sat['PTS'] == 0.0
+        assert bool(sat['has_data']) is False
+
+    @pytest.mark.asyncio
     async def test_known_player_zero_games_in_window_keeps_espn_value(
         self, sample_window_players_df
     ):

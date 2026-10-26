@@ -36,6 +36,17 @@ describe('TimePeriodSelector', () => {
     expect(screen.getByRole('button', { name: /custom/i })).toBeInTheDocument()
   })
 
+  it('shows Last night only when asked, and clicking it selects that period', async () => {
+    renderWithProviders(<TimePeriodSelector value="season" onChange={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /last night/i })).not.toBeInTheDocument()
+
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    renderWithProviders(<TimePeriodSelector value="season" onChange={onChange} showLastNight />)
+    await user.click(screen.getByRole('button', { name: /last night/i }))
+    expect(onChange).toHaveBeenCalledWith('last_night')
+  })
+
   it('does not render the Custom chip when allowCustom is false', () => {
     renderWithProviders(<TimePeriodSelector value="season" onChange={vi.fn()} allowCustom={false} />)
     expect(screen.queryByRole('button', { name: /custom/i })).not.toBeInTheDocument()

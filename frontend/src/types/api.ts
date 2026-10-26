@@ -1,6 +1,8 @@
 export interface Team {
   team_id: number;
   team_name: string;
+  /** ESPN's short fantasy-team code, when the teams list has one. */
+  abbrev?: string | null;
 }
 
 export interface RankingStats {
@@ -96,6 +98,8 @@ export interface LeagueSummary {
   data_date?: string;
   season_start?: string;
   trade_deadline?: string;
+  /** When ESPN last updated the league stats (its nightly run), not when we fetched. */
+  espn_updated_at?: string | null;
 }
 
 export interface HeatmapData {
@@ -188,7 +192,7 @@ export interface PaginatedPlayers {
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
 
-export type TimePeriod = 'season' | 'last_7' | 'last_15' | 'last_30' | 'custom';
+export type TimePeriod = 'season' | 'last_night' | 'last_7' | 'last_15' | 'last_30' | 'custom';
 
 export interface CustomDateRange {
   start: string;

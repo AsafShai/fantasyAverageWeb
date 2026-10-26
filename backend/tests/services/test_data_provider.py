@@ -943,3 +943,27 @@ async def test_memo_response_reuses_until_standings_change(provider):
 
     provider.get_ranking_categories = AsyncMock(return_value=["PTS", "TO"])
     assert (await provider.memo_response("rankings", ("PTS", "asc"), build)).n == 4
+
+
+@pytest.mark.asyncio
+async def test_get_standings_updated_at_reads_cached_payload(provider):
+    payload = {"status": {"standingsUpdateDate": 1793001787401}}
+    provider.cache_manager.totals_cache = {"etag": "e1", "data": None, "raw": payload}
+    stamp = datetime(2026, 10, 26, 8, 3)
+    provider.data_transformer.resolve_standings_updated_at.return_value = stamp
+
+    assert await provider.get_standings_updated_at() == stamp
+    provider.data_transformer.resolve_standings_updated_at.assert_called_once_with(payload)
+    provider._client.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_standings_updated_at_is_none_on_db_fallback(provider):
+    """The cached payload predates the snapshot being served; the data-date
+    badge already tells the user how old the data is."""
+    provider.cache_manager.totals_cache = {
+        "etag": None, "data": None, "data_date": datetime(2026, 10, 20).date(),
+        "raw": {"status": {"standingsUpdateDate": 1793001787401}},
+    }
+
+    assert await provider.get_standings_updated_at() is None

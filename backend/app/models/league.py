@@ -27,6 +27,8 @@ class LeagueSummary(BaseModel):
     data_date: Optional[date] = None
     season_start: Optional[date] = None
     trade_deadline: Optional[datetime] = None
+    # ESPN's own stat-update time (status.standingsUpdateDate), not our fetch time.
+    espn_updated_at: Optional[datetime] = None
 
 class LeagueShotsData(BaseModel):
     shots: List[TeamShotStats]

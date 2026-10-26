@@ -156,7 +156,7 @@ class NbaPlayerService:
                 actual_end=actual_end,
             )
 
-        if time_period == StatTimePeriod.CUSTOM:
+        if time_period in (StatTimePeriod.CUSTOM, StatTimePeriod.LAST_NIGHT):
             return _empty_response(espn_id)
 
         # Preset fallback: ESPN fantasy player pool split stats by name.

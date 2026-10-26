@@ -48,6 +48,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Who Am I?', path: '/minigames/who-am-i', icon: '🕵️', group: 'Minigames' },
   { label: 'Now You See Me', path: '/minigames/now-you-see-me', icon: '👁️', group: 'Minigames' },
   { label: 'NBA Teams', path: '/nba-teams', icon: '🏀', group: 'NBA' },
+  { label: 'Box Scores', path: '/box-scores', icon: '📋', group: 'NBA' },
   { label: 'Season Schedule', path: '/schedule', icon: '🗓️', group: 'NBA' },
   { label: 'Injuries', path: '/injuries', icon: '🩺', group: 'NBA' },
 ]

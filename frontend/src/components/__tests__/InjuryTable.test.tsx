@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InjuryRecord } from '../../types/injury';
+import { renderWithProviders } from '../../test/helpers';
 import InjuryTable from '../injuries/InjuryTable';
 
 function rec(partial: Partial<InjuryRecord> = {}): InjuryRecord {
@@ -18,8 +19,12 @@ function rec(partial: Partial<InjuryRecord> = {}): InjuryRecord {
 }
 
 describe('InjuryTable', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not found', { status: 404 })));
+  });
+
   it('renders rows with player and team', () => {
-    render(<InjuryTable records={[rec({ player: 'Kyrie' })]} totalCount={1} />);
+    renderWithProviders(<InjuryTable records={[rec({ player: 'Kyrie' })]} totalCount={1} />);
     expect(screen.getAllByText('Kyrie').length).toBeGreaterThan(0);
     expect(screen.getAllByText('DAL').length).toBeGreaterThan(0);
   });
@@ -30,7 +35,7 @@ describe('InjuryTable', () => {
       rec({ team: 'ZZZ', player: 'Zed', last_update: '2025-01-10T10:00:00Z' }),
       rec({ team: 'AAA', player: 'Abe', last_update: '2025-01-11T10:00:00Z' }),
     ];
-    render(<InjuryTable records={rows} totalCount={2} />);
+    renderWithProviders(<InjuryTable records={rows} totalCount={2} />);
     const table = screen.getAllByRole('table')[0]!;
     const teamHeader = within(table).getByRole('columnheader', { name: /team/i });
     await user.click(teamHeader);
@@ -42,19 +47,37 @@ describe('InjuryTable', () => {
   });
 
   it('filters empty records with totalCount > 0 shows filter message', () => {
-    render(<InjuryTable records={[]} totalCount={3} />);
+    renderWithProviders(<InjuryTable records={[]} totalCount={3} />);
     expect(screen.getByText(/no results match your filters/i)).toBeInTheDocument();
   });
 
   it('totalCount 0 shows no data message', () => {
-    render(<InjuryTable records={[]} totalCount={0} />);
+    renderWithProviders(<InjuryTable records={[]} totalCount={0} />);
     expect(screen.getByText(/no injury data available/i)).toBeInTheDocument();
   });
 
   it('Out status uses red badge classes', () => {
-    const { container } = render(<InjuryTable records={[rec({ status: 'Out' })]} totalCount={1} />);
+    const { container } = renderWithProviders(<InjuryTable records={[rec({ status: 'Out' })]} totalCount={1} />);
     const badge = container.querySelector('.bg-red-100');
     expect(badge).toBeTruthy();
     expect(badge).toHaveTextContent('Out');
+  });
+
+  it('links a team to its depth chart on the NBA Teams page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify([
+        { team_id: '2', abbreviation: 'BOS', team_name: 'Boston Celtics' },
+      ]), { headers: { 'Content-Type': 'application/json' } })),
+    );
+    renderWithProviders(
+      <InjuryTable records={[rec({ team: 'Boston Celtics', player: 'Jayson Tatum' })]} totalCount={1} />,
+    );
+    const links = await screen.findAllByRole('link', { name: 'Boston Celtics roster' });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '/nba-teams?team=2');
+      expect(link).toHaveTextContent('Roster');
+    }
   });
 });

@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGetLeagueSummaryQuery } from '../store/api/fantasyApi';
 import DateRangePicker from './DateRangePicker';
-import type { CustomDateRange } from '../types/api';
-
-export type TimePeriod = 'season' | 'last_7' | 'last_15' | 'last_30' | 'custom';
+import type { CustomDateRange, TimePeriod } from '../types/api';
 
 interface TimePeriodSelectorProps {
   value: TimePeriod;
@@ -11,6 +9,8 @@ interface TimePeriodSelectorProps {
   customRange?: CustomDateRange | null;
   onCustomRangeChange?: (range: CustomDateRange | null) => void;
   allowCustom?: boolean;
+  /** Player Rankings is the page that ranks a single scored night. */
+  showLastNight?: boolean;
 }
 
 const formatRangeLabel = (range: CustomDateRange) => {
@@ -24,6 +24,7 @@ const TimePeriodSelector: React.FC<TimePeriodSelectorProps> = ({
   customRange = null,
   onCustomRangeChange,
   allowCustom = true,
+  showLastNight = false,
 }) => {
   const showCustom = allowCustom;
   const { data: summary } = useGetLeagueSummaryQuery(undefined, { skip: !showCustom });
@@ -36,6 +37,9 @@ const TimePeriodSelector: React.FC<TimePeriodSelectorProps> = ({
 
   const periods: { value: TimePeriod; label: string; shortLabel: string; emoji: string }[] = [
     { value: 'season', label: 'Full Season', shortLabel: 'Season', emoji: '📅' },
+    ...(showLastNight
+      ? [{ value: 'last_night' as const, label: 'Last night', shortLabel: 'Night', emoji: '🌙' }]
+      : []),
     { value: 'last_7', label: 'Last 7 Days', shortLabel: 'L7', emoji: '🔥' },
     { value: 'last_15', label: 'Last 15 Days', shortLabel: 'L15', emoji: '📊' },
     { value: 'last_30', label: 'Last 30 Days', shortLabel: 'L30', emoji: '📈' },
