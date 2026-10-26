@@ -150,6 +150,9 @@ class MockDataProvider:
     async def get_trade_deadline(self):
         return None
 
+    async def get_standings_updated_at(self):
+        return None
+
     def cached_totals_raw(self):
         return None
 

@@ -11,6 +11,7 @@ import { getErrorMessage } from '../utils/errorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import DataDateBadge from '../components/DataDateBadge'
+import EspnUpdatedNote from '../components/EspnUpdatedNote'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay'
 import InjuryBadge from '../components/InjuryBadge'
@@ -375,7 +376,9 @@ const TeamDetail = () => {
               {team_detail.team.team_name}
               <MyTeamMark teamId={team_detail.team.team_id} />
             </h1>
-            <DataDateBadge dataDate={team_detail.data_date} />
+            {team_detail.data_date
+              ? <DataDateBadge dataDate={team_detail.data_date} />
+              : <EspnUpdatedNote updatedAt={leagueSummary?.espn_updated_at} />}
           </div>
           <div className="flex items-center gap-2">
             <ShareCardButton

@@ -9,6 +9,7 @@ import TopTeams from '../components/today/TopTeams'
 import { getErrorMessage } from '../utils/errorMessage'
 import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
 import LatestMovesCard from '../components/activity/LatestMovesCard'
+import EspnUpdatedNote from '../components/EspnUpdatedNote'
 
 function formatSlate(slateDate: string | null): string {
   if (!slateDate) return 'No games scheduled'
@@ -39,7 +40,10 @@ const Today = () => {
       <DeadlineCountdown deadline={summary?.trade_deadline ?? null} />
 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
+        <div className="flex flex-col">
+          <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
+          <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />
+        </div>
         <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">
           {hub
             ? `${formatSlate(hub.slate_date)} · ${hub.games_count} ${hub.games_count === 1 ? 'game' : 'games'}`

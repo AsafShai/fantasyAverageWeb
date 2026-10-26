@@ -453,6 +453,21 @@ class TestResolveTradeDeadline:
         assert transformer.resolve_trade_deadline({"settings": "not-a-dict"}) is None
 
 
+class TestResolveStandingsUpdatedAt:
+    def test_real_epoch_resolves_expected_datetime(self, transformer):
+        payload = {"status": {"standingsUpdateDate": 1793001787401}}
+        assert transformer.resolve_standings_updated_at(payload) == datetime(
+            2026, 10, 26, 8, 3, 7, 401000, tzinfo=timezone.utc
+        )
+
+    def test_missing_key_returns_none(self, transformer):
+        assert transformer.resolve_standings_updated_at({}) is None
+        assert transformer.resolve_standings_updated_at({"status": {}}) is None
+
+    def test_malformed_status_returns_none(self, transformer):
+        assert transformer.resolve_standings_updated_at({"status": "not-a-dict"}) is None
+
+
 class TestStatColumnsToKeep:
     """ESPN's stat lines carry every stat it tracks and the id map can now name
     all of them, so what gets materialized has to be chosen deliberately."""

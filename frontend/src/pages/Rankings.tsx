@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
+import EspnUpdatedNote from '../components/EspnUpdatedNote'
 import type { RankingStats } from '../types/api'
 import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark } from '../components/MyTeamMark'
@@ -159,9 +160,11 @@ const Rankings = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {data?.data_date && (
+      {(data?.data_date || summary?.espn_updated_at) && (
         <div className="mb-4 flex justify-end">
-          <DataDateBadge dataDate={data.data_date} />
+          {data?.data_date
+            ? <DataDateBadge dataDate={data.data_date} />
+            : <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />}
         </div>
       )}
       {summary && (
