@@ -170,6 +170,18 @@ class TestTeamService:
             assert team.team_id in [1, 2, 3]
             assert team.team_name in ['Team Alpha', 'Team Beta', 'Team Gamma']
         team_service.data_provider.get_totals_df.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_teams_list_attaches_abbrevs(self, team_service, sample_totals_df):
+        team_service.data_provider.get_totals_df.return_value = sample_totals_df
+        team_service.data_provider.get_team_abbrevs.return_value = {1: "ALP", 2: "BET"}
+
+        result = await team_service.get_teams_list()
+
+        by_id = {team.team_id: team.abbrev for team in result}
+        assert by_id[1] == "ALP"
+        assert by_id[2] == "BET"
+        assert by_id[3] is None
     
     @pytest.mark.asyncio
     async def test_get_teams_list_totals_unavailable_falls_back_to_team_names(self, team_service):

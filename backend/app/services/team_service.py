@@ -105,7 +105,7 @@ class TeamService:
             totals_df = await self.data_provider.get_totals_df()
             teams = self._extract_teams_from_dataframe(totals_df)
             if teams:
-                return teams
+                return await self._with_abbrevs(teams)
         except DataSourceError:
             pass
 
@@ -114,7 +114,7 @@ class TeamService:
         if not teams:
             raise ResourceNotFoundError("No teams found in the data")
 
-        return teams
+        return await self._with_abbrevs(teams)
     
     async def get_team_players(self, team_id: int) -> TeamPlayers:
         """Get players for a specific team by team ID"""
@@ -132,6 +132,20 @@ class TeamService:
 
         return self.response_builder.build_team_players_response(team_players)
     
+    async def _with_abbrevs(self, teams: List[Team]) -> List[Team]:
+        """ESPN's short team code (DOR, ASAF, …). Missing codes leave the name as-is."""
+        try:
+            abbrevs = await self.data_provider.get_team_abbrevs()
+        except Exception as e:
+            self.logger.warning(f"Team abbreviations unavailable: {type(e).__name__}: {e}")
+            return teams
+        if not isinstance(abbrevs, dict) or not abbrevs:
+            return teams
+        return [
+            team.model_copy(update={"abbrev": abbrevs[team.team_id]}) if team.team_id in abbrevs else team
+            for team in teams
+        ]
+
     def _extract_teams_from_dataframe(self, totals_df) -> List[Team]:
         """Extract teams list from dataframe with validation"""
         teams = []
