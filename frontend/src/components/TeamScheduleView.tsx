@@ -11,6 +11,11 @@ interface TeamScheduleViewProps {
   teamId: string
 }
 
+// Schedule dates are NBA (Eastern) calendar days.
+function easternToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
+}
+
 function formatDate(date: string, options: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat('en-US', options).format(new Date(`${date}T12:00:00`))
 }
@@ -49,6 +54,12 @@ export default function TeamScheduleView({ teamId }: TeamScheduleViewProps) {
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load team schedule')} />
   if (!team) return <p className="text-sm text-gray-500">Select a team to view its schedule.</p>
 
+  // Only what is left: games before today are gone from the table and the counts.
+  const today = easternToday()
+  const games = team.games.filter(game => game.date >= today)
+  const b2bLeft = games.filter(game => game.rest_days === 0).length
+  const highVolumeLeft = games.filter(game => game.high_volume).length
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -63,9 +74,9 @@ export default function TeamScheduleView({ teamId }: TeamScheduleViewProps) {
       </div>
 
       <div className="mb-5 grid grid-cols-3 gap-2">
-        <Kpi label="Total games" value={team.total_games} metric="scheduleTotal" />
-        <Kpi label="Back-to-backs" value={team.b2b_count} metric="scheduleB2B" />
-        <Kpi label="High-volume" value={team.high_volume_games} metric="scheduleHighVolume" />
+        <Kpi label="Games left" value={games.length} metric="scheduleLeft" />
+        <Kpi label="Back-to-backs left" value={b2bLeft} metric="scheduleB2BLeft" />
+        <Kpi label="High-volume left" value={highVolumeLeft} metric="scheduleHighVolumeLeft" />
       </div>
 
       <div className="max-h-[34rem] overflow-auto rounded-lg border border-gray-200">
@@ -85,8 +96,13 @@ export default function TeamScheduleView({ teamId }: TeamScheduleViewProps) {
             </tr>
           </thead>
           <tbody>
-            {team.games.map((game, index) => {
-              const previous = team.games[index - 1]
+            {games.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500">No games left this season.</td>
+              </tr>
+            )}
+            {games.map((game, index) => {
+              const previous = games[index - 1]
               const showMonth = !previous || monthKey(previous.date) !== monthKey(game.date)
               return (
                 <Fragment key={game.game_id}>

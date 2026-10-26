@@ -3,7 +3,7 @@ import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShot
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves } from '../../types/activity';
-import type { BoxScoreboard, GameBoxScore } from '../../types/boxScore';
+import type { BoxScoreboard, GameBoxScore, SlateValues } from '../../types/boxScore';
 
 type AllPlayersArgs = { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string };
 
@@ -104,6 +104,10 @@ export const fantasyApi = createApi({
     }),
     getBoxScoreboard: builder.query<BoxScoreboard, string>({
       query: (date) => ({ url: '/nba/scoreboard', params: { date } }),
+      keepUnusedDataFor: 120,
+    }),
+    getBoxSlateValues: builder.query<SlateValues, string>({
+      query: (date) => ({ url: '/nba/scoreboard/values', params: { date } }),
       keepUnusedDataFor: 120,
     }),
     getGameBoxScore: builder.query<GameBoxScore, string>({
@@ -315,6 +319,7 @@ export const {
   useGetScheduleQuery,
   useGetBoxScoreboardQuery,
   useGetGameBoxScoreQuery,
+  useGetBoxSlateValuesQuery,
   useGetNbaPlayerQuery,
   useGetNbaPlayerStatsQuery,
   useGetMatchupsTodayQuery,

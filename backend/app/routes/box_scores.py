@@ -8,6 +8,7 @@ from app.services.box_score_service import (
     boxscore_for,
     scoreboard_for,
 )
+from app.services.box_score_value_service import slate_values
 
 router = APIRouter()
 
@@ -16,6 +17,14 @@ router = APIRouter()
 async def scoreboard(game_date: date = Query(..., alias="date")):
     try:
         return await scoreboard_for(game_date)
+    except BoxScoreUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Box scores are temporarily unavailable") from exc
+
+
+@router.get("/scoreboard/values")
+async def scoreboard_values(game_date: date = Query(..., alias="date")):
+    try:
+        return await slate_values(game_date)
     except BoxScoreUnavailable as exc:
         raise HTTPException(status_code=503, detail="Box scores are temporarily unavailable") from exc
 
