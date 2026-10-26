@@ -370,12 +370,14 @@ const Analytics = () => {
             ? <DataDateBadge dataDate={heatmapData.data_date} />
             : <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />}
         </div>
-        <div className="flex gap-2 overflow-x-auto">
+        {/* mobile: the three tabs split the width (a long label wraps) instead of
+            scrolling the last one off screen */}
+        <div className="grid grid-cols-3 gap-2 sm:flex">
           {ANALYTICS_TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+              className={`px-2 py-2 sm:px-4 rounded-md text-sm font-semibold leading-tight sm:whitespace-nowrap transition-colors ${
                 activeTab === tab.key
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
