@@ -1,5 +1,14 @@
 import type { SlatePlayerValue } from '../../types/boxScore'
 
+import type { SlateValues } from '../../types/boxScore'
+
+/** What a Z on the box score means, for tooltips and the share card. */
+export function zExplainer(basis: SlateValues['basis']): string {
+  return basis === 'season'
+    ? "Player Rankings value of this one game: scored against the Rankings pool (season per-game stats, top 300) over the league's categories. +1.5 = a game worth what a +1.5 player averages."
+    : "Scored against every player who played that night (season stats were unavailable), over the league's categories."
+}
+
 export function signedZ(z: number): string {
   return z > 0 ? `+${z.toFixed(2)}` : z.toFixed(2)
 }

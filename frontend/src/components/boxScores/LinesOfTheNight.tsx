@@ -4,7 +4,7 @@ import { ShareCardButton } from '../share/ShareCardButton'
 import { LinesOfTheNightShareCard } from '../share/LinesOfTheNightShareCard'
 import { FantasyTeamTag, ZValue } from './BoxScorePanel'
 import { buildLinesMessage, lineSummary } from './linesOfTheNightFormat'
-import type { SlatePlayerValue } from '../../types/boxScore'
+import type { SlatePlayerValue, SlateValues } from '../../types/boxScore'
 
 function shooting(player: SlatePlayerValue): string {
   return [`${player.fg} FG`, `${player.ft} FT`].join(' · ')
@@ -19,11 +19,13 @@ export default function LinesOfTheNight({
   spoilerGuard,
   dateLabel,
   games,
+  basis,
 }: {
   players: SlatePlayerValue[]
   spoilerGuard: boolean
   dateLabel: string
   games: number
+  basis: SlateValues['basis']
 }) {
   const [open, setOpen] = useState(!spoilerGuard)
   const shareText = buildLinesMessage(dateLabel, players, `${window.location.origin}/box-scores`)
@@ -40,7 +42,7 @@ export default function LinesOfTheNight({
           <span aria-hidden="true" className="text-lg">🔥</span>
           <span className="font-semibold text-gray-900 dark:text-gray-100">Lines of the night</span>
           <span className="hidden truncate text-xs text-gray-500 dark:text-gray-400 sm:inline">
-            Top 5 by z-score across every game on the slate
+            Top 5 by Z (Player Rankings value) across every game on the slate
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -61,7 +63,7 @@ export default function LinesOfTheNight({
             title="Lines of the night"
             shareText={shareText}
             renderCard={({ dark }) => (
-              <LinesOfTheNightShareCard dark={dark} dateLabel={dateLabel} games={games} players={players} />
+              <LinesOfTheNightShareCard dark={dark} dateLabel={dateLabel} games={games} players={players} basis={basis} />
             )}
           />
         </div>

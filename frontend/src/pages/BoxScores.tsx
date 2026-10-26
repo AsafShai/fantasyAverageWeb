@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import BoxScorePanel from '../components/boxScores/BoxScorePanel'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
+import { zExplainer } from '../components/boxScores/linesOfTheNightFormat'
 import { gameClockLabel } from '../components/boxScores/tipTime'
 import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -281,6 +282,7 @@ export default function BoxScores() {
               spoilerGuard={noSpoilers}
               dateLabel={formatSlateLabel(date)}
               games={games.length}
+              basis={values.basis}
             />
           )}
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 snap-x sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">
@@ -306,6 +308,7 @@ export default function BoxScores() {
                 revealed={revealed.includes(boxReady.game_id)}
                 onToggleReveal={() => toggleReveal(boxReady.game_id)}
                 values={values ? valueMap : undefined}
+                zTitle={values ? zExplainer(values.basis) : undefined}
               />
             )}
           </div>

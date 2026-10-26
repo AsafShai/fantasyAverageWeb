@@ -1,6 +1,6 @@
-import type { SlatePlayerValue } from '../../types/boxScore'
+import type { SlatePlayerValue, SlateValues } from '../../types/boxScore'
 import { toListHeadshotUrl } from '../../utils/adp'
-import { lineSummary, signedZ } from '../boxScores/linesOfTheNightFormat'
+import { lineSummary, signedZ, zExplainer } from '../boxScores/linesOfTheNightFormat'
 import type { ShareCardTheme } from './ShareCard'
 
 interface LinesOfTheNightShareCardProps extends ShareCardTheme {
@@ -8,6 +8,7 @@ interface LinesOfTheNightShareCardProps extends ShareCardTheme {
   dateLabel: string
   games: number
   players: SlatePlayerValue[]
+  basis: SlateValues['basis']
 }
 
 export const CARD_WIDTH = 560
@@ -17,7 +18,7 @@ export const CARD_WIDTH = 560
  * with headshot, NBA team, the fantasy team that had him, the line and its Z.
  * Rendered in the page's document so Tailwind (and `dark`) apply.
  */
-export const LinesOfTheNightShareCard = ({ dateLabel, games, players }: LinesOfTheNightShareCardProps) => (
+export const LinesOfTheNightShareCard = ({ dateLabel, games, players, basis }: LinesOfTheNightShareCardProps) => (
   <div
     className="overflow-hidden rounded-2xl bg-gray-50 font-sans text-gray-900 dark:bg-gray-950 dark:text-gray-100"
     style={{ width: CARD_WIDTH }}
@@ -72,7 +73,7 @@ export const LinesOfTheNightShareCard = ({ dateLabel, games, players }: LinesOfT
       ))}
     </ol>
     <p className="px-5 pb-4 text-[11px] text-gray-500 dark:text-gray-400">
-      Z = the line against every player who played that night, over the league's categories, scored like Player Rankings.
+      Z = {zExplainer(basis)}
     </p>
   </div>
 )
