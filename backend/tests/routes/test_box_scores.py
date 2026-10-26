@@ -42,3 +42,18 @@ def test_boxscore_maps_a_missing_game_to_404(mock_box, test_client):
     mock_box.side_effect = BoxScoreNotFound("missing")
     response = test_client.get("/api/nba/games/100/boxscore")
     assert response.status_code == 404
+
+
+@patch("app.routes.box_scores.slate_values", new_callable=AsyncMock)
+def test_scoreboard_values_returns_the_slate_values(mock_values, test_client):
+    mock_values.return_value = {"date": "2026-10-25", "complete": True, "players": []}
+    response = test_client.get("/api/nba/scoreboard/values?date=2026-10-25")
+    assert response.status_code == 200
+    assert response.json()["complete"] is True
+
+
+@patch("app.routes.box_scores.slate_values", new_callable=AsyncMock)
+def test_scoreboard_values_maps_an_espn_outage_to_503(mock_values, test_client):
+    mock_values.side_effect = BoxScoreUnavailable("down")
+    response = test_client.get("/api/nba/scoreboard/values?date=2026-10-25")
+    assert response.status_code == 503

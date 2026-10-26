@@ -104,3 +104,38 @@ export interface GameBoxScore {
   away: BoxTeamBox
   home: BoxTeamBox
 }
+
+export interface SlatePlayerValue {
+  player_id: string
+  name: string
+  position: string
+  team_abbr: string
+  team_logo: string
+  opponent_abbr: string
+  is_home: boolean
+  game_id: string
+  game_status: GameStatus
+  min: string
+  pts: string
+  reb: string
+  ast: string
+  stl: string
+  blk: string
+  tov: string
+  fg: string
+  fg3: string
+  ft: string
+  z: number
+  /** Fantasy team abbreviation on the night of the game; null = free agent. */
+  fantasy_team: string | null
+  fantasy_team_name: string | null
+}
+
+export interface SlateValues {
+  date: string
+  /** Every game on the slate is final. */
+  complete: boolean
+  games_counted: number
+  categories: string[]
+  players: SlatePlayerValue[]
+}

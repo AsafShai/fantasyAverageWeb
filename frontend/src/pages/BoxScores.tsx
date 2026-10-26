@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import BoxScorePanel from '../components/boxScores/BoxScorePanel'
+import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
 import { gameClockLabel } from '../components/boxScores/tipTime'
 import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { useGetBoxScoreboardQuery, useGetGameBoxScoreQuery } from '../store/api/fantasyApi'
-import type { BoxScoreGame, BoxTeamSide } from '../types/boxScore'
+import { useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery } from '../store/api/fantasyApi'
+import type { BoxScoreGame, BoxTeamSide, SlatePlayerValue } from '../types/boxScore'
 import { getErrorMessage } from '../utils/errorMessage'
 
 function easternToday(): string {
@@ -29,6 +30,10 @@ function formatSlateLabel(iso: string): string {
     timeZone: 'UTC',
   }).format(new Date(Date.UTC(year, month - 1, day)))
 }
+
+// Games revealed one at a time while No spoilers is on. Only the most recent
+// few are kept: a game id is never reused, so old ones are dead weight.
+const MAX_REVEALED = 60
 
 function slatePoll(games: BoxScoreGame[] | undefined, date: string): number {
   if (!games) return 0
@@ -149,26 +154,37 @@ export default function BoxScores() {
   const date = searchParams.get('date') || easternToday()
   const gameId = searchParams.get('game') ?? ''
   const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
+  const [revealed, setRevealed] = usePersistedState<string[]>('boxScores.revealedGames', [])
   const today = easternToday()
 
   const [boardPoll, setBoardPoll] = useState(0)
   const [boxPoll, setBoxPoll] = useState(0)
   const board = useGetBoxScoreboardQuery(date, { pollingInterval: boardPoll })
   const games = board.data?.date === date ? board.data.games : undefined
+  const nextBoardPoll = slatePoll(games, date)
+  if (nextBoardPoll !== boardPoll) setBoardPoll(nextBoardPoll)
   const selectedId = games?.some(game => game.game_id === gameId) ? gameId : ''
   const boxScore = useGetGameBoxScoreQuery(selectedId, {
     skip: !selectedId,
     pollingInterval: boxPoll,
   })
   const boxReady = boxScore.data?.game_id === selectedId ? boxScore.data : undefined
+  const nextBoxPoll = boxReady?.status === 'live' ? 15_000 : 0
+  if (nextBoxPoll !== boxPoll) setBoxPoll(nextBoxPoll)
+  const anyStarted = games?.some(game => game.status !== 'scheduled') ?? false
+  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: boardPoll })
+  const values = slateValues.data?.date === date ? slateValues.data : undefined
+  const valueMap = useMemo(() => {
+    const map = new Map<string, SlatePlayerValue>()
+    for (const player of values?.players ?? []) map.set(player.player_id, player)
+    return map
+  }, [values])
 
-  useEffect(() => {
-    setBoardPoll(slatePoll(games, date))
-  }, [games, date])
-
-  useEffect(() => {
-    setBoxPoll(boxReady?.status === 'live' ? 15_000 : 0)
-  }, [boxReady])
+  function toggleReveal(id: string) {
+    setRevealed(current => current.includes(id)
+      ? current.filter(item => item !== id)
+      : [...current, id].slice(-MAX_REVEALED))
+  }
 
   useEffect(() => {
     if (!games) return
@@ -258,13 +274,16 @@ export default function BoxScores() {
 
       {games && games.length > 0 && (
         <>
+          {values?.complete && values.players.length > 0 && (
+            <LinesOfTheNight key={`${date}-${noSpoilers}`} players={values.players.slice(0, 5)} spoilerGuard={noSpoilers} />
+          )}
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 snap-x sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">
             {games.map(game => (
               <GameCard
                 key={game.game_id}
                 game={game}
                 selected={game.game_id === selectedId}
-                hideScores={noSpoilers}
+                hideScores={noSpoilers && !revealed.includes(game.game_id)}
                 onSelect={() => selectGame(game.game_id)}
               />
             ))}
@@ -273,7 +292,16 @@ export default function BoxScores() {
           <div className="mt-4">
             {selectedId && !boxReady && (boxScore.isLoading || boxScore.isFetching) && <LoadingSpinner />}
             {boxScore.isError && <ErrorMessage message={getErrorMessage(boxScore.error, 'Could not load this box score')} />}
-            {boxReady && <BoxScorePanel game={boxReady} hideScores={noSpoilers} />}
+            {boxReady && (
+              <BoxScorePanel
+                key={boxReady.game_id}
+                game={boxReady}
+                hideScores={noSpoilers}
+                revealed={revealed.includes(boxReady.game_id)}
+                onToggleReveal={() => toggleReveal(boxReady.game_id)}
+                values={values ? valueMap : undefined}
+              />
+            )}
           </div>
         </>
       )}

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import { gameClockLabel, localClock } from './tipTime'
-import type { BoxPlayerLine, BoxTeamBox, BoxTeamTotals, GameBoxScore } from '../../types/boxScore'
+import type { BoxPlayerLine, BoxTeamBox, BoxTeamTotals, GameBoxScore, SlatePlayerValue } from '../../types/boxScore'
+
+export type PlayerValues = Map<string, SlatePlayerValue>
 
 const COLUMNS: { key: keyof BoxTeamTotals; label: string }[] = [
   { key: 'min', label: 'MIN' },
@@ -103,12 +105,37 @@ function Linescore({ game, hideScores }: { game: GameBoxScore; hideScores: boole
   )
 }
 
-function PlayerTable({ team, hideScores }: { team: BoxTeamBox; hideScores: boolean }) {
+export function ZValue({ z }: { z: number }) {
+  const tone = z >= 0.5
+    ? 'font-semibold text-emerald-600 dark:text-emerald-400'
+    : z <= -0.5
+      ? 'text-rose-600 dark:text-rose-400'
+      : 'text-gray-700 dark:text-gray-200'
+  return <span className={tone}>{z > 0 ? `+${z.toFixed(2)}` : z.toFixed(2)}</span>
+}
+
+export function FantasyTeamTag({ value }: { value: SlatePlayerValue | undefined }) {
+  if (!value) return <span className="text-gray-300 dark:text-gray-600">—</span>
+  if (!value.fantasy_team) {
+    return <span className="text-[10px] font-semibold uppercase text-gray-400" title="Free agent that night">FA</span>
+  }
+  return (
+    <span
+      className="inline-block max-w-[5.5rem] truncate rounded bg-indigo-50 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300"
+      title={value.fantasy_team_name ?? value.fantasy_team}
+    >
+      {value.fantasy_team}
+    </span>
+  )
+}
+
+function PlayerTable({ team, hideScores, values }: { team: BoxTeamBox; hideScores: boolean; values?: PlayerValues }) {
   const groups = [
     { label: 'Starters', players: team.starters },
     { label: 'Bench', players: team.bench },
   ].filter(group => group.players.length > 0)
   const accent = team.color ? `#${team.color}` : undefined
+  const extra = values ? 2 : 0
 
   return (
     <div className="min-w-0">
@@ -132,6 +159,12 @@ function PlayerTable({ team, hideScores }: { team: BoxTeamBox; hideScores: boole
             <thead className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500 dark:bg-gray-800 dark:text-gray-400">
               <tr>
                 <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-left font-semibold dark:bg-gray-800">Player</th>
+                {values && (
+                  <>
+                    <th className="px-2 py-2 text-left font-semibold" title="Fantasy team that rostered him on the night of the game">Fantasy</th>
+                    <th className="px-2 py-2 text-right font-semibold" title="Z-score of this line against every player line on the slate: the mean of its z over the league's categories (0 = an average line that night)">Z</th>
+                  </>
+                )}
                 {COLUMNS.map(column => (
                   <th key={column.key} className="px-2 py-2 text-right font-semibold">{column.label}</th>
                 ))}
@@ -141,22 +174,23 @@ function PlayerTable({ team, hideScores }: { team: BoxTeamBox; hideScores: boole
               <tbody key={group.label}>
                 <tr>
                   <th
-                    colSpan={COLUMNS.length + 1}
-                    className="bg-gray-50/80 px-3 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:bg-gray-800/80"
+                    colSpan={COLUMNS.length + 1 + extra}
+                    className="bg-gray-50 px-3 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:bg-gray-800"
                   >
-                    {group.label}
+                    <span className="sticky left-3">{group.label}</span>
                   </th>
                 </tr>
                 {group.players.map(player => (
-                  <PlayerRow key={player.player_id || player.name} player={player} />
+                  <PlayerRow key={player.player_id || player.name} player={player} values={values} />
                 ))}
               </tbody>
             ))}
             <tfoot>
               <tr className="border-t-2 border-gray-200 font-semibold dark:border-gray-600">
                 <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left text-gray-800 dark:bg-gray-900 dark:text-gray-100">Total</th>
+                {values && <td colSpan={2} />}
                 {COLUMNS.map(column => (
-                  <td key={column.key} className="px-2 py-2 text-right tabular-nums text-gray-800 dark:text-gray-100">
+                  <td key={column.key} className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-gray-800 dark:text-gray-100">
                     <StatCell value={team.totals[column.key]} hide={false} />
                   </td>
                 ))}
@@ -214,12 +248,23 @@ function NameList({ groups, teamName }: { groups: { label: string; players: BoxP
   )
 }
 
-function PlayerRow({ player }: { player: BoxPlayerLine }) {
+function PlayerRow({ player, values }: { player: BoxPlayerLine; values?: PlayerValues }) {
+  const value = values?.get(player.player_id)
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800">
       <th className="sticky left-0 z-10 max-w-[10rem] bg-white px-3 py-1.5 text-left font-medium dark:bg-gray-900">
         <PlayerName player={player} />
       </th>
+      {values && (
+        <>
+          <td className="whitespace-nowrap px-2 py-1.5 text-left">
+            <FantasyTeamTag value={value} />
+          </td>
+          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">
+            {value ? <ZValue z={value.z} /> : <span className="text-gray-300 dark:text-gray-600">—</span>}
+          </td>
+        </>
+      )}
       {COLUMNS.map(column => (
         <td key={column.key} className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-200">
           <StatCell value={player[column.key]} hide={false} emphasize={column.key === 'plus_minus'} />
@@ -252,10 +297,22 @@ function Shooting({ team }: { team: BoxTeamBox }) {
   )
 }
 
-export default function BoxScorePanel({ game, hideScores }: { game: GameBoxScore; hideScores: boolean }) {
+export default function BoxScorePanel({
+  game,
+  hideScores,
+  revealed = false,
+  onToggleReveal,
+  values,
+}: {
+  game: GameBoxScore
+  hideScores: boolean
+  revealed?: boolean
+  onToggleReveal?: () => void
+  values?: PlayerValues
+}) {
   const [side, setSide] = useState<'away' | 'home'>('away')
-  useEffect(() => { setSide('away') }, [game.game_id])
-  const hide = hideScores && game.status !== 'scheduled'
+  const spoilable = hideScores && game.status !== 'scheduled'
+  const hide = spoilable && !revealed
   const shown = side === 'away' ? game.away : game.home
   const attendance = game.attendance ? `Attendance ${game.attendance.toLocaleString()}` : ''
   const when = gameClockLabel(game.status, game.status_detail, game.start_time)
@@ -276,11 +333,24 @@ export default function BoxScorePanel({ game, hideScores }: { game: GameBoxScore
         <TeamHeader team={game.home} hide={hide} align="right" />
       </div>
       {meta && <p className="mt-3 text-center text-[11px] text-gray-400">{meta}</p>}
+      {spoilable && onToggleReveal && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={onToggleReveal}
+            className={revealed
+              ? 'rounded-full px-3 py-1.5 text-xs font-semibold text-gray-500 ring-1 ring-gray-200 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:text-gray-400 dark:ring-gray-700 dark:hover:text-gray-100'
+              : 'rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300'}
+          >
+            {revealed ? 'Hide this game again' : 'Show this game'}
+          </button>
+        </div>
+      )}
       <div className="mt-4">
-        <Linescore game={game} hideScores={hideScores} />
+        <Linescore game={game} hideScores={hide} />
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800 lg:hidden">
+      <div role="tablist" aria-label="Team" className="mt-5 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
         {(['away', 'home'] as const).map(key => {
           const team = game[key]
           const selected = side === key
@@ -288,21 +358,18 @@ export default function BoxScorePanel({ game, hideScores }: { game: GameBoxScore
             <button
               key={key}
               type="button"
-              aria-pressed={selected}
+              role="tab"
+              aria-selected={selected}
               onClick={() => setSide(key)}
-              className={`rounded-md px-2 py-2 text-sm font-semibold ${selected ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-500'}`}
+              className={`rounded-md px-2 py-2 text-sm font-semibold transition-colors ${selected ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
             >
               {team.abbreviation}
             </button>
           )
         })}
       </div>
-      <div className="mt-4 lg:hidden">
-        <PlayerTable team={shown} hideScores={hide} />
-      </div>
-      <div className="mt-6 hidden gap-6 lg:grid lg:grid-cols-2">
-        <PlayerTable team={game.away} hideScores={hide} />
-        <PlayerTable team={game.home} hideScores={hide} />
+      <div className="mt-4">
+        <PlayerTable team={shown} hideScores={hide} values={hide ? undefined : values} />
       </div>
     </section>
   )

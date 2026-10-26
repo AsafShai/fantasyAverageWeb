@@ -30,6 +30,18 @@ export const METRIC_GLOSSARY = {
     title: 'Total games',
     body: 'Published regular-season games for this team in the schedule currently available from ESPN.',
   },
+  scheduleLeft: {
+    title: 'Games left',
+    body: 'Published regular-season games from today on. Games already played are not counted.',
+  },
+  scheduleB2BLeft: {
+    title: 'Back-to-backs left',
+    body: 'Back-to-backs from today on: games played with no rest day since the previous game.',
+  },
+  scheduleHighVolumeLeft: {
+    title: 'High-volume games left',
+    body: 'Games from today on that fall on nights with at least 10 NBA games league-wide.',
+  },
   scheduleB2B: {
     title: 'Back-to-backs',
     body: 'Games played with no rest day since the previous game. A back-to-back has rest days = 0.',
