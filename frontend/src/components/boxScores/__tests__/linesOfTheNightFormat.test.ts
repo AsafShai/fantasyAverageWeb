@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLinesMessage, lineSummary, signedZ } from '../linesOfTheNightFormat'
+import { lineSummary, signedZ } from '../linesOfTheNightFormat'
 import type { SlatePlayerValue } from '../../../types/boxScore'
 
 const luka: SlatePlayerValue = {
@@ -17,16 +17,5 @@ describe('lines of the night format', () => {
 
   it('summarises the line, leaving out empty extras', () => {
     expect(lineSummary(luka)).toBe('52 PTS · 8 REB · 10 AST · 2 STL · 8 3PM')
-  })
-
-  it('builds the WhatsApp caption with owners and FA', () => {
-    const fa = { ...luka, name: 'Free Guy', z: 1.1, fantasy_team: null, fantasy_team_name: null }
-    const text = buildLinesMessage('Sunday, Oct 25', [luka, fa], 'https://x/box-scores')
-    expect(text).toBe([
-      '🔥 *Lines of the night* · Sunday, Oct 25',
-      '1. *Luka Doncic* +2.40 (52 PTS · 8 REB · 10 AST · 2 STL · 8 3PM) · Lakers Fans',
-      '2. *Free Guy* +1.10 (52 PTS · 8 REB · 10 AST · 2 STL · 8 3PM) · FA',
-      'https://x/box-scores',
-    ].join('\n'))
   })
 })

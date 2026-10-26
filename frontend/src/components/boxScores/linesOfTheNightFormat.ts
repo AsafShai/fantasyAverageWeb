@@ -13,12 +13,3 @@ export function lineSummary(player: SlatePlayerValue): string {
   if (Number(threes) > 0) parts.push(`${threes} 3PM`)
   return parts.join(' · ')
 }
-
-/** The caption that goes with the image, in WhatsApp's own formatting. */
-export function buildLinesMessage(dateLabel: string, players: SlatePlayerValue[], url: string): string {
-  const rows = players.map((player, index) => {
-    const owner = player.fantasy_team_name ?? player.fantasy_team ?? 'FA'
-    return `${index + 1}. *${player.name}* ${signedZ(player.z)} (${lineSummary(player)}) · ${owner}`
-  })
-  return [`🔥 *Lines of the night* · ${dateLabel}`, ...rows, url].join('\n')
-}

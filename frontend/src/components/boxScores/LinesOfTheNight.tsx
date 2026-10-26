@@ -3,7 +3,7 @@ import PlayerNameLink from '../PlayerNameLink'
 import { ShareCardButton } from '../share/ShareCardButton'
 import { LinesOfTheNightShareCard } from '../share/LinesOfTheNightShareCard'
 import { FantasyTeamTag, ZValue } from './BoxScorePanel'
-import { buildLinesMessage, lineSummary } from './linesOfTheNightFormat'
+import { lineSummary } from './linesOfTheNightFormat'
 import type { SlatePlayerValue } from '../../types/boxScore'
 
 function shooting(player: SlatePlayerValue): string {
@@ -26,7 +26,6 @@ export default function LinesOfTheNight({
   games: number
 }) {
   const [open, setOpen] = useState(!spoilerGuard)
-  const shareText = buildLinesMessage(dateLabel, players, `${window.location.origin}/box-scores`)
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm dark:border-amber-500/30 dark:from-amber-950/40 dark:to-gray-900">
       <div className="flex items-center">
@@ -59,7 +58,6 @@ export default function LinesOfTheNight({
         <div className="shrink-0 pr-3">
           <ShareCardButton
             title="Lines of the night"
-            shareText={shareText}
             renderCard={({ dark }) => (
               <LinesOfTheNightShareCard dark={dark} dateLabel={dateLabel} games={games} players={players} />
             )}
