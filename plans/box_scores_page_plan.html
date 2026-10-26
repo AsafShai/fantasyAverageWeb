@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Box Scores Page — Plan</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 48px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.6; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
+  h2 { margin-top: 44px; color: #222; }
+  h3 { color: #444; margin-top: 24px; }
+  pre, body > table { overflow-x: auto; }
+  body > table { display: block; }
+  code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.92em; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  .note { background: #fffbe6; border-left: 3px solid #f0b429; padding: 10px 16px; border-radius: 0 4px 4px 0; margin: 16px 0; }
+  .file { font-weight: bold; font-family: monospace; background: #e8f4fd; padding: 2px 8px; border-radius: 3px; }
+  .decision { background: #eefaf0; border-left: 3px solid #2e9e5b; padding: 8px 16px; border-radius: 0 4px 4px 0; margin: 8px 0; }
+  .open { background: #f3f0ff; border-left: 3px solid #7c3aed; padding: 8px 16px; border-radius: 0 4px 4px 0; margin: 8px 0; }
+
+  /* --- mockup chrome, approximates the app's Tailwind look --- */
+  .mock { border: 1px solid #d0d5dd; border-radius: 10px; background: #f9fafb; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin: 20px 0; padding: 16px; font-size: 14px; line-height: 1.4; }
+  .mock-caption { font-size: 0.8em; color: #6b7280; margin-top: -8px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .bar h4 { margin: 0; font-size: 1.25em; color: #111827; }
+  .datenav { display: flex; align-items: center; gap: 6px; }
+  .btn { border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 4px 10px; font-size: 0.85em; cursor: pointer; color: #374151; }
+  .btn:hover { background: #f3f4f6; }
+  .btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .shield { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d1d5db; background: #fff; border-radius: 999px; padding: 4px 12px 4px 6px; cursor: pointer; font-size: 0.85em; color: #374151; user-select: none; }
+  .shield .track { width: 30px; height: 18px; border-radius: 999px; background: #d1d5db; position: relative; transition: background .15s; }
+  .shield .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .15s; }
+  .shield.on { border-color: #7c3aed; color: #5b21b6; background: #f5f3ff; }
+  .shield.on .track { background: #7c3aed; }
+  .shield.on .track::after { left: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+  .card:hover { border-color: #93c5fd; }
+  .card.sel { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb; }
+  .card .status { font-size: 0.72em; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; display: flex; justify-content: space-between; }
+  .card .live { color: #dc2626; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+  .team { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #111827; }
+  .logo { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; font-weight: 700; }
+  .score { font-variant-numeric: tabular-nums; font-weight: 700; color: #111827; }
+  .loser { color: #9ca3af; font-weight: 500; }
+  .mask { display: inline-block; min-width: 2.2em; text-align: center; color: #a78bfa; letter-spacing: 1px; font-weight: 700; }
+  .mine { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #2563eb; margin-left: 4px; vertical-align: middle; }
+  .reveal { font-size: 0.75em; color: #7c3aed; background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
+  .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 14px; overflow: hidden; }
+  .panel-head { padding: 10px 14px; border-bottom: 1px solid #e5e7eb; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+  .panel-head .t { font-weight: 600; color: #111827; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { border: 1px solid #e5e7eb; border-radius: 6px; padding: 3px 10px; font-size: 0.85em; cursor: pointer; background: #fff; }
+  .tab.on { background: #111827; color: #fff; border-color: #111827; }
+  .scroll { overflow-x: auto; }
+  .bt { width: 100%; border-collapse: collapse; font-size: 0.85em; margin: 0; }
+  .bt th { background: #f9fafb; color: #6b7280; text-transform: uppercase; font-size: 0.72em; padding: 6px 8px; border: none; border-bottom: 1px solid #e5e7eb; text-align: right; white-space: nowrap; }
+  .bt td { padding: 6px 8px; border: none; border-bottom: 1px solid #f1f2f4; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bt th:first-child, .bt td:first-child { text-align: left; position: sticky; left: 0; background: inherit; }
+  .bt tr { background: #fff; }
+  .bt tr.mine-row { background: #eff6ff; }
+  .bt tr.sep td { background: #f9fafb; color: #6b7280; font-size: 0.72em; text-transform: uppercase; padding: 4px 8px; text-align: left; }
+  .bt tr.tot td { font-weight: 700; border-top: 1px solid #d1d5db; }
+  .pos { color: #9ca3af; font-size: 0.8em; margin-left: 4px; }
+  .dnp { padding: 8px 14px; font-size: 0.8em; color: #6b7280; }
+  .gate { padding: 28px 16px; text-align: center; color: #4b5563; }
+  .gate p { margin: 0 0 10px; }
+  .ls { margin: 10px 14px; width: auto; }
+  .ls td, .ls th { text-align: center; }
+  .ls th:first-child, .ls td:first-child { text-align: left; }
+</style>
+</head>
+<body>
+
+<h1>Box Scores Page — Plan</h1>
+<p>A new <code>/box-scores</code> page that shows the box scores of the latest NBA games (default: the most recent night with finished games), with a <b>Spoiler Shield</b> that hides results until the user chooses to see them.</p>
+
+<h2>1. Mockup (clickable)</h2>
+<p>Use the <b>Spoiler Shield</b> switch, the per-game <b>Reveal</b> links, and the cards. All data below is made up.</p>
+
+<div class="mock" id="mock">
+  <div class="bar">
+    <h4>Box Scores</h4>
+    <div class="datenav">
+      <button class="btn" title="Previous night">‹</button>
+      <button class="btn">Sat, Oct 24 ▾</button>
+      <button class="btn" title="Next night">›</button>
+    </div>
+    <div class="shield" id="shield" role="switch" aria-checked="false" tabindex="0">
+      <span class="track"></span><span id="shieldLabel">Spoiler Shield off</span>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="panel" id="panel"></div>
+</div>
+<p class="mock-caption">The game strip is on top, and the selected game's box score is below it. On desktop the two team tables could sit side by side; the mockup uses tabs, which work at every width.</p>
+
+<h2>2. What the page shows</h2>
+<ul>
+  <li><b>Date navigator</b>: prev/next night plus a date picker. By default it opens on the latest night that has a <i>final</i> game. If a night is in progress, it opens on that night and the live games show their status.</li>
+  <li><b>Game strip</b>: one card per game with teams, score, and status (time, live clock/period, or Final). A dot marks games that include a player from <i>my fantasy team</i> (from <code>MyTeamContext</code>).</li>
+  <li><b>Box score panel</b> for the selected game:
+    <ul>
+      <li>Line score (Q1–Q4 + OT + total).</li>
+      <li>Per-team player table: starters, then bench, in ESPN's order. Columns: MIN, PTS, REB, AST, STL, BLK, TOV, FG, 3PT, FT, OREB, PF, +/-. Team totals row and team FG/3P/FT %.</li>
+      <li>DNP list with the reason ESPN gives (e.g. "DNP – Coach's Decision", "Out – Ankle").</li>
+      <li>Rows for my fantasy team's players are highlighted. Names link to <code>/player/:id</code> through <code>PlayerNameLink</code>.</li>
+    </ul>
+  </li>
+  <li><b>Deep link</b>: <code>/box-scores?date=2026-10-24&amp;game=401810123</code>, so a game can be shared and the back button works.</li>
+</ul>
+
+<h2>3. Spoiler Shield</h2>
+<p>This is the main design question. Hiding only the final score isn't enough, because many other things on the page also give the result away:</p>
+<table>
+  <tr><th>Leaks the result</th><th>What the shield does</th></tr>
+  <tr><td>Final score, W/L styling (grey loser)</td><td>Show <code>••</code> masks with a <b>fixed width</b>, so a 2-digit vs 3-digit score can't be guessed from layout. No winner styling.</td></tr>
+  <tr><td>"Final/OT" status</td><td>Show "Final" only. An overtime label tells you the game was close.</td></tr>
+  <tr><td>Live score / period / clock</td><td>Show "In progress" only.</td></tr>
+  <tr><td>Line score</td><td>Hidden.</td></tr>
+  <tr><td>Player stats, <b>minutes</b> and <b>+/-</b></td><td>The whole table is hidden behind the gate. Minutes alone give away a blowout (starters sitting out the 4th).</td></tr>
+  <tr><td>Row order (sorted by PTS)</td><td>Rows always use ESPN's starters → bench order, even when revealed. That keeps the layout the same in both modes.</td></tr>
+  <tr><td>Browser tab title, share images</td><td>The title stays "Box Scores", never "LAL 112 – BOS 108".</td></tr>
+</table>
+
+<div class="decision"><b>Not rendered, not blurred.</b> When shielded, the numbers are left out of the DOM. A CSS blur still exposes them to text selection, find-in-page, screen readers, browser translation, and a flash before the styles load.</div>
+<div class="decision"><b>Three levels:</b> (1) the page-wide switch, saved with <code>usePersistedState('boxScores.spoilerShield', …)</code>; (2) a per-game <b>Reveal</b>, remembered for the session in <code>sessionStorage</code> by event id, so revealing the Lakers game doesn't reveal the others; (3) "Hide again" on a revealed game.</div>
+<div class="decision"><b>Hiding happens on the client.</b> The API always returns full data. The shield is a UI concern, so RTK Query caching stays simple and switching the shield never refetches.</div>
+<div class="open"><b>Open question — default state.</b> I recommend <b>off by default, with the user's choice saved</b>. Most visitors come to check stats, and anyone who cares about spoilers turns it on once. The other option is on by default, which is safer (you can't un-see a score) but costs everyone else a click on every visit.</div>
+<div class="open"><b>Open question — fantasy angle (v2).</b> "Reveal my players only": show my fantasy players' lines with +/- and team totals hidden. Their own numbers still hint at the result, so it is only a partial shield. It should ship as an explicit opt-in, not as part of v1.</div>
+<div class="note">Other pages (Today, Trends, player game logs) also show recent results. The shield applies to this page only. Making it site-wide would be a separate, much bigger change.</div>
+
+<h2>4. Data source</h2>
+<p>We already store box scores in <code>fs_player_games</code> / <code>fs_team_games</code>, but that data was built for the model and doesn't fit this page well:</p>
+<table>
+  <tr><th>Need</th><th>fs_* tables</th><th>ESPN summary (live)</th></tr>
+  <tr><td>Player lines, team score</td><td>✅</td><td>✅</td></tr>
+  <tr><td>Line score by quarter, OT</td><td>❌</td><td>✅ <code>header.competitions[0].competitors[].linescores</code></td></tr>
+  <tr><td>Starters / bench, DNP reasons</td><td>❌ (DNPs dropped)</td><td>✅</td></tr>
+  <tr><td>Tonight's games, live</td><td>❌ (morning ingest, finals only)</td><td>✅</td></tr>
+  <tr><td>Preseason / playoffs / NBA Cup final</td><td>❌ (filtered out)</td><td>✅</td></tr>
+</table>
+<div class="decision"><b>Fetch from ESPN live and cache, without touching the fs tables.</b> The new service reuses the existing ESPN client (<code>model_stats_inference/espn/client.py</code>: scoreboard + <code>summary?event=</code>). It writes no new tables and doesn't change the model pipeline. Caching: final games never change, so they're cached for 24h. Live games are cached for 30–60s, and scoreboards for 60s. A night is ~15 requests, so a cold cache after a restart is cheap.</div>
+<p>If we later want history without ESPN (or something more durable than an in-memory cache), add a <code>box_score_cache(event_id PK, payload JSONB, final BOOL, fetched_at)</code> table. That isn't needed for v1.</p>
+
+<h2>5. API</h2>
+<h3><code>GET /api/box-scores?date=YYYY-MM-DD</code></h3>
+<p>If <code>date</code> is left out, the server picks the latest night with a final game (from the scoreboard calendar it already uses). The response is a list of games:</p>
+<pre><code>{ "date": "2026-10-24", "prev_date": "2026-10-23", "next_date": null,
+  "games": [{ "event_id": "401810123", "status": "final", "period": 4, "overtime": false,
+              "start_time": "...", "clock": null, "season_type": 2,
+              "home": { "team_id": 13, "abbr": "LAL", "name": "Lakers", "score": 112 },
+              "away": { ... } }] }</code></pre>
+<h3><code>GET /api/box-scores/{event_id}</code></h3>
+<pre><code>{ "event_id": "...", "status": "final", "overtime": false,
+  "teams": [{ "team_id": 13, "abbr": "LAL", "linescore": [28, 30, 25, 29], "score": 112,
+              "totals": { "fgm": 42, "fga": 88, ... },
+              "players": [{ "player_id": 1966, "name": "...", "position": "F", "starter": true,
+                            "min": 36, "pts": 28, ..., "plus_minus": 9 }],
+              "dnp": [{ "player_id": ..., "name": "...", "reason": "Out – Ankle" }] }] }</code></pre>
+<p><b>My-team highlight:</b> the frontend already has the fantasy roster. ESPN fantasy player ids are ESPN athlete ids (the same ids <code>fs_player_games</code> uses), so matching on id is enough; no name join is needed. Phase 1 should check this against a real roster, since a few services still match by name.</p>
+
+<h2>6. Files</h2>
+<h3>Backend</h3>
+<ul>
+  <li><span class="file">app/services/box_score_service.py</span>: async fetch with the shared httpx client and the TTL cache, plus parsing. It reuses the stat-name and made-attempted helpers from <code>espn/games.py</code> where they fit, and adds linescore/starter/DNP parsing.</li>
+  <li><span class="file">app/models/box_score_models.py</span>: Pydantic response models.</li>
+  <li><span class="file">app/routes/box_scores.py</span>: registered in <code>main.py</code> under <code>/api/box-scores</code>.</li>
+  <li><span class="file">tests/services/test_box_score_service.py</span>: parsing against saved ESPN JSON fixtures (final, OT, live, a DNP with no athlete id, an All-Star-style event). Route test in <code>tests/routes/</code>. Extend <code>tests/live/test_espn_contract.py</code> to check the linescore/starter fields.</li>
+</ul>
+<h3>Frontend</h3>
+<ul>
+  <li><span class="file">src/pages/BoxScores.tsx</span>: route <code>/box-scores</code> behind a new <code>FF_BOX_SCORES</code> flag, plus a nav entry in <code>Layout.tsx</code> and the command palette.</li>
+  <li><span class="file">src/components/boxScores/</span>: <code>GameStrip</code>, <code>GameCard</code>, <code>LineScore</code>, <code>TeamBoxTable</code> (TanStack Table, like the other tables), <code>SpoilerShieldToggle</code>, <code>SpoilerGate</code>.</li>
+  <li><span class="file">src/hooks/useSpoilerShield.ts</span>: the global flag plus the per-game revealed set, with an <code>isHidden(eventId)</code> function. Components only call this, so none of them handle shield logic themselves.</li>
+  <li><span class="file">src/store/api/fantasyApi.ts</span>: <code>getBoxScoreDay</code> / <code>getBoxScore</code> endpoints. Use <code>pollingInterval: 60_000</code> only while a game on the shown night is live.</li>
+  <li>Tests: the shield hides every leak in the table above (score, OT, minutes, +/-, line score, title); the per-game reveal leaves other games hidden; the persisted switch survives a reload.</li>
+</ul>
+
+<h2>7. Phases</h2>
+<ol>
+  <li><b>Backend</b>: service, endpoints, fixtures, and tests.</li>
+  <li><b>Page without the shield</b>: date nav, strip, box score panel, my-team highlight, deep links.</li>
+  <li><b>Spoiler Shield</b>: the global switch, per-game reveal, and the leak tests.</li>
+  <li><b>Extras</b>: links in from a player's game log (Player Profile/Trends) to that game's box score, and "Reveal my players only".</li>
+</ol>
+
+<script>
+const T = {
+  LAL: ["#552583", "Lakers"], BOS: ["#007A33", "Celtics"],
+  DEN: ["#0E2240", "Nuggets"], PHX: ["#1D1160", "Suns"],
+  NYK: ["#006BB6", "Knicks"], MIA: ["#98002E", "Heat"],
+};
+const games = [
+  { id: "g1", away: "LAL", home: "BOS", as: 112, hs: 108, ot: false, mine: true,
+    ls: { LAL: [28, 30, 25, 29], BOS: [31, 24, 27, 26] } },
+  { id: "g2", away: "DEN", home: "PHX", as: 121, hs: 124, ot: true, mine: false,
+    ls: { DEN: [27, 29, 30, 25, 10], PHX: [30, 26, 28, 27, 13] } },
+  { id: "g3", away: "NYK", home: "MIA", as: 99, hs: 117, ot: false, mine: true,
+    ls: { NYK: [22, 25, 28, 24], MIA: [30, 31, 27, 29] } },
+];
+// Sample player lines: [name, pos, starter, mine, MIN, PTS, REB, AST, STL, BLK, TOV, FG, 3PT, FT, +/-]
+const box = {
+  LAL: [["A. Forward", "F", 1, 1, 36, 28, 9, 6, 1, 1, 3, "11-20", "2-5", "4-5", "+9"],
+        ["B. Guard", "G", 1, 0, 34, 22, 4, 8, 2, 0, 2, "8-17", "3-8", "3-3", "+6"],
+        ["C. Center", "C", 1, 0, 30, 14, 12, 2, 0, 3, 1, "6-9", "0-0", "2-4", "+11"],
+        ["D. Wing", "F", 1, 0, 31, 12, 5, 1, 1, 0, 1, "4-10", "2-6", "2-2", "-2"],
+        ["E. Guard", "G", 1, 0, 29, 10, 3, 4, 1, 0, 2, "4-11", "2-7", "0-0", "+1"],
+        ["F. Sixth", "G", 0, 1, 24, 15, 2, 3, 0, 0, 1, "5-9", "3-5", "2-2", "-3"],
+        ["G. Big", "C", 0, 0, 16, 6, 6, 0, 0, 1, 0, "3-4", "0-0", "0-1", "-2"]],
+  BOS: [["H. Star", "F", 1, 0, 38, 31, 8, 5, 1, 0, 4, "11-24", "4-10", "5-6", "-5"],
+        ["I. Guard", "G", 1, 0, 35, 18, 3, 7, 2, 0, 2, "7-15", "2-6", "2-2", "-3"],
+        ["J. Big", "C", 1, 1, 28, 12, 10, 1, 0, 2, 1, "5-8", "0-1", "2-2", "-8"],
+        ["K. Wing", "F", 1, 0, 33, 11, 4, 2, 1, 1, 0, "4-11", "3-8", "0-0", "-1"],
+        ["L. Guard", "G", 1, 0, 30, 9, 2, 5, 0, 0, 1, "3-9", "1-5", "2-2", "+2"],
+        ["M. Bench", "F", 0, 0, 22, 17, 4, 1, 1, 0, 1, "6-10", "3-4", "2-2", "-5"]],
+};
+const dnp = { LAL: "N. Rookie — DNP – Coach's Decision", BOS: "O. Vet — Out – Ankle" };
+
+let shield = false, sel = "g1", tab = null;
+const revealed = new Set();
+const hidden = id => shield && !revealed.has(id);
+const logo = a => `<span class="logo" style="background:${T[a][0]}">${a}</span>`;
+const mask = '<span class="mask">••</span>';
+
+function card(g) {
+  const h = hidden(g.id);
+  const status = h ? "Final" : (g.ot ? "Final/OT" : "Final");
+  const line = (abbr, s, os) => `<div class="row"><span class="team">${logo(abbr)}${T[abbr][1]}</span>
+    <span class="score ${!h && s < os ? "loser" : ""}">${h ? mask : s}</span></div>`;
+  return `<div class="card ${g.id === sel ? "sel" : ""}" data-id="${g.id}">
+    <div class="status"><span>${status}${g.mine ? ' <span class="mine" title="Has my players"></span>' : ""}</span>
+    ${h ? `<button class="reveal" data-reveal="${g.id}">Reveal</button>` : (shield ? `<button class="reveal" data-hide="${g.id}">Hide</button>` : "")}</div>
+    ${line(g.away, g.as, g.hs)}${line(g.home, g.hs, g.as)}</div>`;
+}
+
+function panel(g) {
+  const head = `<div class="panel-head"><span class="t">${T[g.away][1]} @ ${T[g.home][1]}</span>`;
+  if (hidden(g.id)) {
+    return head + `</div><div class="gate"><p>🛡️ Box score hidden. Score, minutes and +/- are all spoilers.</p>
+      <button class="btn btn-primary" data-reveal="${g.id}">Reveal this game</button></div>`;
+  }
+  const abbrs = [g.away, g.home];
+  const cur = abbrs.includes(tab) ? tab : abbrs[0];
+  const tabs = `<div class="tabs">${abbrs.map(a => `<span class="tab ${a === cur ? "on" : ""}" data-tab="${a}">${a}</span>`).join("")}</div>`;
+  const per = g.ls[g.away].length;
+  const lsHead = ["", ...Array.from({ length: per }, (_, i) => i < 4 ? `Q${i + 1}` : "OT"), "T"];
+  const ls = `<div class="scroll"><table class="bt ls"><tr>${lsHead.map(x => `<th>${x}</th>`).join("")}</tr>
+    ${abbrs.map(a => `<tr><td>${a}</td>${g.ls[a].map(x => `<td>${x}</td>`).join("")}<td><b>${a === g.away ? g.as : g.hs}</b></td></tr>`).join("")}</table></div>`;
+  const rows = box[cur] || box[cur === g.away ? "LAL" : "BOS"];
+  const cols = ["MIN", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FG", "3PT", "FT", "+/-"];
+  let body = "", lastStarter = null;
+  for (const r of rows) {
+    if (r[2] !== lastStarter) { body += `<tr class="sep"><td colspan="12">${r[2] ? "Starters" : "Bench"}</td></tr>`; lastStarter = r[2]; }
+    body += `<tr class="${r[3] ? "mine-row" : ""}"><td>${r[0]}<span class="pos">${r[1]}</span>${r[3] ? '<span class="mine"></span>' : ""}</td>${r.slice(4).map(x => `<td>${x}</td>`).join("")}</tr>`;
+  }
+  const sum = i => rows.reduce((s, r) => s + r[i], 0);
+  body += `<tr class="tot"><td>Totals</td><td></td>${[5, 6, 7, 8, 9, 10].map(i => `<td>${sum(i)}</td>`).join("")}<td colspan="4"></td></tr>`;
+  return head + tabs + (shield ? ` <button class="reveal" data-hide="${g.id}">Hide again</button>` : "") + `</div>` + ls +
+    `<div class="scroll"><table class="bt"><tr><th>Player</th>${cols.map(c => `<th>${c}</th>`).join("")}</tr>${body}</table></div>
+    <div class="dnp">${dnp[cur] || dnp[cur === g.away ? "LAL" : "BOS"]}</div>`;
+}
+
+function render() {
+  document.getElementById("grid").innerHTML = games.map(card).join("");
+  document.getElementById("panel").innerHTML = panel(games.find(g => g.id === sel));
+  const s = document.getElementById("shield");
+  s.classList.toggle("on", shield);
+  s.setAttribute("aria-checked", shield);
+  document.getElementById("shieldLabel").textContent = shield ? "Spoiler Shield on" : "Spoiler Shield off";
+}
+
+document.getElementById("mock").addEventListener("click", e => {
+  const t = e.target.closest("[data-reveal],[data-hide],[data-tab],[data-id],#shield");
+  if (!t) return;
+  if (t.id === "shield") { shield = !shield; revealed.clear(); }
+  else if (t.dataset.reveal) { revealed.add(t.dataset.reveal); sel = t.dataset.reveal; }
+  else if (t.dataset.hide) revealed.delete(t.dataset.hide);
+  else if (t.dataset.tab) tab = t.dataset.tab;
+  else if (t.dataset.id) { sel = t.dataset.id; tab = null; }
+  render();
+});
+document.getElementById("shield").addEventListener("keydown", e => {
+  if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.target.click(); }
+});
+render();
+</script>
+</body>
+</html>
