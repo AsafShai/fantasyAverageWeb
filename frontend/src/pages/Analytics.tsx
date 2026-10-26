@@ -362,20 +362,22 @@ const Analytics = () => {
   }
 
   return (
-    <div>
-      <div className="sticky top-14 z-10 bg-gray-50 dark:bg-gray-900 pt-4 pb-3 mb-6">
+    <div className="px-4 sm:px-6 lg:px-8">
+      <div className="sticky top-14 z-10 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 bg-gray-50 dark:bg-gray-900 pt-4 pb-3 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">League Analytics</h1>
           {heatmapData?.data_date
             ? <DataDateBadge dataDate={heatmapData.data_date} />
             : <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />}
         </div>
-        <div className="flex gap-2 overflow-x-auto">
+        {/* mobile: the three tabs split the width (a long label wraps) instead of
+            scrolling the last one off screen */}
+        <div className="grid grid-cols-3 gap-2 sm:flex">
           {ANALYTICS_TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${
+              className={`px-2 py-2 sm:px-4 rounded-md text-sm font-semibold leading-tight sm:whitespace-nowrap transition-colors ${
                 activeTab === tab.key
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
