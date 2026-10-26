@@ -6,6 +6,7 @@ import { myTeamRowClass } from '../../myTeam/display'
 import PlayerNameLink from '../PlayerNameLink'
 import { formatCountdown } from '../../utils/leagueActivity'
 import type { TradePreset } from '../../hooks/useTradeState'
+import PendingTradeShareButton from './PendingTradeShareButton'
 import { Pill, SIDE_PANEL, SideDot } from './shared'
 import { teamAbbrev, teamLookup, teamName, type TeamLookup } from './teams'
 
@@ -71,13 +72,19 @@ function PendingTradeCard({ trade, teams, now }: { trade: PendingTrade; teams: T
         </h2>
         {left !== null && <Pill tone="warn">Processes {formatCountdown(left)}</Pill>}
         {preset && (
-          <Link
-            to="/trade"
-            state={{ tradePreset: preset }}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-blue-600 px-3 text-sm font-medium text-blue-700 hover:bg-blue-50 sm:ml-auto sm:min-h-9 sm:w-auto dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/50"
-          >
-            Preview in Trade Analyzer
-          </Link>
+          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+            <Link
+              to="/trade"
+              state={{ tradePreset: preset }}
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-blue-600 px-3 text-sm font-medium text-blue-700 hover:bg-blue-50 sm:min-h-9 sm:flex-none dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/50"
+            >
+              Preview in Trade Analyzer
+            </Link>
+            <PendingTradeShareButton
+              preset={preset}
+              processes={left !== null ? `Processes ${when(trade.processes_at, now)}` : 'Waiting for league review'}
+            />
+          </div>
         )}
       </div>
 

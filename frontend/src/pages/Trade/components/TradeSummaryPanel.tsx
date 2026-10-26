@@ -14,8 +14,9 @@ import { STAT_KEYS } from '../constants';
 import { useMyTeam } from '../../../context/MyTeamContext';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
 import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
-import { formatAsOf, type TradeShareRow } from '../../../components/share/shareCardFormat';
+import { formatAsOf } from '../../../components/share/shareCardFormat';
 import { averageZ, type PlayerValueLookup } from '../utils/playerValues';
+import { SHARE_CATEGORIES, tradeShareRows } from '../utils/tradeShare';
 
 interface TradeSummaryPanelProps {
   teamA: Team | null;
@@ -49,18 +50,6 @@ interface Column {
 }
 
 const EXTRA_COLUMN_PREFIX = 'extra:';
-
-// Scoring categories on the share card, mapped to the aggregate fields.
-const SHARE_CATEGORIES = [
-  { category: 'FG%', field: 'fg_percentage' },
-  { category: 'FT%', field: 'ft_percentage' },
-  { category: '3PM', field: 'three_pm' },
-  { category: 'REB', field: 'reb' },
-  { category: 'AST', field: 'ast' },
-  { category: 'STL', field: 'stl' },
-  { category: 'BLK', field: 'blk' },
-  { category: 'PTS', field: 'pts' },
-] as const;
 
 const STAT_HEADERS = [
   { label: 'MIN', icon: '⏰' },
@@ -256,17 +245,9 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   const isTeamTrade = tradeMode === 'team';
   const teamAName = teamA?.team_name ?? 'Your team';
   const teamBName = teamB?.team_name ?? 'Team B';
-  const shareRows: TradeShareRow[] = [
-    ...SHARE_CATEGORIES.map(({ category, field }): TradeShareRow => ({
-      category,
-      values: isTeamTrade ? [displayStatsB[field], displayStatsA[field]] : [displayStatsA[field], displayStatsB[field]],
-    })),
-    ...extraCategories.map((category): TradeShareRow => ({
-      category,
-      values: isTeamTrade ? [extraStatsB[category], extraStatsA[category]] : [extraStatsA[category], extraStatsB[category]],
-      lowerIsBetter: KNOWN_REVERSE_CATEGORIES.has(category),
-    })),
-  ];
+  const shareRows = isTeamTrade
+    ? tradeShareRows(playersB, playersA, viewMode)
+    : tradeShareRows(playersA, playersB, viewMode);
   const sharePlayers = (players: Player[]) => players.map(p => ({ name: p.player_name, value: playerValue?.(p) }));
   const shareSides: [TradeShareSide, TradeShareSide] = isTeamTrade
     ? [

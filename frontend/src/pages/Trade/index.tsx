@@ -9,7 +9,7 @@ import { TradeModeToggle } from './components/TradeModeToggle';
 import { FreeAgentSection } from './components/FreeAgentSection';
 import { TradeSummaryPanel } from './components/TradeSummaryPanel';
 import { useTradeState, type TradePreset } from '../../hooks/useTradeState';
-import type { Player } from '../../types/api';
+import { samePlayer } from './utils/tradeShare';
 import { useTradeData } from '../../hooks/useTradeData';
 import TimePeriodSelector from '../../components/TimePeriodSelector';
 import { formatShort } from '../../utils/dateRange';
@@ -20,9 +20,6 @@ const PERIOD_LABELS: Record<Exclude<TimePeriod, 'custom'>, string> = {
   last_15: 'Last 15 days',
   last_30: 'Last 30 days',
 };
-
-const samePlayer = (a: Pick<Player, 'player_name' | 'player_id'>, b: Pick<Player, 'player_name' | 'player_id'>) =>
-  a.player_id != null && b.player_id != null ? a.player_id === b.player_id : a.player_name === b.player_name;
 
 export const Trade: React.FC = () => {
   // Set by "Preview in Trade Analyzer" on a pending trade.
