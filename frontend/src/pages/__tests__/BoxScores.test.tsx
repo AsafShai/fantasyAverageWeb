@@ -164,6 +164,29 @@ describe('BoxScores', () => {
     expect(screen.queryByText(/28 PTS · 4 REB · 6 AST/)).not.toBeInTheDocument()
   })
 
+  it('has no per-game show button in Full box mode', async () => {
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    expect((await screen.findAllByText('129')).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Show this game' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hide this game again' })).not.toBeInTheDocument()
+  })
+
+  it('hides lines of the night while any game is not final', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      const date = new URL(url, 'http://localhost').searchParams.get('date')
+      if (url.includes('/nba/scoreboard/values')) return json({ ...values, date, complete: false })
+      if (url.includes('/nba/scoreboard')) {
+        return json({ ...board, date, games: [{ ...board.games[0], status: 'live', status_detail: 'Q3 4:12' }] })
+      }
+      if (url.includes('/boxscore')) return json({ ...box, status: 'live' })
+      return json({}, 404)
+    }))
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    expect(await screen.findByRole('columnheader', { name: 'Z' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Lines of the night/ })).not.toBeInTheDocument()
+  })
+
   it('reveals a single game while No spoilers is on', async () => {
     const user = userEvent.setup()
     renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })

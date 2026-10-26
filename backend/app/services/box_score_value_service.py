@@ -1,12 +1,13 @@
 """One slate's player values: a z-score per player line, against every other
 line on the same slate, and the fantasy team that owned him that night.
 
-The z is the usual fantasy one over the league's own scoring categories, but
-the population is the night's box scores, not a season: each counting stat is
-(x - mean) / std across every player who played that day, a percentage is the
-same over its volume-weighted impact (makes - slate rate * attempts), and a
-reverse category (turnovers) counts negative. The line's value is the mean
-across categories, the same scale as the stint Z-score (stint_value.py).
+The z is computed exactly the way the Player Rankings page computes it
+(frontend/src/utils/playerRankings.ts), with the night's box scores as the
+pool: every player who was not a DNP. Per category, counting stats are plain
+z-scores; FG% and FT% are the z of (player pct - the pool's mean pct) *
+attempts; a reverse category (turnovers) is negated. The line's value is the
+mean across categories. With 300+ lines, the reference pool is the top 300 by
+a first pass, and every line is scored against it (scoreAgainstPool).
 """
 
 from __future__ import annotations
@@ -33,7 +34,10 @@ _COUNTING = {
     "FGM": "FGM", "FGA": "FGA", "FTM": "FTM", "FTA": "FTA", "3PA": "3PA",
     "PPG": "PTS", "RPG": "REB", "APG": "AST", "BPG": "BLK", "SPG": "STL", "TOPG": "TO", "3PG": "3PM",
 }
-_RATIOS = {"FG%": ("FGM", "FGA"), "FT%": ("FTM", "FTA"), "3P%": ("3PM", "3PA")}
+# Percentage category -> (makes, attempts), the pairs Player Rankings weights by attempts.
+_PERCENTAGES = {"FG%": ("FGM", "FGA"), "FT%": ("FTM", "FTA")}
+# Player Rankings' reference pool size.
+REFERENCE_POOL_SIZE = 300
 
 _cache: dict[str, tuple[float, dict]] = {}
 _roster_cache: dict[str, tuple[float, dict]] = {}
@@ -61,12 +65,10 @@ def _minutes(raw: str) -> float:
     return _number(str(raw).split(":")[0]) or 0.0
 
 
-def stat_line(player: dict) -> dict[str, float] | None:
-    """The numbers of one box-score line, or None when he did not get on the floor."""
-    minutes = _minutes(player.get("min", ""))
-    if minutes <= 0:
-        return None
-    line = {"MIN": minutes}
+def stat_line(player: dict) -> dict[str, float]:
+    """The numbers of one box-score line. Every listed player who was not a DNP
+    has one; a stat ESPN leaves blank counts as 0."""
+    line = {"MIN": _minutes(player.get("min", ""))}
     for key, made, attempted in (("fg", "FGM", "FGA"), ("fg3", "3PM", "3PA"), ("ft", "FTM", "FTA")):
         line[made], line[attempted] = _pair(player.get(key, "")) or (0.0, 0.0)
     for key, stat in (("pts", "PTS"), ("reb", "REB"), ("ast", "AST"), ("stl", "STL"), ("blk", "BLK"),
@@ -75,38 +77,50 @@ def stat_line(player: dict) -> dict[str, float] | None:
     return line
 
 
-def _zs(values: list[float]) -> list[float]:
-    n = len(values)
-    mean = sum(values) / n
-    std = math.sqrt(sum((v - mean) ** 2 for v in values) / n)
-    if std == 0:
-        return [0.0] * n
-    return [(v - mean) / std for v in values]
+def _pct(line: dict[str, float], category: str) -> float:
+    made, attempted = _PERCENTAGES[category]
+    return line[made] / line[attempted] if line[attempted] else 0.0
+
+
+def _mean_std(values: list[float]) -> tuple[float, float]:
+    mean = sum(values) / len(values)
+    return mean, math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
+
+
+def _category_values(lines: list[dict[str, float]], category: str, pool: list[dict[str, float]]) -> list[float]:
+    """What the z of a category is taken over: the stat itself, or for a
+    percentage the attempt-weighted gap to the pool's mean pct."""
+    if category in _PERCENTAGES:
+        pool_mean = sum(_pct(line, category) for line in pool) / len(pool)
+        attempts = _PERCENTAGES[category][1]
+        return [(_pct(line, category) - pool_mean) * line[attempts] for line in lines]
+    return [line[_COUNTING[category]] for line in lines]
+
+
+def _score(lines: list[dict[str, float]], pool: list[dict[str, float]], categories: list[str],
+           reverse: set[str]) -> list[float]:
+    """Each line's mean z over the categories, against the pool's mean and spread."""
+    totals = [0.0] * len(lines)
+    for category in categories:
+        mean, std = _mean_std(_category_values(pool, category, pool))
+        sign = -1.0 if category in reverse else 1.0
+        for index, value in enumerate(_category_values(lines, category, pool)):
+            totals[index] += 0.0 if std == 0 else sign * (value - mean) / std
+    return [total / len(categories) for total in totals]
 
 
 def slate_zscores(lines: list[dict[str, float]], categories: list[str], reverse: set[str]) -> tuple[list[float], list[str]]:
-    """Each line's mean z over the categories this slate can score, and those
-    categories. Categories a box score cannot carry are left out."""
-    totals = [0.0] * len(lines)
-    used: list[str] = []
-    if not lines:
-        return totals, used
-    for category in categories:
-        if category in _RATIOS:
-            made, attempted = _RATIOS[category]
-            volume = sum(line[attempted] for line in lines)
-            rate = sum(line[made] for line in lines) / volume if volume else 0.0
-            values = [line[made] - rate * line[attempted] for line in lines]
-        elif category in _COUNTING:
-            values = [line[_COUNTING[category]] for line in lines]
-        else:
-            continue
-        sign = -1.0 if category in reverse else 1.0
-        for index, z in enumerate(_zs(values)):
-            totals[index] += sign * z
-        used.append(category)
-    count = len(used) or 1
-    return [round(total / count, 2) for total in totals], used
+    """Each line's z and the categories it was taken over. Categories a box
+    score cannot carry are left out."""
+    used = [c for c in categories if c in _PERCENTAGES or c in _COUNTING]
+    if not lines or not used:
+        return [0.0] * len(lines), used
+    pool = lines
+    if len(lines) >= REFERENCE_POOL_SIZE:
+        first = _score(lines, lines, used, reverse)
+        ranked = sorted(range(len(lines)), key=lambda i: -first[i])
+        pool = [lines[i] for i in ranked[:REFERENCE_POOL_SIZE]]
+    return [round(z, 2) for z in _score(lines, pool, used, reverse)], used
 
 
 async def _league_categories() -> tuple[list[str], set[str]]:
@@ -170,10 +184,7 @@ async def slate_values(day: date) -> dict:
         for side, other in (("away", "home"), ("home", "away")):
             team = box[side]
             for player in team["starters"] + team["bench"]:
-                line = stat_line(player)
-                if line is None:
-                    continue
-                lines.append(line)
+                lines.append(stat_line(player))
                 rows.append({
                     "player_id": player["player_id"],
                     "name": player["name"],

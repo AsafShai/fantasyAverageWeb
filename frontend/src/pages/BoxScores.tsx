@@ -275,7 +275,13 @@ export default function BoxScores() {
       {games && games.length > 0 && (
         <>
           {values?.complete && values.players.length > 0 && (
-            <LinesOfTheNight key={`${date}-${noSpoilers}`} players={values.players.slice(0, 5)} spoilerGuard={noSpoilers} />
+            <LinesOfTheNight
+              key={`${date}-${noSpoilers}`}
+              players={values.players.slice(0, 5)}
+              spoilerGuard={noSpoilers}
+              dateLabel={formatSlateLabel(date)}
+              games={games.length}
+            />
           )}
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 snap-x sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">
             {games.map(game => (

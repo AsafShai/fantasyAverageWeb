@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import { gameClockLabel, localClock } from './tipTime'
+import { signedZ } from './linesOfTheNightFormat'
 import type { BoxPlayerLine, BoxTeamBox, BoxTeamTotals, GameBoxScore, SlatePlayerValue } from '../../types/boxScore'
 
 export type PlayerValues = Map<string, SlatePlayerValue>
@@ -111,7 +112,7 @@ export function ZValue({ z }: { z: number }) {
     : z <= -0.5
       ? 'text-rose-600 dark:text-rose-400'
       : 'text-gray-700 dark:text-gray-200'
-  return <span className={tone}>{z > 0 ? `+${z.toFixed(2)}` : z.toFixed(2)}</span>
+  return <span className={tone}>{signedZ(z)}</span>
 }
 
 export function FantasyTeamTag({ value }: { value: SlatePlayerValue | undefined }) {
@@ -162,7 +163,7 @@ function PlayerTable({ team, hideScores, values }: { team: BoxTeamBox; hideScore
                 {values && (
                   <>
                     <th className="px-2 py-2 text-left font-semibold" title="Fantasy team that rostered him on the night of the game">Fantasy</th>
-                    <th className="px-2 py-2 text-right font-semibold" title="Z-score of this line against every player line on the slate: the mean of its z over the league's categories (0 = an average line that night)">Z</th>
+                    <th className="px-2 py-2 text-right font-semibold" title="Z-score of this line against every player line on the slate: every player who played that night, over the league's categories, scored like Player Rankings (0 = an average line)">Z</th>
                   </>
                 )}
                 {COLUMNS.map(column => (

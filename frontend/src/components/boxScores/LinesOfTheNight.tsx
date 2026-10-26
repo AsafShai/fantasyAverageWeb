@@ -1,16 +1,10 @@
 import { useState } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
+import { ShareCardButton } from '../share/ShareCardButton'
+import { LinesOfTheNightShareCard } from '../share/LinesOfTheNightShareCard'
 import { FantasyTeamTag, ZValue } from './BoxScorePanel'
+import { buildLinesMessage, lineSummary } from './linesOfTheNightFormat'
 import type { SlatePlayerValue } from '../../types/boxScore'
-
-function statLine(player: SlatePlayerValue): string {
-  const parts = [`${player.pts} PTS`, `${player.reb} REB`, `${player.ast} AST`]
-  if (Number(player.stl) > 0) parts.push(`${player.stl} STL`)
-  if (Number(player.blk) > 0) parts.push(`${player.blk} BLK`)
-  const threes = player.fg3.split('-')[0]
-  if (Number(threes) > 0) parts.push(`${threes} 3PM`)
-  return parts.join(' · ')
-}
 
 function shooting(player: SlatePlayerValue): string {
   return [`${player.fg} FG`, `${player.ft} FT`].join(' · ')
@@ -20,15 +14,27 @@ function shooting(player: SlatePlayerValue): string {
  * The five best lines of a finished slate, by z-score against every other
  * line that night. Collapsible; under No spoilers it starts closed.
  */
-export default function LinesOfTheNight({ players, spoilerGuard }: { players: SlatePlayerValue[]; spoilerGuard: boolean }) {
+export default function LinesOfTheNight({
+  players,
+  spoilerGuard,
+  dateLabel,
+  games,
+}: {
+  players: SlatePlayerValue[]
+  spoilerGuard: boolean
+  dateLabel: string
+  games: number
+}) {
   const [open, setOpen] = useState(!spoilerGuard)
+  const shareText = buildLinesMessage(dateLabel, players, `${window.location.origin}/box-scores`)
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm dark:border-amber-500/30 dark:from-amber-950/40 dark:to-gray-900">
+      <div className="flex items-center">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(current => !current)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400"
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400"
       >
         <span className="flex min-w-0 items-center gap-2">
           <span aria-hidden="true" className="text-lg">🔥</span>
@@ -50,6 +56,18 @@ export default function LinesOfTheNight({ players, spoilerGuard }: { players: Sl
         </span>
       </button>
       {open && (
+        <div className="shrink-0 pr-3">
+          <ShareCardButton
+            title="Lines of the night"
+            shareText={shareText}
+            renderCard={({ dark }) => (
+              <LinesOfTheNightShareCard dark={dark} dateLabel={dateLabel} games={games} players={players} />
+            )}
+          />
+        </div>
+      )}
+      </div>
+      {open && (
         <ol className="divide-y divide-amber-100 border-t border-amber-100 dark:divide-gray-800 dark:border-gray-800">
           {players.map((player, index) => (
             <li key={`${player.game_id}-${player.player_id}`} className="flex items-center gap-3 px-4 py-2.5">
@@ -69,7 +87,7 @@ export default function LinesOfTheNight({ players, spoilerGuard }: { players: Sl
                   <FantasyTeamTag value={player} />
                 </div>
                 <p className="text-xs leading-snug text-gray-600 dark:text-gray-300">
-                  {statLine(player)}
+                  {lineSummary(player)}
                 </p>
                 <p className="text-[11px] leading-snug text-gray-400">
                   {player.team_abbr} {player.is_home ? 'vs' : '@'} {player.opponent_abbr} · {player.min} min · {shooting(player)}
