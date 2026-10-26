@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import BoxScorePanel from '../components/boxScores/BoxScorePanel'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
+import { slatePlayerValues } from '../components/boxScores/slateValues'
 import { gameClockLabel } from '../components/boxScores/tipTime'
 import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -174,11 +175,13 @@ export default function BoxScores() {
   const anyStarted = games?.some(game => game.status !== 'scheduled') ?? false
   const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: boardPoll })
   const values = slateValues.data?.date === date ? slateValues.data : undefined
+  // Z comes from the Player Rankings page's own code, so the two never disagree.
+  const ranked = useMemo(() => (values ? slatePlayerValues(values) : []), [values])
   const valueMap = useMemo(() => {
     const map = new Map<string, SlatePlayerValue>()
-    for (const player of values?.players ?? []) map.set(player.player_id, player)
+    for (const player of ranked) map.set(player.player_id, player)
     return map
-  }, [values])
+  }, [ranked])
 
   function toggleReveal(id: string) {
     setRevealed(current => current.includes(id)
@@ -274,10 +277,10 @@ export default function BoxScores() {
 
       {games && games.length > 0 && (
         <>
-          {values?.complete && values.players.length > 0 && (
+          {values?.complete && ranked.length > 0 && (
             <LinesOfTheNight
               key={`${date}-${noSpoilers}`}
-              players={values.players.slice(0, 5)}
+              players={ranked.slice(0, 5)}
               spoilerGuard={noSpoilers}
               dateLabel={formatSlateLabel(date)}
               games={games.length}

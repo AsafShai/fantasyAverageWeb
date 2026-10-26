@@ -105,7 +105,8 @@ export interface GameBoxScore {
   home: BoxTeamBox
 }
 
-export interface SlatePlayerValue {
+/** One non-DNP line of the slate, as the server sends it. */
+export interface SlateLine {
   player_id: string
   name: string
   position: string
@@ -125,10 +126,17 @@ export interface SlatePlayerValue {
   fg: string
   fg3: string
   ft: string
-  z: number
+  /** The line's value per category code (PTS, FG%, TO, ...) plus MIN. */
+  stats: Record<string, number>
   /** Fantasy team abbreviation on the night of the game; null = free agent. */
   fantasy_team: string | null
   fantasy_team_name: string | null
+}
+
+/** A line with its Z: the Player Rankings value of that night (computed in
+ * the browser by computePlayerRankings, see slateValues.ts). */
+export interface SlatePlayerValue extends SlateLine {
+  z: number
 }
 
 export interface SlateValues {
@@ -137,5 +145,6 @@ export interface SlateValues {
   complete: boolean
   games_counted: number
   categories: string[]
-  players: SlatePlayerValue[]
+  reverse_categories: string[]
+  players: SlateLine[]
 }

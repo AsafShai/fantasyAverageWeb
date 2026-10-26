@@ -1,22 +1,17 @@
-"""One slate's player values: a Z per player line, and the fantasy team that
-owned him that night.
+"""One slate's player lines for the box score's Z and Lines of the night, and
+the fantasy team that owned each player that night.
 
-The Z is the value the Player Rankings page gives the same night (its "Last
-night" period, frontend/src/utils/playerRankings.ts with the page's defaults):
-the pool is every player who got on the floor that night, scored per category
-(counting stats as plain z-scores; FG% and FT% as the z of (pct - the pool's
-mean pct) * attempts; a reverse category such as turnovers negated) and
-averaged across the league's categories. With 300+ players the reference pool
-is the top 300 by a first pass. A player listed without minutes (not a DNP)
-is outside the pool, as on the Rankings page, and is scored against it the
-way scoreAgainstPool scores him.
+The Z itself is computed in the browser by the Player Rankings page's own code
+(frontend/src/utils/playerRankings.ts, computePlayerRankings), so the two pages
+can never disagree. This sends what it needs: every non-DNP line's numbers keyed
+by category code, the way the players list carries a period's stats, and the
+league's categories and reverse categories.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import time
 from datetime import date
 
@@ -28,18 +23,16 @@ from app.utils.constants import RANKING_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
-# Category -> the per-line stat it reads. A per-game category is the stat
-# itself on a single night.
+# Category code -> the line stat it is. A per-game category is the stat itself
+# on a single night.
 _COUNTING = {
     "PTS": "PTS", "REB": "REB", "AST": "AST", "STL": "STL", "BLK": "BLK", "3PM": "3PM",
     "TO": "TO", "OREB": "OREB", "DREB": "DREB", "PF": "PF",
     "FGM": "FGM", "FGA": "FGA", "FTM": "FTM", "FTA": "FTA", "3PA": "3PA",
     "PPG": "PTS", "RPG": "REB", "APG": "AST", "BPG": "BLK", "SPG": "STL", "TOPG": "TO", "3PG": "3PM",
 }
-# Percentage category -> (makes, attempts), the pairs Player Rankings weights by attempts.
-_PERCENTAGES = {"FG%": ("FGM", "FGA"), "FT%": ("FTM", "FTA")}
-# Player Rankings' reference pool size.
-REFERENCE_POOL_SIZE = 300
+# Percentage code -> (makes, attempts).
+_PERCENTAGES = {"FG%": ("FGM", "FGA"), "FT%": ("FTM", "FTA"), "3P%": ("3PM", "3PA")}
 
 _cache: dict[str, tuple[float, dict]] = {}
 _roster_cache: dict[str, tuple[float, dict]] = {}
@@ -79,51 +72,14 @@ def stat_line(player: dict) -> dict[str, float]:
     return line
 
 
-def _pct(line: dict[str, float], category: str) -> float:
-    made, attempted = _PERCENTAGES[category]
-    return line[made] / line[attempted] if line[attempted] else 0.0
-
-
-def _mean_std(values: list[float]) -> tuple[float, float]:
-    mean = sum(values) / len(values)
-    return mean, math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
-
-
-def _category_values(lines: list[dict[str, float]], category: str, pool: list[dict[str, float]]) -> list[float]:
-    """What the z of a category is taken over: the stat itself, or for a
-    percentage the attempt-weighted gap to the pool's mean pct."""
-    if category in _PERCENTAGES:
-        pool_mean = sum(_pct(line, category) for line in pool) / len(pool)
-        attempts = _PERCENTAGES[category][1]
-        return [(_pct(line, category) - pool_mean) * line[attempts] for line in lines]
-    return [line[_COUNTING[category]] for line in lines]
-
-
-def _score(lines: list[dict[str, float]], pool: list[dict[str, float]], categories: list[str],
-           reverse: set[str]) -> list[float]:
-    """Each line's mean z over the categories, against the pool's mean and spread."""
-    totals = [0.0] * len(lines)
-    for category in categories:
-        mean, std = _mean_std(_category_values(pool, category, pool))
-        sign = -1.0 if category in reverse else 1.0
-        for index, value in enumerate(_category_values(lines, category, pool)):
-            totals[index] += 0.0 if std == 0 else sign * (value - mean) / std
-    return [total / len(categories) for total in totals]
-
-
-def slate_zscores(lines: list[dict[str, float]], categories: list[str], reverse: set[str]) -> tuple[list[float], list[str]]:
-    """Each line's Z and the categories it was taken over. Categories a box
-    score cannot carry are left out."""
-    used = [c for c in categories if c in _PERCENTAGES or c in _COUNTING]
-    if not lines or not used:
-        return [0.0] * len(lines), used
-    # The Rankings page's night holds only players who logged minutes.
-    pool = [line for line in lines if line["MIN"] > 0] or lines
-    if len(pool) >= REFERENCE_POOL_SIZE:
-        first = _score(pool, pool, used, reverse)
-        ranked = sorted(range(len(pool)), key=lambda i: -first[i])
-        pool = [pool[i] for i in ranked[:REFERENCE_POOL_SIZE]]
-    return [round(z, 2) for z in _score(lines, pool, used, reverse)], used
+def category_stats(line: dict[str, float]) -> dict[str, float]:
+    """A line's value for every category code a box score can carry. A
+    percentage with no attempts is 0, as in the players list."""
+    out = {code: line[stat] for code, stat in _COUNTING.items()}
+    for code, (made, attempted) in _PERCENTAGES.items():
+        out[code] = line[made] / line[attempted] if line[attempted] else 0.0
+    out["MIN"] = line["MIN"]
+    return out
 
 
 async def _league_categories() -> tuple[list[str], set[str]]:
@@ -179,7 +135,6 @@ async def slate_values(day: date) -> dict:
     boxes = await asyncio.gather(*(boxscore_for(game["game_id"]) for game in started), return_exceptions=True)
 
     rows: list[dict] = []
-    lines: list[dict[str, float]] = []
     for game, box in zip(started, boxes):
         if isinstance(box, Exception):
             logger.warning(f"Slate values {day}: box {game['game_id']} unavailable: {type(box).__name__}: {box}")
@@ -187,7 +142,6 @@ async def slate_values(day: date) -> dict:
         for side, other in (("away", "home"), ("home", "away")):
             team = box[side]
             for player in team["starters"] + team["bench"]:
-                lines.append(stat_line(player))
                 rows.append({
                     "player_id": player["player_id"],
                     "name": player["name"],
@@ -208,26 +162,25 @@ async def slate_values(day: date) -> dict:
                     "fg": player["fg"],
                     "fg3": player["fg3"],
                     "ft": player["ft"],
+                    "stats": category_stats(stat_line(player)),
                 })
 
     (categories, reverse), roster, (abbrevs, names) = await asyncio.gather(
         _league_categories(), _roster_on(day), _fantasy_teams(),
     )
-    zs, used = slate_zscores(lines, categories, reverse)
-    for row, z in zip(rows, zs):
-        row["z"] = z
+    for row in rows:
         owner = roster.get(int(row["player_id"])) if row["player_id"].isdigit() else None
         team_id = owner["team_id"] if owner else None
         row["fantasy_team"] = abbrevs.get(team_id, str(team_id)) if team_id is not None else None
         row["fantasy_team_name"] = (names.get(team_id) or row["fantasy_team"]) if team_id is not None else None
-    rows.sort(key=lambda row: -row["z"])
 
     complete = bool(games) and all(game["status"] == "final" for game in games)
     payload = {
         "date": key,
         "complete": complete,
         "games_counted": sum(1 for box in boxes if not isinstance(box, Exception)),
-        "categories": used,
+        "categories": categories,
+        "reverse_categories": [c for c in categories if c in reverse],
         "players": rows,
     }
     _cache[key] = (time.monotonic() + _ttl(games, day, complete), payload)

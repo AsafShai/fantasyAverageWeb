@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services import box_score_value_service as svc
-from app.services.box_score_value_service import slate_values, slate_zscores, stat_line
+from app.services.box_score_value_service import category_stats, slate_values, stat_line
 
 
 def _player(pid, name, minutes="30", pts="10", fg="4-8", fg3="1-3", ft="1-2", reb="5", ast="3",
@@ -30,60 +30,13 @@ def test_stat_line_parses_made_attempted_and_keeps_zero_minute_lines():
     assert blank["MIN"] == 0 and blank["PTS"] == 0 and blank["FGA"] == 0
 
 
-def test_slate_zscores_match_the_player_rankings_formula():
-    # Two lines, PTS and FG%: each category's z is +1/-1 (two values), the mean
-    # over categories is the line's value.
-    a = stat_line(_player("1", "A", pts="30", fg="10-20"))   # 50%
-    b = stat_line(_player("2", "B", pts="10", fg="2-10"))    # 20%
-    zs, _ = slate_zscores([a, b], ["PTS", "FG%"], set())
-    # FG% impact: (pct - mean pct 35%) * FGA -> +3.0 and -1.5 -> z +1 / -1
-    assert zs == [1.0, -1.0]
-    # A line with no shots has a 0 pct, which counts in the pool's mean pct.
-    c = stat_line(_player("3", "C", pts="0", fg="0-0"))
-    zs, _ = slate_zscores([a, b, c], ["FG%"], set())
-    assert zs[0] > zs[2] > zs[1]
-
-
-def test_large_slates_score_against_the_top_300():
-    lines = [stat_line(_player(str(i), "X", pts=str(i))) for i in range(400)]
-    zs, _ = slate_zscores(lines, ["PTS"], set())
-    # Pool = the top 300 (PTS 100..399): mean 249.5. PTS 249/250 straddle zero.
-    assert zs[249] < 0 < zs[250]
-    assert zs[0] < -2.5
-
-
-def test_slate_zscores_ranks_the_big_line_first_and_reverses_turnovers():
-    big = stat_line(_player("1", "Big", pts="52", reb="8", ast="10", fg="17-30", fg3="8-18", ft="10-11"))
-    mid = stat_line(_player("2", "Mid"))
-    low = stat_line(_player("3", "Low", pts="0", reb="1", ast="0", fg="0-6", fg3="0-3", ft="0-0", stl="0"))
-    zs, used = slate_zscores([big, mid, low], ["PTS", "REB", "AST", "FG%", "TO", "XYZ"], {"TO"})
-    assert used == ["PTS", "REB", "AST", "FG%", "TO"]
-    assert zs[0] > zs[1] > zs[2]
-    # Equal lines sum to zero once every category is centred.
-    same = [stat_line(_player(str(i), "X")) for i in range(3)]
-    assert slate_zscores(same, ["PTS", "FG%"], set())[0] == [0.0, 0.0, 0.0]
-
-
-def test_turnovers_count_against_the_line():
-    careful = stat_line(_player("1", "A", tov="0"))
-    sloppy = stat_line(_player("2", "B", tov="6"))
-    zs, _ = slate_zscores([careful, sloppy], ["TO"], {"TO"})
-    assert zs[0] > 0 > zs[1]
-
-
-def test_zero_minute_lines_get_a_z_but_stay_out_of_the_pool():
-    a = stat_line(_player("1", "A", pts="30", fg="10-20"))
-    b = stat_line(_player("2", "B", pts="10", fg="2-10"))
-    idle = stat_line(_player("3", "C", minutes="0", pts="0", fg="0-0", fg3="0-0", ft="0-0",
-                             reb="0", ast="0", stl="0", tov="0"))
-    with_idle, _ = slate_zscores([a, b, idle], ["PTS"], set())
-    without, _ = slate_zscores([a, b], ["PTS"], set())
-    assert with_idle[:2] == without          # the pool is unchanged by him
-    assert with_idle[2] == -2.0              # 0 pts against mean 20, std 10
-
-
-def test_slate_zscores_with_no_lines():
-    assert slate_zscores([], ["PTS"], set()) == ([], ["PTS"])
+def test_category_stats_key_the_line_by_category_code():
+    stats = category_stats(stat_line(_player("1", "A", pts="52", fg="17-30", fg3="8-18", ft="10-11", tov="4")))
+    assert stats["PTS"] == 52 and stats["3PM"] == 8 and stats["TO"] == 4 and stats["PPG"] == 52
+    assert stats["FG%"] == pytest.approx(17 / 30) and stats["FT%"] == pytest.approx(10 / 11)
+    assert stats["MIN"] == 30
+    # No attempts: the percentage is 0, as in the players list.
+    assert category_stats(stat_line(_player("2", "B", ft="0-0")))["FT%"] == 0
 
 
 @pytest.mark.asyncio
@@ -104,13 +57,12 @@ async def test_slate_values_tags_owner_on_that_night_and_free_agents():
          patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({7: "TTP"}, {7: "Trust the process"}))):
         result = await slate_values(date(2026, 10, 25))
     assert result["complete"] is True
-    assert result["categories"] == ["PTS", "FG%"]
-    # A 0-minute line that was not a DNP is in the pool too.
-    names = [p["name"] for p in result["players"]]
-    assert names[0] == "Luka" and sorted(names) == ["Bench Guy", "Luka", "Quiet"]
-    luka = result["players"][0]
-    bench = next(p for p in result["players"] if p["name"] == "Bench Guy")
-    assert luka["z"] > 0 > bench["z"]
+    assert result["categories"] == ["PTS", "FG%"] and result["reverse_categories"] == []
+    # Every non-DNP line, 0-minute ones too; the Z is the browser's to compute.
+    luka, bench, quiet = result["players"]
+    assert [luka["name"], bench["name"], quiet["name"]] == ["Luka", "Bench Guy", "Quiet"]
+    assert "z" not in luka
+    assert luka["stats"]["PTS"] == 52 and quiet["stats"]["MIN"] == 0
     assert luka["fantasy_team"] == "TTP" and luka["fantasy_team_name"] == "Trust the process"
     assert bench["fantasy_team"] is None
     assert luka["opponent_abbr"] == "UTAH" and bench["is_home"] is True

@@ -74,7 +74,14 @@ const valuePlayer = {
   player_id: '1', name: 'Austin Reaves', position: 'G', team_abbr: 'LAL', team_logo: '',
   opponent_abbr: 'UTAH', is_home: false, game_id: '100', game_status: 'final',
   min: '34', pts: '28', reb: '4', ast: '6', stl: '1', blk: '0', tov: '2',
-  fg: '10-18', fg3: '3-7', ft: '5-5', z: 0.91, fantasy_team: 'TTP', fantasy_team_name: 'Trust the process',
+  fg: '10-18', fg3: '3-7', ft: '5-5', fantasy_team: 'TTP', fantasy_team_name: 'Trust the process',
+  stats: { MIN: 34, PTS: 28, REB: 4 },
+}
+
+// A second line so the slate has a spread: Reaves is +1 in both categories.
+const otherPlayer = {
+  ...valuePlayer, player_id: '2', name: 'Bench Guy', min: '12', pts: '4', reb: '2',
+  fantasy_team: null, fantasy_team_name: null, stats: { MIN: 12, PTS: 4, REB: 2 },
 }
 
 const values = {
@@ -82,7 +89,8 @@ const values = {
   complete: true,
   games_counted: 1,
   categories: ['PTS', 'REB'],
-  players: [valuePlayer],
+  reverse_categories: [],
+  players: [otherPlayer, valuePlayer],
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -150,7 +158,7 @@ describe('BoxScores', () => {
     renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
     expect(await screen.findByRole('columnheader', { name: 'Z' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Fantasy' })).toBeInTheDocument()
-    expect(screen.getAllByText('+0.91').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('+1.00').length).toBeGreaterThan(0)
     expect(screen.getAllByTitle('Trust the process').length).toBeGreaterThan(0)
   })
 
