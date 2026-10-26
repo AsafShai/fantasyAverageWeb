@@ -4,6 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
+import EspnUpdatedNote from '../components/EspnUpdatedNote'
 import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
@@ -365,7 +366,9 @@ const Analytics = () => {
       <div className="sticky top-14 z-10 bg-gray-50 dark:bg-gray-900 pt-4 pb-3 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">League Analytics</h1>
-          <DataDateBadge dataDate={heatmapData?.data_date} />
+          {heatmapData?.data_date
+            ? <DataDateBadge dataDate={heatmapData.data_date} />
+            : <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />}
         </div>
         <div className="flex gap-2 overflow-x-auto">
           {ANALYTICS_TABS.map(tab => (

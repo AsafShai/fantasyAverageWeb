@@ -117,7 +117,8 @@ class ResponseBuilder:
                                     nba_game_days_left: Optional[int] = None,
                                     nba_game_days_elapsed: Optional[int] = None,
                                     data_date=None,
-                                    trade_deadline=None) -> LeagueSummary:
+                                    trade_deadline=None,
+                                    espn_updated_at=None) -> LeagueSummary:
         """Build LeagueSummary response from calculated data"""
         return LeagueSummary(
             total_teams=total_teams,
@@ -131,6 +132,7 @@ class ResponseBuilder:
             data_date=data_date,
             season_start=settings.season_start,
             trade_deadline=trade_deadline,
+            espn_updated_at=espn_updated_at,
         )
     
     def build_heatmap_response(self, teams: List[Dict], categories: List[List[float]],

@@ -98,6 +98,8 @@ export interface LeagueSummary {
   data_date?: string;
   season_start?: string;
   trade_deadline?: string;
+  /** When ESPN last updated the league stats (its nightly run), not when we fetched. */
+  espn_updated_at?: string | null;
 }
 
 export interface HeatmapData {

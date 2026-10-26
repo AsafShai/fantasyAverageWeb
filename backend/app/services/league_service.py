@@ -52,6 +52,7 @@ class LeagueService:
             await asyncio.gather(_fetch_league_averages(), _fetch_nba_stats())
 
         trade_deadline = await self.data_provider.get_trade_deadline()
+        espn_updated_at = await self.data_provider.get_standings_updated_at()
 
         return self.response_builder.build_league_summary_response(
             total_teams=len(averages_df),
@@ -63,6 +64,7 @@ class LeagueService:
             nba_game_days_elapsed=nba_game_days_elapsed,
             data_date=self.data_provider.get_data_date(),
             trade_deadline=trade_deadline,
+            espn_updated_at=espn_updated_at,
         )
     
     async def get_heatmap_data(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> HeatmapData:

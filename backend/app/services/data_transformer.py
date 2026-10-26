@@ -121,6 +121,20 @@ class DataTransformer:
             self.logger.warning(f"Error resolving trade deadline from ESPN settings: {e}")
             return None
 
+    def resolve_standings_updated_at(self, espn_data: Dict) -> Optional[datetime]:
+        """When ESPN last refreshed the league's stats, from
+        status.standingsUpdateDate (epoch milliseconds). ESPN sets it once a
+        night when its stat run lands, so it is the time the data actually
+        changed, not the time we fetched it. None when missing or unparseable."""
+        try:
+            updated_ms = espn_data.get('status', {}).get('standingsUpdateDate')
+            if not updated_ms:
+                return None
+            return datetime.fromtimestamp(updated_ms / 1000, tz=timezone.utc)
+        except Exception as e:
+            self.logger.warning(f"Error resolving standings update date from ESPN status: {e}")
+            return None
+
     def parse_slot_usage(self, espn_data: Dict) -> Dict[int, Dict[str, int]]:
         """Parse slot usage from mMatchupScore data. Returns {team_id: {slot_name: games_used}}"""
         result: Dict[int, Dict[str, int]] = {}
