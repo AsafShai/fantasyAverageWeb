@@ -105,6 +105,26 @@ class ReleasedPlayer(BaseModel):
     stint: PlayerStint
 
 
+class PendingTradeSide(BaseModel):
+    team_id: int
+    received: list[ActivityPlayer]
+
+
+class PendingTrade(BaseModel):
+    """A trade both teams accepted that is waiting out the league's review
+    period. Nothing has moved yet, so it carries no stints or values; once
+    it processes it leaves this list and shows up in ``trades``."""
+    id: str
+    proposed_by: Optional[int] = None
+    proposed_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+    processes_at: Optional[datetime] = None
+    sides: list[PendingTradeSide]
+    # Votes from the other teams (ESPN's "approve" / "veto"), when the league votes.
+    approvals: int = 0
+    vetoes: int = 0
+
+
 class LeagueActivity(BaseModel):
     season_id: int
     season_over: bool
@@ -114,6 +134,7 @@ class LeagueActivity(BaseModel):
     moves: list[ActivityMove]
     trades: list[Trade]
     released: list[ReleasedPlayer]
+    pending_trades: list[PendingTrade] = []
     last_updated: datetime
 
 

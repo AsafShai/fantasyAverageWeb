@@ -16,6 +16,8 @@ export interface TradeShareSide {
 const signedZ = (z: number) => `${z >= 0 ? '+' : ''}${z.toFixed(2)}`
 
 interface TradeShareCardProps extends ShareCardTheme {
+  /** Top-right label in the brand row. */
+  kicker?: string
   title: string
   subtitle: string
   sides: [TradeShareSide, TradeShareSide]
@@ -25,17 +27,17 @@ interface TradeShareCardProps extends ShareCardTheme {
   highlightSide: 0 | 1 | null
 }
 
-export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSide, dark }: TradeShareCardProps) => {
+export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sides, rows, mode, highlightSide, dark }: TradeShareCardProps) => {
   const hasValues = sides.some(side => side.players.some(p => p.value))
 
   return (
     <ShareCard
       dark={dark}
-      kicker="Trade Analyzer"
+      kicker={kicker}
       title={title}
       subtitle={subtitle}
       footer={<>
-        <span>{mode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>
+        {rows.length > 0 && <span>{mode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>}
         {hasValues && <span>#rank · Z-score, per game</span>}
       </>}
     >
@@ -54,7 +56,7 @@ export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSi
           </div>
         ))}
       </div>
-      <div className="share-card__body">
+      {rows.length > 0 && <div className="share-card__body">
         <table>
           <colgroup><col style={{ width: 56 }} /><col /><col /></colgroup>
           <thead>
@@ -80,7 +82,7 @@ export const TradeShareCard = ({ title, subtitle, sides, rows, mode, highlightSi
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
     </ShareCard>
   )
 }

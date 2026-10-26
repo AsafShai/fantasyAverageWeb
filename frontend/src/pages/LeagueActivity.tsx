@@ -10,21 +10,24 @@ import ActivityFeed from '../components/activity/ActivityFeed'
 import TradesTab from '../components/activity/TradesTab'
 import TradeTree from '../components/activity/TradeTree'
 import ReleasedPlayers from '../components/activity/ReleasedPlayers'
+import PendingTradesTab from '../components/activity/PendingTradesTab'
 
-const TABS = ['activity', 'trades', 'tree', 'released'] as const
+const TABS = ['activity', 'trades', 'pending', 'tree', 'released'] as const
 type Tab = (typeof TABS)[number]
 
 const TAB_LABEL: Record<Tab, string> = {
   activity: 'Activity',
   trades: 'Trades',
+  pending: 'Pending trades',
   tree: 'Trade tree',
   released: 'Released players',
 }
 
-// Phone widths fit all four tabs only with short labels.
+// Phone widths fit all the tabs only with short labels.
 const TAB_SHORT: Record<Tab, string> = {
   activity: 'Activity',
   trades: 'Trades',
+  pending: 'Pending',
   tree: 'Tree',
   released: 'Released',
 }
@@ -43,6 +46,7 @@ export default function LeagueActivity() {
   // Kept in this browser only; nobody else sees them.
   const [overrides, setOverrides] = usePersistedState<TradeOverrides>('activity.tradeOverrides', {})
   const categories = useMemo(() => orderCategories(data?.categories ?? []), [data?.categories])
+  const pendingCount = data?.pending_trades?.length ?? 0
 
   const selectTrade = (id: string) => setUrl({ tab: 'trades', trade: id })
   const openTree = (tradeId: string, teamId: number) => setUrl({ tab: 'tree', trade: tradeId, team: teamId })
@@ -57,7 +61,7 @@ export default function LeagueActivity() {
         </p>
       </div>
 
-      <div role="tablist" aria-label="League activity views" className="-mx-4 flex gap-1 overflow-x-auto border-b border-gray-200 px-4 sm:mx-0 sm:px-0 dark:border-gray-700">
+      <div role="tablist" aria-label="League activity views" className="-mx-4 flex gap-0.5 overflow-x-auto sm:gap-1 border-b border-gray-200 px-4 sm:mx-0 sm:px-0 dark:border-gray-700">
         {TABS.map(t => (
           <button
             key={t}
@@ -65,9 +69,9 @@ export default function LeagueActivity() {
             type="button"
             id={`activity-tab-${t}`}
             aria-selected={url.tab === t}
-            aria-label={TAB_LABEL[t]}
+            aria-label={t === 'pending' && pendingCount > 0 ? `${TAB_LABEL[t]} (${pendingCount})` : TAB_LABEL[t]}
             onClick={() => setUrl({ tab: t })}
-            className={`-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+            className={`-mb-px shrink-0 border-b-2 px-2 py-2.5 sm:px-3 text-sm font-medium whitespace-nowrap ${
               url.tab === t
                 ? 'border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300'
                 : 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'
@@ -75,6 +79,11 @@ export default function LeagueActivity() {
           >
             <span className="sm:hidden">{TAB_SHORT[t]}</span>
             <span className="hidden sm:inline">{TAB_LABEL[t]}</span>
+            {t === 'pending' && pendingCount > 0 && (
+              <span aria-hidden="true" className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 tabular-nums dark:bg-amber-950 dark:text-amber-300">
+                {pendingCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -99,6 +108,7 @@ export default function LeagueActivity() {
               onOverridesChange={setOverrides}
             />
           )}
+          {url.tab === 'pending' && <PendingTradesTab activity={data} />}
           {url.tab === 'tree' && (
             <TradeTree
               activity={data}
