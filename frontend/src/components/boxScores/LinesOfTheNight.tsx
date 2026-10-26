@@ -78,13 +78,13 @@ export default function LinesOfTheNight({
                 ? <img src={player.team_logo} alt="" className="h-7 w-7 shrink-0 object-contain" />
                 : <span className="h-7 w-7 shrink-0" />}
               <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                   <PlayerNameLink
                     name={player.name}
                     playerId={player.player_id}
                     className="truncate text-sm font-semibold text-gray-900 hover:underline dark:text-gray-100"
                   />
-                  <FantasyTeamTag value={player} />
+                  <FantasyTeamTag value={player} full />
                 </div>
                 <p className="text-xs leading-snug text-gray-600 dark:text-gray-300">
                   {lineSummary(player)}

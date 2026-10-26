@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/helpers'
@@ -160,6 +160,23 @@ describe('BoxScores', () => {
     expect(screen.getByRole('columnheader', { name: 'Fantasy' })).toBeInTheDocument()
     expect(screen.getAllByText('+1.00').length).toBeGreaterThan(0)
     expect(screen.getAllByTitle('Trust the process').length).toBeGreaterThan(0)
+  })
+
+  it('shows the full fantasy team name on tap, and on the lines of the night card', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    // Lines of the night has room for the full name.
+    const card = (await screen.findByRole('button', { name: /Lines of the night/ })).closest('section')!
+    expect(within(card).getByText('Trust the process')).toBeInTheDocument()
+    // The table shows the abbreviation; a tap swaps in the full name and back.
+    const table = await screen.findByRole('table', { name: /box score/ })
+    const tag = within(table).getByRole('button', { name: 'TTP: Trust the process' })
+    expect(tag).toHaveTextContent('TTP')
+    await user.click(tag)
+    expect(tag).toHaveTextContent('Trust the process')
+    expect(tag).toHaveAttribute('aria-expanded', 'true')
+    await user.click(tag)
+    expect(tag).toHaveTextContent('TTP')
   })
 
   it('shows lines of the night once the slate is final', async () => {
