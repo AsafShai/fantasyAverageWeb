@@ -1,6 +1,8 @@
 export interface Team {
   team_id: number;
   team_name: string;
+  /** ESPN's short fantasy-team code, when the teams list has one. */
+  abbrev?: string | null;
 }
 
 export interface RankingStats {
@@ -188,7 +190,7 @@ export interface PaginatedPlayers {
 
 export type ComparisonOperator = "eq" | "gt" | "lt" | "gte" | "lte";
 
-export type TimePeriod = 'season' | 'last_7' | 'last_15' | 'last_30' | 'custom';
+export type TimePeriod = 'season' | 'last_night' | 'last_7' | 'last_15' | 'last_30' | 'custom';
 
 export interface CustomDateRange {
   start: string;

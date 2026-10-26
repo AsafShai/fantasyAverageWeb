@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { usePersistedState, usePersistedSetState } from '../hooks/usePersistedState';
 import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
@@ -158,6 +158,13 @@ export default function NbaTeams() {
   const { data: teams, isLoading, error } = useGetNbaTeamsListQuery();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedTeamId, setSelectedTeamId] = useState<string>(searchParams.get('team') ?? '');
+  const openedFromLink = useRef(Boolean(searchParams.get('team')));
+
+  useEffect(() => {
+    if (!openedFromLink.current || isLoading || !selectedTeamId) return;
+    document.getElementById('nba-depth-chart-heading')?.scrollIntoView({ block: 'start' });
+    openedFromLink.current = false;
+  }, [isLoading, selectedTeamId]);
 
   const handleSelectTeam = (teamId: string) => {
     setSelectedTeamId(teamId);
@@ -196,7 +203,7 @@ export default function NbaTeams() {
 
           {selectedTeamId && (
             <div className="space-y-10">
-              <section aria-labelledby="nba-depth-chart-heading">
+              <section aria-labelledby="nba-depth-chart-heading" className="scroll-mt-20">
                 <h2 id="nba-depth-chart-heading" className="mb-4 text-xl font-semibold text-gray-900">Depth chart</h2>
                 <DepthChartView key={`depth-${selectedTeamId}`} teamId={selectedTeamId} />
               </section>

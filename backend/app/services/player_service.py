@@ -57,7 +57,7 @@ _SEASON_ANCHOR_TTL = timedelta(hours=1)
 _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 
 
-# The windowed players for a preset period (season/last_7/last_15/last_30)
+# The windowed players for a preset period (season/last_night/last_7/last_15/last_30)
 # only move on nightly ingest, but build_windowed_players_df reruns a full
 # fs_player_games aggregation + pandas merge on every /players request, and
 # building the ~1100 Player objects on top of it costs as much again. Both
@@ -141,9 +141,13 @@ def merge_windowed_players_df(
     Custom ranges skip the roster gate entirely: there's no ESPN split to
     fall back to anyway, so every player is simply zeroed to their window
     totals (0 if they have no rows), always has_data=True.
+
+    Last night is the same window-only overlay (ESPN has no one-night split),
+    except a player who did not play is has_data=False so a ranking of that
+    night is the players who played, not a league of zeros.
     """
     merged = espn_players_df.copy()
-    is_custom = time_period == StatTimePeriod.CUSTOM
+    window_only = time_period in (StatTimePeriod.CUSTOM, StatTimePeriod.LAST_NIGHT)
     merged['_join_key'] = merged['Name'].map(resolve_join_key)
     stat_cols = {
         **_DB_STAT_COLS,
@@ -163,23 +167,25 @@ def merge_windowed_players_df(
         for espn_col, db_col in stat_cols.items():
             merged.loc[windowed, espn_col] = merged.loc[windowed, db_col]
 
-    if is_custom:
+    if window_only:
         known = pd.Series(True, index=merged.index)
     else:
         known = (merged['Pro Team'] != 'FA') | windowed
 
     merged['has_data'] = True
 
-    # Only custom ranges force-zero known-but-unwindowed players — they have
-    # no ESPN split to fall back to. Presets leave the ESPN value in place
-    # (see the comment above this function's docstring).
+    # Custom ranges and last night force-zero players with no games in the
+    # window — they have no ESPN split to fall back to. Other presets leave
+    # the ESPN value in place (see the comment above this function's docstring).
     overwritten = windowed
-    if is_custom:
+    if window_only:
         zero_matched = ~windowed
         overwritten = windowed | zero_matched
         if zero_matched.any():
             for espn_col in stat_cols:
                 merged.loc[zero_matched, espn_col] = 0 if espn_col == 'GP' else 0.0
+        if time_period == StatTimePeriod.LAST_NIGHT:
+            merged.loc[zero_matched, 'has_data'] = False
 
     # Ratio categories other than FG%/FT% (which the aggregate computes itself)
     # still hold ESPN's value for its split; rebuild them from the window's
@@ -244,7 +250,7 @@ class PlayerService:
         Args:
             page: Page number (1-indexed)
             limit: Number of players per page
-            time_period: Time period for stats (season, last_7, last_15, last_30, custom)
+            time_period: Time period for stats (season, last_night, last_7, last_15, last_30, custom)
             start: Start date, required when time_period is custom
             end: End date, required when time_period is custom
         """

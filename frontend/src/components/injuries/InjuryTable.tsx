@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
+import { useGetNbaTeamsListQuery } from '../../store/api/fantasyApi';
 import type { InjuryRecord } from '../../types/injury';
 
 function fmtTimestamp(ts: string): string {
@@ -42,6 +44,19 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
   return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
 }
 
+function RosterLink({ team, teamId }: { team: string; teamId: string }) {
+  return (
+    <Link
+      to={`/nba-teams?team=${encodeURIComponent(teamId)}`}
+      aria-label={`${team} roster`}
+      title={`${team} roster`}
+      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-700 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 active:translate-y-px active:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:border-blue-700 dark:bg-gray-900 dark:text-blue-200 dark:hover:border-blue-500 dark:hover:bg-blue-950 dark:active:bg-blue-900"
+    >
+      Roster
+    </Link>
+  );
+}
+
 interface Props {
   records: InjuryRecord[];
   totalCount: number;
@@ -50,6 +65,14 @@ interface Props {
 export default function InjuryTable({ records, totalCount }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('last_update');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const { data: nbaTeams } = useGetNbaTeamsListQuery();
+  const depthChartTeamId = useMemo(() => {
+    const byName = new Map<string, string>();
+    for (const team of nbaTeams ?? []) {
+      byName.set(team.team_name.trim().toLowerCase(), team.team_id);
+    }
+    return (name: string) => byName.get(name.trim().toLowerCase());
+  }, [nbaTeams]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -104,9 +127,15 @@ export default function InjuryTable({ records, totalCount }: Props) {
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
             {sorted.map((r, i) => {
               const { gameTime, matchup } = parseGameParts(r);
+              const teamId = depthChartTeamId(r.team);
               return (
                 <tr key={`${r.team}|${r.player}|${i}`} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap">{r.team}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-medium text-gray-800 dark:text-gray-100">{r.team}</span>
+                      {teamId && <RosterLink team={r.team} teamId={teamId} />}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{gameTime || '—'}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{matchup || '—'}</td>
                   <td className="px-4 py-3 text-gray-800 dark:text-gray-100 whitespace-nowrap">{r.player}</td>
@@ -154,12 +183,16 @@ export default function InjuryTable({ records, totalCount }: Props) {
         {sorted.map((r, i) => {
           const { gameTime, matchup } = parseGameParts(r);
           const gameDisplay = [gameTime, matchup].filter(Boolean).join(' ');
+          const teamId = depthChartTeamId(r.team);
           return (
             <div key={`${r.team}|${r.player}|${i}`} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 shadow-sm w-full min-w-0">
               <div className="flex items-start justify-between gap-2 min-w-0">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{r.player}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{r.team}</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 min-w-0 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="truncate">{r.team}</span>
+                    {teamId && <RosterLink team={r.team} teamId={teamId} />}
+                  </p>
                   {gameDisplay && (
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{gameDisplay}</p>
                   )}

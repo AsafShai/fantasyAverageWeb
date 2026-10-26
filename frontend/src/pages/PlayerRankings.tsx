@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useTransition } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
+import { useGetAllPlayersQuery, useGetLatestMovesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useMyTeam } from '../context/MyTeamContext'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -32,6 +32,21 @@ const DEFAULT_WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) 
 
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
+/** null = everyone, 0 = free agents / waivers, 'rostered' = on any fantasy team. */
+type FantasyTeamFilter = number | 'rostered' | null
+
+function matchesFantasyTeam(teamId: number, filter: FantasyTeamFilter): boolean {
+  if (filter === null) return true
+  if (filter === 'rostered') return teamId !== 0
+  return teamId === filter
+}
+
+/** Short fantasy code. team_id 0 is a free agent or on waivers. */
+function fantasyTeamAbbrev(teamId: number, abbrevById: Map<number, string>): string {
+  if (teamId === 0) return 'FA'
+  return abbrevById.get(teamId) ?? '—'
+}
+
 function getSortVal(ranked: RankedPlayer, col: SortCol, displayMode: 'totals' | 'per_game'): number {
   if (col === 'totalZ') return ranked.totalZ
   if (col === 'gp') return ranked.player.stats.gp
@@ -48,8 +63,24 @@ export default function PlayerRankings() {
     time_period: period,
     ...(period === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   })
-  const { data: teams } = useGetTeamsListQuery()
+  const { data: teams, isSuccess: teamsLoaded } = useGetTeamsListQuery()
+  const teamsHaveAbbrevs = (teams ?? []).some(team => team.abbrev)
+  // The teams list carries the short code once the API includes it. Until then,
+  // the activity feed's team list has the same codes.
+  const { data: latestMoves } = useGetLatestMovesQuery(1, { skip: !teamsLoaded || teamsHaveAbbrevs })
   const { myTeamId, isMyTeam } = useMyTeam()
+  const abbrevById = useMemo(() => {
+    const map = new Map<number, string>()
+    for (const team of teams ?? []) {
+      if (team.abbrev) map.set(team.team_id, team.abbrev)
+    }
+    if (map.size === 0) {
+      for (const team of latestMoves?.teams ?? []) {
+        if (team.abbrev) map.set(team.team_id, team.abbrev)
+      }
+    }
+    return map
+  }, [teams, latestMoves])
   const allPlayers = useMemo(() => playersData?.players ?? [], [playersData])
   const { available: players, excluded: excludedPlayers } = useMemo(
     () => partitionByDataAvailability(allPlayers),
@@ -73,8 +104,7 @@ export default function PlayerRankings() {
   const [minGp, setMinGp] = usePersistedState('playerRankings.minGp', 0)
   const [minMin, setMinMin] = usePersistedState('playerRankings.minMin', 0)
   const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
-  // Fantasy team_id to show; 0 = free agents / waivers, null = everyone.
-  const [fantasyTeam, setFantasyTeam] = usePersistedState<number | null>('playerRankings.fantasyTeam', null)
+  const [fantasyTeam, setFantasyTeam] = usePersistedState<FantasyTeamFilter>('playerRankings.fantasyTeam', null)
   const [weights, setWeights] = usePersistedState<Record<RankingCategory, number>>('playerRankings.weights', { ...DEFAULT_WEIGHTS })
   // A persisted weights object from a previous session (or the default 8)
   // may be missing an entry for a category this league scores (e.g. TO) —
@@ -170,7 +200,7 @@ export default function PlayerRankings() {
     // so a team's players keep their rank among the whole pool.
     const withRank = filtered
       .map((ranked, idx) => ({ ranked, rank: idx + 1 }))
-      .filter(r => fantasyTeam === null || r.ranked.player.team_id === fantasyTeam)
+      .filter(r => matchesFantasyTeam(r.ranked.player.team_id, fantasyTeam))
     const limited = displayLimit === null ? withRank : withRank.slice(0, displayLimit)
     return limited.sort((a, b) => {
       if (sortCol === 'rank') return sortAsc ? a.rank - b.rank : b.rank - a.rank
@@ -237,7 +267,7 @@ export default function PlayerRankings() {
 
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Period</label>
-              <TimePeriodSelector value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
+              <TimePeriodSelector value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} showLastNight />
             </div>
 
             <div>
@@ -275,10 +305,14 @@ export default function PlayerRankings() {
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fantasy team</label>
               <select
                 value={fantasyTeam ?? ''}
-                onChange={e => setFantasyTeam(e.target.value === '' ? null : Number(e.target.value))}
+                onChange={e => {
+                  const value = e.target.value
+                  setFantasyTeam(value === '' ? null : value === 'rostered' ? 'rostered' : Number(value))
+                }}
                 className="w-full sm:w-auto sm:max-w-[14rem] truncate px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               >
                 <option value="">All</option>
+                <option value="rostered">Rostered</option>
                 <option value="0">Free Agents / Waivers</option>
                 {leadWithMyTeam(teams ?? [], myTeamId).map(team => (
                   <option key={team.team_id} value={team.team_id}>
@@ -303,7 +337,9 @@ export default function PlayerRankings() {
 
           {playersData?.actual_start && playersData?.actual_end && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              Showing {formatShort(playersData.actual_start)} – {formatShort(playersData.actual_end)}
+              Showing {playersData.actual_start === playersData.actual_end
+                ? formatShort(playersData.actual_start)
+                : `${formatShort(playersData.actual_start)} – ${formatShort(playersData.actual_end)}`}
             </p>
           )}
 
@@ -351,6 +387,7 @@ export default function PlayerRankings() {
                   <Th col="rank" label="#" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   <Th col="totalZ" label="Z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} tip={METRIC_GLOSSARY.totalZ} />
                   <th className="px-1.5 sm:px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">Player</th>
+                  <th className="px-1.5 sm:px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap" title="Fantasy team">Fantasy</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
                   <th className="hidden sm:table-cell px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Pos</th>
                   <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
@@ -369,6 +406,12 @@ export default function PlayerRankings() {
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-center font-mono text-xs">{rank}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{fmt(ranked.totalZ)}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700"><PlayerNameLink name={ranked.player.player_name} playerId={ranked.player.player_id} /></td>
+                    <td
+                      className={`px-1.5 sm:px-2 py-1.5 sm:py-2 text-xs font-medium whitespace-nowrap ${ranked.player.team_id === 0 ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}
+                      title={ranked.player.team_id === 0 ? 'Free agent' : (ranked.player.fantasy_team_name ?? undefined)}
+                    >
+                      {fantasyTeamAbbrev(ranked.player.team_id, abbrevById)}
+                    </td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.pro_team}</td>
                     <td className="hidden sm:table-cell px-2 py-2 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{ranked.player.positions.join(', ')}</td>
                     <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>

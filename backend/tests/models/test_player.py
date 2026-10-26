@@ -16,6 +16,14 @@ def test_resolve_window_season():
     assert end == TODAY
 
 
+def test_resolve_window_last_night_is_the_anchor_date():
+    start, end = StatTimePeriod.resolve_window(
+        StatTimePeriod.LAST_NIGHT, None, None, SEASON_START, today=TODAY
+    )
+    assert start == TODAY
+    assert end == TODAY
+
+
 def test_resolve_window_last_7():
     start, end = StatTimePeriod.resolve_window(
         StatTimePeriod.LAST_7, None, None, SEASON_START, today=TODAY
@@ -70,6 +78,7 @@ def test_resolve_window_custom_missing_dates_raises():
 
 @pytest.mark.parametrize("period,expected_id", [
     (StatTimePeriod.SEASON, 0),
+    (StatTimePeriod.LAST_NIGHT, 0),
     (StatTimePeriod.LAST_7, 1),
     (StatTimePeriod.LAST_15, 2),
     (StatTimePeriod.LAST_30, 3),

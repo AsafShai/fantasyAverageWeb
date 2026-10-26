@@ -5,6 +5,7 @@ from enum import Enum
 
 class StatTimePeriod(str, Enum):
     SEASON = "season"
+    LAST_NIGHT = "last_night"
     LAST_7 = "last_7"
     LAST_15 = "last_15"
     LAST_30 = "last_30"
@@ -14,6 +15,9 @@ class StatTimePeriod(str, Enum):
     def to_stat_split_id(cls, period: 'StatTimePeriod') -> int:
         mapping = {
             cls.SEASON: 0,
+            # ESPN has no one-night split. 0 is only the roster list; the
+            # night's box scores replace those season numbers.
+            cls.LAST_NIGHT: 0,
             cls.LAST_7: 1,
             cls.LAST_15: 2,
             cls.LAST_30: 3,
@@ -50,6 +54,8 @@ class StatTimePeriod(str, Enum):
             return start, end
         if period == cls.SEASON:
             return season_start, today
+        if period == cls.LAST_NIGHT:
+            return today, today
         if period == cls.LAST_7:
             return max(today - timedelta(days=6), season_start), today
         if period == cls.LAST_15:
