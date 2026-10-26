@@ -967,4 +967,3 @@ async def test_get_standings_updated_at_is_none_on_db_fallback(provider):
     }
 
     assert await provider.get_standings_updated_at() is None
-
