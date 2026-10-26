@@ -1,0 +1,139 @@
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderWithProviders } from '../../test/helpers'
+import BoxScores from '../BoxScores'
+
+const board = {
+  date: '2026-10-25',
+  games: [
+    {
+      game_id: '100',
+      status: 'final',
+      status_detail: 'Final',
+      start_time: '2026-10-26T02:00:00Z',
+      broadcast: 'ESPN',
+      venue: 'Delta Center',
+      away: {
+        team_id: '13', name: 'Los Angeles Lakers', short_name: 'Lakers', abbreviation: 'LAL',
+        logo: '', color: '552583', record: '3-1', score: 129, winner: true,
+      },
+      home: {
+        team_id: '26', name: 'Utah Jazz', short_name: 'Jazz', abbreviation: 'UTAH',
+        logo: '', color: '002B5C', record: '1-3', score: 117, winner: false,
+      },
+    },
+  ],
+}
+
+const box = {
+  game_id: '100',
+  status: 'final',
+  status_detail: 'Final',
+  start_time: '2026-10-26T02:00:00Z',
+  broadcast: 'ESPN',
+  venue: 'Delta Center',
+  periods: ['1', '2', '3', '4'],
+  away: {
+    ...board.games[0].away,
+    linescores: ['30', '40', '29', '30'],
+    starters: [{
+      player_id: '1', name: 'Austin Reaves', position: 'G', ejected: false,
+      min: '34', pts: '28', fg: '10-18', fg3: '3-7', ft: '5-5', reb: '4', ast: '6',
+      tov: '2', stl: '1', blk: '0', oreb: '1', dreb: '3', pf: '2', plus_minus: '+12',
+    }],
+    bench: [],
+    did_not_play: [{ player_id: '9', name: 'Sit Out', position: 'F', reason: "Coach's Decision" }],
+    totals: {
+      min: '240', pts: '129', fg: '48-90', fg3: '12-30', ft: '21-24', reb: '45', ast: '28',
+      tov: '12', stl: '8', blk: '4', oreb: '10', dreb: '35', pf: '18', plus_minus: '',
+    },
+    shooting: {
+      fg_pct: '53.3', fg3_pct: '40.0', ft_pct: '87.5',
+      points_in_paint: '52', fast_break_points: '14', turnover_points: '11', largest_lead: '16',
+    },
+  },
+  home: {
+    ...board.games[0].home,
+    linescores: ['28', '30', '31', '28'],
+    starters: [],
+    bench: [],
+    did_not_play: [],
+    totals: {
+      min: '', pts: '117', fg: '', fg3: '', ft: '', reb: '', ast: '',
+      tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '',
+    },
+    shooting: {
+      fg_pct: '', fg3_pct: '', ft_pct: '',
+      points_in_paint: '', fast_break_points: '', turnover_points: '', largest_lead: '',
+    },
+  },
+}
+
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+describe('BoxScores', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/nba/scoreboard')) {
+        const date = new URL(url, 'http://localhost').searchParams.get('date')
+        return json({ ...board, date })
+      }
+      if (url.includes('/boxscore')) return json(box)
+      return json({}, 404)
+    }))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('shows the slate and the selected box score', async () => {
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    expect(await screen.findByRole('button', { name: /Final/ })).toBeInTheDocument()
+    expect(screen.getAllByText('129').length).toBeGreaterThan(0)
+    expect((await screen.findAllByRole('link', { name: 'Austin Reaves' })).length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Sit Out (Coach's Decision)").length).toBeGreaterThan(0)
+  })
+
+  it('hides scores while No spoilers is on', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    expect((await screen.findAllByText('129')).length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: 'No spoilers' }))
+    await waitFor(() => {
+      expect(screen.queryByText('129')).not.toBeInTheDocument()
+      expect(screen.queryByText('+12')).not.toBeInTheDocument()
+      expect(screen.queryByText('10-18')).not.toBeInTheDocument()
+      expect(screen.queryByText('53.3')).not.toBeInTheDocument()
+      expect(screen.queryByText("Coach's Decision")).not.toBeInTheDocument()
+    })
+    expect(screen.getAllByLabelText('Score hidden').length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: 'Austin Reaves' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Sit Out').length).toBeGreaterThan(0)
+  })
+
+  it('moves to the next date', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    await screen.findByRole('button', { name: /Final/ })
+    await user.click(screen.getByRole('button', { name: 'Next day' }))
+    await waitFor(() => {
+      expect(screen.getByLabelText('Choose a date')).toHaveValue('2026-10-26')
+    })
+  })
+})

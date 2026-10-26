@@ -13,6 +13,7 @@ import PlayerNextGameCard from '../components/PlayerNextGameCard'
 function backLabel(from: string | undefined): string {
   if (!from) return '← Back'
   if (from.startsWith('/nba-teams')) return '← Back to NBA Teams'
+  if (from.startsWith('/box-scores')) return '← Back to Box Scores'
   if (from.startsWith('/players')) return '← Back to Players'
   if (from.startsWith('/team/')) return '← Back to Team'
   if (from.startsWith('/player-rankings')) return '← Back to Player Rankings'

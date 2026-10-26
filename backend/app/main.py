@@ -26,6 +26,7 @@ from app.routes.projections import router as projections_router
 from app.routes.feature_store import router as feature_store_router
 from app.routes.trends import router as trends_router
 from app.routes.schedule import router as schedule_router
+from app.routes.box_scores import router as box_scores_router
 from app.routes.adp import router as adp_router
 from app.routes.surprises import router as surprises_router
 from dotenv import load_dotenv
@@ -219,6 +220,7 @@ app.include_router(projections_router, prefix='/api/projections', tags=['Project
 app.include_router(feature_store_router, prefix='/api/feature-store', tags=['Feature Store'])
 app.include_router(trends_router, prefix='/api/trends', tags=['Trends'])
 app.include_router(schedule_router, prefix='/api/nba', tags=['NBA Schedule'])
+app.include_router(box_scores_router, prefix='/api/nba', tags=['NBA Box Scores'])
 app.include_router(adp_router, prefix='/api/adp', tags=['ADP'])
 app.include_router(surprises_router, prefix='/api/surprises', tags=['Surprises'])
 
