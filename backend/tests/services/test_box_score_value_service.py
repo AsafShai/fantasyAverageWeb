@@ -90,8 +90,7 @@ async def test_slate_values_tags_owner_on_that_night_and_free_agents():
          patch.object(svc, "boxscore_for", AsyncMock(side_effect=lambda gid: boxes[gid])), \
          patch.object(svc, "fantasy_roster_for", AsyncMock(return_value={1: {"team_id": 7, "slot": "PG"}})), \
          patch.object(svc, "_league_categories", AsyncMock(return_value=(["PTS", "FG%"], set()))), \
-         patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({7: "TTP"}, {7: "Trust the process"}))), \
-         patch.object(svc, "_season_lines", AsyncMock(return_value=None)):
+         patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({7: "TTP"}, {7: "Trust the process"}))):
         result = await slate_values(date(2026, 10, 25))
     assert result["complete"] is True
     assert result["categories"] == ["PTS", "FG%"]
@@ -115,47 +114,7 @@ async def test_slate_values_is_incomplete_while_a_game_is_live():
          patch.object(svc, "boxscore_for", AsyncMock(return_value=_box("100", "final", [_player("1", "A")], []))) as box, \
          patch.object(svc, "fantasy_roster_for", AsyncMock(return_value={})), \
          patch.object(svc, "_league_categories", AsyncMock(return_value=(["PTS"], set()))), \
-         patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({}, {}))), \
-         patch.object(svc, "_season_lines", AsyncMock(return_value=None)):
+         patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({}, {}))):
         result = await slate_values(date(2026, 10, 25))
     assert result["complete"] is False
     box.assert_awaited_once_with("100")
-
-
-def test_season_line_is_per_game_like_the_rankings_page():
-    stats = {"gp": 4, "pts": 100, "reb": 40, "ast": 20, "stl": 4, "blk": 8, "three_pm": 12,
-             "fgm": 36, "fga": 80, "ftm": 16, "fta": 20, "fg_percentage": 0.45, "ft_percentage": 0.8,
-             "minutes": 140, "stats": {"PTS": 100, "TO": 12}}
-    line = svc.season_line(stats, ["PTS", "REB", "3PM", "FG%", "FT%", "TO"])
-    assert line["PTS"] == 25 and line["REB"] == 10 and line["3PM"] == 3 and line["TO"] == 3
-    assert line["FGA"] == 20 and line["FGM"] == pytest.approx(9.0)
-    assert line["FTA"] == 5 and line["FTM"] == pytest.approx(4.0)
-    # A player with no games divides by 1, as the page does.
-    assert svc.season_line({**stats, "gp": 0}, ["PTS"])["PTS"] == 100
-
-
-def test_a_game_is_scored_against_the_season_pool_not_the_slate():
-    season = [svc.season_line({"gp": 1, "pts": p, "stats": {"PTS": p}}, ["PTS"]) for p in (10, 20, 30)]
-    game = [stat_line(_player("1", "A", pts="20")), stat_line(_player("2", "B", pts="40"))]
-    zs, _ = slate_zscores(game, ["PTS"], set(), season)
-    # Season pool mean 20, std 8.165: 20 -> 0, 40 -> +2.45 (the slate alone would give -1/+1).
-    assert zs == [0.0, 2.45]
-
-
-@pytest.mark.asyncio
-async def test_slate_values_reports_the_basis():
-    svc.clear_box_score_value_cache()
-    board = {"date": "2026-10-25", "games": [{"game_id": "100", "status": "final"}]}
-    season = [svc.season_line({"gp": 1, "pts": p, "stats": {"PTS": p}}, ["PTS"]) for p in (5, 10)]
-    common = dict(
-        scoreboard_for=AsyncMock(return_value=board),
-        boxscore_for=AsyncMock(return_value=_box("100", "final", [_player("1", "A")], [])),
-        fantasy_roster_for=AsyncMock(return_value={}),
-        _league_categories=AsyncMock(return_value=(["PTS"], set())),
-        _fantasy_teams=AsyncMock(return_value=({}, {})),
-    )
-    for seasonal, basis in ((season, "season"), (None, "slate")):
-        svc.clear_box_score_value_cache()
-        with patch.multiple(svc, **common, _season_lines=AsyncMock(return_value=seasonal)):
-            result = await slate_values(date(2026, 10, 25))
-        assert result["basis"] == basis

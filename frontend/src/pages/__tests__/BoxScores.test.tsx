@@ -82,7 +82,6 @@ const values = {
   complete: true,
   games_counted: 1,
   categories: ['PTS', 'REB'],
-  basis: 'season',
   players: [valuePlayer],
 }
 

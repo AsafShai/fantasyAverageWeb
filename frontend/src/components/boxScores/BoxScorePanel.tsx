@@ -130,7 +130,7 @@ export function FantasyTeamTag({ value }: { value: SlatePlayerValue | undefined 
   )
 }
 
-function PlayerTable({ team, hideScores, values, zTitle }: { team: BoxTeamBox; hideScores: boolean; values?: PlayerValues; zTitle?: string }) {
+function PlayerTable({ team, hideScores, values }: { team: BoxTeamBox; hideScores: boolean; values?: PlayerValues }) {
   const groups = [
     { label: 'Starters', players: team.starters },
     { label: 'Bench', players: team.bench },
@@ -163,7 +163,7 @@ function PlayerTable({ team, hideScores, values, zTitle }: { team: BoxTeamBox; h
                 {values && (
                   <>
                     <th className="px-2 py-2 text-left font-semibold" title="Fantasy team that rostered him on the night of the game">Fantasy</th>
-                    <th className="px-2 py-2 text-right font-semibold" title={zTitle}>Z</th>
+                    <th className="px-2 py-2 text-right font-semibold" title="Z-score of this line against every player line on the slate: every player who played that night, over the league's categories, scored like Player Rankings (0 = an average line)">Z</th>
                   </>
                 )}
                 {COLUMNS.map(column => (
@@ -304,15 +304,12 @@ export default function BoxScorePanel({
   revealed = false,
   onToggleReveal,
   values,
-  zTitle,
 }: {
   game: GameBoxScore
   hideScores: boolean
   revealed?: boolean
   onToggleReveal?: () => void
   values?: PlayerValues
-  /** Tooltip for the Z column. */
-  zTitle?: string
 }) {
   const [side, setSide] = useState<'away' | 'home'>('away')
   const spoilable = hideScores && game.status !== 'scheduled'
@@ -373,7 +370,7 @@ export default function BoxScorePanel({
         })}
       </div>
       <div className="mt-4">
-        <PlayerTable team={shown} hideScores={hide} values={hide ? undefined : values} zTitle={zTitle} />
+        <PlayerTable team={shown} hideScores={hide} values={hide ? undefined : values} />
       </div>
     </section>
   )

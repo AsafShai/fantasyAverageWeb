@@ -137,8 +137,5 @@ export interface SlateValues {
   complete: boolean
   games_counted: number
   categories: string[]
-  /** What Z is measured against: the Player Rankings season pool (per game,
-   * top 300), or the night's own lines when season stats were unavailable. */
-  basis: 'season' | 'slate'
   players: SlatePlayerValue[]
 }

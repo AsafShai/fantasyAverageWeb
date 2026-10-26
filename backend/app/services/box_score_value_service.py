@@ -1,18 +1,13 @@
-"""One slate's player values: a Z per player line, and the fantasy team that
-owned him that night.
+"""One slate's player values: a z-score per player line, against every other
+line on the same slate, and the fantasy team that owned him that night.
 
-The Z is the Player Rankings value (frontend/src/utils/playerRankings.ts) of a
-single game: the page's reference pool is rebuilt here exactly as the page
-builds it with its defaults (season stats, per game, no minimum games or
-minutes: every player, and with 300+ of them the top 300 by a first pass), and
-each game line is scored against that pool the way scoreAgainstPool scores a
-player outside it. Per category, counting stats are plain z-scores; FG% and FT%
-are the z of (pct - the pool's mean pct) * attempts; a reverse category
-(turnovers) is negated; the value is the mean across categories. So a game's Z
-reads on the Rankings scale: +1.5 is a game worth what a +1.5 player averages.
-
-Every player who was not a DNP gets a Z. When season stats are unavailable the
-night's own lines are the pool instead, and the response says so.
+The z is computed exactly the way the Player Rankings page computes it
+(frontend/src/utils/playerRankings.ts), with the night's box scores as the
+pool: every player who was not a DNP. Per category, counting stats are plain
+z-scores; FG% and FT% are the z of (player pct - the pool's mean pct) *
+attempts; a reverse category (turnovers) is negated. The line's value is the
+mean across categories. With 300+ lines, the reference pool is the top 300 by
+a first pass, and every line is scored against it (scoreAgainstPool).
 """
 
 from __future__ import annotations
@@ -114,68 +109,18 @@ def _score(lines: list[dict[str, float]], pool: list[dict[str, float]], categori
     return [total / len(categories) for total in totals]
 
 
-def reference_pool(players: list[dict[str, float]], categories: list[str], reverse: set[str]) -> list[dict[str, float]]:
-    """Player Rankings' reference pool: everyone, or with 300+ players the top
-    300 by a first pass over everyone."""
-    if len(players) < REFERENCE_POOL_SIZE:
-        return players
-    first = _score(players, players, categories, reverse)
-    ranked = sorted(range(len(players)), key=lambda i: -first[i])
-    return [players[i] for i in ranked[:REFERENCE_POOL_SIZE]]
-
-
-def slate_zscores(lines: list[dict[str, float]], categories: list[str], reverse: set[str],
-                  season: list[dict[str, float]] | None = None) -> tuple[list[float], list[str]]:
-    """Each line's Z and the categories it was taken over, against the
-    reference pool built from ``season`` (per-game lines), or from the night's
-    own lines when there is none. Categories a box score cannot carry are left
-    out."""
+def slate_zscores(lines: list[dict[str, float]], categories: list[str], reverse: set[str]) -> tuple[list[float], list[str]]:
+    """Each line's z and the categories it was taken over. Categories a box
+    score cannot carry are left out."""
     used = [c for c in categories if c in _PERCENTAGES or c in _COUNTING]
     if not lines or not used:
         return [0.0] * len(lines), used
-    pool = reference_pool(season or lines, used, reverse)
+    pool = lines
+    if len(lines) >= REFERENCE_POOL_SIZE:
+        first = _score(lines, lines, used, reverse)
+        ranked = sorted(range(len(lines)), key=lambda i: -first[i])
+        pool = [lines[i] for i in ranked[:REFERENCE_POOL_SIZE]]
     return [round(z, 2) for z in _score(lines, pool, used, reverse)], used
-
-
-# Category -> the field a players-list entry carries it in when its generic
-# stats dict lacks it (playerRankings.ts FIXED_FIELD_KEY).
-_FIXED_FIELDS = {"FG%": "fg_percentage", "FT%": "ft_percentage", "3PM": "three_pm", "AST": "ast",
-                 "REB": "reb", "STL": "stl", "BLK": "blk", "PTS": "pts"}
-
-
-def season_line(stats: dict, categories: list[str]) -> dict[str, float]:
-    """A players-list entry's season stats as a per-game line in the keys a box
-    line uses, the way the Rankings page reads them in per-game mode."""
-    gp = max(float(stats.get("gp") or 0), 1.0)
-    generic = stats.get("stats") or {}
-    line = {key: 0.0 for key in set(_COUNTING.values()) | {"FGM", "FGA", "FTM", "FTA", "MIN"}}
-    for category in categories:
-        if category in _PERCENTAGES:
-            made, attempted = _PERCENTAGES[category]
-            attempts = float(stats.get(attempted.lower()) or 0) / gp
-            pct = generic.get(category, stats.get(_FIXED_FIELDS[category]))
-            line[attempted] = attempts
-            line[made] = float(pct or 0) * attempts
-        elif category in _COUNTING:
-            raw = generic.get(category, stats.get(_FIXED_FIELDS.get(category, ""), 0))
-            line[_COUNTING[category]] = float(raw or 0) / gp
-    return line
-
-
-async def _season_lines(categories: list[str]) -> list[dict[str, float]] | None:
-    """Every player in the Rankings page's list, as per-game lines; None when
-    the season stats cannot be had."""
-    from app.services.player_service import PlayerService
-
-    try:
-        players = await PlayerService().get_all_players(page=1, limit=5000)
-    except Exception as exc:
-        logger.warning(f"Slate values: season stats unavailable, scoring against the slate: {type(exc).__name__}: {exc}")
-        return None
-    # The page ranks only players with data (partitionByDataAvailability).
-    lines = [season_line(player.stats.model_dump(), categories)
-             for player in players.players if player.has_data is not False]
-    return lines or None
 
 
 async def _league_categories() -> tuple[list[str], set[str]]:
@@ -265,8 +210,7 @@ async def slate_values(day: date) -> dict:
     (categories, reverse), roster, (abbrevs, names) = await asyncio.gather(
         _league_categories(), _roster_on(day), _fantasy_teams(),
     )
-    season = await _season_lines(categories) if lines else None
-    zs, used = slate_zscores(lines, categories, reverse, season)
+    zs, used = slate_zscores(lines, categories, reverse)
     for row, z in zip(rows, zs):
         row["z"] = z
         owner = roster.get(int(row["player_id"])) if row["player_id"].isdigit() else None
@@ -281,9 +225,6 @@ async def slate_values(day: date) -> dict:
         "complete": complete,
         "games_counted": sum(1 for box in boxes if not isinstance(box, Exception)),
         "categories": used,
-        # What the Z is measured against: the Rankings page's season pool, or
-        # the night's own lines when season stats were unavailable.
-        "basis": "season" if season else "slate",
         "players": rows,
     }
     _cache[key] = (time.monotonic() + _ttl(games, day, complete), payload)
