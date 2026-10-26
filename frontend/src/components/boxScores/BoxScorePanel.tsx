@@ -115,18 +115,33 @@ export function ZValue({ z }: { z: number }) {
   return <span className={tone}>{signedZ(z)}</span>
 }
 
-export function FantasyTeamTag({ value }: { value: SlatePlayerValue | undefined }) {
+const TAG_CLASS = 'inline-block rounded bg-indigo-50 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300'
+
+/**
+ * The fantasy team that had the player that night. `full` shows the team's
+ * name (roomy places like Lines of the night); otherwise the abbreviation,
+ * which a tap swaps for the full name (phones have no hover title).
+ */
+export function FantasyTeamTag({ value, full = false }: { value: SlatePlayerValue | undefined; full?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
   if (!value) return <span className="text-gray-300 dark:text-gray-600">—</span>
   if (!value.fantasy_team) {
     return <span className="text-[10px] font-semibold uppercase text-gray-400" title="Free agent that night">FA</span>
   }
+  const name = value.fantasy_team_name ?? value.fantasy_team
+  if (full) return <span className={`${TAG_CLASS} min-w-0 max-w-full truncate`}>{name}</span>
+  if (name === value.fantasy_team) return <span className={TAG_CLASS}>{name}</span>
   return (
-    <span
-      className="inline-block max-w-[5.5rem] truncate rounded bg-indigo-50 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300"
-      title={value.fantasy_team_name ?? value.fantasy_team}
+    <button
+      type="button"
+      onClick={() => setExpanded(current => !current)}
+      aria-expanded={expanded}
+      aria-label={expanded ? `${name}, show abbreviation` : `${value.fantasy_team}: ${name}`}
+      title={name}
+      className={`${TAG_CLASS} cursor-pointer whitespace-nowrap hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:hover:bg-indigo-900`}
     >
-      {value.fantasy_team}
-    </span>
+      {expanded ? name : value.fantasy_team}
+    </button>
   )
 }
 
