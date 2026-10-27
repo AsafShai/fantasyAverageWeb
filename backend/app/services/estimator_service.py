@@ -150,9 +150,10 @@ class EstimatorService:
             return False
 
     async def warmup_status(self) -> tuple[int, int] | None:
-        """(game days the furthest team has, game days needed) while no team
-        has enough yet to be estimated; None once one has, or if the snapshot
-        can't be read (the caller then keeps its generic message)."""
+        """(the fewest game days any team has, game days needed) while some
+        team doesn't have enough yet, so nothing is estimated; None once every
+        team has, or if the snapshot can't be read (the caller then keeps its
+        generic message)."""
         from app.fantsy_estimator import FantasyEstimator
         estimator = FantasyEstimator()
         try:

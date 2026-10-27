@@ -74,7 +74,7 @@ def test_estimator_results_no_data_404(mock_svc_cls, mock_prov_cls, test_client)
 
 @patch("app.routes.estimator.DataProvider")
 @patch("app.routes.estimator.EstimatorService")
-def test_estimator_results_early_season_says_how_many_game_days_are_left(mock_svc_cls, mock_prov_cls, test_client):
+def test_estimator_results_early_season_says_how_many_game_days_the_slowest_team_lacks(mock_svc_cls, mock_prov_cls, test_client):
     mock_svc = MagicMock()
     mock_svc.get_latest = AsyncMock(return_value=None)
     mock_svc.run_and_store = AsyncMock(return_value=False)
@@ -85,7 +85,8 @@ def test_estimator_results_early_season_says_how_many_game_days_are_left(mock_sv
     response = test_client.get("/api/estimator/results")
     assert response.status_code == 404
     detail = response.json()["detail"]
-    assert "11 game days" in detail and "has 7 so far" in detail and "4 more to go" in detail
+    assert "every team has played 11 game days" in detail
+    assert "fewest has 7 so far" in detail and "4 more to go" in detail
 
 
 @patch("app.routes.estimator.DataProvider")

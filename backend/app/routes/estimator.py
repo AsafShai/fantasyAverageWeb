@@ -38,14 +38,15 @@ def _build_results(data: dict, elapsed_ms: float) -> EstimatorResults:
 
 def _no_results_detail(warmup: tuple[int, int] | None) -> str:
     """The 404 text: how far the season's start still is when that is the
-    reason (the estimator skips teams with too few game days), else generic."""
+    reason (the estimator waits until every team has enough game days),
+    else generic."""
     if warmup is None:
         return "No estimator data available yet. The estimator runs daily after NBA games are completed."
     played, needed = warmup
     left = needed - played
     return (
-        f"The estimator starts once a team has played {needed} game days this season. "
-        f"The furthest team has {played} so far, {left} more to go; "
+        f"The estimator starts once every team has played {needed} game days this season. "
+        f"The team with the fewest has {played} so far, {left} more to go; "
         f"it runs daily after NBA games are completed."
     )
 
