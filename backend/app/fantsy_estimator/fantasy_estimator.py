@@ -55,21 +55,27 @@ class FantasyEstimator:
 
     @property
     def periods_needed(self) -> int:
-        """Game days (scoring periods with games) a team needs before it is
-        estimated: more than minimum_period_id."""
+        """Game days (scoring periods with games) every team needs before the
+        league is estimated: more than minimum_period_id."""
         return self.fantasy_configuration.minimum_period_id + 1
 
-    def periods_played(self, df: pd.DataFrame) -> int:
-        """The most game days any team has, counted exactly as ``estimate``
-        counts them before skipping a team (0 when none has played)."""
-        preprocess_df = self.preprocess.transform(df)
+    def _teams(self, preprocess_df: pd.DataFrame) -> dict:
+        """team_id -> that team's rows after the per-team preprocess (the
+        period_index column numbers its game days)."""
         c = self.columns
-        most = 0
-        for team_id in preprocess_df[c.TEAM_ID].unique():
-            df_team = self._preprocess_team(preprocess_df[preprocess_df[c.TEAM_ID] == team_id])
-            if not df_team.empty:
-                most = max(most, int(df_team[PreprocessColumns.PERIOD_INDEX].max()))
-        return most
+        return {
+            team_id: self._preprocess_team(preprocess_df[preprocess_df[c.TEAM_ID] == team_id])
+            for team_id in preprocess_df[c.TEAM_ID].unique()
+        }
+
+    @staticmethod
+    def _fewest_periods(teams: dict) -> int:
+        return min((len(df_team) for df_team in teams.values()), default=0)
+
+    def periods_played(self, df: pd.DataFrame) -> int:
+        """The fewest game days any team has, counted exactly as ``estimate``
+        counts them before it runs (0 when a team hasn't played)."""
+        return self._fewest_periods(self._teams(self.preprocess.transform(df)))
 
     def _compute_final_and_variance(
         self,
@@ -349,29 +355,23 @@ class FantasyEstimator:
         self._log_input_stats(df)
         preprocess_df = self.preprocess.transform(df)
         c = self.columns
-        min_period_id = self.fantasy_configuration.minimum_period_id
+        teams = self._teams(preprocess_df)
+        # All teams or none: a ranking of only the teams with enough game days
+        # would compare a partial league.
+        fewest = self._fewest_periods(teams)
+        if fewest < self.periods_needed:
+            self.logger.info(
+                "Not estimating yet: the fewest game days of any team is %s, every team needs %s",
+                fewest, self.periods_needed,
+            )
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         results: list[dict] = []
         mc_data: list[tuple[int, str, np.ndarray, np.ndarray, float]] = []
-        for team_id in preprocess_df[c.TEAM_ID].unique():
-            df_team = preprocess_df[preprocess_df[c.TEAM_ID] == team_id]
-            df_team = self._preprocess_team(df_team)
-            if df_team.empty:
-                self.logger.debug("Skipping team_id=%s: no rows after per-team preprocess", team_id)
-                continue
-            if df_team[PreprocessColumns.PERIOD_INDEX].max() <= min_period_id:
-                self.logger.debug(
-                    "Skipping team_id=%s: max(period_index)=%s <= minimum_period_id=%s",
-                    team_id,
-                    df_team[PreprocessColumns.PERIOD_INDEX].max(),
-                    min_period_id,
-                )
-                continue
+        for team_id, df_team in teams.items():
             result, mean_10, cov_10 = self._estimate_per_team(df_team, nba_avg_pace, slot_proj_df)
             self.logger.debug("team_id=%s estimated_final_pts=%s", team_id, result.get(OutputColumnNames.EstimatedFinal.PTS))
             results.append(result)
             mc_data.append((result[c.TEAM_ID], result[c.TEAM_NAME], mean_10, cov_10, result["projected_total_gp"]))
-        if not results:
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         out_cols = (
             [c.TEAM_ID, c.TEAM_NAME, "as_of_date", "projected_total_gp"]
             + list(OutputColumnNames.EstimatedFinal.all())

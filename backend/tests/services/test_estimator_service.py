@@ -199,16 +199,19 @@ async def test_scheduler_runs_estimator_when_sync_wrote_nothing_and_survives_err
 
 
 @pytest.mark.asyncio
-async def test_warmup_status_counts_game_days_until_a_team_has_enough(estimator_service, monkeypatch):
+async def test_warmup_status_counts_the_slowest_teams_game_days(estimator_service, monkeypatch):
     from tests.services.test_fantasy_estimator_fallback import make_snapshot
     from app.fantsy_estimator import FantasyEstimator
     needed = FantasyEstimator().periods_needed
 
-    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=make_snapshot(1, 6)))
+    import pandas as pd
+    one_ready_one_not = pd.concat([make_snapshot(1, 30), make_snapshot(2, 6)], ignore_index=True)
+    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=one_ready_one_not))
     played, need = await estimator_service.warmup_status()
-    assert need == needed and 0 < played < needed
+    assert need == needed and 0 < played < needed                   # the slowest team, not the furthest
 
-    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=make_snapshot(1, 30)))
+    both_ready = pd.concat([make_snapshot(1, 30), make_snapshot(2, 30)], ignore_index=True)
+    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=both_ready))
     assert await estimator_service.warmup_status() is None          # enough: the 404 has another cause
 
     monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(side_effect=RuntimeError("No snapshot data in DB")))
