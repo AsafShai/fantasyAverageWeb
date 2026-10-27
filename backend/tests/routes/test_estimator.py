@@ -60,6 +60,7 @@ def test_estimator_results_no_data_404(mock_svc_cls, mock_prov_cls, test_client)
     mock_svc = MagicMock()
     mock_svc.get_latest = AsyncMock(return_value=None)
     mock_svc.run_and_store = AsyncMock(return_value=False)
+    mock_svc.warmup_status = AsyncMock(return_value=None)
     mock_svc_cls.return_value = mock_svc
 
     mock_prov = MagicMock()
@@ -68,6 +69,23 @@ def test_estimator_results_no_data_404(mock_svc_cls, mock_prov_cls, test_client)
 
     response = test_client.get("/api/estimator/results")
     assert response.status_code == 404
+    assert response.json()["detail"].startswith("No estimator data available yet")
+
+
+@patch("app.routes.estimator.DataProvider")
+@patch("app.routes.estimator.EstimatorService")
+def test_estimator_results_early_season_says_how_many_game_days_are_left(mock_svc_cls, mock_prov_cls, test_client):
+    mock_svc = MagicMock()
+    mock_svc.get_latest = AsyncMock(return_value=None)
+    mock_svc.run_and_store = AsyncMock(return_value=False)
+    mock_svc.warmup_status = AsyncMock(return_value=(7, 11))
+    mock_svc_cls.return_value = mock_svc
+    mock_prov_cls.return_value.sync_db_now = AsyncMock(return_value=False)
+
+    response = test_client.get("/api/estimator/results")
+    assert response.status_code == 404
+    detail = response.json()["detail"]
+    assert "11 game days" in detail and "has 7 so far" in detail and "4 more to go" in detail
 
 
 @patch("app.routes.estimator.DataProvider")
@@ -153,6 +171,7 @@ def test_empty_results_rerun_inline_at_most_once_per_cooldown(test_client):
         service = service_cls.return_value
         service.get_latest = AsyncMock(return_value=None)
         service.run_and_store = AsyncMock(return_value=False)
+        service.warmup_status = AsyncMock(return_value=None)
         provider_cls.return_value.sync_db_now = AsyncMock(return_value=False)
 
         assert test_client.get("/api/estimator/results").status_code == 404

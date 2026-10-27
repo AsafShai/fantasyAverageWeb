@@ -196,3 +196,23 @@ async def test_scheduler_runs_estimator_when_sync_wrote_nothing_and_survives_err
         await estimator_scheduler.start_scheduler()
 
     assert service.run_and_store.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_warmup_status_counts_game_days_until_a_team_has_enough(estimator_service, monkeypatch):
+    from tests.services.test_fantasy_estimator_fallback import make_snapshot
+    from app.fantsy_estimator import FantasyEstimator
+    needed = FantasyEstimator().periods_needed
+
+    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=make_snapshot(1, 6)))
+    played, need = await estimator_service.warmup_status()
+    assert need == needed and 0 < played < needed
+
+    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=make_snapshot(1, 30)))
+    assert await estimator_service.warmup_status() is None          # enough: the 404 has another cause
+
+    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(side_effect=RuntimeError("No snapshot data in DB")))
+    assert await estimator_service.warmup_status() == (0, needed)   # before the first games
+
+    monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(side_effect=OSError("db down")))
+    assert await estimator_service.warmup_status() is None          # unknown: the generic 404, never a 500
