@@ -149,6 +149,27 @@ class EstimatorService:
             self._results_current = False
             return False
 
+    async def warmup_status(self) -> tuple[int, int] | None:
+        """(the fewest game days any team has, game days needed) while some
+        team doesn't have enough yet, so nothing is estimated; None once every
+        team has, or if the snapshot can't be read (the caller then keeps its
+        generic message)."""
+        from app.fantsy_estimator import FantasyEstimator
+        estimator = FantasyEstimator()
+        try:
+            df = await self._get_snapshot_df()
+        except RuntimeError:
+            return 0, estimator.periods_needed      # no snapshot yet: nobody has played
+        except Exception as e:
+            logger.warning(f"Could not read the snapshot for the estimator warm-up: {type(e).__name__}: {e}")
+            return None
+        try:
+            played = await asyncio.to_thread(estimator.periods_played, df)
+        except Exception as e:
+            logger.warning(f"Could not count estimator game days: {type(e).__name__}: {e}")
+            return None
+        return (played, estimator.periods_needed) if played < estimator.periods_needed else None
+
     async def get_latest(self) -> dict | None:
         if self._cache:
             return self._cache

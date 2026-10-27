@@ -36,6 +36,21 @@ def _build_results(data: dict, elapsed_ms: float) -> EstimatorResults:
     )
 
 
+def _no_results_detail(warmup: tuple[int, int] | None) -> str:
+    """The 404 text: how far the season's start still is when that is the
+    reason (the estimator waits until every team has enough game days),
+    else generic."""
+    if warmup is None:
+        return "No estimator data available yet. The estimator runs daily after NBA games are completed."
+    played, needed = warmup
+    left = needed - played
+    return (
+        f"The estimator starts once every team has played {needed} game days this season. "
+        f"The team with the fewest has {played} so far, {left} more to go; "
+        f"it runs daily after NBA games are completed."
+    )
+
+
 async def _sync_and_run(service: EstimatorService, provider: DataProvider) -> None:
     synced = await provider.sync_db_now()
     logger.info(f"Estimator background sync: {'new ESPN data written' if synced else 'snapshot already current'}, running estimator if behind it")
@@ -79,10 +94,7 @@ async def get_estimator_results():
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         if not data or not data.get("rankings"):
-            raise HTTPException(
-                status_code=404,
-                detail="No estimator data available yet. The estimator runs daily after NBA games are completed."
-            )
+            raise HTTPException(status_code=404, detail=_no_results_detail(await service.warmup_status()))
 
         return _build_results(data, elapsed_ms)
 

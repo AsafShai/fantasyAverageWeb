@@ -76,3 +76,28 @@ class TestEstimateWithoutSlotData:
         by_team = predictions.set_index('team_id')['projected_total_gp']
         assert by_team[1] == pytest.approx(700.0)
         assert by_team[2] == pytest.approx(180 * 82 / 30.0)
+
+
+class TestPeriodsPlayed:
+    @pytest.mark.parametrize('days', [1, 8, 11, 12, 13])
+    def test_league_is_estimated_exactly_when_the_slowest_team_has_enough(self, days):
+        """The count the warm-up message shows is the one estimate waits on,
+        so the two can't disagree."""
+        df = pd.concat([make_snapshot(1, days + 5), make_snapshot(2, days)], ignore_index=True)
+        estimator = FantasyEstimator()
+        fewest = estimator.periods_played(df)
+        assert fewest == estimator.periods_played(make_snapshot(2, days))    # the slowest team counts
+        predictions, _, _ = estimator.estimate(df, 30.0, None)
+        assert (fewest >= estimator.periods_needed) == (not predictions.empty)
+
+    def test_all_teams_or_none(self):
+        """One team past the bar and one short: nobody is ranked yet. Once
+        both are past it, both are."""
+        estimator = FantasyEstimator()
+        needed_days = estimator.periods_needed + 1      # the first snapshot day has no period before it
+        short = pd.concat([make_snapshot(1, 30), make_snapshot(2, needed_days - 1)], ignore_index=True)
+        predictions, ranking, probabilities = estimator.estimate(short, 30.0, None)
+        assert predictions.empty and ranking.empty and probabilities.empty
+        ready = pd.concat([make_snapshot(1, 30), make_snapshot(2, needed_days)], ignore_index=True)
+        predictions, ranking, _ = estimator.estimate(ready, 30.0, None)
+        assert sorted(predictions['team_id']) == [1, 2] and len(ranking) == 2
