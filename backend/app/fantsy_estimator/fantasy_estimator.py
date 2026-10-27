@@ -53,6 +53,24 @@ class FantasyEstimator:
         """
         return self.per_team_preprocess.transform(df_team)
 
+    @property
+    def periods_needed(self) -> int:
+        """Game days (scoring periods with games) a team needs before it is
+        estimated: more than minimum_period_id."""
+        return self.fantasy_configuration.minimum_period_id + 1
+
+    def periods_played(self, df: pd.DataFrame) -> int:
+        """The most game days any team has, counted exactly as ``estimate``
+        counts them before skipping a team (0 when none has played)."""
+        preprocess_df = self.preprocess.transform(df)
+        c = self.columns
+        most = 0
+        for team_id in preprocess_df[c.TEAM_ID].unique():
+            df_team = self._preprocess_team(preprocess_df[preprocess_df[c.TEAM_ID] == team_id])
+            if not df_team.empty:
+                most = max(most, int(df_team[PreprocessColumns.PERIOD_INDEX].max()))
+        return most
+
     def _compute_final_and_variance(
         self,
         mean_vector: pd.DataFrame,

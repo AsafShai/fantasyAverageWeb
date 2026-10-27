@@ -76,3 +76,17 @@ class TestEstimateWithoutSlotData:
         by_team = predictions.set_index('team_id')['projected_total_gp']
         assert by_team[1] == pytest.approx(700.0)
         assert by_team[2] == pytest.approx(180 * 82 / 30.0)
+
+
+class TestPeriodsPlayed:
+    @pytest.mark.parametrize('days', [1, 8, 11, 12, 13])
+    def test_counts_game_days_the_way_estimate_skips_teams(self, days):
+        """A team is estimated exactly when its game-day count reaches
+        periods_needed, so the warm-up message can't disagree with the run."""
+        df = pd.concat([make_snapshot(1, days), make_snapshot(2, max(days - 3, 1))], ignore_index=True)
+        estimator = FantasyEstimator()
+        played = estimator.periods_played(df)
+        predictions, _, _ = estimator.estimate(df, 30.0, None)
+        assert (played >= estimator.periods_needed) == (not predictions.empty)
+        assert played == estimator.periods_played(make_snapshot(1, days))    # the furthest team counts
+
