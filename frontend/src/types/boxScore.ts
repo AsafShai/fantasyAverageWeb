@@ -33,6 +33,8 @@ export interface BoxPlayerLine {
   name: string
   position: string
   ejected: boolean
+  /** True only while the game is live and this player is on the floor. */
+  on_court: boolean
   min: string
   pts: string
   fg: string

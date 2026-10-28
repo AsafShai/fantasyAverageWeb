@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import BoxScorePanel from '../components/boxScores/BoxScorePanel'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
+import MyPlayers from '../components/boxScores/MyPlayers'
+import { groupAppearances, myAppearances } from '../components/boxScores/myPlayerGroups'
+import { mineCount, outPlayerIds, rosterSide } from '../components/boxScores/pregameRoster'
+import { nbaTeamId } from '../components/boxScores/proTeam'
 import { slatePlayerValues } from '../components/boxScores/slateValues'
 import { gameClockLabel } from '../components/boxScores/tipTime'
 import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { useMyTeam } from '../context/MyTeamContext'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery } from '../store/api/fantasyApi'
+import { fantasyApi, useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery, useGetNbaTeamDepthChartQuery, useGetTeamPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
+import { useAppSelector } from '../store/hooks'
 import type { BoxScoreGame, BoxTeamSide, SlatePlayerValue } from '../types/boxScore'
 import { getErrorMessage } from '../utils/errorMessage'
 
@@ -51,11 +57,13 @@ function GameCard({
   game,
   selected,
   hideScores,
+  mineCount,
   onSelect,
 }: {
   game: BoxScoreGame
   selected: boolean
   hideScores: boolean
+  mineCount: number | null
   onSelect: () => void
 }) {
   const hide = hideScores && game.status !== 'scheduled'
@@ -76,6 +84,12 @@ function GameCard({
       </p>
       <SideRow team={game.away} hide={hide} />
       <SideRow team={game.home} hide={hide} />
+      {mineCount != null && mineCount > 0 && (
+        <span className="mt-2 flex items-center gap-2 text-[11px] font-semibold normal-case tracking-normal text-blue-700 dark:text-blue-300">
+          <span aria-hidden="true" className="h-3 w-1 shrink-0 rounded-full bg-blue-600" />
+          {mineCount} from your team
+        </span>
+      )}
     </button>
   )
 }
@@ -150,8 +164,18 @@ function NoSpoilersSwitch({ on, onChange }: { on: boolean; onChange: (next: bool
   )
 }
 
+function ScheduledDepthCharts({ teamIds }: { teamIds: string[] }) {
+  return teamIds.map(teamId => <DepthChartRequest key={teamId} teamId={teamId} />)
+}
+
+function DepthChartRequest({ teamId }: { teamId: string }) {
+  useGetNbaTeamDepthChartQuery(teamId)
+  return null
+}
+
 export default function BoxScores() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { myTeamId } = useMyTeam()
   const date = searchParams.get('date') || easternToday()
   const gameId = searchParams.get('game') ?? ''
   const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
@@ -182,22 +206,66 @@ export default function BoxScores() {
     for (const player of ranked) map.set(player.player_id, player)
     return map
   }, [ranked])
+  const selected = games?.find(game => game.game_id === selectedId)
+  const awaitingRoster = selected?.status === 'scheduled'
+  const awayTeamId = awaitingRoster && selected ? nbaTeamId(selected.away.abbreviation) : ''
+  const homeTeamId = awaitingRoster && selected ? nbaTeamId(selected.home.abbreviation) : ''
+  const awayChart = useGetNbaTeamDepthChartQuery(awayTeamId, { skip: !awayTeamId })
+  const homeChart = useGetNbaTeamDepthChartQuery(homeTeamId, { skip: !homeTeamId })
+  const myRoster = useGetTeamPlayersQuery(myTeamId ?? 0, { skip: myTeamId == null })
+  const mineIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const player of myRoster.data?.players ?? []) {
+      if (player.player_id != null) ids.add(String(player.player_id))
+    }
+    return ids
+  }, [myRoster.data])
+  const scheduledTeamIds = useMemo(() => {
+    if (myTeamId == null || !games) return []
+    const ids = new Set<string>()
+    for (const game of games) {
+      if (game.status !== 'scheduled') continue
+      for (const abbreviation of [game.away.abbreviation, game.home.abbreviation]) {
+        const id = nbaTeamId(abbreviation)
+        if (id) ids.add(id)
+      }
+    }
+    return [...ids].sort()
+  }, [games, myTeamId])
+  const outKey = useAppSelector(state => {
+    const charts = scheduledTeamIds.map(teamId => fantasyApi.endpoints.getNbaTeamDepthChart.select(teamId)(state).data)
+    return [...outPlayerIds(charts)].sort().join(',')
+  })
+  const outIds = useMemo(() => new Set(outKey ? outKey.split(',') : []), [outKey])
+  const mineSlate = useMemo(() => {
+    if (myTeamId == null || !myRoster.data || !games) return null
+    const rows = myAppearances(myRoster.data.players, games)
+      .filter(row => row.game.status !== 'scheduled' || !outIds.has(row.playerId))
+    return groupAppearances(rows)
+  }, [myTeamId, myRoster.data, games, outIds])
+  const pool = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' }, { skip: !awaitingRoster })
+  const teams = useGetTeamsListQuery(undefined, { skip: !awaitingRoster })
+  const pregame = useMemo(() => {
+    if (!awaitingRoster || !pool.data || !awayChart.data || !homeChart.data) return null
+    const abbrev = new Map<number, string>()
+    const names = new Map<number, string>()
+    for (const team of teams.data ?? []) {
+      names.set(team.team_id, team.team_name)
+      if (team.abbrev) abbrev.set(team.team_id, team.abbrev)
+    }
+    return {
+      away: rosterSide(awayChart.data, pool.data.players, abbrev, names),
+      home: rosterSide(homeChart.data, pool.data.players, abbrev, names),
+    }
+  }, [awaitingRoster, pool.data, teams.data, awayChart.data, homeChart.data])
+  const rosterLoading = pool.isLoading || awayChart.isLoading || homeChart.isLoading
+  const rosterError = pool.isError || awayChart.isError || homeChart.isError
 
   function toggleReveal(id: string) {
     setRevealed(current => current.includes(id)
       ? current.filter(item => item !== id)
       : [...current, id].slice(-MAX_REVEALED))
   }
-
-  useEffect(() => {
-    if (!games) return
-    if (gameId && games.some(game => game.game_id === gameId)) return
-    const pick = games.find(game => game.status === 'live') ?? games[0]
-    const params = new URLSearchParams()
-    params.set('date', date)
-    if (pick) params.set('game', pick.game_id)
-    setSearchParams(params, { replace: true })
-  }, [games, date, gameId, setSearchParams])
 
   function goTo(next: string) {
     const params = new URLSearchParams()
@@ -277,6 +345,15 @@ export default function BoxScores() {
 
       {games && games.length > 0 && (
         <>
+          <ScheduledDepthCharts teamIds={scheduledTeamIds} />
+          {mineSlate && (
+            <MyPlayers
+              key={`my-players-${date}-${noSpoilers}`}
+              groups={mineSlate}
+              spoilerGuard={noSpoilers}
+              onOpenGame={selectGame}
+            />
+          )}
           {values?.complete && ranked.length > 0 && (
             <LinesOfTheNight
               key={`${date}-${noSpoilers}`}
@@ -293,6 +370,7 @@ export default function BoxScores() {
                 game={game}
                 selected={game.game_id === selectedId}
                 hideScores={noSpoilers && !revealed.includes(game.game_id)}
+                mineCount={myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds) : null}
                 onSelect={() => selectGame(game.game_id)}
               />
             ))}
@@ -309,6 +387,10 @@ export default function BoxScores() {
                 revealed={revealed.includes(boxReady.game_id)}
                 onToggleReveal={() => toggleReveal(boxReady.game_id)}
                 values={values ? valueMap : undefined}
+                pregame={awaitingRoster ? pregame : undefined}
+                pregameLoading={Boolean(awaitingRoster && !pregame && rosterLoading)}
+                pregameError={Boolean(awaitingRoster && rosterError)}
+                mineIds={myTeamId != null ? mineIds : undefined}
               />
             )}
           </div>
