@@ -343,7 +343,7 @@ def _team_box(competitor: dict, status: str, player_blocks: dict, team_blocks: d
     block = player_blocks.get(identity["team_id"]) or {}
     # The summary header team omits the logo and the short name; the box block has both.
     identity = _identity(competitor, block.get("team") or {})
-    starters, bench, dnp = _players(block)
+    starters, bench, dnp = _players(block, live=status == "live")
     totals = _totals(team_blocks.get(identity["team_id"]) or {}, starters + bench, _score(competitor, status))
     return {
         **identity,
@@ -358,7 +358,7 @@ def _team_box(competitor: dict, status: str, player_blocks: dict, team_blocks: d
     }
 
 
-def _players(block: dict) -> tuple[list[dict], list[dict], list[dict]]:
+def _players(block: dict, *, live: bool) -> tuple[list[dict], list[dict], list[dict]]:
     statistics = (block.get("statistics") or [{}])[0]
     names = statistics.get("names") or []
     index = {name: i for i, name in enumerate(names)}
@@ -376,7 +376,9 @@ def _players(block: dict) -> tuple[list[dict], list[dict], list[dict]]:
                 "reason": str(athlete.get("reason") or ""),
             })
             continue
-        line = _player_line(athlete, index)
+        # ESPN leaves `active` on the five who closed a finished game. The page
+        # only wants who is on the floor while the game is in progress.
+        line = _player_line(athlete, index, on_court=live and bool(athlete.get("active")))
         if athlete.get("starter"):
             starters.append(line)
         else:
@@ -384,7 +386,7 @@ def _players(block: dict) -> tuple[list[dict], list[dict], list[dict]]:
     return starters, bench, dnp
 
 
-def _player_line(athlete: dict, index: dict[str, int]) -> dict:
+def _player_line(athlete: dict, index: dict[str, int], *, on_court: bool) -> dict:
     person = athlete.get("athlete") or {}
     values = athlete.get("stats") or []
     line = {
@@ -392,6 +394,7 @@ def _player_line(athlete: dict, index: dict[str, int]) -> dict:
         "name": person.get("displayName") or person.get("shortName") or "Unknown",
         "position": (person.get("position") or {}).get("abbreviation") or "",
         "ejected": bool(athlete.get("ejected")),
+        "on_court": on_court,
     }
     for espn_name, key in _PLAYER_STATS:
         slot = index.get(espn_name)

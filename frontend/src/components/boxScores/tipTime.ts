@@ -6,6 +6,21 @@ export function gameClockLabel(status: string, statusDetail: string, startTime: 
   return statusDetail || status
 }
 
+/** Time left until tip, ticking down to the second. A tip that has passed reads as starting soon. */
+export function countdownLabel(startTime: string, nowMs: number): string | null {
+  const target = new Date(startTime).getTime()
+  if (!startTime || Number.isNaN(target)) return null
+  const remaining = target - nowMs
+  if (remaining <= 0) return 'Starting soon'
+  const total = Math.floor(remaining / 1000)
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  const clock = [hours, minutes, seconds].map(part => String(part).padStart(2, '0')).join(':')
+  return days > 0 ? `${days}d ${clock}` : clock
+}
+
 /** Clock only, in the viewer's time zone. */
 export function localClock(iso: string, timeZone?: string): string | null {
   const date = new Date(iso)
