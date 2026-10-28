@@ -140,6 +140,7 @@ describe('BoxScores', () => {
     const table = await screen.findByRole('table', { name: /box score/ })
     expect(within(table).getByRole('link', { name: 'Austin Reaves' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Starters' })).toBeInTheDocument()
+    expect(within(table).queryByText('Started')).not.toBeInTheDocument()
     expect(within(table).queryByText('On court')).not.toBeInTheDocument()
     expect((await screen.findAllByText("Sit Out (Coach's Decision)")).length).toBeGreaterThan(0)
   })
@@ -268,6 +269,8 @@ describe('BoxScores', () => {
     expect(onCourtAt).toBeGreaterThanOrEqual(0)
     expect(benchAt).toBeGreaterThan(onCourtAt)
     expect(within(table).getAllByText('On court')).toHaveLength(2)
+    const started = within(table).getAllByTitle('Starting five').map(mark => mark.closest('tr')?.querySelector('a')?.textContent)
+    expect(started).toEqual(['Austin Reaves', 'Sat Down'])
     expect(within(table).getByText('Fouled out')).toBeInTheDocument()
     expect(within(table).getByText('Ejected')).toBeInTheDocument()
     expect(within(table).getByTitle('Fouled out')).toHaveTextContent('6')
@@ -347,10 +350,16 @@ describe('BoxScores', () => {
     expect(screen.queryByRole('link', { name: 'LeBron James' })).not.toBeInTheDocument()
     await user.click(card)
     expect(await screen.findByRole('link', { name: 'LeBron James' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Lauri Markkanen' })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Hide Unrostered Players' })).not.toBeChecked()
+    expect(screen.getByRole('link', { name: 'Lauri Markkanen' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Allonzo Trier' })).toBeInTheDocument()
+    expect(screen.getAllByTitle('Free agent that night').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: "DOR: Dor's Injured Team" })).toBeInTheDocument()
-    expect(screen.queryByTitle('Free agent that night')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Hide Unrostered Players' }))
+    expect(screen.queryByRole('link', { name: 'Lauri Markkanen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Allonzo Trier' })).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Free agent that night')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'LeBron James' })).toBeInTheDocument()
     expect(screen.getByText('No rostered players.')).toBeInTheDocument()
     expect(screen.getByText('Starts in')).toBeInTheDocument()
     expect(screen.getByText(/\d+d \d{2}:\d{2}:\d{2}/)).toBeInTheDocument()
@@ -425,7 +434,68 @@ describe('BoxScores', () => {
         .find(item => item?.classList.contains('bg-blue-50'))
       expect(highlighted).toBeTruthy()
     })
-    expect(screen.queryByRole('link', { name: 'Lauri Markkanen' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Lauri Markkanen' })).toBeInTheDocument()
+    expect(screen.getAllByTitle('Free agent that night').length).toBeGreaterThan(0)
+  })
+
+  it('hides players who are out before tip and shows a lesser injury', async () => {
+    localStorage.setItem('fw:myTeam.id', '8')
+    const user = userEvent.setup()
+    const stats = { gp: 1, minutes: 30, pts: 20, reb: 4, ast: 4, stl: 1, blk: 0, three_pm: 2, fg_percentage: 0.5, ft_percentage: 0.8, fgm: 8, fga: 16, ftm: 4, fta: 5 }
+    const scheduled = {
+      ...board.games[0],
+      game_id: '200',
+      status: 'scheduled' as const,
+      status_detail: '7:00 PM EDT',
+      start_time: '2099-01-01T00:00:00Z',
+      away: { ...board.games[0].away, score: null, winner: false },
+      home: { ...board.games[0].home, score: null, winner: false },
+    }
+    const blank = {
+      linescores: [], starters: [], bench: [], did_not_play: [],
+      totals: { min: '', pts: '', fg: '', fg3: '', ft: '', reb: '', ast: '', tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '' },
+      shooting: { fg_pct: '', fg3_pct: '', ft_pct: '', points_in_paint: '', fast_break_points: '', turnover_points: '', largest_lead: '' },
+    }
+    const roster = [
+      { player_name: 'LeBron James', pro_team: 'LAL', positions: ['SF'], team_id: 8, status: 'ONTEAM', player_id: 23, fantasy_team_name: "Dor's Injured Team", stats },
+      { player_name: 'Anthony Davis', pro_team: 'LAL', positions: ['PF'], team_id: 8, status: 'ONTEAM', player_id: 3, fantasy_team_name: "Dor's Injured Team", stats },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      const date = new URL(url, 'http://localhost').searchParams.get('date')
+      if (url.includes('/teams/') && url.includes('/players')) {
+        return json({ team_id: 8, last_updated: '2026-10-25', players: roster })
+      }
+      if (url.includes('/depthchart')) {
+        const teamId = url.match(/nba-teams\/(\d+)/)?.[1]
+        const athletes = teamId === '13'
+          ? [
+            { id: '23', display_name: 'LeBron James', short_name: 'L. James', injury: { status: 'Questionable' } },
+            { id: '3', display_name: 'Anthony Davis', short_name: 'A. Davis', injury: { status: 'Out' } },
+          ]
+          : []
+        return json({
+          team_id: teamId, team_name: '', team_abbreviation: '', team_logo: '', record: '',
+          positions: [{ abbreviation: 'SF', display_name: 'SF', players: athletes }],
+        })
+      }
+      if (url.includes('/players')) {
+        return json({ players: roster, total_count: roster.length, page: 1, limit: 1200, has_more: false })
+      }
+      if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
+      if (url.includes('/nba/scoreboard')) return json({ date, games: [scheduled] })
+      if (url.includes('/boxscore')) return json({ ...scheduled, periods: [], away: { ...scheduled.away, ...blank }, home: { ...scheduled.home, ...blank } })
+      return json({}, 404)
+    }))
+    renderWithProviders(<MyTeamProvider><BoxScores /></MyTeamProvider>, { route: '/box-scores?date=2026-10-25' })
+    const card = await screen.findByRole('button', { name: /1 from your team/ })
+    expect(screen.queryByRole('button', { name: /2 from your team/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /1 yet to play/ })).toBeInTheDocument()
+    await user.click(card)
+    expect(await screen.findByRole('link', { name: 'LeBron James' })).toBeInTheDocument()
+    expect(screen.getByText('Questionable')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Anthony Davis' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Out')).not.toBeInTheDocument()
   })
 
   it('highlights my players in a finished box, including who did not play', async () => {
