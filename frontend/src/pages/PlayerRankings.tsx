@@ -26,7 +26,7 @@ import {
   type RankingsConfig,
 } from '../utils/playerRankings'
 
-type SortCol = 'rank' | 'totalZ' | 'gp' | 'mpg' | RankingCategory | `${RankingCategory}_raw`
+type SortCol = 'rank' | 'totalZ' | 'gp' | 'min' | RankingCategory | `${RankingCategory}_raw`
 
 const DEFAULT_WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
 
@@ -47,10 +47,17 @@ function fantasyTeamAbbrev(teamId: number, abbrevById: Map<number, string>): str
   return abbrevById.get(teamId) ?? '—'
 }
 
+/** Minutes follow the display mode (total or per game). Shown, never ranked. */
+function minutesValue(ranked: RankedPlayer, displayMode: 'totals' | 'per_game'): number {
+  const { minutes, gp } = ranked.player.stats
+  if (displayMode === 'totals') return minutes
+  return gp > 0 ? minutes / gp : 0
+}
+
 function getSortVal(ranked: RankedPlayer, col: SortCol, displayMode: 'totals' | 'per_game'): number {
   if (col === 'totalZ') return ranked.totalZ
   if (col === 'gp') return ranked.player.stats.gp
-  if (col === 'mpg') return ranked.player.stats.gp > 0 ? ranked.player.stats.minutes / ranked.player.stats.gp : 0
+  if (col === 'min') return minutesValue(ranked, displayMode)
   if (col.endsWith('_raw')) return getRawValue(ranked.player, col.replace('_raw', '') as RankingCategory, displayMode)
   return ranked.zScores[col as RankingCategory]
 }
@@ -390,7 +397,7 @@ export default function PlayerRankings() {
                   <th className="px-1.5 sm:px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap" title="Fantasy team">Fantasy</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Team</th>
                   <th className="hidden sm:table-cell px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Pos</th>
-                  <Th col="mpg" label="MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+                  <Th col="min" label={displayMode === 'totals' ? 'MIN' : 'MPG'} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
                   {categories.map(cat => (
                     <Th key={`raw-${cat}`} col={`${cat}_raw` as SortCol} label={CATEGORY_LABELS[cat] ?? cat} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} punted={isPunted(cat)} />
                   ))}
@@ -414,7 +421,7 @@ export default function PlayerRankings() {
                     </td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400 text-xs">{ranked.player.pro_team}</td>
                     <td className="hidden sm:table-cell px-2 py-2 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{ranked.player.positions.join(', ')}</td>
-                    <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-700 dark:text-gray-300">{ranked.player.stats.gp > 0 ? fmt(ranked.player.stats.minutes / ranked.player.stats.gp, 1) : '—'}</td>
+                    <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{ranked.player.stats.gp > 0 ? fmt(minutesValue(ranked, displayMode), displayMode === 'totals' ? 0 : 1) : '—'}</td>
                     {categories.map(cat => (
                       <td key={`raw-${cat}`} className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-right text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                         {rawDisplay(ranked, cat)}
