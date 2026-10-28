@@ -1,18 +1,19 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import BoxScorePanel, { type PregamePlayer } from '../components/boxScores/BoxScorePanel'
+import BoxScorePanel from '../components/boxScores/BoxScorePanel'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
 import MyPlayers from '../components/boxScores/MyPlayers'
 import { groupAppearances, myAppearances } from '../components/boxScores/myPlayerGroups'
-import { fantasyProTeam, nbaTeamId } from '../components/boxScores/proTeam'
+import { mineCount, outPlayerIds, rosterSide } from '../components/boxScores/pregameRoster'
+import { nbaTeamId } from '../components/boxScores/proTeam'
 import { slatePlayerValues } from '../components/boxScores/slateValues'
 import { gameClockLabel } from '../components/boxScores/tipTime'
 import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useMyTeam } from '../context/MyTeamContext'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery, useGetNbaTeamDepthChartQuery, useGetTeamPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
-import type { Player, TeamDepthChart } from '../types/api'
+import { fantasyApi, useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery, useGetNbaTeamDepthChartQuery, useGetTeamPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
+import { useAppSelector } from '../store/hooks'
 import type { BoxScoreGame, BoxTeamSide, SlatePlayerValue } from '../types/boxScore'
 import { getErrorMessage } from '../utils/errorMessage'
 
@@ -46,33 +47,6 @@ function slatePoll(games: BoxScoreGame[] | undefined, date: string): number {
   if (games.some(game => game.status === 'live')) return 20_000
   if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 60_000
   return 0
-}
-
-function rosterSide(chart: TeamDepthChart, players: Player[], abbrev: Map<number, string>, names: Map<number, string>): PregamePlayer[] {
-  const byId = new Map<string, Player>()
-  for (const player of players) {
-    if (player.player_id != null) byId.set(String(player.player_id), player)
-  }
-  const seen = new Set<string>()
-  const rows: PregamePlayer[] = []
-  for (const position of chart.positions) {
-    for (const athlete of position.players) {
-      if (!athlete.id || seen.has(athlete.id)) continue
-      seen.add(athlete.id)
-      const match = byId.get(athlete.id)
-      const owned = Boolean(match && match.team_id !== 0 && match.status !== 'FREEAGENT')
-      if (!owned || !match) continue
-      const code = abbrev.get(match.team_id) || null
-      rows.push({
-        playerId: Number(athlete.id) || null,
-        name: athlete.display_name,
-        position: position.abbreviation,
-        fantasyTeam: code,
-        fantasyTeamName: match.fantasy_team_name || names.get(match.team_id) || code,
-      })
-    }
-  }
-  return rows.sort((a, b) => (a.fantasyTeam ?? '\uffff').localeCompare(b.fantasyTeam ?? '\uffff') || a.name.localeCompare(b.name))
 }
 
 function teamColor(color: string): string | undefined {
@@ -190,9 +164,13 @@ function NoSpoilersSwitch({ on, onChange }: { on: boolean; onChange: (next: bool
   )
 }
 
-function mineInGame(game: BoxScoreGame, byProTeam: Map<string, number>): number {
-  return (byProTeam.get(fantasyProTeam(game.away.abbreviation)) ?? 0)
-    + (byProTeam.get(fantasyProTeam(game.home.abbreviation)) ?? 0)
+function ScheduledDepthCharts({ teamIds }: { teamIds: string[] }) {
+  return teamIds.map(teamId => <DepthChartRequest key={teamId} teamId={teamId} />)
+}
+
+function DepthChartRequest({ teamId }: { teamId: string }) {
+  useGetNbaTeamDepthChartQuery(teamId)
+  return null
 }
 
 export default function BoxScores() {
@@ -242,19 +220,29 @@ export default function BoxScores() {
     }
     return ids
   }, [myRoster.data])
-  const mineByTeam = useMemo(() => {
-    const counts = new Map<string, number>()
-    if (myTeamId == null || !myRoster.data) return counts
-    for (const player of myRoster.data.players) {
-      if (!player.pro_team) continue
-      counts.set(player.pro_team, (counts.get(player.pro_team) ?? 0) + 1)
+  const scheduledTeamIds = useMemo(() => {
+    if (myTeamId == null || !games) return []
+    const ids = new Set<string>()
+    for (const game of games) {
+      if (game.status !== 'scheduled') continue
+      for (const abbreviation of [game.away.abbreviation, game.home.abbreviation]) {
+        const id = nbaTeamId(abbreviation)
+        if (id) ids.add(id)
+      }
     }
-    return counts
-  }, [myTeamId, myRoster.data])
+    return [...ids].sort()
+  }, [games, myTeamId])
+  const outKey = useAppSelector(state => {
+    const charts = scheduledTeamIds.map(teamId => fantasyApi.endpoints.getNbaTeamDepthChart.select(teamId)(state).data)
+    return [...outPlayerIds(charts)].sort().join(',')
+  })
+  const outIds = useMemo(() => new Set(outKey ? outKey.split(',') : []), [outKey])
   const mineSlate = useMemo(() => {
     if (myTeamId == null || !myRoster.data || !games) return null
-    return groupAppearances(myAppearances(myRoster.data.players, games))
-  }, [myTeamId, myRoster.data, games])
+    const rows = myAppearances(myRoster.data.players, games)
+      .filter(row => row.game.status !== 'scheduled' || !outIds.has(row.playerId))
+    return groupAppearances(rows)
+  }, [myTeamId, myRoster.data, games, outIds])
   const pool = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' }, { skip: !awaitingRoster })
   const teams = useGetTeamsListQuery(undefined, { skip: !awaitingRoster })
   const pregame = useMemo(() => {
@@ -357,6 +345,7 @@ export default function BoxScores() {
 
       {games && games.length > 0 && (
         <>
+          <ScheduledDepthCharts teamIds={scheduledTeamIds} />
           {mineSlate && (
             <MyPlayers
               key={`my-players-${date}-${noSpoilers}`}
@@ -381,7 +370,7 @@ export default function BoxScores() {
                 game={game}
                 selected={game.game_id === selectedId}
                 hideScores={noSpoilers && !revealed.includes(game.game_id)}
-                mineCount={myTeamId != null && myRoster.data ? mineInGame(game, mineByTeam) : null}
+                mineCount={myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds) : null}
                 onSelect={() => selectGame(game.game_id)}
               />
             ))}

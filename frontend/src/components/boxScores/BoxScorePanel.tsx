@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import InjuryBadge from '../InjuryBadge'
 import PlayerNameLink from '../PlayerNameLink'
+import type { PregamePlayer } from './pregameRoster'
 import { fouledOut, lineupGroups } from './lineupGroups'
 import { countdownLabel, gameClockLabel, localClock } from './tipTime'
 import { signedZ } from './linesOfTheNightFormat'
@@ -181,6 +183,7 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
   live: boolean
 }) {
   const groups = lineupGroups(team, live)
+  const starterIds = live ? new Set(team.starters.map(player => player.player_id || player.name)) : null
   const accent = team.color ? `#${team.color}` : undefined
   const extra = values ? 2 : 0
 
@@ -198,7 +201,7 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
       {groups.length === 0 ? (
         <p className="py-6 text-sm text-gray-400">The box score is not available yet.</p>
       ) : hideScores ? (
-        <NameList groups={groups} teamName={team.name} mineIds={mineIds} live={live} />
+        <NameList groups={groups} teamName={team.name} mineIds={mineIds} live={live} starterIds={starterIds} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="min-w-full text-xs">
@@ -231,7 +234,7 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
                   </th>
                 </tr>
                 {group.players.map(player => (
-                  <PlayerRow key={player.player_id || player.name} player={player} values={values} mine={isMine(mineIds, player.player_id)} live={live} />
+                  <PlayerRow key={player.player_id || player.name} player={player} values={values} mine={isMine(mineIds, player.player_id)} live={live} started={starterIds?.has(player.player_id || player.name) ?? false} />
                 ))}
               </tbody>
             ))}
@@ -269,7 +272,7 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
   )
 }
 
-function PlayerName({ player, live, nameOnly = false }: { player: BoxPlayerLine; live: boolean; nameOnly?: boolean }) {
+function PlayerName({ player, live, nameOnly = false, started = false }: { player: BoxPlayerLine; live: boolean; nameOnly?: boolean; started?: boolean }) {
   return (
     <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
       <PlayerNameLink
@@ -278,16 +281,22 @@ function PlayerName({ player, live, nameOnly = false }: { player: BoxPlayerLine;
         className="text-gray-800 hover:underline dark:text-gray-100"
       />
       {!nameOnly && player.position && <span className="shrink-0 text-[10px] font-normal text-gray-400">{player.position}</span>}
+      {started && (
+        <span className="shrink-0 text-[10px] font-medium text-gray-400 dark:text-gray-500" title="Starting five">
+          Started
+        </span>
+      )}
       <PlayerStatus onCourt={live && player.on_court} ejected={player.ejected} fouledOut={!nameOnly && fouledOut(player.pf)} />
     </span>
   )
 }
 
-function NameList({ groups, teamName, mineIds, live }: {
+function NameList({ groups, teamName, mineIds, live, starterIds }: {
   groups: { label: string; players: BoxPlayerLine[] }[]
   teamName: string
   mineIds?: ReadonlySet<string>
   live: boolean
+  starterIds: ReadonlySet<string> | null
 }) {
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700">
@@ -299,7 +308,7 @@ function NameList({ groups, teamName, mineIds, live }: {
           <ul>
             {group.players.map(player => (
               <li key={player.player_id || player.name} className={`border-t border-gray-100 px-3 py-1.5 text-xs font-medium dark:border-gray-800 ${isMine(mineIds, player.player_id) ? `${MINE_ROW} ${MINE_EDGE}` : ''}`}>
-                <PlayerName player={player} live={live} nameOnly />
+                <PlayerName player={player} live={live} nameOnly started={starterIds?.has(player.player_id || player.name) ?? false} />
               </li>
             ))}
           </ul>
@@ -310,12 +319,12 @@ function NameList({ groups, teamName, mineIds, live }: {
   )
 }
 
-function PlayerRow({ player, values, mine, live }: { player: BoxPlayerLine; values?: PlayerValues; mine: boolean; live: boolean }) {
+function PlayerRow({ player, values, mine, live, started }: { player: BoxPlayerLine; values?: PlayerValues; mine: boolean; live: boolean; started: boolean }) {
   const value = values?.get(player.player_id)
   return (
     <tr className={`border-t border-gray-100 dark:border-gray-800 ${mine ? MINE_ROW : ''}`}>
       <th className={`sticky left-0 z-10 whitespace-nowrap px-3 py-1.5 text-left font-medium ${mine ? `${MINE_ROW} ${MINE_EDGE}` : 'bg-white dark:bg-gray-900'}`}>
-        <PlayerName player={player} live={live} />
+        <PlayerName player={player} live={live} started={started} />
       </th>
       {values && (
         <>
@@ -359,14 +368,6 @@ function Shooting({ team }: { team: BoxTeamBox }) {
   )
 }
 
-export interface PregamePlayer {
-  playerId: number | null
-  name: string
-  position: string
-  fantasyTeam: string | null
-  fantasyTeamName: string | null
-}
-
 function TipCountdown({ startTime }: { startTime: string }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -383,7 +384,12 @@ function TipCountdown({ startTime }: { startTime: string }) {
   )
 }
 
-function PregameSide({ team, players, mineIds }: { team: BoxTeamBox; players: PregamePlayer[]; mineIds?: ReadonlySet<string> }) {
+function PregameSide({ team, players, mineIds, hideUnrostered }: {
+  team: BoxTeamBox
+  players: PregamePlayer[]
+  mineIds?: ReadonlySet<string>
+  hideUnrostered: boolean
+}) {
   const accent = team.color ? `#${team.color}` : undefined
   return (
     <div className="min-w-0">
@@ -391,11 +397,11 @@ function PregameSide({ team, players, mineIds }: { team: BoxTeamBox; players: Pr
         <TeamMark team={team} />
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{team.name}</h3>
-          <p className="text-[11px] text-gray-400">{players.length} rostered</p>
+          <p className="text-[11px] text-gray-400">{players.length} {hideUnrostered ? 'rostered' : 'players'}</p>
         </div>
       </div>
       {players.length === 0 ? (
-        <p className="py-4 text-sm text-gray-400">No rostered players.</p>
+        <p className="py-4 text-sm text-gray-400">{hideUnrostered ? 'No rostered players.' : 'No players.'}</p>
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-800">
           {players.map(player => (
@@ -403,6 +409,7 @@ function PregameSide({ team, players, mineIds }: { team: BoxTeamBox; players: Pr
               <span className="min-w-0 flex-1">
                 <PlayerNameLink name={player.name} playerId={player.playerId ?? undefined} />
                 {player.position && <span className="ml-1.5 text-[11px] text-gray-400">{player.position}</span>}
+                {player.injury && <span className="ml-1.5 align-middle"><InjuryBadge status={player.injury} /></span>}
               </span>
               <FantasyTeamTag value={{ fantasy_team: player.fantasyTeam, fantasy_team_name: player.fantasyTeamName }} />
             </li>
@@ -420,15 +427,26 @@ function PregameRosters({ game, players, loading, error, mineIds }: {
   error: boolean
   mineIds?: ReadonlySet<string>
 }) {
+  const [hideUnrostered, setHideUnrostered] = useState(false)
+  const visible = (side: PregamePlayer[]) => hideUnrostered ? side.filter(player => player.rostered) : side
   return (
     <div className="mt-5">
       <TipCountdown startTime={game.start_time} />
+      <label className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+        <input
+          type="checkbox"
+          checked={hideUnrostered}
+          onChange={event => setHideUnrostered(event.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-400"
+        />
+        Hide Unrostered Players
+      </label>
       {loading && <p className="mt-4 text-center text-sm text-gray-400">Loading rosters…</p>}
       {error && <p className="mt-4 text-center text-sm text-rose-600">Could not load the rosters.</p>}
       {players && (
         <div className="mt-4 grid gap-6 sm:grid-cols-2">
-          <PregameSide team={game.away} players={players.away} mineIds={mineIds} />
-          <PregameSide team={game.home} players={players.home} mineIds={mineIds} />
+          <PregameSide team={game.away} players={visible(players.away)} mineIds={mineIds} hideUnrostered={hideUnrostered} />
+          <PregameSide team={game.home} players={visible(players.home)} mineIds={mineIds} hideUnrostered={hideUnrostered} />
         </div>
       )}
     </div>
