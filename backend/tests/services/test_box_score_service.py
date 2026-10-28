@@ -33,12 +33,13 @@ def _team(team_id, abbr, name, short, home_away, score="0", winner=False, color=
     }
 
 
-def _athlete(player_id, name, stats, starter=False, dnp=False, reason=""):
+def _athlete(player_id, name, stats, starter=False, dnp=False, reason="", active=False, ejected=False):
     return {
         "starter": starter,
         "didNotPlay": dnp,
         "reason": reason,
-        "ejected": False,
+        "active": active,
+        "ejected": ejected,
         "athlete": {"id": player_id, "displayName": name, "position": {"abbreviation": "G"}},
         "stats": stats,
     }
@@ -46,7 +47,7 @@ def _athlete(player_id, name, stats, starter=False, dnp=False, reason=""):
 
 def _summary():
     names = ["MIN", "PTS", "FG", "3PT", "FT", "REB", "AST", "TO", "STL", "BLK", "OREB", "DREB", "PF", "+/-"]
-    starter = _athlete("1", "Starter One", ["34", "22", "8-16", "2-6", "4-4", "8", "5", "2", "1", "0", "1", "7", "2", "+5"], starter=True)
+    starter = _athlete("1", "Starter One", ["34", "22", "8-16", "2-6", "4-4", "8", "5", "2", "1", "0", "1", "7", "2", "+5"], starter=True, active=True)
     bench = _athlete("2", "Bench Two", ["18", "9", "3-7", "1-3", "2-2", "3", "1", "1", "0", "1", "0", "3", "1", "-2"])
     dnp = _athlete("3", "Sit Out", [], dnp=True, reason="Coach's Decision")
     return {
@@ -168,12 +169,30 @@ def test_boxscore_splits_lineup_and_labels_overtime():
     }]
     assert box["away"]["starters"][0]["fg"] == "8-16"
     assert box["away"]["starters"][0]["plus_minus"] == "+5"
+    assert box["away"]["starters"][0]["on_court"] is False
+    assert box["away"]["starters"][0]["ejected"] is False
     assert box["away"]["totals"]["fg"] == "48-90"
     assert box["away"]["totals"]["pts"] == "129"
     assert box["away"]["totals"]["min"] == "52"
     assert box["away"]["shooting"]["points_in_paint"] == "52"
     assert box["home"]["totals"]["fg"] == ""
     assert box["home"]["totals"]["reb"] == "8"
+
+
+def test_live_box_records_who_is_on_the_court():
+    payload = _summary()
+    payload["header"]["competitions"][0]["status"] = {"type": {"state": "in", "shortDetail": "Q3 4:12"}}
+    athletes = payload["boxscore"]["players"][0]["statistics"][0]["athletes"]
+    athletes[0]["active"] = True
+    athletes[1]["active"] = False
+    athletes[1]["ejected"] = True
+    box = parse_boxscore(payload, "100")
+    assert box["status"] == "live"
+    assert [player["name"] for player in box["away"]["starters"]] == ["Starter One"]
+    assert [player["name"] for player in box["away"]["bench"]] == ["Bench Two"]
+    assert box["away"]["starters"][0]["on_court"] is True
+    assert box["away"]["bench"][0]["on_court"] is False
+    assert box["away"]["bench"][0]["ejected"] is True
 
 
 def test_boxscore_rejects_a_summary_without_teams():
