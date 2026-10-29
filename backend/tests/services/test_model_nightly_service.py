@@ -1,7 +1,7 @@
 """Orchestration tests for ModelNightlyService (fake DB + fake fetch, no network)."""
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 import pandas as pd
@@ -573,3 +573,68 @@ async def test_missing_features_reported_not_rebuilt_when_auto_heal_is_off(servi
     assert statuses["missing_features"] == "manual_refresh_required"
     assert calls == []                              # nothing rebuilt
     assert service._db.vectors_written is None      # store untouched
+
+
+
+def _stub_backfill(monkeypatch, result=None, raises=None):
+    """Replace the surprises backfill; returns the list of ``since`` it was called with."""
+    from app.services.surprise_service import SurpriseService
+    calls = []
+
+    async def backfill(self, since=None):
+        calls.append(since)
+        if raises:
+            raise raises
+        return result or {}
+    monkeypatch.setattr(SurpriseService, "backfill_missing", backfill)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_catchup_scores_unscored_nights_in_its_window(service, monkeypatch):
+    """A run that died after marking a night processed left it unscored; the
+    next slot scores it instead of skipping it for good, looking back only as
+    far as the catch-up window."""
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"game_date": GAME_DATE, "status": "processed"}
+    monkeypatch.setattr(mns.settings, "surprise_nightly_enabled", True)
+    calls = _stub_backfill(monkeypatch, {GAME_DATE: "processed"})
+
+    statuses = await service.run_catchup()
+    yesterday = (datetime.now(mns.ISRAEL_TZ) - timedelta(days=1)).date()
+    assert calls == [yesterday - timedelta(days=mns.CATCHUP_DAYS - 1)]
+    assert statuses["surprises_retry"] == f"{GAME_DATE}: processed"
+
+
+@pytest.mark.asyncio
+async def test_catchup_retry_failure_does_not_stop_the_catchup(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"game_date": GAME_DATE, "status": "processed"}
+    monkeypatch.setattr(mns.settings, "surprise_nightly_enabled", True)
+    _stub_backfill(monkeypatch, raises=RuntimeError("db down"))
+
+    statuses = await service.run_catchup()
+    assert statuses["surprises_retry"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_catchup_retry_runs_when_the_catchup_stops_on_incomplete_data(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    _allow_fetch(monkeypatch, _night(complete=False))
+    monkeypatch.setattr(mns.settings, "surprise_nightly_enabled", True)
+    calls = _stub_backfill(monkeypatch)
+
+    statuses = await service.run_catchup()
+    assert "incomplete_data" in statuses.values()
+    assert len(calls) == 1
+    assert "surprises_retry" not in statuses     # nothing was missing
+
+
+@pytest.mark.asyncio
+async def test_catchup_retry_off_with_the_surprises_switch(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"game_date": GAME_DATE, "status": "processed"}
+    calls = _stub_backfill(monkeypatch)       # the fixture turned surprises off
+
+    await service.run_catchup()
+    assert calls == []
