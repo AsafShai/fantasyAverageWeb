@@ -67,8 +67,8 @@ export default function InjuryTable({ records, totalCount }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const { data: nbaTeams } = useGetNbaTeamsListQuery();
   const depthChartTeamId = useMemo(() => {
-    // The injury PDF's team names lose some spaces ("Philadelphia76ers"), so match
-    // on letters and digits only.
+    // Match on letters and digits only, so a team name that lost a space while being
+    // parsed from the PDF (once "Philadelphia76ers") still links.
     const key = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
     const byName = new Map<string, string>();
     for (const team of nbaTeams ?? []) {
