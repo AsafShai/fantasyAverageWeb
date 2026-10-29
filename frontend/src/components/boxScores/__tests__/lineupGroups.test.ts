@@ -7,6 +7,7 @@ function player(name: string, extra: Partial<BoxPlayerLine> = {}): BoxPlayerLine
     player_id: name,
     name,
     position: 'G',
+    jersey: '',
     ejected: false,
     on_court: false,
     min: '10',

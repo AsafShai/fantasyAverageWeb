@@ -78,14 +78,14 @@ describe('myLine', () => {
     away: {
       starters: [{ player_id: '1', name: 'Austin Reaves' }],
       bench: [],
-      did_not_play: [{ player_id: '9', name: 'Sit Out', reason: "Coach's Decision" }],
+      did_not_play: [{ player_id: '9', name: 'Sit Out', jersey: '0', reason: "Coach's Decision" }],
     },
     home: { starters: [], bench: [], did_not_play: [] },
   } as unknown as GameBoxScore
 
   it('finds a played line, a did-not-play, and anyone left off the sheet', () => {
     expect(myLine(box, '1').kind).toBe('played')
-    expect(myLine(box, '9')).toEqual({ kind: 'dnp', reason: "Coach's Decision" })
+    expect(myLine(box, '9')).toEqual({ kind: 'dnp', reason: "Coach's Decision", jersey: '0' })
     expect(myLine(box, '50')).toEqual({ kind: 'out' })
   })
 })

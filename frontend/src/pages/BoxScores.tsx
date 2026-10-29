@@ -44,8 +44,17 @@ const MAX_REVEALED = 60
 
 function slatePoll(games: BoxScoreGame[] | undefined, date: string): number {
   if (!games) return 0
-  if (games.some(game => game.status === 'live')) return 20_000
+  if (games.some(game => game.status === 'live')) return 60_000
   if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 60_000
+  return 0
+}
+
+// Z-scores and lines of the night read every started box. Refresh them much
+// more slowly than the open game so a live slate is not fetched in full.
+function valuesPoll(games: BoxScoreGame[] | undefined, date: string): number {
+  if (!games || !games.some(game => game.status !== 'scheduled')) return 0
+  if (games.some(game => game.status === 'live')) return 120_000
+  if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 120_000
   return 0
 }
 
@@ -184,6 +193,7 @@ export default function BoxScores() {
 
   const [boardPoll, setBoardPoll] = useState(0)
   const [boxPoll, setBoxPoll] = useState(0)
+  const [slateValuesPoll, setSlateValuesPoll] = useState(0)
   const board = useGetBoxScoreboardQuery(date, { pollingInterval: boardPoll })
   const games = board.data?.date === date ? board.data.games : undefined
   const nextBoardPoll = slatePoll(games, date)
@@ -194,10 +204,12 @@ export default function BoxScores() {
     pollingInterval: boxPoll,
   })
   const boxReady = boxScore.data?.game_id === selectedId ? boxScore.data : undefined
-  const nextBoxPoll = boxReady?.status === 'live' ? 15_000 : 0
+  const nextBoxPoll = boxReady?.status === 'live' ? 60_000 : 0
   if (nextBoxPoll !== boxPoll) setBoxPoll(nextBoxPoll)
   const anyStarted = games?.some(game => game.status !== 'scheduled') ?? false
-  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: boardPoll })
+  const nextValuesPoll = valuesPoll(games, date)
+  if (nextValuesPoll !== slateValuesPoll) setSlateValuesPoll(nextValuesPoll)
+  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: slateValuesPoll })
   const values = slateValues.data?.date === date ? slateValues.data : undefined
   // Z comes from the Player Rankings page's own code, so the two never disagree.
   const ranked = useMemo(() => (values ? slatePlayerValues(values) : []), [values])
@@ -278,6 +290,16 @@ export default function BoxScores() {
     params.set('date', date)
     params.set('game', id)
     setSearchParams(params, { replace: true })
+  }
+
+  function toggleGame(id: string) {
+    if (id === selectedId) {
+      const params = new URLSearchParams()
+      params.set('date', date)
+      setSearchParams(params, { replace: true })
+      return
+    }
+    selectGame(id)
   }
 
   return (
@@ -371,7 +393,7 @@ export default function BoxScores() {
                 selected={game.game_id === selectedId}
                 hideScores={noSpoilers && !revealed.includes(game.game_id)}
                 mineCount={myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds) : null}
-                onSelect={() => selectGame(game.game_id)}
+                onSelect={() => toggleGame(game.game_id)}
               />
             ))}
           </div>
