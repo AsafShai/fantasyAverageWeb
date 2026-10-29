@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import BoxScorePanel from '../components/boxScores/BoxScorePanel'
+import SlateDatePicker from '../components/boxScores/SlateDatePicker'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
 import MyPlayers from '../components/boxScores/MyPlayers'
 import { groupAppearances, myAppearances } from '../components/boxScores/myPlayerGroups'
@@ -12,7 +13,7 @@ import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useMyTeam } from '../context/MyTeamContext'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { fantasyApi, useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery, useGetNbaTeamDepthChartQuery, useGetTeamPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
+import { fantasyApi, useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery, useGetNbaSeasonWindowQuery, useGetNbaTeamDepthChartQuery, useGetTeamPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useAppSelector } from '../store/hooks'
 import type { BoxScoreGame, BoxTeamSide, SlatePlayerValue } from '../types/boxScore'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -190,6 +191,9 @@ export default function BoxScores() {
   const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
   const [revealed, setRevealed] = usePersistedState<string[]>('boxScores.revealedGames', [])
   const today = easternToday()
+  const season = useGetNbaSeasonWindowQuery()
+  const seasonStart = season.data?.start
+  const seasonEnd = season.data?.end
 
   const [boardPoll, setBoardPoll] = useState(0)
   const [boxPoll, setBoxPoll] = useState(0)
@@ -279,7 +283,14 @@ export default function BoxScores() {
       : [...current, id].slice(-MAX_REVEALED))
   }
 
+  function inSeason(next: string) {
+    if (seasonStart && next < seasonStart) return false
+    if (seasonEnd && next > seasonEnd) return false
+    return true
+  }
+
   function goTo(next: string) {
+    if (!inSeason(next)) return
     const params = new URLSearchParams()
     params.set('date', next)
     setSearchParams(params, { replace: true })
@@ -320,32 +331,29 @@ export default function BoxScores() {
         <button
           type="button"
           aria-label="Previous day"
+          disabled={!inSeason(shiftDate(date, -1))}
           onClick={() => goTo(shiftDate(date, -1))}
-          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800 dark:disabled:text-gray-600 dark:disabled:hover:bg-gray-900"
         >
           ‹
         </button>
-        <label className="relative">
-          <span className="block min-w-[12rem] rounded-lg border border-gray-200 bg-white px-4 py-2 text-center text-sm font-semibold text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
-            {formatSlateLabel(date)}
-          </span>
-          <input
-            type="date"
-            value={date}
-            aria-label="Choose a date"
-            onChange={event => { if (event.target.value) goTo(event.target.value) }}
-            className="absolute inset-0 cursor-pointer opacity-0"
-          />
-        </label>
+        <SlateDatePicker
+          date={date}
+          label={formatSlateLabel(date)}
+          min={seasonStart}
+          max={seasonEnd}
+          onChange={goTo}
+        />
         <button
           type="button"
           aria-label="Next day"
+          disabled={!inSeason(shiftDate(date, 1))}
           onClick={() => goTo(shiftDate(date, 1))}
-          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800 dark:disabled:text-gray-600 dark:disabled:hover:bg-gray-900"
         >
           ›
         </button>
-        {date !== today && (
+        {date !== today && inSeason(today) && (
           <button
             type="button"
             onClick={() => goTo(today)}
@@ -368,14 +376,6 @@ export default function BoxScores() {
       {games && games.length > 0 && (
         <>
           <ScheduledDepthCharts teamIds={scheduledTeamIds} />
-          {mineSlate && (
-            <MyPlayers
-              key={`my-players-${date}-${noSpoilers}`}
-              groups={mineSlate}
-              spoilerGuard={noSpoilers}
-              onOpenGame={selectGame}
-            />
-          )}
           {values?.complete && ranked.length > 0 && (
             <LinesOfTheNight
               key={`${date}-${noSpoilers}`}
@@ -383,6 +383,14 @@ export default function BoxScores() {
               spoilerGuard={noSpoilers}
               dateLabel={formatSlateLabel(date)}
               games={games.length}
+            />
+          )}
+          {mineSlate && (
+            <MyPlayers
+              key={`my-players-${date}-${noSpoilers}`}
+              groups={mineSlate}
+              spoilerGuard={noSpoilers}
+              onOpenGame={selectGame}
             />
           )}
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 snap-x sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">

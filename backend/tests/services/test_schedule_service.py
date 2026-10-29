@@ -262,6 +262,23 @@ def test_season_start_is_the_earliest_period_one_game():
     assert schedule_module.season_start_from_pro_team_schedules(payload) == date(2026, 10, 20)
 
 
+def test_season_end_is_the_latest_counted_game():
+    later = 1801177200000
+    payload = {"settings": {"proTeams": [{
+        "id": 18, "abbrev": "NY",
+        "proGamesByScoringPeriod": {
+            "1": [{"id": 1, "date": 1792537200000, "homeProTeamId": 18,
+                   "awayProTeamId": 2, "scoringPeriodId": 1}],
+            "4": [{"id": 2, "date": later, "homeProTeamId": 18,
+                   "awayProTeamId": 2, "scoringPeriodId": 4}],
+        },
+    }]}}
+
+    assert schedule_module.season_start_from_pro_team_schedules(payload) == date(2026, 10, 20)
+    assert schedule_module.season_end_from_pro_team_schedules(payload) > date(2026, 10, 20)
+    assert schedule_module.season_end_from_pro_team_schedules({}) is None
+
+
 def test_season_start_is_none_without_period_one_games():
     payload = {"settings": {"proTeams": [{
         "id": 18, "abbrev": "NY",

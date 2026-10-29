@@ -107,6 +107,15 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Could not derive regular-season start; keeping configured SEASON_START={settings.season_start}")
     except Exception as e:
         logger.warning(f"Failed to derive regular-season start, keeping configured SEASON_START={settings.season_start}: {type(e).__name__}: {e}")
+    try:
+        derived_end = await schedule_service.get_season_end_date()
+        if derived_end is not None:
+            logger.info(f"Regular-season end: {derived_end} (was {settings.season_end})")
+            settings.season_end = derived_end
+        else:
+            logger.warning(f"Could not derive regular-season end; keeping configured SEASON_END={settings.season_end}")
+    except Exception as e:
+        logger.warning(f"Failed to derive regular-season end, keeping configured SEASON_END={settings.season_end}: {type(e).__name__}: {e}")
     await injury_service.initialize()
     if settings.injury_scheduler_enabled:
         background_tasks.spawn(injury_service.start_scheduler(), name="injury-scheduler")

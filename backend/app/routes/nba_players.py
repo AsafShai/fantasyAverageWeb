@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.config import settings
-from app.models.nba_player_models import NbaPlayerBio, NbaPlayerStatsResponse
+from app.models.nba_player_models import NbaPlayerBio, NbaPlayerStatsResponse, PlayerGameLogResponse
 from app.models.player import StatTimePeriod
 from app.services.nba_player_service import NbaPlayerService
 
@@ -38,6 +38,19 @@ async def get_nba_player(player_id: str):
     if bio is None:
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
     return bio
+
+
+@router.get("/{player_id}/games", response_model=PlayerGameLogResponse)
+async def get_nba_player_games(player_id: str):
+    try:
+        return await _service.get_game_log(player_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.exception("Error getting game log for %s: %s", player_id, e)
+        raise HTTPException(status_code=500, detail="Failed to retrieve player game log")
 
 
 @router.get("/{player_id}/stats", response_model=NbaPlayerStatsResponse)

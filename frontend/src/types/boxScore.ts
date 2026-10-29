@@ -28,6 +28,11 @@ export interface BoxScoreboard {
   games: BoxScoreGame[]
 }
 
+export interface NbaSeasonWindow {
+  start: string
+  end: string
+}
+
 export interface BoxPlayerLine {
   player_id: string
   name: string

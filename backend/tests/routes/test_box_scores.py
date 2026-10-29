@@ -1,6 +1,16 @@
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
+from app.config import settings
 from app.services.box_score_service import BoxScoreNotFound, BoxScoreUnavailable
+
+
+def test_season_window_returns_the_regular_season(test_client, monkeypatch):
+    monkeypatch.setattr(settings, "season_start", date(2026, 10, 20))
+    monkeypatch.setattr(settings, "season_end", date(2027, 4, 11))
+    response = test_client.get("/api/nba/season")
+    assert response.status_code == 200
+    assert response.json() == {"start": "2026-10-20", "end": "2027-04-11"}
 
 
 @patch("app.routes.box_scores.scoreboard_for", new_callable=AsyncMock)

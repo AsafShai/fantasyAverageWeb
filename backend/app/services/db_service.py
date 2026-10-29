@@ -1243,6 +1243,41 @@ class DBService:
             )
             return None, None, None
 
+    async def get_player_box_logs(self, player_id: int, season: str) -> list[dict]:
+        """One season of games for a player, newest first, with both teams' scores."""
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT
+                        p.game_id, p.season, p.game_date, p.matchup, p.min,
+                        p.pts, p.reb, p.ast, p.stl, p.blk, p.tov,
+                        p.fg3m, p.fg3a, p.fgm, p.fga, p.ftm, p.fta, p.plus_minus,
+                        t.pts AS team_pts,
+                        opp.pts AS opp_pts
+                    FROM fs_player_games p
+                    LEFT JOIN fs_team_games t
+                        ON t.game_id = p.game_id AND t.team_id = p.team_id
+                    LEFT JOIN LATERAL (
+                        SELECT o.pts
+                        FROM fs_team_games o
+                        WHERE o.game_id = p.game_id AND o.team_id <> p.team_id
+                        LIMIT 1
+                    ) opp ON true
+                    WHERE p.player_id = $1 AND p.season = $2
+                    ORDER BY p.game_date DESC, p.game_id DESC
+                    """,
+                    player_id,
+                    season,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch box log for player {player_id}: {type(e).__name__}: {e}")
+            return []
+
     async def get_latest_game_date(self, season: str) -> Optional[date]:
         """Most recent game_date with real box scores this season, or None if
         none exist yet. Used as the anchor for last_7/15/30 instead of real
