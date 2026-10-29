@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import BoxScorePanel from '../components/boxScores/BoxScorePanel'
+import SlateDatePicker from '../components/boxScores/SlateDatePicker'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
 import MyPlayers from '../components/boxScores/MyPlayers'
 import { groupAppearances, myAppearances } from '../components/boxScores/myPlayerGroups'
@@ -12,7 +13,7 @@ import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useMyTeam } from '../context/MyTeamContext'
 import { usePersistedState } from '../hooks/usePersistedState'
-import { fantasyApi, useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery, useGetNbaTeamDepthChartQuery, useGetTeamPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
+import { fantasyApi, useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxSlateValuesQuery, useGetGameBoxScoreQuery, useGetNbaSeasonWindowQuery, useGetNbaTeamDepthChartQuery, useGetTeamPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useAppSelector } from '../store/hooks'
 import type { BoxScoreGame, BoxTeamSide, SlatePlayerValue } from '../types/boxScore'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -44,8 +45,17 @@ const MAX_REVEALED = 60
 
 function slatePoll(games: BoxScoreGame[] | undefined, date: string): number {
   if (!games) return 0
-  if (games.some(game => game.status === 'live')) return 20_000
+  if (games.some(game => game.status === 'live')) return 60_000
   if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 60_000
+  return 0
+}
+
+// Z-scores and lines of the night read every started box. Refresh them much
+// more slowly than the open game so a live slate is not fetched in full.
+function valuesPoll(games: BoxScoreGame[] | undefined, date: string): number {
+  if (!games || !games.some(game => game.status !== 'scheduled')) return 0
+  if (games.some(game => game.status === 'live')) return 120_000
+  if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 120_000
   return 0
 }
 
@@ -181,9 +191,13 @@ export default function BoxScores() {
   const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
   const [revealed, setRevealed] = usePersistedState<string[]>('boxScores.revealedGames', [])
   const today = easternToday()
+  const season = useGetNbaSeasonWindowQuery()
+  const seasonStart = season.data?.start
+  const seasonEnd = season.data?.end
 
   const [boardPoll, setBoardPoll] = useState(0)
   const [boxPoll, setBoxPoll] = useState(0)
+  const [slateValuesPoll, setSlateValuesPoll] = useState(0)
   const board = useGetBoxScoreboardQuery(date, { pollingInterval: boardPoll })
   const games = board.data?.date === date ? board.data.games : undefined
   const nextBoardPoll = slatePoll(games, date)
@@ -194,10 +208,12 @@ export default function BoxScores() {
     pollingInterval: boxPoll,
   })
   const boxReady = boxScore.data?.game_id === selectedId ? boxScore.data : undefined
-  const nextBoxPoll = boxReady?.status === 'live' ? 15_000 : 0
+  const nextBoxPoll = boxReady?.status === 'live' ? 60_000 : 0
   if (nextBoxPoll !== boxPoll) setBoxPoll(nextBoxPoll)
   const anyStarted = games?.some(game => game.status !== 'scheduled') ?? false
-  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: boardPoll })
+  const nextValuesPoll = valuesPoll(games, date)
+  if (nextValuesPoll !== slateValuesPoll) setSlateValuesPoll(nextValuesPoll)
+  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: slateValuesPoll })
   const values = slateValues.data?.date === date ? slateValues.data : undefined
   // Z comes from the Player Rankings page's own code, so the two never disagree.
   const ranked = useMemo(() => (values ? slatePlayerValues(values) : []), [values])
@@ -267,7 +283,14 @@ export default function BoxScores() {
       : [...current, id].slice(-MAX_REVEALED))
   }
 
+  function inSeason(next: string) {
+    if (seasonStart && next < seasonStart) return false
+    if (seasonEnd && next > seasonEnd) return false
+    return true
+  }
+
   function goTo(next: string) {
+    if (!inSeason(next)) return
     const params = new URLSearchParams()
     params.set('date', next)
     setSearchParams(params, { replace: true })
@@ -278,6 +301,16 @@ export default function BoxScores() {
     params.set('date', date)
     params.set('game', id)
     setSearchParams(params, { replace: true })
+  }
+
+  function toggleGame(id: string) {
+    if (id === selectedId) {
+      const params = new URLSearchParams()
+      params.set('date', date)
+      setSearchParams(params, { replace: true })
+      return
+    }
+    selectGame(id)
   }
 
   return (
@@ -298,32 +331,29 @@ export default function BoxScores() {
         <button
           type="button"
           aria-label="Previous day"
+          disabled={!inSeason(shiftDate(date, -1))}
           onClick={() => goTo(shiftDate(date, -1))}
-          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800 dark:disabled:text-gray-600 dark:disabled:hover:bg-gray-900"
         >
           ‹
         </button>
-        <label className="relative">
-          <span className="block min-w-[12rem] rounded-lg border border-gray-200 bg-white px-4 py-2 text-center text-sm font-semibold text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
-            {formatSlateLabel(date)}
-          </span>
-          <input
-            type="date"
-            value={date}
-            aria-label="Choose a date"
-            onChange={event => { if (event.target.value) goTo(event.target.value) }}
-            className="absolute inset-0 cursor-pointer opacity-0"
-          />
-        </label>
+        <SlateDatePicker
+          date={date}
+          label={formatSlateLabel(date)}
+          min={seasonStart}
+          max={seasonEnd}
+          onChange={goTo}
+        />
         <button
           type="button"
           aria-label="Next day"
+          disabled={!inSeason(shiftDate(date, 1))}
           onClick={() => goTo(shiftDate(date, 1))}
-          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+          className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 bg-white text-lg text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800 dark:disabled:text-gray-600 dark:disabled:hover:bg-gray-900"
         >
           ›
         </button>
-        {date !== today && (
+        {date !== today && inSeason(today) && (
           <button
             type="button"
             onClick={() => goTo(today)}
@@ -346,14 +376,6 @@ export default function BoxScores() {
       {games && games.length > 0 && (
         <>
           <ScheduledDepthCharts teamIds={scheduledTeamIds} />
-          {mineSlate && (
-            <MyPlayers
-              key={`my-players-${date}-${noSpoilers}`}
-              groups={mineSlate}
-              spoilerGuard={noSpoilers}
-              onOpenGame={selectGame}
-            />
-          )}
           {values?.complete && ranked.length > 0 && (
             <LinesOfTheNight
               key={`${date}-${noSpoilers}`}
@@ -361,6 +383,14 @@ export default function BoxScores() {
               spoilerGuard={noSpoilers}
               dateLabel={formatSlateLabel(date)}
               games={games.length}
+            />
+          )}
+          {mineSlate && (
+            <MyPlayers
+              key={`my-players-${date}-${noSpoilers}`}
+              groups={mineSlate}
+              spoilerGuard={noSpoilers}
+              onOpenGame={selectGame}
             />
           )}
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 snap-x sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">
@@ -371,7 +401,7 @@ export default function BoxScores() {
                 selected={game.game_id === selectedId}
                 hideScores={noSpoilers && !revealed.includes(game.game_id)}
                 mineCount={myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds) : null}
-                onSelect={() => selectGame(game.game_id)}
+                onSelect={() => toggleGame(game.game_id)}
               />
             ))}
           </div>

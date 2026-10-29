@@ -30,7 +30,7 @@ interface RosterPlayer {
 
 export type MyLine =
   | { kind: 'played'; line: BoxPlayerLine }
-  | { kind: 'dnp'; reason: string }
+  | { kind: 'dnp'; reason: string; jersey: string }
   | { kind: 'out' }
 
 /** Roster players whose NBA team is on this slate, in tip order then name. */
@@ -79,7 +79,7 @@ export function myLine(box: GameBoxScore, playerId: string): MyLine {
     const played = [...team.starters, ...team.bench].find(player => player.player_id === playerId)
     if (played) return { kind: 'played', line: played }
     const dnp = team.did_not_play.find(player => player.player_id === playerId)
-    if (dnp) return { kind: 'dnp', reason: dnp.reason }
+    if (dnp) return { kind: 'dnp', reason: dnp.reason, jersey: dnp.jersey || '' }
   }
   return { kind: 'out' }
 }

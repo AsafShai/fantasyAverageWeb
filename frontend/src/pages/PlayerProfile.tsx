@@ -9,6 +9,7 @@ import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import PlayerTrendsCard from '../components/PlayerTrendsCard'
 import PlayerNextGameCard from '../components/PlayerNextGameCard'
+import PlayerGameLog from '../components/PlayerGameLog'
 
 function backLabel(from: string | undefined): string {
   if (!from) return '← Back'
@@ -265,6 +266,8 @@ const PlayerProfile = () => {
           </div>
         )}
       </div>
+
+      <PlayerGameLog playerId={playerId} />
 
       <PlayerTrendsCard playerId={Number(playerId)} />
 

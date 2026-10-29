@@ -1,14 +1,15 @@
 import React from 'react';
 import { getHeatmapColor, getTextColor } from '../../../utils/colorUtils';
+import { orderCategories } from '../../../utils/statOrder';
 
 interface TeamRankingsBarProps {
   categoryRanks: Record<string, number>;
 }
 
 export const TeamRankingsBar: React.FC<TeamRankingsBarProps> = ({ categoryRanks }) => {
-  // Column order/set comes straight from the API response (this league's
-  // actual scoring categories), not a hardcoded 8-category list.
-  const categoryKeys = Object.keys(categoryRanks)
+  // Column set comes from the API response (this league's actual scoring
+  // categories), put in the app-wide stat order so it matches Standings.
+  const categoryKeys = orderCategories(Object.keys(categoryRanks))
   const teamCount = Object.keys(categoryRanks).length > 0
     ? Math.max(...Object.values(categoryRanks))
     : 1

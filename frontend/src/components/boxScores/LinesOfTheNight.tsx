@@ -12,7 +12,7 @@ function shooting(player: SlatePlayerValue): string {
 
 /**
  * The five best lines of a finished slate, by z-score against every other
- * line that night. Collapsible; under No spoilers it starts closed.
+ * line that night. Starts closed.
  */
 export default function LinesOfTheNight({
   players,
@@ -25,7 +25,7 @@ export default function LinesOfTheNight({
   dateLabel: string
   games: number
 }) {
-  const [open, setOpen] = useState(!spoilerGuard)
+  const [open, setOpen] = useState(false)
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm dark:border-amber-500/30 dark:from-amber-950/40 dark:to-gray-900">
       <div className="flex items-center">

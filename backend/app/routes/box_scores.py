@@ -2,6 +2,8 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import settings
+
 from app.services.box_score_service import (
     BoxScoreNotFound,
     BoxScoreUnavailable,
@@ -11,6 +13,15 @@ from app.services.box_score_service import (
 from app.services.box_score_value_service import slate_values
 
 router = APIRouter()
+
+
+@router.get("/season")
+async def season_window():
+    """Regular-season first and last game dates, for the box-score calendar."""
+    return {
+        "start": settings.season_start.isoformat(),
+        "end": settings.season_end.isoformat(),
+    }
 
 
 @router.get("/scoreboard")

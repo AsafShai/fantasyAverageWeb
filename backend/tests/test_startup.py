@@ -54,6 +54,7 @@ async def test_lifespan_keeps_schedulers_referenced_and_cancels_them_on_shutdown
         return run
 
     with patch.object(main, "derive_season_start", AsyncMock(return_value=None)), \
+         patch.object(main.schedule_service, "get_season_end_date", AsyncMock(return_value=None)), \
          patch.object(main.injury_service, "initialize", AsyncMock()), \
          patch.object(main.injury_service, "start_scheduler", fake_scheduler("injury")), \
          patch.object(main.estimator_scheduler, "start_scheduler", fake_scheduler("estimator")), \
@@ -87,6 +88,7 @@ async def test_lifespan_skips_adp_scheduler_when_disabled():
 
     adp_start = AsyncMock()
     with patch.object(main, "derive_season_start", AsyncMock(return_value=None)), \
+         patch.object(main.schedule_service, "get_season_end_date", AsyncMock(return_value=None)), \
          patch.object(main.injury_service, "initialize", AsyncMock()), \
          patch.object(main.settings, "injury_scheduler_enabled", False), \
          patch.object(main.settings, "model_nightly_enabled", False), \

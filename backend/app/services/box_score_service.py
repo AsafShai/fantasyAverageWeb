@@ -45,6 +45,13 @@ _PLAYER_STATS = (
 )
 
 _cache: dict[str, tuple[float, dict]] = {}
+# A bad ESPN payload is remembered briefly so the next poll does not ask again.
+_failures: dict[str, tuple[float, Exception]] = {}
+_inflight: dict[str, asyncio.Task] = {}
+_NEGATIVE_TTL = 45.0
+# Live games change often, but ESPN starts returning unusable payloads when
+# the same scoreboard and every box are fetched every few seconds.
+_LIVE_TTL = 60.0
 _client: httpx.AsyncClient | None = None
 
 
@@ -58,6 +65,7 @@ class BoxScoreNotFound(Exception):
 
 def clear_box_score_cache() -> None:
     _cache.clear()
+    _failures.clear()
 
 
 def _http() -> httpx.AsyncClient:
@@ -87,26 +95,50 @@ def _cached(key: str) -> dict | None:
     return payload
 
 
+def _recent_failure(key: str) -> Exception | None:
+    hit = _failures.get(key)
+    if hit is None:
+        return None
+    expires, exc = hit
+    if time.monotonic() > expires:
+        _failures.pop(key, None)
+        return None
+    return exc
+
+
+def _remember_failure(key: str, exc: Exception) -> None:
+    _failures[key] = (time.monotonic() + _NEGATIVE_TTL, exc)
+
+
+async def _single_flight(key: str, fetch):
+    """One ESPN fetch serves every caller that arrives while it is in flight."""
+    current = _inflight.get(key)
+    if current is not None:
+        return await asyncio.shield(current)
+    task = asyncio.create_task(fetch())
+    _inflight[key] = task
+    try:
+        return await task
+    finally:
+        if _inflight.get(key) is task:
+            _inflight.pop(key, None)
+
+
 async def _get_json(url: str, params: dict[str, str]) -> dict:
-    last: Exception | None = None
-    for attempt in range(2):
-        try:
-            response = await _http().get(url, params=params)
-            if response.status_code == 404:
-                raise BoxScoreNotFound(url)
-            response.raise_for_status()
-            data = response.json()
-            if not isinstance(data, dict):
-                raise BoxScoreUnavailable(f"ESPN returned {type(data).__name__}")
-            return data
-        except BoxScoreNotFound:
-            raise
-        except (httpx.HTTPError, ValueError) as exc:
-            last = exc
-            logger.warning(f"ESPN GET {url} attempt {attempt + 1}/2 failed: {type(exc).__name__}: {exc}")
-            if attempt == 0:
-                await asyncio.sleep(0.4)
-    raise BoxScoreUnavailable(f"GET {url} failed: {last}")
+    try:
+        response = await _http().get(url, params=params)
+        if response.status_code == 404:
+            raise BoxScoreNotFound(url)
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise BoxScoreUnavailable(f"ESPN returned {type(data).__name__}")
+        return data
+    except BoxScoreNotFound:
+        raise
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning(f"ESPN GET {url} failed: {type(exc).__name__}: {exc}")
+        raise BoxScoreUnavailable(f"GET {url} failed: {exc}") from exc
 
 
 def _eastern_today() -> date:
@@ -121,7 +153,7 @@ def _scoreboard_ttl(parsed: dict, day: date) -> float:
     if day > today:
         return 30 * 60
     if any(game["status"] == "live" for game in games):
-        return 15
+        return _LIVE_TTL
     return 60
 
 
@@ -129,7 +161,7 @@ def _box_ttl(status: str) -> float:
     if status == "final":
         return 6 * 60 * 60
     if status == "live":
-        return 15
+        return _LIVE_TTL
     return 10 * 60
 
 
@@ -138,9 +170,24 @@ async def scoreboard_for(day: date) -> dict:
     cached = _cached(key)
     if cached is not None:
         return cached
-    payload = await _get_json(SCOREBOARD_URL, {"dates": day.strftime("%Y%m%d"), "limit": "100"})
-    parsed = parse_scoreboard(payload, day)
-    return _store(key, parsed, _scoreboard_ttl(parsed, day))
+    failed = _recent_failure(key)
+    if failed is not None:
+        raise failed
+
+    async def fetch() -> dict:
+        again = _cached(key)
+        if again is not None:
+            return again
+        try:
+            payload = await _get_json(SCOREBOARD_URL, {"dates": day.strftime("%Y%m%d"), "limit": "100"})
+            parsed = parse_scoreboard(payload, day)
+        except BoxScoreUnavailable as exc:
+            _remember_failure(key, exc)
+            raise
+        _failures.pop(key, None)
+        return _store(key, parsed, _scoreboard_ttl(parsed, day))
+
+    return await _single_flight(key, fetch)
 
 
 async def boxscore_for(game_id: str) -> dict:
@@ -148,9 +195,24 @@ async def boxscore_for(game_id: str) -> dict:
     cached = _cached(key)
     if cached is not None:
         return cached
-    payload = await _get_json(SUMMARY_URL, {"event": game_id})
-    parsed = parse_boxscore(payload, game_id)
-    return _store(key, parsed, _box_ttl(parsed["status"]))
+    failed = _recent_failure(key)
+    if failed is not None:
+        raise failed
+
+    async def fetch() -> dict:
+        again = _cached(key)
+        if again is not None:
+            return again
+        try:
+            payload = await _get_json(SUMMARY_URL, {"event": game_id})
+            parsed = parse_boxscore(payload, game_id)
+        except BoxScoreUnavailable as exc:
+            _remember_failure(key, exc)
+            raise
+        _failures.pop(key, None)
+        return _store(key, parsed, _box_ttl(parsed["status"]))
+
+    return await _single_flight(key, fetch)
 
 
 # --- parsing -----------------------------------------------------------------
@@ -372,6 +434,7 @@ def _players(block: dict, *, live: bool) -> tuple[list[dict], list[dict], list[d
             dnp.append({
                 "player_id": str(person.get("id") or ""),
                 "name": name,
+                "jersey": _jersey(person),
                 "position": (person.get("position") or {}).get("abbreviation") or "",
                 "reason": str(athlete.get("reason") or ""),
             })
@@ -386,12 +449,20 @@ def _players(block: dict, *, live: bool) -> tuple[list[dict], list[dict], list[d
     return starters, bench, dnp
 
 
+def _jersey(person: dict) -> str:
+    raw = person.get("jersey")
+    if raw in (None, ""):
+        return ""
+    return str(raw).strip()
+
+
 def _player_line(athlete: dict, index: dict[str, int], *, on_court: bool) -> dict:
     person = athlete.get("athlete") or {}
     values = athlete.get("stats") or []
     line = {
         "player_id": str(person.get("id") or ""),
         "name": person.get("displayName") or person.get("shortName") or "Unknown",
+        "jersey": _jersey(person),
         "position": (person.get("position") or {}).get("abbreviation") or "",
         "ejected": bool(athlete.get("ejected")),
         "on_court": on_court,
