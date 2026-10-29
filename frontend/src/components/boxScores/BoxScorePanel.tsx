@@ -4,6 +4,7 @@ import PlayerNameLink from '../PlayerNameLink'
 import type { PregamePlayer } from './pregameRoster'
 import { fouledOut, lineupGroups } from './lineupGroups'
 import { countdownLabel, gameClockLabel, localClock } from './tipTime'
+import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName'
 import { signedZ } from './linesOfTheNightFormat'
 import type { BoxPlayerLine, BoxTeamBox, BoxTeamTotals, GameBoxScore, SlatePlayerValue } from '../../types/boxScore'
 
@@ -46,16 +47,25 @@ function StatCell({ value, hide, emphasize = false, alert = false }: { value: st
   return <span className={margin}>{value}</span>
 }
 
-export function PlayerStatus({ onCourt, ejected, fouledOut: out }: { onCourt?: boolean; ejected?: boolean; fouledOut?: boolean }) {
-  if (!onCourt && !ejected && !out) return null
+export function JerseyNumber({ jersey }: { jersey?: string }) {
+  if (!jersey) return null
+  return <span className="shrink-0 tabular-nums text-[11px] font-medium text-gray-500 dark:text-gray-400">{jersey}</span>
+}
+
+export function OnCourtDot() {
+  return (
+    <span
+      className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"
+      title="On court"
+      aria-label="On court"
+    />
+  )
+}
+
+export function PlayerStatus({ ejected, fouledOut: out }: { ejected?: boolean; fouledOut?: boolean }) {
+  if (!ejected && !out) return null
   return (
     <>
-      {onCourt && (
-        <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          On court
-        </span>
-      )}
       {out && <span className="shrink-0 text-[10px] font-semibold text-rose-600 dark:text-rose-400">Fouled out</span>}
       {ejected && <span className="shrink-0 text-[10px] font-semibold text-rose-600 dark:text-rose-400">Ejected</span>}
     </>
@@ -185,7 +195,8 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
   const groups = lineupGroups(team, live)
   const starterIds = live ? new Set(team.starters.map(player => player.player_id || player.name)) : null
   const accent = team.color ? `#${team.color}` : undefined
-  const extra = values ? 2 : 0
+  // Dot (live only) and the scrolling status marks sit outside the pinned name.
+  const lead = (live ? 1 : 0) + 2 + (values ? 2 : 0)
 
   return (
     <div className="min-w-0">
@@ -208,7 +219,9 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
             <caption className="sr-only">{team.name} box score</caption>
             <thead className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500 dark:bg-gray-800 dark:text-gray-400">
               <tr>
+                {live && <th className="p-0" aria-hidden="true" />}
                 <th className="sticky left-0 z-20 whitespace-nowrap bg-gray-50 px-3 py-2 text-left font-semibold dark:bg-gray-800">Player</th>
+                <th className="p-0" aria-hidden="true" />
                 {values && (
                   <>
                     <th className="px-2 py-2 text-left font-semibold" title="Fantasy team that rostered him on the night of the game">Fantasy</th>
@@ -224,7 +237,7 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
               <tbody key={group.label}>
                 <tr>
                   <th
-                    colSpan={BOX_LINE_COLUMNS.length + 1 + extra}
+                    colSpan={BOX_LINE_COLUMNS.length + lead}
                     className="bg-gray-50 px-3 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:bg-gray-800"
                   >
                     <span className={`sticky left-3 inline-flex items-center gap-1.5 ${group.label === 'On the court' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
@@ -240,7 +253,9 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
             ))}
             <tfoot>
               <tr className="border-t-2 border-gray-200 font-semibold dark:border-gray-600">
+                {live && <td />}
                 <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left text-gray-800 dark:bg-gray-900 dark:text-gray-100">Total</th>
+                <td />
                 {values && <td colSpan={2} />}
                 {BOX_LINE_COLUMNS.map(column => (
                   <td key={column.key} className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-gray-800 dark:text-gray-100">
@@ -262,7 +277,10 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
             return (
               <span key={player.player_id || player.name}>
                 {index > 0 && ', '}
-                <span className={mine ? 'rounded-sm bg-blue-100 px-0.5 font-medium text-blue-900 dark:bg-blue-900 dark:text-blue-100' : undefined}>{label}</span>
+                <span className={mine ? 'rounded-sm bg-blue-100 px-0.5 font-medium text-blue-900 dark:bg-blue-900 dark:text-blue-100' : undefined}>
+                  {player.jersey && <span className="mr-1 tabular-nums font-medium text-gray-500 dark:text-gray-400">{player.jersey}</span>}
+                  <span>{label}</span>
+                </span>
               </span>
             )
           })}
@@ -272,21 +290,31 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
   )
 }
 
-function PlayerName({ player, live, nameOnly = false, started = false }: { player: BoxPlayerLine; live: boolean; nameOnly?: boolean; started?: boolean }) {
+function PlayerMarks({ player, nameOnly = false, started = false, position = true }: { player: BoxPlayerLine; nameOnly?: boolean; started?: boolean; position?: boolean }) {
   return (
-    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-      <PlayerNameLink
-        name={player.name}
-        playerId={player.player_id}
-        className="text-gray-800 hover:underline dark:text-gray-100"
-      />
-      {!nameOnly && player.position && <span className="shrink-0 text-[10px] font-normal text-gray-400">{player.position}</span>}
+    <>
+      {position && !nameOnly && player.position && <span className="shrink-0 text-[10px] font-normal text-gray-400">{player.position}</span>}
       {started && (
         <span className="shrink-0 text-[10px] font-medium text-gray-400 dark:text-gray-500" title="Starting five">
           Started
         </span>
       )}
-      <PlayerStatus onCourt={live && player.on_court} ejected={player.ejected} fouledOut={!nameOnly && fouledOut(player.pf)} />
+      <PlayerStatus ejected={player.ejected} fouledOut={!nameOnly && fouledOut(player.pf)} />
+    </>
+  )
+}
+
+function PlayerName({ player, live, nameOnly = false, started = false }: { player: BoxPlayerLine; live: boolean; nameOnly?: boolean; started?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      {live && player.on_court && <OnCourtDot />}
+      <JerseyNumber jersey={player.jersey} />
+      <PlayerNameLink
+        name={player.name}
+        playerId={player.player_id}
+        className="text-gray-800 hover:underline dark:text-gray-100"
+      />
+      <PlayerMarks player={player} nameOnly={nameOnly} started={started} />
     </span>
   )
 }
@@ -323,9 +351,29 @@ function PlayerRow({ player, values, mine, live, started }: { player: BoxPlayerL
   const value = values?.get(player.player_id)
   return (
     <tr className={`border-t border-gray-100 dark:border-gray-800 ${mine ? MINE_ROW : ''}`}>
-      <th className={`sticky left-0 z-10 whitespace-nowrap px-3 py-1.5 text-left font-medium ${mine ? `${MINE_ROW} ${MINE_EDGE}` : 'bg-white dark:bg-gray-900'}`}>
-        <PlayerName player={player} live={live} started={started} />
+      {live && (
+        <td className="whitespace-nowrap py-1.5 pl-3 pr-1 text-left align-middle">
+          {player.on_court && <OnCourtDot />}
+        </td>
+      )}
+      <th className={`sticky left-0 z-10 py-1.5 pl-1.5 pr-1.5 text-left align-middle font-medium ${mine ? `${MINE_ROW} ${MINE_EDGE}` : 'bg-white dark:bg-gray-900'}`}>
+        <span className="flex items-center gap-1.5">
+          <JerseyNumber jersey={player.jersey} />
+          <span className={`leading-snug ${nameCellWrapClass(player.name)}`}>
+            <PlayerNameLink
+              name={wrapFriendlyName(player.name)}
+              playerId={player.player_id}
+              className="text-gray-800 hover:underline dark:text-gray-100"
+            />
+          </span>
+          {player.position && <span className="shrink-0 text-[10px] font-normal text-gray-400">{player.position}</span>}
+        </span>
       </th>
+      <td className="whitespace-nowrap py-1.5 pr-2 text-left align-middle">
+        <span className="inline-flex items-center gap-1.5">
+          <PlayerMarks player={player} started={started} position={false} />
+        </span>
+      </td>
       {values && (
         <>
           <td className="whitespace-nowrap px-2 py-1.5 text-left">

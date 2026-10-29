@@ -33,23 +33,23 @@ def _team(team_id, abbr, name, short, home_away, score="0", winner=False, color=
     }
 
 
-def _athlete(player_id, name, stats, starter=False, dnp=False, reason="", active=False, ejected=False):
+def _athlete(player_id, name, stats, starter=False, dnp=False, reason="", active=False, ejected=False, jersey=""):
     return {
         "starter": starter,
         "didNotPlay": dnp,
         "reason": reason,
         "active": active,
         "ejected": ejected,
-        "athlete": {"id": player_id, "displayName": name, "position": {"abbreviation": "G"}},
+        "athlete": {"id": player_id, "displayName": name, "jersey": jersey, "position": {"abbreviation": "G"}},
         "stats": stats,
     }
 
 
 def _summary():
     names = ["MIN", "PTS", "FG", "3PT", "FT", "REB", "AST", "TO", "STL", "BLK", "OREB", "DREB", "PF", "+/-"]
-    starter = _athlete("1", "Starter One", ["34", "22", "8-16", "2-6", "4-4", "8", "5", "2", "1", "0", "1", "7", "2", "+5"], starter=True, active=True)
+    starter = _athlete("1", "Starter One", ["34", "22", "8-16", "2-6", "4-4", "8", "5", "2", "1", "0", "1", "7", "2", "+5"], starter=True, active=True, jersey="15")
     bench = _athlete("2", "Bench Two", ["18", "9", "3-7", "1-3", "2-2", "3", "1", "1", "0", "1", "0", "3", "1", "-2"])
-    dnp = _athlete("3", "Sit Out", [], dnp=True, reason="Coach's Decision")
+    dnp = _athlete("3", "Sit Out", [], dnp=True, reason="Coach's Decision", jersey="0")
     return {
         "gameInfo": {
             "attendance": 17867,
@@ -164,9 +164,11 @@ def test_boxscore_splits_lineup_and_labels_overtime():
     assert box["away"]["did_not_play"] == [{
         "player_id": "3",
         "name": "Sit Out",
+        "jersey": "0",
         "position": "G",
         "reason": "Coach's Decision",
     }]
+    assert box["away"]["starters"][0]["jersey"] == "15"
     assert box["away"]["starters"][0]["fg"] == "8-16"
     assert box["away"]["starters"][0]["plus_minus"] == "+5"
     assert box["away"]["starters"][0]["on_court"] is False
@@ -198,3 +200,44 @@ def test_live_box_records_who_is_on_the_court():
 def test_boxscore_rejects_a_summary_without_teams():
     with pytest.raises(BoxScoreUnavailable):
         parse_boxscore({"header": {"competitions": [{"competitors": []}]}}, "9")
+
+
+@pytest.mark.asyncio
+async def test_a_bad_espn_box_is_not_fetched_again_right_away(monkeypatch):
+    from app.services import box_score_service as svc
+
+    svc.clear_box_score_cache()
+    calls = {"n": 0}
+
+    async def boom(url, params):
+        calls["n"] += 1
+        return {"not": "a box"}
+
+    monkeypatch.setattr(svc, "_get_json", boom)
+    with pytest.raises(BoxScoreUnavailable):
+        await svc.boxscore_for("401")
+    with pytest.raises(BoxScoreUnavailable):
+        await svc.boxscore_for("401")
+    assert calls["n"] == 1
+    svc.clear_box_score_cache()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_box_fetches_share_one_espn_call(monkeypatch):
+    import asyncio
+
+    from app.services import box_score_service as svc
+
+    svc.clear_box_score_cache()
+    calls = {"n": 0}
+
+    async def slow(url, params):
+        calls["n"] += 1
+        await asyncio.sleep(0.05)
+        return _summary()
+
+    monkeypatch.setattr(svc, "_get_json", slow)
+    first, second = await asyncio.gather(svc.boxscore_for("100"), svc.boxscore_for("100"))
+    assert calls["n"] == 1
+    assert first["game_id"] == second["game_id"] == "100"
+    svc.clear_box_score_cache()

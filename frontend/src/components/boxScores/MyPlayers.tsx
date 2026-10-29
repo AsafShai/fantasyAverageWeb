@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import { useGetGameBoxScoreQuery } from '../../store/api/fantasyApi'
-import { BOX_LINE_COLUMNS, PlayerStatus } from './BoxScorePanel'
+import { BOX_LINE_COLUMNS, JerseyNumber, OnCourtDot, PlayerStatus } from './BoxScorePanel'
 import { fouledOut } from './lineupGroups'
 import { clusterByGame, myLine, type MyAppearance, type MyGroups } from './myPlayerGroups'
 import { gameClockLabel } from './tipTime'
@@ -16,8 +16,19 @@ function summary(groups: MyGroups): string {
   return parts.join(' · ')
 }
 
-function matchup(game: BoxScoreGame): string {
-  return `${game.away.abbreviation} @ ${game.home.abbreviation}`
+function GameHeading({ game, hideScore = false }: { game: BoxScoreGame; hideScore?: boolean }) {
+  const clock = gameClockLabel(game.status, game.status_detail, game.start_time)
+  const scored = !hideScore && game.away.score != null && game.home.score != null
+  return (
+    <>
+      {game.away.abbreviation}
+      {scored && <>{' '}<span className="tabular-nums">{game.away.score}</span></>}
+      {' @ '}
+      {game.home.abbreviation}
+      {scored && <>{' '}<span className="tabular-nums">{game.home.score}</span></>}
+      {` · ${clock}`}
+    </>
+  )
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -83,8 +94,9 @@ function StatStrip({ line, hideLabelsOnWide = false }: { line: BoxPlayerLine; hi
   )
 }
 
-function PlayerIdentity({ player, onCourt = false, ejected = false, fouled = false }: {
+function PlayerIdentity({ player, jersey = '', onCourt = false, ejected = false, fouled = false }: {
   player: MyAppearance
+  jersey?: string
   onCourt?: boolean
   ejected?: boolean
   fouled?: boolean
@@ -94,13 +106,15 @@ function PlayerIdentity({ player, onCourt = false, ejected = false, fouled = fal
       {player.teamLogo
         ? <img src={player.teamLogo} alt="" className="h-6 w-6 shrink-0 object-contain" />
         : <span className="h-6 w-6 shrink-0" />}
+      {onCourt && <OnCourtDot />}
+      <JerseyNumber jersey={jersey} />
       <PlayerNameLink
         name={player.name}
         playerId={player.playerId}
         className="min-w-0 text-sm font-semibold text-gray-900 hover:underline dark:text-gray-100"
       />
       {player.position && <span className="shrink-0 text-[11px] text-gray-400">{player.position}</span>}
-      <PlayerStatus onCourt={onCourt} ejected={ejected} fouledOut={fouled} />
+      <PlayerStatus ejected={ejected} fouledOut={fouled} />
     </div>
   )
 }
@@ -117,7 +131,7 @@ function UpcomingCluster({ game, players, onOpenGame }: {
         onClick={() => onOpenGame(game.game_id)}
         className="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:hover:text-blue-300"
       >
-        {matchup(game)} · {gameClockLabel(game.status, game.status_detail, game.start_time)}
+        <GameHeading game={game} />
       </button>
       <ul>
         {players.map(player => (
@@ -135,7 +149,7 @@ function ResultCluster({ game, players, hide, live, onOpenGame }: {
   live: boolean
   onOpenGame: (gameId: string) => void
 }) {
-  const box = useGetGameBoxScoreQuery(game.game_id, { pollingInterval: live ? 15_000 : 0 })
+  const box = useGetGameBoxScoreQuery(game.game_id, { pollingInterval: live ? 60_000 : 0 })
   const ready = box.data?.game_id === game.game_id ? box.data : undefined
   return (
     <li className="px-4 py-2">
@@ -144,7 +158,7 @@ function ResultCluster({ game, players, hide, live, onOpenGame }: {
         onClick={() => onOpenGame(game.game_id)}
         className={`text-left text-[11px] font-semibold uppercase tracking-wide hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:hover:text-blue-300 ${live ? 'text-rose-600' : 'text-gray-400'}`}
       >
-        {matchup(game)} · {gameClockLabel(game.status, game.status_detail, game.start_time)}
+        <GameHeading game={game} hideScore={hide} />
       </button>
       {box.isError && <p className="mt-1 text-xs text-rose-600">Could not load this box.</p>}
       {!hide && ready && players.some(player => myLine(ready, player.playerId).kind === 'played') && (
@@ -174,6 +188,7 @@ function ResultCluster({ game, players, hide, live, onOpenGame }: {
               <div className="lg:w-64 lg:shrink-0">
                 <PlayerIdentity
                   player={player}
+                  jersey={found?.kind === 'played' ? found.line.jersey : found?.kind === 'dnp' ? found.jersey : ''}
                   onCourt={!hide && live && found?.kind === 'played' && found.line.on_court}
                   ejected={!hide && found?.kind === 'played' && found.line.ejected}
                   fouled={!hide && found?.kind === 'played' && fouledOut(found.line.pf)}

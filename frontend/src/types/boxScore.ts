@@ -31,6 +31,7 @@ export interface BoxScoreboard {
 export interface BoxPlayerLine {
   player_id: string
   name: string
+  jersey: string
   position: string
   ejected: boolean
   /** True only while the game is live and this player is on the floor. */
@@ -54,6 +55,7 @@ export interface BoxPlayerLine {
 export interface BoxDidNotPlay {
   player_id: string
   name: string
+  jersey: string
   position: string
   reason: string
 }

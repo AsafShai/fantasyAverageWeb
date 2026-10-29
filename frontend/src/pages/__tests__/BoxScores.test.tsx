@@ -39,12 +39,12 @@ const box = {
     ...board.games[0].away,
     linescores: ['30', '40', '29', '30'],
     starters: [{
-      player_id: '1', name: 'Austin Reaves', position: 'G', ejected: false, on_court: false,
+      player_id: '1', name: 'Austin Reaves', jersey: '15', position: 'G', ejected: false, on_court: false,
       min: '34', pts: '28', fg: '10-18', fg3: '3-7', ft: '5-5', reb: '4', ast: '6',
       tov: '2', stl: '1', blk: '0', oreb: '1', dreb: '3', pf: '2', plus_minus: '+12',
     }],
     bench: [],
-    did_not_play: [{ player_id: '9', name: 'Sit Out', position: 'F', reason: "Coach's Decision" }],
+    did_not_play: [{ player_id: '9', name: 'Sit Out', jersey: '0', position: 'F', reason: "Coach's Decision" }],
     totals: {
       min: '240', pts: '129', fg: '48-90', fg3: '12-30', ft: '21-24', reb: '45', ast: '28',
       tov: '12', stl: '8', blk: '4', oreb: '10', dreb: '35', pf: '18', plus_minus: '',
@@ -143,6 +143,9 @@ describe('BoxScores', () => {
     expect(within(table).queryByText('Started')).not.toBeInTheDocument()
     expect(within(table).queryByText('On court')).not.toBeInTheDocument()
     expect((await screen.findAllByText("Sit Out (Coach's Decision)")).length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: /Final/, pressed: true }))
+    expect(screen.queryByRole('table', { name: /box score/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Final/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('hides scores while No spoilers is on', async () => {
@@ -235,7 +238,7 @@ describe('BoxScores', () => {
     }
     const sat = {
       ...box.away.starters[0],
-      player_id: '4', name: 'Sat Down', on_court: false, pf: '6', ejected: false,
+      player_id: '4', name: 'Giannis Antetokounmpo', on_court: false, pf: '6', ejected: false,
     }
     const tossed = {
       ...box.away.starters[0],
@@ -268,14 +271,33 @@ describe('BoxScores', () => {
     const benchAt = headers.indexOf('Bench')
     expect(onCourtAt).toBeGreaterThanOrEqual(0)
     expect(benchAt).toBeGreaterThan(onCourtAt)
-    expect(within(table).getAllByText('On court')).toHaveLength(2)
+    expect(within(table).queryByText('On court')).not.toBeInTheDocument()
+    expect(within(table).getAllByTitle('On court')).toHaveLength(2)
+    const nameCell = within(table).getByRole('link', { name: 'Austin Reaves' }).closest('th')
+    expect(nameCell).toHaveClass('sticky')
+    expect(nameCell).toHaveTextContent('Austin Reaves')
+    expect(nameCell).toHaveTextContent('15')
+    expect(nameCell).toHaveTextContent('G')
+    expect(within(table).getByRole('link', { name: 'Austin Reaves' }).parentElement?.previousElementSibling).toHaveTextContent('15')
+    expect(nameCell).not.toHaveTextContent('Started')
+    expect(nameCell).toHaveClass('bg-white')
+    expect(nameCell?.previousElementSibling).not.toHaveClass('sticky')
+    expect(nameCell?.previousElementSibling?.querySelector('[title="On court"]')).toBeTruthy()
+    expect(nameCell?.nextElementSibling).not.toHaveClass('sticky')
+    expect(nameCell?.nextElementSibling).toHaveTextContent('Started')
     const started = within(table).getAllByTitle('Starting five').map(mark => mark.closest('tr')?.querySelector('a')?.textContent)
-    expect(started).toEqual(['Austin Reaves', 'Sat Down'])
+    expect(started).toEqual(['Austin Reaves', 'Giannis Antetokounmpo'])
+    const longName = within(table).getByRole('link', { name: 'Giannis Antetokounmpo' })
+    expect(longName.parentElement).toHaveClass('max-w-[38vw]', 'whitespace-normal', 'sm:whitespace-nowrap')
+    expect(longName.closest('th')).not.toHaveTextContent('Started')
+    expect(longName.closest('th')).toHaveClass('bg-white')
+    expect(within(table).getByRole('link', { name: 'Austin Reaves' }).parentElement).toHaveClass('whitespace-nowrap')
+    expect(within(table).getByRole('link', { name: 'Austin Reaves' }).parentElement).not.toHaveClass('max-w-[38vw]')
     expect(within(table).getByText('Fouled out')).toBeInTheDocument()
     expect(within(table).getByText('Ejected')).toBeInTheDocument()
     expect(within(table).getByTitle('Fouled out')).toHaveTextContent('6')
     const names = within(table).getAllByRole('row').map(row => within(row).queryByRole('link')?.textContent).filter(Boolean)
-    expect(names).toEqual(['Austin Reaves', 'Tossed Out', 'Sat Down'])
+    expect(names).toEqual(['Austin Reaves', 'Tossed Out', 'Giannis Antetokounmpo'])
   })
 
   it('reveals a single game while No spoilers is on', async () => {
@@ -527,7 +549,7 @@ describe('BoxScores', () => {
     await user.click(card)
     const table = await screen.findByRole('table', { name: /box score/ })
     expect(within(table).getByRole('link', { name: 'Austin Reaves' }).closest('tr')).toHaveClass('bg-blue-50')
-    expect(screen.getAllByText("Sit Out (Coach's Decision)").some(item => item.classList.contains('bg-blue-100'))).toBe(true)
+    expect(screen.getAllByText("Sit Out (Coach's Decision)").some(item => item.parentElement?.classList.contains('bg-blue-100'))).toBe(true)
     await user.click(screen.getByRole('button', { name: 'No spoilers' }))
     const hidden = await screen.findAllByRole('link', { name: 'Austin Reaves' })
     expect(hidden.map(link => link.closest('li')).find(item => item?.classList.contains('bg-blue-50'))).toBeTruthy()
@@ -563,6 +585,7 @@ describe('BoxScores', () => {
     await user.click(toggleFirst)
     const section = screen.getByRole('region', { name: 'My players' })
     expect(within(section).getByRole('heading', { name: 'Finished' })).toBeInTheDocument()
+    expect(within(section).getByRole('button', { name: /LAL 129 @ UTAH 117/ })).toBeInTheDocument()
     expect(within(section).queryByRole('heading', { name: 'Playing' })).not.toBeInTheDocument()
     expect(within(section).queryByText('Boston Guy')).not.toBeInTheDocument()
     expect(await within(section).findByRole('table', { name: 'Austin Reaves line' })).toBeInTheDocument()
@@ -575,8 +598,11 @@ describe('BoxScores', () => {
     const opened = screen.getByRole('region', { name: 'My players' })
     expect(within(opened).getAllByText('Stats hidden').length).toBeGreaterThan(0)
     expect(within(opened).queryByText('28')).not.toBeInTheDocument()
+    expect(within(opened).queryByRole('button', { name: /129/ })).not.toBeInTheDocument()
+    expect(within(opened).getByRole('button', { name: /LAL @ UTAH · Final/ })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Show results' }))
     expect(await within(opened).findByText('28')).toBeInTheDocument()
+    expect(within(opened).getByRole('button', { name: /LAL 129 @ UTAH 117/ })).toBeInTheDocument()
     expect(within(opened).getByText("Did not play · Coach's Decision")).toBeInTheDocument()
   })
 

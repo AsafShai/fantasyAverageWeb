@@ -119,8 +119,9 @@ def _ttl(games: list[dict], day: date, complete: bool) -> float:
     if complete and day < _eastern_today():
         return 6 * 60 * 60
     if any(game["status"] == "live" for game in games):
-        return 15
-    return 60
+        # Rebuilding this asks ESPN for every started box on the slate.
+        return 120
+    return 120
 
 
 async def slate_values(day: date) -> dict:
