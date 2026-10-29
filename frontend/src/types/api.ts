@@ -533,6 +533,36 @@ export interface NbaPlayerStatsResponse {
   actual_end?: string | null;
 }
 
+export interface PlayerGameLogGame {
+  game_id: string;
+  season: string;
+  game_date: string;
+  opponent: string;
+  is_home: boolean;
+  team_pts: number | null;
+  opp_pts: number | null;
+  minutes: number;
+  pts: number;
+  reb: number;
+  ast: number;
+  stl: number;
+  blk: number;
+  tov: number;
+  fg3m: number;
+  fg3a: number;
+  fgm: number;
+  fga: number;
+  ftm: number;
+  fta: number;
+  plus_minus: number;
+}
+
+export interface PlayerGameLogResponse {
+  player_id: number;
+  current_season: string;
+  games: PlayerGameLogGame[];
+}
+
 export interface DepthChartPosition {
   abbreviation: string;
   display_name: string;

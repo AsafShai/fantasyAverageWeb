@@ -165,12 +165,27 @@ def season_start_from_pro_team_schedules(payload: dict[str, Any]) -> date | None
     return min(opening_dates) if opening_dates else None
 
 
+def season_end_from_pro_team_schedules(payload: dict[str, Any]) -> date | None:
+    """Last regular-season game date across every scoring period."""
+    dates = [_pro_game_date(game) for game in _pro_games(payload)]
+    return max(dates) if dates else None
+
+
 async def get_season_start_date() -> date | None:
     try:
         payload = await get_data_provider().get_pro_team_schedules()
         return season_start_from_pro_team_schedules(payload)
     except Exception as e:
         logger.warning(f"Could not derive season start from pro-team schedules: {type(e).__name__}: {e}")
+        return None
+
+
+async def get_season_end_date() -> date | None:
+    try:
+        payload = await get_data_provider().get_pro_team_schedules()
+        return season_end_from_pro_team_schedules(payload)
+    except Exception as e:
+        logger.warning(f"Could not derive season end from pro-team schedules: {type(e).__name__}: {e}")
         return None
 
 

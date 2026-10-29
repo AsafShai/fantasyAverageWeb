@@ -112,6 +112,7 @@ describe('BoxScores', () => {
     localStorage.clear()
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
+      if (url.includes('/nba/season')) return json({ start: '2026-10-20', end: '2027-04-11' })
       if (url.includes('/nba/scoreboard/values')) {
         const date = new URL(url, 'http://localhost').searchParams.get('date')
         return json({ ...values, date })
@@ -180,7 +181,9 @@ describe('BoxScores', () => {
     const user = userEvent.setup()
     renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
     // Lines of the night has room for the full name.
-    const card = (await screen.findByRole('button', { name: /Lines of the night/ })).closest('section')!
+    const toggle = await screen.findByRole('button', { name: /Lines of the night/ })
+    await user.click(toggle)
+    const card = toggle.closest('section')!
     expect(within(card).getByText('Trust the process')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Final/ }))
     // The table shows the abbreviation; a tap swaps in the full name and back.
@@ -198,10 +201,10 @@ describe('BoxScores', () => {
     const user = userEvent.setup()
     renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
     const toggle = await screen.findByRole('button', { name: /Lines of the night/ })
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/28 PTS · 4 REB · 6 AST/)).toBeInTheDocument()
-    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByText(/28 PTS · 4 REB · 6 AST/)).not.toBeInTheDocument()
+    await user.click(toggle)
+    expect(screen.getByText(/28 PTS · 4 REB · 6 AST/)).toBeInTheDocument()
   })
 
   it('has no per-game show button in Full box mode', async () => {
@@ -612,7 +615,25 @@ describe('BoxScores', () => {
     await screen.findByRole('button', { name: /Final/ })
     await user.click(screen.getByRole('button', { name: 'Next day' }))
     await waitFor(() => {
-      expect(screen.getByLabelText('Choose a date')).toHaveValue('2026-10-26')
+      expect(screen.getByRole('button', { name: 'Choose a date' })).toHaveTextContent('Oct 26')
     })
+  })
+
+  it('opens a calendar limited to the regular season', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    await screen.findByRole('button', { name: /Final/ })
+    await user.click(screen.getByRole('button', { name: 'Choose a date' }))
+    const calendar = await screen.findByRole('dialog', { name: 'Choose a date' })
+    await waitFor(() => {
+      expect(within(calendar).getByRole('button', { name: 'October 19, 2026' })).toBeDisabled()
+    })
+    expect(within(calendar).getByRole('button', { name: 'Previous month' })).toBeDisabled()
+    expect(within(calendar).getByRole('button', { name: 'October 20, 2026' })).toBeEnabled()
+    await user.click(within(calendar).getByRole('button', { name: 'October 28, 2026' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Choose a date' })).toHaveTextContent('Oct 28')
+    })
+    expect(screen.queryByRole('dialog', { name: 'Choose a date' })).not.toBeInTheDocument()
   })
 })

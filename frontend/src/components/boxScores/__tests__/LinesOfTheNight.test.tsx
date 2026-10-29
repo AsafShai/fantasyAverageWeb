@@ -22,6 +22,7 @@ describe('LinesOfTheNight', () => {
   it('shares the image only, with no caption to send or copy', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LinesOfTheNight players={[luka]} spoilerGuard={false} dateLabel="Sunday, Oct 25" games={7} />)
+    await user.click(screen.getByRole('button', { name: /Lines of the night/ }))
     await user.click(screen.getByRole('button', { name: 'Share' }))
     expect(screen.getByRole('dialog', { name: 'Share as image' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Download PNG' })).toBeInTheDocument()

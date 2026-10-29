@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # from SEASON_ID (openers land around Oct 22 of the year the season starts)
     # rather than pinned to one season's date that goes stale the next year.
     season_start: Optional[date] = Field(default=None, alias="SEASON_START")
+    # Last regular-season game date. Replaced at startup from the same ESPN
+    # schedule as season_start; this fallback is only used when that fails.
+    season_end: Optional[date] = Field(default=None, alias="SEASON_END")
     cors_origins: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     injury_scheduler_enabled: bool = Field(default=True, alias="INJURY_SCHEDULER_ENABLED")
@@ -52,6 +55,8 @@ class Settings(BaseSettings):
     def _default_season_start(self) -> "Settings":
         if self.season_start is None:
             self.season_start = date(self.season_id - 1, 10, 22)
+        if self.season_end is None:
+            self.season_end = date(self.season_id, 4, 15)
         return self
 
     @property

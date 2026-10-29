@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from typing import Optional
 
 from app.config import settings
-from app.models.nba_player_models import NbaPlayerBio, NbaPlayerStatsResponse
+from app.models.nba_player_models import (
+    NbaPlayerBio,
+    NbaPlayerStatsResponse,
+    PlayerGameLogGame,
+    PlayerGameLogResponse,
+)
 from app.models.player import PlayerStats, StatTimePeriod
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
@@ -16,6 +22,48 @@ from app.services.player_service import espn_season_string, get_season_anchor_da
 from app.utils.name_matching import resolve_join_key
 
 logger = logging.getLogger(__name__)
+
+_MATCHUP = re.compile(r"^([A-Za-z]{2,4})\s+(vs\.?|@)\s+([A-Za-z]{2,4})$")
+
+
+def _score(value) -> Optional[int]:
+    if value is None:
+        return None
+    return int(round(float(value)))
+
+
+def game_from_row(row: dict) -> PlayerGameLogGame:
+    """One fs_player_games row, plus the two team scores, as a log line."""
+    matchup = str(row.get("matchup") or "").strip()
+    parsed = _MATCHUP.match(matchup)
+    if parsed:
+        opponent, is_home = parsed.group(3).upper(), parsed.group(2).startswith("vs")
+    else:
+        opponent, is_home = matchup, True
+    return PlayerGameLogGame(
+        game_id=str(row["game_id"]),
+        season=str(row["season"]),
+        game_date=row["game_date"],
+        opponent=opponent,
+        is_home=is_home,
+        team_pts=_score(row.get("team_pts")),
+        opp_pts=_score(row.get("opp_pts")),
+        minutes=float(row.get("min") or 0),
+        pts=float(row.get("pts") or 0),
+        reb=float(row.get("reb") or 0),
+        ast=float(row.get("ast") or 0),
+        stl=float(row.get("stl") or 0),
+        blk=float(row.get("blk") or 0),
+        tov=float(row.get("tov") or 0),
+        fg3m=float(row.get("fg3m") or 0),
+        fg3a=float(row.get("fg3a") or 0),
+        fgm=float(row.get("fgm") or 0),
+        fga=float(row.get("fga") or 0),
+        ftm=float(row.get("ftm") or 0),
+        fta=float(row.get("fta") or 0),
+        plus_minus=float(row.get("plus_minus") or 0),
+    )
+
 
 _ZERO_STATS = PlayerStats(
     pts=0.0,
@@ -185,4 +233,16 @@ class NbaPlayerService:
             has_data=True,
             actual_start=resolved_start,
             actual_end=resolved_end,
+        )
+
+    async def get_game_log(self, player_id: str | int) -> PlayerGameLogResponse:
+        espn_id = parse_espn_athlete_id(player_id)
+        if get_player_bio(espn_id) is None:
+            raise KeyError(f"Player {player_id} not found")
+        season = espn_season_string(settings.season_id)
+        rows = await self.db_service.get_player_box_logs(espn_id, season)
+        return PlayerGameLogResponse(
+            player_id=espn_id,
+            current_season=season,
+            games=[game_from_row(row) for row in rows],
         )
