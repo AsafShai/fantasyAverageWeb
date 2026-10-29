@@ -290,7 +290,7 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
   )
 }
 
-function PlayerMarks({ player, live, nameOnly = false, started = false, position = true }: { player: BoxPlayerLine; live: boolean; nameOnly?: boolean; started?: boolean; position?: boolean }) {
+function PlayerMarks({ player, nameOnly = false, started = false, position = true }: { player: BoxPlayerLine; nameOnly?: boolean; started?: boolean; position?: boolean }) {
   return (
     <>
       {position && !nameOnly && player.position && <span className="shrink-0 text-[10px] font-normal text-gray-400">{player.position}</span>}
@@ -314,7 +314,7 @@ function PlayerName({ player, live, nameOnly = false, started = false }: { playe
         playerId={player.player_id}
         className="text-gray-800 hover:underline dark:text-gray-100"
       />
-      <PlayerMarks player={player} live={live} nameOnly={nameOnly} started={started} />
+      <PlayerMarks player={player} nameOnly={nameOnly} started={started} />
     </span>
   )
 }
@@ -371,7 +371,7 @@ function PlayerRow({ player, values, mine, live, started }: { player: BoxPlayerL
       </th>
       <td className="whitespace-nowrap py-1.5 pr-2 text-left align-middle">
         <span className="inline-flex items-center gap-1.5">
-          <PlayerMarks player={player} live={live} started={started} position={false} />
+          <PlayerMarks player={player} started={started} position={false} />
         </span>
       </td>
       {values && (
