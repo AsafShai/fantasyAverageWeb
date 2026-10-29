@@ -80,4 +80,20 @@ describe('InjuryTable', () => {
       expect(link).toHaveTextContent('Roster');
     }
   });
+
+  it('links a team whose report name lost a space (Philadelphia76ers)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify([
+        { team_id: '20', abbreviation: 'PHL', team_name: 'Philadelphia 76ers' },
+      ]), { headers: { 'Content-Type': 'application/json' } })),
+    );
+    renderWithProviders(
+      <InjuryTable records={[rec({ team: 'Philadelphia76ers', player: 'Joel Embiid' })]} totalCount={1} />,
+    );
+    const links = await screen.findAllByRole('link', { name: 'Philadelphia76ers roster' });
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '/nba-teams?team=20');
+    }
+  });
 });
