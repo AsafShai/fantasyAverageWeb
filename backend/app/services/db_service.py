@@ -1817,9 +1817,10 @@ class DBService:
             return None
 
     async def get_unscored_processed_nights(self, since: date) -> list[date]:
-        """Nights the nightly marked processed on or after ``since`` that have no
+        """Nights the nightly ingested on or after ``since`` that have no
         surprise rows yet: what a backfill has to score (a deploy that landed
-        after the nightly ran, or a night the step failed on)."""
+        after the nightly ran, a night the step failed on, or a night recorded
+        as store_already_ingested after a crash, which skips the step)."""
         pool = await self._get_pool()
         if pool is None:
             return []
@@ -1829,7 +1830,7 @@ class DBService:
                     """
                     SELECT r.game_date
                     FROM model_nightly_runs r
-                    WHERE r.status = 'processed' AND r.game_date >= $1
+                    WHERE r.status IN ('processed', 'store_already_ingested') AND r.game_date >= $1
                       AND NOT EXISTS (
                           SELECT 1 FROM model_surprise_results s WHERE s.game_date = r.game_date
                       )

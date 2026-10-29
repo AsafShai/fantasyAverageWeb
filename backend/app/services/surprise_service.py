@@ -34,6 +34,7 @@ from app.services import schedule_service
 from app.services.data_provider import get_data_provider
 from app.services.db_service import DBService
 from app.utils.constants import LINEUP_SLOT_MAP
+from app.utils.memory import log_memory, release_memory
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR
 from model_stats_inference.serving import surprise
 
@@ -232,43 +233,85 @@ class SurpriseService:
         return self._calibration
 
     async def compute_and_store(self, game_date: date) -> str:
-        """Score an ingested night and upsert model_surprise_results."""
+        """Score an ingested night and upsert model_surprise_results.
+
+        Logs one line per stage (inputs read, scored, rosters, written, done)
+        so each morning's log says how far the step got and with what: a run
+        that stops without its "done" line stopped at the stage after the last
+        one logged."""
         db = self._db
+        started = time.monotonic()
+        log_memory(f"surprises {game_date}: start", logger)
+        logger.info(f"Surprises {game_date}: start (thresholds good {settings.surprise_good_threshold}, "
+                    f"bad {settings.surprise_bad_threshold}, min minutes {settings.surprise_min_minutes})")
         history, night_info, evals = await asyncio.gather(
             db.get_fs_player_rows_through(game_date),
             db.get_fs_night_rows(game_date),
             db.get_model_eval_for_date(game_date),
         )
-        if history.empty or not (history["GAME_DATE"].dt.date == game_date).any():
-            logger.warning(f"Surprises {game_date}: no ingested rows for that night")
+        night_rows = history[history["GAME_DATE"].dt.date == game_date] if not history.empty else history
+        n_games = int(night_info["GAME_ID"].nunique()) if not night_info.empty else 0
+        n_eligible = sum(1 for e in evals if e.get("eligible"))
+        logger.info(
+            f"Surprises {game_date}: inputs read: {n_games} games, {len(night_info)} night rows, "
+            f"{len(night_rows)} played rows of {night_rows['PLAYER_ID'].nunique() if len(night_rows) else 0} players, "
+            f"{len(history)} history rows, {len(evals)} model estimates ({n_eligible} eligible)"
+        )
+        if history.empty or night_rows.empty:
+            # The readers return an empty frame on a DB error too (and log it
+            # there): an empty night right after the nightly wrote it is an error.
+            logger.error(
+                f"Surprises {game_date}: no played rows for that night "
+                f"(history rows {len(history)}, night rows {len(night_info)}); nothing scored"
+            )
             return "no_rows"
+        if not evals:
+            logger.warning(f"Surprises {game_date}: no model estimates for that night; every row is scored on history only")
         evals_df = pd.DataFrame(evals)
         night = await asyncio.to_thread(score_night, history, night_info, evals_df, game_date, self.calibration)
-        del history, night_info, evals, evals_df   # the step runs after the feature-store build; keep its peak low
+        del history, night_info, evals, evals_df, night_rows   # the step runs after the feature-store build; keep its peak low
         gc.collect()
-        roster = await fantasy_roster_for(game_date)
-        rows = [_to_tuple(r, game_date, roster) for _, r in night.iterrows()]
-        written = await db.insert_model_surprise_rows(rows)
-        clear_surprise_read_cache()
-        if not written:
-            return "db_write_failed"
         n_scored = int(night["SCORE"].notna().sum())
+        n_estimate = int(night["HAS_ESTIMATE"].sum())
         n_good = int((night["SCORE"] >= settings.surprise_good_threshold).sum())
         n_bad = int((night["SCORE"] <= -settings.surprise_bad_threshold).sum())
+        log_memory(f"surprises {game_date}: scored", logger)
         logger.info(
-            f"Surprises {game_date}: {len(rows)} players, {n_scored} scored "
-            f"({int(night['HAS_ESTIMATE'].sum())} with a model estimate), {n_good} good, {n_bad} bad"
+            f"Surprises {game_date}: scored {len(night)} players with {settings.surprise_min_minutes}+ minutes: "
+            f"{n_scored} with a score ({n_estimate} with a model estimate, {n_scored - n_estimate} on history only), "
+            f"{len(night) - n_scored} without; {n_good} booms, {n_bad} busts"
+        )
+        roster = await fantasy_roster_for(game_date)
+        rows = [_to_tuple(r, game_date, roster) for _, r in night.iterrows()]
+        if not rows:
+            # Nothing to store, so the night stays without rows: not a success.
+            logger.error(f"Surprises {game_date}: no player passed the minutes floor; nothing stored")
+            return "no_players"
+        n_rostered = sum(1 for pid in night["PLAYER_ID"] if int(pid) in roster)
+        logger.info(f"Surprises {game_date}: writing {len(rows)} rows ({n_rostered} on a fantasy roster)")
+        written = await db.insert_model_surprise_rows(rows)
+        clear_surprise_read_cache()
+        elapsed = time.monotonic() - started
+        if not written:
+            logger.error(f"Surprises {game_date}: writing {len(rows)} rows failed after {elapsed:.1f}s; nothing stored")
+            return "db_write_failed"
+        log_memory(f"surprises {game_date}: done", logger)
+        logger.info(
+            f"Surprises {game_date}: done in {elapsed:.1f}s: {len(rows)} players stored, "
+            f"{n_good} booms, {n_bad} busts"
         )
         return "processed"
 
-    async def backfill_missing(self) -> dict[date, str]:
-        """Score every night this season the nightly marked processed that has no
-        surprise rows yet, oldest first; one status per night. Nothing is
-        rescored, so it is safe to run any time."""
-        season_start = await schedule_service.get_season_start_date() or settings.season_start
-        nights = await self._db.get_unscored_processed_nights(season_start)
+    async def backfill_missing(self, since: date | None = None) -> dict[date, str]:
+        """Score every night the nightly ingested (processed, or recorded as
+        store_already_ingested after a crash) that has no surprise rows yet,
+        from ``since`` (default: the season start), oldest first; one status
+        per night. Nothing is rescored, so it is safe to run any time."""
+        if since is None:
+            since = await schedule_service.get_season_start_date() or settings.season_start
+        nights = await self._db.get_unscored_processed_nights(since)
         if not nights:
-            logger.info("Surprises backfill: every processed night is scored")
+            logger.info(f"Surprises backfill: every ingested night since {since} is scored")
             return {}
         logger.info(f"Surprises backfill: {len(nights)} nights to score, {nights[0]} .. {nights[-1]}")
         results: dict[date, str] = {}
@@ -276,8 +319,10 @@ class SurpriseService:
             try:
                 results[night] = await self.compute_and_store(night)
             except Exception as e:
-                logger.error(f"Surprises backfill {night}: {type(e).__name__}: {e}")
+                logger.error(f"Surprises backfill {night}: {type(e).__name__}: {e}", exc_info=True)
                 results[night] = "failed"
+            # One night's frames are gone before the next one loads.
+            release_memory(f"surprises backfill {night}: {results[night]}", logger)
         return results
 
     # --- read side ------------------------------------------------------------
