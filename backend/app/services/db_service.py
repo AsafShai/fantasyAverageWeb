@@ -898,6 +898,30 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to delete injury status for {team}|{player}: {type(e).__name__}: {e}")
 
+    async def rename_injury_team(self, old_team: str, new_team: str) -> None:
+        """Move a team's rows to a new name; rows already under the new name win."""
+        pool = await self._get_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        """
+                        DELETE FROM player_injury_status o
+                        WHERE o.team = $1 AND EXISTS (
+                            SELECT 1 FROM player_injury_status n WHERE n.team = $2 AND n.player = o.player
+                        )
+                        """,
+                        old_team, new_team,
+                    )
+                    await conn.execute(
+                        "UPDATE player_injury_status SET team = $2 WHERE team = $1",
+                        old_team, new_team,
+                    )
+        except Exception as e:
+            logger.error(f"Failed to rename injury team {old_team} -> {new_team}: {type(e).__name__}: {e}")
+
     async def get_injury_statuses_for_teams(self, teams: list[str]) -> list[dict]:
         pool = await self._get_pool()
         if pool is None:

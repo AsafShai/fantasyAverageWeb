@@ -67,11 +67,14 @@ export default function InjuryTable({ records, totalCount }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const { data: nbaTeams } = useGetNbaTeamsListQuery();
   const depthChartTeamId = useMemo(() => {
+    // Match on letters and digits only, so a team name that lost a space while being
+    // parsed from the PDF (once "Philadelphia76ers") still links.
+    const key = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
     const byName = new Map<string, string>();
     for (const team of nbaTeams ?? []) {
-      byName.set(team.team_name.trim().toLowerCase(), team.team_id);
+      byName.set(key(team.team_name), team.team_id);
     }
-    return (name: string) => byName.get(name.trim().toLowerCase());
+    return (name: string) => byName.get(key(name));
   }, [nbaTeams]);
 
   function handleSort(key: SortKey) {
