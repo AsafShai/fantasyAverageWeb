@@ -197,6 +197,9 @@ class ModelNightlyService:
         """
         missing = await self._ensure_vectors_current()
         yesterday = (datetime.now(ISRAEL_TZ) - timedelta(days=1)).date()
+        logger.info(
+            f"Model nightly catch-up: nights {yesterday - timedelta(days=CATCHUP_DAYS - 1)} .. {yesterday}"
+        )
         statuses: dict[str, str] = {"missing_features": missing} if missing else {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = yesterday - timedelta(days=offset)
@@ -209,10 +212,40 @@ class ModelNightlyService:
             if status not in ("processed", "no_games", "already_processed", "store_already_ingested"):
                 logger.warning(f"Model nightly catch-up stopped at {d}: {status}")
                 break
+        if settings.surprise_nightly_enabled:
+            await self._retry_unscored_surprises(statuses, oldest=yesterday - timedelta(days=CATCHUP_DAYS - 1))
         if missing == "vectors_refreshed" or _INVALIDATING_STATUSES.intersection(statuses.values()):
             await self._prewarm_inference_store()
             release_memory("nightly catch-up: inference store prewarmed", logger)
         return statuses
+
+    async def _retry_unscored_surprises(self, statuses: dict[str, str], oldest: date) -> None:
+        """Score every ingested night in the catch-up window (``oldest`` ..
+        yesterday) that still has no Boom or Bust rows.
+
+        The surprises step runs at the end of the run that marks a night
+        processed, so a run that dies after the mark (a restart, a crash) left
+        the night unscored and every later slot skipped it. Each slot now
+        finishes the job. A night already scored is never touched; a night
+        that keeps failing ages out with the window instead of being retried
+        every slot all season. A night whose inline step just failed in this
+        slot gets one more try here, which is cheap. Skipped when a night in
+        the loop raised: the scheduler retries the whole catch-up next slot."""
+        from app.services.surprise_service import SurpriseService
+        try:
+            async with self._lock:
+                done = await SurpriseService(db=self._db).backfill_missing(since=oldest)
+        except Exception as e:
+            logger.error(f"Surprises retry failed: {type(e).__name__}: {e}", exc_info=True)
+            statuses["surprises_retry"] = "failed"
+            return
+        if not done:
+            logger.info(f"Surprises retry: nothing to score since {oldest}")
+            return
+        for night, status in done.items():
+            log = logger.info if status == "processed" else logger.error
+            log(f"Surprises retry {night}: {status}")
+        statuses["surprises_retry"] = ", ".join(f"{d}: {s}" for d, s in done.items())
 
     async def run_for_date(self, game_date: date, force: bool = False) -> str:
         async with self._lock:
@@ -223,7 +256,16 @@ class ModelNightlyService:
         if not force:
             run = await db.get_model_nightly_run(game_date)
             if run is not None:
+                # Only the newest night is worth a line each slot; older ones
+                # were reported on their own morning.
+                newest = game_date >= (datetime.now(ISRAEL_TZ) - timedelta(days=1)).date()
+                logger.log(
+                    logging.INFO if newest else logging.DEBUG,
+                    f"Nightly {game_date}: already in the ledger ({run.get('status')}, "
+                    f"{run.get('num_games')} games, marked at {run.get('ran_at')}); skipped",
+                )
                 return "already_processed"
+        logger.info(f"Nightly {game_date}: not in the ledger; processing")
 
         # Leakage guard (unconditional, even with --force): once the night's rows
         # are in the store, a "prediction" for it would see its own outcome. We
@@ -352,12 +394,26 @@ class ModelNightlyService:
         # not fatal: the night itself is processed, and
         # `python -m app.services.surprise_service --date` backfills it.
         if settings.surprise_nightly_enabled:
+            logger.info(f"Nightly {game_date}: night stored; starting surprises (Boom or Bust)")
             try:
                 from app.services.surprise_service import SurpriseService
-                await SurpriseService(db=db).compute_and_store(game_date)
+                status = await SurpriseService(db=db).compute_and_store(game_date)
+                if status == "processed":
+                    logger.info(f"Nightly {game_date}: surprises finished ({status})")
+                else:
+                    logger.error(
+                        f"Nightly {game_date}: surprises did not finish ({status}); the night has no Boom or Bust "
+                        f"rows yet. The catch-up retries it this slot and the next ones while it is in the window; "
+                        f"by hand: python -m app.services.surprise_service --date {game_date}"
+                    )
             except Exception as e:
-                logger.error(f"Surprises {game_date} failed: {type(e).__name__}: {e}", exc_info=True)
+                logger.error(
+                    f"Surprises {game_date} failed: {type(e).__name__}: {e}; the catch-up retries it",
+                    exc_info=True,
+                )
             release_memory(f"nightly {game_date}: surprises done", logger)
+        else:
+            logger.warning(f"Nightly {game_date}: surprises skipped (SURPRISE_NIGHTLY_ENABLED=false)")
         return "processed"
 
     async def _refresh_vectors_through(self, game_date: date) -> Optional[bool]:

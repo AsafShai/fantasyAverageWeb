@@ -898,6 +898,30 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to delete injury status for {team}|{player}: {type(e).__name__}: {e}")
 
+    async def rename_injury_team(self, old_team: str, new_team: str) -> None:
+        """Move a team's rows to a new name; rows already under the new name win."""
+        pool = await self._get_pool()
+        if pool is None:
+            return
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        """
+                        DELETE FROM player_injury_status o
+                        WHERE o.team = $1 AND EXISTS (
+                            SELECT 1 FROM player_injury_status n WHERE n.team = $2 AND n.player = o.player
+                        )
+                        """,
+                        old_team, new_team,
+                    )
+                    await conn.execute(
+                        "UPDATE player_injury_status SET team = $2 WHERE team = $1",
+                        old_team, new_team,
+                    )
+        except Exception as e:
+            logger.error(f"Failed to rename injury team {old_team} -> {new_team}: {type(e).__name__}: {e}")
+
     async def get_injury_statuses_for_teams(self, teams: list[str]) -> list[dict]:
         pool = await self._get_pool()
         if pool is None:
@@ -1817,9 +1841,10 @@ class DBService:
             return None
 
     async def get_unscored_processed_nights(self, since: date) -> list[date]:
-        """Nights the nightly marked processed on or after ``since`` that have no
+        """Nights the nightly ingested on or after ``since`` that have no
         surprise rows yet: what a backfill has to score (a deploy that landed
-        after the nightly ran, or a night the step failed on)."""
+        after the nightly ran, a night the step failed on, or a night recorded
+        as store_already_ingested after a crash, which skips the step)."""
         pool = await self._get_pool()
         if pool is None:
             return []
@@ -1829,7 +1854,7 @@ class DBService:
                     """
                     SELECT r.game_date
                     FROM model_nightly_runs r
-                    WHERE r.status = 'processed' AND r.game_date >= $1
+                    WHERE r.status IN ('processed', 'store_already_ingested') AND r.game_date >= $1
                       AND NOT EXISTS (
                           SELECT 1 FROM model_surprise_results s WHERE s.game_date = r.game_date
                       )

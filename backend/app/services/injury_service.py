@@ -112,7 +112,7 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
 
     PAGE_FOOTER_RE = re.compile(r"^page\d+of\d+$", re.IGNORECASE)
     VALID_STATUSES = {"Out", "Questionable", "Doubtful", "Probable", "Available"}
-    CAMEL_SPLIT_RE = re.compile(r"(?<=[a-z])(?=[A-Z])(?<!Mc)(?<!Mac)|(?<=[A-Z])(?=[A-Z][a-z])")
+    CAMEL_SPLIT_RE = re.compile(r"(?<=[a-z])(?=[A-Z])(?<!Mc)(?<!Mac)|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[a-z])(?=\d)")
 
     def split_camel(s: str) -> str:
         return CAMEL_SPLIT_RE.sub(" ", s)
@@ -515,6 +515,11 @@ async def update_injury_data() -> None:
     await _try_update_injury_data()
 
 
+# Team names the parser used to produce, mapped to what it produces now. Stored
+# rows are moved over on startup so their last_update survives the rename.
+LEGACY_TEAM_NAMES = {"Philadelphia76ers": "Philadelphia 76ers"}
+
+
 async def initialize() -> None:
     """Fetch and store the latest injury report on startup (no notifications).
 
@@ -522,6 +527,10 @@ async def initialize() -> None:
     timestamp of when they were actually last changed, not the current time.
     """
     logger.info("Initializing injury service")
+    db_service = get_db_service()
+    for old_team, new_team in LEGACY_TEAM_NAMES.items():
+        await db_service.rename_injury_team(old_team, new_team)
+
     url = get_current_pdf_url()
     logger.info(f"Fetching injury PDF: {url}")
     pdf_bytes = await fetch_pdf_bytes(url)
@@ -529,7 +538,6 @@ async def initialize() -> None:
         logger.warning(f"Starting with empty injury store - initial PDF unavailable ({last_fetch_error}): {url}")
         return
 
-    db_service = get_db_service()
     db_rows = await db_service.load_all_injury_statuses()
     db_timestamps: dict[str, str] = {}
     for row in db_rows:

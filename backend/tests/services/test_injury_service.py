@@ -161,3 +161,41 @@ class TestInjuryPollLogging:
         with caplog.at_level(logging.INFO, logger=inj.__name__):
             assert await inj._try_update_injury_data() is False
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+class TestLegacyTeamRename:
+    @pytest.mark.asyncio
+    async def test_renames_before_fetch_even_if_pdf_unavailable(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        db = MagicMock(rename_injury_team=AsyncMock())
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=None))
+
+        await inj.initialize()
+
+        db.rename_injury_team.assert_awaited_once_with("Philadelphia76ers", "Philadelphia 76ers")
+
+    @pytest.mark.asyncio
+    async def test_renamed_rows_keep_their_last_update(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        rows = [{"team": "Philadelphia76ers", "player": "Joel Embiid", "last_updated": "2026-10-20T10:00:00+00:00"}]
+
+        async def rename(old, new):
+            for row in rows:
+                if row["team"] == old:
+                    row["team"] = new
+
+        db = MagicMock(
+            rename_injury_team=AsyncMock(side_effect=rename),
+            load_all_injury_statuses=AsyncMock(side_effect=lambda: rows),
+        )
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        monkeypatch.setattr(inj, "injury_store", {})
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_pdf", lambda _: [_rec(team="Philadelphia 76ers", player="Joel Embiid")])
+
+        await inj.initialize()
+
+        assert inj.injury_store["Philadelphia 76ers|Joel Embiid"].last_update == "2026-10-20T10:00:00+00:00"
