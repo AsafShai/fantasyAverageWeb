@@ -67,6 +67,7 @@ SEASON_QUAL_GAMES = 10
 Z_STATS = [
     "MIN", "PTS", "REB", "OREB", "DREB", "AST", "FG3M", "FG3A",
     "STL", "BLK", "TOV", "FGM", "FGA", "FTM", "FTA", "PF", "PLUS_MINUS",
+    *surprise.EFFICIENCY,   # the shooting impacts the Boom or Bust score weights
 ]
 
 MODELS_DIR = config.DATA_DIR / "walkforward_models"
@@ -317,6 +318,8 @@ def main() -> None:
     df["FT_PCT"] = np.where(df["FTA"] > 0, df["FTM"] / df["FTA"], np.nan)
     for stat in config.TARGETS + ["FG_PCT", "FT_PCT"]:
         df[f"ERR_{stat}"] = df[stat] - df[f"PRED_{stat}"]
+    # The shooting impacts' estimates and errors (from the makes/attempts ones).
+    df = surprise.add_errors(df)
 
     df = add_normalized_columns(df)
 
