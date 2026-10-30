@@ -6,14 +6,16 @@ from the walk-forward research parquet) so a night's scores are comparable
 across the season rather than relative to that one night:
 
   Metric 1 — Z-SURPRISE, minutes-blind: Pearson z of each stat against the
-             player's own history: last 10 games, last 5 and this season at
+             player's own history (for the two shooting impacts, EFF_FG and
+             EFF_FT, the plain difference from his average): last 10 games, last 5 and this season at
              half weight (the season's growing over its first 20 games), his
              whole history only as a light anchor; weighted per stat and per
              window, then
              volume-weighted by sqrt(MIN / 30) so an 8-minute outburst counts
              less than a starter's 36-minute one.
   Metric 2 — MODEL-ERROR SURPRISE: actual minus what the model expected for
-             the minutes he actually played, weighted per stat. Only players
+             the minutes he actually played, weighted per stat (the impacts'
+             estimates come from the makes and attempts estimates). Only players
              with a model estimate (MIN_INFERENCE_GAMES) have it.
   FINAL    — good side 25% metric 1 + 75% metric 2, bad side 75% metric 1 +
              25% metric 2, mapped onto N(0,1)
@@ -26,8 +28,8 @@ across the season rather than relative to that one night:
              leaning to booms), so the first weeks of a season still have a
              page.
 
-The stat weights are the research dashboard's final defaults (July 2026); the
-window weights and the blend were set by the league in October 2026. They live
+The stat weights: shooting through the two impacts, threes at half weight
+(October 2026); the window weights and the blend were set by the league in October 2026. They live
 here on purpose: a server-side decision, not a UI control. Changing any of
 them means re-training the calibration (scripts/build_surprise_calibration.py).
 """
@@ -58,21 +60,28 @@ SEASON_FULL_GAMES = 20
 # before that the reason shows his all-time average.
 SEASON_AVG_MIN_GAMES = 3
 # Pearson z — variance follows the mean, so a scrub's tiny std cannot explode
-# his score on any decent night (raw z over-rewards low-volume players).
+# his score on any decent night (raw z over-rewards low-volume players). The
+# shooting impacts (EFFICIENCY) can be negative, so their PZ_ columns hold the
+# plain difference from his average instead; the calibration supplies the scale.
 BASIS = "PZ"
-# Make-volume plus binomial shooting efficiency: a monster scoring line rises
-# from the weights themselves, a cold 0/9 sinks. Zero-weight stats are omitted.
+# Shooting enters as one linear impact per kind, the fantasy category's own
+# measure: makes above what a league-average shooter makes on the same
+# attempts, EFF_FG = FGM - LEAGUE_FG_PCT x FGA. 0/0 is 0, each make adds 1 - p
+# and each miss costs p, so the farther from the league rate and the more
+# attempts, the bigger either way (8/9 beats 2/2, 0/9 sinks below 0/2), and no
+# centre is forgiven. League rates of 2025-26 (sum of makes / sum of attempts
+# over every played game). Linear, so the model's estimate is exact from its
+# makes and attempts estimates: PRED_EFF = PRED_FGM - p x PRED_FGA.
+LEAGUE_FG_PCT = 0.471
+LEAGUE_FT_PCT = 0.783
+EFFICIENCY = {"EFF_FG": ("FGM", "FGA", LEAGUE_FG_PCT), "EFF_FT": ("FTM", "FTA", LEAGUE_FT_PCT)}
+# The same stats and weights on both metrics; shooting only through the two
+# impacts (makes, attempts and percentages are not weighted on their own).
 Z_WEIGHTS = {
-    "PTS": 1.0, "FGM": 0.5, "FTM": 0.5, "REB": 1.0, "AST": 1.0,
-    "STL": 1.0, "BLK": 1.0, "FG_PCT": 0.50, "FG3M": 0.40, "FT_PCT": 0.35,
+    "PTS": 1.0, "REB": 1.0, "AST": 1.0, "STL": 1.0, "BLK": 1.0, "FG3M": 0.5,
+    "EFF_FG": 0.7, "EFF_FT": 0.7,
 }
-# Model error: scoring/makes-dominant like metric 1; attempts stay slightly
-# negative (efficiency) but small, so a huge-volume night isn't buried.
-ERR_WEIGHTS = {
-    "PTS": 1.0, "FGM": 0.5, "FTM": 0.5, "REB": 1.0, "AST": 1.0,
-    "STL": 1.0, "BLK": 1.0, "FG3M": 0.65, "FG_PCT": 0.20, "FT_PCT": 0.20,
-    "FGA": -0.10, "FTA": -0.10,
-}
+ERR_WEIGHTS = dict(Z_WEIGHTS)
 VOLUME_WEIGHT = True
 # Blend of (z vs his own averages, model error), by side: a boom is mostly
 # "beat what the model expected for his minutes" (75% model, 25% averages); a
@@ -112,16 +121,23 @@ N_REASONS = 5
 # bad cells. The page's three colour steps follow the same rarity (marks.ts).
 MIN_REASON = 1.0
 MIN_REASON_BAD = 0.7
-# The model-error column that backs each stat's verdict. Shooting uses the
-# makes error (volume-inherent), never the percentage error.
+# The model-error column that backs each stat's verdict. The impacts carry
+# their own volume (a 1-of-1 is +0.53), so no attempts gate is needed.
 REASON_ERR_COLUMN = {
     "PTS": "PTS", "REB": "REB", "AST": "AST", "STL": "STL", "BLK": "BLK", "FG3M": "FG3M",
-    "FGM": "FGM", "FTM": "FTM", "FG_PCT": "FGM", "FT_PCT": "FTM",
+    "EFF_FG": "EFF_FG", "EFF_FT": "EFF_FT",
 }
-# A shooting verdict needs volume: the binomial z of a 1-of-1 night is ~1 on
-# its own, so FG needs this many attempts and FT this many to be marked.
-MIN_FGA_FOR_REASON = 4
-MIN_FTA_FOR_REASON = 3
+
+
+def add_efficiency(df: pd.DataFrame) -> pd.DataFrame:
+    """EFF_FG / EFF_FT (makes above the league rate on the same attempts) on a
+    box-score frame; returned as is when it already carries them."""
+    if all(name in df.columns for name in EFFICIENCY):
+        return df
+    df = df.copy()
+    for name, (made, att, p) in EFFICIENCY.items():
+        df[name] = df[made].astype(float) - p * df[att].astype(float)
+    return df
 
 
 # --- Z-scores (every played game counts; windows strictly before tonight) ----
@@ -161,6 +177,7 @@ def compute_zscores(
     stats = list(Z_STATS if stats is None else stats)
     pct_stats = list(PCT_STATS if pct_stats is None else pct_stats)
 
+    players_raw = add_efficiency(players_raw)
     zdf = players_raw[players_raw["MIN"].notna() & (players_raw["MIN"] > 0)]
     zdf = zdf.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
 
@@ -181,6 +198,8 @@ def compute_zscores(
             return (s - mean) / std.replace(0.0, np.nan)
 
         def pearson(mean: pd.Series) -> pd.Series:
+            if stat in EFFICIENCY:   # an impact can be negative: the plain difference
+                return s - mean
             return (s - mean) / np.sqrt(mean.clip(lower=0.0) + 1.0)
 
         def probit(rank_incl: pd.Series, n_prior) -> pd.Series:
@@ -279,6 +298,7 @@ def night_zscores(
     pct_stats = list(PCT_STATS if pct_stats is None else pct_stats)
     night_ts = pd.Timestamp(night)
 
+    rows = add_efficiency(rows)
     played = rows[rows["MIN"].notna() & (rows["MIN"] > 0)]
     played = played.sort_values(["PLAYER_ID", "GAME_DATE"])
     dates = played["GAME_DATE"].dt.normalize()
@@ -299,7 +319,8 @@ def night_zscores(
         for stat in stats:
             mean = g[stat].mean().reindex(tonight.index).where(enough)
             x = tonight[stat].astype(float)
-            cols[f"PZ_{win}_{stat}"] = (x - mean) / np.sqrt(mean.clip(lower=0.0) + 1.0)
+            diff = x - mean
+            cols[f"PZ_{win}_{stat}"] = diff if stat in EFFICIENCY else diff / np.sqrt(mean.clip(lower=0.0) + 1.0)
             if win in ("ALL", "SEASON"):
                 cols[f"AVG_{win}_{stat}"] = mean
         for num, den, name in pct_stats:
@@ -332,6 +353,10 @@ def add_errors(df: pd.DataFrame) -> pd.DataFrame:
     for stat in ERR_TARGETS + ["FG_PCT", "FT_PCT"]:
         pred = df[f"PRED_{stat}"] if f"PRED_{stat}" in df.columns else np.nan
         df[f"ERR_{stat}"] = df[stat] - pred
+    df = add_efficiency(df)
+    for name, (made, att, p) in EFFICIENCY.items():
+        df[f"PRED_{name}"] = df[f"PRED_{made}"] - p * df[f"PRED_{att}"]
+        df[f"ERR_{name}"] = df[name] - df[f"PRED_{name}"]
     return df
 
 
@@ -462,8 +487,7 @@ def per_stat_surprise(uz: pd.DataFrame, ue: pd.DataFrame) -> pd.DataFrame:
 def stat_surprises(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
     """Per row and stat, the per-stat surprise ``reasons_for`` marks: z
     against his own windows (averaged over the windows that exist) blended
-    with that stat's standardized model error (per_stat_surprise), with the
-    volume gates on the shooting stats (NaN below them)."""
+    with that stat's standardized model error (per_stat_surprise)."""
     normed = standardize(df, calibration)
     factor = season_factor(df)
     strength = {}
@@ -486,12 +510,7 @@ def stat_surprises(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
         stat: normed[f"NORM_ERR_{err}"] if f"NORM_ERR_{err}" in normed.columns else np.nan
         for stat, err in REASON_ERR_COLUMN.items() if stat in uz.columns
     }, index=df.index)
-    u = per_stat_surprise(uz, ue)
-    # volume gates on the shooting verdicts
-    for stat, att_col, floor in (("FG_PCT", "FGA", MIN_FGA_FOR_REASON), ("FT_PCT", "FTA", MIN_FTA_FOR_REASON)):
-        if stat in u.columns and att_col in df.columns:
-            u[stat] = u[stat].where(df[att_col] >= floor)
-    return u
+    return per_stat_surprise(uz, ue)
 
 
 def shown_average(row: pd.Series, stat: str) -> float:
@@ -518,7 +537,7 @@ def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> li
     better than his norm and the model's expectation, negative = worse. A boom
     can carry a cold stat and a bust a good one. The first entry matches the
     score's sign so the headline reads right; the rest come strongest first.
-    Shooting stats also need the volume gates. Each entry: stat, tonight's
+    Each entry: stat, tonight's
     value, his season (or all-time) average, z (the per-stat surprise).
     """
     u = stat_surprises(df, calibration)
@@ -610,6 +629,7 @@ def calibration_settings() -> dict:
         "basis": BASIS, "window_weights": WINDOW_WEIGHTS, "season_full_games": SEASON_FULL_GAMES,
         "z_weights": Z_WEIGHTS,
         "err_weights": ERR_WEIGHTS, "volume_weight": VOLUME_WEIGHT, "blend": BLEND, "blend_rule": "by_side",
+        "efficiency": {name: p for name, (_, _, p) in EFFICIENCY.items()}, "efficiency_window": "difference",
     }
 
 

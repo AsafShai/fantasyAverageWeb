@@ -232,13 +232,17 @@ class SurpriseService:
             self._calibration = surprise.load_calibration()
         return self._calibration
 
-    async def compute_and_store(self, game_date: date) -> str:
+    async def compute_and_store(self, game_date: date, require_roster: bool = False) -> str:
         """Score an ingested night and upsert model_surprise_results.
 
         Logs one line per stage (inputs read, scored, rosters, written, done)
         so each morning's log says how far the step got and with what: a run
         that stops without its "done" line stopped at the stage after the last
-        one logged."""
+        one logged.
+
+        ``require_roster`` (the rescore) stores nothing when ESPN's rosters are
+        unavailable, so a night that already has rows keeps its fantasy owners
+        rather than being rewritten without them."""
         db = self._db
         started = time.monotonic()
         log_memory(f"surprises {game_date}: start", logger)
@@ -282,6 +286,9 @@ class SurpriseService:
             f"{len(night) - n_scored} without; {n_good} booms, {n_bad} busts"
         )
         roster = await fantasy_roster_for(game_date)
+        if require_roster and not roster:
+            logger.error(f"Surprises {game_date}: fantasy rosters unavailable; the stored rows are kept, run it again")
+            return "roster_unavailable"
         rows = [_to_tuple(r, game_date, roster) for _, r in night.iterrows()]
         if not rows:
             # Nothing to store, so the night stays without rows: not a success.
@@ -323,6 +330,29 @@ class SurpriseService:
                 results[night] = "failed"
             # One night's frames are gone before the next one loads.
             release_memory(f"surprises backfill {night}: {results[night]}", logger)
+        return results
+
+    async def rescore(self, since: date | None = None) -> dict[date, str]:
+        """Score again every night that already has surprise rows, from
+        ``since`` (default: the season start), oldest first, replacing them:
+        the one-off after the score's math, weights or calibration changed, so
+        every stored night reads by the same score. One status per night."""
+        if since is None:
+            since = await schedule_service.get_season_start_date() or settings.season_start
+        nights = [d for d in await self._db.get_surprise_dates() if d >= since]
+        nights.sort()
+        if not nights:
+            logger.info(f"Surprises rescore: no stored night since {since}")
+            return {}
+        logger.info(f"Surprises rescore: {len(nights)} stored nights, {nights[0]} .. {nights[-1]}")
+        results: dict[date, str] = {}
+        for night in nights:
+            try:
+                results[night] = await self.compute_and_store(night, require_roster=True)
+            except Exception as e:
+                logger.error(f"Surprises rescore {night}: {type(e).__name__}: {e}", exc_info=True)
+                results[night] = "failed"
+            release_memory(f"surprises rescore {night}: {results[night]}", logger)
         return results
 
     # --- read side ------------------------------------------------------------
@@ -481,11 +511,21 @@ if __name__ == "__main__":
     which.add_argument("--date", help="YYYY-MM-DD of an ingested night")
     which.add_argument("--missing", action="store_true",
                        help="every processed night this season without surprise rows")
+    which.add_argument("--rescore", action="store_true",
+                       help="score again every stored night this season (or since --since), "
+                            "replacing its rows: after the score's math or calibration changed")
+    parser.add_argument("--since", help="YYYY-MM-DD, with --rescore: the first night to score again")
     args = parser.parse_args()
+    if args.since and not args.rescore:
+        parser.error("--since goes with --rescore")
 
     async def _main() -> str:
         try:
             svc = SurpriseService()
+            if args.rescore:
+                since = date.fromisoformat(args.since) if args.since else None
+                done = await svc.rescore(since)
+                return "\n".join(f"{d}: {status}" for d, status in done.items()) or "nothing to rescore"
             if args.missing:
                 done = await svc.backfill_missing()
                 return "\n".join(f"{d}: {status}" for d, status in done.items()) or "nothing to score"

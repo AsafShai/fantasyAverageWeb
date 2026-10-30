@@ -87,8 +87,11 @@ def test_score_night_scores_only_the_night_and_flags_estimates(history):
     assert bool(by_name.at["Big Night", "HAS_ESTIMATE"]) is True
     assert bool(by_name.at["Cold Night", "HAS_ESTIMATE"]) is False
     lead = by_name.at["Big Night", "REASONS"][0]
-    assert lead["z"] > 0 and lead["stat"] in ("PTS", "FGM", "REB", "AST", "FG3M", "STL", "BLK", "FTM")
-    assert all(r["z"] > 0 for r in by_name.at["Big Night", "REASONS"])     # everything was up tonight
+    assert lead["z"] > 0 and lead["stat"] in ("PTS", "REB", "AST", "FG3M", "STL", "BLK")
+    # every counting stat was up tonight; the shooting (20/50 FG, 6/9 FT, far
+    # under the league rates on triple his attempts) marks as a cold impact
+    for r in by_name.at["Big Night", "REASONS"]:
+        assert (r["z"] < 0) if r["stat"].startswith("EFF_") else (r["z"] > 0)
     assert by_name.at["Cold Night", "REASONS"][0]["z"] < 0
 
 
@@ -222,6 +225,43 @@ async def test_backfill_with_nothing_missing_scores_nothing(monkeypatch):
     monkeypatch.setattr(svc._db, "get_unscored_processed_nights", _async_return([]))
     monkeypatch.setattr(svc, "compute_and_store", _async_return(pytest.fail))
     assert await svc.backfill_missing() == {}
+
+
+@pytest.mark.asyncio
+async def test_rescore_scores_every_stored_night_since_oldest_first(monkeypatch):
+    """Only stored nights from ``since``, oldest first, owners required, a failure does not stop the rest."""
+    svc = SurpriseService()
+    nights = [NIGHT, NIGHT + timedelta(days=1), NIGHT + timedelta(days=2)]
+    stored = [nights[2], nights[1], nights[0], NIGHT - timedelta(days=200)]     # the DB's order, last season too
+    monkeypatch.setattr(surprise_service.schedule_service, "get_season_start_date", _async_return(NIGHT))
+    monkeypatch.setattr(svc._db, "get_surprise_dates", _async_return(stored))
+    calls: list[tuple[date, bool]] = []
+
+    async def _compute(game_date, require_roster=False):
+        calls.append((game_date, require_roster))
+        if game_date == nights[1]:
+            raise RuntimeError("db down")
+        return "processed"
+
+    monkeypatch.setattr(svc, "compute_and_store", _compute)
+    assert await svc.rescore() == {nights[0]: "processed", nights[1]: "failed", nights[2]: "processed"}
+    assert calls == [(n, True) for n in nights]
+
+
+@pytest.mark.asyncio
+async def test_rescore_without_rosters_keeps_the_stored_rows(monkeypatch, history):
+    """ESPN down during a rescore: nothing is written, so the night keeps its fantasy owners."""
+    svc = SurpriseService()
+    monkeypatch.setattr(svc._db, "get_fs_player_rows_through", _async_return(history))
+    monkeypatch.setattr(svc._db, "get_fs_night_rows", _async_return(pd.DataFrame()))
+    monkeypatch.setattr(svc._db, "get_model_eval_for_date", _async_return([]))
+    monkeypatch.setattr(surprise_service, "fantasy_roster_for", _async_return({}))
+
+    async def _no_write(*_a, **_k):
+        pytest.fail("rows written without rosters")
+
+    monkeypatch.setattr(svc._db, "insert_model_surprise_rows", _no_write)
+    assert await svc.compute_and_store(NIGHT, require_roster=True) == "roster_unavailable"
 
 
 def _counting(value):

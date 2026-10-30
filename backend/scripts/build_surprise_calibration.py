@@ -29,6 +29,28 @@ DEFAULT_PARQUET = (
 )
 
 
+def add_efficiency_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """The shooting impacts' window columns and model errors for a parquet the
+    backtest wrote before they existed. The windows reach back before the
+    reference season (his whole history, last 10 across seasons), so they are
+    computed from the research game logs of every season up to it (the month
+    cache; nothing is fetched for a cached past season)."""
+    from model_stats_inference.research import config, data
+
+    season = df["SEASON"].iloc[0] if "SEASON" in df.columns else config.SEASONS[3]
+    seasons = config.SEASONS[: config.SEASONS.index(season) + 1]
+    print(f"parquet lacks the shooting impacts; adding them from the {seasons[0]}..{seasons[-1]} logs")
+    players_raw, _ = data.fetch_game_logs(seasons)
+    players_raw = data._to_datetime(players_raw)
+    z = surprise.compute_zscores(players_raw, stats=list(surprise.EFFICIENCY), pct_stats=[], families=("PZ",))
+    z = z.drop(columns=["SEASON_GAMES"])
+    keys = ["PLAYER_ID", "GAME_ID"]
+    z["GAME_ID"] = z["GAME_ID"].astype(str).str.zfill(10)
+    df = df.assign(GAME_ID=df["GAME_ID"].astype(str).str.zfill(10))
+    df = df.drop(columns=[c for c in z.columns if c not in keys and c in df.columns])
+    return surprise.add_errors(df.merge(z, on=keys, how="left"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--parquet", type=Path, default=DEFAULT_PARQUET)
@@ -37,6 +59,8 @@ def main() -> None:
 
     # Recomputed even when the parquet carries it, so it always counts the same way.
     df = surprise.add_season_games(pd.read_parquet(args.parquet))
+    if any(c not in df.columns for c in surprise.required_columns()):
+        df = add_efficiency_columns(df)
     missing = [c for c in surprise.required_columns() if c not in df.columns]
     if missing:
         sys.exit(f"parquet lacks the research columns {missing}; re-run the backtest")

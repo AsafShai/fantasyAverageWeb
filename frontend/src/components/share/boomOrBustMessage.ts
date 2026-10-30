@@ -3,24 +3,27 @@ import type { SurpriseRow } from '../../types/api'
 const STAT_LABELS: Record<string, string> = { FG3M: '3PM', FG_PCT: 'FG%', FT_PCT: 'FT%' }
 const MAX_NAMES = 5
 
-/** "38 PTS": the first driver without the average, for the narrow share card. */
-export function shortReason(row: SurpriseRow): string | null {
-  const r = row.reasons[0]
-  if (!r) return null
+/** "12/14 FG", "38 PTS": a driver as the line shows it. The shooting impacts
+ * (EFF_FG / EFF_FT) read as makes/attempts, never as the impact number. */
+function reasonText(row: SurpriseRow, r: SurpriseRow['reasons'][number]): string {
+  if (r.stat === 'EFF_FG') return `${row.fgm}/${row.fga} FG`
+  if (r.stat === 'EFF_FT') return `${row.ftm}/${row.fta} FT`
   const label = STAT_LABELS[r.stat] ?? r.stat
   if (r.stat === 'FG_PCT' || r.stat === 'FT_PCT') return `${Math.round(r.value * 100)}% ${label}`
   return `${Number.isInteger(r.value) ? r.value : r.value.toFixed(1)} ${label}`
+}
+
+/** "38 PTS": the first driver without the average, for the narrow share card. */
+export function shortReason(row: SurpriseRow): string | null {
+  const r = row.reasons[0]
+  return r ? reasonText(row, r) : null
 }
 
 const fmtScore = (score: number) => `${score < 0 ? '−' : '+'}${Math.abs(score).toFixed(1)}`
 
 /** "38 PTS, 5 STL": the two stats that drove the score, compact. */
 function drivers(row: SurpriseRow): string {
-  return row.reasons.slice(0, 2).map((r) => {
-    const label = STAT_LABELS[r.stat] ?? r.stat
-    if (r.stat === 'FG_PCT' || r.stat === 'FT_PCT') return `${Math.round(r.value * 100)}% ${label}`
-    return `${Number.isInteger(r.value) ? r.value : r.value.toFixed(1)} ${label}`
-  }).join(', ')
+  return row.reasons.slice(0, 2).map((r) => reasonText(row, r)).join(', ')
 }
 
 function names(rows: SurpriseRow[]): string {
@@ -51,6 +54,7 @@ export function buildShareMessage(dateLabel: string, booms: SurpriseRow[], busts
 const DRIVER_COLUMN: Record<string, string> = {
   PTS: 'pts', REB: 'reb', AST: 'ast', FG3M: 'fg3m', STL: 'stl', BLK: 'blk',
   FGM: 'fg', FGA: 'fg', FG_PCT: 'fg', FTM: 'ft', FTA: 'ft', FT_PCT: 'ft',
+  EFF_FG: 'fg', EFF_FT: 'ft',
 }
 
 /** The columns to mark in a row and the sign of each: 'good' when the stat was
