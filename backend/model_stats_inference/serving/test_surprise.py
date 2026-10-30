@@ -153,7 +153,7 @@ class TestScoring:
         hist = pd.concat([_history(p, 12, 15.0, seed=p) for p in range(1, 5)], ignore_index=True)
         # a big night on points and rebounds, with a cold free-throw line on volume
         hist.loc[hist["GAME_ID"] == "1-011", ["PTS", "REB", "FTM", "FTA"]] = [40, 15, 0, 8]
-        # and a 1-of-1 FG night elsewhere: no shooting verdict without volume
+        # and a 1-of-1 FG night elsewhere: the impact carries its own (tiny) volume
         hist.loc[hist["GAME_ID"] == "2-011", ["FGM", "FGA"]] = [1, 1]
         z = surprise.compute_zscores(hist, with_means=True)
         df = hist.merge(z, on=["PLAYER_ID", "GAME_ID"])
@@ -162,11 +162,12 @@ class TestScoring:
         reasons = surprise.reasons_for(df, scored, calibration)
         big = reasons[df.index[df["GAME_ID"] == "1-011"][0]]
         assert big[0]["stat"] in ("PTS", "REB") and big[0]["z"] > 0      # headline matches the boom
-        assert {r["stat"]: r["z"] for r in big}.get("FT_PCT", 0) < 0     # the cold line is kept, negative
+        cold_line = {r["stat"]: r["z"] for r in big}.get("EFF_FT", 0)
+        assert cold_line < 0                                              # the cold line is kept, negative
         assert big[0]["avg"] is not None and len(big) <= surprise.N_REASONS
         assert all(r["z"] >= surprise.MIN_REASON or r["z"] <= -surprise.MIN_REASON_BAD for r in big)
         small = reasons[df.index[df["GAME_ID"] == "2-011"][0]]
-        assert "FG_PCT" not in {r["stat"] for r in small}
+        assert abs({r["stat"]: r["z"] for r in small}.get("EFF_FG", 0)) < abs(cold_line)
 
     def test_calibration_lists_every_required_column(self):
         hist = pd.concat([_history(p, 12, 15.0, seed=p) for p in range(1, 4)], ignore_index=True)
@@ -203,6 +204,42 @@ class TestScoring:
         # every weight and rule it was trained under, so a change without a rebuild fails here
         assert calibration["settings"] == surprise.calibration_settings()
         assert set(surprise.required_columns()) <= set(calibration["norm"])
+
+
+class TestShootingImpact:
+    """EFF = makes - league rate x attempts: 0/0 neutral, volume scales it both ways."""
+
+    @staticmethod
+    def _eff(made: float, att: float, kind: str = "FG") -> float:
+        row = pd.DataFrame({"FGM": [0.0], "FGA": [0.0], "FTM": [0.0], "FTA": [0.0]})
+        row[f"{kind}M"], row[f"{kind}A"] = made, att
+        return float(surprise.add_efficiency(row)[f"EFF_{kind}"].iloc[0])
+
+    def test_neutral_at_nothing_and_at_the_league_rate(self):
+        assert self._eff(0, 0) == 0 and self._eff(0, 0, "FT") == 0
+        assert self._eff(1, 1) == pytest.approx(1 - surprise.LEAGUE_FG_PCT)
+        assert self._eff(0, 1, "FT") == pytest.approx(-surprise.LEAGUE_FT_PCT)
+
+    def test_volume_scales_it_both_ways(self):
+        assert self._eff(8, 9) > self._eff(2, 2) > self._eff(1, 1) > 0
+        assert self._eff(0, 9) < self._eff(0, 2) < 0
+        assert self._eff(5, 10, "FT") < self._eff(0, 1, "FT")      # 50% from the line is a bad night
+
+    def test_window_column_is_the_plain_difference_from_his_average(self):
+        hist = _history(1, 12, 15.0)
+        z = surprise.night_zscores(hist, hist["GAME_DATE"].iloc[-1].date())
+        eff = surprise.add_efficiency(hist)["EFF_FG"]
+        assert z["PZ_L5_EFF_FG"].iloc[0] == pytest.approx(eff.iloc[-1] - eff.iloc[-6:-1].mean())
+        assert z["PZ_SEASON_EFF_FG"].iloc[0] == pytest.approx(eff.iloc[-1] - eff.iloc[:-1].mean())
+
+    def test_model_error_comes_from_the_makes_and_attempts_estimates(self):
+        df = pd.DataFrame({s: [10.0] for s in surprise.ERR_TARGETS})
+        df["FGM"], df["FGA"], df["FTM"], df["FTA"] = 9.0, 17.0, 3.0, 3.0
+        for s in surprise.ERR_TARGETS:
+            df[f"PRED_{s}"] = {"FGM": 7.0, "FGA": 15.0, "FTM": 4.0, "FTA": 5.0}.get(s, 10.0)
+        out = surprise.add_errors(df).iloc[0]
+        assert out["ERR_EFF_FG"] == pytest.approx((9 - 7) - surprise.LEAGUE_FG_PCT * (17 - 15))
+        assert out["ERR_EFF_FT"] == pytest.approx((3 - 4) - surprise.LEAGUE_FT_PCT * (3 - 5))
 
 
 def test_per_stat_surprise_blends_like_the_final_and_falls_back_to_z():
