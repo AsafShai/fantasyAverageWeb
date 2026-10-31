@@ -8,6 +8,8 @@ import logging
 from app.utils.ssl_context import shared_ssl_context
 
 _CACHE_TTL = timedelta(minutes=30)
+# After a failed fetch, try ESPN again this soon rather than waiting a full TTL.
+_FAILURE_RETRY_AFTER = timedelta(minutes=2)
 # The season's game-day calendar and its regular-season window are static once
 # published (a season doesn't grow new game days mid-day), so they are kept far
 # longer than the day counts derived from them against today's date.
@@ -62,6 +64,17 @@ class NBAStatsService:
             return cache['value']
 
         value = await self._fetch_nba_average_pace(season_id)
+        if value is None:
+            # ESPN intermittently 403s us. Keep serving the last good value for
+            # this season instead of blanking it for a full TTL, and retry soon.
+            last_good = cache['value'] if cache['season_id'] == season_id else None
+            self._pace_cache = {
+                'season_id': season_id,
+                'value': last_good,
+                'ts': datetime.now() - _CACHE_TTL + _FAILURE_RETRY_AFTER,
+            }
+            return last_good
+
         self._pace_cache = {'season_id': season_id, 'value': value, 'ts': datetime.now()}
         return value
 
