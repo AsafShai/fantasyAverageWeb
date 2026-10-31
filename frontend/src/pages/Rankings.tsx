@@ -175,7 +175,7 @@ const Rankings = () => {
             </div>
             <div className="text-center sm:text-left">
               <div className="text-xs text-gray-500 font-medium">NBA Avg Pace</div>
-              <div className="text-xl font-bold text-gray-900 sm:text-2xl">{(summary.nba_avg_pace ?? 0).toFixed(1)}</div>
+              <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_avg_pace == null ? '—' : summary.nba_avg_pace.toFixed(1)}</div>
             </div>
           </div>
           <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">

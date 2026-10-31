@@ -36,7 +36,7 @@ export default function LeagueAverages({ summary }: LeagueAveragesProps) {
         {AVERAGE_TILES.map(tile => (
           <StatTile key={tile.label} label={tile.label} value={tile.value(summary.league_averages)} />
         ))}
-        <StatTile label="NBA pace" value={(summary.nba_avg_pace ?? 0).toFixed(1)} />
+        <StatTile label="NBA pace" value={summary.nba_avg_pace == null ? '—' : summary.nba_avg_pace.toFixed(1)} />
         <StatTile label="Days left" value={String(summary.nba_game_days_left ?? 0)} />
         <StatTile label="Teams" value={String(summary.total_teams)} />
       </div>
