@@ -150,12 +150,12 @@ export function getRawValue(player: Player, cat: RankingCategory, displayMode: '
   return getCatValue(player, cat, displayMode)
 }
 
-// Scores a player outside a ranking's referencePool (e.g. below the minGp
-// cutoff) against that same pool's mean/stdev, so the number is directly
-// comparable to the totalZ values computePlayerRankings produced for it.
-export function scoreAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>, categories: RankingCategory[] = DEFAULT_CATEGORIES,
-                                 reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): number {
-  const catZs = categories.map(cat => {
+// Per-category z-scores for a player outside a ranking's referencePool (e.g.
+// below the minGp cutoff, or past the top-300 cut), measured against that same
+// pool's mean/stdev so they're directly comparable to the pool's own z-scores.
+export function categoryZAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', categories: RankingCategory[] = DEFAULT_CATEGORIES,
+                                     reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): Record<RankingCategory, number> {
+  const entries = categories.map(cat => {
     const sign = reverseCategories.has(cat) ? -1 : 1
     if (PERCENTAGE_CATEGORIES.has(cat)) {
       const poolMean = referencePool.reduce((s, p) => s + rawCatValue(p, cat), 0) / referencePool.length
@@ -164,13 +164,62 @@ export function scoreAgainstPool(player: Player, referencePool: Player[], calcMo
       const gp = Math.max(player.stats.gp, 1)
       const attempts = calcMode === 'per_game' ? player.stats[attemptKey] / gp : player.stats[attemptKey]
       const playerImpact = (rawCatValue(player, cat) - poolMean) * attempts
-      return stdev === 0 ? 0 : sign * (playerImpact - mean) / stdev
+      return [cat, stdev === 0 ? 0 : sign * (playerImpact - mean) / stdev] as const
     }
     const { mean, stdev } = meanStdev(referencePool.map(p => getCatValue(p, cat, calcMode)))
     const playerValue = getCatValue(player, cat, calcMode)
-    return stdev === 0 ? 0 : sign * (playerValue - mean) / stdev
+    return [cat, stdev === 0 ? 0 : sign * (playerValue - mean) / stdev] as const
   })
-  return categories.reduce((sum, cat, ci) => sum + catZs[ci] * weights[cat], 0) / categories.length
+  return Object.fromEntries(entries) as Record<RankingCategory, number>
+}
+
+// Scores a player outside a ranking's referencePool against that same pool,
+// so the number is directly comparable to the totalZ values
+// computePlayerRankings produced for it.
+export function scoreAgainstPool(player: Player, referencePool: Player[], calcMode: 'totals' | 'per_game', weights: Record<RankingCategory, number>, categories: RankingCategory[] = DEFAULT_CATEGORIES,
+                                 reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): number {
+  const zScores = categoryZAgainstPool(player, referencePool, calcMode, categories, reverseCategories)
+  return categories.reduce((sum, cat) => sum + zScores[cat] * weights[cat], 0) / categories.length
+}
+
+export interface PlayerRankSummary {
+  /** 1-based overall rank, or null when the player falls outside the ranked pool. */
+  rank: number | null
+  /** How many players were ranked (the reference pool size). */
+  poolSize: number
+  totalZ: number
+  zScores: Record<RankingCategory, number>
+  /** 1-based rank among ranked players sharing each of this player's positions. */
+  positionRanks: { position: string; rank: number }[]
+}
+
+// One player's place in the Player Rankings page's default view (season,
+// per-game, equal weights, no filters), so a profile shows the same rank/Z
+// that page shows. Computed from the players list the caller already has.
+export function getPlayerRankSummary(players: Player[], playerId: number, categories: RankingCategory[] = DEFAULT_CATEGORIES,
+                                     reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): PlayerRankSummary | null {
+  const available = partitionByDataAvailability(players).available
+  const target = available.find(p => p.player_id === playerId)
+  if (!target || target.stats.gp <= 0) return null
+
+  const weights = Object.fromEntries(categories.map(c => [c, 1])) as Record<RankingCategory, number>
+  const config: RankingsConfig = { calcMode: 'per_game', minGp: 0, minMin: 0, position: null, weights }
+  const ranked = computePlayerRankings(available, config, categories, reverseCategories)
+  if (ranked.length === 0) return null
+
+  const idx = ranked.findIndex(r => r.player.player_id === playerId)
+  if (idx >= 0) {
+    const positionRanks = target.positions.map(position => ({
+      position,
+      rank: ranked.slice(0, idx + 1).filter(r => r.player.positions.includes(position)).length,
+    }))
+    return { rank: idx + 1, poolSize: ranked.length, totalZ: ranked[idx].totalZ, zScores: ranked[idx].zScores, positionRanks }
+  }
+
+  const pool = ranked.map(r => r.player)
+  const zScores = categoryZAgainstPool(target, pool, 'per_game', categories, reverseCategories)
+  const totalZ = categories.reduce((sum, cat) => sum + zScores[cat] * weights[cat], 0) / categories.length
+  return { rank: null, poolSize: ranked.length, totalZ, zScores, positionRanks: [] }
 }
 
 export interface DataAvailabilityPartition {

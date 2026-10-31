@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetNbaPlayerStatsQuery } from '../store/api/fantasyApi'
 import type { CustomDateRange, PlayerStatKey, TimePeriod } from '../types/api'
@@ -10,6 +10,9 @@ import { getErrorMessage } from '../utils/errorMessage'
 import PlayerTrendsCard from '../components/PlayerTrendsCard'
 import PlayerNextGameCard from '../components/PlayerNextGameCard'
 import PlayerGameLog from '../components/PlayerGameLog'
+import PlayerFantasyValueCard from '../components/PlayerFantasyValueCard'
+import { orderCategories } from '../utils/statOrder'
+import { DEFAULT_CATEGORIES, getPlayerRankSummary } from '../utils/playerRankings'
 
 function backLabel(from: string | undefined): string {
   if (!from) return '← Back'
@@ -89,8 +92,25 @@ const PlayerProfile = () => {
   // Fantasy roster status (owner / free agent) — reuses the same paginated
   // players list the Players/Projections pages already query, so it's often
   // already warm in the RTK Query cache rather than a fresh fetch.
-  const { data: allPlayers } = useGetAllPlayersQuery({ page: 1, limit: 1200 })
+  const { data: allPlayers, isLoading: allPlayersLoading } = useGetAllPlayersQuery({ page: 1, limit: 1200 })
   const fantasyEntry = allPlayers?.players.find((p) => p.player_id === Number(playerId))
+
+  // Rank + z-score come from that same list (computed client-side exactly as
+  // the Player Rankings page's default view does), so no extra request.
+  const apiCategories = allPlayers?.categories
+  const rankCategories = useMemo(
+    () => orderCategories(apiCategories?.length ? apiCategories : DEFAULT_CATEGORIES),
+    [apiCategories],
+  )
+  const rankSummary = useMemo(() => {
+    if (!allPlayers) return null
+    return getPlayerRankSummary(
+      allPlayers.players,
+      Number(playerId),
+      rankCategories,
+      new Set(allPlayers.reverse_categories ?? []),
+    )
+  }, [allPlayers, playerId, rankCategories])
 
   if (!playerId) return <ErrorMessage message="Missing player id" />
   if (bioLoading) return <LoadingSpinner />
@@ -178,6 +198,15 @@ const PlayerProfile = () => {
           </dl>
         </div>
       </div>
+
+      {(allPlayersLoading || fantasyEntry) && (
+        <PlayerFantasyValueCard
+          positions={fantasyEntry?.positions ?? []}
+          summary={rankSummary}
+          categories={rankCategories}
+          loading={allPlayersLoading}
+        />
+      )}
 
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">

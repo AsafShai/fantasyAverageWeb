@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useTransition } from 'react'
+import { useState, useMemo, useRef, useEffect, useTransition, useDeferredValue } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { useGetAllPlayersQuery, useGetLatestMovesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useMyTeam } from '../context/MyTeamContext'
@@ -10,6 +10,7 @@ import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import PlayerNameLink from '../components/PlayerNameLink'
 import { formatShort } from '../utils/dateRange'
+import { normalizePlayerName } from '../utils/playerName'
 import { orderCategories } from '../utils/statOrder'
 import InfoTip from '../components/InfoTip'
 import { METRIC_GLOSSARY, type MetricInfo } from '../constants/metricGlossary'
@@ -125,6 +126,10 @@ export default function PlayerRankings() {
     return changed ? merged : weights
   }, [weights, categories])
   const [displayLimit, setDisplayLimit] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const searchQuery = useMemo(() => normalizePlayerName(deferredSearch), [deferredSearch])
   const [sliderResetKey, setSliderResetKey] = useState(0)
   const [sortCol, setSortCol] = useState<SortCol>('totalZ')
   const [sortAsc, setSortAsc] = useState(false)
@@ -205,17 +210,20 @@ export default function PlayerRankings() {
     // The row number is the totalZ rank, so it stays with the player whichever
     // column the table is sorted by. It's taken before the fantasy-team filter
     // so a team's players keep their rank among the whole pool.
+    // Search also runs after ranking, so a match keeps its overall rank, and it
+    // ignores the Top-N limit — searching should find anyone in the pool.
     const withRank = filtered
       .map((ranked, idx) => ({ ranked, rank: idx + 1 }))
       .filter(r => matchesFantasyTeam(r.ranked.player.team_id, fantasyTeam))
-    const limited = displayLimit === null ? withRank : withRank.slice(0, displayLimit)
+      .filter(r => !searchQuery || normalizePlayerName(r.ranked.player.player_name).includes(searchQuery))
+    const limited = displayLimit === null || searchQuery ? withRank : withRank.slice(0, displayLimit)
     return limited.sort((a, b) => {
       if (sortCol === 'rank') return sortAsc ? a.rank - b.rank : b.rank - a.rank
       const aVal = getSortVal(a.ranked, sortCol, displayMode)
       const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, fantasyTeam, displayMode, displayLimit])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, fantasyTeam, displayMode, displayLimit, searchQuery])
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -237,7 +245,31 @@ export default function PlayerRankings() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
       <div className="max-w-screen-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Player Rankings</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">Player Rankings</h1>
+
+        <div className="mb-4">
+          <PlayerSearchBox value={search} onChange={setSearch} />
+          {searchQuery && hasCalculated && (
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+              {sortedPlayers.length === 0
+                ? 'No players match'
+                : `${sortedPlayers.length} ${sortedPlayers.length === 1 ? 'player' : 'players'} found · ranks are overall`}
+              {sortedPlayers.length > 0 && (
+                <>
+                  {' · '}
+                  {/* The filter panel pushes the table off-screen on narrow viewports. */}
+                  <button
+                    type="button"
+                    onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className="lg:hidden font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    View results ↓
+                  </button>
+                </>
+              )}
+            </p>
+          )}
+        </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 mb-6 space-y-3 sm:space-y-4">
 
@@ -382,12 +414,17 @@ export default function PlayerRankings() {
 
         {hasCalculated && sortedPlayers.length === 0 && (
           <div className="text-center text-gray-400 dark:text-gray-500 py-16">
-            No players match the current filters.
+            {searchQuery ? (
+              <>
+                No players match “{search.trim()}” with the current filters.{' '}
+                <button onClick={() => setSearch('')} className="text-blue-600 dark:text-blue-400 hover:underline">Clear search</button>
+              </>
+            ) : 'No players match the current filters.'}
           </div>
         )}
 
         {hasCalculated && sortedPlayers.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
+          <div ref={resultsRef} className="scroll-mt-20 bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
@@ -440,6 +477,48 @@ export default function PlayerRankings() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function PlayerSearchBox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
+    <div className="relative w-full sm:max-w-md">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+      >
+        <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 3.4 9.83l3.64 3.63a.75.75 0 1 0 1.06-1.06l-3.63-3.64A5.5 5.5 0 0 0 9 3.5ZM5 9a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" clipRule="evenodd" />
+      </svg>
+      <input
+        ref={inputRef}
+        type="search"
+        inputMode="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        spellCheck={false}
+        aria-label="Search players"
+        placeholder="Search players…"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Escape') onChange('') }}
+        className="w-full pl-9 pr-9 py-2.5 sm:py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-base sm:text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-search-cancel-button]:hidden"
+      />
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear search"
+          onClick={() => { onChange(''); inputRef.current?.focus() }}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }
