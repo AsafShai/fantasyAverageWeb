@@ -172,6 +172,39 @@ class TestNBAStatsServiceAveragePace:
             assert result is None
 
     @pytest.mark.asyncio
+    async def test_failed_pace_fetch_keeps_last_good_value(self, nba_stats_service):
+        """An ESPN error after a good fetch serves the last good value, not None"""
+        nba_stats_service._fetch_nba_average_pace = AsyncMock(side_effect=[5.4, None])
+        try:
+            assert await nba_stats_service.get_nba_average_pace(2027) == 5.4
+            nba_stats_service._pace_cache['ts'] = datetime(2000, 1, 1)  # expire
+            assert await nba_stats_service.get_nba_average_pace(2027) == 5.4
+        finally:
+            del nba_stats_service._fetch_nba_average_pace
+
+    @pytest.mark.asyncio
+    async def test_failed_pace_fetch_retries_soon(self, nba_stats_service):
+        """A failure is not cached for the full TTL — the next call shortly after retries"""
+        from app.services import nba_stats_service as mod
+        nba_stats_service._fetch_nba_average_pace = AsyncMock(side_effect=[None, 5.4])
+        try:
+            assert await nba_stats_service.get_nba_average_pace(2027) is None
+            # Move the failure past the short retry window, still well inside the TTL.
+            nba_stats_service._pace_cache['ts'] -= mod._FAILURE_RETRY_AFTER
+            assert await nba_stats_service.get_nba_average_pace(2027) == 5.4
+        finally:
+            del nba_stats_service._fetch_nba_average_pace
+
+    @pytest.mark.asyncio
+    async def test_failed_pace_fetch_ignores_other_seasons_value(self, nba_stats_service):
+        nba_stats_service._pace_cache = {'season_id': 2026, 'value': 82.0, 'ts': datetime(2000, 1, 1)}
+        nba_stats_service._fetch_nba_average_pace = AsyncMock(return_value=None)
+        try:
+            assert await nba_stats_service.get_nba_average_pace(2027) is None
+        finally:
+            del nba_stats_service._fetch_nba_average_pace
+
+    @pytest.mark.asyncio
     async def test_get_nba_average_pace_empty_response(self, nba_stats_service):
         """Test handling of empty standings data"""
         mock_response = Mock()
