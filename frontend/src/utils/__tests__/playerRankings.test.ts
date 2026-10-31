@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computePlayerRankings, partitionByDataAvailability, DEFAULT_CATEGORIES as CATEGORIES } from '../playerRankings'
+import { computePlayerRankings, getPlayerRankSummary, partitionByDataAvailability, scoreAgainstPool, DEFAULT_CATEGORIES as CATEGORIES } from '../playerRankings'
 import type { Player } from '../../types/api'
 import type { RankingsConfig } from '../playerRankings'
 
@@ -274,5 +274,53 @@ describe('reverse-scored categories', () => {
     const careful = ranked.find(r => r.player.player_name === 'Careful')!
 
     expect(careful.zScores['TO']).toBeLessThan(0)
+  })
+})
+
+describe('getPlayerRankSummary', () => {
+  const withId = (p: Player, id: number): Player => ({ ...p, player_id: id })
+
+  it('matches the rankings page default view (rank, totalZ, category z)', () => {
+    const players = [
+      withId(makePlayer({ name: 'Star', pts: 30 * 70, positions: ['PG', 'SG'] }), 1),
+      withId(makePlayer({ name: 'Mid', pts: 20 * 70, positions: ['SG'] }), 2),
+      withId(makePlayer({ name: 'Low', pts: 10 * 70, positions: ['C'] }), 3),
+    ]
+    const weights = Object.fromEntries(CATEGORIES.map(c => [c, 1]))
+    const ranked = computePlayerRankings(players, { calcMode: 'per_game', minGp: 0, minMin: 0, position: null, weights })
+
+    const summary = getPlayerRankSummary(players, 2, CATEGORIES)!
+    expect(summary.rank).toBe(2)
+    expect(summary.poolSize).toBe(3)
+    expect(summary.totalZ).toBeCloseTo(ranked[1].totalZ)
+    expect(summary.zScores['PTS']).toBeCloseTo(ranked[1].zScores['PTS'])
+  })
+
+  it('ranks the player within each eligible position', () => {
+    const players = [
+      withId(makePlayer({ name: 'Star', pts: 30 * 70, positions: ['PG', 'SG'] }), 1),
+      withId(makePlayer({ name: 'Mid', pts: 20 * 70, positions: ['SG', 'SF'] }), 2),
+      withId(makePlayer({ name: 'Low', pts: 10 * 70, positions: ['C'] }), 3),
+    ]
+    expect(getPlayerRankSummary(players, 2, CATEGORIES)!.positionRanks).toEqual([
+      { position: 'SG', rank: 2 },
+      { position: 'SF', rank: 1 },
+    ])
+  })
+
+  it('scores a player past the top-300 cut against the ranked pool, with no rank', () => {
+    const players = Array.from({ length: 320 }, (_, i) => withId(makePlayer({ name: `P${i}`, pts: (320 - i) * 70 }), i + 1))
+    const summary = getPlayerRankSummary(players, 320, CATEGORIES)!
+    expect(summary.rank).toBeNull()
+    expect(summary.poolSize).toBe(300)
+    const weights = Object.fromEntries(CATEGORIES.map(c => [c, 1]))
+    const pool = computePlayerRankings(players, { calcMode: 'per_game', minGp: 0, minMin: 0, position: null, weights }).map(r => r.player)
+    expect(summary.totalZ).toBeCloseTo(scoreAgainstPool(players[319], pool, 'per_game', weights))
+  })
+
+  it('returns null for an unknown player or one with no games', () => {
+    const players = [withId(makePlayer({ name: 'A' }), 1), withId(makePlayer({ name: 'B', gp: 0 }), 2)]
+    expect(getPlayerRankSummary(players, 99, CATEGORIES)).toBeNull()
+    expect(getPlayerRankSummary(players, 2, CATEGORIES)).toBeNull()
   })
 })

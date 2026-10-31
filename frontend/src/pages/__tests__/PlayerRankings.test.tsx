@@ -89,4 +89,31 @@ describe('PlayerRankings page', () => {
     const ascRows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
     expect(ascRows[0]).toHaveTextContent('Beta Wing');
   });
+
+  it('filters by a name search, keeping each match\'s overall rank', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlayerRankings />);
+    await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument());
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search players' }), 'beta');
+
+    await waitFor(() => expect(screen.queryByText('Alpha Guard')).not.toBeInTheDocument());
+    const row = screen.getByText('Beta Wing').closest('tr')!;
+    expect(within(row).getAllByRole('cell')[0]).toHaveTextContent('2');
+    expect(screen.getByText(/1 player found/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+    await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument());
+  });
+
+  it('shows an empty state with a clear button when nothing matches', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlayerRankings />);
+    await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument());
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search players' }), 'zzz');
+    await waitFor(() => expect(screen.getByText(/No players match “zzz”/)).toBeInTheDocument());
+    await user.click(screen.getByText('Clear search', { selector: 'button' }));
+    await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument());
+  });
 });
