@@ -131,6 +131,48 @@ describe('BoxScores', () => {
     localStorage.clear()
   })
 
+  it('shows the newest plays of the last quarter and can filter to scoring', async () => {
+    const user = userEvent.setup()
+    const withPlays = {
+      ...box,
+      plays: [
+        { id: '1', period: 1, clock: '11:02', text: 'Early layup', team_id: '13', scoring: true, points: 2, away_score: 2, home_score: 0, kind: 'score' },
+        { id: '2', period: 4, clock: '0:40', text: 'Collier enters the game', team_id: '26', scoring: false, points: 0, away_score: 97, home_score: 98, kind: 'sub' },
+        { id: '3', period: 4, clock: '0:34.6', text: 'Lillard pullup', team_id: '13', scoring: true, points: 3, away_score: 100, home_score: 98, kind: 'score' },
+        { id: '4', period: 4, clock: '0:00', text: 'End of the 4th Quarter', team_id: '', scoring: false, points: 0, away_score: 100, home_score: 98, kind: 'period' },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/nba/season')) return json({ start: '2026-10-20', end: '2027-04-11' })
+      if (url.includes('/nba/scoreboard/values')) return json(values)
+      if (url.includes('/nba/scoreboard')) return json(board)
+      if (url.includes('/boxscore')) return json(withPlays)
+      return json({}, 404)
+    }))
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    await user.click(await screen.findByRole('button', { name: /Final/ }))
+    const feed = await screen.findByRole('button', { name: /Play-by-play/ })
+    expect(feed).toHaveAttribute('aria-expanded', 'true')
+    const section = feed.closest('section')!
+    const items = within(section).getAllByRole('listitem').map(item => item.textContent)
+    expect(items[0]).toContain('End of the 4th Quarter')
+    expect(items[1]).toContain('Lillard pullup')
+    expect(items[1]).toContain('+3')
+    expect(items[2]).toContain('Collier enters the game')
+    expect(within(section).queryByText('Early layup')).not.toBeInTheDocument()
+    await user.click(within(section).getByRole('tab', { name: 'Q1' }))
+    expect(within(section).getByText('Early layup')).toBeInTheDocument()
+    expect(within(section).queryByText('Lillard pullup')).not.toBeInTheDocument()
+    await user.click(within(section).getByRole('tab', { name: 'Q4' }))
+    await user.click(within(section).getByRole('button', { name: /Scoring/ }))
+    expect(within(section).getByText('Lillard pullup')).toBeInTheDocument()
+    expect(within(section).queryByText('Collier enters the game')).not.toBeInTheDocument()
+    expect(within(section).queryByText('End of the 4th Quarter')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'No spoilers' }))
+    expect(screen.queryByText('Lillard pullup')).not.toBeInTheDocument()
+  })
+
   it('shows the slate and opens a box score after the game is clicked', async () => {
     const user = userEvent.setup()
     renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
@@ -205,6 +247,22 @@ describe('BoxScores', () => {
     expect(screen.queryByText(/28 PTS · 4 REB · 6 AST/)).not.toBeInTheDocument()
     await user.click(toggle)
     expect(screen.getByText(/28 PTS · 4 REB · 6 AST/)).toBeInTheDocument()
+  })
+
+  it('lists the top unrostered lines on the free-agent tab', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
+    const toggle = await screen.findByRole('button', { name: /Lines of the night/ })
+    await user.click(toggle)
+    const card = toggle.closest('section')!
+    expect(within(card).getByText('Austin Reaves')).toBeInTheDocument()
+    await user.click(within(card).getByRole('tab', { name: 'FA of the night' }))
+    expect(within(card).getByRole('tab', { name: 'FA of the night' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(card).getByText('Bench Guy')).toBeInTheDocument()
+    expect(within(card).getByText('FA')).toBeInTheDocument()
+    expect(within(card).queryByText('Austin Reaves')).not.toBeInTheDocument()
+    expect(within(card).queryByText('Trust the process')).not.toBeInTheDocument()
+    expect(within(card).getByText(/4 PTS · 2 REB · 6 AST/)).toBeInTheDocument()
   })
 
   it('has no per-game show button in Full box mode', async () => {
