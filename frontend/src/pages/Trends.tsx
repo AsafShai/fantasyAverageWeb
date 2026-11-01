@@ -18,7 +18,6 @@ import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange } from '../types/api'
 import { fantasyTeamOptionLabel } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
-import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam'
 
 const MIN_CUSTOM_WINDOW_DAYS = 5
 const MAX_CUSTOM_WINDOW_DAYS = 60
@@ -628,12 +627,10 @@ export default function Trends() {
   )
   const [minGames, setMinGames] = usePersistedState('trends.minGames', 2)
   const [ownership, setOwnership] = usePersistedState<Ownership>('trends.ownership', 'all')
+  // Every fantasy team by default (like Injuries); My Team is only listed first
+  // in the picker, never auto-selected. Not persisted, so nothing stale to clear.
   const [fantasyTeam, setFantasyTeam] = useState<string | null>(null)
   const { myTeam } = useMyTeam()
-  useFollowMyTeamValue(fantasyTeam, myTeam?.team_name ?? null, (name) => {
-    setFantasyTeam(name)
-    setOwnership('all')
-  })
   // one remembered choice per tab: "prior 2 seasons" is the right default when
   // judging a season line, "this season" when judging current form
   const [seasonBaseline, setSeasonBaseline] = usePersistedState(
@@ -811,7 +808,7 @@ export default function Trends() {
               <div
                 className={`flex rounded-lg border overflow-hidden text-xs sm:text-sm ${isShootingSeasonTab ? 'border-gray-200 dark:border-gray-700 opacity-70' : 'border-gray-300 dark:border-gray-600'}`}
                 title={isShootingSeasonTab
-                  ? 'Only filters by recent games played — the season-vs-prior-seasons comparison on this tab barely uses this window.'
+                  ? "Doesn't change who is flagged or the Season% / baseline numbers. Only sets the G column, the Min games filter, and the highlighted stretch in the player chart."
                   : 'Recency window for the G column and eligibility filter'}
               >
                 {WINDOW_OPTIONS.map(d => (
