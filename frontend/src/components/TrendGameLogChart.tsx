@@ -393,6 +393,9 @@ export default function TrendGameLogChart({
                   fillOpacity={1}
                   stroke="var(--trend-band-label)"
                   strokeOpacity={0.5}
+                  // with a Bar on the second y-axis, the default 'discard'
+                  // check dropped the band (Usage & Role never showed it)
+                  ifOverflow="visible"
                 />
               )}
               {mode !== 'minutes' && <Bar yAxisId="bar" dataKey="bar" fill={BAR_COLOR} fillOpacity={0.45} isAnimationActive={false} />}
