@@ -379,7 +379,7 @@ export default function BoxScores() {
           {values?.complete && ranked.length > 0 && (
             <LinesOfTheNight
               key={`${date}-${noSpoilers}`}
-              players={ranked.slice(0, 5)}
+              players={ranked}
               spoilerGuard={noSpoilers}
               dateLabel={formatSlateLabel(date)}
               games={games.length}

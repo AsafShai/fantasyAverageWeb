@@ -197,6 +197,68 @@ def test_live_box_records_who_is_on_the_court():
     assert box["away"]["bench"][0]["ejected"] is True
 
 
+def test_boxscore_keeps_the_play_by_play_in_order():
+    payload = _summary()
+    payload["plays"] = [
+        {
+            "id": "1",
+            "text": "End of the 1st Quarter",
+            "awayScore": 30,
+            "homeScore": 28,
+            "scoringPlay": False,
+            "scoreValue": 0,
+            "period": {"number": 1},
+            "clock": {"displayValue": "0.0"},
+            "type": {"text": "End Period"},
+        },
+        {
+            "id": "2",
+            "text": "Damian Lillard makes 21-foot pullup jump shot",
+            "awayScore": 33,
+            "homeScore": 28,
+            "scoringPlay": True,
+            "scoreValue": 3,
+            "team": {"id": "13"},
+            "period": {"number": 1},
+            "clock": {"displayValue": "34.6"},
+            "type": {"text": "Pullup Jump Shot"},
+        },
+        {"text": "   ", "period": {"number": 1}, "clock": {"displayValue": "1:00"}},
+        "not-a-play",
+        {
+            "id": "3",
+            "text": "Isaiah Collier enters the game for Darryn Peterson",
+            "awayScore": 33,
+            "homeScore": 28,
+            "period": {"number": 2},
+            "clock": {"displayValue": "8:12"},
+            "team": {"id": 26},
+            "type": {"text": "Substitution"},
+            "participants": [{"athlete": {"id": 5001}}, {"athlete": {"id": "5002"}}, {"athlete": {}}, "junk"],
+        },
+    ]
+    plays = parse_boxscore(payload, "100")["plays"]
+    assert [play["text"] for play in plays] == [
+        "End of the 1st Quarter",
+        "Damian Lillard makes 21-foot pullup jump shot",
+        "Isaiah Collier enters the game for Darryn Peterson",
+    ]
+    assert plays[0]["clock"] == "0:00"
+    assert plays[0]["kind"] == "period"
+    assert plays[0]["team_id"] == ""
+    assert plays[1]["clock"] == "0:34.6"
+    assert plays[1]["scoring"] is True
+    assert plays[1]["points"] == 3
+    assert plays[1]["team_id"] == "13"
+    assert plays[1]["kind"] == "score"
+    assert plays[1]["away_score"] == 33
+    assert plays[2]["kind"] == "sub"
+    assert plays[2]["clock"] == "8:12"
+    assert plays[2]["team_id"] == "26"
+    assert plays[2]["athlete_ids"] == ["5001", "5002"]
+    assert plays[1]["athlete_ids"] == []
+
+
 def test_boxscore_rejects_a_summary_without_teams():
     with pytest.raises(BoxScoreUnavailable):
         parse_boxscore({"header": {"competitions": [{"competitors": []}]}}, "9")

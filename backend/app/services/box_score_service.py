@@ -1,8 +1,9 @@
 """NBA box scores from ESPN's public site API.
 
 The scoreboard lists one day's games. Each game's summary is the full box:
-player lines, starters, players who did not play, quarter scores, and team
-totals. Unauthenticated, same host the nightly ingest already uses.
+player lines, starters, players who did not play, quarter scores, team
+totals, and the play-by-play. Unauthenticated, same host the nightly ingest
+already uses.
 """
 
 from __future__ import annotations
@@ -269,6 +270,7 @@ def parse_boxscore(payload: dict, game_id: str) -> dict:
         "periods": _period_labels(period_count),
         "away": away,
         "home": home,
+        "plays": _plays(payload),
     }
 
 
@@ -418,6 +420,87 @@ def _team_box(competitor: dict, status: str, player_blocks: dict, team_blocks: d
         "totals": totals,
         "shooting": _shooting(team_blocks.get(identity["team_id"]) or {}),
     }
+
+
+def _clock(raw: str) -> str:
+    """ESPN writes the last minute as seconds ("34.6") and zero as "0.0"."""
+    text = raw.strip()
+    if not text or ":" in text:
+        return text
+    try:
+        seconds = float(text)
+    except ValueError:
+        return text
+    if seconds <= 0:
+        return "0:00"
+    whole = int(seconds)
+    tenths = int(round((seconds - whole) * 10))
+    if tenths == 10:
+        whole += 1
+        tenths = 0
+    if whole >= 60:
+        return "1:00"
+    if tenths == 0:
+        return f"0:{whole:02d}"
+    return f"0:{whole:02d}.{tenths}"
+
+
+def _play_kind(raw: dict) -> str:
+    if raw.get("scoringPlay"):
+        return "score"
+    label = str((raw.get("type") or {}).get("text") or "")
+    if label == "Substitution":
+        return "sub"
+    if label in ("End Period", "End Game"):
+        return "period"
+    if "Timeout" in label:
+        return "timeout"
+    return "play"
+
+
+def _plays(payload: dict) -> list[dict]:
+    plays = []
+    for index, raw in enumerate(payload.get("plays") or []):
+        if not isinstance(raw, dict):
+            continue
+        text = str(raw.get("text") or "").replace("\n", " ").strip()
+        if not text:
+            continue
+        period = raw.get("period") or {}
+        try:
+            period_number = int(period.get("number") or 0)
+        except (TypeError, ValueError):
+            period_number = 0
+        team_id = str((raw.get("team") or {}).get("id") or "")
+        try:
+            points = int(raw.get("scoreValue") or 0)
+        except (TypeError, ValueError):
+            points = 0
+        try:
+            away_score = int(raw.get("awayScore") or 0)
+            home_score = int(raw.get("homeScore") or 0)
+        except (TypeError, ValueError):
+            away_score = home_score = 0
+        scoring = bool(raw.get("scoringPlay"))
+        athlete_ids = []
+        for participant in raw.get("participants") or []:
+            athlete_id = str(((participant or {}).get("athlete") or {}).get("id") or "") if isinstance(participant, dict) else ""
+            if athlete_id and athlete_id not in athlete_ids:
+                athlete_ids.append(athlete_id)
+        plays.append({
+            "id": str(raw.get("id") or index),
+            "period": period_number,
+            "clock": _clock(str((raw.get("clock") or {}).get("displayValue") or "")),
+            "text": text,
+            "team_id": team_id,
+            "scoring": scoring,
+            "points": points if scoring else 0,
+            "away_score": away_score,
+            "home_score": home_score,
+            "kind": _play_kind(raw),
+            "athlete_ids": athlete_ids,
+        })
+    return plays
 
 
 def _players(block: dict, *, live: bool) -> tuple[list[dict], list[dict], list[dict]]:
