@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
 import TrendGameLogChart from './TrendGameLogChart'
 import DateRangePicker from './DateRangePicker'
-import type { RegressionStat, CustomDateRange } from '../types/api'
+import type { RegressionStat, CustomDateRange, CountingCategory } from '../types/api'
 import { LOW_SAMPLE_GP } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import { STAT_FIELDS, seasonAttempts, summarize, fmtValue, fmtDelta, type CardMode } from '../utils/playerTrendsSummary'
+import { countingCategoriesOf, isCountingCategory } from '../utils/categoryTrends'
 
 const DEFAULT_WINDOW_DAYS = 15
 const PRESET_WINDOWS = [7, 15, 30] as const
@@ -80,9 +81,12 @@ function Skeleton() {
 
 interface Props {
   playerId: number
+  /** This league's scoring categories; only the counting ones get chips. */
+  categories?: string[]
 }
 
-export default function PlayerTrendsCard({ playerId }: Props) {
+export default function PlayerTrendsCard({ playerId, categories }: Props) {
+  const countingCats = useMemo(() => countingCategoriesOf(categories), [categories])
   const [mode, setMode] = useState<CardMode>('minutes')
   const [windowDays, setWindowDays] = useState(DEFAULT_WINDOW_DAYS)
   const [customStartIso, setCustomStartIso] = useState<string | null>(null)
@@ -155,9 +159,12 @@ export default function PlayerTrendsCard({ playerId }: Props) {
         <>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
             <div className="flex flex-wrap gap-2 order-2 sm:order-1">
-              {MODE_CHIPS.filter(
-                (c) => c.key === 'minutes' || c.key === 'usage' || availableShootingStats.includes(c.key as RegressionStat),
-              ).map((c) => (
+              {[
+                ...MODE_CHIPS.filter(
+                  (c) => c.key === 'minutes' || c.key === 'usage' || availableShootingStats.includes(c.key as RegressionStat),
+                ),
+                ...countingCats.map((c) => ({ key: c as CardMode, label: c })),
+              ].map((c) => (
                 <button
                   key={c.key}
                   type="button"
@@ -236,12 +243,13 @@ export default function PlayerTrendsCard({ playerId }: Props) {
           <TrendGameLogChart
             playerId={playerId}
             playerName={log.player_name}
-            mode={mode === 'minutes' || mode === 'usage' ? mode : 'shooting'}
+            mode={mode === 'minutes' || mode === 'usage' ? mode : isCountingCategory(mode) ? 'category' : 'shooting'}
             regressionMode="form"
             windowDays={windowDays}
             baselineSeasons={0}
-            stat={mode === 'minutes' || mode === 'usage' ? undefined : mode}
+            stat={mode === 'minutes' || mode === 'usage' || isCountingCategory(mode) ? undefined : mode}
             qualifiedStats={availableShootingStats}
+            category={isCountingCategory(mode) ? (mode as CountingCategory) : undefined}
           />
         </>
       )}

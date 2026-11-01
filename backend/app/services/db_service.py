@@ -1394,7 +1394,8 @@ class DBService:
         (fs_team_games has no min column — derived via SUM(fs_player_games.min)
         grouped by team_id+game_id). USG% itself is computed per game in Python
         (never from summed totals) then averaged over whatever window the
-        caller wants (season, last-5, etc) from this same row set."""
+        caller wants (season, last-5, etc) from this same row set. Also carries
+        the player's counting stats, which Category Movers reads from it."""
         pool = await self._get_pool()
         if pool is None:
             return pd.DataFrame()
@@ -1411,6 +1412,7 @@ class DBService:
                         p.fga AS p_fga,
                         p.fta AS p_fta,
                         p.tov AS p_tov,
+                        p.pts, p.reb, p.ast, p.stl, p.blk, p.fg3m,
                         t.fga AS t_fga,
                         t.fta AS t_fta,
                         t.tov AS t_tov,
@@ -1450,6 +1452,7 @@ class DBService:
                         p.matchup,
                         p.min AS p_min,
                         p.fgm, p.fga, p.ftm, p.fta, p.fg3m, p.fg3a,
+                        p.pts, p.reb, p.ast, p.stl, p.blk,
                         p.fga AS p_fga,
                         p.fta AS p_fta,
                         p.tov AS p_tov,

@@ -17,6 +17,7 @@ from app.services.trend_service import (
     _TTLLRUCache,
     build_game_log,
     classify_role_badge,
+    compute_category_movers,
     compute_minutes_movers,
     compute_regression_groups,
     compute_usage_role,
@@ -1121,3 +1122,107 @@ class TestInFlightCoalescing:
 
         assert call_count == 2
         assert second['fgm'].iloc[0] == 1
+
+
+# --- Category Movers -------------------------------------------------------
+
+def _cat_games_df(player_id, player_name, older, recent, min_old=30.0, min_new=30.0, **flat):
+    """older/recent: lists of PTS per game; every other category is held flat
+    (overridable via **flat) so only PTS can move. recent games fall on/after
+    date(2026, 1, 20)."""
+    base = date(2026, 1, 1)
+    cols = {"reb": 5.0, "ast": 3.0, "stl": 1.0, "blk": 1.0, "fg3m": 2.0, "p_tov": 2.0}
+    cols.update(flat)
+    rows = []
+    for i, pts in enumerate(older):
+        rows.append({"player_id": player_id, "player_name": player_name, "game_date": base + timedelta(days=i),
+                     "p_min": min_old, "pts": pts, **cols})
+    for i, pts in enumerate(recent):
+        rows.append({"player_id": player_id, "player_name": player_name, "game_date": base + timedelta(days=19 + i),
+                     "p_min": min_new, "pts": pts, **cols})
+    return pd.DataFrame(rows)
+
+
+_CAT_WINDOW_START = date(2026, 1, 19)
+
+
+def _cat_players(name="Cat Mover", team=None):
+    return _players_df([{"Name": name, "Pro Team": "DEN", "Positions": "SG,SF", "fantasy_team_name": team}])
+
+
+def test_category_flags_big_significant_points_jump():
+    games = _cat_games_df(1, "Cat Mover", [10, 12, 8, 11, 9, 10, 12, 8, 10, 10], [20, 22, 18, 21])
+    items = compute_category_movers(games, {1: 4}, _cat_players(), _CAT_WINDOW_START)
+    assert len(items) == 1
+    item = items[0]
+    assert item.season_gp == 14 and item.window_gp == 4
+    assert item.position == "SG" and item.fantasy_status == "FA"
+    pts = next(s for s in item.stats if s.cat == "PTS")
+    assert pts.window_avg == pytest.approx(20.25)
+    assert pts.season_avg == pytest.approx((100 + 81) / 14)
+    assert pts.delta == pytest.approx(20.25 - 181 / 14)
+    assert pts.flagged and pts.z > 1.5
+    # flat categories never flag (no spread -> z is None)
+    reb = next(s for s in item.stats if s.cat == "REB")
+    assert reb.z is None and not reb.flagged
+    assert [s.cat for s in item.stats] == ["PTS", "REB", "AST", "3PM", "STL", "BLK", "TO"]
+
+
+def test_category_reports_minutes_alongside_the_change():
+    games = _cat_games_df(1, "Cat Mover", [10, 12, 8, 11, 9, 10, 12, 8, 10, 10], [20, 24, 16, 20],
+                          min_old=15.0, min_new=30.0)
+    item = compute_category_movers(games, {}, _cat_players(), _CAT_WINDOW_START)[0]
+    assert item.season_mpg == pytest.approx((10 * 15 + 4 * 30) / 14)
+    assert item.window_mpg == pytest.approx(30.0)
+    pts = next(s for s in item.stats if s.cat == "PTS")
+    assert pts.delta == pytest.approx(20 - 180 / 14)
+
+
+def test_category_below_min_delta_not_flagged():
+    # tiny but perfectly consistent change: significant z, below the 3.0 PTS floor
+    games = _cat_games_df(1, "Cat Mover", [10, 11] * 5, [12, 13, 12, 13])
+    assert compute_category_movers(games, {}, _cat_players(), _CAT_WINDOW_START) == []
+
+
+def test_category_season_and_window_gp_gates():
+    short_season = _cat_games_df(1, "Cat Mover", [10] * 4 + [12] * 3, [25, 25])  # 9 games
+    assert compute_category_movers(short_season, {}, _cat_players(), _CAT_WINDOW_START) == []
+    one_window_game = _cat_games_df(1, "Cat Mover", [10, 12] * 6, [30])
+    assert compute_category_movers(one_window_game, {}, _cat_players(), _CAT_WINDOW_START) == []
+
+
+def test_category_window_covering_whole_season_has_no_z():
+    games = _cat_games_df(1, "Cat Mover", [], [10, 30] * 6)
+    assert compute_category_movers(games, {}, _cat_players(), date(2025, 12, 1)) == []
+
+
+def test_category_skips_unmatched_and_uses_team_name():
+    games = _cat_games_df(1, "Cat Mover", [10, 12, 8, 11, 9, 10, 12, 8, 10, 10], [20, 22, 18, 21])
+    assert compute_category_movers(games, {}, _cat_players(name="Someone Else"), _CAT_WINDOW_START) == []
+    items = compute_category_movers(games, {}, _cat_players(team="Dunk Tank"), _CAT_WINDOW_START)
+    assert items[0].fantasy_status == "Dunk Tank"
+
+
+def test_category_empty_games_df_returns_empty_list():
+    assert compute_category_movers(pd.DataFrame(), {}, pd.DataFrame(), _CAT_WINDOW_START) == []
+
+
+@pytest.mark.asyncio
+async def test_get_category_movers_reuses_usage_rows_and_stamps_league(service):
+    games = _cat_games_df(1, "Cat Mover", [10, 12, 8, 11, 9, 10, 12, 8, 10, 10], [20, 22, 18, 21])
+    with patch.object(service, "_db") as mock_db, \
+         patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
+        mock_anchor.return_value = date(2026, 6, 1)
+        mock_db.get_usage_components = AsyncMock(return_value=games)
+        mock_db.get_games_since = AsyncMock(return_value={})
+
+        response = await service.get_category_movers(
+            _cat_players(), 15, ["FG%", "FT%", "3PM", "REB", "PTS", "TO"], ["TO"]
+        )
+        await service.get_category_movers(_cat_players(), 15, ["PTS"], [])
+
+        assert mock_db.get_usage_components.call_count == 1
+        assert response.league_categories == ["3PM", "REB", "PTS", "TO"]
+        assert response.reverse_categories == ["TO"]
+        assert response.min_season_gp == 10 and response.min_window_gp == 2
+        assert response.min_delta["PTS"] == 3.0 and response.min_abs_z == 1.5
