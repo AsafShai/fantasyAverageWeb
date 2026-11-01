@@ -234,6 +234,7 @@ def test_boxscore_keeps_the_play_by_play_in_order():
             "clock": {"displayValue": "8:12"},
             "team": {"id": 26},
             "type": {"text": "Substitution"},
+            "participants": [{"athlete": {"id": 5001}}, {"athlete": {"id": "5002"}}, {"athlete": {}}, "junk"],
         },
     ]
     plays = parse_boxscore(payload, "100")["plays"]
@@ -254,6 +255,8 @@ def test_boxscore_keeps_the_play_by_play_in_order():
     assert plays[2]["kind"] == "sub"
     assert plays[2]["clock"] == "8:12"
     assert plays[2]["team_id"] == "26"
+    assert plays[2]["athlete_ids"] == ["5001", "5002"]
+    assert plays[1]["athlete_ids"] == []
 
 
 def test_boxscore_rejects_a_summary_without_teams():

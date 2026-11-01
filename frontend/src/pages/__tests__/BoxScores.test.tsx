@@ -173,6 +173,54 @@ describe('BoxScores', () => {
     expect(screen.queryByText('Lillard pullup')).not.toBeInTheDocument()
   })
 
+  it('filters plays to my players, sub in and out included, and marks their names', async () => {
+    localStorage.setItem('fw:myTeam.id', '8')
+    const user = userEvent.setup()
+    const stats = { gp: 1, minutes: 30, pts: 20, reb: 4, ast: 4, stl: 1, blk: 0, three_pm: 2, fg_percentage: 0.5, ft_percentage: 0.8, fgm: 8, fga: 16, ftm: 4, fta: 5 }
+    const withPlays = {
+      ...box,
+      plays: [
+        { id: '1', period: 4, clock: '5:00', text: 'Austin Reaves enters the game for Bench Guy', team_id: '13', scoring: false, points: 0, away_score: 90, home_score: 90, kind: 'sub', athlete_ids: ['1', '2'] },
+        { id: '2', period: 4, clock: '4:30', text: 'Lauri Markkanen makes layup', team_id: '26', scoring: true, points: 2, away_score: 90, home_score: 92, kind: 'score', athlete_ids: ['24'] },
+        { id: '3', period: 4, clock: '4:00', text: 'Bench Guy makes jumper (Austin Reaves assists)', team_id: '13', scoring: true, points: 2, away_score: 92, home_score: 92, kind: 'score', athlete_ids: ['2', '1'] },
+        { id: '4', period: 4, clock: '3:30', text: 'Austin Reaves bad pass', team_id: '13', scoring: false, points: 0, away_score: 92, home_score: 92, kind: 'play' },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.includes('/teams/') && url.includes('/players')) {
+        return json({
+          team_id: 8,
+          last_updated: '2026-10-25',
+          players: [{ player_name: 'Austin Reaves', pro_team: 'LAL', positions: ['SG'], team_id: 8, status: 'ONTEAM', player_id: 1, fantasy_team_name: "Dor's Injured Team", stats }],
+        })
+      }
+      if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
+      if (url.includes('/nba/season')) return json({ start: '2026-10-20', end: '2027-04-11' })
+      if (url.includes('/nba/scoreboard/values')) return json(values)
+      if (url.includes('/nba/scoreboard')) return json(board)
+      if (url.includes('/boxscore')) return json(withPlays)
+      return json({}, 404)
+    }))
+    renderWithProviders(<MyTeamProvider><BoxScores /></MyTeamProvider>, { route: '/box-scores?date=2026-10-25' })
+    await user.click(await screen.findByRole('button', { name: /Final/ }))
+    const feed = await screen.findByRole('button', { name: /Play-by-play/ })
+    const section = feed.closest('section')!
+    const mineFilter = await within(section).findByRole('button', { name: 'Mine 3' })
+    let marks = within(section).getAllByTestId('pbp-mine-name').map(mark => mark.textContent)
+    expect(marks).toEqual(['Austin Reaves', 'Austin Reaves', 'Austin Reaves'])
+    expect(within(section).getByText('Lauri Markkanen makes layup')).toBeInTheDocument()
+    await user.click(mineFilter)
+    expect(mineFilter).toHaveAttribute('aria-pressed', 'true')
+    expect(within(section).queryByText('Lauri Markkanen makes layup')).not.toBeInTheDocument()
+    const items = within(section).getAllByRole('listitem').map(item => item.textContent)
+    expect(items).toHaveLength(3)
+    expect(items[2]).toContain('enters the game for Bench Guy')
+    await user.click(within(section).getByRole('button', { name: /Scoring/ }))
+    marks = within(section).getAllByTestId('pbp-mine-name').map(mark => mark.textContent)
+    expect(marks).toEqual(['Austin Reaves'])
+  })
+
   it('shows the slate and opens a box score after the game is clicked', async () => {
     const user = userEvent.setup()
     renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })

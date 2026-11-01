@@ -595,7 +595,7 @@ export default function BoxScorePanel({
           </div>
         </>
       )}
-      {!hide && <PlayByPlay game={game} />}
+      {!hide && <PlayByPlay game={game} mineIds={mineIds} />}
     </section>
   )
 }

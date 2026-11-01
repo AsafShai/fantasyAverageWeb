@@ -1,7 +1,62 @@
-import { useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { BoxPlay, GameBoxScore } from '../../types/boxScore'
 
-type PlayFilter = 'all' | 'scoring'
+type PlayFilter = 'all' | 'scoring' | 'mine'
+
+interface MinePlayer {
+  id: string
+  name: string
+}
+
+/** My players who appear in this game's box (played, or did not play). */
+function myPlayersInGame(game: GameBoxScore, mineIds: ReadonlySet<string> | undefined): MinePlayer[] {
+  if (!mineIds || mineIds.size === 0) return []
+  const out: MinePlayer[] = []
+  const seen = new Set<string>()
+  for (const team of [game.away, game.home]) {
+    for (const player of [...team.starters, ...team.bench, ...team.did_not_play]) {
+      const id = String(player.player_id || '')
+      if (!id || seen.has(id) || !mineIds.has(id) || !player.name) continue
+      seen.add(id)
+      out.push({ id, name: player.name })
+    }
+  }
+  return out
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Which of my players a play involves: by ESPN participant id when the feed
+ * carries them, otherwise by name in the text (boxes cached before ids). */
+function minePlayersIn(play: BoxPlay, mine: MinePlayer[]): MinePlayer[] {
+  if (mine.length === 0 || play.kind === 'period') return []
+  if (play.athlete_ids && play.athlete_ids.length > 0) {
+    const ids = new Set(play.athlete_ids)
+    return mine.filter(player => ids.has(player.id))
+  }
+  return mine.filter(player => play.text.includes(player.name))
+}
+
+function highlightNames(text: string, names: string[]): ReactNode {
+  if (names.length === 0) return text
+  const pattern = new RegExp(`(${[...names].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|')})`, 'g')
+  const wanted = new Set(names)
+  return text.split(pattern).map((part, index) =>
+    wanted.has(part) ? (
+      <mark
+        key={index}
+        data-testid="pbp-mine-name"
+        className="rounded bg-blue-100 px-0.5 font-semibold text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+      >
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  )
+}
 
 function periodName(period: number): string {
   if (period >= 1 && period <= 4) return `Q${period}`
@@ -18,8 +73,9 @@ function teamColor(color: string): string | undefined {
  * One game's play-by-play. The feed is newest first inside the quarter on
  * screen, so a live game and the end of a finished one open on the latest play.
  */
-export function PlayByPlay({ game }: { game: GameBoxScore }) {
+export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: ReadonlySet<string> }) {
   const plays = game.plays ?? []
+  const mine = useMemo(() => myPlayersInGame(game, mineIds), [game, mineIds])
   const periods = [...new Set(plays.map(play => play.period).filter(period => period > 0))].sort((a, b) => a - b)
   const latest = periods[periods.length - 1] ?? 0
   const [chosenPeriod, setChosenPeriod] = useState<number | null>(null)
@@ -27,8 +83,16 @@ export function PlayByPlay({ game }: { game: GameBoxScore }) {
   const [open, setOpen] = useState(true)
   const period = chosenPeriod != null && periods.includes(chosenPeriod) ? chosenPeriod : latest
   const inPeriod = plays.filter(play => play.period === period)
-  const shown = (filter === 'scoring' ? inPeriod.filter(play => play.scoring) : inPeriod).slice().reverse()
+  const mineInPeriod = inPeriod.filter(play => minePlayersIn(play, mine).length > 0)
+  const activeFilter: PlayFilter = filter === 'mine' && mine.length === 0 ? 'all' : filter
+  const filtered = activeFilter === 'scoring' ? inPeriod.filter(play => play.scoring) : activeFilter === 'mine' ? mineInPeriod : inPeriod
+  const shown = filtered.slice().reverse()
   const scoringCount = inPeriod.filter(play => play.scoring).length
+  const filters: ReadonlyArray<readonly [PlayFilter, string]> = [
+    ['all', `All ${inPeriod.length}`],
+    ['scoring', `Scoring ${scoringCount}`],
+    ...(mine.length > 0 ? [['mine', `Mine ${mineInPeriod.length}`] as const] : []),
+  ]
 
   if (plays.length === 0) return null
 
@@ -77,11 +141,8 @@ export function PlayByPlay({ game }: { game: GameBoxScore }) {
               })}
             </div>
             <div role="group" aria-label="Which plays" className="inline-flex rounded-full bg-gray-100 p-0.5 dark:bg-gray-800">
-              {([
-                ['all', `All ${inPeriod.length}`],
-                ['scoring', `Scoring ${scoringCount}`],
-              ] as const).map(([id, label]) => {
-                const selected = filter === id
+              {filters.map(([id, label]) => {
+                const selected = activeFilter === id
                 return (
                   <button
                     key={id}
@@ -102,9 +163,11 @@ export function PlayByPlay({ game }: { game: GameBoxScore }) {
           </div>
 
           {shown.length === 0 ? (
-            <p className="px-1 py-6 text-center text-xs text-gray-400">No baskets this quarter.</p>
+            <p className="px-1 py-6 text-center text-xs text-gray-400">
+              {activeFilter === 'mine' ? 'None of your players in a play this quarter.' : 'No baskets this quarter.'}
+            </p>
           ) : (
-            <div key={`${period}-${filter}`} className="mt-2 max-h-80 overflow-y-auto overscroll-contain rounded-lg border border-gray-100 dark:border-gray-800">
+            <div key={`${period}-${activeFilter}`} className="mt-2 max-h-80 overflow-y-auto overscroll-contain rounded-lg border border-gray-100 dark:border-gray-800">
               <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-gray-100 bg-white/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
                 <span className="w-11 shrink-0 text-right">Time</span>
                 <span className="min-w-0 flex-1">Play</span>
@@ -113,7 +176,7 @@ export function PlayByPlay({ game }: { game: GameBoxScore }) {
               </div>
               <ol>
                 {shown.map(play => (
-                  <PlayRow key={play.id} play={play} game={game} />
+                  <PlayRow key={play.id} play={play} game={game} mineNames={minePlayersIn(play, mine).map(player => player.name)} />
                 ))}
               </ol>
             </div>
@@ -124,7 +187,7 @@ export function PlayByPlay({ game }: { game: GameBoxScore }) {
   )
 }
 
-function PlayRow({ play, game }: { play: BoxPlay; game: GameBoxScore }) {
+function PlayRow({ play, game, mineNames }: { play: BoxPlay; game: GameBoxScore; mineNames: string[] }) {
   if (play.kind === 'period') {
     return (
       <li className="border-t border-gray-100 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:border-gray-800">
@@ -153,7 +216,7 @@ function PlayRow({ play, game }: { play: BoxPlay; game: GameBoxScore }) {
             +{play.points}
           </span>
         )}
-        {play.text}
+        {highlightNames(play.text, mineNames)}
       </p>
       <span className={`w-8 shrink-0 pt-0.5 text-center text-xs tabular-nums ${awayScored ? 'font-bold text-gray-900 dark:text-white' : 'text-gray-400'}`}>
         {play.away_score}
