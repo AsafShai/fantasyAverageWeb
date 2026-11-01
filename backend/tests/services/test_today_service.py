@@ -159,6 +159,22 @@ class TestRankChanges:
         changes = TodayService.build_rank_changes([rankings_row(11, 1, 'Alpha')], [])
         assert changes.teams == [] and changes.latest_period is None
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('mode, table', [
+        ('averages', 'team_rankings_averages'),
+        ('totals', 'team_rankings_totals'),
+    ])
+    async def test_each_mode_reads_its_own_rankings_table(self, mode, table):
+        from unittest.mock import AsyncMock, MagicMock
+
+        service = TodayService()
+        service.db_service = MagicMock(
+            get_latest_two_periods_rankings=AsyncMock(return_value=[]),
+            get_games_played_for_periods=AsyncMock(return_value=[]),
+        )
+        await service.get_rank_changes(mode)
+        assert service.db_service.get_latest_two_periods_rankings.await_args.args[2] == table
+
 
 class TestClassifyStatus:
     @pytest.mark.parametrize('raw, expected', [
