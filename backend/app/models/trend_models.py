@@ -98,6 +98,52 @@ class UsageResponse(BaseModel):
     min_window_gp: int
 
 
+CountingCategory = Literal['PTS', 'REB', 'AST', '3PM', 'STL', 'BLK', 'TO']
+
+
+class CategoryStatItem(BaseModel):
+    """One counting category for one player: window per-game average vs the
+    season's (window included, like Minutes Movers). z is the change in units
+    of the player's own per-game spread; flagged means it cleared both the
+    category's min_delta and min_abs_z gates."""
+    cat: CountingCategory
+    season_avg: float
+    window_avg: float
+    delta: float
+    z: Optional[float] = None  # None when the player's games have no spread to measure
+    flagged: bool
+
+
+class CategoryMoverItem(BaseModel):
+    player_id: int
+    player_name: str
+    pro_team: str
+    position: str
+    fantasy_status: str  # owning team name, or 'FA'
+    games_last_15d: int
+    season_gp: int
+    window_gp: int
+    season_mpg: float
+    window_mpg: float
+    low_sample: bool
+    stats: list[CategoryStatItem]  # every supported category, flagged or not
+
+
+class CategoryResponse(BaseModel):
+    items: list[CategoryMoverItem]  # only players with at least one flagged category
+    window_days: int
+    last_updated: str
+    # this league's scoring categories / reverse-scored ones, so the page can
+    # show only what the league counts and colour TO the right way round
+    league_categories: list[str]
+    reverse_categories: list[str]
+    # eligibility gates, echoed so the page can state them
+    min_season_gp: int
+    min_window_gp: int
+    min_abs_z: float
+    min_delta: dict[str, float]
+
+
 class GameLogEntry(BaseModel):
     game_date: str
     matchup: str
@@ -109,6 +155,12 @@ class GameLogEntry(BaseModel):
     fta: int
     fg3m: int
     fg3a: int
+    pts: int = 0
+    reb: int = 0
+    ast: int = 0
+    stl: int = 0
+    blk: int = 0
+    tov: int = 0
 
 
 class GameLogResponse(BaseModel):
