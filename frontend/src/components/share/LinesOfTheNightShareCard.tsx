@@ -8,6 +8,8 @@ interface LinesOfTheNightShareCardProps extends ShareCardTheme {
   dateLabel: string
   games: number
   players: SlatePlayerValue[]
+  /** Card heading. The free-agent tab shares the same layout under its own name. */
+  title?: string
 }
 
 export const CARD_WIDTH = 560
@@ -17,7 +19,12 @@ export const CARD_WIDTH = 560
  * with headshot, NBA team, the fantasy team that had him, the line and its Z.
  * Rendered in the page's document so Tailwind (and `dark`) apply.
  */
-export const LinesOfTheNightShareCard = ({ dateLabel, games, players }: LinesOfTheNightShareCardProps) => (
+export const LinesOfTheNightShareCard = ({
+  dateLabel,
+  games,
+  players,
+  title = 'Lines of the night',
+}: LinesOfTheNightShareCardProps) => (
   <div
     className="overflow-hidden rounded-2xl bg-gray-50 font-sans text-gray-900 dark:bg-gray-950 dark:text-gray-100"
     style={{ width: CARD_WIDTH }}
@@ -27,7 +34,7 @@ export const LinesOfTheNightShareCard = ({ dateLabel, games, players }: LinesOfT
         <span>🏀 Fantasy League</span>
         <span>Box scores</span>
       </div>
-      <div className="mt-1 whitespace-nowrap text-2xl font-extrabold tracking-tight">🔥 Lines of the night</div>
+      <div className="mt-1 whitespace-nowrap text-2xl font-extrabold tracking-tight">🔥 {title}</div>
       <div className="mt-0.5 whitespace-nowrap text-sm text-amber-50">
         {dateLabel} · {games} game{games === 1 ? '' : 's'}
       </div>
