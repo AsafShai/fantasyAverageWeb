@@ -3,6 +3,7 @@ import InjuryBadge from '../InjuryBadge'
 import PlayerNameLink from '../PlayerNameLink'
 import type { PregamePlayer } from './pregameRoster'
 import { fouledOut, lineupGroups } from './lineupGroups'
+import { PlayByPlay } from './PlayByPlay'
 import { countdownLabel, gameClockLabel, localClock } from './tipTime'
 import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName'
 import { signedZ } from './linesOfTheNightFormat'
@@ -594,6 +595,7 @@ export default function BoxScorePanel({
           </div>
         </>
       )}
+      {!hide && <PlayByPlay game={game} mineIds={mineIds} />}
     </section>
   )
 }

@@ -101,6 +101,24 @@ export interface BoxTeamBox extends BoxTeamSide {
   shooting: BoxShooting
 }
 
+export interface BoxPlay {
+  id: string
+  /** 1–4 regulation, 5 the first overtime. */
+  period: number
+  clock: string
+  text: string
+  /** ESPN team id of the side the play belongs to. Empty when it is the period itself. */
+  team_id: string
+  scoring: boolean
+  points: number
+  away_score: number
+  home_score: number
+  kind: 'score' | 'sub' | 'period' | 'timeout' | 'play'
+  /** ESPN ids of the players in the play (shooter, assister, sub in/out, ...).
+   * Absent on a response cached before participants were parsed. */
+  athlete_ids?: string[]
+}
+
 export interface GameBoxScore {
   game_id: string
   status: GameStatus
@@ -112,6 +130,8 @@ export interface GameBoxScore {
   periods: string[]
   away: BoxTeamBox
   home: BoxTeamBox
+  /** Chronological. Absent on a response cached before play-by-play was parsed. */
+  plays?: BoxPlay[]
 }
 
 /** One non-DNP line of the slate, as the server sends it. */
