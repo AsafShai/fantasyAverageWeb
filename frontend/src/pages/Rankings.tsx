@@ -253,7 +253,7 @@ const Rankings = () => {
                 {isStandings
                   ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
                   : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
-                {movesShown && ' ▲/▼ = change since last night, GP + = games played last night.'}
+                {hasMoves && ' ▲/▼ = change since last night, GP + = games played last night.'}
               </p>
             </div>
             <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
@@ -359,12 +359,12 @@ const Rankings = () => {
             {hasMoves && (
               <button
                 onClick={() => setShowMoves(!showMoves)}
-                aria-pressed={showMoves}
-                className={`ml-auto px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                  showMoves ? 'bg-white text-blue-700' : 'bg-blue-500 text-white hover:bg-blue-400'
-                }`}
+                className="ml-auto inline-flex w-36 items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors bg-white text-blue-700 hover:bg-blue-50"
               >
-                ▲▼ Last night
+                <span aria-hidden="true" className="text-[10px] leading-none">
+                  <span className="text-emerald-600">▲</span><span className="text-red-600">▼</span>
+                </span>
+                {showMoves ? 'Hide movers' : 'Show movers'}
               </button>
             )}
           </div>
