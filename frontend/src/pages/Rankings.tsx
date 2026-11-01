@@ -361,7 +361,7 @@ const Rankings = () => {
                 onClick={() => setShowMoves(!showMoves)}
                 className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors bg-white text-blue-700 hover:bg-blue-50"
               >
-                <span aria-hidden="true" className="text-xs leading-none">
+                <span aria-hidden="true" className="text-[10px] leading-none">
                   <span className="text-emerald-600">▲</span><span className="text-red-600">▼</span>
                 </span>
                 {showMoves ? 'Hide movers' : 'Show movers'}
