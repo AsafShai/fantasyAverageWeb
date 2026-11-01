@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
-import { useGetRankingsQuery, useGetLeagueSummaryQuery } from '../store/api/fantasyApi'
+import { useGetRankingsQuery, useGetLeagueSummaryQuery, useGetRankChangesQuery } from '../store/api/fantasyApi'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { Link } from 'react-router'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import EspnUpdatedNote from '../components/EspnUpdatedNote'
-import type { RankingStats } from '../types/api'
+import type { RankingStats, TeamRankChange } from '../types/api'
 import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { useMyTeam } from '../context/MyTeamContext'
@@ -26,6 +27,20 @@ const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%'])
 // stat reads identically in both places: 4 decimal places, percentages scaled to 0-100.
 const formatAverageValue = (categoryKey: string, val: number) =>
   PERCENTAGE_CATEGORIES.has(categoryKey) ? (val * 100).toFixed(4) + '%' : val.toFixed(4)
+
+const formatDelta = (n: number) => (n % 1 === 0 ? Math.abs(n).toString() : Math.abs(n).toFixed(1))
+
+// Hangs off the right edge of its value, so values keep a straight column.
+const DELTA_CLASS = 'absolute left-full top-1/2 -translate-y-1/2 ml-1 text-[10px] leading-none'
+
+/** ▲/▼ change since the previous night, small beside a number; `showSame`
+ * prints a dash for no change (rank and total), otherwise nothing is shown. */
+const Delta = ({ value, showSame = false }: { value: number | null | undefined; showSame?: boolean }) => {
+  if (value == null) return null
+  if (value > 0) return <span className={`${DELTA_CLASS} font-bold text-emerald-600 dark:text-emerald-400`}>▲{formatDelta(value)}</span>
+  if (value < 0) return <span className={`${DELTA_CLASS} font-bold text-red-600 dark:text-red-400`}>▼{formatDelta(value)}</span>
+  return showSame ? <span className={`${DELTA_CLASS} text-gray-400`}>–</span> : null
+}
 
 const RANKINGS_URL_SCHEMA = {
   from: isoDateParam(),
@@ -66,6 +81,10 @@ const Rankings = () => {
 
   const { data, error, isLoading } = useGetRankingsQuery(appliedDates)
   const { data: summary, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
+  // Last night's moves belong to the default (season-to-date) view only.
+  const [showMoves, setShowMoves] = usePersistedState('rankings.showMoves', true)
+  const isDateRangeActive = !!(appliedDates.startDate && appliedDates.endDate)
+  const { data: rankChanges } = useGetRankChangesQuery(mode, { skip: isDateRangeActive })
 
   const handleStartDate = (val: string) => {
     setStartDate(val)
@@ -101,8 +120,6 @@ const Rankings = () => {
       setSortOrder('desc')
     }
   }
-
-  const isDateRangeActive = !!(appliedDates.startDate && appliedDates.endDate)
 
   if (isLoading || summaryLoading) return <LoadingSpinner />
   // A custom-range failure (e.g. no data for that window) shouldn't blow away
@@ -141,6 +158,12 @@ const Rankings = () => {
   })
 
   const isStandings = viewMode === 'standings'
+
+  const hasMoves = !isDateRangeActive && (rankChanges?.teams.length ?? 0) > 0
+  const movesShown = hasMoves && showMoves
+  const movesByTeam = new Map<number, TeamRankChange>(
+    movesShown ? rankChanges!.teams.map(t => [t.team_id, t]) : []
+  )
 
   const columns = [
     { key: 'rank', label: 'Rank', sortable: true },
@@ -219,6 +242,7 @@ const Rankings = () => {
                           rangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} – ${formatDate(appliedDates.endDate!)}` : undefined}
                           asOf={formatAsOf(data?.data_date)}
                           highlightTeamId={highlightMyTeam ? myTeamId : null}
+                          moves={movesShown ? movesByTeam : undefined}
                         />
                       )}
                     />
@@ -229,6 +253,7 @@ const Rankings = () => {
                 {isStandings
                   ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
                   : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
+                {movesShown && ' ▲/▼ = change since last night, GP + = games played last night.'}
               </p>
             </div>
             <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
@@ -331,6 +356,17 @@ const Rankings = () => {
                 Clear
               </button>
             )}
+            {hasMoves && (
+              <button
+                onClick={() => setShowMoves(!showMoves)}
+                aria-pressed={showMoves}
+                className={`ml-auto px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                  showMoves ? 'bg-white text-blue-700' : 'bg-blue-500 text-white hover:bg-blue-400'
+                }`}
+              >
+                ▲▼ Last night
+              </button>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {[1, 7, 15, 30].map(days => (
@@ -395,7 +431,10 @@ const Rankings = () => {
               {rankings.map((team: RankingStats, index: number) => (
                 <tr key={team.team.team_id} className="group hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
                   <td className="table-cell px-3 sm:px-6 font-bold text-blue-600">
-                    #{team.rank || index + 1}
+                    <span className="relative">
+                      #{team.rank || index + 1}
+                      <Delta value={movesByTeam.get(team.team.team_id)?.rank_delta} showSame />
+                    </span>
                   </td>
                   <td className={`table-cell ${TEAM_NAME_CELL_CLASS} sticky left-0 z-10 bg-white group-hover:bg-blue-50 ${isMyTeam(team.team.team_id) ? 'shadow-[inset_4px_0_0_0_#2563eb,2px_0_4px_-2px_rgba(0,0,0,0.15)]' : 'shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]'}`}>
                     <div className={TEAM_NAME_BOX_CLASS}>
@@ -409,6 +448,7 @@ const Rankings = () => {
                     </div>
                   </td>
                   {columns.slice(2).map((column) => {
+                    const move = movesByTeam.get(team.team.team_id)
                     const isCategoryColumn = categoryKeys.includes(column.key)
                     const value = isCategoryColumn
                       ? (isStandings ? team.stats?.[column.key] : team.category_ranks?.[column.key])
@@ -429,7 +469,14 @@ const Rankings = () => {
 
                     return (
                       <td key={column.key} className={`table-cell font-medium ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''}`}>
-                        {display}
+                        <span className="relative">
+                          {display}
+                          {move && isCategoryColumn && !isStandings && <Delta value={move.categories[column.key]} />}
+                          {move && column.key === 'total_points' && <Delta value={move.total_delta} showSame />}
+                          {move && column.key === 'gp' && move.gp_delta != null && (
+                            <span className={`${DELTA_CLASS} text-gray-500 dark:text-gray-400`}>+{move.gp_delta}</span>
+                          )}
+                        </span>
                       </td>
                     )
                   })}

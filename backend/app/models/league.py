@@ -94,6 +94,25 @@ class RankMover(BaseModel):
     delta: float
 
 
+class TeamRankChange(BaseModel):
+    """One team's move between the two latest stored scoring periods.
+    rank_delta > 0 means it climbed that many places; the category and total
+    deltas are roto points (higher is better); gp_delta is the games its
+    players played in the latest period."""
+    team_id: int
+    team_name: str
+    rank_delta: Optional[int] = None
+    total_delta: Optional[float] = None
+    gp_delta: Optional[int] = None
+    categories: Dict[str, float] = {}
+
+
+class RankChanges(BaseModel):
+    previous_period: Optional[int] = None
+    latest_period: Optional[int] = None
+    teams: List[TeamRankChange] = []
+
+
 class TeamRosterHealth(BaseModel):
     """Counts over the team's rostered players who have a game tonight; the
     five add up to exactly games_tonight."""
