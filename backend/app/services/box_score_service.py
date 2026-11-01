@@ -482,6 +482,11 @@ def _plays(payload: dict) -> list[dict]:
         except (TypeError, ValueError):
             away_score = home_score = 0
         scoring = bool(raw.get("scoringPlay"))
+        athlete_ids = []
+        for participant in raw.get("participants") or []:
+            athlete_id = str(((participant or {}).get("athlete") or {}).get("id") or "") if isinstance(participant, dict) else ""
+            if athlete_id and athlete_id not in athlete_ids:
+                athlete_ids.append(athlete_id)
         plays.append({
             "id": str(raw.get("id") or index),
             "period": period_number,
@@ -493,6 +498,7 @@ def _plays(payload: dict) -> list[dict]:
             "away_score": away_score,
             "home_score": home_score,
             "kind": _play_kind(raw),
+            "athlete_ids": athlete_ids,
         })
     return plays
 

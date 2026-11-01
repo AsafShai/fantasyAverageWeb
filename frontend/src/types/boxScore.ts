@@ -114,6 +114,9 @@ export interface BoxPlay {
   away_score: number
   home_score: number
   kind: 'score' | 'sub' | 'period' | 'timeout' | 'play'
+  /** ESPN ids of the players in the play (shooter, assister, sub in/out, ...).
+   * Absent on a response cached before participants were parsed. */
+  athlete_ids?: string[]
 }
 
 export interface GameBoxScore {
