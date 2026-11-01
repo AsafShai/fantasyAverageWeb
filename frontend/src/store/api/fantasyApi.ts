@@ -1,5 +1,5 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, CategoryResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, NightSurprises, PeriodSurprises, PlayerGameLogResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, CategoryResponse } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves } from '../../types/activity';
@@ -55,6 +55,11 @@ export const fantasyApi = createApi({
     getTodayHub: builder.query<TodayHub, void>({
       query: () => '/league/today',
       providesTags: ['League'],
+      keepUnusedDataFor: 300,
+    }),
+    getRankChanges: builder.query<RankChanges, 'averages' | 'totals'>({
+      query: (mode) => `/league/rank-changes?mode=${mode}`,
+      providesTags: ['Rankings'],
       keepUnusedDataFor: 300,
     }),
     getLeagueShots: builder.query<LeagueShotsData, void>({
@@ -319,6 +324,7 @@ export const {
   useGetHeatmapDataQuery,
   // useGetCategoryRankingsQuery,
   useGetTodayHubQuery,
+  useGetRankChangesQuery,
   useGetLeagueShotsQuery,
   useGetTeamsListQuery,
   useGetTeamPlayersQuery,

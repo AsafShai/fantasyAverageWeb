@@ -439,11 +439,14 @@ class DBService:
             return []
 
     async def get_latest_two_periods_rankings(
-        self, league_id: int, season_id: int
+        self, league_id: int, season_id: int, table: str = 'team_rankings_averages'
     ) -> list[dict]:
         """Rows for the two highest scoring periods that actually exist — the
         pair the Today hub diffs. Picks the top two present rather than
-        (max, max-1) so a gap in the ledger still yields a comparable pair."""
+        (max, max-1) so a gap in the ledger still yields a comparable pair.
+        `table` is team_rankings_averages or team_rankings_totals."""
+        if table not in ('team_rankings_averages', 'team_rankings_totals'):
+            raise ValueError(f"Not a rankings table: {table}")
         pool = await self._get_pool()
         if pool is None:
             return []
@@ -454,7 +457,7 @@ class DBService:
                     f"""
                     WITH periods AS (
                         SELECT DISTINCT scoring_period_id
-                        FROM team_rankings_averages
+                        FROM {table}
                         WHERE league_id = $1 AND season_id = $2
                         ORDER BY scoring_period_id DESC
                         LIMIT 2
@@ -463,7 +466,7 @@ class DBService:
                            r.rk_fg_pct, r.rk_ft_pct, r.rk_three_pm, r.rk_reb,
                            r.rk_ast, r.rk_stl, r.rk_blk, r.rk_pts, r.rk_total
                            {', r.ranks' if dynamic else ''}
-                    FROM team_rankings_averages r
+                    FROM {table} r
                     JOIN periods p ON p.scoring_period_id = r.scoring_period_id
                     WHERE r.league_id = $1 AND r.season_id = $2
                     ORDER BY r.scoring_period_id, r.team_id
@@ -473,6 +476,29 @@ class DBService:
                 return [dict(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to fetch latest two periods of rankings: {type(e).__name__}: {e}")
+            return []
+
+    async def get_games_played_for_periods(
+        self, periods: list[int], league_id: int, season_id: int
+    ) -> list[dict]:
+        """Season-to-date games played per team at each of `periods`, from
+        team_daily_snapshot: [{scoring_period_id, team_id, gp}]."""
+        pool = await self._get_pool()
+        if pool is None or not periods:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT scoring_period_id, team_id, gp
+                    FROM team_daily_snapshot
+                    WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = ANY($3::int[])
+                    """,
+                    league_id, season_id, periods,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch games played for periods {periods}: {type(e).__name__}: {e}")
             return []
 
     @staticmethod

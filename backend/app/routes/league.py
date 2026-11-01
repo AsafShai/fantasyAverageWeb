@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from app.models import LeagueSummary, LeagueShotsData, DraftReport, TodayHub
+from app.models import LeagueSummary, LeagueShotsData, DraftReport, RankChanges, TodayHub
 from app.models.activity_models import LeagueActivity, LatestMoves
 from app.services.league_service import LeagueService
 from app.services.draft_report_service import DraftReportService
@@ -26,6 +26,19 @@ async def get_today_hub() -> TodayHub:
 
     Never 503s — every part of the hub is fail-open inside the service."""
     return await _today_service.get_today_hub()
+
+
+@router.get("/rank-changes", response_model=RankChanges)
+async def get_rank_changes(
+    mode: Annotated[str, Query(pattern="^(averages|totals)$")] = "averages",
+) -> RankChanges:
+    """Each team's move since the previous stored scoring period: places,
+    roto points per category and in total, and games played."""
+    try:
+        return await _today_service.get_rank_changes(mode)
+    except Exception as e:
+        logger.exception(f"Error building rank changes: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve rank changes") from e
 
 
 @router.get("/summary", response_model=LeagueSummary)

@@ -115,6 +115,67 @@ class TestMovers:
         assert TodayService.build_movers(rows) == []
 
 
+def gp_row(period, team_id, gp):
+    return {'scoring_period_id': period, 'team_id': team_id, 'gp': gp}
+
+
+class TestRankChanges:
+    def test_places_points_and_games_between_the_two_latest_periods(self):
+        rows = [
+            rankings_row(10, 1, 'Alpha', rk_ast=4.0, rk_total=50.0),
+            rankings_row(10, 2, 'Beta', rk_total=48.0),
+            rankings_row(11, 1, 'Alpha', rk_ast=3.0, rk_total=47.0),
+            rankings_row(11, 2, 'Beta', rk_total=49.0),
+        ]
+        gp = [gp_row(10, 1, 60), gp_row(11, 1, 64), gp_row(10, 2, 58), gp_row(11, 2, 58)]
+
+        changes = TodayService.build_rank_changes(rows, gp)
+
+        assert (changes.previous_period, changes.latest_period) == (10, 11)
+        alpha, beta = changes.teams
+        assert (alpha.rank_delta, alpha.total_delta, alpha.gp_delta) == (-1, -3.0, 4)
+        assert alpha.categories['AST'] == -1.0
+        assert alpha.categories['REB'] == 0.0
+        assert 'TOTAL' not in alpha.categories
+        assert (beta.rank_delta, beta.total_delta, beta.gp_delta) == (1, 1.0, 0)
+
+    def test_a_tie_shares_the_higher_place(self):
+        rows = [
+            rankings_row(10, 1, 'Alpha', rk_total=50.0),
+            rankings_row(10, 2, 'Beta', rk_total=48.0),
+            rankings_row(11, 1, 'Alpha', rk_total=49.0),
+            rankings_row(11, 2, 'Beta', rk_total=49.0),
+        ]
+        by_team = {t.team_id: t for t in TodayService.build_rank_changes(rows, []).teams}
+        assert by_team[1].rank_delta == 0
+        assert by_team[2].rank_delta == 1
+
+    def test_games_played_unknown_without_both_snapshots(self):
+        rows = [rankings_row(10, 1, 'Alpha'), rankings_row(11, 1, 'Alpha')]
+        (alpha,) = TodayService.build_rank_changes(rows, [gp_row(11, 1, 64)]).teams
+        assert alpha.gp_delta is None
+
+    def test_one_period_has_nothing_to_compare(self):
+        changes = TodayService.build_rank_changes([rankings_row(11, 1, 'Alpha')], [])
+        assert changes.teams == [] and changes.latest_period is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('mode, table', [
+        ('averages', 'team_rankings_averages'),
+        ('totals', 'team_rankings_totals'),
+    ])
+    async def test_each_mode_reads_its_own_rankings_table(self, mode, table):
+        from unittest.mock import AsyncMock, MagicMock
+
+        service = TodayService()
+        service.db_service = MagicMock(
+            get_latest_two_periods_rankings=AsyncMock(return_value=[]),
+            get_games_played_for_periods=AsyncMock(return_value=[]),
+        )
+        await service.get_rank_changes(mode)
+        assert service.db_service.get_latest_two_periods_rankings.await_args.args[2] == table
+
+
 class TestClassifyStatus:
     @pytest.mark.parametrize('raw, expected', [
         ('Out', 'out'),
