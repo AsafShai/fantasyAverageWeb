@@ -9,7 +9,7 @@ import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
-import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
+import { todayIso, presetRangeStart, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
@@ -237,10 +237,10 @@ const Analytics = () => {
             <button
               key={days}
               onClick={() => {
-                const start = getDateNDaysAgo(days);
+                const start = presetRangeStart(days, summary?.season_start);
                 setStartDate(start);
                 setEndDate(today);
-                setDateError('');
+                validateDates(start, today);
               }}
               className="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
             >

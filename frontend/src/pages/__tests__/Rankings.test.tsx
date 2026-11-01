@@ -160,6 +160,10 @@ describe('Rankings page', () => {
     const table = screen.getByRole('table');
     const alphaRow = within(table).getByText('Alpha Squad').closest('tr')!;
     expect(within(alphaRow).getByText('4000')).toBeInTheDocument();
+    // A percentage is a rate in totals mode too, not a total to round to "0.5".
+    expect(within(alphaRow).getByText('46.7000%')).toBeInTheDocument();
+    expect(within(alphaRow).getByText('80.0000%')).toBeInTheDocument();
+    expect(within(alphaRow).queryByText('0.5')).not.toBeInTheDocument();
   });
 
   it('switching back to Rankings restores category-rank cells', async () => {

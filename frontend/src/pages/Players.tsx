@@ -23,6 +23,7 @@ import { useMyTeam } from '../context/MyTeamContext';
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';
 import PlayerNameLink from '../components/PlayerNameLink';
+import { parseStatFilterValue, passesStatFilter } from '../utils/statFilter';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import './Players.css';
 
@@ -41,6 +42,8 @@ const STAT_KEYS: readonly PlayerStatKey[] = [
 ];
 
 const OPERATORS: readonly ComparisonOperator[] = ['eq', 'gt', 'gte', 'lt', 'lte'];
+
+const OPERATOR_LABELS: Record<ComparisonOperator, string> = { eq: '=', gt: '>', gte: '>=', lt: '<', lte: '<=' };
 
 const teamParam: UrlParam<string> = {
   parse: (raw) => (/^\d+$/.test(raw) ? raw : undefined),
@@ -220,24 +223,7 @@ const Players = () => {
 
       if (filters.stat_filters?.length) {
         for (const filter of filters.stat_filters) {
-          const statValue = player.stats[filter.stat];
-          const isPercentage = filter.stat === 'fg_percentage' || filter.stat === 'ft_percentage';
-          const compareValue = (showAverages && !isPercentage)
-            ? (player.stats.gp > 0 ? statValue / player.stats.gp : 0)
-            : statValue;
-
-          const filterValue = isPercentage ? filter.value / 100 : filter.value;
-
-          let passes = false;
-          switch (filter.operator) {
-            case "eq": passes = compareValue === filterValue; break;
-            case "gt": passes = compareValue > filterValue; break;
-            case "lt": passes = compareValue < filterValue; break;
-            case "gte": passes = compareValue >= filterValue; break;
-            case "lte": passes = compareValue <= filterValue; break;
-          }
-
-          if (!passes) return false;
+          if (!passesStatFilter(player, filter, showAverages)) return false;
         }
       }
 
@@ -384,16 +370,21 @@ const Players = () => {
 
 const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onChange: (filters: PlayerFilters) => void; teams?: Array<{ team_id: number; team_name: string }> }) => {
   const { myTeamId, isMyTeam } = useMyTeam()
-  const [statFilter, setStatFilter] = useState<Partial<StatFilter>>({});
+  const [statFilter, setStatFilter] = useState<Partial<Omit<StatFilter, 'value'>>>({});
+  // Kept as typed, so a 0 shows and an emptied box is not NaN.
+  const [valueText, setValueText] = useState('');
+
+  const filterValue = parseStatFilterValue(valueText);
+  const canAddFilter = !!statFilter.stat && !!statFilter.operator && filterValue !== null;
 
   const addStatFilter = () => {
-    if (statFilter.stat && statFilter.operator && statFilter.value !== undefined) {
-      onChange({
-        ...filters,
-        stat_filters: [...(filters.stat_filters || []), statFilter as StatFilter]
-      });
-      setStatFilter({});
-    }
+    if (!statFilter.stat || !statFilter.operator || filterValue === null) return;
+    onChange({
+      ...filters,
+      stat_filters: [...(filters.stat_filters || []), { stat: statFilter.stat, operator: statFilter.operator, value: filterValue }]
+    });
+    setStatFilter({});
+    setValueText('');
   };
 
   const removeStatFilter = (index: number) => {
@@ -521,18 +512,18 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
           type="number"
           step="0.1"
           placeholder="Value"
-          value={statFilter.value || ''}
-          onChange={(e) => setStatFilter({ ...statFilter, value: parseFloat(e.target.value) })}
+          value={valueText}
+          onChange={(e) => setValueText(e.target.value)}
         />
 
-        <button onClick={addStatFilter}>Add Filter</button>
+        <button onClick={addStatFilter} disabled={!canAddFilter}>Add Filter</button>
       </div>
 
       {filters.stat_filters && filters.stat_filters.length > 0 && (
         <div className="active-filters">
           {filters.stat_filters.map((filter, idx) => (
             <div key={idx} className="filter-chip">
-              {filter.stat.toUpperCase()} {filter.operator} {filter.value}
+              {filter.stat.toUpperCase()} {OPERATOR_LABELS[filter.operator]} {filter.value}
               <button onClick={() => removeStatFilter(idx)}>×</button>
             </div>
           ))}

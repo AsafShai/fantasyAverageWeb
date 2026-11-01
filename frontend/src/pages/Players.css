@@ -150,6 +150,15 @@
   background: #1565c0;
 }
 
+.stat-filter-builder button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stat-filter-builder button:disabled:hover {
+  background: #1976d2;
+}
+
 .active-filters {
   display: flex;
   gap: 10px;

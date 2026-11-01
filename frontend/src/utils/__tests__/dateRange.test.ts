@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { daysBetween, toLocalIso, validateDateRange } from '../dateRange'
+import { daysBetween, getDateNDaysAgo, presetRangeStart, toLocalIso, validateDateRange } from '../dateRange'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -68,5 +68,18 @@ describe('toLocalIso / daysBetween (Asia/Jerusalem)', () => {
 
   it('returns 0 for the same date', () => {
     expect(daysBetween('2026-01-01', '2026-01-01')).toBe(0)
+  })
+})
+
+describe('presetRangeStart', () => {
+  it('is N days ago once the season is that old', () => {
+    expect(presetRangeStart(7, '2000-01-01')).toBe(getDateNDaysAgo(7))
+    expect(presetRangeStart(7)).toBe(getDateNDaysAgo(7))
+  })
+
+  it('never starts before the season start, which the API rejects', () => {
+    const seasonStart = getDateNDaysAgo(10)
+    expect(presetRangeStart(30, seasonStart)).toBe(seasonStart)
+    expect(validateDateRange(presetRangeStart(30, seasonStart), toLocalIso(new Date()), seasonStart)).toBeNull()
   })
 })

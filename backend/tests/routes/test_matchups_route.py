@@ -384,3 +384,26 @@ async def test_slate_built_across_an_injury_report_is_not_cached(mock_services, 
     await build
 
     assert 'today' not in matchups_route._response_cache
+
+
+@pytest.mark.asyncio
+async def test_foreground_build_started_before_nightly_invalidation_is_not_cached(mock_services, swr_clock):
+    # A cold request (nothing cached) builds in the foreground; the nightly
+    # fold-in clearing the cache mid-build must keep its pre-fold-in result out.
+    svc, _ = mock_services
+    release = asyncio.Event()
+    real_games = svc.get_games_today.return_value
+
+    async def slow_games(date=None):
+        await release.wait()
+        return real_games
+
+    svc.get_games_today = AsyncMock(side_effect=slow_games)
+    build = asyncio.create_task(matchups_route.get_matchups_today(date=None))
+    await asyncio.sleep(0)
+    matchups_route.clear_matchup_response_cache()  # nightly fold-in lands mid-build
+    release.set()
+    served = await build
+
+    assert served  # the caller still gets its slate
+    assert 'today' not in matchups_route._response_cache
