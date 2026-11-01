@@ -3,6 +3,9 @@ import type { BoxPlay, GameBoxScore } from '../../types/boxScore'
 
 type PlayFilter = 'all' | 'scoring' | 'mine'
 
+/** Tab value for the whole game, every quarter in one feed. */
+const FULL_GAME = 0
+
 interface MinePlayer {
   id: string
   name: string
@@ -81,8 +84,10 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
   const [chosenPeriod, setChosenPeriod] = useState<number | null>(null)
   const [filter, setFilter] = useState<PlayFilter>('all')
   const [open, setOpen] = useState(true)
-  const period = chosenPeriod != null && periods.includes(chosenPeriod) ? chosenPeriod : latest
-  const inPeriod = plays.filter(play => play.period === period)
+  const fullGame = chosenPeriod === FULL_GAME
+  const period = fullGame ? FULL_GAME : chosenPeriod != null && periods.includes(chosenPeriod) ? chosenPeriod : latest
+  const inPeriod = fullGame ? plays : plays.filter(play => play.period === period)
+  const tabLabel = (item: number) => (item === FULL_GAME ? 'Full' : periodName(item))
   const mineInPeriod = inPeriod.filter(play => minePlayersIn(play, mine).length > 0)
   const activeFilter: PlayFilter = filter === 'mine' && mine.length === 0 ? 'all' : filter
   const filtered = activeFilter === 'scoring' ? inPeriod.filter(play => play.scoring) : activeFilter === 'mine' ? mineInPeriod : inPeriod
@@ -105,7 +110,7 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
         className="flex w-full items-center gap-2 rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
       >
         <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Play-by-play</span>
-        <span className="text-[11px] text-gray-400">{periodName(period)} · newest first</span>
+        <span className="text-[11px] text-gray-400">{fullGame ? 'Full game' : periodName(period)} · newest first</span>
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"
@@ -120,7 +125,7 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
         <div className="mt-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div role="tablist" aria-label="Quarter" className="flex gap-1 overflow-x-auto">
-              {periods.map(item => {
+              {[...periods, FULL_GAME].map(item => {
                 const selected = item === period
                 return (
                   <button
@@ -135,7 +140,7 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
                     }`}
                   >
-                    {periodName(item)}
+                    {tabLabel(item)}
                   </button>
                 )
               })}
@@ -164,7 +169,7 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
 
           {shown.length === 0 ? (
             <p className="px-1 py-6 text-center text-xs text-gray-400">
-              {activeFilter === 'mine' ? 'None of your players in a play this quarter.' : 'No baskets this quarter.'}
+              {activeFilter === 'mine' ? `None of your players in a play ${fullGame ? 'this game' : 'this quarter'}.` : `No baskets ${fullGame ? 'this game' : 'this quarter'}.`}
             </p>
           ) : (
             <div key={`${period}-${activeFilter}`} className="mt-2 max-h-80 overflow-y-auto overscroll-contain rounded-lg border border-gray-100 dark:border-gray-800">
@@ -176,7 +181,7 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
               </div>
               <ol>
                 {shown.map(play => (
-                  <PlayRow key={play.id} play={play} game={game} mineNames={minePlayersIn(play, mine).map(player => player.name)} />
+                  <PlayRow key={play.id} play={play} game={game} mineNames={minePlayersIn(play, mine).map(player => player.name)} showPeriod={fullGame} />
                 ))}
               </ol>
             </div>
@@ -187,7 +192,7 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
   )
 }
 
-function PlayRow({ play, game, mineNames }: { play: BoxPlay; game: GameBoxScore; mineNames: string[] }) {
+function PlayRow({ play, game, mineNames, showPeriod }: { play: BoxPlay; game: GameBoxScore; mineNames: string[]; showPeriod: boolean }) {
   if (play.kind === 'period') {
     return (
       <li className="border-t border-gray-100 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:border-gray-800">
@@ -209,7 +214,12 @@ function PlayRow({ play, game, mineNames }: { play: BoxPlay; game: GameBoxScore;
       }`}
       style={color ? { boxShadow: `inset 3px 0 0 ${color}` } : undefined}
     >
-      <span className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-gray-400">{play.clock}</span>
+      <span className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-gray-400">
+        {play.clock}
+        {showPeriod && play.period > 0 && (
+          <span className="block text-[9px] font-semibold uppercase leading-tight text-gray-400/80">{periodName(play.period)}</span>
+        )}
+      </span>
       <p className={`min-w-0 flex-1 text-xs leading-snug ${quiet ? 'text-gray-400' : 'text-gray-800 dark:text-gray-100'}`}>
         {play.points > 0 && (
           <span className="mr-1.5 inline-block rounded bg-emerald-600 px-1 py-px text-[10px] font-bold tabular-nums text-white">
