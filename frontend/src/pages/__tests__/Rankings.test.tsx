@@ -200,21 +200,20 @@ describe('Rankings page', () => {
     expect(within(beta).getAllByRole('cell')[0].textContent).toBe('#2▼1');
   });
 
-  it('the "Last night" button hides and brings back the moves', async () => {
+  it('"Hide movers" hides the moves and the button then reads "Show movers"', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
-    const toggle = await screen.findByRole('button', { name: /last night/i });
+    await user.click(await screen.findByRole('button', { name: 'Hide movers' }));
     const table = screen.getByRole('table');
-    await user.click(toggle);
     expect(within(table).queryByText(/▲|▼/)).not.toBeInTheDocument();
-    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: 'Show movers' }));
     expect(within(within(table).getByText('Alpha Squad').closest('tr')!).getAllByRole('cell')[0].textContent).toBe('#1▲1');
   });
 
-  it('a date range shows no moves and no "Last night" button', async () => {
+  it('a date range shows no moves and no movers button', async () => {
     renderWithProviders(<Rankings />, { route: '/?from=2025-10-05&to=2025-10-20' });
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /last night/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /movers/i })).not.toBeInTheDocument();
     expect(within(screen.getByRole('table')).queryByText(/▲|▼/)).not.toBeInTheDocument();
   });
 });
