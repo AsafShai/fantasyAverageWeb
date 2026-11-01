@@ -359,12 +359,9 @@ const Rankings = () => {
             {hasMoves && (
               <button
                 onClick={() => setShowMoves(!showMoves)}
-                aria-pressed={showMoves}
-                className={`ml-auto px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${
-                  showMoves ? 'bg-white text-blue-700' : 'bg-blue-500 text-white hover:bg-blue-400'
-                }`}
+                className="ml-auto px-3 py-1.5 text-sm font-semibold rounded-md transition-colors bg-white text-blue-700 hover:bg-blue-50"
               >
-                ▲▼ Last night
+                {showMoves ? 'Hide movers' : 'Show movers'}
               </button>
             )}
           </div>
