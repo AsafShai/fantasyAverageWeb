@@ -160,7 +160,10 @@ async def _build_matchups(
 ) -> list[PlayerMatchupResponse]:
     """The full slate pipeline; caches a non-empty result under cache_key (unless the
     cache was invalidated since `generation` was read, or an injury report landed
-    while it was being built)."""
+    while it was being built). A foreground build reads the generation here, so a
+    nightly invalidation that lands mid-build keeps its result out too."""
+    if generation is None:
+        generation = _cache_generation
     injury_generation = _injury_generation
     # Independent of one another: two ESPN reads and two DB reads, so they
     # overlap rather than queue. return_exceptions keeps each failure's
@@ -292,7 +295,7 @@ async def _build_matchups(
     )
     if (
         results
-        and (generation is None or generation == _cache_generation)
+        and generation == _cache_generation
         and injury_generation == _injury_generation
     ):
         _response_cache[cache_key] = (time.monotonic(), results)
