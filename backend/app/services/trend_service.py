@@ -227,6 +227,9 @@ def compute_regression_groups(
     return groups
 
 
+# Default season-games gate for Minutes / Usage / Categories. The service reads
+# settings.trends_min_season_gp (env TRENDS_MIN_SEASON_GP, default 10) and
+# passes it in; the pure functions fall back to this when called directly.
 MIN_SEASON_GP = 10
 MIN_WINDOW_GP = 2
 LOW_SAMPLE_GP = 3  # window_gp below this -> "partial" badge, regardless of window_days
@@ -237,6 +240,7 @@ def compute_minutes_movers(
     window_df: pd.DataFrame,
     games_last_15d: dict[int, int],
     players_df: pd.DataFrame,
+    min_season_gp: int = MIN_SEASON_GP,
 ) -> list[MinutesMoverItem]:
     """Pure calc: season MPG vs MPG within the recency window (window_df is
     already date-bounded by the caller) -> eligibility-gated, player-level
@@ -259,7 +263,7 @@ def compute_minutes_movers(
 
         season_gp = int(season_row['gp'])
         window_gp = int(window_row['gp'])
-        if season_gp < MIN_SEASON_GP or window_gp < MIN_WINDOW_GP:
+        if season_gp < min_season_gp or window_gp < MIN_WINDOW_GP:
             continue
 
         player_name = str(season_row['player_name'])
@@ -328,6 +332,7 @@ def compute_usage_role(
     games_last_15d: dict[int, int],
     players_df: pd.DataFrame,
     window_start,
+    min_season_gp: int = MIN_SEASON_GP,
 ) -> list[UsageRoleItem]:
     """Pure calc: per-game USG% (never from summed totals) averaged over
     season vs the recency window (games with game_date >= window_start),
@@ -344,7 +349,7 @@ def compute_usage_role(
     items: list[UsageRoleItem] = []
     for player_id, group in games_df.groupby('player_id'):
         season_gp = len(group)
-        if season_gp < MIN_SEASON_GP:
+        if season_gp < min_season_gp:
             continue
 
         window_group = group[group['game_date'] >= window_start]
@@ -460,6 +465,7 @@ def compute_category_movers(
     games_last_15d: dict[int, int],
     players_df: pd.DataFrame,
     window_start,
+    min_season_gp: int = MIN_SEASON_GP,
 ) -> list[CategoryMoverItem]:
     """Pure calc: per-game counting stats -> per-player category changes over
     the recency window, same games gates as Minutes Movers / Usage & Role. Only
@@ -476,7 +482,7 @@ def compute_category_movers(
     items: list[CategoryMoverItem] = []
     for player_id, group in games_df.groupby('player_id'):
         season_gp = len(group)
-        if season_gp < MIN_SEASON_GP:
+        if season_gp < min_season_gp:
             continue
         window_mask = group['game_date'] >= window_start
         window_gp = int(window_mask.sum())
@@ -849,12 +855,14 @@ class TrendService:
             )
             games_last_15d = await self._db.get_games_since(window_start)
 
-            items = compute_minutes_movers(season_df, window_df, games_last_15d, players_df)
+            items = compute_minutes_movers(
+                season_df, window_df, games_last_15d, players_df, settings.trends_min_season_gp
+            )
             response = MinutesResponse(
                 items=items,
                 window_days=window_days,
                 last_updated=datetime.now().isoformat(),
-                min_season_gp=MIN_SEASON_GP,
+                min_season_gp=settings.trends_min_season_gp,
                 min_window_gp=MIN_WINDOW_GP,
             )
             self._cache_preset_response(self._minutes_cache, window_days, window_days, response)
@@ -877,12 +885,14 @@ class TrendService:
             games_df = await self._get_season_usage(current_season, anchor_date)
             games_last_15d = await self._db.get_games_since(window_start)
 
-            items = compute_usage_role(games_df, games_last_15d, players_df, window_start)
+            items = compute_usage_role(
+                games_df, games_last_15d, players_df, window_start, settings.trends_min_season_gp
+            )
             response = UsageResponse(
                 items=items,
                 window_days=window_days,
                 last_updated=datetime.now().isoformat(),
-                min_season_gp=MIN_SEASON_GP,
+                min_season_gp=settings.trends_min_season_gp,
                 min_window_gp=MIN_WINDOW_GP,
             )
             self._cache_preset_response(self._usage_cache, window_days, window_days, response)
@@ -910,7 +920,9 @@ class TrendService:
             window_start = anchor_date - timedelta(days=window_days)
             games_df = await self._get_season_usage(current_season, anchor_date)
             games_last_15d = await self._db.get_games_since(window_start)
-            items = compute_category_movers(games_df, games_last_15d, players_df, window_start)
+            items = compute_category_movers(
+                games_df, games_last_15d, players_df, window_start, settings.trends_min_season_gp
+            )
             entry = {'items': items, 'last_updated': datetime.now().isoformat()}
             self._cache_preset_response(self._category_cache, window_days, window_days, entry)
             return entry
@@ -928,7 +940,7 @@ class TrendService:
             last_updated=entry['last_updated'],
             league_categories=league,
             reverse_categories=[c for c in (reverse_categories or []) if c in _CATEGORY_COLUMNS],
-            min_season_gp=MIN_SEASON_GP,
+            min_season_gp=settings.trends_min_season_gp,
             min_window_gp=MIN_WINDOW_GP,
             min_abs_z=CATEGORY_MIN_ABS_Z,
             min_delta=dict(CATEGORY_MIN_DELTA),

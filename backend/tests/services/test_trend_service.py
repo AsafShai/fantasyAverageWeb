@@ -1226,3 +1226,42 @@ async def test_get_category_movers_reuses_usage_rows_and_stamps_league(service):
         assert response.reverse_categories == ["TO"]
         assert response.min_season_gp == 10 and response.min_window_gp == 2
         assert response.min_delta["PTS"] == 3.0 and response.min_abs_z == 1.5
+
+
+def test_category_min_season_gp_is_configurable():
+    # 6 season games: below the default 10, enough once the gate is lowered to 5
+    games = _cat_games_df(1, "Cat Mover", [10, 12], [20, 22, 18, 21], min_old=30.0)
+    assert compute_category_movers(games, {}, _cat_players(), _CAT_WINDOW_START) == []
+    items = compute_category_movers(games, {}, _cat_players(), _CAT_WINDOW_START, min_season_gp=5)
+    assert len(items) == 1 and items[0].season_gp == 6
+
+
+def test_usage_min_season_gp_is_configurable():
+    games = _usage_games_df(1, "Ayo Dosunmu", [(5, 20)] * 5, [(10, 20)] * 5)  # 10 games
+    players = _players_df([{"Name": "Ayo Dosunmu", "Pro Team": "CHI", "Positions": "PG", "fantasy_team_name": None}])
+    window_start = date(2026, 1, 16)
+    assert len(compute_usage_role(games, {}, players, window_start)) == 1
+    assert compute_usage_role(games, {}, players, window_start, min_season_gp=11) == []
+
+
+@pytest.mark.asyncio
+async def test_trends_read_min_season_gp_from_settings(service, monkeypatch):
+    monkeypatch.setattr(settings, "trends_min_season_gp", 5)
+    games = _cat_games_df(1, "Cat Mover", [10, 12], [20, 22, 18, 21], min_old=30.0)
+    with patch.object(service, "_db") as mock_db, \
+         patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
+        mock_anchor.return_value = date(2026, 6, 1)
+        mock_db.get_usage_components = AsyncMock(return_value=games)
+        mock_db.get_games_since = AsyncMock(return_value={})
+        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pd.DataFrame())
+
+        cats = await service.get_category_movers(_cat_players(), 15)
+        usage = await service.get_usage_role(_cat_players(), 15)
+        minutes = await service.get_minutes_movers(_cat_players(), 15)
+
+    assert cats.min_season_gp == usage.min_season_gp == minutes.min_season_gp == 5
+
+
+def test_trends_min_season_gp_defaults_to_ten():
+    from app.config import Settings
+    assert Settings.model_fields["trends_min_season_gp"].default == 10
