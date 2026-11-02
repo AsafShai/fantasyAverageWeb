@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from app.models.trend_models import (
+    CategoryResponse,
     GameLogResponse,
     MinutesResponse,
     RegressionMode,
@@ -47,6 +48,18 @@ async def get_usage_role(
 ) -> UsageResponse:
     players_df = await _data_provider.get_players_df()
     return await _trend_service.get_usage_role(players_df, window_days)
+
+
+@router.get('/categories', response_model=CategoryResponse)
+async def get_category_movers(
+    window_days: int = Query(DEFAULT_RECENCY_WINDOW_DAYS, ge=MIN_RECENCY_WINDOW_DAYS, le=MAX_RECENCY_WINDOW_DAYS),
+) -> CategoryResponse:
+    players_df = await _data_provider.get_players_df()
+    league_categories = await _data_provider.get_ranking_categories()
+    reverse_categories = await _data_provider.get_reverse_categories()
+    return await _trend_service.get_category_movers(
+        players_df, window_days, list(league_categories), sorted(reverse_categories)
+    )
 
 
 @router.get('/player/{player_id}/gamelog', response_model=GameLogResponse)

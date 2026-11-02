@@ -1,6 +1,7 @@
-import type { GameLogEntry, GameLogResponse, RegressionStat } from '../types/api'
+import type { CountingCategory, GameLogEntry, GameLogResponse, RegressionStat } from '../types/api'
+import { CATEGORY_FIELD, isCountingCategory } from './categoryTrends'
 
-export type CardMode = 'minutes' | 'usage' | RegressionStat
+export type CardMode = 'minutes' | 'usage' | RegressionStat | CountingCategory
 
 export const STAT_FIELDS: Record<RegressionStat, { made: keyof GameLogEntry; att: keyof GameLogEntry }> = {
   '3P%': { made: 'fg3m', att: 'fg3a' },
@@ -41,6 +42,21 @@ export function summarize(log: GameLogResponse, mode: CardMode): TrendSummary {
     }
   }
 
+  if (isCountingCategory(mode)) {
+    const field = CATEGORY_FIELD[mode]
+    const mean = (games: GameLogEntry[]) => games.reduce((sum, g) => sum + ((g[field] as number) ?? 0), 0) / games.length
+    const seasonValue = log.games.length ? mean(log.games) : null
+    const windowValue = windowGames.length ? mean(windowGames) : null
+    return {
+      seasonValue,
+      windowValue,
+      delta: windowValue === null || seasonValue === null ? null : windowValue - seasonValue,
+      windowStart: log.window_start,
+      seasonGames: log.season_gp,
+      windowGames: windowGames.length,
+    }
+  }
+
   const { made, att } = STAT_FIELDS[mode]
   const seasonValue = log.season_pct[mode] ?? null
   const attSum = windowGames.reduce((sum, g) => sum + (g[att] as number), 0)
@@ -58,11 +74,12 @@ export function summarize(log: GameLogResponse, mode: CardMode): TrendSummary {
 
 export function fmtValue(value: number | null, mode: CardMode): string {
   if (value === null) return '—'
-  return mode === 'minutes' ? value.toFixed(1) : `${value.toFixed(1)}%`
+  return mode === 'minutes' || isCountingCategory(mode) ? value.toFixed(1) : `${value.toFixed(1)}%`
 }
+
 
 export function fmtDelta(value: number | null, mode: CardMode): string {
   if (value === null) return '—'
   const sign = value >= 0 ? '+' : ''
-  return mode === 'minutes' ? `${sign}${value.toFixed(1)}` : `${sign}${value.toFixed(1)}%`
+  return mode === 'minutes' || isCountingCategory(mode) ? `${sign}${value.toFixed(1)}` : `${sign}${value.toFixed(1)}%`
 }

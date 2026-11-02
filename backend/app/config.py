@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     surprise_good_threshold: float = Field(default=2.1, alias="SURPRISE_GOOD_THRESHOLD")
     surprise_bad_threshold: float = Field(default=2.2, alias="SURPRISE_BAD_THRESHOLD")
     surprise_min_minutes: float = Field(default=0.0, alias="SURPRISE_MIN_MINUTES")
+    # Trends (Minutes Movers, Usage & Role, Categories): games a player needs this
+    # season before he can be listed. Lower it on a staging service early in the
+    # season, when nobody has 10 games yet, to see the tabs with real data.
+    trends_min_season_gp: int = Field(default=10, ge=1, alias="TRENDS_MIN_SEASON_GP")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",

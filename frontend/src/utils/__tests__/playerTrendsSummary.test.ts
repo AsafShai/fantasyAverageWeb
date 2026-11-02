@@ -14,6 +14,12 @@ function game(overrides: Partial<GameLogEntry>): GameLogEntry {
     fta: 2,
     fg3m: 1,
     fg3a: 3,
+    pts: 15,
+    reb: 5,
+    ast: 3,
+    stl: 1,
+    blk: 1,
+    tov: 2,
     ...overrides,
   }
 }
@@ -119,5 +125,24 @@ describe('fmtValue / fmtDelta', () => {
   it('signs deltas explicitly', () => {
     expect(fmtDelta(4, 'minutes')).toBe('+4.0')
     expect(fmtDelta(-2.3, 'usage')).toBe('-2.3%')
+  })
+})
+
+describe('summarize counting categories', () => {
+  it('averages the category per game, season vs window', () => {
+    const l = log({
+      window_start: '2026-01-10',
+      games: [
+        game({ game_date: '2026-01-01', pts: 10, min: 20 }),
+        game({ game_date: '2026-01-02', pts: 14, min: 20 }),
+        game({ game_date: '2026-01-11', pts: 24, min: 40 }),
+      ],
+    })
+    const s = summarize(l, 'PTS')
+    expect(s.seasonValue).toBeCloseTo(16)
+    expect(s.windowValue).toBeCloseTo(24)
+    expect(s.delta).toBeCloseTo(8)
+    expect(fmtValue(16, 'PTS')).toBe('16.0')
+    expect(fmtDelta(-1.25, 'TO')).toBe('-1.3')
   })
 })

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.exceptions import DataSourceError, ResourceNotFoundError
 from app.models.trend_models import (
+    CategoryResponse,
     GameLogEntry,
     GameLogResponse,
     MinutesMoverItem,
@@ -91,6 +92,19 @@ _MOCK_GAME_LOG = GameLogResponse(
 )
 
 
+_MOCK_CATEGORY_RESPONSE = CategoryResponse(
+    items=[],
+    window_days=15,
+    last_updated='2026-07-18T12:00:00',
+    league_categories=['3PM', 'REB', 'PTS'],
+    reverse_categories=[],
+    min_season_gp=10,
+    min_window_gp=2,
+    min_abs_z=1.5,
+    min_delta={'PTS': 3.0},
+)
+
+
 @pytest.fixture
 def mock_services(monkeypatch):
     svc = MagicMock()
@@ -98,9 +112,12 @@ def mock_services(monkeypatch):
     svc.get_minutes_movers = AsyncMock(return_value=_MOCK_MINUTES_RESPONSE)
     svc.get_usage_role = AsyncMock(return_value=_MOCK_USAGE_RESPONSE)
     svc.get_player_game_log = AsyncMock(return_value=_MOCK_GAME_LOG)
+    svc.get_category_movers = AsyncMock(return_value=_MOCK_CATEGORY_RESPONSE)
 
     provider = MagicMock()
     provider.get_players_df = AsyncMock(return_value=_MOCK_PLAYERS)
+    provider.get_ranking_categories = AsyncMock(return_value=['FG%', '3PM', 'REB', 'PTS', 'TO'])
+    provider.get_reverse_categories = AsyncMock(return_value={'TO'})
 
     monkeypatch.setattr('app.routes.trends._trend_service', svc)
     monkeypatch.setattr('app.routes.trends._data_provider', provider)
@@ -289,3 +306,15 @@ class TestGlobalExceptionHandlers:
 
         assert resp.status_code == 404
         assert resp.json()['detail'] == "No players found"
+
+
+def test_get_categories_passes_league_categories(mock_services):
+    svc, _ = mock_services
+    client = TestClient(app)
+    resp = client.get('/api/trends/categories?window_days=7')
+
+    assert resp.status_code == 200
+    assert resp.json()['min_delta'] == {'PTS': 3.0}
+    args = svc.get_category_movers.call_args.args
+    assert args[0].equals(_MOCK_PLAYERS)
+    assert args[1:] == (7, ['FG%', '3PM', 'REB', 'PTS', 'TO'], ['TO'])

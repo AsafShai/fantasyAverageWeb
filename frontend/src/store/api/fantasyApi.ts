@@ -1,5 +1,5 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, CategoryResponse } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves } from '../../types/activity';
@@ -247,6 +247,10 @@ export const fantasyApi = createApi({
       query: ({ windowDays = 15 } = {}) => ({ url: '/trends/usage', params: { window_days: windowDays } }),
       keepUnusedDataFor: 600,
     }),
+    getTrendsCategories: builder.query<CategoryResponse, { windowDays?: number }>({
+      query: ({ windowDays = 15 } = {}) => ({ url: '/trends/categories', params: { window_days: windowDays } }),
+      keepUnusedDataFor: 600,
+    }),
     getTrendsRegression: builder.query<RegressionResponse, { windowDays?: number; baselineSeasons?: number; mode?: RegressionMode }>({
       query: ({ windowDays = 15, baselineSeasons = 2, mode = 'season' } = {}) => ({
         url: '/trends/regression',
@@ -356,6 +360,7 @@ export const {
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
   useGetTrendsRegressionQuery,
+  useGetTrendsCategoriesQuery,
   useGetTrendGameLogQuery,
   useGetLatestSurprisesQuery,
   useGetSurprisesForDateQuery,

@@ -298,7 +298,7 @@ const PlayerProfile = () => {
 
       <PlayerGameLog playerId={playerId} />
 
-      <PlayerTrendsCard playerId={Number(playerId)} />
+      <PlayerTrendsCard playerId={Number(playerId)} categories={apiCategories} />
 
       <PlayerNextGameCard playerId={playerId} />
     </div>
