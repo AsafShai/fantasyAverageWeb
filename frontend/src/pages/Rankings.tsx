@@ -359,10 +359,10 @@ const Rankings = () => {
             {hasMoves && (
               <button
                 onClick={() => setShowMoves(!showMoves)}
-                className="ml-auto inline-flex w-36 items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors bg-white text-blue-700 hover:bg-blue-50"
+                className="ml-auto inline-flex w-36 items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-gray-600"
               >
                 <span aria-hidden="true" className="text-[10px] leading-none">
-                  <span className="text-emerald-600">▲</span><span className="text-red-600">▼</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">▲</span><span className="text-red-600 dark:text-red-400">▼</span>
                 </span>
                 {showMoves ? 'Hide movers' : 'Show movers'}
               </button>
