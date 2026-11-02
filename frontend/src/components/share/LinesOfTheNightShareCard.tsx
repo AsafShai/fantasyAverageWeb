@@ -58,6 +58,18 @@ export const LinesOfTheNightShareCard = ({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 whitespace-nowrap">
               <span className="truncate text-[15px] font-bold">{player.name}</span>
+              {player.game_status === 'live' && (
+                <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                  Live
+                </span>
+              )}
+              {player.game_status === 'live' && player.on_court && (
+                <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  On the court
+                </span>
+              )}
               <span
                 className={player.fantasy_team
                   ? 'rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300'

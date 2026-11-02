@@ -153,6 +153,7 @@ async def slate_values(day: date) -> dict:
                     "is_home": side == "home",
                     "game_id": box["game_id"],
                     "game_status": box["status"],
+                    "on_court": bool(player.get("on_court")) and box["status"] == "live",
                     "min": player["min"],
                     "pts": player["pts"],
                     "reb": player["reb"],
