@@ -17,7 +17,7 @@ import DateRangePicker from '../components/DateRangePicker'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange, CategoryMoverItem, CategoryStatItem, CountingCategory } from '../types/api'
-import { countingCategoriesOf, helpfulZ, isGoodChange } from '../utils/categoryTrends'
+import { countingCategoriesOf, isGoodChange } from '../utils/categoryTrends'
 import { fantasyTeamOptionLabel } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 
@@ -391,8 +391,6 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
   )
 }
 
-type CategoryChoice = CountingCategory | 'all'
-
 // Chart in an expanded row: starts on the category the row is about, the
 // player's other league categories one click away.
 function CategoryRowChart({ item, initial, cats, windowDays }: {
@@ -427,7 +425,6 @@ const CAT_SORT_VAL: Record<string, (r: CategoryRow) => number | string> = {
   l5: r => r.stat.window_avg,
   delta: r => r.stat.delta,
   dmpg: r => r.item.window_mpg - r.item.season_mpg,
-  z: r => Math.abs(r.stat.z ?? 0),
   g15: r => r.item.games_last_15d,
 }
 
@@ -439,7 +436,7 @@ function CategoryTable({ items, cat, cats, reverse, filters, windowDays }: {
   filters: Filters
   windowDays: number
 }) {
-  const [sortCol, setSortCol] = useState('z')
+  const [sortCol, setSortCol] = useState('delta')
   const [sortAsc, setSortAsc] = useState(false)
   const { open: expanded, toggle } = useExpandedSet()
 
@@ -450,7 +447,7 @@ function CategoryTable({ items, cat, cats, reverse, filters, windowDays }: {
 
   const rows = useMemo(() => {
     const filtered = flagged.filter(r => passesShared(r.item, filters))
-    const getVal = CAT_SORT_VAL[sortCol] ?? CAT_SORT_VAL.z
+    const getVal = CAT_SORT_VAL[sortCol] ?? CAT_SORT_VAL.delta
     return [...filtered].sort((a, b) => {
       const av = getVal(a), bv = getVal(b)
       const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number)
@@ -478,13 +475,12 @@ function CategoryTable({ items, cat, cats, reverse, filters, windowDays }: {
               <Th col="l5" label={`${windowDays}d ${cat}`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`${cat} per game over the last ${windowDays} days`} />
               <Th col="delta" label={`Δ ${cat} vs season`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Change: ${windowDays}d ${cat} per game minus season`} />
               <Th col="dmpg" label="Δ MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Change: ${windowDays}d MPG minus season MPG`} />
-              <Th col="z" label="z" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title="How unlikely the change is to be luck. Above 1.5 = notable." />
               <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
               <th className="px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" title="Fantasy owner, or FA if unrostered">Owner</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <EmptyRow colSpan={9} noneQualify={flagged.length === 0} />}
+            {rows.length === 0 && <EmptyRow colSpan={8} noneQualify={flagged.length === 0} />}
             {rows.map(({ item: r, stat }) => {
               const open = expanded.has(r.player_id)
               const dmpg = r.window_mpg - r.season_mpg
@@ -508,137 +504,12 @@ function CategoryTable({ items, cat, cats, reverse, filters, windowDays }: {
                 <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{stat.window_avg.toFixed(1)}</td>
                 <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><DeltaPill value={stat.delta} unit="" good={isGoodChange(stat.delta, cat, reverse)} /></td>
                 <td className="hidden sm:table-cell px-3 py-2 text-gray-700 dark:text-gray-300">{dmpg >= 0 ? '+' : ''}{dmpg.toFixed(1)}mpg</td>
-                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><ZCell z={stat.z} /></td>
                 <td className="hidden sm:table-cell px-3 py-2 text-gray-700 dark:text-gray-300">{r.games_last_15d}</td>
                 <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><StatusBadge fantasyStatus={r.fantasy_status} /></td>
               </tr>
               {open && (
-                <ExpandRow colSpan={9}>
+                <ExpandRow colSpan={8}>
                   <CategoryRowChart item={r} initial={cat} cats={cats} windowDays={windowDays} />
-                </ExpandRow>
-              )}
-              </Fragment>
-            )})}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-// All categories at once: one row per player with a listed change in any
-// league category, one cell per category. Coloured only where that category
-// made the list, in the same emerald/red as the delta pills.
-function CategoryGrid({ items, cats, reverse, filters, windowDays }: {
-  items: CategoryMoverItem[]
-  cats: CountingCategory[]
-  reverse: ReadonlySet<string>
-  filters: Filters
-  windowDays: number
-}) {
-  const [sortCol, setSortCol] = useState('z')
-  const [sortAsc, setSortAsc] = useState(false)
-  const { open: expanded, toggle } = useExpandedSet()
-
-  const relevant = useMemo(
-    () => items.filter(i => i.stats.some(s => s.flagged && cats.includes(s.cat))),
-    [items, cats],
-  )
-
-  const rows = useMemo(() => {
-    const filtered = relevant
-      .filter(r => passesShared(r, filters))
-      .map(item => ({ item }))
-    const getVal = (r: { item: CategoryMoverItem }): number | string => {
-      if (sortCol === 'player') return r.item.player_name
-      if (sortCol === 'g15') return r.item.games_last_15d
-      if (sortCol === 'z') {
-        return Math.max(0, ...r.item.stats.filter(x => x.flagged && cats.includes(x.cat)).map(x => Math.abs(x.z ?? 0)))
-      }
-      const s = r.item.stats.find(x => x.cat === sortCol)
-      return s ? helpfulZ(s, reverse) ?? 0 : 0
-    }
-    return [...filtered].sort((a, b) => {
-      const av = getVal(a), bv = getVal(b)
-      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number)
-      return sortAsc ? cmp : -cmp
-    })
-  }, [relevant, filters, cats, reverse, sortCol, sortAsc])
-
-  const handleSort = (col: string) => {
-    if (col === sortCol) setSortAsc(a => !a)
-    else { setSortCol(col); setSortAsc(false) }
-  }
-
-  const colSpan = cats.length + 3
-
-  return (
-    <div>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-        Each cell is the change per game vs season. Coloured cells are the ones that qualify on their own
-        {reverse.size > 0 && <> ({[...reverse].join(', ')}: fewer is better)</>}. Click any row for the game-by-game chart.
-      </p>
-      <div className="overflow-auto max-h-[70vh] rounded-lg">
-        <table className="w-full text-xs sm:text-sm">
-          <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
-            <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
-              {cats.map(c => (
-                <Th key={c} col={c} label={c} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} />
-              ))}
-              <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
-              <th className="px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" title="Fantasy owner, or FA if unrostered">Owner</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && <EmptyRow colSpan={colSpan} noneQualify={relevant.length === 0} />}
-            {rows.map(({ item: r }) => {
-              const open = expanded.has(r.player_id)
-              const top = r.stats
-                .filter(s => s.flagged && cats.includes(s.cat))
-                .sort((a, b) => Math.abs(b.z ?? 0) - Math.abs(a.z ?? 0))[0]
-              return (
-              <Fragment key={r.player_id}>
-              <tr
-                onClick={() => toggle(r.player_id)}
-                tabIndex={0}
-                role="button"
-                aria-expanded={open}
-                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && toggle(r.player_id)}
-                className="group cursor-pointer border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
-              >
-                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700">
-                  <Caret open={open} />
-                  {r.player_name}
-                  {r.low_sample && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">partial</span>}
-                  <div className="text-[10px] font-normal text-gray-400 dark:text-gray-500">{r.pro_team} · {r.position}</div>
-                </td>
-                {cats.map(c => {
-                  const s = r.stats.find(x => x.cat === c)
-                  if (!s) return <td key={c} className="px-1.5 sm:px-3 py-1.5 text-gray-400 dark:text-gray-500">—</td>
-                  const good = isGoodChange(s.delta, c, reverse)
-                  const tone = !s.flagged
-                    ? 'text-gray-500 dark:text-gray-400'
-                    : good
-                      ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold'
-                      : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 font-bold'
-                  return (
-                    <td key={c} className="px-1 sm:px-2 py-1.5">
-                      <span
-                        title={`${c}: ${s.season_avg.toFixed(1)} → ${s.window_avg.toFixed(1)} per game${s.z === null ? '' : ` · z ${s.z.toFixed(1)}`}`}
-                        className={`inline-block min-w-[3.25rem] rounded-full px-1.5 py-0.5 text-xs tabular-nums whitespace-nowrap ${tone}`}
-                      >
-                        {s.delta >= 0 ? '+' : ''}{s.delta.toFixed(1)}
-                      </span>
-                    </td>
-                  )
-                })}
-                <td className="hidden sm:table-cell px-3 py-2 text-gray-700 dark:text-gray-300">{r.games_last_15d}</td>
-                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><StatusBadge fantasyStatus={r.fantasy_status} /></td>
-              </tr>
-              {open && (
-                <ExpandRow colSpan={colSpan}>
-                  <CategoryRowChart item={r} initial={top?.cat ?? cats[0]} cats={cats} windowDays={windowDays} />
                 </ExpandRow>
               )}
               </Fragment>
@@ -907,7 +778,7 @@ export default function Trends() {
     0,
     urlTabIsForm ? urlBaseline : undefined,
   )
-  const [categoryChoice, setCategoryChoice] = usePersistedState<CategoryChoice>('trends.category', 'all')
+  const [categoryChoice, setCategoryChoice] = usePersistedState<string>('trends.category', 'PTS')
   const [customStartIso, setCustomStartIso] = useState<string | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
   const [customError, setCustomError] = useState<string | null>(null)
@@ -938,9 +809,9 @@ export default function Trends() {
     [categoriesQuery.data],
   )
   // a remembered category the league no longer scores falls back to the grid
-  const activeCategory: CategoryChoice = categoryChoice !== 'all' && !leagueCats.includes(categoryChoice)
-    ? 'all'
-    : categoryChoice
+  // the remembered category, or PTS / the league's first one when it isn't scored here
+  const activeCategory: CountingCategory = leagueCats.find(c => c === categoryChoice)
+    ?? (leagueCats.includes('PTS') ? 'PTS' : leagueCats[0])
   const regressionQuery = useGetTrendsRegressionQuery(
     { windowDays, baselineSeasons, mode: regressionMode ?? 'season' },
     { skip: !isShooting },
@@ -1008,15 +879,10 @@ export default function Trends() {
   const gpGates = tab === 'minutes' ? minutesQuery.data : tab === 'usage' ? usageQuery.data : undefined
   const regressionGates = isShooting ? regressionQuery.data : undefined
   const categoryGates = tab === 'categories' ? categoriesQuery.data : undefined
-  const fmtFloor = (c: CountingCategory) => `${(categoryGates?.min_delta[c] ?? 0).toFixed(1)} ${c}`
   // Who can appear at all on the active tab — shown above the table always,
   // so the rule stays visible once players start to qualify.
   const eligibilityRule = categoryGates
-    ? `Shows players with ${categoryGates.min_season_gp}+ games this season and ${categoryGates.min_window_gp}+ in the last ${windowDays} days, and a change of ${
-        activeCategory === 'all'
-          ? `at least ${leagueCats.map(fmtFloor).join(', ')} per game in any category`
-          : `${(categoryGates.min_delta[activeCategory] ?? 0).toFixed(1)}+ ${activeCategory} per game`
-      } with z above ${categoryGates.min_abs_z}.`
+    ? `Shows players with ${categoryGates.min_season_gp}+ games this season and ${categoryGates.min_window_gp}+ in the last ${windowDays} days, and a change of ${(categoryGates.min_delta[activeCategory] ?? 0).toFixed(1)}+ ${activeCategory} per game, up or down.`
     : gpGates
     ? `Shows players with ${gpGates.min_season_gp}+ games this season and ${gpGates.min_window_gp}+ in the last ${windowDays} days.`
     : regressionGates?.mode === 'form'
@@ -1189,14 +1055,14 @@ export default function Trends() {
             {tab === 'categories' && (
               <div className="col-span-2 sm:basis-full flex items-center gap-1.5 overflow-x-auto sm:flex-wrap" role="group" aria-label="Category">
                 <span className="shrink-0 text-xs sm:text-sm text-gray-600 dark:text-gray-300 mr-1">Category</span>
-                {(['all', ...leagueCats] as CategoryChoice[]).map(c => (
+                {leagueCats.map(c => (
                   <button
                     key={c}
                     onClick={() => setCategoryChoice(c)}
-                    title={c === 'all' ? 'Every league category at once — one row per player' : `Players whose ${c} per game moved`}
+                    title={`Players whose ${c} per game moved`}
                     className={`shrink-0 px-2.5 py-2 sm:py-1.5 rounded-lg border text-xs sm:text-sm whitespace-nowrap ${activeCategory === c ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600'}`}
                   >
-                    {c === 'all' ? 'All categories' : c}
+                    {c}
                   </button>
                 ))}
               </div>
@@ -1233,9 +1099,8 @@ export default function Trends() {
               {eligibilityRule && <p className="text-xs text-gray-500 dark:text-gray-400">{eligibilityRule}</p>}
               {tab === 'minutes' && minutesQuery.data && <MinutesTable items={minutesQuery.data.items} filters={filters} windowDays={windowDays} />}
               {tab === 'usage' && usageQuery.data && <UsageTable items={usageQuery.data.items} filters={filters} windowDays={windowDays} />}
-              {tab === 'categories' && categoriesQuery.data && (activeCategory === 'all'
-                ? <CategoryGrid items={categoriesQuery.data.items} cats={leagueCats} reverse={reverseCats} filters={filters} windowDays={windowDays} />
-                : <CategoryTable key={activeCategory} items={categoriesQuery.data.items} cat={activeCategory} cats={leagueCats} reverse={reverseCats} filters={filters} windowDays={windowDays} />
+              {tab === 'categories' && categoriesQuery.data && (
+                <CategoryTable key={activeCategory} items={categoriesQuery.data.items} cat={activeCategory} cats={leagueCats} reverse={reverseCats} filters={filters} windowDays={windowDays} />
               )}
               {isShooting && regressionQuery.data && (
                 <RegressionTable

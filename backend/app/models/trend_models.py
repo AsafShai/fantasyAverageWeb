@@ -103,14 +103,12 @@ CountingCategory = Literal['PTS', 'REB', 'AST', '3PM', 'STL', 'BLK', 'TO']
 
 class CategoryStatItem(BaseModel):
     """One counting category for one player: window per-game average vs the
-    season's (window included, like Minutes Movers). z is the change in units
-    of the player's own per-game spread; flagged means it cleared both the
-    category's min_delta and min_abs_z gates."""
+    season's (window included, like Minutes Movers). flagged means the change,
+    up or down, reached the category's min_delta."""
     cat: CountingCategory
     season_avg: float
     window_avg: float
     delta: float
-    z: Optional[float] = None  # None when the player's games have no spread to measure
     flagged: bool
 
 
@@ -140,7 +138,6 @@ class CategoryResponse(BaseModel):
     # eligibility gates, echoed so the page can state them
     min_season_gp: int
     min_window_gp: int
-    min_abs_z: float
     min_delta: dict[str, float]
 
 

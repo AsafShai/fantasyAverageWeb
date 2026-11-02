@@ -100,7 +100,6 @@ _MOCK_CATEGORY_RESPONSE = CategoryResponse(
     reverse_categories=[],
     min_season_gp=10,
     min_window_gp=2,
-    min_abs_z=1.5,
     min_delta={'PTS': 3.0},
 )
 

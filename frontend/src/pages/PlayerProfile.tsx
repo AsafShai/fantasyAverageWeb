@@ -298,7 +298,7 @@ const PlayerProfile = () => {
 
       <PlayerGameLog playerId={playerId} />
 
-      <PlayerTrendsCard playerId={Number(playerId)} categories={apiCategories} />
+      <PlayerTrendsCard playerId={Number(playerId)} categories={apiCategories} reverseCategories={allPlayers?.reverse_categories} />
 
       <PlayerNextGameCard playerId={playerId} />
     </div>
