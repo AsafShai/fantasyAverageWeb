@@ -1,18 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
 import TrendGameLogChart from './TrendGameLogChart'
-import DateRangePicker from './DateRangePicker'
-import type { RegressionStat, CustomDateRange, CountingCategory } from '../types/api'
+import type { RegressionStat, CustomDateRange, CountingCategory, TimePeriod } from '../types/api'
 import { LOW_SAMPLE_GP } from '../utils/trendBaseline'
-import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
-import { STAT_FIELDS, seasonAttempts, summarize, fmtValue, fmtDelta, type CardMode } from '../utils/playerTrendsSummary'
+import { toLocalIso } from '../utils/dateRange'
+import { STAT_FIELDS, seasonAttempts, summarize, fmtValue, fmtDelta, trendWindowFor, DEFAULT_TREND_WINDOW_DAYS, type CardMode } from '../utils/playerTrendsSummary'
 import { countingCategoriesOf, isCountingCategory, isGoodChange } from '../utils/categoryTrends'
 import { orderCategories } from '../utils/statOrder'
-
-const DEFAULT_WINDOW_DAYS = 15
-const PRESET_WINDOWS = [7, 15, 30] as const
-const MIN_CUSTOM_WINDOW_DAYS = 5
-const MAX_CUSTOM_WINDOW_DAYS = 60
 
 const MODE_LABEL: Partial<Record<CardMode, string>> = { minutes: 'Minutes', usage: 'Usage' }
 
@@ -21,10 +15,6 @@ function addDaysIso(iso: string, days: number): string {
   const dt = new Date(y, m - 1, d)
   dt.setDate(dt.getDate() + days)
   return toLocalIso(dt)
-}
-
-function subDaysIso(iso: string, days: number): string {
-  return addDaysIso(iso, -days)
 }
 
 function Skeleton() {
@@ -47,17 +37,25 @@ interface Props {
   categories?: string[]
   /** Reverse-scored categories (fewer is better, e.g. TO). */
   reverseCategories?: string[]
+  /** The page's time frame; Trends compares that recent stretch to the season. */
+  timePeriod?: TimePeriod
+  customRange?: CustomDateRange | null
 }
 
-export default function PlayerTrendsCard({ playerId, categories, reverseCategories }: Props) {
+export default function PlayerTrendsCard({ playerId, categories, reverseCategories, timePeriod = 'season', customRange = null }: Props) {
   const countingCats = useMemo(() => countingCategoriesOf(categories), [categories])
   const reverse = useMemo(() => new Set(reverseCategories ?? []), [reverseCategories])
   // which stat's chart is open; clicking the open one again closes it
   const [mode, setMode] = useState<CardMode | null>('minutes')
-  const [windowDays, setWindowDays] = useState(DEFAULT_WINDOW_DAYS)
-  const [customStartIso, setCustomStartIso] = useState<string | null>(null)
-  const [customOpen, setCustomOpen] = useState(false)
-  const [customError, setCustomError] = useState<string | null>(null)
+  // A custom range needs the latest game day to tell whether it ends there.
+  // It doesn't depend on the window, so read it off the default 15-day log
+  // (the same cached request the fallback uses); other time frames skip this.
+  const { data: anchorLog } = useGetTrendGameLogQuery(
+    { playerId, windowDays: DEFAULT_TREND_WINDOW_DAYS, baselineSeasons: 0, mode: 'form' },
+    { skip: !playerId || timePeriod !== 'custom', refetchOnFocus: false },
+  )
+  const anchorIso = anchorLog ? addDaysIso(anchorLog.window_start, anchorLog.window_days) : null
+  const { days: windowDays, fallback } = trendWindowFor(timePeriod, customRange, anchorIso)
 
   const { data: log, error, isLoading, refetch } = useGetTrendGameLogQuery(
     { playerId, windowDays, baselineSeasons: 0, mode: 'form' },
@@ -75,31 +73,6 @@ export default function PlayerTrendsCard({ playerId, categories, reverseCategori
     () => ['minutes', 'usage', ...orderCategories<CardMode>([...availableShootingStats, ...countingCats])],
     [availableShootingStats, countingCats],
   )
-
-  // anchor (latest game day) is invariant across windows, so any loaded
-  // response - whichever window it was fetched for - can derive it
-  const anchorIso = log ? addDaysIso(log.window_start, log.window_days) : null
-  const customMinStartIso = anchorIso ? subDaysIso(anchorIso, MAX_CUSTOM_WINDOW_DAYS) : undefined
-
-  const selectPreset = (d: number) => {
-    setWindowDays(d)
-    setCustomStartIso(null)
-    setCustomError(null)
-    setCustomOpen(false)
-  }
-
-  const handleCustomApply = (range: CustomDateRange) => {
-    if (!anchorIso) return
-    const days = daysBetween(range.start, anchorIso)
-    if (days < MIN_CUSTOM_WINDOW_DAYS || days > MAX_CUSTOM_WINDOW_DAYS) {
-      setCustomError(`That's ${days} day${days === 1 ? '' : 's'} — pick a start between ${MIN_CUSTOM_WINDOW_DAYS} and ${MAX_CUSTOM_WINDOW_DAYS} days before ${formatShort(anchorIso)}.`)
-      return
-    }
-    setCustomError(null)
-    setCustomStartIso(range.start)
-    setWindowDays(days)
-    setCustomOpen(false)
-  }
 
   const is404 = error && 'status' in error && error.status === 404
 
@@ -133,52 +106,19 @@ export default function PlayerTrendsCard({ playerId, categories, reverseCategori
         const partial = windowGames < LOW_SAMPLE_GP
         return (
         <>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-            <p className="text-xs text-gray-500 dark:text-gray-400 order-2 sm:order-1">
+          <div className="mb-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Last {windowDays} days vs season · {windowGames} {windowGames === 1 ? 'game' : 'games'}
               {partial && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">partial</span>}
               <span className="hidden sm:inline"> · Click a stat for its game-by-game chart</span>
             </p>
-
-            <div className="flex flex-wrap items-center gap-2 order-1 sm:order-2">
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs">
-                {PRESET_WINDOWS.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => selectPreset(d)}
-                    className={`px-2.5 py-1.5 whitespace-nowrap ${!customStartIso && windowDays === d ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                  >
-                    {d}d
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setCustomOpen((o) => !o)}
-                  title="Pick a custom start date — the window always ends on the latest game day"
-                  className={`px-2.5 py-1.5 whitespace-nowrap ${customStartIso ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                >
-                  📆
-                </button>
-              </div>
-              {customStartIso && !customOpen && (
-                <span className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                  since {formatShort(customStartIso)} · {windowDays}d
-                </span>
-              )}
-            </div>
           </div>
-
-          {customOpen && anchorIso && (
-            <div className="mb-3">
-              <DateRangePicker
-                seasonStart={customMinStartIso}
-                fixedEnd={anchorIso}
-                initialStart={customStartIso ?? ''}
-                onApply={handleCustomApply}
-              />
-              {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
-            </div>
+          {fallback && (
+            <p className="-mt-2 mb-3 text-xs text-gray-400 dark:text-gray-500">
+              {fallback === 'season'
+                ? 'Full Season has no recent stretch to compare, so Trends shows the last 15 days.'
+                : 'Trends compares a stretch that ends on the latest game day, so for this range it shows the last 15 days.'}
+            </p>
           )}
 
           <p className="sm:hidden text-xs text-gray-500 dark:text-gray-400 mb-2">Tap a stat for its game-by-game chart</p>

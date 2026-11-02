@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GameLogEntry, GameLogResponse } from '../../types/api'
-import { fmtDelta, fmtValue, seasonAttempts, summarize } from '../playerTrendsSummary'
+import { fmtDelta, fmtValue, seasonAttempts, summarize, trendWindowFor } from '../playerTrendsSummary'
 
 function game(overrides: Partial<GameLogEntry>): GameLogEntry {
   return {
@@ -144,5 +144,25 @@ describe('summarize counting categories', () => {
     expect(s.delta).toBeCloseTo(8)
     expect(fmtValue(16, 'PTS')).toBe('16.0')
     expect(fmtDelta(-1.25, 'TO')).toBe('-1.3')
+  })
+})
+
+describe('trendWindowFor', () => {
+  const anchor = '2026-11-01'
+  it('maps the page time frame to the comparison window', () => {
+    expect(trendWindowFor('last_7', null, anchor)).toEqual({ days: 7, fallback: null })
+    expect(trendWindowFor('last_15', null, anchor)).toEqual({ days: 15, fallback: null })
+    expect(trendWindowFor('last_30', null, anchor)).toEqual({ days: 30, fallback: null })
+  })
+  it('falls back to 15 days for Full Season', () => {
+    expect(trendWindowFor('season', null, anchor)).toEqual({ days: 15, fallback: 'season' })
+  })
+  it('uses a custom range that ends on the latest game day', () => {
+    expect(trendWindowFor('custom', { start: '2026-10-22', end: '2026-11-01' }, anchor)).toEqual({ days: 10, fallback: null })
+  })
+  it('falls back for a custom range that ends earlier, is too short, or before the anchor is known', () => {
+    expect(trendWindowFor('custom', { start: '2026-10-10', end: '2026-10-20' }, anchor).fallback).toBe('custom')
+    expect(trendWindowFor('custom', { start: '2026-10-30', end: '2026-11-01' }, anchor).fallback).toBe('custom')
+    expect(trendWindowFor('custom', { start: '2026-10-22', end: '2026-11-01' }, null).fallback).toBe('custom')
   })
 })
