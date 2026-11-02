@@ -41,6 +41,18 @@ const STAT_ROWS: { key: PlayerStatKey; label: string; isPct?: boolean }[] = [
   { key: 'gp', label: 'GP' },
 ]
 
+function timePeriodLabel(period: TimePeriod, range: CustomDateRange | null): string {
+  if (period === 'custom') {
+    if (!range) return 'Custom'
+    const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return `${fmt(range.start)} – ${fmt(range.end)}`
+  }
+  const labels: Partial<Record<TimePeriod, string>> = {
+    season: 'Full Season', last_7: 'Last 7 Days', last_15: 'Last 15 Days', last_30: 'Last 30 Days',
+  }
+  return labels[period] ?? period
+}
+
 function formatStat(value: number, isPct?: boolean): string {
   if (isPct) return `${(value * 100).toFixed(1)}%`
   if (Number.isInteger(value)) return String(value)
@@ -95,22 +107,32 @@ const PlayerProfile = () => {
   const { data: allPlayers, isLoading: allPlayersLoading } = useGetAllPlayersQuery({ page: 1, limit: 1200 })
   const fantasyEntry = allPlayers?.players.find((p) => p.player_id === Number(playerId))
 
-  // Rank + z-score come from that same list (computed client-side exactly as
-  // the Player Rankings page's default view does), so no extra request.
+  // Rank + z-score follow the page's time frame: the same players list Player
+  // Rankings ranks for that period, ranked client-side the same way. On Full
+  // Season this is the query above (the cache key normalises the period).
+  const {
+    data: periodPlayers,
+    isFetching: periodPlayersFetching,
+  } = useGetAllPlayersQuery(
+    { page: 1, limit: 1200, time_period: timePeriod, ...customParams },
+    { skip: timePeriod === 'custom' && !customRange },
+  )
+
   const apiCategories = allPlayers?.categories
   const rankCategories = useMemo(
     () => orderCategories(apiCategories?.length ? apiCategories : DEFAULT_CATEGORIES),
     [apiCategories],
   )
   const rankSummary = useMemo(() => {
-    if (!allPlayers) return null
+    if (!periodPlayers) return null
     return getPlayerRankSummary(
-      allPlayers.players,
+      periodPlayers.players,
       Number(playerId),
       rankCategories,
-      new Set(allPlayers.reverse_categories ?? []),
+      new Set(periodPlayers.reverse_categories ?? []),
     )
-  }, [allPlayers, playerId, rankCategories])
+  }, [periodPlayers, playerId, rankCategories])
+  const periodLabel = timePeriodLabel(timePeriod, customRange)
 
   if (!playerId) return <ErrorMessage message="Missing player id" />
   if (bioLoading) return <LoadingSpinner />
@@ -199,25 +221,34 @@ const PlayerProfile = () => {
         </div>
       </div>
 
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <span className="text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">
+          Time frame <span className="font-normal text-gray-400 dark:text-gray-500">· Fantasy Value and Stats</span>
+        </span>
+        <TimePeriodSelector
+          value={timePeriod}
+          onChange={setTimePeriod}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+        />
+      </div>
+
       {(allPlayersLoading || fantasyEntry) && (
         <PlayerFantasyValueCard
           positions={fantasyEntry?.positions ?? []}
           summary={rankSummary}
           categories={rankCategories}
-          loading={allPlayersLoading}
+          loading={allPlayersLoading || periodPlayersFetching}
+          periodLabel={periodLabel}
         />
       )}
 
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Stats</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Stats <span className="text-base font-normal text-gray-500 dark:text-gray-400">· {periodLabel}</span>
+          </h2>
           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start gap-3">
-            <TimePeriodSelector
-              value={timePeriod}
-              onChange={setTimePeriod}
-              customRange={customRange}
-              onCustomRangeChange={setCustomRange}
-            />
             <div className="flex self-start border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
               <button
                 type="button"

@@ -38,9 +38,11 @@ interface Props {
   summary: PlayerRankSummary | null
   categories: RankingCategory[]
   loading: boolean
+  /** The page's time frame the rank and z-score are computed over. */
+  periodLabel?: string
 }
 
-export default function PlayerFantasyValueCard({ positions, summary, categories, loading }: Props) {
+export default function PlayerFantasyValueCard({ positions, summary, categories, loading, periodLabel = 'Full Season' }: Props) {
   if (loading) {
     return (
       <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 sm:p-6 animate-pulse" data-testid="fantasy-value-skeleton">
@@ -65,7 +67,7 @@ export default function PlayerFantasyValueCard({ positions, summary, categories,
     >
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h2 id="fantasy-value-heading" className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Fantasy Value
+          Fantasy Value <span className="text-base font-normal text-gray-500 dark:text-gray-400">· {periodLabel}</span>
         </h2>
         <Link
           to="/player-rankings"
@@ -127,7 +129,7 @@ export default function PlayerFantasyValueCard({ positions, summary, categories,
             <InfoTip
               title="Z-score"
               body="Average of this player's per-category z-scores vs. the ranked pool. 0 is average; higher is better."
-              formula="Season · per game · equal weights"
+              formula={`${periodLabel} · per game · equal weights`}
             />
           </div>
           {summary ? (
@@ -144,7 +146,7 @@ export default function PlayerFantasyValueCard({ positions, summary, categories,
         <>
           <div className="flex items-baseline justify-between mb-2">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Category z-scores</h3>
-            <span className="text-[11px] text-gray-400 dark:text-gray-500">Season · per game</span>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">{periodLabel} · per game</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
             {categories.map(cat => {
@@ -156,7 +158,7 @@ export default function PlayerFantasyValueCard({ positions, summary, categories,
         </>
       ) : (
         <p className="text-sm text-gray-400 dark:text-gray-500">
-          No season stats yet, so there's no rank or z-score for this player.
+          No stats in this time frame, so there's no rank or z-score for this player.
         </p>
       )}
     </section>
