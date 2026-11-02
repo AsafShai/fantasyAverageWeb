@@ -1150,7 +1150,7 @@ def _cat_players(name="Cat Mover", team=None):
     return _players_df([{"Name": name, "Pro Team": "DEN", "Positions": "SG,SF", "fantasy_team_name": team}])
 
 
-def test_category_flags_big_significant_points_jump():
+def test_category_flags_big_points_jump():
     games = _cat_games_df(1, "Cat Mover", [10, 12, 8, 11, 9, 10, 12, 8, 10, 10], [20, 22, 18, 21])
     items = compute_category_movers(games, {1: 4}, _cat_players(), _CAT_WINDOW_START)
     assert len(items) == 1
@@ -1161,10 +1161,10 @@ def test_category_flags_big_significant_points_jump():
     assert pts.window_avg == pytest.approx(20.25)
     assert pts.season_avg == pytest.approx((100 + 81) / 14)
     assert pts.delta == pytest.approx(20.25 - 181 / 14)
-    assert pts.flagged and pts.z > 1.5
-    # flat categories never flag (no spread -> z is None)
+    assert pts.flagged
+    # unchanged categories don't flag
     reb = next(s for s in item.stats if s.cat == "REB")
-    assert reb.z is None and not reb.flagged
+    assert reb.delta == pytest.approx(0.0) and not reb.flagged
     assert [s.cat for s in item.stats] == ["PTS", "REB", "AST", "3PM", "STL", "BLK", "TO"]
 
 
@@ -1179,7 +1179,7 @@ def test_category_reports_minutes_alongside_the_change():
 
 
 def test_category_below_min_delta_not_flagged():
-    # tiny but perfectly consistent change: significant z, below the 3.0 PTS floor
+    # consistent change, but below the 3.0 PTS minimum
     games = _cat_games_df(1, "Cat Mover", [10, 11] * 5, [12, 13, 12, 13])
     assert compute_category_movers(games, {}, _cat_players(), _CAT_WINDOW_START) == []
 
@@ -1191,7 +1191,7 @@ def test_category_season_and_window_gp_gates():
     assert compute_category_movers(one_window_game, {}, _cat_players(), _CAT_WINDOW_START) == []
 
 
-def test_category_window_covering_whole_season_has_no_z():
+def test_category_window_covering_whole_season_has_no_change():
     games = _cat_games_df(1, "Cat Mover", [], [10, 30] * 6)
     assert compute_category_movers(games, {}, _cat_players(), date(2025, 12, 1)) == []
 
@@ -1225,7 +1225,8 @@ async def test_get_category_movers_reuses_usage_rows_and_stamps_league(service):
         assert response.league_categories == ["3PM", "REB", "PTS", "TO"]
         assert response.reverse_categories == ["TO"]
         assert response.min_season_gp == 10 and response.min_window_gp == 2
-        assert response.min_delta["PTS"] == 3.0 and response.min_abs_z == 1.5
+        assert response.min_delta["PTS"] == 3.0
+        assert not hasattr(response, "min_abs_z")
 
 
 def test_category_min_season_gp_is_configurable():
@@ -1265,3 +1266,18 @@ async def test_trends_read_min_season_gp_from_settings(service, monkeypatch):
 def test_trends_min_season_gp_defaults_to_ten():
     from app.config import Settings
     assert Settings.model_fields["trends_min_season_gp"].default == 10
+
+
+def test_category_change_gate_is_the_minimum_either_direction():
+    # a noisy scorer: the window drop clears the 3.0 minimum, so he is listed
+    # (no spread-based filter), and the drop is kept as a negative change
+    games = _cat_games_df(1, "Cat Mover", [30, 5, 28, 6, 25, 8, 27, 4, 26, 7], [8, 10, 6, 9])
+    items = compute_category_movers(games, {}, _cat_players(), _CAT_WINDOW_START)
+    pts = next(s for s in items[0].stats if s.cat == "PTS")
+    assert pts.flagged and pts.delta < -3.0
+
+
+def test_build_game_log_carries_category_minimums():
+    games_df = pd.DataFrame([_game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5)])
+    log = build_game_log(games_df, 42, "2025-26", 15, date(2026, 5, 20), {}, 2)
+    assert log.category_min_delta == trend_service.CATEGORY_MIN_DELTA

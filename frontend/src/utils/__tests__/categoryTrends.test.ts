@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CategoryStatItem } from '../../types/api'
-import { countingCategoriesOf, helpfulZ, isGoodChange } from '../categoryTrends'
-
-function stat(over: Partial<CategoryStatItem>): CategoryStatItem {
-  return {
-    cat: 'PTS', season_avg: 10, window_avg: 10, delta: 0, z: 0, flagged: false, ...over,
-  }
-}
+import { countingCategoriesOf, isGoodChange } from '../categoryTrends'
 
 describe('categoryTrends', () => {
   it('keeps only measurable league categories, in display order', () => {
@@ -22,7 +15,6 @@ describe('categoryTrends', () => {
     expect(isGoodChange(-0.5, 'TO', reverse)).toBe(true)
     expect(isGoodChange(0.5, 'TO', reverse)).toBe(false)
     expect(isGoodChange(0.5, 'PTS', reverse)).toBe(true)
-    expect(helpfulZ(stat({ cat: 'TO', z: 2 }), reverse)).toBe(-2)
   })
 
 })

@@ -6,7 +6,7 @@ import type { RegressionStat, CustomDateRange, CountingCategory } from '../types
 import { LOW_SAMPLE_GP } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
 import { STAT_FIELDS, seasonAttempts, summarize, fmtValue, fmtDelta, type CardMode } from '../utils/playerTrendsSummary'
-import { countingCategoriesOf, isCountingCategory } from '../utils/categoryTrends'
+import { countingCategoriesOf, isCountingCategory, isGoodChange } from '../utils/categoryTrends'
 
 const DEFAULT_WINDOW_DAYS = 15
 const PRESET_WINDOWS = [7, 15, 30] as const
@@ -81,12 +81,15 @@ function Skeleton() {
 
 interface Props {
   playerId: number
-  /** This league's scoring categories; only the counting ones get chips. */
+  /** This league's scoring categories; the counting ones get a row of their own. */
   categories?: string[]
+  /** Reverse-scored categories (fewer is better, e.g. TO). */
+  reverseCategories?: string[]
 }
 
-export default function PlayerTrendsCard({ playerId, categories }: Props) {
+export default function PlayerTrendsCard({ playerId, categories, reverseCategories }: Props) {
   const countingCats = useMemo(() => countingCategoriesOf(categories), [categories])
+  const reverse = useMemo(() => new Set(reverseCategories ?? []), [reverseCategories])
   const [mode, setMode] = useState<CardMode>('minutes')
   const [windowDays, setWindowDays] = useState(DEFAULT_WINDOW_DAYS)
   const [customStartIso, setCustomStartIso] = useState<string | null>(null)
@@ -159,12 +162,9 @@ export default function PlayerTrendsCard({ playerId, categories }: Props) {
         <>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
             <div className="flex flex-wrap gap-2 order-2 sm:order-1">
-              {[
-                ...MODE_CHIPS.filter(
-                  (c) => c.key === 'minutes' || c.key === 'usage' || availableShootingStats.includes(c.key as RegressionStat),
-                ),
-                ...countingCats.map((c) => ({ key: c as CardMode, label: c })),
-              ].map((c) => (
+              {MODE_CHIPS.filter(
+                (c) => c.key === 'minutes' || c.key === 'usage' || availableShootingStats.includes(c.key as RegressionStat),
+              ).map((c) => (
                 <button
                   key={c.key}
                   type="button"
@@ -218,6 +218,40 @@ export default function PlayerTrendsCard({ playerId, categories }: Props) {
                 onApply={handleCustomApply}
               />
               {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
+            </div>
+          )}
+
+          {countingCats.length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3" role="group" aria-label="Categories">
+              {countingCats.map((cat) => {
+                const s = summarize(log, cat)
+                const min = log.category_min_delta?.[cat]
+                const moved = s.delta !== null && min !== undefined && Math.abs(s.delta) >= min
+                const deltaClass = !moved
+                  ? 'text-gray-500 dark:text-gray-400'
+                  : isGoodChange(s.delta as number, cat, reverse)
+                    ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold'
+                    : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 font-bold'
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setMode(cat)}
+                    title={`${cat}: season ${fmtValue(s.seasonValue, cat)}, last ${windowDays}d ${fmtValue(s.windowValue, cat)} per game`}
+                    className={`text-left rounded-lg border px-2.5 py-1.5 transition-colors ${
+                      mode === cat
+                        ? 'border-blue-600 ring-1 ring-blue-600 bg-white dark:bg-gray-800'
+                        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <span className="block text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{cat}</span>
+                    <span className="block text-base font-semibold text-gray-900 dark:text-gray-100 tabular-nums">{fmtValue(s.windowValue, cat)}</span>
+                    <span className={`inline-block mt-0.5 rounded-full px-1.5 py-0.5 text-[11px] tabular-nums ${deltaClass}`}>
+                      {fmtDelta(s.delta, cat)}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           )}
 

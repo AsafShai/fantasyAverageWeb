@@ -410,9 +410,8 @@ _CATEGORY_COLUMNS = {
     'BLK': 'blk',
     'TO': 'p_tov',
 }
-# Smallest per-game change worth flagging, per category. Provisional, like
-# DRIFT_THRESHOLD: the z gate alone lets a 0.2 -> 0.5 BLK move through for a
-# player whose blocks barely vary, which is real but not worth a roster move.
+# Smallest per-game change (window vs season, either direction) for a category
+# to list a player. Provisional, like DRIFT_THRESHOLD: tune once there's data.
 CATEGORY_MIN_DELTA = {
     'PTS': 3.0,
     'REB': 1.5,
@@ -422,40 +421,24 @@ CATEGORY_MIN_DELTA = {
     'BLK': 0.4,
     'TO': 0.6,
 }
-CATEGORY_MIN_ABS_Z = FORM_MIN_ABS_Z
 
 
 def _category_stat(cat: str, values: pd.Series, window_mask: pd.Series) -> CategoryStatItem:
-    """Window per-game mean vs season per-game mean (window included). The
-    window is a subset of the season, so Var(window mean - season mean) is
-    sd^2 * (1/n_window - 1/n_season) — that is what z is measured against. The
-    spread is the player's own per-game sd this season, so a steady rebounder
-    needs a smaller move to flag than a streaky scorer."""
+    """Window per-game mean vs season per-game mean (window included), like
+    Minutes Movers. Flagged when the change, up or down, reaches the
+    category's minimum."""
     n_season = len(values)
     n_window = int(window_mask.sum())
     window_values = values[window_mask]
     season_avg = float(values.mean())
     window_avg = float(window_values.mean()) if n_window else 0.0
     delta = window_avg - season_avg
-
-    z: Optional[float] = None
-    if 0 < n_window < n_season:
-        sd = float(values.std(ddof=1))
-        se = sd * math.sqrt(1 / n_window - 1 / n_season)
-        if se > 0:
-            z = delta / se
-
-    flagged = (
-        z is not None
-        and abs(z) >= CATEGORY_MIN_ABS_Z
-        and abs(delta) >= CATEGORY_MIN_DELTA[cat]
-    )
+    flagged = n_window > 0 and abs(delta) >= CATEGORY_MIN_DELTA[cat]
     return CategoryStatItem(
         cat=cat,
         season_avg=season_avg,
         window_avg=window_avg,
         delta=delta,
-        z=z,
         flagged=flagged,
     )
 
@@ -520,7 +503,7 @@ def compute_category_movers(
             stats=stats,
         ))
 
-    items.sort(key=lambda i: max(abs(s.z or 0.0) for s in i.stats if s.flagged), reverse=True)
+    items.sort(key=lambda i: i.player_name)  # the page sorts; this just keeps output stable
     return items
 
 
@@ -629,6 +612,7 @@ def build_game_log(
         league_usg=league_usg,
         baseline_seasons=baseline_seasons,
         games=entries,
+        category_min_delta=dict(CATEGORY_MIN_DELTA),
     )
 
 
@@ -942,7 +926,6 @@ class TrendService:
             reverse_categories=[c for c in (reverse_categories or []) if c in _CATEGORY_COLUMNS],
             min_season_gp=settings.trends_min_season_gp,
             min_window_gp=MIN_WINDOW_GP,
-            min_abs_z=CATEGORY_MIN_ABS_Z,
             min_delta=dict(CATEGORY_MIN_DELTA),
         )
 

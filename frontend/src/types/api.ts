@@ -826,14 +826,13 @@ export interface UsageResponse {
 export type CountingCategory = 'PTS' | 'REB' | 'AST' | '3PM' | 'STL' | 'BLK' | 'TO';
 
 /** One counting category for one player: window per-game average vs the
- * season's (window included). z is in units of the player's own per-game
- * spread; flagged = cleared both min_delta and min_abs_z. */
+ * season's (window included). flagged = the change, up or down, reached the
+ * category's min_delta. */
 export interface CategoryStatItem {
   cat: CountingCategory;
   season_avg: number;
   window_avg: number;
   delta: number;
-  z: number | null;
   flagged: boolean;
 }
 
@@ -861,7 +860,6 @@ export interface CategoryResponse {
   // eligibility gates
   min_season_gp: number;
   min_window_gp: number;
-  min_abs_z: number;
   min_delta: Partial<Record<CountingCategory, number>>;
 }
 
@@ -940,6 +938,8 @@ export interface GameLogResponse {
   league_usg: number | null;
   baseline_seasons: number;
   games: GameLogEntry[];
+  /** Per-category minimum change the Trends Categories tab lists by. */
+  category_min_delta?: Partial<Record<CountingCategory, number>>;
 }
 
 export interface RankMover {
