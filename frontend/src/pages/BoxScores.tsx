@@ -376,11 +376,12 @@ export default function BoxScores() {
       {games && games.length > 0 && (
         <>
           <ScheduledDepthCharts teamIds={scheduledTeamIds} />
-          {values?.complete && ranked.length > 0 && (
+          {ranked.length > 0 && (
             <LinesOfTheNight
               key={`${date}-${noSpoilers}`}
               players={ranked}
               spoilerGuard={noSpoilers}
+              inProgress={!values?.complete}
               dateLabel={formatSlateLabel(date)}
               games={games.length}
             />

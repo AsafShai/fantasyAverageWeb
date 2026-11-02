@@ -82,4 +82,22 @@ async def test_slate_values_is_incomplete_while_a_game_is_live():
          patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({}, {}))):
         result = await slate_values(date(2026, 10, 25))
     assert result["complete"] is False
+    assert result["players"][0]["on_court"] is False
     box.assert_awaited_once_with("100")
+
+
+@pytest.mark.asyncio
+async def test_slate_values_marks_a_live_player_on_the_court():
+    svc.clear_box_score_value_cache()
+    board = {"date": "2026-10-25", "games": [{"game_id": "100", "status": "live"}]}
+    playing = {**_player("1", "On Floor"), "on_court": True}
+    sitting = {**_player("2", "On Bench"), "on_court": False}
+    with patch.object(svc, "scoreboard_for", AsyncMock(return_value=board)), \
+         patch.object(svc, "boxscore_for", AsyncMock(return_value=_box("100", "live", [playing], [sitting]))), \
+         patch.object(svc, "fantasy_roster_for", AsyncMock(return_value={})), \
+         patch.object(svc, "_league_categories", AsyncMock(return_value=(["PTS"], set()))), \
+         patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({}, {}))):
+        result = await slate_values(date(2026, 10, 25))
+    by_name = {row["name"]: row for row in result["players"]}
+    assert by_name["On Floor"]["game_status"] == "live" and by_name["On Floor"]["on_court"] is True
+    assert by_name["On Bench"]["on_court"] is False

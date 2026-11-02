@@ -330,11 +330,21 @@ describe('BoxScores', () => {
     expect(screen.queryByRole('button', { name: 'Hide this game again' })).not.toBeInTheDocument()
   })
 
-  it('hides lines of the night while any game is not final', async () => {
+  it('shows lines of the night from the first started game, on the lines so far', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
       const date = new URL(url, 'http://localhost').searchParams.get('date')
-      if (url.includes('/nba/scoreboard/values')) return json({ ...values, date, complete: false })
+      if (url.includes('/nba/scoreboard/values')) {
+        return json({
+          ...values,
+          date,
+          complete: false,
+          players: [
+            { ...valuePlayer, game_status: 'live', on_court: true },
+            { ...otherPlayer, game_status: 'live', on_court: false },
+          ],
+        })
+      }
       if (url.includes('/nba/scoreboard')) {
         return json({ ...board, date, games: [{ ...board.games[0], status: 'live', status_detail: 'Q3 4:12' }] })
       }
@@ -343,9 +353,21 @@ describe('BoxScores', () => {
     }))
     const user = userEvent.setup()
     renderWithProviders(<BoxScores />, { route: '/box-scores?date=2026-10-25' })
-    await user.click(await screen.findByRole('button', { name: /Q3/ }))
-    expect(await screen.findByRole('columnheader', { name: 'Z' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Lines of the night/ })).not.toBeInTheDocument()
+    const toggle = await screen.findByRole('button', { name: /Lines of the night/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await user.click(toggle)
+    const card = toggle.closest('section')!
+    expect(within(card).getByText('Top 5 by z-score across games played so far')).toBeInTheDocument()
+    expect(within(card).getByText(/28 PTS · 4 REB · 6 AST/)).toBeInTheDocument()
+    const austin = within(card).getByRole('link', { name: 'Austin Reaves' }).closest('li')!
+    expect(within(austin).getByText('Live')).toBeInTheDocument()
+    expect(within(austin).getByText('On the court')).toBeInTheDocument()
+    expect(within(austin).getByText('Live').compareDocumentPosition(within(austin).getByText('On the court')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await user.click(within(card).getByRole('tab', { name: 'FA of the night' }))
+    expect(within(card).getByText('Top 5 unrostered so far, by z-score')).toBeInTheDocument()
+    const bench = within(card).getByRole('link', { name: 'Bench Guy' }).closest('li')!
+    expect(within(bench).getByText('Live')).toBeInTheDocument()
+    expect(within(bench).queryByText('On the court')).not.toBeInTheDocument()
   })
 
   it('splits a live box by who is on the court and marks fouls and ejections', async () => {

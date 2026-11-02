@@ -2,7 +2,7 @@ import { useState } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import { ShareCardButton } from '../share/ShareCardButton'
 import { LinesOfTheNightShareCard } from '../share/LinesOfTheNightShareCard'
-import { FantasyTeamTag, ZValue } from './BoxScorePanel'
+import { FantasyTeamTag, LiveMark, OnCourtMark, ZValue } from './BoxScorePanel'
 import { lineSummary } from './linesOfTheNightFormat'
 import type { SlatePlayerValue } from '../../types/boxScore'
 
@@ -14,24 +14,33 @@ function shooting(player: SlatePlayerValue): string {
 
 type NightTab = 'lines' | 'fa'
 
-const TABS: { id: NightTab; label: string; hint: string }[] = [
-  { id: 'lines', label: 'Lines of the night', hint: 'Top 5 by z-score across every game on the slate' },
-  { id: 'fa', label: 'FA of the night', hint: 'Top 5 unrostered in the league, by z-score' },
-]
+function tabHint(id: NightTab, inProgress: boolean): string {
+  if (id === 'fa') {
+    return inProgress
+      ? 'Top 5 unrostered so far, by z-score'
+      : 'Top 5 unrostered in the league, by z-score'
+  }
+  return inProgress
+    ? 'Top 5 by z-score across games played so far'
+    : 'Top 5 by z-score across every game on the slate'
+}
 
 /**
- * The five best lines of a finished slate, by z-score against every other
- * line that night, plus the five best free agents. Starts closed.
+ * The five best lines so far tonight, by z-score against every other line
+ * that has started, plus the five best free agents. Starts closed.
  * `players` is the full slate, highest z-score first.
  */
 export default function LinesOfTheNight({
   players,
   spoilerGuard,
+  inProgress = false,
   dateLabel,
   games,
 }: {
   players: SlatePlayerValue[]
   spoilerGuard: boolean
+  /** A game is still scheduled or live, so the ranking is the night so far. */
+  inProgress?: boolean
   dateLabel: string
   games: number
 }) {
@@ -39,8 +48,9 @@ export default function LinesOfTheNight({
   const [tab, setTab] = useState<NightTab>('lines')
   const lines = players.slice(0, TOP)
   const freeAgents = players.filter(player => player.fantasy_team == null).slice(0, TOP)
-  const active = TABS.find(item => item.id === tab) ?? TABS[0]
   const shown = tab === 'lines' ? lines : freeAgents
+  const hint = tabHint(tab, inProgress)
+  const label = tab === 'fa' ? 'FA of the night' : 'Lines of the night'
 
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm dark:border-amber-500/30 dark:from-amber-950/40 dark:to-gray-900">
@@ -55,7 +65,7 @@ export default function LinesOfTheNight({
           <span aria-hidden="true" className="text-lg">🔥</span>
           <span className="font-semibold text-gray-900 dark:text-gray-100">Lines of the night</span>
           <span className="hidden truncate text-xs text-gray-500 dark:text-gray-400 sm:inline">
-            Top 5 lines and the top 5 free agents
+            {inProgress ? 'So far, across games that have started' : 'Top 5 lines and the top 5 free agents'}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -73,7 +83,7 @@ export default function LinesOfTheNight({
       {open && shown.length > 0 && (
         <div className="shrink-0 pr-3">
           <ShareCardButton
-            title={active.label}
+            title={label}
             contentKey={tab}
             renderCard={({ dark }) => (
               <LinesOfTheNightShareCard
@@ -81,7 +91,7 @@ export default function LinesOfTheNight({
                 dateLabel={dateLabel}
                 games={games}
                 players={shown}
-                title={active.label}
+                title={label}
               />
             )}
           />
@@ -91,29 +101,30 @@ export default function LinesOfTheNight({
       {open && (
         <>
           <div role="tablist" aria-label="Night rankings" className="flex gap-1 border-t border-amber-100 px-3 pt-2 dark:border-gray-800">
-            {TABS.map(item => {
-              const selected = item.id === tab
+            {(['lines', 'fa'] as const).map(id => {
+              const selected = id === tab
+              const name = id === 'fa' ? 'FA of the night' : 'Lines of the night'
               return (
                 <button
-                  key={item.id}
+                  key={id}
                   type="button"
                   role="tab"
-                  id={`night-tab-${item.id}`}
+                  id={`night-tab-${id}`}
                   aria-controls="night-tab-panel"
                   aria-selected={selected}
-                  onClick={() => setTab(item.id)}
+                  onClick={() => setTab(id)}
                   className={`rounded-t px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
                     selected
                       ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
                       : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
                   }`}
                 >
-                  {item.label}
+                  {name}
                 </button>
               )
             })}
           </div>
-          <p className="px-4 pb-2 text-[11px] text-gray-500 dark:text-gray-400">{active.hint}</p>
+          <p className="px-4 pb-2 text-[11px] text-gray-500 dark:text-gray-400">{hint}</p>
           {shown.length > 0 ? (
             <ol id="night-tab-panel" role="tabpanel" aria-labelledby={`night-tab-${tab}`} className="divide-y divide-amber-100 border-t border-amber-100 dark:divide-gray-800 dark:border-gray-800">
               {shown.map((player, index) => (
@@ -131,6 +142,8 @@ export default function LinesOfTheNight({
                         playerId={player.player_id}
                         className="truncate text-sm font-semibold text-gray-900 hover:underline dark:text-gray-100"
                       />
+                      {player.game_status === 'live' && <LiveMark />}
+                      {player.game_status === 'live' && player.on_court && <OnCourtMark />}
                       <FantasyTeamTag value={player} full />
                     </div>
                     <p className="text-xs leading-snug text-gray-600 dark:text-gray-300">

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import { useGetGameBoxScoreQuery } from '../../store/api/fantasyApi'
-import { BOX_LINE_COLUMNS, JerseyNumber, OnCourtDot, PlayerStatus } from './BoxScorePanel'
+import { BOX_LINE_COLUMNS, JerseyNumber, LiveMark, OnCourtMark, PlayerStatus } from './BoxScorePanel'
 import { fouledOut } from './lineupGroups'
 import { clusterByGame, myLine, type MyAppearance, type MyGroups } from './myPlayerGroups'
 import { gameClockLabel } from './tipTime'
@@ -94,9 +94,10 @@ function StatStrip({ line, hideLabelsOnWide = false }: { line: BoxPlayerLine; hi
   )
 }
 
-function PlayerIdentity({ player, jersey = '', onCourt = false, ejected = false, fouled = false }: {
+function PlayerIdentity({ player, jersey = '', live = false, onCourt = false, ejected = false, fouled = false }: {
   player: MyAppearance
   jersey?: string
+  live?: boolean
   onCourt?: boolean
   ejected?: boolean
   fouled?: boolean
@@ -106,7 +107,6 @@ function PlayerIdentity({ player, jersey = '', onCourt = false, ejected = false,
       {player.teamLogo
         ? <img src={player.teamLogo} alt="" className="h-6 w-6 shrink-0 object-contain" />
         : <span className="h-6 w-6 shrink-0" />}
-      {onCourt && <OnCourtDot />}
       <JerseyNumber jersey={jersey} />
       <PlayerNameLink
         name={player.name}
@@ -114,6 +114,8 @@ function PlayerIdentity({ player, jersey = '', onCourt = false, ejected = false,
         className="min-w-0 text-sm font-semibold text-gray-900 hover:underline dark:text-gray-100"
       />
       {player.position && <span className="shrink-0 text-[11px] text-gray-400">{player.position}</span>}
+      {live && <LiveMark />}
+      {onCourt && <OnCourtMark />}
       <PlayerStatus ejected={ejected} fouledOut={fouled} />
     </div>
   )
@@ -189,6 +191,7 @@ function ResultCluster({ game, players, hide, live, onOpenGame }: {
                 <PlayerIdentity
                   player={player}
                   jersey={found?.kind === 'played' ? found.line.jersey : found?.kind === 'dnp' ? found.jersey : ''}
+                  live={!hide && live}
                   onCourt={!hide && live && found?.kind === 'played' && found.line.on_court}
                   ejected={!hide && found?.kind === 'played' && found.line.ejected}
                   fouled={!hide && found?.kind === 'played' && fouledOut(found.line.pf)}
