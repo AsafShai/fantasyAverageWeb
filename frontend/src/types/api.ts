@@ -901,6 +901,25 @@ export interface RankMover {
   delta: number;
 }
 
+/** One team's move since the previous stored night (see /league/rank-changes). */
+export interface TeamRankChange {
+  team_id: number;
+  team_name: string;
+  /** Places gained (positive) or lost (negative). */
+  rank_delta: number | null;
+  total_delta: number | null;
+  /** Games played in the latest night. */
+  gp_delta: number | null;
+  /** Roto points gained or lost per category; unchanged categories may be 0. */
+  categories: Record<string, number>;
+}
+
+export interface RankChanges {
+  previous_period: number | null;
+  latest_period: number | null;
+  teams: TeamRankChange[];
+}
+
 export interface TeamRosterHealth {
   team_id: number;
   team_name: string;

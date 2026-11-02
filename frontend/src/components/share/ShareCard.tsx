@@ -13,12 +13,14 @@ interface ShareCardProps extends ShareCardTheme {
   footer?: ReactNode
   /** Wider card for tables with many columns (e.g. 8 categories + Tot + GP). */
   wide?: boolean
+  /** Wider still, for tables that carry a change next to each number. */
+  extraWide?: boolean
   children: ReactNode
 }
 
 /** Frame every share card uses: branded header, body, optional footer. */
-export const ShareCard = ({ dark, kicker, title, subtitle, footer, wide = false, children }: ShareCardProps) => (
-  <div className={`share-card${wide ? ' share-card--wide' : ''}${dark ? ' share-card--dark' : ''}`}>
+export const ShareCard = ({ dark, kicker, title, subtitle, footer, wide = false, extraWide = false, children }: ShareCardProps) => (
+  <div className={`share-card${wide ? ' share-card--wide' : ''}${extraWide ? ' share-card--xwide' : ''}${dark ? ' share-card--dark' : ''}`}>
     <div className="share-card__head">
       <div className="share-card__brand">
         <span>🏀 Fantasy League</span>

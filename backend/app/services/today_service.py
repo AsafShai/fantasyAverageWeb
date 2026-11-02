@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any, Optional
 
 from app.config import settings
-from app.models import NightlyRun, RankMover, TeamRosterHealth, TodayHub
+from app.models import NightlyRun, RankChanges, RankMover, TeamRankChange, TeamRosterHealth, TodayHub
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.nba_matchup_service import get_shared_matchup_service
@@ -173,6 +173,84 @@ class TodayService:
 
         movers.sort(key=lambda m: (-abs(m.delta), m.team_name, m.category))
         return movers
+
+    async def get_rank_changes(self, mode: str = 'averages') -> RankChanges:
+        """Each team's move in places, roto points and games played between the
+        two latest stored scoring periods, for the Rankings table."""
+        table = 'team_rankings_totals' if mode == 'totals' else 'team_rankings_averages'
+        rows = await self.db_service.get_latest_two_periods_rankings(
+            settings.league_id, settings.season_id, table
+        )
+        periods = sorted({int(r['scoring_period_id']) for r in rows})
+        gp_rows = await self.db_service.get_games_played_for_periods(
+            periods, settings.league_id, settings.season_id
+        )
+        return self.build_rank_changes(rows, gp_rows)
+
+    @staticmethod
+    def build_rank_changes(rows: list[dict], gp_rows: list[dict]) -> RankChanges:
+        """rows: rankings rows of the two latest periods (rk_* are roto points).
+        Places are standard competition ranks by total points, so a tie shares
+        the higher place."""
+        periods = sorted({int(r['scoring_period_id']) for r in rows})
+        if len(periods) < 2:
+            return RankChanges()
+        previous_period, latest_period = periods[-2], periods[-1]
+
+        by_period: dict[int, dict[int, dict]] = {previous_period: {}, latest_period: {}}
+        names: dict[int, str] = {}
+        for row in rows:
+            period = int(row['scoring_period_id'])
+            if period not in by_period:
+                continue
+            team_id = int(row['team_id'])
+            by_period[period][team_id] = TodayService._categories_of(row)
+            names[team_id] = str(row['team_name'])
+
+        def places(period: int) -> dict[int, int]:
+            totals = {
+                team_id: cats[TOTAL_KEY]
+                for team_id, cats in by_period[period].items()
+                if cats.get(TOTAL_KEY) is not None
+            }
+            return {
+                team_id: 1 + sum(1 for other in totals.values() if other > total)
+                for team_id, total in totals.items()
+            }
+
+        place_before, place_now = places(previous_period), places(latest_period)
+        gp: dict[tuple[int, int], int] = {
+            (int(r['scoring_period_id']), int(r['team_id'])): int(r['gp'])
+            for r in gp_rows if r.get('gp') is not None
+        }
+
+        teams: list[TeamRankChange] = []
+        for team_id, latest in by_period[latest_period].items():
+            previous = by_period[previous_period].get(team_id)
+            if previous is None:
+                continue
+            deltas = {
+                category: round(float(value) - float(previous[category]), 2)
+                for category, value in latest.items()
+                if value is not None and previous.get(category) is not None
+            }
+            total_delta = deltas.pop(TOTAL_KEY, None)
+            rank_delta = (
+                place_before[team_id] - place_now[team_id]
+                if team_id in place_before and team_id in place_now else None
+            )
+            gp_before, gp_now = gp.get((previous_period, team_id)), gp.get((latest_period, team_id))
+            teams.append(TeamRankChange(
+                team_id=team_id,
+                team_name=names.get(team_id, str(team_id)),
+                rank_delta=rank_delta,
+                total_delta=total_delta,
+                gp_delta=None if gp_before is None or gp_now is None else gp_now - gp_before,
+                categories=deltas,
+            ))
+
+        teams.sort(key=lambda t: t.team_id)
+        return RankChanges(previous_period=previous_period, latest_period=latest_period, teams=teams)
 
     @staticmethod
     def _categories_of(row: dict) -> dict[str, Optional[float]]:

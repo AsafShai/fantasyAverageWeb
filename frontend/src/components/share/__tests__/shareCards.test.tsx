@@ -74,6 +74,33 @@ describe('RankingsShareCard', () => {
     expect(within(bodyRows[1]).getAllByRole('cell').map(c => c.textContent)).toEqual(['2', 'Brick City', '4', '1', '18', '100']);
   });
 
+  it('leaves the stats uncoloured, with or without the moves', () => {
+    const { container } = renderCard('rankings');
+    expect(container.querySelector('.sc-good, .sc-bad')).toBeNull();
+    expect(screen.queryByText(/Green = top 3/)).not.toBeInTheDocument();
+  });
+
+  it("carries last night's moves when the page shows them, and widens to fit", () => {
+    const { container } = render(
+      <RankingsShareCard
+        dark={false}
+        rows={rows}
+        categories={['FG%', 'PTS']}
+        view="rankings"
+        mode="averages"
+        asOf="Oct 19, 2026"
+        highlightTeamId={null}
+        moves={new Map([[2, { team_id: 2, team_name: 'Brick City', rank_delta: -1, total_delta: 1.5, gp_delta: 4, categories: { 'FG%': -2, PTS: 0 } }]])}
+      />,
+    );
+    expect(container.querySelector('.share-card--xwide')).not.toBeNull();
+    const brick = screen.getAllByRole('row')[2];
+    expect(within(brick).getAllByRole('cell').map(c => c.textContent)).toEqual(['2▼1', 'Brick City', '4▼2', '1', '18▲1.5', '100+4']);
+    // A team without a move keeps its plain numbers.
+    expect(within(screen.getAllByRole('row')[1]).getAllByRole('cell')[0].textContent).toBe('1');
+    expect(screen.getByText('▲▼ = change since last night')).toBeInTheDocument();
+  });
+
   it('ends each row with the team\'s games played, in both views', () => {
     for (const view of ['rankings', 'standings'] as const) {
       const { unmount } = renderCard(view);

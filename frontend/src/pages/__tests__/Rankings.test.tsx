@@ -98,6 +98,26 @@ describe('Rankings page', () => {
             last_updated: '2026-08-19',
           });
         }
+        if (url.includes('/league/rank-changes?mode=totals')) {
+          return jsonResponse({
+            previous_period: 11,
+            latest_period: 12,
+            teams: [
+              { team_id: 1, team_name: 'Alpha Squad', rank_delta: -1, total_delta: -4, gp_delta: 3, categories: { PTS: -1 } },
+              { team_id: 2, team_name: 'Beta Ballers', rank_delta: 1, total_delta: 4, gp_delta: 4, categories: {} },
+            ],
+          });
+        }
+        if (url.includes('/league/rank-changes?mode=averages')) {
+          return jsonResponse({
+            previous_period: 11,
+            latest_period: 12,
+            teams: [
+              { team_id: 1, team_name: 'Alpha Squad', rank_delta: 1, total_delta: 2, gp_delta: 3, categories: { 'FG%': 2, PTS: 0 } },
+              { team_id: 2, team_name: 'Beta Ballers', rank_delta: -1, total_delta: -2, gp_delta: 4, categories: { AST: -1 } },
+            ],
+          });
+        }
         if (url.includes('/league/summary')) {
           return jsonResponse({ nba_avg_pace: 100, nba_game_days_left: 30, season_start: '2025-10-01' });
         }
@@ -174,6 +194,52 @@ describe('Rankings page', () => {
     const table = screen.getByRole('table');
     const alphaRow = within(table).getByText('Alpha Squad').closest('tr')!;
     expect(within(alphaRow).queryByText('115.3000')).not.toBeInTheDocument();
+  });
+
+  it("shows last night's moves next to rank, category points, total and games on the default view", async () => {
+    renderWithProviders(<Rankings />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getByText('Alpha Squad').closest('tr')!.textContent).toContain('▲'));
+    const alpha = within(table).getByText('Alpha Squad').closest('tr')!;
+    const cells = within(alpha).getAllByRole('cell');
+    expect(cells[0].textContent).toBe('#1▲1');
+    expect(cells[2].textContent).toBe('3▲2'); // FG% points, up 2
+    expect(cells.at(-2)!.textContent).toBe('8▲2'); // total
+    expect(cells.at(-1)!.textContent).toBe('50+3'); // games last night
+    const beta = within(table).getByText('Beta Ballers').closest('tr')!;
+    expect(within(beta).getAllByRole('cell')[0].textContent).toBe('#2▼1');
+  });
+
+  it('"Hide movers" hides the moves and the button then reads "Show movers"', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Rankings />);
+    await user.click(await screen.findByRole('button', { name: 'Hide movers' }));
+    const table = screen.getByRole('table');
+    expect(within(table).queryByText(/▲|▼/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show movers' }));
+    expect(within(within(table).getByText('Alpha Squad').closest('tr')!).getAllByRole('cell')[0].textContent).toBe('#1▲1');
+  });
+
+  it('Totals shows the movers of the totals table, not the averages one', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Rankings />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getByText('Alpha Squad').closest('tr')!.textContent).toContain('▲'));
+    await user.click(screen.getByRole('button', { name: /^totals$/i }));
+    await waitFor(() => {
+      const alpha = within(screen.getByRole('table')).getByText('Alpha Squad').closest('tr')!;
+      expect(within(alpha).getAllByRole('cell').at(-2)!.textContent).toBe('4▼4');
+    });
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => requestUrl(input)).some(u => u.includes('rank-changes?mode=totals'))).toBe(true);
+    const beta = within(screen.getByRole('table')).getByText('Beta Ballers').closest('tr')!;
+    expect(within(beta).getAllByRole('cell')[0].textContent).toBe('#1▲1');
+  });
+
+  it('a date range shows no moves and no movers button', async () => {
+    renderWithProviders(<Rankings />, { route: '/?from=2025-10-05&to=2025-10-20' });
+    await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /movers/i })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('table')).queryByText(/▲|▼/)).not.toBeInTheDocument();
   });
 });
 
