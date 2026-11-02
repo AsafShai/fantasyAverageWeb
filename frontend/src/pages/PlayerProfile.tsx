@@ -223,7 +223,7 @@ const PlayerProfile = () => {
 
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
         <span className="text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">
-          Time frame <span className="font-normal text-gray-400 dark:text-gray-500">· Fantasy Value and Stats</span>
+          Time frame <span className="font-normal text-gray-400 dark:text-gray-500">· Fantasy Value, Stats and Trends</span>
         </span>
         <TimePeriodSelector
           value={timePeriod}
@@ -327,7 +327,13 @@ const PlayerProfile = () => {
         )}
       </div>
 
-      <PlayerTrendsCard playerId={Number(playerId)} categories={apiCategories} reverseCategories={allPlayers?.reverse_categories} />
+      <PlayerTrendsCard
+        playerId={Number(playerId)}
+        categories={apiCategories}
+        reverseCategories={allPlayers?.reverse_categories}
+        timePeriod={timePeriod}
+        customRange={customRange}
+      />
 
       <PlayerNextGameCard playerId={playerId} />
 

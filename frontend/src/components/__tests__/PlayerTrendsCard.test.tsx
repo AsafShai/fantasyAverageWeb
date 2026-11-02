@@ -25,8 +25,12 @@ const LOG: GameLogResponse = {
   ],
 }
 
+const queryArgs: { windowDays: number }[] = []
 vi.mock('../../store/api/fantasyApi', () => ({
-  useGetTrendGameLogQuery: () => ({ data: LOG, error: undefined, isLoading: false, refetch: vi.fn() }),
+  useGetTrendGameLogQuery: (args: { windowDays: number }, opts?: { skip?: boolean }) => {
+    if (!opts?.skip) queryArgs.push(args)
+    return { data: LOG, error: undefined, isLoading: false, refetch: vi.fn() }
+  },
 }))
 // the chart has its own data fetching; here we only care which stat it is asked to draw
 vi.mock('../TrendGameLogChart', () => ({
@@ -66,5 +70,19 @@ describe('PlayerTrendsCard', () => {
     // PTS 15.0 season -> 20.0 window: up; BLK 0.5 -> 0.0: down
     expect(screen.getByText('+5.0')).toHaveClass('text-emerald-700')
     expect(screen.getByText('-0.5')).toHaveClass('text-red-600')
+  })
+
+  it('follows the page time frame instead of its own picker', () => {
+    queryArgs.length = 0
+    render(<PlayerTrendsCard playerId={1} categories={LEAGUE} timePeriod="last_7" />)
+    expect(queryArgs.at(-1)?.windowDays).toBe(7)
+    expect(screen.getByText(/Last 7 days vs season/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '15d' })).not.toBeInTheDocument()
+  })
+
+  it('explains the 15-day fallback on Full Season', () => {
+    render(<PlayerTrendsCard playerId={1} categories={LEAGUE} timePeriod="season" />)
+    expect(screen.getByText(/Last 15 days vs season/)).toBeInTheDocument()
+    expect(screen.getByText(/Full Season has no recent stretch to compare/)).toBeInTheDocument()
   })
 })
