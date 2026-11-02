@@ -1276,8 +1276,3 @@ def test_category_change_gate_is_the_minimum_either_direction():
     pts = next(s for s in items[0].stats if s.cat == "PTS")
     assert pts.flagged and pts.delta < -3.0
 
-
-def test_build_game_log_carries_category_minimums():
-    games_df = pd.DataFrame([_game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5)])
-    log = build_game_log(games_df, 42, "2025-26", 15, date(2026, 5, 20), {}, 2)
-    assert log.category_min_delta == trend_service.CATEGORY_MIN_DELTA

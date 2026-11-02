@@ -225,8 +225,8 @@ export default function PlayerTrendsCard({ playerId, categories, reverseCategori
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3" role="group" aria-label="Categories">
               {countingCats.map((cat) => {
                 const s = summarize(log, cat)
-                const min = log.category_min_delta?.[cat]
-                const moved = s.delta !== null && min !== undefined && Math.abs(s.delta) >= min
+                // every category shows its trend; only an exact zero stays grey
+                const moved = s.delta !== null && Math.abs(s.delta) >= 0.05
                 const deltaClass = !moved
                   ? 'text-gray-500 dark:text-gray-400'
                   : isGoodChange(s.delta as number, cat, reverse)

@@ -938,8 +938,6 @@ export interface GameLogResponse {
   league_usg: number | null;
   baseline_seasons: number;
   games: GameLogEntry[];
-  /** Per-category minimum change the Trends Categories tab lists by. */
-  category_min_delta?: Partial<Record<CountingCategory, number>>;
 }
 
 export interface RankMover {

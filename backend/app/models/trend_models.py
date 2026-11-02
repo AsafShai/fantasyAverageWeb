@@ -175,6 +175,3 @@ class GameLogResponse(BaseModel):
     league_usg: Optional[float] = None  # minutes-weighted league USG%, ~20 by construction
     baseline_seasons: int
     games: list[GameLogEntry]
-    # same per-category minimum change the Trends Categories tab lists by, so the
-    # player page marks the same moves
-    category_min_delta: dict[str, float] = {}

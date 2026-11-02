@@ -612,7 +612,6 @@ def build_game_log(
         league_usg=league_usg,
         baseline_seasons=baseline_seasons,
         games=entries,
-        category_min_delta=dict(CATEGORY_MIN_DELTA),
     )
 
 
