@@ -327,11 +327,12 @@ const PlayerProfile = () => {
         )}
       </div>
 
-      <PlayerGameLog playerId={playerId} />
-
       <PlayerTrendsCard playerId={Number(playerId)} categories={apiCategories} reverseCategories={allPlayers?.reverse_categories} />
 
       <PlayerNextGameCard playerId={playerId} />
+
+      {/* the whole season game by game: the longest section, and not tied to the time frame */}
+      <PlayerGameLog playerId={playerId} />
     </div>
   )
 }
