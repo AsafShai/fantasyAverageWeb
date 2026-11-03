@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { usePersistedState, usePersistedSetState } from '../hooks/usePersistedState';
-import { useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
+import { useGetAllPlayersQuery, useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -26,7 +26,18 @@ function injuryStyle(status: string): string {
   return INJURY_STYLES[status] ?? 'bg-gray-100 text-gray-700';
 }
 
-function DepthChartTable({ positions }: { positions: DepthChartPosition[] }) {
+function FaMark() {
+  return (
+    <span
+      title="Free agent"
+      className="inline-flex rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+    >
+      FA
+    </span>
+  );
+}
+
+function DepthChartTable({ positions, freeAgentIds }: { positions: DepthChartPosition[]; freeAgentIds: ReadonlySet<string> }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
@@ -53,6 +64,7 @@ function DepthChartTable({ positions }: { positions: DepthChartPosition[] }) {
                     {player ? (
                       <div className="flex items-center gap-2">
                         <PlayerNameLink name={player.display_name} playerId={player.id} />
+                        {freeAgentIds.has(player.id) && <FaMark />}
                         {player.injury && (
                           <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-semibold ${injuryStyle(player.injury.status)}`}>
                             {player.injury.status}
@@ -100,6 +112,14 @@ function FilterCheckbox({
 
 function DepthChartView({ teamId }: { teamId: string }) {
   const { data, isLoading, error } = useGetNbaTeamDepthChartQuery(teamId);
+  const { data: playersData } = useGetAllPlayersQuery({ limit: 1200 });
+  const freeAgentIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const player of playersData?.players ?? []) {
+      if (player.player_id != null && player.status === 'FREEAGENT') ids.add(String(player.player_id));
+    }
+    return ids;
+  }, [playersData]);
   const [excludedStatuses, setExcludedStatuses] = usePersistedSetState<string>(`nbaTeams.${teamId}.excludedStatuses`, new Set());
   const [removeDuplicates, setRemoveDuplicates] = usePersistedState(`nbaTeams.${teamId}.removeDuplicates`, false);
 
@@ -149,7 +169,7 @@ function DepthChartView({ teamId }: { teamId: string }) {
         />
       </div>
 
-      <DepthChartTable positions={filteredPositions} />
+      <DepthChartTable positions={filteredPositions} freeAgentIds={freeAgentIds} />
     </div>
   );
 }
