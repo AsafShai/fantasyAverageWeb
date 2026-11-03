@@ -4,12 +4,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.minigames import GAME_SLUGS
 from app.minigames import leaderboard as lb
-from app.minigames.players import (
-    build_nba_team_options,
-    find_player_by_id,
-    get_players,
-    load_bundle,
-)
+from app.minigames.players import build_nba_team_options, find_player_by_id, get_players
+from app.services import nba_player_catalog
 from app.minigames.who_am_i import compute_who_am_i_feedback
 from app.models.minigame_models import (
     MinigameLeaderboardResponse,
@@ -31,7 +27,7 @@ def _slug_or_404(game_slug: str) -> str:
 
 @router.get("/players")
 async def get_minigame_players():
-    return load_bundle()
+    return await nba_player_catalog.get_minigame_bundle()
 
 
 @router.get("/teams")

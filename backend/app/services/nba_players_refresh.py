@@ -1,10 +1,8 @@
-"""Refresh the static NBA players JSON from ESPN rosters."""
+"""Refresh the NBA players catalog in Postgres from ESPN rosters."""
 
 from __future__ import annotations
 
-import json
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -86,23 +84,6 @@ def normalize_position(pos: str) -> str:
     return _POSITION_BUCKETS.get(raw.lower(), raw)
 
 
-def load_previous_players_by_id(path: Path) -> dict[str, dict]:
-    if not path.is_file():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    players = data.get("players") if isinstance(data, dict) else None
-    if not isinstance(players, list):
-        return {}
-    by_id: dict[str, dict] = {}
-    for p in players:
-        if isinstance(p, dict) and isinstance(p.get("id"), str):
-            by_id[p["id"]] = p
-    return by_id
-
-
 def _player_from_athlete(a: dict, team_name: str, abbr: str) -> dict[str, Any] | None:
     full_name = a.get("fullName") or a.get("displayName")
     if not full_name or not isinstance(full_name, str):
@@ -141,14 +122,13 @@ def _player_from_athlete(a: dict, team_name: str, abbr: str) -> dict[str, Any] |
     }
 
 
-def _dedupe_and_preserve(players: list[dict], out_path: Path) -> list[dict]:
+def _dedupe_and_preserve(players: list[dict], previous_by_id: dict[str, dict]) -> list[dict]:
     by_name: dict[str, dict] = {}
     for p in players:
         key = p["displayName"].lower()
         if key not in by_name:
             by_name[key] = p
     unique = list(by_name.values())
-    previous_by_id = load_previous_players_by_id(out_path)
     preserved = 0
     for p in unique:
         prev = previous_by_id.get(p.get("id"))
@@ -159,30 +139,15 @@ def _dedupe_and_preserve(players: list[dict], out_path: Path) -> list[dict]:
                 p[key] = prev[key]
                 preserved += 1
     if previous_by_id:
-        logger.info("Preserved %d prior non-null field(s) from %s", preserved, out_path.name)
+        logger.info("Preserved %d prior non-null field(s) from existing catalog", preserved)
     return unique
 
 
-def write_players_payload(players: list[dict], out_path: Path) -> None:
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "seasonLabel": SEASON_LABEL,
-        "source": "ESPN roster API (run create_nba_players_json.py)",
-        "updatedAt": datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z"),
-        "players": players,
-    }
-    out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+async def refresh_nba_players_catalog() -> int:
+    """Fetch current ESPN rosters and persist the catalog to Postgres.
 
-
-async def refresh_nba_players_json(out_path: Path | None = None) -> int:
-    """Fetch current ESPN rosters, write the catalog JSON, and reload memory.
-
-    Refuses to overwrite the file if ESPN returns fewer than ``MIN_PLAYERS``.
+    Refuses to replace the catalog if ESPN returns fewer than ``MIN_PLAYERS``.
     """
-    path = out_path or nba_player_catalog.JSON_PATH
     async with httpx.AsyncClient(timeout=60.0, headers={"Accept": "application/json"}, verify=shared_ssl_context()) as client:
         teams_data = (await client.get(TEAMS_URL)).raise_for_status().json()
         teams = teams_data.get("sports", [{}])[0].get("leagues", [{}])[0].get("teams", [])
@@ -203,19 +168,35 @@ async def refresh_nba_players_json(out_path: Path | None = None) -> int:
                 if row:
                     players.append(row)
 
-    unique = _dedupe_and_preserve(players, path)
+    previous_by_id = await nba_player_catalog.load_previous_players_by_id()
+    unique = _dedupe_and_preserve(players, previous_by_id)
     if len(unique) < MIN_PLAYERS:
         raise RuntimeError(
             f"ESPN roster refresh returned {len(unique)} players; "
-            f"need at least {MIN_PLAYERS} to overwrite {path.name}"
+            f"need at least {MIN_PLAYERS} to replace the catalog"
         )
-    write_players_payload(unique, path)
-    nba_player_catalog.reset_catalog_cache()
-    logger.info("Wrote %d NBA players to %s", len(unique), path)
-    return len(unique)
+    count = await nba_player_catalog.replace_all(
+        unique,
+        season_label=SEASON_LABEL,
+        source="ESPN roster API (nba players refresh)",
+    )
+    return count
+
+
+def refresh_nba_players_catalog_sync() -> int:
+    import asyncio
+
+    return asyncio.run(refresh_nba_players_catalog())
+
+
+# Backward-compatible aliases for scripts and tests.
+async def refresh_nba_players_json(out_path: Path | None = None) -> int:
+    if out_path is not None:
+        raise ValueError("out_path is no longer supported; catalog is stored in Postgres")
+    return await refresh_nba_players_catalog()
 
 
 def refresh_nba_players_json_sync(out_path: Path | None = None) -> int:
-    import asyncio
-
-    return asyncio.run(refresh_nba_players_json(out_path))
+    if out_path is not None:
+        raise ValueError("out_path is no longer supported; catalog is stored in Postgres")
+    return refresh_nba_players_catalog_sync()

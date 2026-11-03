@@ -34,7 +34,6 @@ RUN pip install uv && uv sync --frozen --no-group test --no-group ml-research
 # Copy application code and set ownership
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser model_stats_inference/ ./model_stats_inference/
-COPY --chown=appuser:appuser data/ ./data/
 
 # Same for our own code, so a fresh container doesn't compile it on first import.
 RUN /app/.venv/bin/python -m compileall -q app model_stats_inference \

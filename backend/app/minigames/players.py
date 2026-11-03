@@ -2,32 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import logging
 import random
-from pathlib import Path
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
-
-_JSON_PATH = Path(__file__).resolve().parents[2] / "data" / "nba-players-2025-26.json"
-_bundle: Optional[dict[str, Any]] = None
-
-
-def load_bundle() -> dict[str, Any]:
-    global _bundle
-    if _bundle is not None:
-        return _bundle
-    if not _JSON_PATH.exists():
-        logger.error("NBA players JSON missing at %s", _JSON_PATH)
-        _bundle = {"seasonLabel": "", "source": "", "updatedAt": "", "players": []}
-        return _bundle
-    _bundle = json.loads(_JSON_PATH.read_text(encoding="utf-8"))
-    return _bundle
+from app.services import nba_player_catalog
 
 
 def get_players() -> list[dict[str, Any]]:
-    return list(load_bundle().get("players") or [])
+    return nba_player_catalog.get_players_list()
 
 
 def find_player_by_id(players: list[dict[str, Any]], player_id: str) -> Optional[dict[str, Any]]:
