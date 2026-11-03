@@ -34,6 +34,19 @@ export function slotCeiling(slot: SlotName): number {
   return SLOT_CAPS[slot] / SLOT_MULTIPLICITY[slot]
 }
 
+/** Weight on the max at the end of the season — mirrors MAX_WEIGHT_AT_SEASON_END in the backend. */
+export const MAX_WEIGHT_AT_SEASON_END = 0.5
+
+/**
+ * Weight on the max in the projection: 1 on opening night, falling evenly with the NBA
+ * pace to MAX_WEIGHT_AT_SEASON_END after 82 games. Early on a team behind the rate can
+ * still close the gap, so the rate means little; late there is less time to catch up.
+ */
+export function maxWeight(avgPace: number): number {
+  const progress = Math.min(Math.max(avgPace / GAMES_PER_SLOT, 0), 1)
+  return 1 - (1 - MAX_WEIGHT_AT_SEASON_END) * progress
+}
+
 /** Below this NBA pace the season is too young for any of these signals to mean anything. */
 export const MIN_PACE_FOR_COLOR = 10
 
@@ -49,7 +62,8 @@ export interface SlotProjection {
   /** Most games the whole column can still finish on — UTIL counts all three slots, out of 248. */
   maxGamesTotal: number | null
   /**
-   * Blended season-end projection for the whole column — UTIL counts all three slots,
+   * Season-end projection for the whole column: maxWeight * max + (1 - maxWeight) * the
+   * rate estimate, the rate estimate alone while the game days left are unknown — UTIL counts all three slots,
    * out of 248. This is the direct mirror of proj_<slot> in the backend estimator.
    */
   estimated: number | null
@@ -121,7 +135,17 @@ export function projectSlot(
 
   // Method 2 takes over as the season progresses.
   const w2 = avgPace / GAMES_PER_SLOT
-  const estimated = m2 === null ? m1 : (1 - w2) * m1 + w2 * m2
+  if (m2 === null) {
+    return {
+      used, usedTotal: gamesUsed, rate, maxGames, maxGamesTotal,
+      estimated: m1, estimatedRounded: Math.round(m1), estimatedPerSlot: m1 / multiplicity,
+    }
+  }
+  const rateEstimate = (1 - w2) * m1 + w2 * m2
+  // The max pulls the projection: the games are there to be played, and early in the
+  // season a team can still catch up, so the max weighs nearly everything.
+  const a = maxWeight(avgPace)
+  const estimated = a * (maxGamesTotal ?? cap) + (1 - a) * rateEstimate
 
   return {
     used,

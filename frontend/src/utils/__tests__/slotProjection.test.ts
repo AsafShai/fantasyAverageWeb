@@ -8,7 +8,13 @@ import {
   slotCeiling,
   SLOT_CAPS,
   GAMES_PER_SLOT,
+  MAX_WEIGHT_AT_SEASON_END,
+  maxWeight,
 } from '../slotProjection'
+
+/** The projection: the max and the rate estimate weighted by the season's progress. */
+const withMax = (avgPace: number, rate: number, max: number) =>
+  maxWeight(avgPace) * max + (1 - maxWeight(avgPace)) * rate
 
 const midSeason = { avgPace: 41, gameDaysLeft: 80 }
 
@@ -77,7 +83,7 @@ describe('projectSlot', () => {
     const m1 = Math.min(used * (82 / avgPace), 82)
     const m2 = Math.min(used + (used / daysElapsed) * daysLeft, 82)
     const w2 = avgPace / 82
-    const expected = (1 - w2) * m1 + w2 * m2
+    const expected = withMax(avgPace, (1 - w2) * m1 + w2 * m2, 82)
 
     const { estimated } = projectSlot(used, 'PG', { avgPace, gameDaysLeft: daysLeft, gameDaysElapsed: daysElapsed })
     expect(estimated).toBeCloseTo(expected, 6)
@@ -90,8 +96,27 @@ describe('projectSlot', () => {
     const m2 = 60 + (60 / 140) * 25
     const w2 = 70 / 82
     const { estimated } = projectSlot(60, 'PG', ctx)
-    expect(estimated).toBeCloseTo((1 - w2) * m1 + w2 * m2, 6)
-    expect(estimated).toBeCloseTo(70.7, 1)
+    expect(estimated).toBeCloseTo(withMax(70, (1 - w2) * m1 + w2 * m2, 82), 6)
+  })
+
+  it('weighs the max fully on opening night and half at season end', () => {
+    expect(maxWeight(0)).toBeCloseTo(1, 9)
+    expect(MAX_WEIGHT_AT_SEASON_END).toBe(0.5)
+    expect(maxWeight(82)).toBeCloseTo(0.5, 9)
+    expect(maxWeight(41)).toBeCloseTo(0.75, 9)
+    expect(maxWeight(7)).toBeGreaterThan(0.95)
+  })
+
+  it('keeps a slot behind the rate a week in close to the max it can still reach', () => {
+    const { estimated } = projectSlot(3, 'PG', { avgPace: 7, gameDaysLeft: 150, gameDaysElapsed: 14 })
+    expect(estimated!).toBeGreaterThan(78)
+    expect(estimated!).toBeLessThan(82)
+  })
+
+  it('cannot project past the max late in the season', () => {
+    const { estimated, maxGamesTotal } = projectSlot(70, 'PG', { avgPace: 75, gameDaysLeft: 5, gameDaysElapsed: 150 })
+    expect(maxGamesTotal).toBe(75)
+    expect(estimated!).toBeLessThanOrEqual(75)
   })
 
   it('falls back to method 1 alone without game days elapsed', () => {
@@ -130,7 +155,8 @@ describe('projectSlot', () => {
     const m1 = Math.min(usedTotal * (82 / avgPace), 248)
     const m2 = Math.min(usedTotal + (usedTotal / daysElapsed) * daysLeft, 248)
     const w2 = avgPace / 82
-    const expected = (1 - w2) * m1 + w2 * m2
+    // max: 120 used + 3 slots * 83 days = 369, capped at 248
+    const expected = withMax(avgPace, (1 - w2) * m1 + w2 * m2, 248)
 
     const { estimated } = projectSlot(usedTotal, 'UTIL', { avgPace, gameDaysLeft: daysLeft, gameDaysElapsed: daysElapsed })
     expect(estimated).toBeCloseTo(expected, 6)
