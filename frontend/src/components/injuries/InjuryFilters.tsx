@@ -10,6 +10,8 @@ interface Props {
   filters: Filters;
   onChange: (filters: Filters) => void;
   teams: string[];
+  teamsDisabled?: boolean;
+  teamsPlaceholder?: string;
 }
 
 const STATUSES = ['Out', 'Questionable', 'Doubtful', 'Probable', 'Available'];
@@ -19,11 +21,15 @@ function MultiSelectDropdown({
   selected,
   placeholder,
   onChange,
+  disabled = false,
+  emptyMessage,
 }: {
   options: string[];
   selected: string[];
   placeholder: string;
   onChange: (values: string[]) => void;
+  disabled?: boolean;
+  emptyMessage?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -56,8 +62,10 @@ function MultiSelectDropdown({
     <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white dark:bg-gray-700 transition-colors ${
+        disabled={disabled}
+        title={disabled ? 'Loading team list…' : undefined}
+        onClick={() => !disabled && setOpen(o => !o)}
+        className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white dark:bg-gray-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           selected.length > 0 ? 'border-blue-400 text-blue-700 dark:text-blue-300' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300'
         }`}
       >
@@ -75,8 +83,11 @@ function MultiSelectDropdown({
         </svg>
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div className="absolute z-20 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+          {options.length === 0 && emptyMessage ? (
+            <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">{emptyMessage}</p>
+          ) : null}
           {options.map(opt => (
             <label
               key={opt}
@@ -97,7 +108,13 @@ function MultiSelectDropdown({
   );
 }
 
-export default function InjuryFilters({ filters, onChange, teams }: Props) {
+export default function InjuryFilters({
+  filters,
+  onChange,
+  teams,
+  teamsDisabled = false,
+  teamsPlaceholder = 'All Teams',
+}: Props) {
   return (
     <div className="flex flex-wrap gap-3 items-center">
       <input
@@ -118,7 +135,9 @@ export default function InjuryFilters({ filters, onChange, teams }: Props) {
       <MultiSelectDropdown
         options={teams}
         selected={filters.teams}
-        placeholder="All Teams"
+        placeholder={teamsPlaceholder}
+        disabled={teamsDisabled}
+        emptyMessage="No teams in this view"
         onChange={selectedTeams => onChange({ ...filters, teams: selectedTeams })}
       />
     </div>

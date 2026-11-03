@@ -37,6 +37,8 @@ describe('Injuries page', () => {
     renderWithProviders(<Injuries />);
     expect(screen.getAllByText('Jay').length).toBeGreaterThan(0);
     expect(screen.getByText(/showing 2 of 2 player/i)).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'My players' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: "My players' teams" })).not.toBeInTheDocument();
   });
 
   it('debounced search filters', async () => {
