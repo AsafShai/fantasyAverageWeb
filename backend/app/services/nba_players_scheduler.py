@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.services.nba_players_refresh import refresh_nba_players_json
+from app.services.nba_players_refresh import refresh_nba_players_catalog
 from app.utils.request_context import start_job_run
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ async def start_scheduler() -> None:
         start_job_run("nba-players-refresh")
         logger.info("NBA players refresh triggered")
         try:
-            count = await refresh_nba_players_json()
+            count = await refresh_nba_players_catalog()
             logger.info("NBA players refresh finished: %d players", count)
         except Exception as e:
             logger.exception(

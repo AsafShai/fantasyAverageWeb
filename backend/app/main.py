@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 from app.config import settings
 import logging
 from app.services.data_provider import DataProvider
+from app.services import nba_player_catalog
 from app.services.nba_stats_service import NBAStatsService
 from app.services.nba_matchup_service import get_shared_matchup_service
 from app.services.league_activity_service import get_league_activity_service
@@ -117,6 +118,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to derive regular-season end, keeping configured SEASON_END={settings.season_end}: {type(e).__name__}: {e}")
     await injury_service.initialize()
+    try:
+        catalog_count = await nba_player_catalog.warm_cache()
+        if catalog_count == 0:
+            logger.warning(
+                "NBA player catalog is empty; apply migration create_nba_player_catalog.sql "
+                "and run scripts/create_nba_players_json.py or wait for the daily refresh"
+            )
+        else:
+            logger.info("NBA player catalog warm: %d players", catalog_count)
+    except Exception as e:
+        logger.warning("Failed to warm NBA player catalog: %s: %s", type(e).__name__, e)
     if settings.injury_scheduler_enabled:
         background_tasks.spawn(injury_service.start_scheduler(), name="injury-scheduler")
     else:
