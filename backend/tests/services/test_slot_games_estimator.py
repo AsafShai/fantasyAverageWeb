@@ -1,6 +1,8 @@
 import pytest
 import pandas as pd
-from app.services.slot_games_estimator import SlotGamesEstimator, SLOT_CAPS, SLOTS
+from app.services.slot_games_estimator import (
+    MAX_WEIGHT_AT_SEASON_END, SlotGamesEstimator, SLOT_CAPS, SLOTS, max_weight,
+)
 
 
 def make_df(avg_pace: float, days_remaining: int, slot_values: dict | None = None,
@@ -30,6 +32,12 @@ def make_multi_team_df(avg_pace: float, days_remaining: int, teams: list[dict]) 
     return pd.DataFrame(rows)
 
 
+def with_max(avg_pace: float, rate_estimate: float, max_games: float) -> float:
+    """The projection: the max and the rate estimate weighted by the season's progress."""
+    a = max_weight(avg_pace)
+    return a * max_games + (1 - a) * rate_estimate
+
+
 @pytest.fixture
 def estimator():
     return SlotGamesEstimator()
@@ -48,7 +56,7 @@ class TestSlotGamesEstimatorEarlySeason:
         w2 = avg_pace / 82
         m1 = gp * (82 / avg_pace)           # = 41, within cap
         m2 = gp + (gp / (2 * avg_pace)) * days_remaining  # = 15, within cap
-        expected_pg = w1 * m1 + w2 * m2
+        expected_pg = with_max(avg_pace, w1 * m1 + w2 * m2, min(gp + days_remaining, 82))
 
         assert result['proj_PG'].iloc[0] == pytest.approx(expected_pg, rel=1e-6)
 
@@ -76,7 +84,7 @@ class TestSlotGamesEstimatorLateSeason:
         w2 = avg_pace / 82
         m1 = min(gp * (82 / avg_pace), SLOT_CAPS['PG'])
         m2 = min(gp + (gp / (2 * avg_pace)) * days_remaining, SLOT_CAPS['PG'])
-        expected_pg = w1 * m1 + w2 * m2
+        expected_pg = with_max(avg_pace, w1 * m1 + w2 * m2, min(gp + days_remaining, 82))
 
         assert result['proj_PG'].iloc[0] == pytest.approx(expected_pg, rel=1e-6)
 
@@ -145,8 +153,8 @@ class TestSlotGamesEstimatorEdgeCases:
             assert result[f'proj_{slot}'].iloc[0] == 0.0
         assert result['proj_total'].iloc[0] == 0.0
 
-    def test_zero_slot_games_projects_zero(self, estimator):
-        df = make_df(avg_pace=41.0, days_remaining=40, slot_values={s: 0 for s in SLOTS})
+    def test_zero_slot_games_and_no_days_left_projects_zero(self, estimator):
+        df = make_df(avg_pace=41.0, days_remaining=0, slot_values={s: 0 for s in SLOTS})
         result = estimator.estimate(df)
 
         for slot in SLOTS:
@@ -178,7 +186,7 @@ class TestSlotGamesEstimatorEdgeCases:
         w2 = avg_pace / 82
         m1 = min(gp * (82 / avg_pace), 82)
         m2 = gp
-        expected = w1 * m1 + w2 * m2
+        expected = with_max(avg_pace, w1 * m1 + w2 * m2, gp)
 
         assert result['proj_PG'].iloc[0] == pytest.approx(expected, rel=1e-6)
 
@@ -194,15 +202,17 @@ class TestSlotGamesEstimatorMethod2Rate:
         w2 = 70.0 / 82
         m1 = 60 * (82 / 70.0)
         m2 = 60 + (60 / 140) * 25
-        assert result['proj_PG'].iloc[0] == pytest.approx((1 - w2) * m1 + w2 * m2, rel=1e-6)
-        assert result['proj_PG'].iloc[0] == pytest.approx(70.7, abs=0.05)
+        assert result['proj_PG'].iloc[0] == pytest.approx(with_max(70.0, (1 - w2) * m1 + w2 * m2, 82), rel=1e-6)
 
     def test_util_rate_covers_all_three_slots(self, estimator):
         df = make_df(avg_pace=70.0, days_remaining=25, days_elapsed=140,
                      slot_values={**{s: 60 for s in SLOTS}, 'UTIL': 180})
         result = estimator.estimate(df)
 
-        assert result['proj_UTIL'].iloc[0] == pytest.approx(3 * result['proj_PG'].iloc[0], rel=1e-6)
+        # 180 used + 3 slots * 25 days = 255, over the 248 cap; PG's max is 60 + 25 = 82 (×3 = 246)
+        w2 = 70.0 / 82
+        rate = (1 - w2) * min(180 * 82 / 70.0, 248) + w2 * (180 + (180 / 140) * 25)
+        assert result['proj_UTIL'].iloc[0] == pytest.approx(with_max(70.0, rate, 248), rel=1e-6)
 
     @pytest.mark.parametrize('days_elapsed', [None, 0])
     def test_falls_back_to_method1_without_elapsed_days(self, estimator, days_elapsed):
@@ -224,3 +234,41 @@ class TestSlotGamesEstimatorMethod2Rate:
         result = estimator.estimate(df.drop(columns=['nba_game_days_elapsed']))
 
         assert result['proj_PG'].iloc[0] == pytest.approx(30 * (82 / 41.0), rel=1e-6)
+
+
+class TestSlotGamesEstimatorMaxWeight:
+    def test_weight_is_one_on_opening_night(self):
+        assert max_weight(0.0) == pytest.approx(1.0)
+
+    def test_weight_falls_to_half_at_season_end(self):
+        assert MAX_WEIGHT_AT_SEASON_END == 0.5
+        assert max_weight(82.0) == pytest.approx(0.5)
+        assert max_weight(90.0) == pytest.approx(0.5)
+
+    def test_weight_after_seven_games_is_close_to_one(self):
+        assert max_weight(7.0) == pytest.approx(1 - 0.5 * 7 / 82)
+        assert max_weight(7.0) > 0.95
+
+    def test_weight_falls_evenly_with_pace(self):
+        assert max_weight(41.0) == pytest.approx(0.75)
+
+    def test_team_behind_the_rate_early_still_projects_near_the_max(self, estimator):
+        """A week in, a slot that has used 3 of 7 possible games is not lost: the
+        projection stays close to the 82 it can still reach."""
+        df = make_df(avg_pace=7.0, days_remaining=150, slot_values={s: 3 for s in SLOTS})
+        result = estimator.estimate(df)
+
+        assert result['proj_PG'].iloc[0] > 78
+        assert result['proj_PG'].iloc[0] < 82
+
+    def test_max_is_used_plus_one_per_day_per_slot_capped(self, estimator):
+        """Late in the season the max binds: 70 used with 5 days left cannot pass 75."""
+        df = make_df(avg_pace=75.0, days_remaining=5, days_elapsed=150,
+                     slot_values={**{s: 70 for s in SLOTS}, 'UTIL': 210})
+        result = estimator.estimate(df)
+
+        w2 = 75.0 / 82
+        rate_pg = (1 - w2) * min(70 * 82 / 75.0, 82) + w2 * (70 + (70 / 150) * 5)
+        assert result['proj_PG'].iloc[0] == pytest.approx(with_max(75.0, rate_pg, 75), rel=1e-6)
+        rate_util = (1 - w2) * min(210 * 82 / 75.0, 248) + w2 * (210 + (210 / 150) * 5)
+        assert result['proj_UTIL'].iloc[0] == pytest.approx(with_max(75.0, rate_util, 225), rel=1e-6)
