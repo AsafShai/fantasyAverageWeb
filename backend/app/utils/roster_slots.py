@@ -8,3 +8,5 @@ SLOT_CAPS = {
     'C': 82, 'G': 82, 'F': 82, 'UTIL': 248,
 }
 SLOT_NAMES = list(SLOT_CAPS.keys())
+# Roster slots per column: every game day can fill each one, so UTIL gains three a day.
+SLOT_MULTIPLICITY = {slot: 3 if slot == 'UTIL' else 1 for slot in SLOT_NAMES}

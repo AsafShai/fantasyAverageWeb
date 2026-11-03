@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GameLogEntry, GameLogResponse } from '../../types/api'
-import { fmtDelta, fmtValue, seasonAttempts, summarize } from '../playerTrendsSummary'
+import { fmtDelta, fmtValue, seasonAttempts, summarize, trendWindowFor } from '../playerTrendsSummary'
 
 function game(overrides: Partial<GameLogEntry>): GameLogEntry {
   return {
@@ -14,6 +14,12 @@ function game(overrides: Partial<GameLogEntry>): GameLogEntry {
     fta: 2,
     fg3m: 1,
     fg3a: 3,
+    pts: 15,
+    reb: 5,
+    ast: 3,
+    stl: 1,
+    blk: 1,
+    tov: 2,
     ...overrides,
   }
 }
@@ -119,5 +125,44 @@ describe('fmtValue / fmtDelta', () => {
   it('signs deltas explicitly', () => {
     expect(fmtDelta(4, 'minutes')).toBe('+4.0')
     expect(fmtDelta(-2.3, 'usage')).toBe('-2.3%')
+  })
+})
+
+describe('summarize counting categories', () => {
+  it('averages the category per game, season vs window', () => {
+    const l = log({
+      window_start: '2026-01-10',
+      games: [
+        game({ game_date: '2026-01-01', pts: 10, min: 20 }),
+        game({ game_date: '2026-01-02', pts: 14, min: 20 }),
+        game({ game_date: '2026-01-11', pts: 24, min: 40 }),
+      ],
+    })
+    const s = summarize(l, 'PTS')
+    expect(s.seasonValue).toBeCloseTo(16)
+    expect(s.windowValue).toBeCloseTo(24)
+    expect(s.delta).toBeCloseTo(8)
+    expect(fmtValue(16, 'PTS')).toBe('16.0')
+    expect(fmtDelta(-1.25, 'TO')).toBe('-1.3')
+  })
+})
+
+describe('trendWindowFor', () => {
+  const anchor = '2026-11-01'
+  it('maps the page time frame to the comparison window', () => {
+    expect(trendWindowFor('last_7', null, anchor)).toEqual({ days: 7, fallback: null })
+    expect(trendWindowFor('last_15', null, anchor)).toEqual({ days: 15, fallback: null })
+    expect(trendWindowFor('last_30', null, anchor)).toEqual({ days: 30, fallback: null })
+  })
+  it('falls back to 15 days for Full Season', () => {
+    expect(trendWindowFor('season', null, anchor)).toEqual({ days: 15, fallback: 'season' })
+  })
+  it('uses a custom range that ends on the latest game day', () => {
+    expect(trendWindowFor('custom', { start: '2026-10-22', end: '2026-11-01' }, anchor)).toEqual({ days: 10, fallback: null })
+  })
+  it('falls back for a custom range that ends earlier, is too short, or before the anchor is known', () => {
+    expect(trendWindowFor('custom', { start: '2026-10-10', end: '2026-10-20' }, anchor).fallback).toBe('custom')
+    expect(trendWindowFor('custom', { start: '2026-10-30', end: '2026-11-01' }, anchor).fallback).toBe('custom')
+    expect(trendWindowFor('custom', { start: '2026-10-22', end: '2026-11-01' }, null).fallback).toBe('custom')
   })
 })

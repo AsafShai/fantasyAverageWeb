@@ -85,6 +85,7 @@ class FantasyEstimator:
         nba_avg_pace: float,
         mean_gp_per_period: float,
         projected_total_gp: float,
+        mean_weight_sq: float = 0.0,
     ) -> dict:
         """
         From window mean/cov and current state, compute estimated_final and variance per stat
@@ -105,8 +106,19 @@ class FantasyEstimator:
             estimated_final_component[av] = current_state[av] + mean_vector.loc[av, "mean"] * remaining_games
 
         # Σ̂ = cov of per-game averages. Var(total of n games) = n * G̃ * Σ̂
-        # where G̃ = mean_gp_per_period (avg player-games per period).
-        full_cov_remaining = covariance_matrix * remaining_games * mean_gp_per_period
+        # where G̃ = mean_gp_per_period (avg player-games per period) — the luck of
+        # the games to come, were each team's per-game level known exactly.
+        # It is not: the mean is itself an estimate, Var(μ̂) = Σ̂ · Σω² (mean_weight_sq),
+        # and its error repeats in every remaining game, adding n² · Σ̂ · Σω².
+        # Together: n · G̃ · Σ̂ · (1 + n · Σω² / G̃) — with equal weights over N games
+        # seen, 1 + n / N. Both terms carry a scale fitted on last season (see
+        # FantasyConfiguration).
+        config = self.fantasy_configuration
+        mean_error = (
+            config.mean_uncertainty_scale * remaining_games * mean_weight_sq / mean_gp_per_period
+            if mean_gp_per_period > 0 else 0.0
+        )
+        full_cov_remaining = covariance_matrix * remaining_games * mean_gp_per_period * (config.luck_scale + mean_error)
         variance_component = {av: full_cov_remaining.loc[av, av] for av in stat_cols}
 
         # Percentage stats: ratio + delta method with correlation
@@ -208,9 +220,10 @@ class FantasyEstimator:
                 float(last_row[c.GP]), nba_avg_pace, float(sum(SLOT_CAPS.values()))
             )
 
+        omega = self.window_estimator.mean_weights(df_team)
         row, mean_10, cov_10 = self._compute_final_and_variance(
             mean_vector, covariance_matrix, last_row, nba_avg_pace, mean_gp_per_period,
-            projected_total_gp,
+            projected_total_gp, float(np.sum(omega ** 2)),
         )
         row[c.TEAM_ID] = team_id
         row[c.TEAM_NAME] = team_name

@@ -145,6 +145,8 @@ export interface SlateLine {
   is_home: boolean
   game_id: string
   game_status: GameStatus
+  /** True only while this player's game is live and he is on the floor. */
+  on_court?: boolean
   min: string
   pts: string
   reb: string

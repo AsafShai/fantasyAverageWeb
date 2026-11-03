@@ -2,7 +2,7 @@ import math
 
 import pandas as pd
 
-from app.utils.roster_slots import SLOT_CAPS, SLOT_NAMES as SLOTS
+from app.utils.roster_slots import SLOT_CAPS, SLOT_MULTIPLICITY, SLOT_NAMES as SLOTS
 
 
 def _first_number(df: pd.DataFrame, column: str) -> float:
@@ -13,14 +13,32 @@ def _first_number(df: pd.DataFrame, column: str) -> float:
     return float(value)
 
 
+# Weight on the max at the end of the season. Early on the max carries almost all of
+# it: a team behind the rate after a week can still close the gap, so the rate means
+# little; late in the season there is less time to catch up, so the rate counts more.
+MAX_WEIGHT_AT_SEASON_END = 0.5
+
+
+def max_weight(avg_pace: float) -> float:
+    """Weight on the max in the projection: 1 on opening night, falling evenly with
+    the NBA pace to MAX_WEIGHT_AT_SEASON_END after 82 games."""
+    progress = min(max(avg_pace / 82, 0.0), 1.0)
+    return 1 - (1 - MAX_WEIGHT_AT_SEASON_END) * progress
+
+
 class SlotGamesEstimator:
     """
     Projects season-end games per roster slot for each fantasy team.
 
-    Blends two methods weighted by how far through the NBA season we are:
+    The rate estimate blends two methods weighted by how far through the NBA season we are:
       - Method 1 (pace extrapolation): dominates early in season
       - Method 2 (days-remaining projection): dominates late in season — games used
         so far plus the slot's fill rate per game day times the game days left
+
+    The projection is then max_weight * max + (1 - max_weight) * rate estimate, where
+    max is the most games the slot can still finish on (used + one per game day left
+    per roster slot, capped). Without the game days left there is no max, and the rate
+    estimate stands alone.
     """
 
     def estimate(self, slot_pace_df: pd.DataFrame) -> pd.DataFrame:
@@ -53,6 +71,7 @@ class SlotGamesEstimator:
 
         w2 = avg_pace / 82
         w1 = 1 - w2
+        a = max_weight(avg_pace)
 
         result = pd.DataFrame(slot_pace_df[['team_id', 'team_name']])
 
@@ -67,8 +86,10 @@ class SlotGamesEstimator:
             # The rate is per game day, not per NBA team game, so it can be multiplied
             # by the game days left: there are about two game days per team game.
             m2 = (g + (g / days_elapsed) * days_remaining).clip(upper=cap)
+            rate_estimate = w1 * m1 + w2 * m2
+            max_games = (g + days_remaining * SLOT_MULTIPLICITY[slot]).clip(upper=cap)
 
-            result[f'proj_{slot}'] = w1 * m1 + w2 * m2
+            result[f'proj_{slot}'] = a * max_games + (1 - a) * rate_estimate
 
         proj_cols = [f'proj_{s}' for s in SLOTS]
         result['proj_total'] = result[proj_cols].sum(axis=1)

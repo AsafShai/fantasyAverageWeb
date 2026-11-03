@@ -5,6 +5,7 @@ import {
   useGetTrendsMinutesQuery,
   useGetTrendsUsageQuery,
   useGetTrendsRegressionQuery,
+  useGetTrendsCategoriesQuery,
   useGetTrendGameLogQuery,
 } from '../store/api/fantasyApi'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -15,7 +16,8 @@ import InfoTip from '../components/InfoTip'
 import DateRangePicker from '../components/DateRangePicker'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
-import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange } from '../types/api'
+import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange, CategoryMoverItem, CategoryStatItem, CountingCategory } from '../types/api'
+import { countingCategoriesOf, isGoodChange } from '../utils/categoryTrends'
 import { fantasyTeamOptionLabel } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 
@@ -33,12 +35,13 @@ function subDaysIso(iso: string, days: number): string {
   return addDaysIso(iso, -days)
 }
 
-type TabKey = 'minutes' | 'usage' | 'shooting-season' | 'shooting-form'
+type TabKey = 'minutes' | 'usage' | 'categories' | 'shooting-season' | 'shooting-form'
 type Ownership = 'all' | 'fa' | 'rostered'
 
 const TABS: [TabKey, string, string][] = [
   ['minutes', 'Minutes Movers', 'Who is playing more or fewer minutes than their season average'],
   ['usage', 'Usage & Role', 'Whose share of their team’s possessions has moved'],
+  ['categories', 'Categories', 'Whose per-game output in your league’s counting categories (PTS, REB, AST, 3PM, STL, BLK, TO) has moved'],
   ['shooting-season', 'Shooting · Season', "Whose season shooting line is out of step with their history — the number that will look different by the time you trade them."],
   ['shooting-form', 'Shooting · Form', "Who is genuinely shooting above or below their own level right now, judged against everything outside the recency window. Small samples are filtered out by significance, not by a fixed attempt count."],
 ]
@@ -137,13 +140,15 @@ function StatusBadge({ fantasyStatus }: { fantasyStatus: string }) {
   return <span className="text-gray-400 dark:text-gray-500 text-xs">{fantasyStatus}</span>
 }
 
-function DeltaPill({ value, unit, decimals = 1 }: { value: number; unit: string; decimals?: number }) {
+// good: colour override for reverse-scored categories (TO), where a rise is bad.
+// The arrow always follows the raw direction; the colour follows fantasy value.
+function DeltaPill({ value, unit, decimals = 1, good }: { value: number; unit: string; decimals?: number; good?: boolean }) {
   const up = value >= 0
   const sign = up ? '+' : ''
   return (
     <span
       className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full text-xs whitespace-nowrap ${
-        up
+        good ?? up
           ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400'
           : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'
       }`}
@@ -375,6 +380,136 @@ function UsageTable({ items, filters, windowDays }: { items: UsageRoleItem[]; fi
               {open && (
                 <ExpandRow colSpan={9}>
                   <TrendGameLogChart playerId={r.player_id} playerName={r.player_name} mode="usage" windowDays={windowDays} />
+                </ExpandRow>
+              )}
+              </Fragment>
+            )})}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// Chart in an expanded row: starts on the category the row is about, the
+// player's other league categories one click away.
+function CategoryRowChart({ item, initial, cats, windowDays }: {
+  item: CategoryMoverItem
+  initial: CountingCategory
+  cats: CountingCategory[]
+  windowDays: number
+}) {
+  const [cat, setCat] = useState<CountingCategory>(initial)
+  return (
+    <TrendGameLogChart
+      playerId={item.player_id}
+      playerName={item.player_name}
+      mode="category"
+      windowDays={windowDays}
+      category={cat}
+      categories={cats}
+      onCategoryChange={setCat}
+    />
+  )
+}
+
+interface CategoryRow {
+  item: CategoryMoverItem
+  stat: CategoryStatItem
+}
+
+const CAT_SORT_VAL: Record<string, (r: CategoryRow) => number | string> = {
+  player: r => r.item.player_name,
+  team: r => r.item.pro_team,
+  season: r => r.stat.season_avg,
+  l5: r => r.stat.window_avg,
+  delta: r => r.stat.delta,
+  dmpg: r => r.item.window_mpg - r.item.season_mpg,
+  g15: r => r.item.games_last_15d,
+}
+
+function CategoryTable({ items, cat, cats, reverse, filters, windowDays }: {
+  items: CategoryMoverItem[]
+  cat: CountingCategory
+  cats: CountingCategory[]
+  reverse: ReadonlySet<string>
+  filters: Filters
+  windowDays: number
+}) {
+  const [sortCol, setSortCol] = useState('delta')
+  const [sortAsc, setSortAsc] = useState(false)
+  const { open: expanded, toggle } = useExpandedSet()
+
+  const flagged = useMemo(() => items.flatMap(item => {
+    const stat = item.stats.find(s => s.cat === cat)
+    return stat?.flagged ? [{ item, stat }] : []
+  }), [items, cat])
+
+  const rows = useMemo(() => {
+    const filtered = flagged.filter(r => passesShared(r.item, filters))
+    const getVal = CAT_SORT_VAL[sortCol] ?? CAT_SORT_VAL.delta
+    return [...filtered].sort((a, b) => {
+      const av = getVal(a), bv = getVal(b)
+      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number)
+      return sortAsc ? cmp : -cmp
+    })
+  }, [flagged, filters, sortCol, sortAsc])
+
+  const handleSort = (col: string) => {
+    if (col === sortCol) setSortAsc(a => !a)
+    else { setSortCol(col); setSortAsc(false) }
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+        Δ MPG shows whether the minutes moved with it.{reverse.has(cat) && <> For {cat}, fewer is better.</>} Click any row for the game-by-game chart.
+      </p>
+      <div className="overflow-auto max-h-[70vh] rounded-lg">
+        <table className="w-full text-xs sm:text-sm">
+          <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
+            <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+              <Th col="player" label="Player" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700" />
+              <Th col="team" label="Team" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+              <Th col="season" label={`Season ${cat}`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`${cat} per game, full season`} />
+              <Th col="l5" label={`${windowDays}d ${cat}`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`${cat} per game over the last ${windowDays} days`} />
+              <Th col="delta" label={`Δ ${cat} vs season`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} title={`Change: ${windowDays}d ${cat} per game minus season`} />
+              <Th col="dmpg" label="Δ MPG" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" title={`Change: ${windowDays}d MPG minus season MPG`} />
+              <Th col="g15" label={`G(${windowDays}d)`} sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} className="hidden sm:table-cell" />
+              <th className="px-1.5 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" title="Fantasy owner, or FA if unrostered">Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && <EmptyRow colSpan={8} noneQualify={flagged.length === 0} />}
+            {rows.map(({ item: r, stat }) => {
+              const open = expanded.has(r.player_id)
+              const dmpg = r.window_mpg - r.season_mpg
+              return (
+              <Fragment key={r.player_id}>
+              <tr
+                onClick={() => toggle(r.player_id)}
+                tabIndex={0}
+                role="button"
+                aria-expanded={open}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && toggle(r.player_id)}
+                className="group cursor-pointer border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+              >
+                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700">
+                  <Caret open={open} />
+                  {r.player_name}
+                  {r.low_sample && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">partial</span>}
+                </td>
+                <td className="hidden sm:table-cell px-3 py-2 text-gray-500 dark:text-gray-400">{r.pro_team}</td>
+                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{stat.season_avg.toFixed(1)}</td>
+                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{stat.window_avg.toFixed(1)}</td>
+                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><DeltaPill value={stat.delta} unit="" good={isGoodChange(stat.delta, cat, reverse)} /></td>
+                <td className="hidden sm:table-cell px-3 py-2 text-gray-700 dark:text-gray-300">{dmpg >= 0 ? '+' : ''}{dmpg.toFixed(1)}mpg</td>
+                <td className="hidden sm:table-cell px-3 py-2 text-gray-700 dark:text-gray-300">{r.games_last_15d}</td>
+                <td className="px-1.5 sm:px-3 py-1.5 sm:py-2"><StatusBadge fantasyStatus={r.fantasy_status} /></td>
+              </tr>
+              {open && (
+                <ExpandRow colSpan={8}>
+                  <CategoryRowChart item={r} initial={cat} cats={cats} windowDays={windowDays} />
                 </ExpandRow>
               )}
               </Fragment>
@@ -643,6 +778,7 @@ export default function Trends() {
     0,
     urlTabIsForm ? urlBaseline : undefined,
   )
+  const [categoryChoice, setCategoryChoice] = usePersistedState<string>('trends.category', 'PTS')
   const [customStartIso, setCustomStartIso] = useState<string | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
   const [customError, setCustomError] = useState<string | null>(null)
@@ -663,6 +799,19 @@ export default function Trends() {
 
   const minutesQuery = useGetTrendsMinutesQuery({ windowDays }, { skip: tab !== 'minutes' })
   const usageQuery = useGetTrendsUsageQuery({ windowDays }, { skip: tab !== 'usage' })
+  const categoriesQuery = useGetTrendsCategoriesQuery({ windowDays }, { skip: tab !== 'categories' })
+  const leagueCats = useMemo(
+    () => countingCategoriesOf(categoriesQuery.data?.league_categories),
+    [categoriesQuery.data],
+  )
+  const reverseCats = useMemo(
+    () => new Set<string>(categoriesQuery.data?.reverse_categories ?? []),
+    [categoriesQuery.data],
+  )
+  // a remembered category the league no longer scores falls back to the grid
+  // the remembered category, or PTS / the league's first one when it isn't scored here
+  const activeCategory: CountingCategory = leagueCats.find(c => c === categoryChoice)
+    ?? (leagueCats.includes('PTS') ? 'PTS' : leagueCats[0])
   const regressionQuery = useGetTrendsRegressionQuery(
     { windowDays, baselineSeasons, mode: regressionMode ?? 'season' },
     { skip: !isShooting },
@@ -677,7 +826,9 @@ export default function Trends() {
     ? minutesQuery.data?.items[0]?.player_id
     : tab === 'usage'
       ? usageQuery.data?.items[0]?.player_id
-      : regressionQuery.data?.items[0]?.player_id
+      : tab === 'categories'
+        ? categoriesQuery.data?.items[0]?.player_id
+        : regressionQuery.data?.items[0]?.player_id
 
   const anchorQuery = useGetTrendGameLogQuery(
     { playerId: anchorSourceId ?? 0, windowDays },
@@ -718,16 +869,21 @@ export default function Trends() {
     ? minutesQuery.data?.min_window_gp ?? 0
     : tab === 'usage'
       ? usageQuery.data?.min_window_gp ?? 0
-      : 0
+      : tab === 'categories'
+        ? categoriesQuery.data?.min_window_gp ?? 0
+        : 0
   const effectiveMinGames = Math.max(minGames, minGamesFloor)
 
   const filters: Filters = { nameFilter, position, minG15: effectiveMinGames, ownership, fantasyTeam }
 
   const gpGates = tab === 'minutes' ? minutesQuery.data : tab === 'usage' ? usageQuery.data : undefined
   const regressionGates = isShooting ? regressionQuery.data : undefined
+  const categoryGates = tab === 'categories' ? categoriesQuery.data : undefined
   // Who can appear at all on the active tab — shown above the table always,
   // so the rule stays visible once players start to qualify.
-  const eligibilityRule = gpGates
+  const eligibilityRule = categoryGates
+    ? `Shows players with ${categoryGates.min_season_gp}+ games this season and ${categoryGates.min_window_gp}+ in the last ${windowDays} days, and a change of ${(categoryGates.min_delta[activeCategory] ?? 0).toFixed(1)}+ ${activeCategory} per game, up or down.`
+    : gpGates
     ? `Shows players with ${gpGates.min_season_gp}+ games this season and ${gpGates.min_window_gp}+ in the last ${windowDays} days.`
     : regressionGates?.mode === 'form'
       ? `Shows players with ${regressionGates.min_window_attempts}+ shots in the last ${windowDays} days and ${regressionGates.min_baseline_attempts}+ before that.`
@@ -735,16 +891,16 @@ export default function Trends() {
         ? `Shows players with ${regressionGates.min_season_attempts['3P%']}+ threes, ${regressionGates.min_season_attempts['FT%']}+ free throws or ${regressionGates.min_season_attempts['FG%']}+ field goals attempted this season.`
         : null
 
-  const activeQuery = tab === 'minutes' ? minutesQuery : tab === 'usage' ? usageQuery : regressionQuery
+  const activeQuery = tab === 'minutes' ? minutesQuery : tab === 'usage' ? usageQuery : tab === 'categories' ? categoriesQuery : regressionQuery
 
   // No endpoint returns a league-wide game-night count directly, so this
   // approximates it from the loaded data: the most games any single player
   // logged in the window is, in practice, the number of nights the league
   // actually played (a full-minutes player hits every one of them).
   const gameNights = useMemo(() => {
-    const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? regressionQuery.data?.items ?? []
+    const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? categoriesQuery.data?.items ?? regressionQuery.data?.items ?? []
     return items.reduce((max, r) => Math.max(max, r.games_last_15d), 0) || null
-  }, [minutesQuery.data, usageQuery.data, regressionQuery.data])
+  }, [minutesQuery.data, usageQuery.data, categoriesQuery.data, regressionQuery.data])
 
   // Picker choices run from the tab's floor up to the window's game nights —
   // more games than nights played can't exist. With no data yet (early season)
@@ -756,30 +912,30 @@ export default function Trends() {
   const isShootingSeasonTab = tab === 'shooting-season'
 
   const teamOptions = useMemo(() => {
-    const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? regressionQuery.data?.items ?? []
+    const items = minutesQuery.data?.items ?? usageQuery.data?.items ?? categoriesQuery.data?.items ?? regressionQuery.data?.items ?? []
     const names = [...new Set(items.map(i => i.fantasy_status).filter(t => t !== 'FA'))].sort()
     if (!myTeam || !names.includes(myTeam.team_name)) return names
     return [myTeam.team_name, ...names.filter(name => name !== myTeam.team_name)]
-  }, [minutesQuery.data, usageQuery.data, regressionQuery.data, myTeam])
+  }, [minutesQuery.data, usageQuery.data, categoriesQuery.data, regressionQuery.data, myTeam])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
       <div className="max-w-screen-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">📈 Trends</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Whose situation just changed — minutes, usage, shooting. Click any player for their game-by-game chart.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Whose situation just changed — minutes, usage, scoring categories, shooting. Click any player for their game-by-game chart.</p>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 sm:p-4 mb-6 space-y-4">
           {/* mobile: one control group per full-width row, buttons stretched to a
               common edge; desktop keeps the flowing single row */}
           <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:flex sm:flex-wrap sm:gap-x-2 sm:gap-y-3 sm:items-center">
-            {/* four tabs overflow one row at 390px, so mobile gets a 2x2 grid */}
+            {/* five tabs overflow one row at 390px, so mobile gets a 2-column grid, the odd last tab full width */}
             <div className="col-span-2 grid grid-cols-2 sm:flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm">
               {TABS.map(([key, label, help]) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
                   title={help}
-                  className={`px-3 py-2 sm:py-1.5 whitespace-nowrap ${tab === key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+                  className={`px-3 py-2 sm:py-1.5 whitespace-nowrap last:col-span-2 ${tab === key ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
                 >
                   {label}
                 </button>
@@ -896,6 +1052,21 @@ export default function Trends() {
                 {minGamesOptions.map(n => <option key={n} value={n}>{n === 0 ? 'Any' : `${n}+`}</option>)}
               </select>
             </label>
+            {tab === 'categories' && (
+              <div className="col-span-2 sm:basis-full flex items-center gap-1.5 overflow-x-auto sm:flex-wrap" role="group" aria-label="Category">
+                <span className="shrink-0 text-xs sm:text-sm text-gray-600 dark:text-gray-300 mr-1">Category</span>
+                {leagueCats.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setCategoryChoice(c)}
+                    title={`Players whose ${c} per game moved`}
+                    className={`shrink-0 px-2.5 py-2 sm:py-1.5 rounded-lg border text-xs sm:text-sm whitespace-nowrap ${activeCategory === c ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600'}`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
             {isShooting && (
               <label
                 className="col-span-2 flex flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:gap-1.5 sm:ml-4 text-xs sm:text-sm text-gray-600 dark:text-gray-300"
@@ -928,6 +1099,9 @@ export default function Trends() {
               {eligibilityRule && <p className="text-xs text-gray-500 dark:text-gray-400">{eligibilityRule}</p>}
               {tab === 'minutes' && minutesQuery.data && <MinutesTable items={minutesQuery.data.items} filters={filters} windowDays={windowDays} />}
               {tab === 'usage' && usageQuery.data && <UsageTable items={usageQuery.data.items} filters={filters} windowDays={windowDays} />}
+              {tab === 'categories' && categoriesQuery.data && (
+                <CategoryTable key={activeCategory} items={categoriesQuery.data.items} cat={activeCategory} cats={leagueCats} reverse={reverseCats} filters={filters} windowDays={windowDays} />
+              )}
               {isShooting && regressionQuery.data && (
                 <RegressionTable
                   key={regressionQuery.data.mode}

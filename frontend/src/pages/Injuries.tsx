@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useInjuryData } from '../hooks/useInjuryData';
 import { useDebounce } from '../hooks/useDebounce';
 import InjuryFilters from '../components/injuries/InjuryFilters';
@@ -7,7 +7,7 @@ import NotificationsPanel from '../components/injuries/NotificationsPanel';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { useMyTeam } from '../context/MyTeamContext';
-import { useGetTeamDetailQuery } from '../store/api/fantasyApi';
+import { useGetNbaTeamsListQuery, useGetTeamDetailQuery } from '../store/api/fantasyApi';
 import { normalizePlayerName } from '../utils/playerName';
 
 interface Filters {
@@ -16,23 +16,86 @@ interface Filters {
   statuses: string[];
 }
 
+/** Letters and digits only, so "Philadelphia 76ers" and "Philadelphia76ers" match. */
+function teamKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** Widest first. The two narrower choices nest, so only one can be on. */
+type InjuryScope = 'all' | 'teams' | 'players'
+
+const INJURY_SCOPES: { id: InjuryScope; label: string; hint: string }[] = [
+  { id: 'all', label: 'All', hint: '' },
+  { id: 'teams', label: "My players' teams", hint: 'Every injury on an NBA team where one of your players plays.' },
+  { id: 'players', label: 'My players', hint: 'Only players on your roster.' },
+]
+
+function InjuryScopeControl({
+  scope,
+  onChange,
+  rosterError,
+  teamsError,
+}: {
+  scope: InjuryScope
+  onChange: (scope: InjuryScope) => void
+  rosterError: boolean
+  teamsError: boolean
+}) {
+  const hint = INJURY_SCOPES.find(option => option.id === scope)?.hint
+  return (
+    <div>
+      <div
+        role="radiogroup"
+        aria-label="Whose injuries to show"
+        className="flex w-full max-w-full flex-col overflow-hidden rounded-lg border border-gray-300 dark:border-gray-600 lg:inline-flex lg:w-auto lg:flex-row"
+      >
+        {INJURY_SCOPES.map(option => {
+          const selected = scope === option.id
+          return (
+            <label
+              key={option.id}
+              className={`flex min-h-[2.75rem] cursor-pointer items-center justify-center border-b border-gray-200 px-4 py-2.5 text-center text-sm font-medium leading-snug last:border-b-0 has-[:focus-visible]:relative has-[:focus-visible]:z-10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset dark:border-gray-600 lg:min-h-0 lg:min-w-0 lg:whitespace-nowrap lg:border-b-0 lg:border-r lg:px-4 lg:py-2 lg:last:border-r-0 ${
+                option.id === 'teams' ? 'lg:flex-[1.35]' : 'lg:shrink-0'
+              } ${
+                selected
+                  ? 'bg-blue-600 text-white has-[:focus-visible]:ring-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 has-[:focus-visible]:ring-blue-400 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              <input
+                type="radio"
+                name="injury-scope"
+                value={option.id}
+                checked={selected}
+                onChange={() => onChange(option.id)}
+                className="sr-only"
+              />
+              {option.label}
+            </label>
+          )
+        })}
+      </div>
+      {hint && <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
+      {rosterError && <p className="mt-1.5 text-xs text-gray-500">Could not load your roster, showing every injury.</p>}
+      {teamsError && <p className="mt-1.5 text-xs text-gray-500">Could not load NBA teams, showing every injury.</p>}
+    </div>
+  )
+}
+
 export default function Injuries() {
   const { records, loading, error, notifications, lastReportTime } = useInjuryData();
   const [filters, setFilters] = useState<Filters>({ search: '', teams: [], statuses: [] });
   const [notifOpen, setNotifOpen] = useState(false);
   const { myTeam, myTeamId } = useMyTeam();
-  // Every team's injuries by default; "My roster" narrows to My Team on request.
-  const [myRosterOnly, setMyRosterOnly] = useState(false);
+  // One choice: everyone, the NBA teams your players are on, or only your players.
+  const [scope, setScope] = useState<InjuryScope>('all');
+  const rosterNeeded = scope !== 'all';
   const rosterQuery = useGetTeamDetailQuery(
     { teamId: myTeamId ?? 0 },
-    { skip: myTeamId == null || !myRosterOnly },
+    { skip: myTeamId == null || !rosterNeeded },
   );
+  const nbaTeamsQuery = useGetNbaTeamsListQuery(undefined, { skip: myTeamId == null || scope !== 'teams' });
   const debouncedSearch = useDebounce(filters.search, 300);
-
-  const teams = useMemo(() => {
-    const unique = Array.from(new Set(records.map(r => r.team))).sort();
-    return unique;
-  }, [records]);
 
   const rosterNames = useMemo(() => {
     const names = new Set<string>();
@@ -42,7 +105,53 @@ export default function Injuries() {
     return names;
   }, [rosterQuery.data]);
 
-  const rosterFilterOn = myTeamId != null && myRosterOnly && rosterQuery.isSuccess;
+  const rosterFilterOn = myTeamId != null && scope === 'players' && rosterQuery.isSuccess;
+  const myNbaTeamKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const nameByAbbr = new Map((nbaTeamsQuery.data ?? []).map(team => [team.abbreviation, team.team_name]));
+    for (const player of rosterQuery.data?.players ?? []) {
+      const abbr = player.pro_team?.trim();
+      if (!abbr || abbr === 'FA') continue;
+      keys.add(teamKey(abbr));
+      const name = nameByAbbr.get(abbr);
+      if (name) keys.add(teamKey(name));
+    }
+    return keys;
+  }, [rosterQuery.data, nbaTeamsQuery.data]);
+  const nbaTeamsFilterOn = myTeamId != null && scope === 'teams' && rosterQuery.isSuccess && nbaTeamsQuery.isSuccess;
+
+  const scopeDataLoading =
+    myTeamId != null &&
+    scope !== 'all' &&
+    (rosterQuery.isLoading || (scope === 'teams' && nbaTeamsQuery.isLoading));
+
+  /** Rows visible for the current scope, before search / team / status filters. */
+  const recordsInScope = useMemo(() => {
+    if (scope === 'all' || myTeamId == null) return records;
+    if (scope === 'players') {
+      if (!rosterFilterOn) return records;
+      return records.filter(r => rosterNames.has(normalizePlayerName(r.player)));
+    }
+    if (scope === 'teams') {
+      if (!nbaTeamsFilterOn) return records;
+      return records.filter(r => myNbaTeamKeys.has(teamKey(r.team)));
+    }
+    return records;
+  }, [records, scope, myTeamId, rosterFilterOn, rosterNames, nbaTeamsFilterOn, myNbaTeamKeys]);
+
+  const teamOptions = useMemo(
+    () => Array.from(new Set(recordsInScope.map(r => r.team))).sort(),
+    [recordsInScope],
+  );
+
+  useEffect(() => {
+    const allowed = new Set(teamOptions);
+    setFilters(prev => {
+      const teams = prev.teams.filter(t => allowed.has(t));
+      if (teams.length === prev.teams.length) return prev;
+      return { ...prev, teams };
+    });
+  }, [teamOptions]);
 
   const filteredRecords = useMemo(() => {
     return records
@@ -53,9 +162,10 @@ export default function Injuries() {
         const matchesTeam = filters.teams.length === 0 || filters.teams.includes(r.team);
         const matchesStatus = filters.statuses.length === 0 || filters.statuses.includes(r.status);
         const matchesRoster = !rosterFilterOn || rosterNames.has(normalizePlayerName(r.player));
-        return matchesSearch && matchesTeam && matchesStatus && matchesRoster;
+        const matchesNbaTeam = !nbaTeamsFilterOn || myNbaTeamKeys.has(teamKey(r.team));
+        return matchesSearch && matchesTeam && matchesStatus && matchesRoster && matchesNbaTeam;
       })
-  }, [records, debouncedSearch, filters.teams, filters.statuses, rosterFilterOn, rosterNames]);
+  }, [records, debouncedSearch, filters.teams, filters.statuses, rosterFilterOn, rosterNames, nbaTeamsFilterOn, myNbaTeamKeys]);
 
   return (
     <>
@@ -111,29 +221,39 @@ export default function Injuries() {
 
             {/* Left panel — filters + table */}
             <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-4 sm:flex-nowrap">
-                <InjuryFilters filters={filters} onChange={setFilters} teams={teams} />
+              <div className="mb-4 space-y-3">
                 {myTeam && (
-                  <label className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200">
-                    <input
-                      type="checkbox"
-                      checked={myRosterOnly}
-                      onChange={(event) => setMyRosterOnly(event.target.checked)}
+                  <InjuryScopeControl
+                    scope={scope}
+                    onChange={setScope}
+                    rosterError={rosterNeeded && rosterQuery.isError}
+                    teamsError={scope === 'teams' && nbaTeamsQuery.isError}
+                  />
+                )}
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    {myTeam && scope !== 'all' && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Search and filters below apply within your selection above.
+                      </p>
+                    )}
+                    <InjuryFilters
+                      filters={filters}
+                      onChange={setFilters}
+                      teams={teamOptions}
+                      teamsDisabled={scopeDataLoading}
+                      teamsPlaceholder={myTeam && scope !== 'all' ? 'All teams in view' : 'All Teams'}
                     />
-                    My roster
-                  </label>
-                )}
-                {myTeam && myRosterOnly && rosterQuery.isError && (
-                  <span className="text-xs text-gray-500">Could not load your roster, showing every injury.</span>
-                )}
-                {lastReportTime && (
-                  <span className="text-xs text-gray-400 shrink-0">
-                    Last report: {new Date(lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                )}
+                  </div>
+                  {lastReportTime && (
+                    <span className="text-xs text-gray-400 shrink-0 pt-2">
+                      Last report: {new Date(lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="injury-table-scroll">
-                {myTeam && myRosterOnly && rosterQuery.isLoading ? (
+                {myTeam && rosterNeeded && (rosterQuery.isLoading || (scope === 'teams' && nbaTeamsQuery.isLoading)) ? (
                   <p className="py-6 text-sm text-gray-500">Loading your roster…</p>
                 ) : (
                   <InjuryTable records={filteredRecords} totalCount={records.length} />

@@ -823,6 +823,46 @@ export interface UsageResponse {
   min_window_gp: number;
 }
 
+export type CountingCategory = 'PTS' | 'REB' | 'AST' | '3PM' | 'STL' | 'BLK' | 'TO';
+
+/** One counting category for one player: window per-game average vs the
+ * season's (window included). flagged = the change, up or down, reached the
+ * category's min_delta. */
+export interface CategoryStatItem {
+  cat: CountingCategory;
+  season_avg: number;
+  window_avg: number;
+  delta: number;
+  flagged: boolean;
+}
+
+export interface CategoryMoverItem {
+  player_id: number;
+  player_name: string;
+  pro_team: string;
+  position: string;
+  fantasy_status: string;
+  games_last_15d: number;
+  season_gp: number;
+  window_gp: number;
+  season_mpg: number;
+  window_mpg: number;
+  low_sample: boolean;
+  stats: CategoryStatItem[];
+}
+
+export interface CategoryResponse {
+  items: CategoryMoverItem[];
+  window_days: number;
+  last_updated: string;
+  league_categories: CountingCategory[];
+  reverse_categories: CountingCategory[];
+  // eligibility gates
+  min_season_gp: number;
+  min_window_gp: number;
+  min_delta: Partial<Record<CountingCategory, number>>;
+}
+
 export type RegressionStat = '3P%' | 'FT%' | 'FG%';
 
 export interface RegressionStatItem {
@@ -875,6 +915,12 @@ export interface GameLogEntry {
   fta: number;
   fg3m: number;
   fg3a: number;
+  pts: number;
+  reb: number;
+  ast: number;
+  stl: number;
+  blk: number;
+  tov: number;
 }
 
 export interface GameLogResponse {

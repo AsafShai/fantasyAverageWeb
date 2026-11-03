@@ -15,10 +15,11 @@ import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
-import type { GameLogEntry, GameLogResponse, RegressionStat, RegressionMode } from '../types/api'
+import type { CountingCategory, GameLogEntry, GameLogResponse, RegressionStat, RegressionMode } from '../types/api'
+import { CATEGORY_FIELD, COUNTING_CATEGORIES } from '../utils/categoryTrends'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 
-export type GameLogMode = 'minutes' | 'usage' | 'shooting'
+export type GameLogMode = 'minutes' | 'usage' | 'shooting' | 'category'
 
 const ROLLING_GAMES = 5
 
@@ -32,6 +33,7 @@ const LINE_COLOR: Record<GameLogMode, string> = {
   minutes: '#3b82f6',
   usage: '#f59e0b',
   shooting: '#10b981',
+  category: '#3b82f6',
 }
 
 const BAR_COLOR = '#8b5cf6'
@@ -78,9 +80,13 @@ interface ChartRow {
   minutes: number
 }
 
-function buildRows(log: GameLogResponse, mode: GameLogMode, stat: RegressionStat): ChartRow[] {
+function buildRows(log: GameLogResponse, mode: GameLogMode, stat: RegressionStat, category: CountingCategory): ChartRow[] {
   return log.games.map((g, i) => {
     const base = { date: g.game_date, label: shortDate(g.game_date), matchup: g.matchup, minutes: g.min, capped: false }
+    if (mode === 'category') {
+      const v = (g[CATEGORY_FIELD[category]] as number) ?? 0
+      return { ...base, value: v, trueValue: v, bar: g.min, rawPct: null }
+    }
     if (mode === 'minutes') {
       return { ...base, value: g.min, trueValue: g.min, bar: 0, rawPct: null }
     }
@@ -118,13 +124,15 @@ const OUTLIER_HEADROOM = 1.35
 // bottom or a legitimately low game vanishes. So: floor is always the true
 // minimum, ceiling only backs off when the top outliers sit far above the 95th
 // percentile, and any point above it is capped and marked rather than clipped.
-function chartScale(values: number[], refs: number[]): { domain: [number, number]; cap: number } {
+// Counting stats are plain per-game totals, not rates, so a big night is real
+// and is never capped (noCap).
+function chartScale(values: number[], refs: number[], noCap = false): { domain: [number, number]; cap: number } {
   const sorted = [...values].sort((a, b) => a - b)
   const dataMin = sorted[0]
   const dataMax = sorted[sorted.length - 1]
   const p95 = percentile(sorted, 0.95)
 
-  const cap = dataMax > p95 * OUTLIER_HEADROOM ? p95 * OUTLIER_HEADROOM : dataMax
+  const cap = !noCap && dataMax > p95 * OUTLIER_HEADROOM ? p95 * OUTLIER_HEADROOM : dataMax
 
   let lo = dataMin
   let hi = cap
@@ -160,14 +168,24 @@ function StatBlock({ rows }: { rows: [string, string][] }) {
   )
 }
 
-function ChartTooltip({ active, payload, mode, stat }: {
+function ChartTooltip({ active, payload, mode, stat, category }: {
   active?: boolean
   payload?: { payload: ChartRow }[]
   mode: GameLogMode
   stat: RegressionStat
+  category: CountingCategory
 }) {
   if (!active || !payload?.length) return null
   const r = payload[0].payload
+  if (mode === 'category') {
+    return (
+      <div className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-[11px] shadow">
+        <div className="font-semibold text-gray-800 dark:text-gray-100">{r.label} · {r.matchup}</div>
+        <div className="text-gray-600 dark:text-gray-300">{category}: {r.trueValue}</div>
+        <div className="text-gray-500 dark:text-gray-400">MIN: {r.bar.toFixed(0)}</div>
+      </div>
+    )
+  }
   const unit = mode === 'minutes' ? ' min' : '%'
   const main = mode === 'minutes' ? 'MPG' : mode === 'usage' ? 'USG' : `${stat} (${ROLLING_GAMES}g)`
   return (
@@ -195,16 +213,22 @@ interface Props {
   stat?: RegressionStat
   qualifiedStats?: RegressionStat[]
   onStatChange?: (stat: RegressionStat) => void
+  /** mode='category': which counting category, and which ones to offer */
+  category?: CountingCategory
+  categories?: CountingCategory[]
+  onCategoryChange?: (cat: CountingCategory) => void
 }
 
 export default function TrendGameLogChart({
   playerId, playerName, mode, regressionMode = 'season', windowDays, baselineSeasons = 2,
   stat = '3P%', qualifiedStats = [], onStatChange,
+  category = 'PTS', categories = COUNTING_CATEGORIES, onCategoryChange,
 }: Props) {
   const { data: log, isLoading, error } = useGetTrendGameLogQuery({ playerId, windowDays, baselineSeasons, mode: regressionMode })
   const isForm = mode === 'shooting' && regressionMode === 'form'
+  const isCategory = mode === 'category'
 
-  const rows = useMemo(() => (log ? buildRows(log, mode, stat) : []), [log, mode, stat])
+  const rows = useMemo(() => (log ? buildRows(log, mode, stat, category) : []), [log, mode, stat, category])
 
   if (isLoading) return <div className="py-6"><LoadingSpinner /></div>
   if (error) return <ErrorMessage message={getErrorMessage(error, `Could not load ${playerName}'s game log.`)} />
@@ -221,16 +245,20 @@ export default function TrendGameLogChart({
   const bandStart = windowRows.length ? windowRows[0].label : null
   const bandEnd = rows[rows.length - 1].label
 
-  const seasonRef = mode === 'minutes' ? log.season_mpg : mode === 'usage' ? log.season_usg : log.season_pct[stat]
+  const categorySeasonMean = rows.reduce((s, r) => s + r.trueValue, 0) / rows.length
+  const seasonRef = isCategory
+    ? categorySeasonMean
+    : mode === 'minutes' ? log.season_mpg : mode === 'usage' ? log.season_usg : log.season_pct[stat]
   const baselineRef = mode === 'shooting' ? log.baseline_pct[stat] : undefined
   const leagueRef = mode === 'shooting'
     ? log.league_pct[stat]
     : mode === 'usage' ? (log.league_usg ?? undefined) : undefined
-  const unit = mode === 'minutes' ? '' : '%'
+  const unit = mode === 'minutes' || isCategory ? '' : '%'
 
   const { domain, cap } = chartScale(
     rows.map(r => r.value),
     [seasonRef, baselineRef, leagueRef].filter((v): v is number => v !== undefined),
+    isCategory,
   )
   const cappedRows = rows.map(r => (r.value > cap ? { ...r, value: cap, capped: true } : r))
   const cappedCount = cappedRows.filter(r => r.capped).length
@@ -256,7 +284,13 @@ export default function TrendGameLogChart({
   })()
 
   const statRows: [string, string][] =
-    mode === 'minutes'
+    isCategory
+      ? [
+          [`Season ${category}`, categorySeasonMean.toFixed(1)],
+          [`${windowDays}d ${category}`, windowMean === null ? '—' : windowMean.toFixed(1)],
+          ['Games', String(log.season_gp)],
+        ]
+    : mode === 'minutes'
       ? [
           ['Season MPG', log.season_mpg.toFixed(1)],
           [`${windowDays}d MPG`, windowMean === null ? '—' : windowMean.toFixed(1)],
@@ -305,7 +339,21 @@ export default function TrendGameLogChart({
           {mode === 'minutes' && 'minutes in each game'}
           {mode === 'usage' && 'usage rate in each game · bars = minutes'}
           {mode === 'shooting' && `${stat}, rolling ${ROLLING_GAMES} games · bars = attempts`}
+          {isCategory && `${category} in each game · bars = minutes`}
         </span>
+        {isCategory && onCategoryChange && categories.length > 1 && (
+          <div className="flex flex-wrap rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-[11px]">
+            {categories.map(c => (
+              <button
+                key={c}
+                onClick={e => { e.stopPropagation(); onCategoryChange(c) }}
+                className={`px-2.5 py-1 ${c === category ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
         {mode === 'shooting' && selectableStats.length > 1 && (
           <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-[11px]">
             {selectableStats.map(s => (
@@ -333,9 +381,9 @@ export default function TrendGameLogChart({
             <ComposedChart data={cappedRows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--trend-grid)" />
               <XAxis dataKey="label" tick={{ fontSize: 9 }} interval="preserveStartEnd" minTickGap={24} />
-              <YAxis yAxisId="main" tick={{ fontSize: 9 }} domain={domain} allowDataOverflow width={34} tickFormatter={(v: number) => v.toFixed(0)} />
+              <YAxis yAxisId="main" tick={{ fontSize: 9 }} domain={domain} allowDataOverflow width={34} tickFormatter={(v: number) => v.toFixed(domain[1] - domain[0] < 5 ? 1 : 0)} />
               <YAxis yAxisId="bar" orientation="right" hide domain={[0, (max: number) => max * 3]} />
-              <Tooltip content={<ChartTooltip mode={mode} stat={stat} />} />
+              <Tooltip content={<ChartTooltip mode={mode} stat={stat} category={category} />} />
               {bandStart && (
                 <ReferenceArea
                   yAxisId="main"
@@ -345,6 +393,9 @@ export default function TrendGameLogChart({
                   fillOpacity={1}
                   stroke="var(--trend-band-label)"
                   strokeOpacity={0.5}
+                  // with a Bar on the second y-axis, the default 'discard'
+                  // check dropped the band (Usage & Role never showed it)
+                  ifOverflow="visible"
                 />
               )}
               {mode !== 'minutes' && <Bar yAxisId="bar" dataKey="bar" fill={BAR_COLOR} fillOpacity={0.45} isAnimationActive={false} />}
@@ -395,14 +446,14 @@ export default function TrendGameLogChart({
 
       <Legend items={[
         {
-          label: mode === 'minutes' ? 'Minutes' : mode === 'usage' ? 'USG%' : `${stat} · ${ROLLING_GAMES}g`,
+          label: mode === 'minutes' ? 'Minutes' : mode === 'usage' ? 'USG%' : isCategory ? category : `${stat} · ${ROLLING_GAMES}g`,
           hint: mode === 'shooting'
             ? `Rolling ${ROLLING_GAMES} games: total makes ÷ total attempts, so a 1-for-1 night doesn't count as a 100% game`
             : 'One point per game',
           color: LINE_COLOR[mode],
         },
         ...(mode === 'minutes' ? [] : [{
-          label: mode === 'usage' ? 'Minutes' : 'Attempts',
+          label: mode === 'usage' || isCategory ? 'Minutes' : 'Attempts',
           hint: 'One bar per game',
           bar: true,
         }]),

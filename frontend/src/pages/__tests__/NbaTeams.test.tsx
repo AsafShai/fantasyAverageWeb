@@ -90,6 +90,39 @@ describe('NbaTeams page', () => {
     expect(screen.getByText('Point Guard')).toBeInTheDocument();
   });
 
+  it('marks a free agent and leaves a rostered player unmarked', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('/players/')) {
+          return jsonResponse({
+            players: [
+              { player_id: 1, status: 'FREEAGENT', player_name: 'Healthy', team_id: 0 },
+              { player_id: 2, status: 'ONTEAM', player_name: 'Hurt', team_id: 3 },
+              { player_id: 4, status: 'WAIVERS', player_name: 'Two', team_id: 0 },
+            ],
+          });
+        }
+        if (url.includes('depthchart')) return jsonResponse(depthChart);
+        if (url.includes('/nba-teams/')) return jsonResponse(nbaTeams);
+        return new Response('not found', { status: 404 });
+      }),
+    );
+    renderWithProviders(<NbaTeams />);
+    await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
+    await user.selectOptions(screen.getByRole('combobox'), '13');
+    const table = await screen.findByRole('table');
+    const healthy = within(table).getByText('Healthy').closest('div')!;
+    const hurt = within(table).getByText('Hurt').closest('div')!;
+    const two = within(table).getByText('Two').closest('div')!;
+    expect(within(healthy).getByText('FA')).toBeInTheDocument();
+    expect(within(healthy).getByTitle('Free agent')).toBeInTheDocument();
+    expect(within(hurt).queryByText('FA')).not.toBeInTheDocument();
+    expect(within(two).queryByText('FA')).not.toBeInTheDocument();
+  });
+
   it('excluding Out status removes Out players', async () => {
     const user = userEvent.setup();
     renderWithProviders(<NbaTeams />);

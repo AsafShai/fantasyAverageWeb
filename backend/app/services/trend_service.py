@@ -9,6 +9,9 @@ import pandas as pd
 
 from app.config import settings
 from app.models.trend_models import (
+    CategoryMoverItem,
+    CategoryResponse,
+    CategoryStatItem,
     GameLogEntry,
     GameLogResponse,
     MinutesMoverItem,
@@ -224,6 +227,9 @@ def compute_regression_groups(
     return groups
 
 
+# Default season-games gate for Minutes / Usage / Categories. The service reads
+# settings.trends_min_season_gp (env TRENDS_MIN_SEASON_GP, default 10) and
+# passes it in; the pure functions fall back to this when called directly.
 MIN_SEASON_GP = 10
 MIN_WINDOW_GP = 2
 LOW_SAMPLE_GP = 3  # window_gp below this -> "partial" badge, regardless of window_days
@@ -234,6 +240,7 @@ def compute_minutes_movers(
     window_df: pd.DataFrame,
     games_last_15d: dict[int, int],
     players_df: pd.DataFrame,
+    min_season_gp: int = MIN_SEASON_GP,
 ) -> list[MinutesMoverItem]:
     """Pure calc: season MPG vs MPG within the recency window (window_df is
     already date-bounded by the caller) -> eligibility-gated, player-level
@@ -256,7 +263,7 @@ def compute_minutes_movers(
 
         season_gp = int(season_row['gp'])
         window_gp = int(window_row['gp'])
-        if season_gp < MIN_SEASON_GP or window_gp < MIN_WINDOW_GP:
+        if season_gp < min_season_gp or window_gp < MIN_WINDOW_GP:
             continue
 
         player_name = str(season_row['player_name'])
@@ -325,6 +332,7 @@ def compute_usage_role(
     games_last_15d: dict[int, int],
     players_df: pd.DataFrame,
     window_start,
+    min_season_gp: int = MIN_SEASON_GP,
 ) -> list[UsageRoleItem]:
     """Pure calc: per-game USG% (never from summed totals) averaged over
     season vs the recency window (games with game_date >= window_start),
@@ -341,7 +349,7 @@ def compute_usage_role(
     items: list[UsageRoleItem] = []
     for player_id, group in games_df.groupby('player_id'):
         season_gp = len(group)
-        if season_gp < MIN_SEASON_GP:
+        if season_gp < min_season_gp:
             continue
 
         window_group = group[group['game_date'] >= window_start]
@@ -389,6 +397,113 @@ def compute_usage_role(
         ))
 
     items.sort(key=lambda i: abs(i.delta_usg), reverse=True)
+    return items
+
+
+# Category Movers. Column in the per-game frame for each counting category.
+_CATEGORY_COLUMNS = {
+    'PTS': 'pts',
+    'REB': 'reb',
+    'AST': 'ast',
+    '3PM': 'fg3m',
+    'STL': 'stl',
+    'BLK': 'blk',
+    'TO': 'p_tov',
+}
+# Smallest per-game change (window vs season, either direction) for a category
+# to list a player. Provisional, like DRIFT_THRESHOLD: tune once there's data.
+CATEGORY_MIN_DELTA = {
+    'PTS': 3.0,
+    'REB': 1.5,
+    'AST': 1.2,
+    '3PM': 0.6,
+    'STL': 0.4,
+    'BLK': 0.4,
+    'TO': 0.6,
+}
+
+
+def _category_stat(cat: str, values: pd.Series, window_mask: pd.Series) -> CategoryStatItem:
+    """Window per-game mean vs season per-game mean (window included), like
+    Minutes Movers. Flagged when the change, up or down, reaches the
+    category's minimum."""
+    n_season = len(values)
+    n_window = int(window_mask.sum())
+    window_values = values[window_mask]
+    season_avg = float(values.mean())
+    window_avg = float(window_values.mean()) if n_window else 0.0
+    delta = window_avg - season_avg
+    flagged = n_window > 0 and abs(delta) >= CATEGORY_MIN_DELTA[cat]
+    return CategoryStatItem(
+        cat=cat,
+        season_avg=season_avg,
+        window_avg=window_avg,
+        delta=delta,
+        flagged=flagged,
+    )
+
+
+def compute_category_movers(
+    games_df: pd.DataFrame,
+    games_last_15d: dict[int, int],
+    players_df: pd.DataFrame,
+    window_start,
+    min_season_gp: int = MIN_SEASON_GP,
+) -> list[CategoryMoverItem]:
+    """Pure calc: per-game counting stats -> per-player category changes over
+    the recency window, same games gates as Minutes Movers / Usage & Role. Only
+    players with at least one flagged category are returned; each carries every
+    category so the page can show the full line. No DB/network access."""
+    if games_df.empty:
+        return []
+
+    espn_by_name = {
+        resolve_join_key(str(row.get('Name', ''))): row
+        for _, row in players_df.iterrows()
+    }
+
+    items: list[CategoryMoverItem] = []
+    for player_id, group in games_df.groupby('player_id'):
+        season_gp = len(group)
+        if season_gp < min_season_gp:
+            continue
+        window_mask = group['game_date'] >= window_start
+        window_gp = int(window_mask.sum())
+        if window_gp < MIN_WINDOW_GP:
+            continue
+
+        minutes = group['p_min'].astype(float)
+        stats = [
+            _category_stat(cat, group[col].astype(float), window_mask)
+            for cat, col in _CATEGORY_COLUMNS.items()
+        ]
+        if not any(s.flagged for s in stats):
+            continue
+
+        player_name = str(group.iloc[0]['player_name'])
+        espn_row = espn_by_name.get(resolve_join_key(player_name))
+        if espn_row is None:
+            logger.warning(f"No ESPN roster match for '{player_name}' - skipped from Category Movers")
+            continue
+
+        fantasy_team_name = espn_row.get('fantasy_team_name')
+        position = str(espn_row.get('Positions', 'Unknown')).split(',')[0].strip() or 'Unknown'
+        items.append(CategoryMoverItem(
+            player_id=int(player_id),
+            player_name=player_name,
+            pro_team=str(espn_row.get('Pro Team', 'Unknown')),
+            position=position,
+            fantasy_status=fantasy_team_name if isinstance(fantasy_team_name, str) and fantasy_team_name else 'FA',
+            games_last_15d=games_last_15d.get(int(player_id), 0),
+            season_gp=season_gp,
+            window_gp=window_gp,
+            season_mpg=float(minutes.mean()),
+            window_mpg=float(minutes[window_mask].mean()),
+            low_sample=window_gp < LOW_SAMPLE_GP,
+            stats=stats,
+        ))
+
+    items.sort(key=lambda i: i.player_name)  # the page sorts; this just keeps output stable
     return items
 
 
@@ -472,6 +587,9 @@ def build_game_log(
             fgm=int(row['fgm']), fga=int(row['fga']),
             ftm=int(row['ftm']), fta=int(row['fta']),
             fg3m=int(row['fg3m']), fg3a=int(row['fg3a']),
+            pts=int(row.get('pts', 0) or 0), reb=int(row.get('reb', 0) or 0),
+            ast=int(row.get('ast', 0) or 0), stl=int(row.get('stl', 0) or 0),
+            blk=int(row.get('blk', 0) or 0), tov=int(row.get('p_tov', 0) or 0),
         )
         for i, (_, row) in enumerate(games_df.iterrows())
     ]
@@ -563,6 +681,8 @@ class TrendService:
         self._minutes_inflight: dict[int, asyncio.Future] = {}
         self._usage_cache: dict[int, dict] = {}
         self._usage_inflight: dict[int, asyncio.Future] = {}
+        self._category_cache: dict[int, dict] = {}
+        self._category_inflight: dict[int, asyncio.Future] = {}
         self._game_log_cache = _TTLLRUCache(maxsize=_GAME_LOG_CACHE_MAXSIZE, ttl=_TREND_CACHE_TTL)
         self._game_log_inflight: dict[tuple, asyncio.Future] = {}
         self._league_cache: dict[str, dict] = {}
@@ -626,6 +746,7 @@ class TrendService:
         self._league_cache.clear()
         self._minutes_cache.clear()
         self._usage_cache.clear()
+        self._category_cache.clear()
         self._regression_cache.clear()
         self._game_log_cache.clear()
         self._anchor = anchor
@@ -717,12 +838,14 @@ class TrendService:
             )
             games_last_15d = await self._db.get_games_since(window_start)
 
-            items = compute_minutes_movers(season_df, window_df, games_last_15d, players_df)
+            items = compute_minutes_movers(
+                season_df, window_df, games_last_15d, players_df, settings.trends_min_season_gp
+            )
             response = MinutesResponse(
                 items=items,
                 window_days=window_days,
                 last_updated=datetime.now().isoformat(),
-                min_season_gp=MIN_SEASON_GP,
+                min_season_gp=settings.trends_min_season_gp,
                 min_window_gp=MIN_WINDOW_GP,
             )
             self._cache_preset_response(self._minutes_cache, window_days, window_days, response)
@@ -745,18 +868,65 @@ class TrendService:
             games_df = await self._get_season_usage(current_season, anchor_date)
             games_last_15d = await self._db.get_games_since(window_start)
 
-            items = compute_usage_role(games_df, games_last_15d, players_df, window_start)
+            items = compute_usage_role(
+                games_df, games_last_15d, players_df, window_start, settings.trends_min_season_gp
+            )
             response = UsageResponse(
                 items=items,
                 window_days=window_days,
                 last_updated=datetime.now().isoformat(),
-                min_season_gp=MIN_SEASON_GP,
+                min_season_gp=settings.trends_min_season_gp,
                 min_window_gp=MIN_WINDOW_GP,
             )
             self._cache_preset_response(self._usage_cache, window_days, window_days, response)
             return response
 
         return await self._coalesced(self._usage_inflight, window_days, _compute)
+
+    async def get_category_movers(
+        self,
+        players_df: pd.DataFrame,
+        window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
+        league_categories: Optional[list[str]] = None,
+        reverse_categories: Optional[list[str]] = None,
+    ) -> CategoryResponse:
+        """The cached part is the league-independent item list; the league's
+        categories are stamped onto each response so a settings change shows
+        up without waiting out the cache."""
+        window_days = _normalize_window_days(window_days)
+
+        current_season = espn_season_string(settings.season_id)
+        anchor_date = await get_season_anchor_date(current_season, self._db)
+        self._sync_anchor(anchor_date)
+
+        async def _compute():
+            window_start = anchor_date - timedelta(days=window_days)
+            games_df = await self._get_season_usage(current_season, anchor_date)
+            games_last_15d = await self._db.get_games_since(window_start)
+            items = compute_category_movers(
+                games_df, games_last_15d, players_df, window_start, settings.trends_min_season_gp
+            )
+            entry = {'items': items, 'last_updated': datetime.now().isoformat()}
+            self._cache_preset_response(self._category_cache, window_days, window_days, entry)
+            return entry
+
+        if self._cache_valid(self._category_cache, window_days):
+            entry = self._category_cache[window_days]['data']
+        else:
+            entry = await self._coalesced(self._category_inflight, window_days, _compute)
+
+        cats = list(_CATEGORY_COLUMNS)
+        league = [c for c in (league_categories or cats) if c in _CATEGORY_COLUMNS] or cats
+        return CategoryResponse(
+            items=entry['items'],
+            window_days=window_days,
+            last_updated=entry['last_updated'],
+            league_categories=league,
+            reverse_categories=[c for c in (reverse_categories or []) if c in _CATEGORY_COLUMNS],
+            min_season_gp=settings.trends_min_season_gp,
+            min_window_gp=MIN_WINDOW_GP,
+            min_delta=dict(CATEGORY_MIN_DELTA),
+        )
 
     async def _prior_shooting(self, baseline_seasons: int) -> pd.DataFrame:
         if baseline_seasons in self._baseline_cache:
