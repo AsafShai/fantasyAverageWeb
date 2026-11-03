@@ -47,3 +47,11 @@ describe('ProjectedRankingsShareCard', () => {
     expect(alpha).toHaveClass('sc-me')
   })
 })
+
+describe('expectedPlace', () => {
+  it('averages the places by their chance', async () => {
+    const { expectedPlace } = await import('../../../utils/rankProbability')
+    expect(expectedPlace(new Map([[1, 0.25], [12, 0.75]]))).toBeCloseTo(9.25, 9)
+    expect(expectedPlace(new Map([[3, 1]]))).toBe(3)
+  })
+})

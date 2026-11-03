@@ -3,7 +3,7 @@ import { formatRankProbabilityPercent, getProbColor, type HeatmapRow } from '../
 import { ShareCard, type ShareCardTheme } from './ShareCard'
 
 interface RankProbabilityShareCardProps extends ShareCardTheme {
-  /** Rows in the order the page shows them (most likely place first). */
+  /** Rows in the order the page shows them (best expected place first). */
   rows: HeatmapRow[]
   places: number[]
   asOf: string
@@ -19,7 +19,7 @@ export const RankProbabilityShareCard = ({ rows, places, asOf, highlightTeamId, 
     kicker="Season estimator"
     title="Rank Probability"
     subtitle={`Chance of each finishing place · as of ${asOf}`}
-    footer={<><span>Teams ordered by most likely place</span><span>{rows.length} teams</span></>}
+    footer={<><span>Teams ordered by expected place</span><span>{rows.length} teams</span></>}
   >
     <div className="share-card__body">
       <table>

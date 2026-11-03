@@ -111,6 +111,41 @@ class WindowEstimator:
 
         return np.asarray(mean_vec), np.asarray(cov_mat)
 
+    def mean_weights(self, df_team: pd.DataFrame) -> np.ndarray:
+        """
+        The weight each period row ends up with in the mean ``fit`` returns,
+        normalised to sum to 1 (one per row with all stats present). The mean
+        is Σ ω_i y_i, so if the rows are independent with covariance Σ,
+        Var(mean) = Σ · Σ ω_i²: few rows, or weight piled on the latest
+        windows, mean an uncertain mean.
+        """
+        valid = df_team[list(_STAT_AVG_COLUMNS)].dropna()
+        n_rows = len(valid)
+        if n_rows == 0:
+            return np.zeros(0)
+        gp_col = PreprocessColumns.GP_IN_PERIOD
+        if gp_col in df_team.columns:
+            W = np.maximum(df_team.loc[valid.index, gp_col].to_numpy(dtype=float), 0.0)
+        else:
+            W = np.ones(n_rows, dtype=float)
+
+        L = self.window_size
+        if n_rows < 2:
+            return np.ones(n_rows)
+        if n_rows < L:
+            return W / W.sum() if W.sum() > 0 else np.full(n_rows, 1 / n_rows)
+
+        starts = list(range(0, n_rows - L + 1, self.step_size)) or [0]
+        n_windows = len(starts)
+        decay = np.array([self.decay ** (n_windows - 1 - i) for i in range(n_windows)])
+        decay = decay / decay.sum()
+        omega = np.zeros(n_rows)
+        for d_w, start in zip(decay, starts):
+            w = W[start : start + L]
+            share = w / w.sum() if w.sum() > 0 else np.full(len(w), 1 / len(w))
+            omega[start : start + L] += d_w * share
+        return omega
+
     @staticmethod
     def stat_columns() -> tuple[str, ...]:
         """Return the avg_*_in_period column names that define the vector dimensions."""
