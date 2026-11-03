@@ -1,4 +1,3 @@
-import json
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
@@ -10,7 +9,7 @@ from app.services.nba_players_refresh import (
     MIN_PLAYERS,
     _dedupe_and_preserve,
     normalize_position,
-    refresh_nba_players_json,
+    refresh_nba_players_catalog,
 )
 from app.services.nba_players_scheduler import compute_next_trigger
 
@@ -51,30 +50,25 @@ def test_normalize_position_buckets_specific_roles():
     assert normalize_position("Wing") == "Wing"
 
 
-def test_dedupe_and_preserve_keeps_prior_non_null_fields(tmp_path):
-    out = tmp_path / "nba-players-2025-26.json"
-    out.write_text(
-        json.dumps({"players": [_player("espn-1", "Victor Wembanyama", height="7'4\"")]}),
-        encoding="utf-8",
-    )
+def test_dedupe_and_preserve_keeps_prior_non_null_fields():
+    previous = {"espn-1": _player("espn-1", "Victor Wembanyama", height="7'4\"")}
     unique = _dedupe_and_preserve(
         [_player("espn-1", "Victor Wembanyama", height=None), _player("espn-1", "Victor Wembanyama")],
-        out,
+        previous,
     )
     assert len(unique) == 1
     assert unique[0]["height"] == "7'4\""
 
 
-def test_dedupe_and_preserve_takes_new_value_when_espn_fills_a_null(tmp_path):
-    out = tmp_path / "nba-players-2025-26.json"
+def test_dedupe_and_preserve_takes_new_value_when_espn_fills_a_null():
     old = _player("espn-1", "Victor Wembanyama")
     old["jerseyNumber"] = None
     old["photoUrl"] = None
-    out.write_text(json.dumps({"players": [old]}), encoding="utf-8")
+    previous = {"espn-1": old}
     incoming = _player("espn-1", "Victor Wembanyama")
     incoming["jerseyNumber"] = "1"
     incoming["photoUrl"] = "https://example.com/wemby.png"
-    unique = _dedupe_and_preserve([incoming], out)
+    unique = _dedupe_and_preserve([incoming], previous)
     assert unique[0]["jerseyNumber"] == "1"
     assert unique[0]["photoUrl"] == "https://example.com/wemby.png"
 
@@ -92,12 +86,7 @@ def test_compute_next_trigger_is_today_before_eight_and_tomorrow_after():
 
 
 @pytest.mark.asyncio
-async def test_refresh_writes_json_and_reloads_catalog(tmp_path, monkeypatch):
-    out = tmp_path / "nba-players-2025-26.json"
-    monkeypatch.setattr(nba_player_catalog, "JSON_PATH", out)
-    monkeypatch.setattr(nba_player_catalog, "_JSON_PATH", out)
-    nba_player_catalog.reset_catalog_cache()
-
+async def test_refresh_persists_catalog(monkeypatch):
     teams = {
         "sports": [
             {
@@ -145,23 +134,33 @@ async def test_refresh_writes_json_and_reloads_catalog(tmp_path, monkeypatch):
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
+    captured: list[list[dict]] = []
+
+    async def fake_replace_all(players, **kwargs):
+        captured.append(players)
+        nba_player_catalog._apply_cache(
+            {"seasonLabel": "2025-26", "source": "test", "updatedAt": "2026-01-01T00:00:00Z"},
+            players,
+        )
+        return len(players)
+
     monkeypatch.setattr("app.services.nba_players_refresh.MIN_PLAYERS", 1)
     monkeypatch.setattr("app.services.nba_players_refresh.httpx.AsyncClient", lambda **_k: fake_client)
+    monkeypatch.setattr(nba_player_catalog, "load_previous_players_by_id", AsyncMock(return_value={}))
+    monkeypatch.setattr(nba_player_catalog, "replace_all", fake_replace_all)
 
-    count = await refresh_nba_players_json(out)
+    count = await refresh_nba_players_catalog()
     assert count == 1
-    payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["players"][0]["displayName"] == "Victor Wembanyama"
-    assert payload["players"][0]["teamAbbr"] == "SAS"
+    assert captured[0][0]["displayName"] == "Victor Wembanyama"
+    assert captured[0][0]["teamAbbr"] == "SAS"
     bio = nba_player_catalog.get_player_bio("3945274")
     assert bio is not None
     assert bio.display_name == "Victor Wembanyama"
 
 
 @pytest.mark.asyncio
-async def test_refresh_refuses_to_overwrite_when_too_few(tmp_path, monkeypatch):
-    out = tmp_path / "nba-players-2025-26.json"
-    out.write_text(json.dumps({"players": [_player("espn-1", "Keep Me")]}), encoding="utf-8")
+async def test_refresh_refuses_to_replace_when_too_few(monkeypatch):
+    previous = [_player("espn-1", "Keep Me")]
 
     class FakeResp:
         def raise_for_status(self):
@@ -175,8 +174,15 @@ async def test_refresh_refuses_to_overwrite_when_too_few(tmp_path, monkeypatch):
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
     fake_client.__aexit__ = AsyncMock(return_value=False)
     monkeypatch.setattr("app.services.nba_players_refresh.httpx.AsyncClient", lambda **_k: fake_client)
+    monkeypatch.setattr(
+        nba_player_catalog,
+        "load_previous_players_by_id",
+        AsyncMock(return_value={"espn-1": previous[0]}),
+    )
+    replace = AsyncMock()
+    monkeypatch.setattr(nba_player_catalog, "replace_all", replace)
 
     with pytest.raises(RuntimeError, match="need at least"):
-        await refresh_nba_players_json(out)
-    assert json.loads(out.read_text(encoding="utf-8"))["players"][0]["displayName"] == "Keep Me"
+        await refresh_nba_players_catalog()
+    replace.assert_not_called()
     assert MIN_PLAYERS == 100
