@@ -8,7 +8,7 @@ import { MyTeamMark } from '../components/MyTeamMark'
 import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
-import { getProbColor, formatRankProbabilityPercent, type HeatmapRow } from '../utils/rankProbability'
+import { getProbColor, formatRankProbabilityPercent, expectedPlace, type HeatmapRow } from '../utils/rankProbability'
 import { ShareCardButton } from '../components/share/ShareCardButton'
 import { RankProbabilityShareCard, ProjectedRankingsShareCard } from '../components/share/EstimatorShareCards'
 import { formatAsOf } from '../components/share/shareCardFormat'
@@ -60,11 +60,10 @@ function RankProbabilityHeatmap({ teams, asOf }: { teams: TeamRankProbability[];
     probs,
   }))
 
-  const sorted = [...teamList].sort((a, b) => {
-    const bestA = rankCols.reduce((best, r) => (a.probs.get(r) ?? 0) > (a.probs.get(best) ?? 0) ? r : best, 1)
-    const bestB = rankCols.reduce((best, r) => (b.probs.get(r) ?? 0) > (b.probs.get(best) ?? 0) ? r : best, 1)
-    return bestA - bestB
-  })
+  // Ordered by expected place, not most likely place: early in the season the
+  // chances are flat, and a team spread from 1st to 12th can have 1st as its
+  // single likeliest place without being anywhere near the favourite.
+  const sorted = [...teamList].sort((a, b) => expectedPlace(a.probs) - expectedPlace(b.probs))
 
   return (
     <div>
@@ -87,7 +86,7 @@ function RankProbabilityHeatmap({ teams, asOf }: { teams: TeamRankProbability[];
         )}
       </div>
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
-        How likely is each team to finish in each place by end of season? Cells show percent chance (0–100%). Teams are ordered by their most likely finishing position.
+        How likely is each team to finish in each place by end of season? Cells show percent chance (0–100%). Teams are ordered by their expected finishing place.
       </p>
       <div className="overflow-auto max-h-[70vh]">
         <table className="min-w-full border-collapse text-sm">
