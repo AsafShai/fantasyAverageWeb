@@ -80,10 +80,16 @@ class EstimatorService:
             logger.warning(f"Failed to fetch NBA avg pace, using fallback: {e}")
         return _NBA_AVG_PACE_FALLBACK
 
-    async def run_and_store(self, *, wait: bool = False) -> bool:
+    async def run_and_store(self, *, wait: bool = False, force: bool = False) -> bool:
         """Run the estimator once per new snapshot. If a run is already in
         flight, skip it (returns False) — or with wait=True, wait for that run
-        and return whether it left results for the latest snapshot in place."""
+        and return whether it left results for the latest snapshot in place.
+
+        force=True recomputes even when results already cover the latest
+        snapshot (after a model change), waiting for any run in flight first."""
+        if force:
+            async with self._run_lock:
+                return await self._run_and_store_locked(force=True)
         if self._run_lock.locked():
             if not wait:
                 logger.info("Estimator run already in progress, skipping")
@@ -93,20 +99,20 @@ class EstimatorService:
         async with self._run_lock:
             return await self._run_and_store_locked()
 
-    async def _run_and_store_locked(self) -> bool:
+    async def _run_and_store_locked(self, force: bool = False) -> bool:
         latest = await self.db_service.get_latest_snapshot_date(settings.league_id, settings.season_id)
         if latest is None:
             logger.info("No snapshot data yet, skipping estimator run")
             self._results_current = False
             return False
 
-        if self._cache_date is not None and self._cache_date >= latest:
+        if not force and self._cache_date is not None and self._cache_date >= latest:
             logger.info(f"Estimator already ran on snapshot {latest}, skipping")
             self._results_current = True
             return False
 
         stored_as_of = await self.db_service.get_estimator_as_of(settings.league_id, settings.season_id)
-        if stored_as_of is not None and stored_as_of >= latest:
+        if not force and stored_as_of is not None and stored_as_of >= latest:
             logger.info(f"Stored estimator results already cover snapshot {latest}, skipping")
             self._cache_date = stored_as_of
             self._results_current = True

@@ -219,3 +219,37 @@ async def test_warmup_status_counts_the_slowest_teams_game_days(estimator_servic
 
     monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(side_effect=OSError("db down")))
     assert await estimator_service.warmup_status() is None          # unknown: the generic 404, never a 500
+
+
+@pytest.mark.asyncio
+async def test_force_reruns_when_stored_results_cover_latest_snapshot(estimator_service, monkeypatch):
+    """After a model change today's results already exist; force recomputes them."""
+    fake_est = _stub_run_inputs(estimator_service, monkeypatch, _estimate_result)
+    estimator_service.db_service.get_estimator_as_of.return_value = date(2026, 1, 1)
+
+    assert await estimator_service.run_and_store() is False
+    assert await estimator_service.run_and_store(force=True) is True
+    assert fake_est.return_value.estimate.call_count == 1
+    estimator_service.db_service.upsert_estimator_prediction.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_force_reruns_even_with_a_cached_run(estimator_service, monkeypatch):
+    fake_est = _stub_run_inputs(estimator_service, monkeypatch, _estimate_result)
+
+    assert await estimator_service.run_and_store() is True
+    assert await estimator_service.run_and_store() is False
+    assert await estimator_service.run_and_store(force=True) is True
+    assert fake_est.return_value.estimate.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_force_waits_for_a_run_in_flight_then_runs(estimator_service, monkeypatch):
+    import asyncio
+    fake_est = _stub_run_inputs(estimator_service, monkeypatch, _estimate_result)
+
+    first = asyncio.create_task(estimator_service.run_and_store())
+    await asyncio.sleep(0)
+    assert await estimator_service.run_and_store(force=True) is True
+    assert await first is True
+    assert fake_est.return_value.estimate.call_count == 2
