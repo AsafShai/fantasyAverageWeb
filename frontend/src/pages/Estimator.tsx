@@ -8,6 +8,10 @@ import { MyTeamMark } from '../components/MyTeamMark'
 import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
+import { getProbColor, formatRankProbabilityPercent, type HeatmapRow } from '../utils/rankProbability'
+import { ShareCardButton } from '../components/share/ShareCardButton'
+import { RankProbabilityShareCard, ProjectedRankingsShareCard } from '../components/share/EstimatorShareCards'
+import { formatAsOf } from '../components/share/shareCardFormat'
 
 const STAT_LABELS: Record<string, string> = {
   fg_pct: 'FG%',
@@ -23,34 +27,6 @@ const STAT_LABELS: Record<string, string> = {
 const STAT_KEYS = ['fg_pct', 'ft_pct', 'three_pm', 'reb', 'ast', 'stl', 'blk', 'pts'] as const
 type StatKey = typeof STAT_KEYS[number]
 
-function formatRankProbabilityPercent(prob: number): string {
-  if (prob <= 0) return ''
-  return `${(prob * 100).toFixed(1)}%`
-}
-
-function getProbColor(prob: number, isDark: boolean): { bg: string; text: string } {
-  if (prob === 0) return { bg: isDark ? 'rgb(17,24,39)' : 'rgb(240,245,255)', text: isDark ? 'transparent' : '#aaa' }
-  if (isDark) {
-    // dark: dark navy (low) → bright steel blue (high), no white
-    const r = Math.round(30  + prob * (56  - 30))
-    const g = Math.round(50  + prob * (130 - 50))
-    const b = Math.round(80  + prob * (200 - 80))
-    return {
-      bg: `rgb(${r},${g},${b})`,
-      text: prob > 0.4 ? 'white' : '#93c5fd',
-    }
-  }
-  const intensity = Math.round(prob * 255)
-  const r = Math.round(255 - intensity * (255 - 8) / 255)
-  const g = Math.round(255 - intensity * (255 - 81) / 255)
-  const b = Math.round(255 - intensity * (255 - 156) / 255)
-  return {
-    bg: `rgb(${r},${g},${b})`,
-    text: prob > 0.5 ? 'white' : prob > 0.2 ? '#1a3a5c' : '#555',
-  }
-}
-
-
 function useDarkMode() {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   useEffect(() => {
@@ -61,8 +37,8 @@ function useDarkMode() {
   return isDark
 }
 
-function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
-  const { isMyTeam } = useMyTeam()
+function RankProbabilityHeatmap({ teams, asOf }: { teams: TeamRankProbability[]; asOf: string }) {
+  const { isMyTeam, myTeamId } = useMyTeam()
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
   useFollowMyTeamId(selectedTeamId, setSelectedTeamId)
   const isDark = useDarkMode()
@@ -78,7 +54,7 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
   const numRanks = Math.max(...teams.map(t => t.rank), 0)
   const rankCols = Array.from({ length: numRanks }, (_, i) => i + 1)
 
-  const teamList = Array.from(teamMap.entries()).map(([team_id, { team_name, probs }]) => ({
+  const teamList: HeatmapRow[] = Array.from(teamMap.entries()).map(([team_id, { team_name, probs }]) => ({
     team_id,
     team_name,
     probs,
@@ -92,7 +68,24 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-1">Rank Probability Heatmap</h2>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h2 className="text-xl font-semibold">Rank Probability Heatmap</h2>
+        {sorted.length > 0 && (
+          <ShareCardButton
+            title="Rank Probability"
+            highlightOption={myTeamId !== null}
+            renderCard={({ dark, highlightMyTeam }) => (
+              <RankProbabilityShareCard
+                dark={dark}
+                rows={sorted}
+                places={rankCols}
+                asOf={asOf}
+                highlightTeamId={highlightMyTeam ? myTeamId : null}
+              />
+            )}
+          />
+        )}
+      </div>
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
         How likely is each team to finish in each place by end of season? Cells show percent chance (0–100%). Teams are ordered by their most likely finishing position.
       </p>
@@ -146,8 +139,8 @@ function RankProbabilityHeatmap({ teams }: { teams: TeamRankProbability[] }) {
 
 type RankingSortKey = 'rank' | 'total_expected_pts' | 'projected_total_gp' | `expected_pts_${typeof STAT_KEYS[number]}`
 
-function RankingTable({ rankings }: { rankings: TeamRanking[] }) {
-  const { isMyTeam } = useMyTeam()
+function RankingTable({ rankings, asOf }: { rankings: TeamRanking[]; asOf: string }) {
+  const { isMyTeam, myTeamId } = useMyTeam()
   const [sortKey, setSortKey] = useState<RankingSortKey>('rank')
   const [sortAsc, setSortAsc] = useState(true)
 
@@ -169,7 +162,23 @@ function RankingTable({ rankings }: { rankings: TeamRanking[] }) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-1">Projected Rankings</h2>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h2 className="text-xl font-semibold">Projected Rankings</h2>
+        {sorted.length > 0 && (
+          <ShareCardButton
+            title="Projected Rankings"
+            highlightOption={myTeamId !== null}
+            renderCard={({ dark, highlightMyTeam }) => (
+              <ProjectedRankingsShareCard
+                dark={dark}
+                rows={sorted}
+                asOf={asOf}
+                highlightTeamId={highlightMyTeam ? myTeamId : null}
+              />
+            )}
+          />
+        )}
+      </div>
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
         Where each team is projected to finish by end of season. Click any column to sort. Higher score in a category means a better projected finish in that stat.
       </p>
@@ -311,15 +320,17 @@ const Estimator = () => {
 
   if (!data) return <ErrorMessage message="No estimator data available yet." />
 
+  const asOf = formatAsOf(data.as_of_date)
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 overflow-x-hidden">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 overflow-hidden">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Season Estimator</h1>
-        <RankProbabilityHeatmap teams={data.rank_probabilities} />
+        <RankProbabilityHeatmap teams={data.rank_probabilities} asOf={asOf} />
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 overflow-hidden">
-        <RankingTable rankings={data.rankings} />
+        <RankingTable rankings={data.rankings} asOf={asOf} />
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 overflow-hidden">
