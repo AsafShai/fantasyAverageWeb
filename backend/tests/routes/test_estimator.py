@@ -179,39 +179,3 @@ def test_empty_results_rerun_inline_at_most_once_per_cooldown(test_client):
         assert test_client.get("/api/estimator/results").status_code == 404
 
     assert service.run_and_store.await_count == 1
-
-
-@patch("app.routes.estimator.DataProvider")
-@patch("app.routes.estimator.EstimatorService")
-def test_refresh_forces_a_rerun_and_returns_the_new_results(mock_svc_cls, mock_prov_cls, test_client):
-    mock_svc = MagicMock()
-    mock_svc.run_and_store = AsyncMock(return_value=True)
-    mock_svc.get_latest = AsyncMock(return_value=_full_payload())
-    mock_svc_cls.return_value = mock_svc
-    mock_prov = MagicMock()
-    mock_prov.sync_db_now = AsyncMock(return_value=False)
-    mock_prov_cls.return_value = mock_prov
-
-    response = test_client.post("/api/estimator/refresh")
-
-    assert response.status_code == 200
-    assert len(response.json()["rankings"]) == 1
-    mock_prov.sync_db_now.assert_awaited_once()
-    mock_svc.run_and_store.assert_awaited_once_with(force=True)
-
-
-@patch("app.routes.estimator.DataProvider")
-@patch("app.routes.estimator.EstimatorService")
-def test_refresh_before_the_season_can_be_estimated_says_why(mock_svc_cls, mock_prov_cls, test_client):
-    mock_svc = MagicMock()
-    mock_svc.run_and_store = AsyncMock(return_value=False)
-    mock_svc.warmup_status = AsyncMock(return_value=(4, 11))
-    mock_svc_cls.return_value = mock_svc
-    mock_prov = MagicMock()
-    mock_prov.sync_db_now = AsyncMock(return_value=False)
-    mock_prov_cls.return_value = mock_prov
-
-    response = test_client.post("/api/estimator/refresh")
-
-    assert response.status_code == 409
-    assert "7 more to go" in response.json()["detail"]

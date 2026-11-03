@@ -51,28 +51,6 @@ def _no_results_detail(warmup: tuple[int, int] | None) -> str:
     )
 
 
-@router.post("/refresh", response_model=EstimatorResults)
-async def refresh_estimator():
-    """Recompute the estimator now, even when today's results already exist —
-    after a change to the model, so the page need not wait for the next morning's
-    run. Overwrites today's stored results (they are keyed by snapshot date)."""
-    start = time.perf_counter()
-    try:
-        service = EstimatorService()
-        await DataProvider().sync_db_now()
-        if not await service.run_and_store(force=True):
-            raise HTTPException(status_code=409, detail=_no_results_detail(await service.warmup_status()))
-        data = await service.get_latest()
-        if not data or not data.get("rankings"):
-            raise HTTPException(status_code=500, detail="Estimator ran but left no results")
-        return _build_results(data, (time.perf_counter() - start) * 1000)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error refreshing estimator: {e}")
-        raise HTTPException(status_code=500, detail="Failed to refresh estimator results")
-
-
 async def _sync_and_run(service: EstimatorService, provider: DataProvider) -> None:
     synced = await provider.sync_db_now()
     logger.info(f"Estimator background sync: {'new ESPN data written' if synced else 'snapshot already current'}, running estimator if behind it")

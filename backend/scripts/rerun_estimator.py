@@ -9,8 +9,6 @@ snapshot date). Nothing else is touched.
 Usage (from backend/):
     python scripts/rerun_estimator.py --database-url postgresql://...
     DATABASE_URL=... python scripts/rerun_estimator.py
-
-The same run is available on a deployed backend as POST /api/estimator/refresh.
 """
 
 from __future__ import annotations
