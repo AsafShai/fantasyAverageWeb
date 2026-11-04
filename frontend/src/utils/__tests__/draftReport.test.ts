@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildScoredPicks, buildTeamGrades, topSteals, topBusts } from '../draftReport'
+import { buildScoredPicks, buildTeamDiffRanking, buildTeamGrades, topSteals, topBusts } from '../draftReport'
 import type { Player, DraftPick } from '../../types/api'
 
 function makePlayer(overrides: {
@@ -56,12 +56,12 @@ describe('buildScoredPicks', () => {
     expect(scored.badge).toBe('Steal')
   })
 
-  it('marks a player below the games-played floor as INJ, not ranked', () => {
+  it('marks a sub-min-GP player as Low GP (not value-ranked)', () => {
     const hurt = makePlayer({ name: 'Hurt Guy', pts: 30, gp: 5 })
     const picks = [makePick({ pick: 10, player_name: 'Hurt Guy' })]
     const [scored] = buildScoredPicks(picks, [hurt, ...fillerPool(30)], 'per_game')
 
-    expect(scored.badge).toBe('INJ')
+    expect(scored.badge).toBe('Low GP')
     expect(scored.valueRank).toBeNull()
     expect(scored.gp).toBe(5)
   })
@@ -73,6 +73,8 @@ describe('buildScoredPicks', () => {
 
     expect(scored.badge).toBe('DNP')
     expect(scored.valueRank).toBeNull()
+    expect(scored.diff).toBeNull()
+    expect(scored.gp).toBe(0)
   })
 
   it('marks a player entirely absent from the pool as DNP', () => {
@@ -155,16 +157,30 @@ describe.skip('buildTeamGrades', () => {
   })
 })
 
+describe('buildTeamDiffRanking', () => {
+  it('excludes DNP picks from diff totals but lists them as unranked', () => {
+    const scoredPicks = [
+      { pick: 10, round: 1, team_id: 1, team_name: 'T', player_name: 'Ranked', gp: 70, mpg: 30, totalZ: 1, valueRank: 8, diff: 2, badge: 'Fair' as const },
+      { pick: 11, round: 1, team_id: 1, team_name: 'T', player_name: 'Ghost', gp: 0, mpg: null, totalZ: null, valueRank: null, diff: null, badge: 'DNP' as const },
+    ]
+    const [team] = buildTeamDiffRanking(scoredPicks)
+    expect(team.avgDiff).toBe(2)
+    expect(team.n).toBe(1)
+    expect(team.total).toBe(2)
+    expect(team.unranked.map(u => u.player_name)).toEqual(['Ghost'])
+  })
+})
+
 describe('topSteals', () => {
-  it('excludes steals below the 50 GP floor', () => {
+  it('includes steals regardless of games played', () => {
     const scoredPicks = [
       { pick: 1, round: 1, team_id: 1, team_name: 'T', player_name: 'Low GP Steal', gp: 20, mpg: 30, totalZ: 1, valueRank: 1, diff: 50, badge: 'Steal' as const },
       { pick: 2, round: 1, team_id: 1, team_name: 'T', player_name: 'Qualified Steal', gp: 60, mpg: 30, totalZ: 1, valueRank: 2, diff: 40, badge: 'Steal' as const },
     ]
     const steals = topSteals(scoredPicks)
 
-    expect(steals).toHaveLength(1)
-    expect(steals[0].player_name).toBe('Qualified Steal')
+    expect(steals).toHaveLength(2)
+    expect(steals[0].player_name).toBe('Low GP Steal')
   })
 
   it('weights a steal at an earlier pick above the same raw diff late', () => {

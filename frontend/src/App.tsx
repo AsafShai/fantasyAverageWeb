@@ -26,6 +26,7 @@ const PlayerRankings = lazy(() => import('./pages/PlayerRankings'))
 const Projections = lazy(() => import('./pages/Projections'))
 const BoomOrBust = lazy(() => import('./pages/BoomOrBust'))
 const DraftReport = lazy(() => import('./pages/DraftReport'))
+const FaReport = lazy(() => import('./pages/FaReport'))
 const Trends = lazy(() => import('./pages/Trends'))
 const Minigames = lazy(() => import('./pages/Minigames'))
 const HangmanGame = lazy(() => import('./pages/minigames/HangmanGame'))
@@ -69,6 +70,7 @@ function App() {
               <Route path="projections" element={<Projections />} />
               {FF_BOOM_OR_BUST && <Route path="boom-or-bust" element={<BoomOrBust />} />}
               {FF_DRAFT_REPORT && <Route path="draft-report" element={<DraftReport />} />}
+              {FF_DRAFT_REPORT && <Route path="fa-report" element={<FaReport />} />}
               {FF_DRAFT_PAGES && <Route path="draft/rankings-adp" element={<AdpPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/adp" element={<Navigate to="/draft/rankings-adp" replace />} />}
               {FF_DRAFT_PAGES && <Route path="draft/board" element={<DraftBoardPage />} />}
