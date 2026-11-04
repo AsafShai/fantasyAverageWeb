@@ -23,7 +23,12 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Standings & Rankings', path: '/rankings', icon: '🏆', group: 'League' },
   { label: 'Teams', path: '/teams', icon: '👥', group: 'League' },
   ...(FF_LEAGUE_ACTIVITY ? [{ label: 'Activity', path: '/activity', icon: '🔁', group: 'League' }] : []),
-  ...(FF_DRAFT_REPORT ? [{ label: 'Draft Report', path: '/draft-report', icon: '📝', group: 'League' }] : []),
+  ...(FF_DRAFT_REPORT
+    ? [
+        { label: 'Draft Report', path: '/draft-report', icon: '📝', group: 'League' },
+        { label: 'FA Report', path: '/fa-report', icon: '🆓', group: 'League' },
+      ]
+    : []),
   { label: 'Players', path: '/players', icon: '⛹️', group: 'Players' },
   ...(FF_DRAFT_PAGES
     ? [

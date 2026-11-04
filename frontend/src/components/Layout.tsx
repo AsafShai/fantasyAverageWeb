@@ -424,7 +424,12 @@ const NavShell = ({ darkMode, setDarkMode, setSearchOpen }: NavShellProps) => {
         { path: '/rankings', label: 'Standings & Rankings', icon: '🏆' },
         { path: '/teams', label: 'Teams', icon: '👥' },
         ...(FF_LEAGUE_ACTIVITY ? [{ path: '/activity', label: 'Activity', icon: '🔁' }] : []),
-        ...(FF_DRAFT_REPORT ? [{ path: '/draft-report', label: 'Draft Report', icon: '📝' }] : []),
+        ...(FF_DRAFT_REPORT
+          ? [
+              { path: '/draft-report', label: 'Draft Report', icon: '📝' },
+              { path: '/fa-report', label: 'FA Report', icon: '🆓' },
+            ]
+          : []),
       ],
     },
     {

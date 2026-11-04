@@ -1,4 +1,5 @@
 import type { Player, DraftPick } from '../types/api'
+import { normalizePlayerName } from './playerName'
 import {
   computePlayerRankings,
   scoreAgainstPool,
@@ -7,7 +8,7 @@ import {
   type RankingCategory,
 } from './playerRankings'
 
-export type DraftBadge = 'Steal' | 'Solid' | 'Fair' | 'Reach' | 'Bust' | 'INJ' | 'DNP'
+export type DraftBadge = 'Steal' | 'Solid' | 'Fair' | 'Reach' | 'Bust' | 'INJ' | 'Low GP' | 'DNP'
 
 export interface ScoredPick extends DraftPick {
   gp: number | null
@@ -43,10 +44,10 @@ export interface TeamDiff {
   unranked: UnrankedPick[]
 }
 
-export const MIN_GP_FOR_RANK = 15
-export const LOW_GP_MIN = 1
-const STEAL_MIN_GP = 50
 const WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) as Record<RankingCategory, number>
+
+/** Min games played to enter the season value pool on Draft Report and FA Report. */
+export const REPORT_MIN_GP = 10
 
 function badgeFor(diff: number): DraftBadge {
   if (diff >= 25) return 'Steal'
@@ -56,31 +57,107 @@ function badgeFor(diff: number): DraftBadge {
   return 'Bust'
 }
 
-export function buildScoredPicks(picks: DraftPick[], allPlayers: Player[], calcMode: 'totals' | 'per_game', minGpForRank: number = MIN_GP_FOR_RANK): ScoredPick[] {
+/** Draft picks with no realized games — shown on the board but excluded from value math. */
+export function isDnpPick(p: ScoredPick): boolean {
+  return p.badge === 'DNP'
+}
+
+/** Played some games but below REPORT_MIN_GP — excluded from value math, not a true DNP. */
+export function isLowGpPick(p: ScoredPick): boolean {
+  return p.badge === 'Low GP'
+}
+
+export function isExcludedFromValuePick(p: ScoredPick): boolean {
+  return isDnpPick(p) || isLowGpPick(p)
+}
+
+export interface SeasonValueEntry {
+  valueRank: number
+  totalZ: number
+  gp: number
+}
+
+function computeSeasonValueMaps(allPlayers: Player[], calcMode: 'totals' | 'per_game', minGpForRank: number = 0) {
   const { available } = partitionByDataAvailability(allPlayers)
-  // computePlayerRankings caps its returned pool at 300 (a display-perf limit
-  // for the interactive Player Rankings page) — draft report needs every
-  // qualified (GP >= minGpForRank) player ranked, not just the top 300, so
-  // it re-scores anyone the cap dropped against the same referencePool and
-  // re-sorts the full qualified set itself.
-  const ranked = computePlayerRankings(available, { calcMode, minGp: minGpForRank, minMin: 0, position: null, weights: WEIGHTS })
+  const poolMinGp = Math.max(minGpForRank, 1)
+  const ranked = computePlayerRankings(available, { calcMode, minGp: poolMinGp, minMin: 0, position: null, weights: WEIGHTS })
   const referencePool = ranked.map(r => r.player)
   const zByName = new Map(ranked.map(r => [r.player.player_name, r.totalZ]))
-
-  const qualified = available.filter(p => p.stats.gp >= minGpForRank)
+  const qualified = available.filter(p => p.stats.gp >= poolMinGp)
   const fullyRanked = qualified
     .map(p => ({ player: p, totalZ: zByName.get(p.player_name) ?? scoreAgainstPool(p, referencePool, calcMode, WEIGHTS) }))
     .sort((a, b) => b.totalZ - a.totalZ)
   const rankByName = new Map(fullyRanked.map((r, i) => [r.player.player_name, { rank: i + 1, totalZ: r.totalZ }]))
-
   const playerByName = new Map(available.map(p => [p.player_name, p]))
+  return { rankByName, playerByName, referencePool, calcMode, available }
+}
+
+/** Season 8-cat value rank keyed by normalized player name (same pool as Draft Report). */
+export function buildSeasonValueRankByName(
+  allPlayers: Player[],
+  calcMode: 'totals' | 'per_game',
+  minGpForRank: number = REPORT_MIN_GP,
+): Map<string, SeasonValueEntry> {
+  const { rankByName, playerByName } = computeSeasonValueMaps(allPlayers, calcMode, minGpForRank)
+  const out = new Map<string, SeasonValueEntry>()
+  for (const [name, entry] of rankByName) {
+    const player = playerByName.get(name)
+    if (!player || player.stats.gp < minGpForRank) continue
+    out.set(normalizePlayerName(name), {
+      valueRank: entry.rank,
+      totalZ: entry.totalZ,
+      gp: player.stats.gp,
+    })
+  }
+  return out
+}
+
+export function buildScoredPicks(
+  picks: DraftPick[],
+  allPlayers: Player[],
+  calcMode: 'totals' | 'per_game',
+  minGpForRank: number = REPORT_MIN_GP,
+): ScoredPick[] {
+  const poolMinGp = Math.max(minGpForRank, 1)
+  const { rankByName, playerByName, referencePool, calcMode: mode, available } = computeSeasonValueMaps(
+    allPlayers,
+    calcMode,
+    minGpForRank,
+  )
   const fallbackRank = available.length + 40
 
+  const dnpPick = (pick: DraftPick, gp: number | null): ScoredPick => ({
+    ...pick,
+    gp,
+    mpg: null,
+    totalZ: null,
+    valueRank: null,
+    diff: null,
+    badge: 'DNP',
+  })
+
+  const lowGpPick = (pick: DraftPick, gp: number): ScoredPick => ({
+    ...pick,
+    gp,
+    mpg: gp > 0 ? (playerByName.get(pick.player_name)!.stats.minutes / gp) : null,
+    totalZ: null,
+    valueRank: null,
+    diff: null,
+    badge: 'Low GP',
+  })
+
   return picks.map(pick => {
+    const player = playerByName.get(pick.player_name)
+    if (!player || player.stats.gp <= 0) {
+      return dnpPick(pick, player?.stats.gp ?? null)
+    }
+    if (player.stats.gp < poolMinGp) {
+      return lowGpPick(pick, player.stats.gp)
+    }
+
     const rankedEntry = rankByName.get(pick.player_name)
     if (rankedEntry) {
       const diff = pick.pick - rankedEntry.rank
-      const player = playerByName.get(pick.player_name)!
       return {
         ...pick,
         gp: player.stats.gp,
@@ -92,12 +169,7 @@ export function buildScoredPicks(picks: DraftPick[], allPlayers: Player[], calcM
       }
     }
 
-    const player = playerByName.get(pick.player_name)
-    if (!player) {
-      return { ...pick, gp: null, mpg: null, totalZ: null, valueRank: null, diff: null, badge: 'DNP' as const }
-    }
-
-    const totalZ = scoreAgainstPool(player, referencePool, calcMode, WEIGHTS)
+    const totalZ = scoreAgainstPool(player, referencePool, mode, WEIGHTS)
     return {
       ...pick,
       gp: player.stats.gp,
@@ -105,7 +177,7 @@ export function buildScoredPicks(picks: DraftPick[], allPlayers: Player[], calcM
       totalZ,
       valueRank: null,
       diff: pick.pick - fallbackRank,
-      badge: player.stats.gp > 0 ? ('INJ' as const) : ('DNP' as const),
+      badge: 'INJ' as const,
     }
   })
 }
@@ -153,7 +225,7 @@ export function buildTeamGrades(scoredPicks: ScoredPick[]): TeamGrade[] {
   }
 
   const teamStats = [...byTeam.entries()].map(([team_id, { team_name, picks }]) => {
-    const judged = picks.filter(p => p.valueRank !== null)
+    const judged = picks.filter(p => p.valueRank !== null && !isDnpPick(p))
     const realized = judged.reduce((s, p) => s + valueScore(p.valueRank!), 0)
     const expected = judged.reduce((s, p) => s + valueScore(p.pick), 0)
     const ratio = expected > 0 ? realized / expected : 1
@@ -188,6 +260,11 @@ export function buildTeamDiffRanking(scoredPicks: ScoredPick[]): TeamDiff[] {
   for (const p of scoredPicks) {
     if (!byTeam.has(p.team_id)) byTeam.set(p.team_id, { team_name: p.team_name, diffs: [], total: 0, unranked: [] })
     const e = byTeam.get(p.team_id)!
+    if (isExcludedFromValuePick(p)) {
+      e.total++
+      e.unranked.push({ player_name: p.player_name, badge: p.badge, gp: p.gp, pick: p.pick })
+      continue
+    }
     e.total++
     if (p.valueRank !== null && p.diff !== null) e.diffs.push(p.diff)
     else e.unranked.push({ player_name: p.player_name, badge: p.badge, gp: p.gp, pick: p.pick })
@@ -211,7 +288,7 @@ export function buildTeamDiffRanking(scoredPicks: ScoredPick[]): TeamDiff[] {
 
 export function topSteals(scoredPicks: ScoredPick[], limit = 5): ScoredPick[] {
   return scoredPicks
-    .filter(p => p.badge === 'Steal' && (p.gp ?? 0) >= STEAL_MIN_GP)
+    .filter(p => p.badge === 'Steal' && !isDnpPick(p))
     .sort((a, b) => pickSurplus(b) - pickSurplus(a))
     .slice(0, limit)
 }
@@ -221,7 +298,7 @@ export function topBusts(scoredPicks: ScoredPick[], limit = 5): ScoredPick[] {
   // INJ/DNP carry no realized value to judge — an injury is bad luck, not a bad
   // pick — so they're excluded rather than ranked as the "worst" outcomes.
   return scoredPicks
-    .filter(p => p.badge === 'Bust')
+    .filter(p => p.badge === 'Bust' && !isDnpPick(p))
     .sort((a, b) => pickSurplus(a) - pickSurplus(b))
     .slice(0, limit)
 }
