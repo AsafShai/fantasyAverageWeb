@@ -116,6 +116,15 @@ const TeamDetail = () => {
     return new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m]))
   }, [coverageSlate, datedMatchupReady, datedMatchups, liveMatchups])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  // The route keeps this page mounted when it moves to another team (the header's
+  // My team link, back/forward), so the per-roster choices reset with the team:
+  // a set of the previous roster's names would leave every new player unchecked.
+  const [rosterTeamId, setRosterTeamId] = useState(teamIdNumber)
+  if (rosterTeamId !== teamIdNumber) {
+    setRosterTeamId(teamIdNumber)
+    setIncludedPlayers(null)
+    setExpandedRows(new Set())
+  }
   const toggleExpand = (name: string) => {
     setExpandedRows(prev => {
       const next = new Set(prev)

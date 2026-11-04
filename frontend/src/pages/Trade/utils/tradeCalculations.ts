@@ -100,12 +100,29 @@ export const aggregatePlayerStats = (players: Player[]): AggregatedStats => {
   };
 };
 
+/** Per-game view of one side of a trade: each player's per-game line, added up.
+ * A side giving two 20-PPG players gives 40 points a night, not 20, so the
+ * counting stats are summed rather than averaged; FG%/FT% come from the summed
+ * per-game makes and attempts. GP stays the side's total games. */
 export const aggregatePlayerAverages = (players: Player[]): AggregatedStats => {
-  const result = _aggregatePlayerAverages(players);
+  const mean = _aggregatePlayerAverages(players);
+  const n = players.length;
+  const sum = (value: number) => value * n;
   return {
-    ...result,
-    fg_percentage: result.fg_percentage * 100,
-    ft_percentage: result.ft_percentage * 100,
+    pts: sum(mean.pts),
+    reb: sum(mean.reb),
+    ast: sum(mean.ast),
+    stl: sum(mean.stl),
+    blk: sum(mean.blk),
+    fgm: sum(mean.fgm),
+    fga: sum(mean.fga),
+    ftm: sum(mean.ftm),
+    fta: sum(mean.fta),
+    three_pm: sum(mean.three_pm),
+    minutes: sum(mean.minutes),
+    gp: mean.gp,
+    fg_percentage: mean.fg_percentage * 100,
+    ft_percentage: mean.ft_percentage * 100,
   };
 };
 
@@ -195,12 +212,12 @@ export const aggregateExtraTotals = (players: Player[], categories: string[]): R
     players.reduce((sum, p) => sum + (p.stats.stats?.[category] ?? 0), 0),
   ]));
 
-/** Averages view: the mean of each player's per-game value, the same way
+/** Averages view: each player's per-game value added up, the same way
  * aggregatePlayerAverages combines the fixed counting stats. */
 export const aggregateExtraAverages = (players: Player[], categories: string[]): Record<string, number> =>
   Object.fromEntries(categories.map(category => [
     category,
-    players.length === 0 ? 0 : players.reduce(
+    players.reduce(
       (sum, p) => sum + (p.stats.gp > 0 ? (p.stats.stats?.[category] ?? 0) / p.stats.gp : 0), 0,
-    ) / players.length,
+    ),
   ]));

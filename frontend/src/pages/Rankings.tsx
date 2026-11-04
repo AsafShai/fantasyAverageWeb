@@ -9,7 +9,7 @@ import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import EspnUpdatedNote from '../components/EspnUpdatedNote'
 import type { RankingStats, TeamRankChange } from '../types/api'
-import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
+import { todayIso, presetRangeStart, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { useMyTeam } from '../context/MyTeamContext'
 import { TEAM_NAME_BOX_CLASS, TEAM_NAME_CELL_CLASS, wrapFriendlyName } from '../utils/wrapName'
@@ -373,10 +373,10 @@ const Rankings = () => {
               <button
                 key={days}
                 onClick={() => {
-                  const start = getDateNDaysAgo(days);
+                  const start = presetRangeStart(days, summary?.season_start);
                   setStartDate(start);
                   setEndDate(today);
-                  setDateError('');
+                  validateDates(start, today);
                 }}
                 className="px-2 py-0.5 text-xs rounded bg-blue-500 text-white hover:bg-blue-400 transition-colors"
               >
@@ -458,7 +458,9 @@ const Rankings = () => {
                     if (typeof value === 'number') {
                       if (isCategoryColumn && !isStandings) {
                         display = value
-                      } else if (isCategoryColumn && isStandings && mode === 'averages') {
+                      } else if (isCategoryColumn && isStandings && (mode === 'averages' || PERCENTAGE_CATEGORIES.has(column.key))) {
+                        // A percentage is the same rate in totals mode, so it keeps the
+                        // averages formatting instead of collapsing to "0.5".
                         display = formatAverageValue(column.key, value)
                       } else if (column.key === 'gp') {
                         display = value

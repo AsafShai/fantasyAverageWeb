@@ -86,6 +86,19 @@ describe('aggregatePlayerAverages (trade)', () => {
     expect(a.fg_percentage).toBeGreaterThan(1);
     expect(a.ft_percentage).toBeGreaterThan(1);
   });
+
+  it('adds the per-game lines up, so a 2-for-1 compares what each side really gives', () => {
+    const line = (pts: number, fgm: number, fga: number, gp: number): Player => ({
+      ...p,
+      stats: { ...stats, pts: pts * gp, fgm: fgm * gp, fga: fga * gp, gp },
+    });
+    const two = aggregatePlayerAverages([line(20, 8, 16, 10), line(20, 6, 16, 5)]);
+    const one = aggregatePlayerAverages([line(30, 10, 20, 10)]);
+    expect(two.pts).toBeCloseTo(40);
+    expect(one.pts).toBeCloseTo(30);
+    expect(two.fg_percentage).toBeCloseTo((14 / 32) * 100);
+    expect(two.gp).toBe(15);
+  });
 });
 
 describe('formatStatValue', () => {
@@ -123,10 +136,10 @@ describe('extra league categories', () => {
     expect(extraCountingCategories([withExtras({ TO: 1, 'A/TO': 2, DD: 3 }, 1)])).toEqual(['TO', 'DD']);
   });
 
-  it('sums totals and averages per-game values like the fixed stats', () => {
+  it('sums totals and per-game values like the fixed stats', () => {
     const players = [withExtras({ TO: 10 }, 5), withExtras({ TO: 6 }, 2)];
     expect(aggregateExtraTotals(players, ['TO'])).toEqual({ TO: 16 });
-    expect(aggregateExtraAverages(players, ['TO'])).toEqual({ TO: (2 + 3) / 2 });
+    expect(aggregateExtraAverages(players, ['TO'])).toEqual({ TO: 2 + 3 });
     expect(aggregateExtraAverages([], ['TO'])).toEqual({ TO: 0 });
   });
 });
