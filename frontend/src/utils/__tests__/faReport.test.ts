@@ -31,7 +31,7 @@ function makePlayer(overrides: Partial<{ name: string; gp: number; pts: number; 
       minutes: 30,
       gp: overrides.gp ?? 50,
     },
-    team_id: null,
+    team_id: 0,
     status: 'FREEAGENT',
     has_data: true,
   }
@@ -102,6 +102,10 @@ describe('buildFaReportRows', () => {
     const drafted = makePlayer({ name: 'Drafted Star', player_id: 1, gp: 60 })
     const free = makePlayer({ name: 'Still Free', player_id: 2, gp: 40, pts: 25 })
     const activity: LeagueActivity = {
+      season_id: 2027,
+      season_over: false,
+      latest_date: '2025-10-05',
+      categories: ['PTS'],
       teams: [{ team_id: 3, name: 'C Team', abbrev: 'CT' }],
       moves: [
         {
@@ -115,8 +119,9 @@ describe('buildFaReportRows', () => {
           dropped: [],
         },
       ],
-      stints: [],
-      open_spots: [],
+      trades: [],
+      released: [],
+      last_updated: '2025-10-05T00:00:00Z',
     }
     const rows = buildFaReportRows(
       [makePick('Drafted Star')],
