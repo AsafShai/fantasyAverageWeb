@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
-import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery, useGetScheduleQuery } from '../store/api/fantasyApi'
+import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery, useGetScheduleQuery, useGetTeamRosterDayQuery } from '../store/api/fantasyApi'
 import type { TimePeriod, PlayerMatchup, CustomDateRange, PlayerStatKey } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -25,6 +25,8 @@ import { TeamShareCard } from '../components/share/TeamShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
 import { orderCategories } from '../utils/statOrder'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
+import { RosterDayContent, RosterDayStepper, SlotPill } from '../components/RosterDayView'
+import { lineupSlotOrder, lockNote } from '../utils/rosterDay'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
@@ -50,6 +52,10 @@ const TEAM_DETAIL_URL_SCHEMA = {
   // Default to ESPN lineup order (PG, SG, SF, PF, C, G, F, UTIL, BE, IR).
   sort: stringParam('lineup_slot'),
   order: enumParam(['asc', 'desc'] as const, 'asc'),
+  // Roster table mode; Daily (roster by day) is the default.
+  mode: enumParam<PlayerTableMode>(['daily', 'stats', 'schedule'], 'daily'),
+  // Daily mode's day; empty = today.
+  day: isoDateParam(),
 }
 
 const TeamDetail = () => {
@@ -80,6 +86,9 @@ const TeamDetail = () => {
   }, [timePeriod, customRange, team_detail])
   const [sortBy, setSortBy] = useState<string | null>(urlState.sort || null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(urlState.order)
+  const [tableMode, setTableMode] = useState<PlayerTableMode>(urlState.mode)
+  // '' = today (kept out of the URL so a shared link always opens on the current day).
+  const [rosterDate, setRosterDate] = useState<string>(urlState.day)
 
   const isCustom = timePeriod === 'custom' && customRange !== null
   useEffect(() => {
@@ -89,14 +98,27 @@ const TeamDetail = () => {
       to: isCustom ? customRange.end : '',
       sort: sortBy ?? '',
       order: sortOrder,
+      mode: tableMode,
+      day: tableMode === 'daily' ? rosterDate : '',
     })
-  }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder])
+  }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder, tableMode, rosterDate])
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
-  const [tableMode, setTableMode] = useState<PlayerTableMode>('stats')
   const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
   const [activeCoverageDate, setActiveCoverageDate] = useState<string | null>(null)
   const showSchedule = tableMode === 'schedule'
+  const showDaily = tableMode === 'daily'
+  const showStats = tableMode === 'stats'
+  const today = easternToday()
+  const {
+    currentData: rosterDay,
+    isFetching: rosterDayFetching,
+    error: rosterDayError,
+  } = useGetTeamRosterDayQuery(
+    { teamId: teamIdNumber, ...(rosterDate ? { date: rosterDate } : {}) },
+    { skip: !showDaily || !teamIdNumber },
+  )
+  const changeRosterDate = (date: string) => setRosterDate(date >= (rosterDay?.last_date ?? today) ? '' : date)
   const { data: schedule } = useGetScheduleQuery()
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
   const opponents = useMemo(
@@ -105,7 +127,7 @@ const TeamDetail = () => {
   )
   const [integerMode, setIntegerMode] = usePersistedState('teamDetail.integerMode', true)
   const [includedPlayers, setIncludedPlayers] = useState<Set<string> | null>(null)
-  const coverageSlate = !showSchedule && coverageDate ? coverageDate.replaceAll('-', '') : undefined
+  const coverageSlate = showStats && coverageDate ? coverageDate.replaceAll('-', '') : undefined
   const { data: liveMatchups = [] } = useGetMatchupsTodayQuery(undefined, { skip: !!coverageSlate })
   const { currentData: datedMatchups } = useGetMatchupsTodayQuery(coverageSlate, {
     skip: !coverageSlate,
@@ -223,12 +245,7 @@ const TeamDetail = () => {
     return positionRank[firstPos as keyof typeof positionRank] ?? 99
   }
 
-  // ESPN lineup order: starters, flex, UTIL, then bench and IR.
-  const lineupSlotOrder = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'SG/SF', 'G/F', 'PF/C', 'F/C', 'UTIL', 'BE', 'IR']
-  const getLineupSlotOrder = (slot?: string | null): number => {
-    const idx = slot ? lineupSlotOrder.indexOf(slot) : -1
-    return idx === -1 ? 99 : idx
-  }
+  const getLineupSlotOrder = lineupSlotOrder
 
   const allPlayers = team_detail.players ?? []
 
@@ -495,9 +512,9 @@ const TeamDetail = () => {
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
               <div className="order-1 w-full sm:order-3 sm:w-auto">
-                <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
+                <StatsScheduleToggle mode={tableMode} onChange={setTableMode} includeDaily />
               </div>
-              {!showSchedule && (
+              {showStats && (
                 <div className="order-2 flex w-full overflow-hidden rounded border border-gray-300 sm:order-2 sm:w-auto">
                   <button
                     className={`flex-1 border-r border-gray-300 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
@@ -513,14 +530,24 @@ const TeamDetail = () => {
                   </button>
                 </div>
               )}
-              {!showSchedule && (
+              {showStats && (
                 <label className="order-3 flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none sm:order-1">
                   <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
                   Integer projections
                 </label>
               )}
             </div>
-            {!showSchedule ? (
+            {showDaily ? (
+              <div className="w-full sm:flex sm:justify-end">
+                <RosterDayStepper
+                  date={rosterDate || rosterDay?.date || today}
+                  firstDate={rosterDay?.first_date}
+                  lastDate={rosterDay?.last_date ?? today}
+                  note={rosterDay && !rosterDayFetching ? lockNote(rosterDay) : rosterDayFetching ? 'Loading this day…' : undefined}
+                  onChange={changeRosterDate}
+                />
+              </div>
+            ) : showStats ? (
               <div className="w-full sm:flex sm:justify-end">
                 <TimePeriodSelector
                   value={timePeriod}
@@ -536,7 +563,7 @@ const TeamDetail = () => {
             )}
           </div>
         </div>
-        {!showSchedule && timePeriod === 'custom' && customRange && (
+        {showStats && timePeriod === 'custom' && customRange && (
           <CoverageNotice
             requestedStart={customRange.start}
             requestedEnd={customRange.end}
@@ -544,7 +571,13 @@ const TeamDetail = () => {
             actualEnd={team_detail.actual_end}
           />
         )}
-        {!team_detail.players ? (
+        {showDaily ? (
+          rosterDayError && !rosterDayFetching ? (
+            <ErrorMessage message={getErrorMessage(rosterDayError, 'Failed to load the roster for this day')} />
+          ) : (
+            <RosterDayContent day={rosterDay} loading={rosterDayFetching && !rosterDay} matchups={matchupMap} />
+          )
+        ) : !team_detail.players ? (
           <div className="py-12 text-center text-gray-400 text-sm">
             Roster data is currently unavailable. Team stats above are from the last known snapshot.
           </div>
@@ -605,11 +638,7 @@ const TeamDetail = () => {
                   <React.Fragment key={idx}>
                     <tr className="hover:bg-gray-50">
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
-                        {player.lineup_slot === 'IR' ? (
-                          <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200" title="Injured reserve">IR</span>
-                        ) : player.lineup_slot && player.lineup_slot !== 'BE' ? (
-                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-sky-400/15 dark:text-sky-300 dark:ring-sky-400/40" title="Active lineup slot">{player.lineup_slot}</span>
-                        ) : (player.lineup_slot ?? '—')}
+                        <SlotPill slot={player.lineup_slot} />
                       </td>
                       {!showSchedule && (
                       <td className="px-4 py-3 whitespace-nowrap text-center">

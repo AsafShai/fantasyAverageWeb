@@ -1,7 +1,7 @@
 import type { WeekScheduleDay } from '../utils/slateWindow'
 import './MatchupDisplay.css'
 
-export type PlayerTableMode = 'stats' | 'schedule'
+export type PlayerTableMode = 'daily' | 'stats' | 'schedule'
 
 export const SCHEDULE_HORIZONS = [7, 14, 28] as const
 export type ScheduleHorizon = (typeof SCHEDULE_HORIZONS)[number]
@@ -35,37 +35,38 @@ export function ScheduleHorizonToggle({
   )
 }
 
+const MODE_LABELS: Record<PlayerTableMode, string> = { daily: 'Daily', stats: 'Stats', schedule: 'Schedule' }
+
 export function StatsScheduleToggle({
   mode,
   onChange,
+  includeDaily = false,
 }: {
   mode: PlayerTableMode
   onChange: (mode: PlayerTableMode) => void
+  /** Adds the Daily (roster by day) mode, first. Team page only. */
+  includeDaily?: boolean
 }) {
+  const modes: PlayerTableMode[] = includeDaily ? ['daily', 'stats', 'schedule'] : ['stats', 'schedule']
   return (
     <div className="flex w-full self-start overflow-hidden rounded border border-gray-300 sm:w-auto dark:border-gray-600">
-      <button
-        type="button"
-        className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 ${
-          mode === 'stats'
-            ? 'bg-blue-600 text-white font-medium'
-            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-        }`}
-        onClick={() => onChange('stats')}
-      >
-        Stats
-      </button>
-      <button
-        type="button"
-        className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${
-          mode === 'schedule'
-            ? 'bg-blue-600 text-white font-medium'
-            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-        }`}
-        onClick={() => onChange('schedule')}
-      >
-        Schedule
-      </button>
+      {modes.map((value, index) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={mode === value}
+          className={`flex-1 sm:flex-none px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 ${
+            index < modes.length - 1 ? 'border-r border-gray-300 dark:border-gray-600' : ''
+          } ${
+            mode === value
+              ? 'bg-blue-600 text-white font-medium'
+              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+          }`}
+          onClick={() => onChange(value)}
+        >
+          {MODE_LABELS[value]}
+        </button>
+      ))}
     </div>
   )
 }
