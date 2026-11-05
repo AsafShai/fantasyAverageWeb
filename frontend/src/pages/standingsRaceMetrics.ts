@@ -50,3 +50,44 @@ export const metricOptionsFor = (points: TeamTimeSeriesPoint[] | undefined): Met
     ...categories.map(c => ({ value: c, label: c })),
   ]
 }
+
+// --- Stat Value view: the teams' actual numbers rather than roto ranks ---
+
+export type Basis = 'avg' | 'totals'
+
+// Counting stats a snapshot stores only as inputs to a percentage. They are not
+// scored categories, so the fallback list (no league settings) leaves them out.
+const SOURCE_ONLY_STATS = new Set(['FGM', 'FGA', 'FTM', 'FTA', '3PA', 'GP'])
+
+export const statValue = (point: TeamTimeSeriesPoint, metric: string): number => {
+  const value = point.values?.[metric]
+  return value === undefined || value === null ? NaN : Number(value)
+}
+
+// The league's scored categories that the payload actually carries values for,
+// in the league's order. Without league settings, every carried category that
+// is not just a percentage's input, in the familiar order.
+export const statMetricOptionsFor = (
+  points: TeamTimeSeriesPoint[] | undefined,
+  leagueCategories: string[] | undefined,
+): MetricOption[] => {
+  const carried = new Set<string>()
+  points?.forEach(p => {
+    if (p.values) Object.keys(p.values).forEach(c => carried.add(c))
+  })
+  const categories = leagueCategories && leagueCategories.length > 0
+    ? orderCategories(leagueCategories.filter(c => carried.has(c)))
+    : orderCategories(Array.from(carried).filter(c => !SOURCE_ONLY_STATS.has(c)))
+  return categories.map(c => ({ value: c, label: c }))
+}
+
+export const isPercentCategory = (metric: string) => metric.includes('%')
+
+// .472 for a percentage; 14.2 or 0.95 per game; 2,840 for a season total
+// (a derived rate such as A/TO stays at two decimals in either basis).
+export const formatStatValue = (value: number, metric: string, basis: Basis): string => {
+  if (isPercentCategory(metric)) return value.toFixed(3).replace(/^(-?)0\./, '$1.')
+  if (basis === 'totals' && Number.isInteger(value)) return value.toLocaleString()
+  if (basis === 'avg' && Math.abs(value) >= 10) return value.toFixed(1)
+  return value.toFixed(2)
+}
