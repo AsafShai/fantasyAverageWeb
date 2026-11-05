@@ -460,10 +460,7 @@ const StandingsRace = () => {
           {isFetching && !data && <LoadingSpinner />}
           {error && <ErrorMessage message={getErrorMessage(error, 'Failed to load standings history')} />}
           {!isFetching && !error && chartData.length === 0 && (
-            <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-8">
-              No data available yet. Stats accumulate daily
-              {isValueView ? ', and stat values start 10 days into the season.' : '.'}
-            </p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-8">No data available yet. Stats accumulate daily.</p>
           )}
 
           {data && !error && chartData.length > 0 && (

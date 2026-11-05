@@ -711,7 +711,7 @@ async def test_snapshot_over_time_returns_totals(db_service, monkeypatch):
     assert "GP" not in point["values"]
     # no stats column without the migration
     assert "stats" not in conn.fetch.call_args[0][0]
-    assert conn.fetch.call_args[0][4] == [1]
+    assert conn.fetch.call_args[0][1:] == (1234567890, 2026, [1])
 
 
 @pytest.mark.asyncio
