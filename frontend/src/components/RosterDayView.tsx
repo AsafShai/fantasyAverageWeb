@@ -3,7 +3,7 @@ import type { PlayerMatchup, RosterDay, RosterDayPlayer } from '../types/api'
 import PlayerNameLink from './PlayerNameLink'
 import InjuryBadge from './InjuryBadge'
 import LoadingSpinner from './LoadingSpinner'
-import { wrapFriendlyName } from '../utils/wrapName'
+import { nameCellWrapClass, wrapFriendlyName } from '../utils/wrapName'
 import { addDays } from '../utils/slateWindow'
 import { dayLabel, isBench, lineupSlotOrder, moveMeta, pct, starterTotals } from '../utils/rosterDay'
 import './MatchupDisplay.css'
@@ -215,19 +215,31 @@ export function RosterDayContent({
                     <td className="hidden sm:table-cell px-3 py-3 whitespace-nowrap text-sm text-gray-400">
                       <SlotPill slot={player.lineup_slot} activeTitle="Lineup slot at lock" />
                     </td>
-                    {/* Phone: the slot rides in the sticky name cell (the Slot column would
-                        scroll away), and name + tags wrap so the sticky column stays narrow. */}
-                    <td className={`px-3 py-3 max-w-[40vw] whitespace-normal sm:max-w-none sm:whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 border-r border-r-gray-200 ${lit ? 'bg-blue-50' : 'bg-white'}`}>
-                      <span className="mr-1.5 text-xs text-gray-400 sm:hidden"><SlotPill slot={player.lineup_slot} activeTitle="Lineup slot at lock" /></span>
+                    {/* Phone: the slot pill, pro team and positions ride under the name in the
+                        sticky cell (their own columns would scroll away or push the stats off screen). */}
+                    <td className={`px-3 py-3 ${nameCellWrapClass(player.player_name)} text-sm font-medium text-gray-900 sticky left-0 z-10 border-r border-r-gray-200 ${lit ? 'bg-blue-50' : 'bg-white'}`}>
+                      {/* Same rule as every other name column (utils/wrapName, on the cell):
+                          a name of 16 characters or fewer stays on one line and the column
+                          fits it; a longer one wraps between words within 38vw on phones. */}
                       <PlayerNameLink name={wrapFriendlyName(player.player_name)} playerId={player.player_id} />{' '}
                       <InjuryBadge status={matchup?.injury_status} />
-                      {player.added && (
-                        <span className="ml-2 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200 dark:text-blue-300 dark:ring-blue-400/40 whitespace-nowrap" title="First day on this roster">Added</span>
+                      {(player.added || player.dropped) && (
+                        // Own line on phones, so the tags never widen the sticky column.
+                        <span className="mt-1 block sm:mt-0 sm:inline">
+                          {player.added && (
+                            <span className="mr-1.5 sm:mr-0 sm:ml-2 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200 dark:text-blue-300 dark:ring-blue-400/40 whitespace-nowrap" title="First day on this roster">Added</span>
+                          )}
+                          {player.dropped && (
+                            <span className="sm:ml-2 inline-block rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200 whitespace-nowrap" title="Last day on this roster">Dropped</span>
+                          )}
+                        </span>
                       )}
-                      {player.dropped && (
-                        <span className="ml-2 inline-block rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200 whitespace-nowrap" title="Last day on this roster">Dropped</span>
-                      )}
-                      <span className="mt-0.5 block text-xs font-normal text-gray-500 sm:hidden">{player.pro_team} · {player.positions.join(', ')}</span>
+                      {/* Second line on phones: slot, team, positions. Kept off the name line so
+                          the column is only as wide as the name, as in the other tables. */}
+                      <span className="mt-1 block text-xs font-normal text-gray-500 sm:hidden">
+                        <span className="mr-1.5 text-gray-400"><SlotPill slot={player.lineup_slot} activeTitle="Lineup slot at lock" /></span>
+                        {player.pro_team} · {player.positions.join(', ')}
+                      </span>
                     </td>
                     <td className="hidden sm:table-cell px-3 py-3 whitespace-nowrap text-sm text-gray-500">{player.positions.join(', ')}</td>
                     <td className="hidden sm:table-cell px-3 py-3 whitespace-nowrap text-sm text-gray-500">{player.pro_team}</td>
