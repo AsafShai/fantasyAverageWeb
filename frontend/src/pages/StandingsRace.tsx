@@ -195,7 +195,7 @@ function EndLabels({
 
 
 const StandingsRace = () => {
-  const [basis, setBasis] = useState<Basis>('totals')
+  const [basis, setBasis] = useState<Basis>('avg')
   const [view, setView] = useState<ViewMode>('points')
   const [metric, setMetric] = useState<string>(TOTAL_METRIC)
   const [highlighted, setHighlighted] = useState<Set<number>>(new Set())
