@@ -160,12 +160,13 @@ describe('StandingsRace Stat Value view', () => {
     await waitFor(() => expect(calls).toContain('snapshot'));
   });
 
-  it('keeps reading the rankings in Roto Points', async () => {
+  it('opens on per-game roto points and keeps reading the rankings there', async () => {
     const calls = stubSources({ rankings_totals: { data: [point()] }, rankings_avg: { data: [point()] } });
     renderWithProviders(<StandingsRace />);
+    await waitFor(() => expect(calls).toEqual(['rankings_avg']));
+    expect(screen.getByRole('button', { name: 'Per Game' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Season Totals' }));
     await waitFor(() => expect(calls).toContain('rankings_totals'));
-    fireEvent.click(screen.getByRole('button', { name: 'Per Game' }));
-    await waitFor(() => expect(calls).toContain('rankings_avg'));
   });
 });
 
