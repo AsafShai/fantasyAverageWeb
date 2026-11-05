@@ -540,7 +540,6 @@ class DBService:
         pool = await self._get_pool()
         if pool is None:
             return []
-        cutoff = settings.season_start + timedelta(days=10)
         try:
             async with pool.acquire() as conn:
                 dynamic = await self._supports_dynamic_categories(conn)
@@ -548,16 +547,16 @@ class DBService:
                 query = f"""
                     SELECT date, team_id, team_name, {columns}{', stats' if dynamic else ''}
                     FROM team_daily_snapshot
-                    WHERE league_id = $1 AND season_id = $2 AND date >= $3
+                    WHERE league_id = $1 AND season_id = $2
                 """
                 if team_ids:
                     rows = await conn.fetch(
-                        query + " AND team_id = ANY($4) ORDER BY date, team_id",
-                        league_id, season_id, cutoff, team_ids,
+                        query + " AND team_id = ANY($3) ORDER BY date, team_id",
+                        league_id, season_id, team_ids,
                     )
                 else:
                     rows = await conn.fetch(
-                        query + " ORDER BY date, team_id", league_id, season_id, cutoff,
+                        query + " ORDER BY date, team_id", league_id, season_id,
                     )
                 return [self._snapshot_row_to_point(dict(r), per_game) for r in rows]
         except Exception as e:
