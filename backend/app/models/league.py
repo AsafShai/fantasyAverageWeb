@@ -73,9 +73,16 @@ class TeamTimeSeriesPoint(BaseModel):
     stl: Optional[float] = None
     blk: Optional[float] = None
     pts: Optional[float] = None
+    # Stat sources only (snapshot, averages): category code -> value, covering
+    # every stored category including ones with no column of their own.
+    values: Optional[Dict[str, float]] = None
 
 class RankingsOverTimeResponse(BaseModel):
     data: List[TeamTimeSeriesPoint]
+    # Stat sources only: the league's scored categories, in the league's order,
+    # and those where a lower value is better (e.g. TO). Empty when unknown.
+    categories: List[str] = []
+    reverse_categories: List[str] = []
 
 class DraftPick(BaseModel):
     pick: int

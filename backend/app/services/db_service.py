@@ -8,6 +8,7 @@ import pandas as pd
 from app.config import settings
 from app.utils import category_storage
 from app.utils.category_storage import SNAPSHOT_FIXED_CATEGORIES, TOTAL_KEY
+from app.utils.constants import DERIVED_CATEGORIES
 from app.models.injury_models import InjuryRecord
 from model_stats_inference.research import config as rconfig
 
@@ -524,75 +525,76 @@ class DBService:
     async def get_snapshot_over_time(
         self, team_ids: list[int] | None, league_id: int, season_id: int
     ) -> list[dict]:
+        """Each team's season totals per day, per category."""
+        return await self._stat_values_over_time(team_ids, league_id, season_id, per_game=False)
+
+    async def get_averages_over_time(
+        self, team_ids: list[int] | None, league_id: int, season_id: int
+    ) -> list[dict]:
+        """Each team's per-game averages per day, per category."""
+        return await self._stat_values_over_time(team_ids, league_id, season_id, per_game=True)
+
+    async def _stat_values_over_time(
+        self, team_ids: list[int] | None, league_id: int, season_id: int, per_game: bool
+    ) -> list[dict]:
         pool = await self._get_pool()
         if pool is None:
             return []
         cutoff = settings.season_start + timedelta(days=10)
         try:
             async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
+                columns = ', '.join(_SNAPSHOT_COL_MAP.values())
+                query = f"""
+                    SELECT date, team_id, team_name, {columns}{', stats' if dynamic else ''}
+                    FROM team_daily_snapshot
+                    WHERE league_id = $1 AND season_id = $2 AND date >= $3
+                """
                 if team_ids:
                     rows = await conn.fetch(
-                        """
-                        SELECT date, team_id, team_name,
-                               fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
-                        FROM team_daily_snapshot
-                        WHERE league_id = $1 AND season_id = $2
-                          AND date >= $3 AND team_id = ANY($4)
-                        ORDER BY date, team_id
-                        """,
+                        query + " AND team_id = ANY($4) ORDER BY date, team_id",
                         league_id, season_id, cutoff, team_ids,
                     )
                 else:
                     rows = await conn.fetch(
-                        """
-                        SELECT date, team_id, team_name,
-                               fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
-                        FROM team_daily_snapshot
-                        WHERE league_id = $1 AND season_id = $2 AND date >= $3
-                        ORDER BY date, team_id
-                        """,
-                        league_id, season_id, cutoff,
+                        query + " ORDER BY date, team_id", league_id, season_id, cutoff,
                     )
-                return [dict(r) for r in rows]
+                return [self._snapshot_row_to_point(dict(r), per_game) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch snapshot over time: {type(e).__name__}: {e}")
+            kind = "averages" if per_game else "snapshot"
+            logger.error(f"Failed to fetch {kind} over time: {type(e).__name__}: {e}")
             return []
 
-    async def get_averages_over_time(
-        self, team_ids: list[int] | None, league_id: int, season_id: int
-    ) -> list[dict]:
-        pool = await self._get_pool()
-        if pool is None:
-            return []
-        _base = """
-            SELECT date, team_id, team_name,
-                   fg_pct,
-                   ft_pct,
-                   ROUND((three_pm::numeric / NULLIF(gp, 0)), 4) AS three_pm,
-                   ROUND((reb::numeric    / NULLIF(gp, 0)), 4) AS reb,
-                   ROUND((ast::numeric    / NULLIF(gp, 0)), 4) AS ast,
-                   ROUND((stl::numeric    / NULLIF(gp, 0)), 4) AS stl,
-                   ROUND((blk::numeric    / NULLIF(gp, 0)), 4) AS blk,
-                   ROUND((pts::numeric    / NULLIF(gp, 0)), 4) AS pts
-            FROM team_daily_snapshot
-            WHERE league_id = $1 AND season_id = $2 AND date >= $3
-        """
-        try:
-            async with pool.acquire() as conn:
-                cutoff = settings.season_start + timedelta(days=10)
-                if team_ids:
-                    rows = await conn.fetch(
-                        _base + " AND team_id = ANY($4) ORDER BY date, team_id",
-                        league_id, season_id, cutoff, team_ids,
-                    )
-                else:
-                    rows = await conn.fetch(
-                        _base + " ORDER BY date, team_id", league_id, season_id, cutoff
-                    )
-                return [dict(r) for r in rows]
-        except Exception as e:
-            logger.error(f"Failed to fetch averages over time: {type(e).__name__}: {e}")
-            return []
+    @staticmethod
+    def _snapshot_row_to_point(row: dict, per_game: bool) -> dict:
+        """A snapshot row as one over-time point: `values` holds every stored
+        category (fixed columns plus JSONB extras) keyed by category code, and
+        the legacy per-column fields mirror it for the fixed categories.
+
+        Per game, a counted category is divided by games played; a derived one
+        (FG%, A/TO, PPG...) is already a rate and is passed through as is."""
+        fixed = {cat: row.get(col) for cat, col in _SNAPSHOT_COL_MAP.items()}
+        merged = category_storage.merge_categories(fixed, row.get('stats'))
+        gp = merged.pop('GP', None)
+        gp = int(gp) if gp is not None else None
+        values: dict[str, float] = {}
+        for cat, raw in merged.items():
+            value = float(raw)
+            if per_game and cat not in DERIVED_CATEGORIES:
+                if not gp:
+                    continue
+                value = round(value / gp, 4)
+            values[cat] = value
+        point = {
+            'date': row['date'],
+            'team_id': row['team_id'],
+            'team_name': row['team_name'],
+            'gp': gp,
+            'values': values,
+        }
+        for cat in ('FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS'):
+            point[_SNAPSHOT_COL_MAP[cat]] = values.get(cat)
+        return point
 
     async def get_snapshots_for_date_range(
         self, start_date: date, end_date: date, league_id: int, season_id: int

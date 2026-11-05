@@ -669,3 +669,62 @@ async def test_date_range_from_season_start_has_no_baseline(db_service, monkeypa
     assert start == date(2026, 1, 1)
     assert rows_start == []
     assert conn.fetch.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_averages_over_time_divides_counts_by_gp_and_keeps_rates(db_service, monkeypatch):
+    rows = [{
+        "date": date(2025, 11, 5), "team_id": 1, "team_name": "A", "gp": 10,
+        "fgm": 45, "fga": 100, "fg_pct": 0.45, "ftm": 8, "fta": 10, "ft_pct": 0.8,
+        "three_pm": 17, "reb": 56, "ast": 33, "stl": 9, "blk": 6, "pts": 142,
+        "stats": '{"TO": 21, "A/TO": 1.5714}',
+    }]
+    conn = FakeConn(fetch_result=rows, dynamic_columns=True)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    [point] = await db_service.get_averages_over_time(None, 1234567890, 2026)
+
+    assert point["gp"] == 10
+    assert point["values"]["PTS"] == 14.2
+    assert point["values"]["TO"] == 2.1
+    # rates are already per-anything: never divided by games played
+    assert point["values"]["FG%"] == 0.45
+    assert point["values"]["A/TO"] == 1.5714
+    assert point["pts"] == 14.2 and point["fg_pct"] == 0.45
+    assert "stats" in conn.fetch.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_snapshot_over_time_returns_totals(db_service, monkeypatch):
+    rows = [{
+        "date": date(2025, 11, 5), "team_id": 1, "team_name": "A", "gp": 10,
+        "fgm": 45, "fga": 100, "fg_pct": 0.45, "ftm": 8, "fta": 10, "ft_pct": 0.8,
+        "three_pm": 17, "reb": 56, "ast": 33, "stl": 9, "blk": 6, "pts": 142,
+    }]
+    conn = FakeConn(fetch_result=rows)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    [point] = await db_service.get_snapshot_over_time([1], 1234567890, 2026)
+
+    assert point["values"]["PTS"] == 142.0
+    assert point["values"]["FG%"] == 0.45
+    assert "GP" not in point["values"]
+    # no stats column without the migration
+    assert "stats" not in conn.fetch.call_args[0][0]
+    assert conn.fetch.call_args[0][4] == [1]
+
+
+@pytest.mark.asyncio
+async def test_averages_over_time_skips_counts_when_no_games(db_service, monkeypatch):
+    rows = [{
+        "date": date(2025, 11, 5), "team_id": 1, "team_name": "A", "gp": 0,
+        "fgm": 0, "fga": 0, "fg_pct": 0.0, "ftm": 0, "fta": 0, "ft_pct": 0.0,
+        "three_pm": 0, "reb": 0, "ast": 0, "stl": 0, "blk": 0, "pts": 0,
+    }]
+    conn = FakeConn(fetch_result=rows)
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+
+    [point] = await db_service.get_averages_over_time(None, 1234567890, 2026)
+
+    assert "PTS" not in point["values"]
+    assert point["pts"] is None

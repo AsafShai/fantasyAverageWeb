@@ -258,10 +258,17 @@ export interface TeamTimeSeriesPoint {
   stl?: number;
   blk?: number;
   pts?: number;
+  /** Stat sources only (snapshot, averages): category code -> value, including
+   *  categories with no column of their own. */
+  values?: Record<string, number> | null;
 }
 
 export interface RankingsOverTimeResponse {
   data: TeamTimeSeriesPoint[];
+  /** Stat sources only: the league's scored categories, in its order. */
+  categories?: string[];
+  /** Stat sources only: categories where a lower value is better (e.g. TO). */
+  reverse_categories?: string[];
 }
 
 export interface DraftPick {

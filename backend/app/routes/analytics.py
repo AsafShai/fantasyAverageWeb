@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from app.models import HeatmapData, RankingsOverTimeResponse, TeamTimeSeriesPoint
 from app.services.league_service import LeagueService
 from app.services.db_service import DBService
+from app.services.data_provider import DataProvider
 from typing import Annotated, Optional
 from app.exceptions import ResourceNotFoundError, DataSourceError
 from app.utils.utils import latest_client_date
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 LeagueServiceDep = Annotated[LeagueService, Depends(LeagueService)]
 DBServiceDep = Annotated[DBService, Depends(DBService)]
+
+_data_provider = DataProvider()
 
 _SOURCE_TO_TABLE = {
     "rankings_avg": "team_rankings_averages",
@@ -50,6 +53,19 @@ async def get_heatmap(
         logger.exception(f"Error getting heatmap data: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve heatmap data")
 
+async def _league_categories() -> tuple[list[str], list[str]]:
+    """The league's scored and reverse-scored categories, or empty lists when
+    ESPN's settings can't be read -- the chart then falls back to the values
+    it was sent, and treats every category as higher-is-better."""
+    try:
+        categories = list(await _data_provider.get_ranking_categories())
+        reverse = sorted(await _data_provider.get_reverse_categories())
+        return categories, reverse
+    except Exception as e:
+        logger.warning(f"Could not resolve league categories for over-time: {type(e).__name__}: {e}")
+        return [], []
+
+
 @router.get("/over-time", response_model=RankingsOverTimeResponse)
 async def get_over_time(
     db_service: DBServiceDep,
@@ -74,6 +90,9 @@ async def get_over_time(
             rows = await db_service.get_rankings_over_time(table, parsed_team_ids, settings.league_id, settings.season_id)
 
         points = [TeamTimeSeriesPoint(**{k: (v.isoformat() if isinstance(v, date_type) else v) for k, v in row.items()}) for row in rows]
+        if source in ("snapshot", "averages"):
+            categories, reverse = await _league_categories()
+            return RankingsOverTimeResponse(data=points, categories=categories, reverse_categories=reverse)
         return RankingsOverTimeResponse(data=points)
     except HTTPException:
         raise
