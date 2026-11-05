@@ -5,13 +5,14 @@ team: the slot every player was in when that day's games locked, his stat line
 that day, and the adds/drops/trades around it (the moves strip and the
 Added/Dropped tags).
 
-ESPN serves all of that per scoring period: one league call (view=mRoster,
-scoringPeriodId=N) carries every team's roster at that period's lock, each
-entry with the player's single-period stat line; view=mTransactions2 lists the
-period's moves. A roster call is ~1.9 MB, so a past day is fetched once, trimmed
-to ~200 small rows for the whole league and stored (fantasy_roster_day /
+ESPN serves all of that per scoring period: view=mRoster with scoringPeriodId=N
+and rosterForTeamId=T is the team's roster at that period's lock, each entry
+with the player's single-period stat line (~160 KB; without rosterForTeamId it
+is every team, ~1.9 MB, which costs the process ~12x the memory to parse);
+view=mTransactions2 lists the period's moves (~50 KB). A past team-day is
+fetched once, trimmed to ~16 small rows and stored (fantasy_roster_day /
 fantasy_roster_moves); from then on it is read from Postgres. Nothing
-backfills: a day is stored the first time anyone asks for it. Today is never
+backfills: a team-day is stored the first time anyone opens it. Today is never
 stored -- the lineup and moves can still change -- and is cached briefly.
 
 Without a database the same trimmed rows live in a small in-process LRU, so
@@ -74,7 +75,7 @@ ITEM_TYPES = ("ADD", "DROP", "TRADE")
 LIVE_TTL_S = 5 * 60           # today's roster / moves
 RESPONSE_TTL_PAST_S = 6 * 60 * 60
 RESPONSE_TTL_RECENT_S = 60    # yesterday's tags still depend on today's moves
-MEMORY_PERIODS = 40           # no-DB fallback: trimmed periods kept in process
+MEMORY_PERIODS = 120          # no-DB fallback: trimmed team-days (~16 rows each) kept in process
 RESPONSE_CACHE_SIZE = 128
 
 
@@ -288,40 +289,42 @@ class RosterDayService:
 
     # -- rosters ------------------------------------------------------------
 
-    async def _fetch_roster(self, period: int) -> list[tuple]:
-        payload = await self._get([("view", "mRoster"), ("scoringPeriodId", str(period))])
-        rows = parse_roster_payload(payload, period, settings.season_id)
-        del payload  # ~1.9 MB parsed; only the trimmed rows are kept
-        logger.info(f"Roster day: fetched period {period} from ESPN ({len(rows)} rows, all teams)")
+    async def _fetch_roster(self, period: int, team_id: int) -> list[tuple]:
+        """One team's trimmed rows for ``period``. Asks ESPN for that team only:
+        the league-wide roster is ~12x the bytes to download and parse."""
+        payload = await self._get([
+            ("view", "mRoster"), ("scoringPeriodId", str(period)), ("rosterForTeamId", str(team_id)),
+        ])
+        rows = [r[1:] for r in parse_roster_payload(payload, period, settings.season_id) if r[0] == team_id]
+        del payload  # only the trimmed rows are kept
+        logger.info(f"Roster day: fetched period {period} team {team_id} from ESPN ({len(rows)} rows)")
         return rows
 
     async def _team_roster(self, period: int, team_id: int, live: bool) -> list[tuple]:
         """The team's rows for ``period``: (player_id, name, positions, pro_team_id, slot, stats)."""
-        def pick(rows):
-            return [r[1:] for r in rows if r[0] == team_id]
-
-        cached = self._rosters.get(period)
+        key = (period, team_id)
+        cached = self._rosters.get(key)
         if cached is not None:
-            return pick(cached)
-        async with self._lock(("roster", period)):
-            cached = self._rosters.get(period)
+            return cached
+        async with self._lock(("roster", *key)):
+            cached = self._rosters.get(key)
             if cached is not None:
-                return pick(cached)
+                return cached
             if not live:
-                saved = await self._db.get_saved_roster_periods([period], "roster")
+                saved = await self._db.get_saved_roster_periods([period], "roster", team_id)
                 if saved and period in saved:
                     return [
                         (r["player_id"], r["player_name"], r["positions"], r["pro_team_id"], r["lineup_slot"],
                          stats_from_array(r["stats"]))
                         for r in await self._db.get_roster_day_rows(period, team_id)
                     ]
-            rows = await self._fetch_roster(period)
+            rows = await self._fetch_roster(period, team_id)
             stored = False if live else await self._db.save_roster_day(
-                period, [(*r[:6], stats_to_array(r[6])) for r in rows])
+                period, team_id, [(*r[:5], stats_to_array(r[5])) for r in rows])
             if live or not stored:
                 # Today, or no database: keep the trimmed rows in process.
-                self._rosters.set(period, rows, LIVE_TTL_S if live else RESPONSE_TTL_PAST_S)
-            return pick(rows)
+                self._rosters.set(key, rows, LIVE_TTL_S if live else RESPONSE_TTL_PAST_S)
+            return rows
 
     # -- moves --------------------------------------------------------------
 

@@ -1997,10 +1997,10 @@ class DBService:
 
     # ── Roster by day (fantasy_roster_day / fantasy_roster_moves) ──────────
 
-    async def get_saved_roster_periods(self, periods: list[int], kind: str) -> Optional[set[int]]:
-        """Which of ``periods`` are stored completely for ``kind`` ('roster' or
-        'moves'). None when there is no database (or it failed): the caller then
-        treats every period as not stored."""
+    async def get_saved_roster_periods(self, periods: list[int], kind: str, team_id: int = 0) -> Optional[set[int]]:
+        """Which of ``periods`` are stored completely for ``kind`` ('roster', per
+        team, or 'moves', league-wide with team_id 0). None when there is no
+        database (or it failed): the caller then treats every period as not stored."""
         pool = await self._get_pool()
         if pool is None or not periods:
             return None if pool is None else set()
@@ -2008,8 +2008,9 @@ class DBService:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
                     "SELECT scoring_period_id FROM fantasy_roster_period_saved "
-                    "WHERE league_id = $1 AND season_id = $2 AND kind = $3 AND scoring_period_id = ANY($4::int[])",
-                    settings.league_id, settings.season_id, kind, periods,
+                    "WHERE league_id = $1 AND season_id = $2 AND kind = $3 AND team_id = $4 "
+                    "AND scoring_period_id = ANY($5::int[])",
+                    settings.league_id, settings.season_id, kind, team_id, periods,
                 )
                 return {r["scoring_period_id"] for r in rows}
         except Exception as e:
@@ -2034,10 +2035,10 @@ class DBService:
             logger.error(f"Failed to read roster day {period} team {team_id}: {type(e).__name__}: {e}")
             return []
 
-    async def save_roster_day(self, period: int, rows: list[tuple]) -> bool:
-        """Store one period's rosters for every team, then mark it saved, in one
-        transaction. Row tuples: (team_id, player_id, player_name, positions,
-        pro_team_id, lineup_slot, stats)."""
+    async def save_roster_day(self, period: int, team_id: int, rows: list[tuple]) -> bool:
+        """Store one team's roster for one period, then mark it saved, in one
+        transaction. Row tuples: (player_id, player_name, positions, pro_team_id,
+        lineup_slot, stats)."""
         pool = await self._get_pool()
         if pool is None:
             return False
@@ -2046,24 +2047,25 @@ class DBService:
             async with pool.acquire() as conn:
                 async with conn.transaction():
                     await conn.execute(
-                        "DELETE FROM fantasy_roster_day WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3",
-                        lid, sid, period,
+                        "DELETE FROM fantasy_roster_day "
+                        "WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3 AND team_id = $4",
+                        lid, sid, period, team_id,
                     )
                     await conn.executemany(
                         "INSERT INTO fantasy_roster_day (league_id, season_id, scoring_period_id, team_id, player_id, "
                         "player_name, positions, pro_team_id, lineup_slot, stats) "
                         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
-                        [(lid, sid, period, *row) for row in rows],
+                        [(lid, sid, period, team_id, *row) for row in rows],
                     )
                     await conn.execute(
-                        "INSERT INTO fantasy_roster_period_saved (league_id, season_id, scoring_period_id, kind) "
-                        "VALUES ($1, $2, $3, 'roster') ON CONFLICT DO NOTHING",
-                        lid, sid, period,
+                        "INSERT INTO fantasy_roster_period_saved (league_id, season_id, scoring_period_id, kind, team_id) "
+                        "VALUES ($1, $2, $3, 'roster', $4) ON CONFLICT DO NOTHING",
+                        lid, sid, period, team_id,
                     )
-            logger.info(f"Roster day: stored period {period} ({len(rows)} rows)")
+            logger.info(f"Roster day: stored period {period} team {team_id} ({len(rows)} rows)")
             return True
         except Exception as e:
-            logger.error(f"Failed to store roster day {period}: {type(e).__name__}: {e}")
+            logger.error(f"Failed to store roster day {period} team {team_id}: {type(e).__name__}: {e}")
             return False
 
     async def get_roster_moves(self, periods: list[int]) -> list[dict]:

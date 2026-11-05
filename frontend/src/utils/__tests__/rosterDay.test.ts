@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RosterDay, RosterDayPlayer } from '../../types/api'
-import { lineupSlotOrder, lockNote, moveMeta, pct, starterTotals } from '../rosterDay'
+import { lineupSlotOrder, lockNote, moveNote, moveTime, pct, starterTotals } from '../rosterDay'
 
 const stats = (pts: number, fgm: number, fga: number) => ({
   minutes: 30, fgm, fga, ftm: 2, fta: 4, three_pm: 1, reb: 5, ast: 3, stl: 1, blk: 0, pts, to: 2,
@@ -50,7 +50,12 @@ describe('rosterDay utils', () => {
 
   it('labels moves, including one made after the previous lock', () => {
     const move = { id: 'm', kind: 'free_agent' as const, at: '2026-11-05T00:52:40Z', added: [], dropped: [], after_lock: true }
-    expect(moveMeta(move, '2026-11-05')).toBe('Free agent · Wed 7:52 PM · after Wed lock')
-    expect(moveMeta({ ...move, kind: 'waiver', after_lock: false, at: '2026-11-03T08:42:00Z' }, '2026-11-03')).toBe('Waiver claim · Tue 3:42 AM')
+    // Made Wednesday evening, after Wednesday's lock: shown on Thursday with its weekday.
+    expect(moveTime(move, '2026-11-05')).toBe('Wed 7:52 PM')
+    expect(moveNote(move, '2026-11-05')).toBe('after Wed lock')
+    const waiver = { ...move, kind: 'waiver' as const, after_lock: false, at: '2026-11-03T08:42:00Z' }
+    expect(moveTime(waiver, '2026-11-03')).toBe('3:42 AM')
+    expect(moveNote(waiver, '2026-11-03')).toBe('Waiver claim')
+    expect(moveNote({ ...waiver, kind: 'free_agent' }, '2026-11-03')).toBe('')
   })
 })

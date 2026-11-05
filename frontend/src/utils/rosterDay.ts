@@ -29,15 +29,26 @@ export function lockNote(day: RosterDay, now: Date = new Date()): string {
   return new Date(day.lock_at) > now ? `Live · locks ${time}` : `Live · locked ${time}`
 }
 
-const MOVE_KIND: Record<RosterDayMove['kind'], string> = {
-  free_agent: 'Free agent',
+// Free-agent pickups are the usual case, so only the others are labelled.
+const MOVE_KIND: Record<RosterDayMove['kind'], string | null> = {
+  free_agent: null,
   waiver: 'Waiver claim',
   trade: 'Trade',
 }
 
-export function moveMeta(move: RosterDayMove, date: string): string {
-  const when = easternTime(move.at, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-  const parts = [MOVE_KIND[move.kind], when]
+/** When the move was made (ET): just the time on the day itself, with the
+ * weekday when it was made the day before (after that day's lock). */
+export function moveTime(move: RosterDayMove, date: string): string {
+  const sameDay = new Intl.DateTimeFormat('en-CA', { timeZone: EASTERN }).format(new Date(move.at)) === date
+  return easternTime(move.at, sameDay ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+}
+
+/** The small note after a move: its kind (when not a free-agent pickup) and
+ * whether it came after the previous day's lock. Empty when there is nothing to say. */
+export function moveNote(move: RosterDayMove, date: string): string {
+  const parts: string[] = []
+  const kind = MOVE_KIND[move.kind]
+  if (kind) parts.push(kind)
   if (move.after_lock) parts.push(`after ${formatSlateDate(addDays(date, -1), { weekday: 'short' })} lock`)
   return parts.join(' · ')
 }

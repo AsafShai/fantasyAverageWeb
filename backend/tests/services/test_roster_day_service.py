@@ -164,13 +164,13 @@ def test_player_status():
 class _FakeDB:
     """No database: nothing saved, every save reports failure."""
 
-    async def get_saved_roster_periods(self, periods, kind):
+    async def get_saved_roster_periods(self, periods, kind, team_id=0):
         return None
 
     async def get_roster_day_rows(self, period, team_id):
         return []
 
-    async def save_roster_day(self, period, rows):
+    async def save_roster_day(self, period, team_id, rows):
         return False
 
     async def get_roster_moves(self, periods):
@@ -197,6 +197,9 @@ async def test_get_roster_day_builds_the_day_and_caches_without_db():
     async def fake_get(params):
         calls.append(dict(params)["view"])
         if dict(params)["view"] == "mRoster":
+            # One team per request (rosterForTeamId); ESPN still lists every team.
+            assert "rosterForTeamId" in dict(params)
+        if dict(params)["view"] == "mRoster":
             return _roster_payload(16)
         return {"transactions": []}
 
@@ -214,11 +217,15 @@ async def test_get_roster_day_builds_the_day_and_caches_without_db():
         assert by_name["Off Day"].status == "no_game"
         assert calls.count("mRoster") == 1
 
-        # Another team on the same day: no new roster call (all teams were kept).
+        # The same team-day again: served from the in-process copy (no database here).
         service._responses.clear()
+        await service.get_roster_day(1, date(2026, 11, 4))
+        assert calls.count("mRoster") == 1
+
+        # Another team on the same day is its own small request.
         other = await service.get_roster_day(2, date(2026, 11, 4))
         assert [p.player_name for p in other.players] == ["Other Team"]
-        assert calls.count("mRoster") == 1
+        assert calls.count("mRoster") == 2
 
         with pytest.raises(InvalidParameterError):
             await service.get_roster_day(1, date(2026, 11, 6))
