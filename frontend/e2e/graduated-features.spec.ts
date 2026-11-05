@@ -34,9 +34,40 @@ test('Players: slate picker, matchup column and schedule view', async ({ page })
 test('Team page: roster coverage, matchup column and schedule toggle', async ({ page }) => {
   await page.goto('/team/1')
   await expect(page.getByRole('heading', { name: 'Roster coverage' })).toBeVisible()
+  // Daily is the default; the season stats table is one click away.
+  await page.getByRole('button', { name: 'Stats', exact: true }).click()
+  await expect(page).toHaveURL(/mode=stats/)
   await expect(page.locator('th', { hasText: 'Matchup' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Schedule', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Custom' })).toBeVisible()
+})
+
+test('Team page: Daily roster by day is the default', async ({ page }) => {
+  const days: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname.endsWith('/teams/1/roster-day')) days.push(url.searchParams.get('date') ?? 'today')
+  })
+  await page.goto('/team/1')
+  await expect(page.getByRole('button', { name: 'Daily', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  const table = page.getByTestId('roster-day-table')
+  await expect(table).toBeVisible()
+  await expect(page.getByTestId('roster-day-note')).toHaveText('Lineup at lock · 7:00 PM ET')
+  await expect(table.locator('th', { hasText: 'FG%' })).toBeVisible()
+  const walker = page.getByTestId('roster-day-row').filter({ hasText: 'Jarace Walker' })
+  await expect(walker.getByText('Added')).toBeVisible()
+  await expect(walker.getByText('Dropped')).toBeVisible()
+  await expect(walker.getByText('6/15')).toBeVisible()
+
+  const moves = page.getByTestId('roster-day-moves')
+  await expect(moves.getByText('+ Egor Demin')).toBeVisible()
+  await moves.getByRole('button', { name: '+ Jarace Walker' }).click()
+  await expect(walker).toHaveClass(/bg-blue-50/)
+
+  await page.getByRole('button', { name: 'Previous day' }).click()
+  await expect(page).toHaveURL(/day=2026-11-01/)
+  expect(days).toContain('2026-11-01')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
 test('Minigames hub lists all four games', async ({ page }) => {

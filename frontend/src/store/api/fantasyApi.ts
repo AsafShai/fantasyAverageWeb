@@ -1,5 +1,5 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, CategoryResponse } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, CategoryResponse, RosterDay } from '../../types/api';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves } from '../../types/activity';
@@ -34,6 +34,14 @@ export const fantasyApi = createApi({
         url: `/teams/${teamId}`,
         params: { time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) },
       }),
+      keepUnusedDataFor: 300,
+    }),
+    getTeamRosterDay: builder.query<RosterDay, { teamId: number; date?: string }>({
+      query: ({ teamId, date }) => ({
+        url: `/teams/${teamId}/roster-day`,
+        params: date ? { date } : {},
+      }),
+      // Past days never change; today is refetched when the page is revisited.
       keepUnusedDataFor: 300,
     }),
     getLeagueSummary: builder.query<LeagueSummary, void>({
@@ -320,6 +328,7 @@ export const {
   useGetLatestMovesQuery,
   useGetRankingsQuery,
   useGetTeamDetailQuery,
+  useGetTeamRosterDayQuery,
   useGetLeagueSummaryQuery,
   useGetHeatmapDataQuery,
   // useGetCategoryRankingsQuery,
