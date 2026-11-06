@@ -1,6 +1,7 @@
 # Mobile redesign (phones, below 768px)
 
-Step 1 added the flag, tokens and shared components; step 2 the phone shell.
+Step 1 added the flag, tokens and shared components; step 2 the phone shell;
+step 3 the player sheet.
 With the flag on and a phone-width window, `Layout` renders `shell/MobileShell`
 instead of today's nav; pages that are not converted yet render unchanged inside it.
 
@@ -21,4 +22,11 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   shared by both), site footer. The menu and the search overlay are history
   entries: back closes them; a menu/search pick replaces that entry, so back
   from the new page returns to the page they were opened on.
+- **Player sheet** `player/`: on a phone every `PlayerNameLink` (and a player
+  search result) opens the sheet over the current page as `?player=<ESPN id>`
+  instead of going to `/player/:id`. Back closes it; a shared link or reload
+  opens it directly. Shows team · positions · slot · GP, the fantasy owner, the
+  season per-game line (Players list), the profile's next-game projection with
+  a minutes stepper (POST /projections/predict), and Full profile / Trade
+  Analyzer, which replace the sheet's history entry.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).

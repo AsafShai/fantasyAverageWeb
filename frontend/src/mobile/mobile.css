@@ -276,3 +276,35 @@
 }
 /* index.css paints every footer grey in dark mode; the shell footer sits on the page */
 .dark footer.mr-foot { background-color: transparent !important; border-color: var(--mr-border) !important; }
+
+/* ── player sheet (step 3) ── */
+.mr-ps-head { align-items: flex-start; }
+.mr-ps-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mr-ps-badge {
+  flex-shrink: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 8px; text-decoration: none;
+}
+.mr-ps-owner { background: var(--mr-primary-soft); color: var(--mr-primary); }
+.mr-ps-owner:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.mr-ps-free { background: var(--mr-pill-avail-bg); color: var(--mr-pill-avail-fg); }
+.mr-ps-label { font-weight: 700; }
+.mr-ps-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.mr-ps-tile {
+  background: var(--mr-sunken); border-radius: 10px; padding: 8px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.mr-ps-tl { font-size: 10px; font-weight: 700; color: var(--mr-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.mr-ps-tv { font-family: var(--mr-font-num); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mr-ps-proj {
+  background: var(--mr-sunken); border-radius: 12px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mr-ps-skel { height: 118px; box-sizing: border-box; opacity: 0.6; }
+.mr-ps-proj-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mr-ps-next { flex: 1; min-width: 0; }
+.mr-ps-next b { color: var(--mr-text); }
+.mr-ps-line { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; }
+.mr-ps-line span { display: flex; flex-direction: column; }
+.mr-ps-line i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--mr-muted); }
+.mr-ps-line b { font-family: var(--mr-font-num); font-size: 15px; }
+.mr-ps-actions { display: flex; gap: 8px; }
