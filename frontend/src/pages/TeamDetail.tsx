@@ -27,7 +27,7 @@ import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponen
 import { RosterDayContent, RosterDayStepper, SlotPill } from '../components/RosterDayView'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { lineupSlotOrder, lockNote } from '../utils/rosterDay'
-import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
+import { easternToday, formatSlateDate, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -105,7 +105,9 @@ const TeamDetail = () => {
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
   const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
-  const [activeCoverageDate, setActiveCoverageDate] = useState<string | null>(null)
+  const [, setActiveCoverageDate] = useState<string | null>(null)
+  /** Which day is "in focus" in Schedule roster mode (who plays / column emphasis). */
+  const [scheduleFocusDate, setScheduleFocusDate] = useState<string | null>(null)
   const showSchedule = tableMode === 'schedule'
   const showDaily = tableMode === 'daily'
   const showStats = tableMode === 'stats'
@@ -121,6 +123,17 @@ const TeamDetail = () => {
   const changeRosterDate = (date: string) => setRosterDate(date >= (rosterDay?.last_date ?? today) ? '' : date)
   const { data: schedule } = useGetScheduleQuery()
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
+  useEffect(() => {
+    if (!showSchedule) return
+    const dates = weekDays.map(d => d.date)
+    if (dates.length === 0) return
+    setScheduleFocusDate(prev => {
+      if (prev && dates.includes(prev)) return prev
+      if (coverageDate && dates.includes(coverageDate)) return coverageDate
+      return dates[0]
+    })
+  }, [showSchedule, scheduleHorizon, weekDays, coverageDate])
+  const scheduleSpotlightDate = scheduleFocusDate ?? weekDays[0]?.date ?? null
   const opponents = useMemo(
     () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
     [schedule],
@@ -156,6 +169,18 @@ const TeamDetail = () => {
     () => team_detail?.players?.filter(p => p.has_data !== false) ?? [],
     [team_detail]
   )
+
+  const rosterPlayers = team_detail?.players ?? []
+  const scheduleSpotlightRows = useMemo(() => {
+    if (!showSchedule || !scheduleSpotlightDate || rosterPlayers.length === 0) return []
+    return [...rosterPlayers]
+      .filter(p => !!weekOpponent(opponents, p.pro_team, scheduleSpotlightDate))
+      .sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot))
+  }, [showSchedule, scheduleSpotlightDate, rosterPlayers, opponents])
+
+  const scheduleSummaryHeading = scheduleSpotlightDate
+    ? `${formatSlateDate(scheduleSpotlightDate, { weekday: 'long', month: 'short', day: 'numeric' })}`
+    : ''
 
   const togglePlayerInclusion = (playerName: string) => {
     setIncludedPlayers(prev => {
@@ -647,7 +672,11 @@ const TeamDetail = () => {
           teamId={teamIdNumber}
           horizon={scheduleHorizon}
           onHorizonChange={setScheduleHorizon}
-          onSelectDate={setCoverageDate}
+          externalSelectedDate={showSchedule ? scheduleSpotlightDate : null}
+          onSelectDate={date => {
+            setCoverageDate(date)
+            setScheduleFocusDate(date)
+          }}
           onActiveDate={setActiveCoverageDate}
         />
       </CollapsibleSection>
@@ -665,6 +694,28 @@ const TeamDetail = () => {
         <div className="sticky top-0 z-30 -mx-4 mb-3 space-y-2 border-b border-gray-100 bg-white/95 px-4 py-2 backdrop-blur-md sm:hidden dark:border-gray-700 dark:bg-gray-800/95">
           <div className="flex flex-col gap-2">
             <StatsScheduleToggle mode={tableMode} onChange={setTableMode} includeDaily />
+            {showSchedule && weekDays.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
+                {weekDays.map(day => {
+                  const focused = day.date === scheduleSpotlightDate
+                  return (
+                    <button
+                      key={day.date}
+                      type="button"
+                      onClick={() => setScheduleFocusDate(day.date)}
+                      className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-left text-[11px] leading-tight transition-colors ${
+                        focused
+                          ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
+                          : 'border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800/80'
+                      }`}
+                    >
+                      <div className="font-semibold text-gray-800 dark:text-gray-200">{day.weekday}</div>
+                      <div className="text-gray-500 dark:text-gray-400">{day.label}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
             {showDaily && (
               <RosterDayStepper
                 compact
@@ -780,6 +831,58 @@ const TeamDetail = () => {
             )}
           </div>
         </div>
+        {showSchedule && weekDays.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-3 hidden flex-wrap gap-2 sm:flex">
+              {weekDays.map(day => {
+                const focused = day.date === scheduleSpotlightDate
+                return (
+                  <button
+                    key={day.date}
+                    type="button"
+                    onClick={() => setScheduleFocusDate(day.date)}
+                    className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                      focused
+                        ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
+                        : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800/80 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <div className="font-semibold text-gray-800 dark:text-gray-200">{day.weekday}</div>
+                    <div className="text-gray-500 dark:text-gray-400">{day.label}</div>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 dark:border-gray-600 dark:bg-gray-900/40 sm:mt-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Who plays{scheduleSummaryHeading ? ` · ${scheduleSummaryHeading}` : ''}?
+              </p>
+              {scheduleSpotlightRows.length === 0 ? (
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">No games for your roster this day.</p>
+              ) : (
+                <ul className="mt-2 space-y-1.5 text-sm">
+                  {scheduleSpotlightRows.map(p => {
+                    const opp = weekOpponent(opponents, p.pro_team, scheduleSpotlightDate!)
+                    return (
+                      <li key={p.player_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <SlotPill slot={p.lineup_slot} />
+                        <PlayerNameLink name={wrapFriendlyName(p.player_name)} playerId={p.player_id} />
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {p.pro_team}
+                          {opp && (
+                            <span className="ml-1">
+                              <WeekOpponent opponent={opp} />
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
         {showStats && timePeriod === 'custom' && customRange && (
           <CoverageNotice
             requestedStart={customRange.start}
@@ -873,7 +976,7 @@ const TeamDetail = () => {
                         <div
                           key={day.date}
                           className={`shrink-0 rounded-md border px-2 py-1.5 text-center text-[10px] leading-tight ${
-                            day.date === activeCoverageDate
+                            day.date === scheduleSpotlightDate
                               ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
                               : 'border-gray-200 dark:border-gray-600'
                           }`}
@@ -954,7 +1057,7 @@ const TeamDetail = () => {
                     } transition-colors duration-150 ${
                       column.key === 'player_name' ? 'sticky left-0 z-10 border-r border-r-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900' : ''
                     } ${
-                      showSchedule && column.day?.date === activeCoverageDate ? 'bg-blue-100 dark:bg-blue-950/50' : ''
+                      showSchedule && column.day?.date === scheduleSpotlightDate ? 'bg-blue-100 dark:bg-blue-950/50' : ''
                     }`}
                   >
                     {column.key === 'include' ? (
@@ -969,9 +1072,13 @@ const TeamDetail = () => {
                         />
                       </div>
                     ) : 'day' in column && column.day ? (
-                      <div className="flex items-center justify-center">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-center rounded px-1 py-0.5 text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                        onClick={() => setScheduleFocusDate(column.day!.date)}
+                      >
                         <WeekDayHeading day={column.day} />
-                      </div>
+                      </button>
                     ) : (
                       <div className={`flex items-center ${column.align === 'right' ? 'justify-end' : column.align === 'center' ? 'justify-center' : ''}`}>
                         {column.label}
@@ -1022,7 +1129,7 @@ const TeamDetail = () => {
                           {weekDays.map(day => (
                             <td
                               key={day.date}
-                              className={`px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 ${day.date === activeCoverageDate ? 'bg-blue-100' : ''}`}
+                              className={`px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 ${day.date === scheduleSpotlightDate ? 'bg-blue-100 dark:bg-blue-950/40' : ''}`}
                             >
                               <WeekOpponent opponent={weekOpponent(opponents, player.pro_team, day.date)} />
                             </td>
@@ -1077,7 +1184,7 @@ const TeamDetail = () => {
                 {showSchedule ? (
                   <>
                     {weekDays.map(day => (
-                      <td key={day.date} className={`px-4 py-3 whitespace-nowrap text-sm text-blue-900 ${day.date === activeCoverageDate ? 'bg-blue-100' : ''}`} />
+                      <td key={day.date} className={`px-4 py-3 whitespace-nowrap text-sm text-blue-900 ${day.date === scheduleSpotlightDate ? 'bg-blue-100 dark:bg-blue-950/40' : ''}`} />
                     ))}
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900" />
                   </>

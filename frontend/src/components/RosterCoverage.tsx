@@ -14,6 +14,8 @@ interface RosterCoverageProps {
   onHorizonChange: (horizon: ScheduleHorizon) => void
   onSelectDate?: (date: string) => void
   onActiveDate?: (date: string) => void
+  /** When set to a date in the visible window, highlights that column (e.g. roster Schedule day picker). */
+  externalSelectedDate?: string | null
   /** Skip card shell when nested in a collapsible. */
   embedded?: boolean
 }
@@ -36,6 +38,7 @@ export default function RosterCoverage({
   onHorizonChange,
   onSelectDate,
   onActiveDate,
+  externalSelectedDate,
   embedded = false,
 }: RosterCoverageProps) {
   const { data: schedule, isLoading, error } = useGetScheduleQuery()
@@ -62,6 +65,11 @@ export default function RosterCoverage({
   }), [roster, schedule, visibleDays])
 
   const activeDate = visibleDays.some(day => day.date === selectedDate) ? selectedDate : visibleDays[0]?.date ?? ''
+
+  useEffect(() => {
+    if (!externalSelectedDate || !visibleDays.some(d => d.date === externalSelectedDate)) return
+    setSelectedDate(externalSelectedDate)
+  }, [externalSelectedDate, visibleDays])
 
   useEffect(() => {
     if (activeDate) onActiveDate?.(activeDate)
