@@ -1,4 +1,4 @@
-import { test, expect, isMobile } from './support/test'
+import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test'
 
 // Features that used to sit behind removed feature flags (FF_TODAY_HUB,
 // FF_NAV_REORG, FF_SCHEDULE, FF_MATCHUP_QUALITY, FF_CUSTOM_RANGE, FF_MINIGAMES,
@@ -31,13 +31,18 @@ test('Players: slate picker, matchup column and schedule view', async ({ page })
   await expect(page.locator('th', { hasText: 'Games' })).toBeVisible()
 })
 
-test('Team page: roster coverage, matchup column and schedule toggle', async ({ page }) => {
+test('Team page: roster coverage, stats period controls and schedule toggle', async ({ page }) => {
   await page.goto('/team/1')
   await expect(page.getByRole('heading', { name: 'Roster coverage' })).toBeVisible()
   // Daily is the default; the season stats table is one click away.
   await page.getByRole('button', { name: 'Stats', exact: true }).click()
   await expect(page).toHaveURL(/mode=stats/)
-  await expect(page.locator('th', { hasText: 'Matchup' })).toBeVisible()
+  await expect(page.locator('th', { hasText: 'Matchup' })).toHaveCount(0)
+  if (!isMobile(page)) {
+    await expect(page.locator('th', { hasText: 'FG%' })).toBeVisible()
+  } else {
+    await expect(page.getByRole('button', { name: 'FG%', exact: true }).first()).toBeVisible()
+  }
   await expect(page.getByRole('button', { name: 'Schedule', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Custom' })).toBeVisible()
 })
@@ -50,24 +55,36 @@ test('Team page: Daily roster by day is the default', async ({ page }) => {
   })
   await page.goto('/team/1')
   await expect(page.getByRole('button', { name: 'Daily', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  const table = page.getByTestId('roster-day-table')
-  await expect(table).toBeVisible()
-  await expect(page.getByTestId('roster-day-note')).toHaveText('Lineup at lock · 7:00 PM ET')
-  await expect(table.locator('th', { hasText: 'FG%' })).toBeVisible()
-  const walker = page.getByTestId('roster-day-row').filter({ hasText: 'Jarace Walker' })
-  await expect(walker.getByText('Added')).toBeVisible()
-  await expect(walker.getByText('Dropped')).toBeVisible()
-  await expect(walker.getByText('6/15')).toBeVisible()
+  await expect(page.getByTestId('roster-day-note').first()).toHaveText('Lineup at lock · 7:00 PM ET')
+
+  const desktop = !isMobile(page)
+  const walkerRow = desktop
+    ? page.getByTestId('roster-day-row').filter({ hasText: 'Jarace Walker' })
+    : page.getByRole('listitem').filter({ hasText: 'Jarace Walker' })
+  const walkerHighlight = desktop
+    ? walkerRow
+    : walkerRow.locator(':scope > div').first()
+
+  if (desktop) {
+    const table = page.getByTestId('roster-day-table')
+    await expect(table).toBeVisible()
+    await expect(table.locator('th', { hasText: 'FG%' })).toBeVisible()
+  } else {
+    await expect(page.getByTestId('roster-day-table')).toBeHidden()
+  }
+  await expect(walkerRow.getByText('Added')).toBeVisible()
+  await expect(walkerRow.getByText('Dropped')).toBeVisible()
+  await expect(walkerRow.getByText('6/15')).toBeVisible()
 
   const moves = page.getByTestId('roster-day-moves')
   await expect(moves.getByText('+ Egor Demin')).toBeVisible()
   await moves.getByRole('button', { name: '+ Jarace Walker' }).click()
-  await expect(walker).toHaveClass(/bg-blue-50/)
+  await expect(walkerHighlight).toHaveClass(/bg-blue-50/)
 
   await page.getByRole('button', { name: 'Previous day' }).click()
   await expect(page).toHaveURL(/day=2026-11-01/)
   expect(days).toContain('2026-11-01')
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await expectNoHorizontalScroll(page)
 })
 
 test('Minigames hub lists all four games', async ({ page }) => {

@@ -231,7 +231,7 @@ const TeamDetail = () => {
     { key: 'positions', label: 'Position', align: 'left', sortable: true },
     { key: 'pro_team', label: 'Pro Team', align: 'left', sortable: true },
     ...(showSchedule ? [...dayColumns, { key: 'week_games', label: 'Games', align: 'center', sortable: true }] : statColumns),
-    /** Matchup lives on Daily (today) roster, not Stats. */
+    /** Matchup when not in Stats (like roster table); not on multi-day Schedule grid. */
     ...(!showSchedule && !showStats ? [{ key: 'matchup', label: 'Matchup', align: 'left', sortable: false }] : []),
   ]
 
@@ -360,6 +360,8 @@ const TeamDetail = () => {
 
   const teamAverage = calculateTeamAverage()
 
+  const statsNoDataColSpan = statColumns.length
+
   /** ESPN lineup order (same as default URL schema). */
   const resetStatsSort = () => {
     setSortBy('lineup_slot')
@@ -388,7 +390,7 @@ const TeamDetail = () => {
 
   const heroStatValue = (player: Player): string => {
     const key = sortBy
-    if (!key || key === 'lineup_slot' || key === 'include' || key === 'matchup' || key.startsWith('day:')) {
+    if (!key || key === 'lineup_slot' || key === 'include' || key.startsWith('day:')) {
       return formatStat(player.stats.pts, player.stats.gp)
     }
     if (key === 'player_name') return player.player_name
@@ -1032,7 +1034,7 @@ const TeamDetail = () => {
                       ) : noData ? (
                         <td
                           className="px-4 py-3 text-center italic text-gray-400 dark:text-gray-500"
-                          colSpan={16}
+                          colSpan={statsNoDataColSpan}
                           title="Not available for a custom range — try Last 7/15/30/Season"
                         >
                           No data for this range

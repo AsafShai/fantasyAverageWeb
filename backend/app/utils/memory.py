@@ -8,6 +8,8 @@ step and how close the container was to its limit.
 import ctypes
 import gc
 import logging
+import resource
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -38,6 +40,12 @@ def _read_int(path: str) -> Optional[int]:
 
 
 def _rss_bytes() -> Optional[int]:
+    # Linux: VmRSS in kB. macOS: ru_maxrss in bytes (see getrusage(2)).
+    if sys.platform == "darwin":
+        try:
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        except OSError:
+            return None
     try:
         for line in Path("/proc/self/status").read_text().splitlines():
             if line.startswith("VmRSS:"):

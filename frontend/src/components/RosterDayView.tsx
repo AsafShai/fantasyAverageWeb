@@ -297,6 +297,7 @@ function RosterDayMobilePlayerCard({
   lit,
   isExpanded,
   onToggleMatchup,
+  showStatDetails = true,
 }: {
   player: RosterDayPlayer
   day: RosterDay
@@ -304,13 +305,17 @@ function RosterDayMobilePlayerCard({
   lit: boolean
   isExpanded: boolean
   onToggleMatchup: () => void
+  /** When false (e.g. today's slate), hide the per-player stat grid on mobile. */
+  showStatDetails?: boolean
 }) {
   const bench = isBench(player.lineup_slot)
   const s = player.stats
   const opp = oppLabel(day.is_today, player)
   const metaLine = [player.positions.join(', '), player.pro_team, opp].join(' · ')
-  const showMobileStatsBlock =
-    !day.is_today || player.status === 'dnp' || (player.status === 'played' && !!s)
+  /** Past days: full stat grid. Today with stats hidden: only DNP needs a short line. */
+  const showMobileStatsBlock = showStatDetails
+    ? !day.is_today || player.status === 'dnp' || (player.status === 'played' && !!s)
+    : day.is_today && player.status === 'dnp'
 
   return (
     <div
@@ -444,7 +449,8 @@ export function RosterDayContent({
     [day],
   )
   const totals = useMemo(() => starterTotals(players), [players])
-  const showStatColumns = true
+  /** Hide Min/FG%/… columns on today’s daily roster; show them for past days. */
+  const showStatColumns = day ? !day.is_today : false
   const mobileGroups = useMemo(() => {
     const starters = players.filter(p => !isBench(p.lineup_slot))
     const bench = players.filter(p => isBench(p.lineup_slot))
@@ -498,6 +504,7 @@ export function RosterDayContent({
                         lit={lit}
                         isExpanded={isExpanded}
                         onToggleMatchup={() => toggleMatchupExpand(player.player_name)}
+                        showStatDetails={showStatColumns}
                       />
                     </li>
                   )
@@ -523,6 +530,7 @@ export function RosterDayContent({
                         lit={lit}
                         isExpanded={isExpanded}
                         onToggleMatchup={() => toggleMatchupExpand(player.player_name)}
+                        showStatDetails={showStatColumns}
                       />
                     </li>
                   )

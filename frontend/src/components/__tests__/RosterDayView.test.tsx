@@ -67,13 +67,14 @@ describe('RosterDayContent', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 
-  it('shows stat columns for today in the desktop table', () => {
+  it('hides per-game stat columns for today on desktop (stats stay on past days)', () => {
     renderDay({ ...DAY, is_today: true, date: '2026-11-05', last_date: '2026-11-05' })
-    expect(screen.getByRole('columnheader', { name: 'Min' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Min' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'FG%' })).toBeNull()
     expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Player' })).toBeInTheDocument()
     const row = screen.getAllByTestId('roster-day-row')[0]
-    expect(within(row).getAllByText('40.00%').length).toBeGreaterThan(0)
+    expect(within(row).queryByText('40.00%')).toBeNull()
     // Today's slate: no starter-aggregate row/card (games still in progress or not summed here).
     expect(screen.queryByTestId('roster-day-totals')).toBeNull()
     expect(screen.queryByTestId('roster-day-mobile-totals')).toBeNull()
