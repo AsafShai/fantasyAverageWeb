@@ -77,6 +77,9 @@ describe('MobileShell', () => {
       expect(within(section).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(group.items.map((i) => i.path))
     }
     expect(within(menu).getByRole('combobox', { name: 'My team' })).toBeInTheDocument()
+    expect(within(menu).getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.replace(/^\S+\s+/, ''))).toEqual([
+      'LEAGUE', 'PLAYERS', 'INSIGHTS', 'TOOLS', 'NBA', 'MINIGAMES',
+    ])
 
     await userEvent.click(within(menu).getByRole('link', { name: /Injuries/ }))
     expect(screen.getByTestId('where')).toHaveTextContent('/injuries')
