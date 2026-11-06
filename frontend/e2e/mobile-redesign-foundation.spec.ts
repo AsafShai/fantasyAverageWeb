@@ -14,7 +14,10 @@ test.describe('mobile redesign flag', () => {
     expect(await page.evaluate(() => localStorage.getItem('fw:ff-mobile-redesign'))).toBeNull()
   })
 
-  test('no visible change: the flag alone does not change today\'s layout', async ({ page }) => {
+  // Since step 2 the flag switches phones to the new shell (see
+  // mobile-redesign-shell.spec.ts); desktop must never change.
+  test('desktop: the flag does not change today\'s layout', async ({ page }) => {
+    test.skip(isMobile(page), 'desktop only')
     await page.goto('/?ff=mobile')
     // today's header and nav are still the old ones
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
