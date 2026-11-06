@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Mobile redesign tokens + `mr-` components (unused until a page opts in). */
+@import "./mobile/mobile.css";
 
 @variant dark (&:where(.dark, .dark *));
 
