@@ -11,3 +11,7 @@ export const FF_DRAFT_STEALS_BUSTS = import.meta.env.VITE_FF_DRAFT_STEALS_BUSTS 
 export const FF_SHARE_CARDS = import.meta.env.VITE_FF_SHARE_CARDS === 'true';
 // League Activity page (adds/drops/trades, trade history + tree) and the Today "Latest moves" card.
 export const FF_LEAGUE_ACTIVITY = import.meta.env.VITE_FF_LEAGUE_ACTIVITY === 'true';
+// Mobile redesign (phones, below the md breakpoint). Build-time default; the
+// owner can also switch it on for one browser with ?ff=mobile (and back off
+// with ?ff=off). See src/mobile/flag.ts for the runtime override.
+export const FF_MOBILE_REDESIGN = import.meta.env.VITE_FF_MOBILE_REDESIGN === 'true';
