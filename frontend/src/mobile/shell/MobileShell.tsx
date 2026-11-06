@@ -131,9 +131,16 @@ function MobileTabBar() {
 
 // ── ☰ menu sheet ────────────────────────────────────────────────────────
 
+/** Phone menu only: NBA comes before Minigames (desktop keeps its order). */
+function menuOrder(groups: NavGroupDef[]): NavGroupDef[] {
+  const rank = (key: string) => (key === 'nba' ? 0 : key === 'minigames' ? 1 : -1)
+  const tail = groups.filter((g) => rank(g.key) >= 0).sort((a, b) => rank(a.key) - rank(b.key))
+  return [...groups.filter((g) => rank(g.key) < 0), ...tail]
+}
+
 function MenuSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { pathname } = useLocation()
-  const groups: NavGroupDef[] = getNavGroups()
+  const groups: NavGroupDef[] = menuOrder(getNavGroups())
   return (
     <BottomSheet open={open} onClose={onClose} title="Menu" hideTitle sunken>
       <MyTeamPicker />

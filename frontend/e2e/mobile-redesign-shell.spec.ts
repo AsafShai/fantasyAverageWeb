@@ -3,7 +3,7 @@ import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test
 // Step 2 of the mobile redesign: the phone shell (header, bottom tab bar,
 // ☰ menu sheet, footer) and browser back for its sheets.
 
-const GROUPS = ['LEAGUE', 'PLAYERS', 'INSIGHTS', 'TOOLS', 'MINIGAMES', 'NBA']
+const GROUPS = ['LEAGUE', 'PLAYERS', 'INSIGHTS', 'TOOLS', 'NBA', 'MINIGAMES']
 const TABS = ['Home', 'Standings', 'Teams', 'Players', 'Trade']
 
 test.describe('shell is off unless flag + phone width', () => {
