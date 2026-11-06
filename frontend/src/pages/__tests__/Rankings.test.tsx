@@ -141,13 +141,17 @@ describe('Rankings page', () => {
     const alphaRow = within(table).getByText('Alpha Squad').closest('tr')!;
     // Category rank (3), not the actual pts/fg% value, in the default Rankings view
     expect(within(alphaRow).queryByText('115.3000')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Sort by')).not.toBeInTheDocument();
   });
 
-  it('the "View Mode" group offers Standings/Rankings and "Values" offers Averages/Totals', async () => {
+  it('Layout, Show, and Values groups offer the expected controls', async () => {
     renderWithProviders(<Rankings />);
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
-    expect(screen.getByText('View Mode')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Layout' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Show' })).toBeInTheDocument();
     expect(screen.getByText('Values')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^full table$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^team cards$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^standings$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^rankings$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^averages$/i })).toBeInTheDocument();
@@ -332,5 +336,127 @@ describe('Rankings page team names', () => {
     const shortCell = screen.getByText('Alpha Squad').closest('td')!;
     expect(shortCell.className).toContain('sm:whitespace-nowrap');
     expect(screen.getByText('Alpha Squad').closest('div')!.className).toContain('w-[34vw]');
+  });
+});
+
+describe('Rankings page — mobile layout', () => {
+  beforeEach(() => {
+    localStorage.setItem('fw:rankings.layout', JSON.stringify('cards'));
+
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: /max-width:\s*639px/.test(query),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('/rankings')) {
+          return jsonResponse({
+            averages_rankings: [
+              team({
+                team: { team_id: 1, team_name: 'Alpha Squad' },
+                rank: 1,
+                total_points: 8,
+                pts: 115.3,
+                fg_percentage: 0.467,
+                category_ranks: { 'FG%': 3, 'FT%': 1, '3PM': 2, AST: 2, REB: 2, STL: 2, BLK: 2, PTS: 2 },
+              }),
+              team({
+                team: { team_id: 2, team_name: 'Beta Ballers' },
+                rank: 2,
+                total_points: 4,
+                pts: 121.0,
+                fg_percentage: 0.444,
+                category_ranks: { 'FG%': 1, 'FT%': 3, '3PM': 3, AST: 1, REB: 1, STL: 1, BLK: 3, PTS: 3 },
+              }),
+            ],
+            totals_rankings: [
+              team({
+                team: { team_id: 1, team_name: 'Alpha Squad' },
+                rank: 2,
+                total_points: 4,
+                pts: 4000,
+                category_ranks: { 'FG%': 2, 'FT%': 2, '3PM': 2, AST: 2, REB: 2, STL: 2, BLK: 2, PTS: 1 },
+              }),
+              team({
+                team: { team_id: 2, team_name: 'Beta Ballers' },
+                rank: 1,
+                total_points: 8,
+                pts: 9000,
+                category_ranks: { 'FG%': 1, 'FT%': 1, '3PM': 1, AST: 1, REB: 1, STL: 1, BLK: 1, PTS: 2 },
+              }),
+            ],
+            categories: [...ALL_CATEGORIES, 'TOTAL_POINTS'],
+            last_updated: '2026-08-19',
+          });
+        }
+        if (url.includes('/league/rank-changes?mode=totals')) {
+          return jsonResponse({
+            previous_period: 11,
+            latest_period: 12,
+            teams: [
+              { team_id: 1, team_name: 'Alpha Squad', rank_delta: -1, total_delta: -4, gp_delta: 3, categories: { PTS: -1 } },
+              { team_id: 2, team_name: 'Beta Ballers', rank_delta: 1, total_delta: 4, gp_delta: 4, categories: {} },
+            ],
+          });
+        }
+        if (url.includes('/league/rank-changes?mode=averages')) {
+          return jsonResponse({
+            previous_period: 11,
+            latest_period: 12,
+            teams: [
+              { team_id: 1, team_name: 'Alpha Squad', rank_delta: 1, total_delta: 2, gp_delta: 3, categories: { 'FG%': 2, PTS: 0 } },
+              { team_id: 2, team_name: 'Beta Ballers', rank_delta: -1, total_delta: -2, gp_delta: 4, categories: { AST: -1 } },
+            ],
+          });
+        }
+        if (url.includes('/league/summary')) {
+          return jsonResponse({ nba_avg_pace: 100, nba_game_days_left: 30, season_start: '2025-10-01' });
+        }
+        return new Response('not found', { status: 404 });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows card list with every category label and no wide table', async () => {
+    renderWithProviders(<Rankings />);
+    await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Sort by')).toBeInTheDocument();
+
+    const list = screen.getByRole('list');
+    const alphaCard = within(list).getByText('Alpha Squad').closest('li')!;
+    for (const cat of ALL_CATEGORIES) {
+      expect(within(alphaCard).getByText(cat)).toBeInTheDocument();
+    }
+  });
+
+  it('mobile sort control changes list order', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Rankings />);
+    await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
+
+    const sortSelect = screen.getByLabelText('Sort by');
+    // Category ranks: lower is better. Default order is desc, so higher (worse) ranks sort first.
+    await user.selectOptions(sortSelect, 'FT%');
+
+    const list = screen.getByRole('list');
+    const items = within(list).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('Beta Ballers'); // rank 3
+    expect(items[1]).toHaveTextContent('Alpha Squad'); // rank 1
   });
 });
