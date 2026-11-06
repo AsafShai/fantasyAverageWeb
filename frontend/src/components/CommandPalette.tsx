@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { useGlobalSearch, highlightMatch } from '../hooks/useGlobalSearch'
 import type { SearchResult } from '../hooks/useGlobalSearch'
@@ -6,6 +6,12 @@ import type { SearchResult } from '../hooks/useGlobalSearch'
 interface CommandPaletteProps {
   isOpen: boolean
   onClose: () => void
+  /**
+   * Go to a picked result. Default: close, then navigate. The phone shell
+   * passes its own so the result replaces the palette's history entry (back
+   * then returns to the page the search was opened from).
+   */
+  onNavigate?: (path: string) => void
 }
 
 const badgeClasses: Record<'fa' | 'out', string> = {
@@ -30,7 +36,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
  * opened from the navbar search icon). Layout.tsx owns the open/close state
  * and the global Ctrl/Cmd+K listener so both nav variants can trigger it.
  */
-const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
+const CommandPalette = ({ isOpen, onClose, onNavigate }: CommandPaletteProps) => {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
@@ -38,6 +44,14 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
   const { groups } = useGlobalSearch(query)
+  const go = useCallback(
+    (path: string) => {
+      if (onNavigate) return onNavigate(path)
+      onClose()
+      navigate(path)
+    },
+    [onNavigate, onClose, navigate],
+  )
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
   // Each open starts from an empty search. Reset while rendering (not in an
@@ -76,23 +90,19 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
       } else if (e.key === 'Enter') {
         e.preventDefault()
         const result = flatResults[selected]
-        if (result?.path) {
-          onClose()
-          navigate(result.path)
-        }
+        if (result?.path) go(result.path)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, flatResults, selected, onClose, navigate])
+  }, [isOpen, flatResults, selected, onClose, go])
 
   if (!isOpen) return null
 
   const handleSelect = (result: SearchResult) => {
     if (!result.path) return
-    onClose()
-    navigate(result.path)
+    go(result.path)
   }
 
   let rowIndex = -1
@@ -103,6 +113,7 @@ const CommandPalette = ({ isOpen, onClose }: CommandPaletteProps) => {
       <div
         role="dialog"
         aria-modal="true"
+        aria-label="Search"
         onClick={(e) => e.stopPropagation()}
         className="relative flex h-full w-full flex-col overflow-hidden bg-white dark:bg-gray-900 md:h-auto md:max-h-[80vh] md:w-[520px] md:rounded-xl md:border md:border-gray-200 md:shadow-2xl md:dark:border-gray-700"
       >
