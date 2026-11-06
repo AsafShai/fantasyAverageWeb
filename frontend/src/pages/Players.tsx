@@ -753,7 +753,7 @@ const PlayerTable = ({
                 )}
               </tr>
               {showMatchup && isExpanded && matchup && (
-                <MatchupExpandRow matchup={matchup} colSpan={4 + statColumnCount + matchupColumnCount} integerMode={integerMode} onCollapse={() => toggleExpand(player.player_name)} />
+                <MatchupExpandRow matchup={matchup} colSpan={4 + statColumnCount + matchupColumnCount} integerMode={integerMode} />
               )}
             </React.Fragment>
           );

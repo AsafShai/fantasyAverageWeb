@@ -42,6 +42,39 @@ const Delta = ({ value, showSame = false }: { value: number | null | undefined; 
   return showSame ? <span className={`${DELTA_CLASS} text-gray-400`}>–</span> : null
 }
 
+/** Inline mover deltas for card layout (avoids overflow from absolute positioning). */
+const InlineDelta = ({ value, showSame = false }: { value: number | null | undefined; showSame?: boolean }) => {
+  if (value == null) return null
+  if (value > 0) return <span className="ml-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">▲{formatDelta(value)}</span>
+  if (value < 0) return <span className="ml-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">▼{formatDelta(value)}</span>
+  return showSame ? <span className="ml-0.5 text-[10px] text-gray-400">–</span> : null
+}
+
+type RankingsCellContext = {
+  categoryKeys: string[]
+  isStandings: boolean
+  mode: 'averages' | 'totals'
+}
+
+function getRankingCellDisplay(
+  team: RankingStats,
+  columnKey: string,
+  ctx: RankingsCellContext,
+): string | number | undefined {
+  const { categoryKeys, isStandings, mode } = ctx
+  const isCategoryColumn = categoryKeys.includes(columnKey)
+  const value = isCategoryColumn
+    ? (isStandings ? team.stats?.[columnKey] : team.category_ranks?.[columnKey])
+    : (team[columnKey as keyof RankingStats] as number)
+
+  if (typeof value !== 'number') return value
+
+  if (isCategoryColumn && !isStandings) return value
+  if (isCategoryColumn && isStandings && mode === 'averages') return formatAverageValue(columnKey, value)
+  if (columnKey === 'gp') return value
+  return value % 1 === 0 ? value.toString() : value.toFixed(1)
+}
+
 const RANKINGS_URL_SCHEMA = {
   from: isoDateParam(),
   to: isoDateParam(),
@@ -50,6 +83,15 @@ const RANKINGS_URL_SCHEMA = {
   sort: stringParam('total_points'),
   order: enumParam(['asc', 'desc'] as const, 'desc'),
 }
+
+/** Shared size for header segment toggles (Layout / Show / Values): equal columns, same height */
+const RANKINGS_HEADER_TOGGLE_ROW = 'grid grid-cols-2 gap-2 w-full min-w-[min(100%,11rem)] max-w-[22rem]'
+const RANKINGS_HEADER_TOGGLE_BTN =
+  'flex h-10 min-h-10 w-full items-center justify-center gap-1 rounded-lg px-2 text-center text-sm font-semibold leading-tight transition-colors sm:px-3'
+/** Date pickers: same height and corner radius as toggle buttons; sits in the same grid width as toggles */
+const RANKINGS_DATE_LABEL_ROW = 'flex min-h-5 items-center gap-2'
+const RANKINGS_DATE_INPUT =
+  'box-border h-10 min-h-10 w-full rounded-lg border border-blue-300 bg-white px-2 py-0 text-sm font-semibold leading-none text-gray-800 [color-scheme:light] focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:[color-scheme:dark]'
 
 const Rankings = () => {
   const { isMyTeam, myTeamId } = useMyTeam()
@@ -83,6 +125,9 @@ const Rankings = () => {
   const { data: summary, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
   // Last night's moves belong to the default (season-to-date) view only.
   const [showMoves, setShowMoves] = usePersistedState('rankings.showMoves', true)
+  const [layout, setLayout] = usePersistedState<'cards' | 'table'>('rankings.layout', 'table')
+  const showCards = layout === 'cards'
+  const showTable = layout === 'table'
   const isDateRangeActive = !!(appliedDates.startDate && appliedDates.endDate)
   const { data: rankChanges } = useGetRankChangesQuery(mode, { skip: isDateRangeActive })
 
@@ -173,6 +218,8 @@ const Rankings = () => {
     { key: 'gp', label: 'GP', sortable: true },
   ]
 
+  const cellCtx: RankingsCellContext = { categoryKeys, isStandings, mode }
+
   const titleWord = isStandings ? 'Standings' : 'Rankings'
   const modeLabel = mode === 'averages' ? 'Averages' : 'Totals'
 
@@ -215,54 +262,87 @@ const Rankings = () => {
 
       <div className="card">
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <div className="flex items-start justify-between gap-3">
-                <h2 className="text-2xl font-bold text-white">
-                  Team {titleWord} ({modeLabel})
-                  {isDateRangeActive && (
-                    <span className="ml-2 text-lg font-normal text-blue-100">
-                      – {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}
-                    </span>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-2xl font-bold text-white">
+                    Team {titleWord} ({modeLabel})
+                    {isDateRangeActive && (
+                      <span className="ml-2 text-lg font-normal text-blue-100">
+                        – {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}
+                      </span>
+                    )}
+                  </h2>
+                  {rankings.length > 0 && (
+                    <div className="shrink-0">
+                      <ShareCardButton
+                        title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
+                        variant="onBlue"
+                        highlightOption={myTeamId !== null}
+                        renderCard={({ dark, highlightMyTeam }) => (
+                          <RankingsShareCard
+                            dark={dark}
+                            rows={rankings}
+                            categories={categoryKeys}
+                            view={viewMode}
+                            mode={mode}
+                            rangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} – ${formatDate(appliedDates.endDate!)}` : undefined}
+                            asOf={formatAsOf(data?.data_date)}
+                            highlightTeamId={highlightMyTeam ? myTeamId : null}
+                            moves={movesShown ? movesByTeam : undefined}
+                          />
+                        )}
+                      />
+                    </div>
                   )}
-                </h2>
-                {rankings.length > 0 && (
-                  <div className="shrink-0">
-                    <ShareCardButton
-                      title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
-                      variant="onBlue"
-                      highlightOption={myTeamId !== null}
-                      renderCard={({ dark, highlightMyTeam }) => (
-                        <RankingsShareCard
-                          dark={dark}
-                          rows={rankings}
-                          categories={categoryKeys}
-                          view={viewMode}
-                          mode={mode}
-                          rangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} – ${formatDate(appliedDates.endDate!)}` : undefined}
-                          asOf={formatAsOf(data?.data_date)}
-                          highlightTeamId={highlightMyTeam ? myTeamId : null}
-                          moves={movesShown ? movesByTeam : undefined}
-                        />
-                      )}
-                    />
-                  </div>
-                )}
+                </div>
+                <p className="text-blue-100 mt-1">
+                  {isStandings
+                    ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
+                    : showCards
+                      ? 'Each category shows the team\'s rank within that category. Use Sort below to reorder.'
+                      : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
+                  {hasMoves && ' ▲/▼ = change since last night, GP + = games played last night.'}
+                </p>
               </div>
-              <p className="text-blue-100 mt-1">
-                {isStandings
-                  ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
-                  : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
-                {hasMoves && ' ▲/▼ = change since last night, GP + = games played last night.'}
-              </p>
             </div>
-            <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
-              <div className="flex flex-col gap-1 items-start sm:items-end">
-                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">View Mode</span>
-                <div className="flex gap-2">
+
+            <div className="flex w-full max-w-full flex-col gap-3 sm:flex-row sm:items-end sm:gap-4 md:gap-6">
+              <div className="flex min-w-0 w-full flex-1 flex-col gap-1 items-start" role="group" aria-label="Layout">
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Layout</span>
+                <div className={`${RANKINGS_HEADER_TOGGLE_ROW} sm:max-w-none`}>
                   <button
+                    type="button"
+                    onClick={() => setLayout('table')}
+                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
+                      showTable
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Full table
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLayout('cards')}
+                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
+                      showCards
+                        ? 'bg-white text-blue-700'
+                        : 'bg-blue-500 text-white hover:bg-blue-400'
+                    }`}
+                  >
+                    Team cards
+                  </button>
+                </div>
+              </div>
+              <div className="flex min-w-0 w-full flex-1 flex-col gap-1 items-start" role="group" aria-label="Show">
+                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Show</span>
+                <div className={`${RANKINGS_HEADER_TOGGLE_ROW} sm:max-w-none`}>
+                  <button
+                    type="button"
                     onClick={() => setViewMode('standings')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
                       isStandings
                         ? 'bg-white text-blue-700'
                         : 'bg-blue-500 text-white hover:bg-blue-400'
@@ -271,8 +351,9 @@ const Rankings = () => {
                     Standings
                   </button>
                   <button
+                    type="button"
                     onClick={() => setViewMode('rankings')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
                       !isStandings
                         ? 'bg-white text-blue-700'
                         : 'bg-blue-500 text-white hover:bg-blue-400'
@@ -282,12 +363,13 @@ const Rankings = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-1 items-start sm:items-end">
+              <div className="flex min-w-0 w-full flex-1 flex-col gap-1 items-start">
                 <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Values</span>
-                <div className="flex gap-2">
+                <div className={`${RANKINGS_HEADER_TOGGLE_ROW} sm:max-w-none`}>
                   <button
+                    type="button"
                     onClick={() => setMode('averages')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
                       mode === 'averages'
                         ? 'bg-white text-blue-700'
                         : 'bg-blue-500 text-white hover:bg-blue-400'
@@ -296,8 +378,9 @@ const Rankings = () => {
                     Averages
                   </button>
                   <button
+                    type="button"
                     onClick={() => setMode('totals')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
                       mode === 'totals'
                         ? 'bg-white text-blue-700'
                         : 'bg-blue-500 text-white hover:bg-blue-400'
@@ -308,85 +391,118 @@ const Rankings = () => {
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-blue-100 font-medium">From</label>
-              <input
-                type="date"
-                value={startDate}
-                min={summary?.season_start}
-                max={endDate || today}
-                onChange={(e) => handleStartDate(e.target.value)}
-                className="px-3 py-1.5 rounded-md text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-blue-100 font-medium">To</label>
-                <button
-                  onClick={() => handleEndDate(today)}
-                  className="text-xs text-blue-200 hover:text-white underline"
-                >
-                  Today
-                </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-2 sm:max-w-md sm:flex-1">
+                  <div className={RANKINGS_HEADER_TOGGLE_ROW}>
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <label className={`${RANKINGS_DATE_LABEL_ROW} text-xs text-blue-100 font-medium`}>
+                        <span>From</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        min={summary?.season_start}
+                        max={endDate || today}
+                        onChange={(e) => handleStartDate(e.target.value)}
+                        className={RANKINGS_DATE_INPUT}
+                      />
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <div className={`${RANKINGS_DATE_LABEL_ROW} justify-between`}>
+                        <label htmlFor="rankings-date-to" className="text-xs text-blue-100 font-medium">
+                          To
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleEndDate(today)}
+                          className="text-[11px] font-medium text-blue-100 hover:text-white"
+                        >
+                          Today
+                        </button>
+                      </div>
+                      <input
+                        id="rankings-date-to"
+                        type="date"
+                        value={endDate}
+                        min={startDate || summary?.season_start}
+                        max={today}
+                        onChange={(e) => handleEndDate(e.target.value)}
+                        className={RANKINGS_DATE_INPUT}
+                      />
+                    </div>
+                  </div>
+                  {startDate && endDate && (
+                    <div className={RANKINGS_HEADER_TOGGLE_ROW}>
+                      <button
+                        type="button"
+                        onClick={applyDates}
+                        disabled={!!dateError}
+                        className="flex h-10 min-h-10 w-full items-center justify-center rounded-lg bg-white px-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-700 dark:text-blue-300 dark:hover:bg-gray-600 sm:px-3"
+                      >
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearDates}
+                        className="flex h-10 min-h-10 w-full items-center justify-center rounded-lg border border-blue-300 px-2 text-sm font-semibold text-blue-100 transition-colors hover:border-white hover:text-white sm:px-3"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {hasMoves && (
+                  <button
+                    type="button"
+                    onClick={() => setShowMoves(!showMoves)}
+                    className="inline-flex shrink-0 items-center gap-1 self-end rounded-md border border-white/45 bg-white/15 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:border-white/70 hover:bg-white/25 active:bg-white/20 sm:self-start"
+                  >
+                    <span aria-hidden="true" className="text-[9px] leading-none">
+                      <span className="text-emerald-200">▲</span>
+                      <span className="text-red-200">▼</span>
+                    </span>
+                    {showMoves ? 'Hide movers' : 'Show movers'}
+                  </button>
+                )}
               </div>
-              <input
-                type="date"
-                value={endDate}
-                min={startDate || summary?.season_start}
-                max={today}
-                onChange={(e) => handleEndDate(e.target.value)}
-                className="px-3 py-1.5 rounded-md text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
+              <div className="mt-1 w-full min-w-0 max-w-md">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-blue-200/90">
+                  Quick range
+                </div>
+                <div
+                  className="grid w-full grid-cols-4 gap-1.5 sm:gap-2"
+                  role="group"
+                  aria-label="Quick date range presets"
+                >
+                  {[1, 7, 15, 30].map(days => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => {
+                        const start = getDateNDaysAgo(days);
+                        setStartDate(start);
+                        setEndDate(today);
+                        setDateError('');
+                      }}
+                      title={`Last ${days} day${days === 1 ? '' : 's'} to today`}
+                      aria-label={`Set date range to last ${days} days through today`}
+                      className="flex min-h-9 min-w-0 items-center justify-center rounded-lg border border-white/35 bg-white/10 px-1 py-2 text-center text-[11px] font-semibold leading-none text-white shadow-sm transition-colors hover:border-white/55 hover:bg-white/20 active:bg-white/15 sm:min-h-10 sm:px-2 sm:text-xs"
+                    >
+                      <span className="sm:hidden" aria-hidden="true">
+                        {days}d
+                      </span>
+                      <span className="hidden sm:inline">Last {days}d</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {dateError && (
+                <p className="text-sm text-red-200">{dateError}</p>
+              )}
             </div>
-            <button
-              onClick={applyDates}
-              disabled={!startDate || !endDate || !!dateError}
-              className="px-4 py-1.5 text-sm font-semibold bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Apply
-            </button>
-            {(startDate || endDate) && (
-              <button
-                onClick={clearDates}
-                className="px-3 py-1.5 text-sm text-blue-100 hover:text-white border border-blue-300 hover:border-white rounded-md transition-colors"
-              >
-                Clear
-              </button>
-            )}
-            {hasMoves && (
-              <button
-                onClick={() => setShowMoves(!showMoves)}
-                className="ml-auto inline-flex w-36 items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-gray-600"
-              >
-                <span aria-hidden="true" className="text-[10px] leading-none">
-                  <span className="text-emerald-600 dark:text-emerald-400">▲</span><span className="text-red-600 dark:text-red-400">▼</span>
-                </span>
-                {showMoves ? 'Hide movers' : 'Show movers'}
-              </button>
-            )}
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {[1, 7, 15, 30].map(days => (
-              <button
-                key={days}
-                onClick={() => {
-                  const start = getDateNDaysAgo(days);
-                  setStartDate(start);
-                  setEndDate(today);
-                  setDateError('');
-                }}
-                className="px-2 py-0.5 text-xs rounded bg-blue-500 text-white hover:bg-blue-400 transition-colors"
-              >
-                Last {days}d
-              </button>
-            ))}
-          </div>
-          {dateError && (
-            <p className="mt-2 text-sm text-red-200">{dateError}</p>
-          )}
         </div>
 
         {hasDateMismatch && (
@@ -401,6 +517,116 @@ const Rankings = () => {
           </div>
         )}
 
+        {showCards ? (
+          <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50 px-4 py-3 space-y-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <label htmlFor="rankings-mobile-sort" className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Sort by
+                </label>
+                <select
+                  id="rankings-mobile-sort"
+                  value={sortBy}
+                  onChange={e => handleSort(e.target.value)}
+                  className="w-full min-w-0 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                >
+                  {columns
+                    .filter(c => c.sortable)
+                    .map(c => (
+                      <option key={c.key} value={c.key}>
+                        {c.label}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSortOrder(o => (o === 'asc' ? 'desc' : 'asc'))}
+                className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                aria-label={sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+              >
+                {sortOrder === 'asc' ? '↑ Asc' : '↓ Desc'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {showCards ? (
+          <div className="-mx-4 max-h-[70vh] overflow-y-auto px-4 pb-4 pt-1 [scrollbar-width:thin]">
+            <ul className="space-y-3">
+              {rankings.map((teamRow: RankingStats, index: number) => {
+                const move = movesByTeam.get(teamRow.team.team_id)
+                const my = isMyTeam(teamRow.team.team_id)
+                const totalVal = getRankingCellDisplay(teamRow, 'total_points', cellCtx)
+                const gpVal = getRankingCellDisplay(teamRow, 'gp', cellCtx)
+                return (
+                  <li
+                    key={teamRow.team.team_id}
+                    className={`rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800 ${
+                      my ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900' : ''
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start gap-2 gap-y-1 border-b border-gray-100 pb-2 dark:border-gray-700">
+                      <div className="shrink-0 text-sm font-bold text-blue-600">
+                        <span className="inline-flex items-baseline">
+                          #{teamRow.rank || index + 1}
+                          <InlineDelta value={move?.rank_delta} showSame />
+                        </span>
+                      </div>
+                      <div className={`min-w-0 flex-1 ${TEAM_NAME_CELL_CLASS}`}>
+                        <div className={TEAM_NAME_BOX_CLASS}>
+                          <Link
+                            to={`/team/${teamRow.team.team_id}`}
+                            className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            {wrapFriendlyName(teamRow.team.team_name)}
+                          </Link>
+                          <MyTeamMark teamId={teamRow.team.team_id} />
+                        </div>
+                      </div>
+                      <div className="flex w-full shrink-0 justify-between gap-3 text-xs sm:w-auto sm:flex-col sm:items-end sm:justify-start">
+                        <div className="text-right">
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Total</div>
+                          <div className="inline-flex items-baseline font-semibold text-gray-900 dark:text-gray-100">
+                            {totalVal}
+                            {move && <InlineDelta value={move.total_delta} showSame />}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">GP</div>
+                          <div className="inline-flex items-baseline font-semibold text-gray-900 dark:text-gray-100">
+                            {gpVal}
+                            {move && move.gp_delta != null && (
+                              <span className="ml-0.5 text-[10px] text-gray-500 dark:text-gray-400">+{move.gp_delta}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2">
+                      {categoryKeys.map(catKey => {
+                        const display = getRankingCellDisplay(teamRow, catKey, cellCtx)
+                        const catDelta = move && !isStandings ? move.categories[catKey] : undefined
+                        return (
+                          <div
+                            key={catKey}
+                            className="rounded border border-gray-100 bg-gray-50/80 px-1.5 py-1 dark:border-gray-600 dark:bg-gray-900/40"
+                          >
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{catKey}</div>
+                            <div className="inline-flex flex-wrap items-baseline text-xs font-medium text-gray-900 dark:text-gray-100">
+                              {display}
+                              {catDelta !== undefined && <InlineDelta value={catDelta} />}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : (
         <div className="overflow-auto max-h-[70vh]">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="sticky top-0 z-30 bg-gray-50">
@@ -450,22 +676,7 @@ const Rankings = () => {
                   {columns.slice(2).map((column) => {
                     const move = movesByTeam.get(team.team.team_id)
                     const isCategoryColumn = categoryKeys.includes(column.key)
-                    const value = isCategoryColumn
-                      ? (isStandings ? team.stats?.[column.key] : team.category_ranks?.[column.key])
-                      : (team[column.key as keyof RankingStats] as number)
-
-                    let display: string | number | undefined = value
-                    if (typeof value === 'number') {
-                      if (isCategoryColumn && !isStandings) {
-                        display = value
-                      } else if (isCategoryColumn && isStandings && mode === 'averages') {
-                        display = formatAverageValue(column.key, value)
-                      } else if (column.key === 'gp') {
-                        display = value
-                      } else {
-                        display = value % 1 === 0 ? value.toString() : value.toFixed(1)
-                      }
-                    }
+                    const display = getRankingCellDisplay(team, column.key, cellCtx)
 
                     return (
                       <td key={column.key} className={`table-cell font-medium ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''}`}>
@@ -485,6 +696,7 @@ const Rankings = () => {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   )

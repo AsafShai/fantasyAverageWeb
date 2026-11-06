@@ -15,6 +15,8 @@ interface SlotUsageTableProps {
   avgPace?: number | null
   gameDaysLeft?: number | null
   gameDaysElapsed?: number | null
+  /** Inside a collapsible — skip card chrome and duplicate heading. */
+  embedded?: boolean
 }
 
 type GapTone = 'neutral' | 'short' | 'lost'
@@ -77,7 +79,13 @@ function HeadCell({ label, gloss }: { label: string; gloss: string }) {
   )
 }
 
-export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft, gameDaysElapsed }: SlotUsageTableProps) {
+export default function SlotUsageTable({
+  slotUsage,
+  avgPace,
+  gameDaysLeft,
+  gameDaysElapsed,
+  embedded = false,
+}: SlotUsageTableProps) {
   const pace: PaceContext = { avgPace, gameDaysLeft, gameDaysElapsed }
   const rows = SLOT_NAMES.map(slot => {
     const usage = slotUsage[slot]
@@ -86,24 +94,32 @@ export default function SlotUsageTable({ slotUsage, avgPace, gameDaysLeft, gameD
   })
   const numericPace = typeof avgPace === 'number' && avgPace > 0 ? avgPace : null
 
+  const meta = (
+    <p className="text-[11.5px] tabular-nums text-gray-400 dark:text-gray-500">
+      {typeof gameDaysLeft === 'number' && (
+        <>
+          <span className="font-bold text-gray-600 dark:text-gray-300">{gameDaysLeft}</span> game days left
+        </>
+      )}
+      {typeof gameDaysLeft === 'number' && numericPace !== null && ' · '}
+      {numericPace !== null && (
+        <>
+          NBA pace <span className="font-bold text-gray-600 dark:text-gray-300">{numericPace.toFixed(1)}</span>
+        </>
+      )}
+    </p>
+  )
+
   return (
-    <div className="rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800">
-      <div className="flex flex-col gap-1 pb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-        <h2 className="text-lg font-bold text-gray-900 sm:text-xl dark:text-gray-50">Slot usage</h2>
-        <p className="text-[11.5px] tabular-nums text-gray-400 dark:text-gray-500">
-          {typeof gameDaysLeft === 'number' && (
-            <>
-              <span className="font-bold text-gray-600 dark:text-gray-300">{gameDaysLeft}</span> game days left
-            </>
-          )}
-          {typeof gameDaysLeft === 'number' && numericPace !== null && ' · '}
-          {numericPace !== null && (
-            <>
-              NBA pace <span className="font-bold text-gray-600 dark:text-gray-300">{numericPace.toFixed(1)}</span>
-            </>
-          )}
-        </p>
-      </div>
+    <div className={embedded ? 'p-4 sm:p-5 dark:bg-gray-800' : 'rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800'}>
+      {embedded ? (
+        <h2 className="sr-only">Slot usage</h2>
+      ) : (
+        <div className="flex flex-col gap-1 pb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+          <h2 className="text-lg font-bold text-gray-900 sm:text-xl dark:text-gray-50">Slot usage</h2>
+          {meta}
+        </div>
+      )}
 
       <table className="w-full border-collapse">
         <thead>
