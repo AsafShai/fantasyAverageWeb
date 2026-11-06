@@ -5,6 +5,9 @@ import { SocialLinks } from '../../components/Footer'
 import { getNavGroups, prefetchRoute, type NavGroupDef } from '../../components/navConfig'
 import { useMyTeam } from '../../context/MyTeamContext'
 import { ensureMobileFonts } from '../fonts'
+import PlayerSheet from '../player/PlayerSheet'
+import { playerIdFromPath } from '../player/playerParam'
+import { usePlayerSheet } from '../player/usePlayerSheet'
 import { BottomSheet, useSheetHistory } from '../ui'
 import { TABS } from './tabs'
 
@@ -12,7 +15,8 @@ import { TABS } from './tabs'
  * Phone shell of the redesign (step 2): logo header, page, site footer, the
  * bottom tab bar and the ☰ menu sheet. Pages that are not converted yet render
  * unchanged inside it. The menu and the search overlay live in browser history,
- * so the phone's back button closes them before it leaves the page.
+ * so the phone's back button closes them before it leaves the page. The player
+ * sheet (step 3) opens over any page from a player name: `?player=<id>`.
  */
 
 interface MobileShellProps {
@@ -27,6 +31,7 @@ const MobileShell = ({ darkMode, setDarkMode }: MobileShellProps) => {
   const navigate = useNavigate()
   const menu = useSheetHistory(MENU_SHEET_ID)
   const search = useSheetHistory(SEARCH_SHEET_ID)
+  const playerSheet = usePlayerSheet()
 
   useEffect(() => ensureMobileFonts(), [])
 
@@ -52,9 +57,15 @@ const MobileShell = ({ darkMode, setDarkMode }: MobileShellProps) => {
         isOpen={search.open}
         onClose={search.hide}
         // Replace the search entry, so back from the result returns to the page
-        // the search was opened on (not to the search again).
-        onNavigate={(path) => navigate(path, { replace: true })}
+        // the search was opened on (not to the search again). A player result
+        // opens the player sheet over that page, like any player name.
+        onNavigate={(path) => {
+          const playerId = playerIdFromPath(path)
+          if (playerId) playerSheet.open(playerId, { replace: true })
+          else navigate(path, { replace: true })
+        }}
       />
+      <PlayerSheet />
     </div>
   )
 }
