@@ -28,9 +28,33 @@ Rules:
   keep existing tests green, add tests, and be checked at 390 px.
 When something in the screenshots conflicts with the live site’s data or behaviour, keep the live behaviour
 and ask.
+
+Reporting (every step, never skip):
+- Before coding: say which step of the plan this is, what will change and what will not.
+- While working: list the commands you run; paste test / build / lint output in your reply verbatim
+  (failures in full), don't just say "tests pass".
+- After coding: explain what changed and why, file by file; take live screenshots at 390 px of every
+  page/state you touched (Playwright against the running dev server, flag on) and show them next to the
+  matching design screenshot from docs/mobile-redesign/screens/; tick the PARITY.md items for that page
+  and call out anything missing or different.
+- End with: open questions, what's next, and the branch / PR link.
 ```
 
-## 3. Which Claude to use for what
+## 3. One step = one session
+
+The Project does not start steps by itself. Start one Claude Code session per step (one PR each) with:
+
+```
+Read docs/mobile-redesign/HANDOFF.md and PARITY.md. Do step <N> of §6 (<name of the step>)
+on a new branch from dev. Follow the reporting rules in docs/mobile-redesign/PROJECT_SETUP.md:
+explain the plan first, show commands and test output verbatim, and finish with live 390 px
+screenshots next to the matching design screenshots plus the PARITY checklist for the pages touched.
+Open a PR to dev when done.
+```
+
+Review the screenshots and PR, merge, then start the next step the same way.
+
+## 4. Which Claude to use for what
 - **Claude Project (chat):** planning, reviewing a PR against the screenshots/PARITY, writing component specs. It can’t run the app or push code.
 - **Claude Code (web or CLI) on the repo:** the actual implementation PRs (it can run tests, Playwright at 390 px and push branches). Point it at `docs/mobile-redesign/HANDOFF.md` at the start of each session.
-- The design canvas link in HANDOFF.md is viewable by you in the browser; other Claude sessions may not be able to open it, which is why everything they need is exported into this folder.
+- The design canvas link in HANDOFF.md is for you. A Project chat most likely can’t open it, and Claude Code would only get the design source, not a picture — so the screenshots in `screens/` (and `prototype.html`) are what the agents compare against.

@@ -106,6 +106,8 @@ Screens index: `01-today` · `02-standings-rankings` · `03-standings-cards` · 
 5. Remaining pages: Box Scores, Activity, Schedule, Injuries, Projections, Trends, Estimator, Analytics, Draft/FA Report, NBA Teams, Minigames.
 6. Rollout: owner → league; after 1–2 stable weeks delete the old mobile code paths and the flag.
 
+**Reporting per step** (see `PROJECT_SETUP.md`): explain the plan first; show commands and test output verbatim; finish with live 390 px screenshots next to the matching design screenshots and the PARITY checklist for the pages touched.
+
 **Each PR:** matches its screenshot(s); every item in its `PARITY.md` section is present; existing page tests (`frontend/src/pages/__tests__`) still pass + new tests; Playwright screenshot at 390 px; check loading / empty / error / long names / dark mode.
 
 **Also add early:** simple page-view tracking (one event per route change) so usage can be compared before/after (today’s logs can’t tell which preloaded page was viewed).
