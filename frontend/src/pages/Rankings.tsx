@@ -17,6 +17,8 @@ import { ShareCardButton } from '../components/share/ShareCardButton'
 import { RankingsShareCard } from '../components/share/RankingsShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
 import { orderCategories } from '../utils/statOrder'
+import { useMobileRedesign } from '../mobile/flag'
+import { RankingsMobile } from '../mobile/pages/rankings/RankingsMobile'
 
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -95,6 +97,7 @@ const RANKINGS_DATE_INPUT =
 
 const Rankings = () => {
   const { isMyTeam, myTeamId } = useMyTeam()
+  const mobile = useMobileRedesign()
   const [urlState, setUrlState] = useUrlState(RANKINGS_URL_SCHEMA)
   const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from < urlState.to
   const [sortBy, setSortBy] = useState<string>(urlState.sort)
@@ -228,6 +231,88 @@ const Rankings = () => {
     (data.actual_end_date && data.actual_end_date !== data.date_range_end)
   )
 
+  const rangeLabel = isDateRangeActive ? `${formatDate(appliedDates.startDate!)} – ${formatDate(appliedDates.endDate!)}` : ''
+
+  const shareButton = (variant: 'onBlue' | 'neutral') => rankings.length > 0 && (
+    <ShareCardButton
+      title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
+      variant={variant}
+      highlightOption={myTeamId !== null}
+      renderCard={({ dark, highlightMyTeam }) => (
+        <RankingsShareCard
+          dark={dark}
+          rows={rankings}
+          categories={categoryKeys}
+          view={viewMode}
+          mode={mode}
+          rangeLabel={rangeLabel || undefined}
+          asOf={formatAsOf(data?.data_date)}
+          highlightTeamId={highlightMyTeam ? myTeamId : null}
+          moves={movesShown ? movesByTeam : undefined}
+        />
+      )}
+    />
+  )
+
+  if (mobile) {
+    // Phone view: same state, data and controls, laid out for a phone.
+    const explainer = isStandings
+      ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
+      : (showCards
+        ? 'Each category shows the team\'s rank within that category. Use Sort below to reorder.'
+        : 'Each category cell shows the team\'s rank within that category. Tap column headers to sort.')
+        + (hasMoves ? ' ▲/▼ = change since last night, GP + = games played last night.' : '')
+    return (
+      <RankingsMobile
+        title={`Team ${titleWord} (${modeLabel})`}
+        explainer={explainer}
+        dataDate={data?.data_date}
+        espnUpdatedAt={summary?.espn_updated_at}
+        share={shareButton('neutral')}
+        layout={layout}
+        onLayout={setLayout}
+        view={viewMode}
+        onView={setViewMode}
+        mode={mode}
+        onMode={setMode}
+        startDate={startDate}
+        endDate={endDate}
+        minDate={summary?.season_start}
+        today={today}
+        dateError={dateError}
+        onStartDate={handleStartDate}
+        onEndDate={handleEndDate}
+        onApply={applyDates}
+        onClear={clearDates}
+        onQuickRange={(days) => {
+          setStartDate(getDateNDaysAgo(days))
+          setEndDate(today)
+          setDateError('')
+        }}
+        appliedRangeLabel={rangeLabel}
+        mismatchNote={hasDateMismatch
+          ? `Note: closest available data used - showing ${formatDate(data!.actual_start_date!)} - ${formatDate(data!.actual_end_date!)}`
+          : undefined}
+        rangeError={error && isDateRangeActive ? getErrorMessage(error, 'Could not load rankings for this date range.') : undefined}
+        hasMoves={hasMoves}
+        showMoves={showMoves}
+        onToggleMoves={() => setShowMoves(!showMoves)}
+        pace={summary?.nba_avg_pace}
+        daysLeft={summary?.nba_game_days_left}
+        rankings={rankings}
+        categoryKeys={categoryKeys}
+        movesByTeam={movesByTeam}
+        cellDisplay={(t, key) => getRankingCellDisplay(t, key, cellCtx)}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={handleSort}
+        onSortBy={handleSort}
+        onToggleOrder={() => setSortOrder(o => (o === 'asc' ? 'desc' : 'asc'))}
+        isMyTeam={isMyTeam}
+      />
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {(data?.data_date || summary?.espn_updated_at) && (
@@ -276,24 +361,7 @@ const Rankings = () => {
                   </h2>
                   {rankings.length > 0 && (
                     <div className="shrink-0">
-                      <ShareCardButton
-                        title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
-                        variant="onBlue"
-                        highlightOption={myTeamId !== null}
-                        renderCard={({ dark, highlightMyTeam }) => (
-                          <RankingsShareCard
-                            dark={dark}
-                            rows={rankings}
-                            categories={categoryKeys}
-                            view={viewMode}
-                            mode={mode}
-                            rangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} – ${formatDate(appliedDates.endDate!)}` : undefined}
-                            asOf={formatAsOf(data?.data_date)}
-                            highlightTeamId={highlightMyTeam ? myTeamId : null}
-                            moves={movesShown ? movesByTeam : undefined}
-                          />
-                        )}
-                      />
+                      {shareButton('onBlue')}
                     </div>
                   )}
                 </div>
