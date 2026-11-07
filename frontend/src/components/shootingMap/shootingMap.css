@@ -1,0 +1,29 @@
+/* Player Shooting Map: chart colors and the few pieces Tailwind can't express.
+   The palette follows the site: gray chrome, green helps, red hurts (as the
+   League Analytics heatmap), and the same values again under .dark. The chart
+   engine reads these variables when it draws. */
+.sm-root {
+  --ink: #111827; --muted: #6b7280; --grid: #e5e7eb; --rule: #d1d5db; --label-halo: #ffffff;
+  --hot: #059669; --hot-soft: #a7f3d0; --cold: #dc2626; --cold-soft: #fecaca; --neutral: #9ca3af;
+  --sel: #111827;
+}
+.dark .sm-root {
+  --ink: #f3f4f6; --muted: #9ca3af; --grid: #374151; --rule: #4b5563; --label-halo: #1f2937;
+  --hot: #34d399; --hot-soft: #065f46; --cold: #f87171; --cold-soft: #7f1d1d; --neutral: #6b7280;
+  --sel: #ffffff;
+}
+.sm-chart { display: block; width: 100%; height: clamp(440px, 72vh, 780px); touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.sm-chart.sm-dragging { cursor: grabbing; }
+.sm-chart text { font-family: inherit; }
+@media (max-width: 640px) { .sm-chart { height: clamp(380px, 62vh, 560px); } }
+.sm-ramp { display: inline-block; width: 110px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--cold), var(--cold-soft), var(--neutral), var(--hot-soft), var(--hot)); }
+.sm-tip { position: absolute; pointer-events: none; z-index: 3; min-width: 180px; padding: 8px 10px; border-radius: 8px; background: #111827; color: #f9fafb; font-size: 12px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+.dark .sm-tip { background: #f9fafb; color: #111827; }
+.sm-tip-n { font-size: 14px; font-weight: 600; }
+.sm-tip-sub { opacity: .7; margin-bottom: 4px; }
+.sm-tip-r { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.sm-tip-r span:first-child { opacity: .7; }
+.sm-tip-pos { color: #34d399; font-weight: 600; }
+.sm-tip-neg { color: #f87171; font-weight: 600; }
+.dark .sm-tip-pos { color: #047857; }
+.dark .sm-tip-neg { color: #b91c1c; }

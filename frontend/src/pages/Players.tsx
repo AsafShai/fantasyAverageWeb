@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useDebounce } from '../hooks/useDebounce';
 import {
@@ -25,6 +26,8 @@ import InjuryBadge from '../components/InjuryBadge';
 import PlayerNameLink from '../components/PlayerNameLink';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import './Players.css';
+import { useMobileRedesign } from '../mobile/flag';
+import MobilePlayers from '../mobile/pages/players/MobilePlayers';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 
@@ -84,6 +87,10 @@ const PLAYERS_URL_SCHEMA = {
 };
 
 const Players = () => {
+  const mobile = useMobileRedesign();
+  // Re-applied after every navigation: closing the phone Filters sheet steps
+  // back over its history entry, which still has the pre-filter query.
+  const { key: locationKey } = useLocation();
   const [urlState, setUrlState, urlKeys] = useUrlState(PLAYERS_URL_SCHEMA);
   const [filters, setFilters] = useState<PlayerFilters>(() => ({
     search: urlState.q,
@@ -184,6 +191,7 @@ const Players = () => {
     slateDate,
     playingOnSlateOnly,
     showAverages,
+    locationKey,
   ]);
 
   const filteredPlayers = useMemo(() => {
@@ -245,6 +253,44 @@ const Players = () => {
     });
   }, [data, filters, showAverages, debouncedSearch, playingOnSlateOnly, playingTeamsOnSlate]);
 
+  if (mobile) {
+    return (
+      <MobilePlayers
+        isLoading={isLoading}
+        error={error}
+        players={filteredPlayers}
+        actualStart={data?.actual_start}
+        actualEnd={data?.actual_end}
+        filters={filters}
+        setFilters={setFilters}
+        teams={teams}
+        teamMap={teamMap}
+        showAverages={showAverages}
+        setShowAverages={setShowAverages}
+        timePeriod={timePeriod}
+        setTimePeriod={setTimePeriod}
+        customRange={customRange}
+        setCustomRange={setCustomRange}
+        integerMode={integerMode}
+        setIntegerMode={setIntegerMode}
+        tableMode={tableMode}
+        setTableMode={setTableMode}
+        scheduleHorizon={scheduleHorizon}
+        setScheduleHorizon={setScheduleHorizon}
+        slateDate={slateDate}
+        setSlateDate={setSlateDate}
+        upcomingDates={upcomingDates}
+        pastDates={pastDates}
+        currentSlateDate={currentSlateDate}
+        selectedSlateDate={selectedSlateDate}
+        slateUsable={!!selectedSlateDate && !!playingTeamsOnSlate}
+        playingOnSlateOnly={playingOnSlateOnly}
+        setPlayingOnSlateOnly={setPlayingOnSlateOnly}
+        matchupMap={matchupMap}
+        schedule={schedule}
+      />
+    );
+  }
   if (isLoading) return <div className="loading">Loading players...</div>;
   if (error) return <div className="error">Error loading players</div>;
 
@@ -753,7 +799,7 @@ const PlayerTable = ({
                 )}
               </tr>
               {showMatchup && isExpanded && matchup && (
-                <MatchupExpandRow matchup={matchup} colSpan={4 + statColumnCount + matchupColumnCount} integerMode={integerMode} onCollapse={() => toggleExpand(player.player_name)} />
+                <MatchupExpandRow matchup={matchup} colSpan={4 + statColumnCount + matchupColumnCount} integerMode={integerMode} />
               )}
             </React.Fragment>
           );

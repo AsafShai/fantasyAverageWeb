@@ -1,69 +1,25 @@
-import { useMemo, useState } from 'react'
 import InfoTip from './InfoTip'
 import TeamNightGrid from './TeamNightGrid'
 import TeamTraceButton from './TeamTraceButton'
 import { METRIC_GLOSSARY } from '../constants/metricGlossary'
 import type { ScheduleResponse } from '../types/api'
-import {
-  HIGH_VOLUME_GAMES,
-  addDays,
-  buildSlateWindow,
-  firstScheduleDay,
-  formatSlateDate,
-  matchupsByDate,
-} from '../utils/slateWindow'
+import { HIGH_VOLUME_GAMES, formatSlateDate } from '../utils/slateWindow'
+import { SLATE_PRESETS as PRESETS, useSlateCalendar } from '../hooks/useSlateCalendar'
 
 const BAR_AREA_PX = 110
-const PRESETS = [7, 14, 28] as const
-type WindowMode = (typeof PRESETS)[number] | 'custom'
 
 interface SlateCalendarProps {
   schedule: ScheduleResponse
 }
 
 export default function SlateCalendar({ schedule }: SlateCalendarProps) {
-  const calendarDays = schedule.calendar_days
-  const startDate = useMemo(() => firstScheduleDay(calendarDays), [calendarDays])
-  const lastDate = calendarDays[calendarDays.length - 1]?.date ?? startDate
+  const {
+    mode, chooseMode, endDate, draftEnd, typeEnd, clearDraft, minEnd, lastDate,
+    window, days, rows, dayIndex, selectedDay, setSelectedDayIndex, maxSlate,
+    tracedTeam, clearTrace, toggleTeam, tracedNights,
+  } = useSlateCalendar(schedule)
 
-  const clampEnd = (date: string) => (date > lastDate ? lastDate : date)
-  // Mode is explicit rather than inferred from the end date. Inferring it made
-  // a hand-picked date that happened to match a preset flip the active button,
-  // and left no way to say "the user is choosing their own end date".
-  const [mode, setMode] = useState<WindowMode>(14)
-  const [customEnd, setCustomEnd] = useState(lastDate)
-  const [draftEnd, setDraftEnd] = useState<string | null>(null)
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0)
-  const [tracedTeam, setTracedTeam] = useState<string | null>(null)
-
-  const endDate = mode === 'custom' ? customEnd : clampEnd(addDays(startDate, mode - 1))
-  const minEnd = addDays(startDate, 1)
-
-  const matchups = useMemo(() => matchupsByDate(schedule), [schedule])
-  const window = useMemo(
-    () => buildSlateWindow(schedule, startDate, endDate, matchups),
-    [endDate, matchups, schedule, startDate]
-  )
-
-  const { days, rows } = window
   if (!days.length) return null
-
-  const dayIndex = Math.min(selectedDayIndex, days.length - 1)
-  const selectedDay = days[dayIndex]
-  const maxSlate = Math.max(...days.map(day => day.slateSize), 1)
-  const tracedNights = tracedTeam
-    ? days.filter(day => day.matchups.some(m => m.away === tracedTeam || m.home === tracedTeam)).length
-    : 0
-
-  const chooseMode = (next: WindowMode) => {
-    if (next === 'custom') setCustomEnd(lastDate)
-    setMode(next)
-    setDraftEnd(null)
-    setSelectedDayIndex(0)
-  }
-
-  const toggleTeam = (abbreviation: string) =>
-    setTracedTeam(current => (current === abbreviation ? null : abbreviation))
 
   return (
     <div className="mb-6 space-y-4">
@@ -107,14 +63,8 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
               min={minEnd}
               max={lastDate}
               disabled={mode !== 'custom'}
-              onChange={event => {
-                const picked = event.target.value
-                setDraftEnd(picked)
-                if (!picked || picked < minEnd || picked > lastDate) return
-                setCustomEnd(picked)
-                setSelectedDayIndex(0)
-              }}
-              onBlur={() => setDraftEnd(null)}
+              onChange={event => typeEnd(event.target.value)}
+              onBlur={clearDraft}
               className="rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs font-bold text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             />
           </label>
@@ -131,7 +81,7 @@ export default function SlateCalendar({ schedule }: SlateCalendarProps) {
             </span>
             <button
               type="button"
-              onClick={() => setTracedTeam(null)}
+              onClick={clearTrace}
               className="ml-auto rounded-md bg-white px-2 py-1 text-[11px] font-bold text-blue-700 hover:underline"
             >
               Clear

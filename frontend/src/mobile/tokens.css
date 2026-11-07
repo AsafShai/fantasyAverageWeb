@@ -1,0 +1,145 @@
+/*
+ * Mobile redesign: design tokens.
+ * Values come from the approved design (v2 · Redesign). Everything here is
+ * either a CSS variable or an `mr-` prefixed class, so nothing on today's
+ * pages changes until a page opts in by rendering these components.
+ *
+ * Tailwind: the @theme inline block exposes the same tokens as utilities
+ * (bg-mr-card, text-mr-muted, font-mr-num, rounded-mr-card …) for page work.
+ */
+
+:root {
+  /* surfaces */
+  --mr-page: #F2F4F7;
+  --mr-card: #FFFFFF;
+  --mr-sunken: #F2F4F7;      /* tiles, stat boxes inside cards */
+  --mr-seg-track: #E3E7ED;
+  --mr-seg-on: #FFFFFF;
+  --mr-table-head: #F7F8FA;
+  --mr-row-me: #EEF3FE;      /* my-team highlight */
+  --mr-scrim: rgba(14, 23, 38, 0.45);
+
+  /* text */
+  --mr-text: #0E1726;
+  --mr-text-2: #3B4556;
+  --mr-muted: #5B6474;
+  --mr-faint: #8A93A3;
+
+  /* lines */
+  --mr-border: #E3E6EB;
+  --mr-divider: #EEF0F3;
+  --mr-grabber: #D5DAE1;
+
+  /* brand */
+  --mr-primary: #1D4ED8;
+  --mr-primary-2: #2563EB;
+  --mr-primary-soft: #E8EEFD;
+  --mr-brand-from: #2563EB;
+  --mr-brand-to: #7C3AED;
+  --mr-ink: #0E1726;         /* selected chip, dark highlight cards */
+  --mr-on-ink: #FFFFFF;
+  --mr-on-primary: #FFFFFF;
+
+  /* deltas (Rankings view only) */
+  --mr-up: #059669;
+  --mr-down: #DC2626;
+  --mr-same: #9CA3AF;
+  --mr-gp: #6B7280;
+
+  /* shape + type */
+  --mr-radius-card: 16px;
+  --mr-radius-ctl: 10px;
+  --mr-radius-sheet: 22px;
+  --mr-pad-card: 14px;
+  --mr-tap: 40px;
+  --mr-font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mr-font-num: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --mr-shadow-on: 0 1px 2px rgba(14, 23, 38, 0.12);
+
+  /* pills: background / text */
+  --mr-pill-out-bg: #FEE2E2;      --mr-pill-out-fg: #B91C1C;
+  --mr-pill-doubt-bg: #FFEDD5;    --mr-pill-doubt-fg: #C2410C;
+  --mr-pill-quest-bg: #FEF3C7;    --mr-pill-quest-fg: #92400E;
+  --mr-pill-prob-bg: #DBEAFE;     --mr-pill-prob-fg: #1D4ED8;
+  --mr-pill-avail-bg: #DCFCE7;    --mr-pill-avail-fg: #166534;
+  --mr-pill-starter-bg: #ECFDF3;  --mr-pill-starter-fg: #15803D;  --mr-pill-starter-bd: #A7E3BF;
+  --mr-pill-bench-bg: #F2F4F7;    --mr-pill-bench-fg: #5B6474;    --mr-pill-bench-bd: #E3E6EB;
+  --mr-pill-ir-bg: #FDE2D2;       --mr-pill-ir-fg: #9A3412;       --mr-pill-ir-bd: #F4B48C;
+  --mr-pill-added-bg: #DCFCE7;    --mr-pill-added-fg: #166534;
+  --mr-pill-waiver-bg: #ECFCCB;   --mr-pill-waiver-fg: #3F6212;
+  --mr-pill-trade-bg: #DBEAFE;    --mr-pill-trade-fg: #1D4ED8;
+  --mr-pill-dropped-bg: #F2F4F7;  --mr-pill-dropped-fg: #5B6474;
+  --mr-pill-fa-bg: #FEF3C7;       --mr-pill-fa-fg: #92400E;       --mr-pill-fa-bd: #FDE68A;
+}
+
+/*
+ * Dark mode. The mock simulates dark mode with a color inversion; the real
+ * site switches the `.dark` class on <html>, so these are real dark values in
+ * the same navy family the site already uses (#111827 page).
+ */
+.dark {
+  --mr-page: #0B1220;
+  --mr-card: #151E2E;
+  --mr-sunken: #1E293B;
+  --mr-seg-track: #0B1220;
+  --mr-seg-on: #2A3548;
+  --mr-table-head: #1A2436;
+  --mr-row-me: #1E2D4F;
+  --mr-scrim: rgba(0, 0, 0, 0.6);
+
+  --mr-text: #E6EAF2;
+  --mr-text-2: #C5CCD8;
+  --mr-muted: #9AA4B5;
+  --mr-faint: #6F7A8C;
+
+  --mr-border: #2A3548;
+  --mr-divider: #222C3D;
+  --mr-grabber: #3A4558;
+
+  --mr-primary: #60A5FA;
+  --mr-primary-2: #3B82F6;
+  --mr-primary-soft: #1E2D4F;
+  --mr-ink: #E6EAF2;
+  --mr-on-ink: #0B1220;
+  --mr-on-primary: #0B1220;
+
+  --mr-up: #34D399;
+  --mr-down: #F87171;
+  --mr-same: #6F7A8C;
+  --mr-gp: #9AA4B5;
+  --mr-shadow-on: 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  --mr-pill-out-bg: #4C1D1D;      --mr-pill-out-fg: #FCA5A5;
+  --mr-pill-doubt-bg: #431407;    --mr-pill-doubt-fg: #FDBA74;
+  --mr-pill-quest-bg: #422006;    --mr-pill-quest-fg: #FDE68A;
+  --mr-pill-prob-bg: #1E3A5F;     --mr-pill-prob-fg: #93C5FD;
+  --mr-pill-avail-bg: #052E16;    --mr-pill-avail-fg: #86EFAC;
+  --mr-pill-starter-bg: #052E16;  --mr-pill-starter-fg: #86EFAC;  --mr-pill-starter-bd: #166534;
+  --mr-pill-bench-bg: #1E293B;    --mr-pill-bench-fg: #9AA4B5;    --mr-pill-bench-bd: #2A3548;
+  --mr-pill-ir-bg: #431407;       --mr-pill-ir-fg: #FDBA74;       --mr-pill-ir-bd: #7C2D12;
+  --mr-pill-added-bg: #052E16;    --mr-pill-added-fg: #86EFAC;
+  --mr-pill-waiver-bg: #1A2E05;   --mr-pill-waiver-fg: #BEF264;
+  --mr-pill-trade-bg: #1E3A5F;    --mr-pill-trade-fg: #93C5FD;
+  --mr-pill-dropped-bg: #1E293B;  --mr-pill-dropped-fg: #9AA4B5;
+  --mr-pill-fa-bg: #422006;       --mr-pill-fa-fg: #FDE68A;       --mr-pill-fa-bd: #713F12;
+}
+
+@theme inline {
+  --color-mr-page: var(--mr-page);
+  --color-mr-card: var(--mr-card);
+  --color-mr-sunken: var(--mr-sunken);
+  --color-mr-text: var(--mr-text);
+  --color-mr-text-2: var(--mr-text-2);
+  --color-mr-muted: var(--mr-muted);
+  --color-mr-faint: var(--mr-faint);
+  --color-mr-border: var(--mr-border);
+  --color-mr-divider: var(--mr-divider);
+  --color-mr-primary: var(--mr-primary);
+  --color-mr-row-me: var(--mr-row-me);
+  --color-mr-up: var(--mr-up);
+  --color-mr-down: var(--mr-down);
+  --font-mr: var(--mr-font);
+  --font-mr-num: var(--mr-font-num);
+  --radius-mr-card: var(--mr-radius-card);
+  --radius-mr-ctl: var(--mr-radius-ctl);
+}

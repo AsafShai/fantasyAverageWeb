@@ -14,6 +14,10 @@ interface RosterCoverageProps {
   onHorizonChange: (horizon: ScheduleHorizon) => void
   onSelectDate?: (date: string) => void
   onActiveDate?: (date: string) => void
+  /** When set to a date in the visible window, highlights that column (e.g. roster Schedule day picker). */
+  externalSelectedDate?: string | null
+  /** Skip card shell when nested in a collapsible. */
+  embedded?: boolean
 }
 
 function daySurface(day: ScheduleCalendarDay): string {
@@ -27,7 +31,16 @@ function slateTone(day: ScheduleCalendarDay): string {
   return 'bg-gray-100 text-gray-500'
 }
 
-export default function RosterCoverage({ players, teamId, horizon, onHorizonChange, onSelectDate, onActiveDate }: RosterCoverageProps) {
+export default function RosterCoverage({
+  players,
+  teamId,
+  horizon,
+  onHorizonChange,
+  onSelectDate,
+  onActiveDate,
+  externalSelectedDate,
+  embedded = false,
+}: RosterCoverageProps) {
   const { data: schedule, isLoading, error } = useGetScheduleQuery()
   const { data: allPlayerData } = useGetAllPlayersQuery({ limit: 500 }, { skip: players.length > 0 })
   const [selectedDate, setSelectedDate] = useState('')
@@ -54,19 +67,37 @@ export default function RosterCoverage({ players, teamId, horizon, onHorizonChan
   const activeDate = visibleDays.some(day => day.date === selectedDate) ? selectedDate : visibleDays[0]?.date ?? ''
 
   useEffect(() => {
+    if (!externalSelectedDate || !visibleDays.some(d => d.date === externalSelectedDate)) return
+    setSelectedDate(externalSelectedDate)
+  }, [externalSelectedDate, visibleDays])
+
+  useEffect(() => {
     if (activeDate) onActiveDate?.(activeDate)
   }, [activeDate, onActiveDate])
 
-  if (isLoading) return <div className="bg-white rounded-lg shadow p-6"><LoadingSpinner /></div>
+  if (isLoading) {
+    return embedded
+      ? <div className="p-6"><LoadingSpinner /></div>
+      : <div className="rounded-lg bg-white p-6 shadow"><LoadingSpinner /></div>
+  }
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load schedule coverage')} />
   if (!schedule || !visibleDays.length) return null
 
+  const shell = embedded ? 'p-4 sm:p-6 dark:bg-gray-800' : 'rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800'
+
   return (
-    <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-      <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className={shell}>
+      <div className={`flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between ${embedded ? 'pb-4' : 'border-b border-gray-100 pb-4 dark:border-gray-700'}`}>
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Roster coverage</h2>
-          <p className="mt-1 text-xs text-gray-500">Bar height = rostered players with an NBA game. The slate label is the total number of NBA games that day.</p>
+          {embedded ? <h2 className="sr-only">Roster coverage</h2> : (
+            <h2 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-100">Roster coverage</h2>
+          )}
+          <p className="mt-1 text-xs text-gray-500 sm:hidden dark:text-gray-400">
+            Bar = rostered players with a game; slate = NBA games that day.
+          </p>
+          <p className="mt-1 hidden text-xs text-gray-500 sm:block dark:text-gray-400">
+            Bar height = rostered players with an NBA game. The slate label is the total number of NBA games that day.
+          </p>
         </div>
         <div className="flex rounded-lg border border-gray-200 p-1 text-xs">
           {SCHEDULE_HORIZONS.map(value => (
@@ -74,7 +105,7 @@ export default function RosterCoverage({ players, teamId, horizon, onHorizonChan
               key={value}
               type="button"
               onClick={() => onHorizonChange(value)}
-              className={`rounded-md px-3 py-2 ${horizon === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`rounded-md px-4 py-3 sm:px-3 sm:py-2 ${horizon === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {value} days
             </button>

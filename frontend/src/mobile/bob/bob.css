@@ -1,0 +1,13 @@
+/* Boom or Bust on a phone (mobile redesign step 5). */
+.mr-bob { gap: 12px; }
+.mr-bob .space-y-6 > * + * { margin-top: 12px; }
+.mr-bob-card { display: flex; flex-direction: column; gap: 10px; padding-left: 0; padding-right: 0; overflow: hidden; }
+.mr-bob-card > .mr-card-head, .mr-bob-card > .mr-bob-slider, .mr-bob-card > .mr-bob-foot { margin-left: 14px; margin-right: 14px; }
+.mr-bob-slider { width: auto; }
+.mr-bob-slider label { color: var(--mr-muted); font-size: 12.5px; }
+.mr-bob-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.mr-bob-note {
+  margin: 0; padding: 10px 12px; font-size: 13px; border-radius: var(--mr-radius-ctl);
+  background: var(--mr-pill-quest-bg); color: var(--mr-pill-quest-fg);
+}
+.mr-bob p.text-xs { font-size: 12px; color: var(--mr-muted); }

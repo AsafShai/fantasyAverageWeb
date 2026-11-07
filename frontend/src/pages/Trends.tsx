@@ -16,10 +16,17 @@ import InfoTip from '../components/InfoTip'
 import DateRangePicker from '../components/DateRangePicker'
 import { BASELINE_LABEL } from '../utils/trendBaseline'
 import { toLocalIso, daysBetween, formatShort } from '../utils/dateRange'
-import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange, CategoryMoverItem, CategoryStatItem, CountingCategory } from '../types/api'
+import type { MinutesMoverItem, UsageRoleItem, RegressionPlayerGroup, RegressionStatItem, RegressionStat, RegressionMode, CustomDateRange, CategoryMoverItem, CountingCategory } from '../types/api'
 import { countingCategoriesOf, isGoodChange } from '../utils/categoryTrends'
 import { fantasyTeamOptionLabel } from '../myTeam/display'
+import {
+  TABS, TAB_MODE, ALL_POSITIONS, BASELINE_OPTIONS, FORM_BASELINE_OPTIONS, OWNERSHIP_OPTIONS, WINDOW_OPTIONS,
+  MIN_SORT_VAL, USG_SORT_VAL, CAT_SORT_VAL, MAKES_LABEL, normalizeDelta, passesShared, sortRegressionGroups,
+  type TabKey, type Ownership, type Filters,
+} from '../utils/trendsShared'
 import { useMyTeam } from '../context/MyTeamContext'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileTrends from '../mobile/trends/MobileTrends'
 
 const MIN_CUSTOM_WINDOW_DAYS = 5
 const MAX_CUSTOM_WINDOW_DAYS = 60
@@ -33,71 +40,6 @@ function addDaysIso(iso: string, days: number): string {
 
 function subDaysIso(iso: string, days: number): string {
   return addDaysIso(iso, -days)
-}
-
-type TabKey = 'minutes' | 'usage' | 'categories' | 'shooting-season' | 'shooting-form'
-type Ownership = 'all' | 'fa' | 'rostered'
-
-const TABS: [TabKey, string, string][] = [
-  ['minutes', 'Minutes Movers', 'Who is playing more or fewer minutes than their season average'],
-  ['usage', 'Usage & Role', 'Whose share of their team’s possessions has moved'],
-  ['categories', 'Categories', 'Whose per-game output in your league’s counting categories (PTS, REB, AST, 3PM, STL, BLK, TO) has moved'],
-  ['shooting-season', 'Shooting · Season', "Whose season shooting line is out of step with their history — the number that will look different by the time you trade them."],
-  ['shooting-form', 'Shooting · Form', "Who is genuinely shooting above or below their own level right now, judged against everything outside the recency window. Small samples are filtered out by significance, not by a fixed attempt count."],
-]
-
-const TAB_MODE: Partial<Record<TabKey, RegressionMode>> = {
-  'shooting-season': 'season',
-  'shooting-form': 'form',
-}
-
-const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
-
-const BASELINE_OPTIONS: [number, string, string][] = [
-  [2, 'Prior 2 seasons', 'Measured against the two seasons before this one, attempt-weighted. Bigger sample, survives one fluky year, but slow to accept a genuine change in the shooter.'],
-  [1, 'Last season only', 'Measured against last season alone. Reacts faster to a real change, noisier for low-volume shooters.'],
-]
-
-// mode='form' only: no prior seasons at all, so the window is judged against
-// this season alone. Right when a player's level has genuinely moved (new role,
-// new team, second-year jump) and his older seasons no longer describe him.
-const FORM_BASELINE_OPTIONS: [number, string, string][] = [
-  [0, 'This season', 'The window measured against the rest of this season only. Follows a player whose level has actually changed; ignores who he used to be.'],
-  ...BASELINE_OPTIONS.map(([v, l, h]) => [v, l, `${h} Pooled with this season up to the window.`] as [number, string, string]),
-]
-
-const OWNERSHIP_OPTIONS: [Ownership, string][] = [
-  ['all', 'All players'],
-  ['fa', 'Free agents'],
-  ['rostered', 'Rostered'],
-]
-
-interface Filters {
-  nameFilter: string
-  position: string | null
-  minG15: number
-  ownership: Ownership
-  fantasyTeam: string | null
-}
-
-interface SharedFilterable {
-  player_name: string
-  position: string
-  fantasy_status: string
-  games_last_15d: number
-}
-
-function passesShared<T extends SharedFilterable>(
-  row: T,
-  { nameFilter, position, minG15, ownership, fantasyTeam }: Filters
-): boolean {
-  if (position && row.position !== position) return false
-  if (row.games_last_15d < minG15) return false
-  if (ownership === 'fa' && row.fantasy_status !== 'FA') return false
-  if (ownership === 'rostered' && row.fantasy_status === 'FA') return false
-  if (fantasyTeam && row.fantasy_status !== fantasyTeam) return false
-  if (nameFilter.trim() && !row.player_name.toLowerCase().includes(nameFilter.trim().toLowerCase())) return false
-  return true
 }
 
 function ExpandRow({ colSpan, children }: { colSpan: number; children: React.ReactNode }) {
@@ -204,17 +146,6 @@ function EmptyRow({ colSpan, noneQualify, hint }: { colSpan: number; noneQualify
   )
 }
 
-const MIN_SORT_VAL: Record<string, (r: MinutesMoverItem) => number | string> = {
-  player: r => r.player_name,
-  team: r => r.pro_team,
-  pos: r => r.position,
-  season: r => r.season_mpg,
-  l5: r => r.l5_mpg,
-  delta: r => r.delta_mpg,
-  gp: r => r.season_gp,
-  g15: r => r.games_last_15d,
-}
-
 function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[]; filters: Filters; windowDays: number }) {
   const [sortCol, setSortCol] = useState('delta')
   const [sortAsc, setSortAsc] = useState(false)
@@ -290,16 +221,6 @@ function MinutesTable({ items, filters, windowDays }: { items: MinutesMoverItem[
       </table>
     </div>
   )
-}
-
-const USG_SORT_VAL: Record<string, (r: UsageRoleItem) => number | string> = {
-  player: r => r.player_name,
-  team: r => r.pro_team,
-  season: r => r.season_usg,
-  l5: r => r.l5_usg,
-  delta: r => r.delta_usg,
-  dmpg: r => r.delta_mpg,
-  g15: r => r.games_last_15d,
 }
 
 function RoleBadge({ badge }: { badge: string | null }) {
@@ -413,21 +334,6 @@ function CategoryRowChart({ item, initial, cats, windowDays }: {
   )
 }
 
-interface CategoryRow {
-  item: CategoryMoverItem
-  stat: CategoryStatItem
-}
-
-const CAT_SORT_VAL: Record<string, (r: CategoryRow) => number | string> = {
-  player: r => r.item.player_name,
-  team: r => r.item.pro_team,
-  season: r => r.stat.season_avg,
-  l5: r => r.stat.window_avg,
-  delta: r => r.stat.delta,
-  dmpg: r => r.item.window_mpg - r.item.season_mpg,
-  g15: r => r.item.games_last_15d,
-}
-
 function CategoryTable({ items, cat, cats, reverse, filters, windowDays }: {
   items: CategoryMoverItem[]
   cat: CountingCategory
@@ -521,25 +427,6 @@ function CategoryTable({ items, cat, cats, reverse, filters, windowDays }: {
   )
 }
 
-const REG_SORT_VAL: Record<string, (s: RegressionStatItem) => number | string> = {
-  stat: s => s.stat,
-  cur: s => s.current_pct,
-  base: s => s.baseline_pct,
-  dev: s => s.dev,
-  att: s => s.attempts_per_game,
-  drift: s => s.drift_score,
-  z: s => Math.abs(s.z ?? 0),  // magnitude, so an ice-cold stretch ranks with a red-hot one
-  impact: s => normalizeDelta(s),
-}
-
-const MAKES_LABEL: Record<RegressionStat, string> = { '3P%': '3PM', 'FT%': 'FTM', 'FG%': 'FGM' }
-
-// Expected change in makes per game if the stat snaps back to the baseline, at
-// current attempt volume — same unit for all three stats so they compare.
-function normalizeDelta(stat: RegressionStatItem): number {
-  return (-stat.dev / 100) * stat.attempts_per_game
-}
-
 function NormalizePill({ stat }: { stat: RegressionStatItem }) {
   const delta = normalizeDelta(stat)
   return (
@@ -573,36 +460,10 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
     return next
   })
 
-  const groups = useMemo(() => {
-    const filtered = items
-      .filter(g => passesShared(g, filters))
-      .map(g => ({ ...g, stats: statFilter === 'all' ? g.stats : g.stats.filter(s => s.stat === statFilter) }))
-      .filter(g => g.stats.length > 0)
-
-    const getVal = REG_SORT_VAL[sortCol] ?? REG_SORT_VAL.dev
-    const identityCol = sortCol === 'stat' ? false : ['player', 'team', 'g15'].includes(sortCol)
-
-    const withKey = filtered.map(g => {
-      const sortedStats = [...g.stats].sort((a, b) => (
-        isForm ? b.drift_score - a.drift_score : Math.abs(b.dev) - Math.abs(a.dev)
-      ))
-      let key: number | string
-      if (identityCol) {
-        key = sortCol === 'player' ? g.player_name : sortCol === 'team' ? g.pro_team : g.games_last_15d
-      } else {
-        const extreme = sortedStats.reduce((best, s) => (Math.abs(getVal(s) as number) > Math.abs(getVal(best) as number) ? s : best), sortedStats[0])
-        key = getVal(extreme)
-      }
-      return { group: g, stats: sortedStats, key }
-    })
-
-    withKey.sort((a, b) => {
-      const cmp = typeof a.key === 'string' ? a.key.localeCompare(b.key as string) : (a.key as number) - (b.key as number)
-      return sortAsc ? cmp : -cmp
-    })
-
-    return withKey
-  }, [items, filters, statFilter, sortCol, sortAsc, isForm])
+  const groups = useMemo(
+    () => sortRegressionGroups(items, filters, statFilter, sortCol, sortAsc, isForm),
+    [items, filters, statFilter, sortCol, sortAsc, isForm],
+  )
 
   const handleSort = (col: string) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -727,8 +588,6 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
   )
 }
 
-const WINDOW_OPTIONS = [7, 15, 30] as const
-
 const DEFAULT_WINDOW_DAYS = 15
 const DEFAULT_BASELINE_SEASONS = 2
 
@@ -749,12 +608,14 @@ const TRENDS_URL_SCHEMA = {
 }
 
 export default function Trends() {
+  const mobile = useMobileRedesign()
   const [urlState, setUrlState, urlKeys] = useUrlState(TRENDS_URL_SCHEMA)
   const urlBaseline = urlKeys.has('baseline') ? urlState.baseline : undefined
   const urlTabIsForm = TAB_MODE[urlState.mode] === 'form'
   const [tab, setTab] = useState<TabKey>(urlState.mode)
   const [nameFilter, setNameFilter] = useState('')
   const [position, setPosition] = useState<string | null>(null)
+  const [positions, setPositions] = useState<string[]>([]) // phone: pick several
   const [windowDays, setWindowDays] = usePersistedState<number>(
     'trends.windowDays',
     DEFAULT_WINDOW_DAYS,
@@ -874,7 +735,7 @@ export default function Trends() {
         : 0
   const effectiveMinGames = Math.max(minGames, minGamesFloor)
 
-  const filters: Filters = { nameFilter, position, minG15: effectiveMinGames, ownership, fantasyTeam }
+  const filters: Filters = { nameFilter, position: mobile ? null : position, positions: mobile ? positions : undefined, minG15: effectiveMinGames, ownership, fantasyTeam }
 
   const gpGates = tab === 'minutes' ? minutesQuery.data : tab === 'usage' ? usageQuery.data : undefined
   const regressionGates = isShooting ? regressionQuery.data : undefined
@@ -917,6 +778,71 @@ export default function Trends() {
     if (!myTeam || !names.includes(myTeam.team_name)) return names
     return [myTeam.team_name, ...names.filter(name => name !== myTeam.team_name)]
   }, [minutesQuery.data, usageQuery.data, categoriesQuery.data, regressionQuery.data, myTeam])
+
+  const customPanel = (
+    <>
+          {!anchorIso ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400 py-2">
+              {anchorQuery.isFetching || anchorSourceId === undefined ? 'Loading latest game day…' : 'Could not determine the latest game day.'}
+            </p>
+          ) : (
+            <>
+              <DateRangePicker
+                seasonStart={customMinStartIso}
+                fixedEnd={anchorIso}
+                initialStart={customStartIso ?? ''}
+                onApply={handleCustomApply}
+              />
+              {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
+            </>
+          )}
+    </>
+  )
+
+  if (mobile) {
+    return (
+      <MobileTrends
+        tab={tab}
+        setTab={setTab}
+        isLoading={activeQuery.isLoading}
+        errorMessage={activeQuery.error ? getErrorMessage(activeQuery.error, 'Failed to load trends data.') : null}
+        filters={filters}
+        setSearch={setNameFilter}
+        positions={positions}
+        setPositions={setPositions}
+        setOwnership={(key) => { setOwnership(key); if (key === 'fa') setFantasyTeam(null) }}
+        fantasyTeam={fantasyTeam}
+        setFantasyTeam={(t) => { setFantasyTeam(t); if (t) setOwnership('all') }}
+        teamOptions={teamOptions}
+        myTeamName={myTeam?.team_name}
+        minGames={minGames}
+        setMinGames={setMinGames}
+        minGamesFloor={minGamesFloor}
+        minGamesOptions={minGamesOptions}
+        windowDays={windowDays}
+        customStartIso={customStartIso}
+        selectPreset={selectPreset}
+        customOpen={customOpen}
+        toggleCustom={() => setCustomOpen(o => !o)}
+        customPanel={customPanel}
+        gameNights={gameNights}
+        eligibilityRule={eligibilityRule}
+        isShootingSeasonTab={isShootingSeasonTab}
+        minutes={minutesQuery.data?.items}
+        usage={usageQuery.data?.items}
+        categories={categoriesQuery.data?.items}
+        leagueCats={leagueCats}
+        reverseCats={reverseCats}
+        activeCategory={activeCategory}
+        setCategory={setCategoryChoice}
+        regression={regressionQuery.data}
+        isShooting={isShooting}
+        isFormTab={isFormTab}
+        baselineSeasons={baselineSeasons}
+        setBaselineSeasons={setBaselineSeasons}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
@@ -998,25 +924,7 @@ export default function Trends() {
                 ⚠ Short window ({windowDays}d) — most rows will be based on very few games and marked <span className="font-semibold">partial</span>.
               </p>
             )}
-            {customOpen && (
-              <div className="col-span-2">
-                {!anchorIso ? (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 py-2">
-                    {anchorQuery.isFetching || anchorSourceId === undefined ? 'Loading latest game day…' : 'Could not determine the latest game day.'}
-                  </p>
-                ) : (
-                  <>
-                    <DateRangePicker
-                      seasonStart={customMinStartIso}
-                      fixedEnd={anchorIso}
-                      initialStart={customStartIso ?? ''}
-                      onApply={handleCustomApply}
-                    />
-                    {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
-                  </>
-                )}
-              </div>
-            )}
+            {customOpen && <div className="col-span-2">{customPanel}</div>}
             <div className="col-span-2 flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm" title="Which players to show: everyone, free agents only, or rostered only">
               {OWNERSHIP_OPTIONS.map(([key, label]) => (
                 <button

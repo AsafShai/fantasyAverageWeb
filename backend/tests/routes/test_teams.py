@@ -203,3 +203,37 @@ def test_team_detail_404_is_not_cached():
     response = client.get("/api/teams/9999")
     assert response.status_code == 404
     assert teams_route._response_cache == {}
+
+
+def test_get_team_roster_day_validation_error():
+    response = client.get("/api/teams/0/roster-day")
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("error,status", [
+    ("InvalidParameterError", 422), ("ResourceNotFoundError", 404), ("DataSourceError", 503),
+])
+def test_get_team_roster_day_error_mapping(error, status):
+    from app import exceptions
+    from app.services import roster_day_service
+    service = roster_day_service.get_roster_day_service()
+    with patch.object(service, "get_roster_day", side_effect=getattr(exceptions, error)("boom")):
+        response = client.get("/api/teams/1/roster-day?date=2026-11-04")
+    assert response.status_code == status
+
+
+def test_get_team_roster_day_passes_the_date():
+    from datetime import datetime, timezone
+    from app.models.roster_day_models import RosterDay
+    from app.services import roster_day_service
+    day = RosterDay(
+        team_id=1, date=date(2026, 11, 4), scoring_period_id=16, is_today=False, has_games=True,
+        lock_at=datetime(2026, 11, 5, tzinfo=timezone.utc), first_date=date(2026, 10, 20),
+        last_date=date(2026, 11, 5), players=[], moves=[],
+    )
+    service = roster_day_service.get_roster_day_service()
+    with patch.object(service, "get_roster_day", return_value=day) as mocked:
+        response = client.get("/api/teams/1/roster-day?date=2026-11-04")
+    assert response.status_code == 200
+    assert response.json()["scoring_period_id"] == 16
+    mocked.assert_called_once_with(1, date(2026, 11, 4))

@@ -1,21 +1,12 @@
-import { useMemo, useState } from 'react'
-import { useGetTrendGameLogQuery } from '../store/api/fantasyApi'
+import { useState } from 'react'
 import TrendGameLogChart from './TrendGameLogChart'
-import type { RegressionStat, CustomDateRange, CountingCategory, TimePeriod } from '../types/api'
+import type { CustomDateRange, CountingCategory, TimePeriod } from '../types/api'
 import { LOW_SAMPLE_GP } from '../utils/trendBaseline'
-import { toLocalIso } from '../utils/dateRange'
-import { STAT_FIELDS, seasonAttempts, summarize, fmtValue, fmtDelta, trendWindowFor, DEFAULT_TREND_WINDOW_DAYS, type CardMode } from '../utils/playerTrendsSummary'
-import { countingCategoriesOf, isCountingCategory, isGoodChange } from '../utils/categoryTrends'
-import { orderCategories } from '../utils/statOrder'
+import { summarize, fmtValue, fmtDelta, type CardMode } from '../utils/playerTrendsSummary'
+import { isCountingCategory, isGoodChange } from '../utils/categoryTrends'
+import { usePlayerTrends } from '../hooks/usePlayerTrends'
 
 const MODE_LABEL: Partial<Record<CardMode, string>> = { minutes: 'Minutes', usage: 'Usage' }
-
-function addDaysIso(iso: string, days: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, m - 1, d)
-  dt.setDate(dt.getDate() + days)
-  return toLocalIso(dt)
-}
 
 function Skeleton() {
   return (
@@ -43,38 +34,10 @@ interface Props {
 }
 
 export default function PlayerTrendsCard({ playerId, categories, reverseCategories, timePeriod = 'season', customRange = null }: Props) {
-  const countingCats = useMemo(() => countingCategoriesOf(categories), [categories])
-  const reverse = useMemo(() => new Set(reverseCategories ?? []), [reverseCategories])
   // which stat's chart is open; clicking the open one again closes it
   const [mode, setMode] = useState<CardMode | null>('minutes')
-  // A custom range needs the latest game day to tell whether it ends there.
-  // It doesn't depend on the window, so read it off the default 15-day log
-  // (the same cached request the fallback uses); other time frames skip this.
-  const { data: anchorLog } = useGetTrendGameLogQuery(
-    { playerId, windowDays: DEFAULT_TREND_WINDOW_DAYS, baselineSeasons: 0, mode: 'form' },
-    { skip: !playerId || timePeriod !== 'custom', refetchOnFocus: false },
-  )
-  const anchorIso = anchorLog ? addDaysIso(anchorLog.window_start, anchorLog.window_days) : null
-  const { days: windowDays, fallback } = trendWindowFor(timePeriod, customRange, anchorIso)
-
-  const { data: log, error, isLoading, refetch } = useGetTrendGameLogQuery(
-    { playerId, windowDays, baselineSeasons: 0, mode: 'form' },
-    { skip: !playerId, refetchOnFocus: false },
-  )
-
-  const availableShootingStats = useMemo(() => {
-    if (!log) return []
-    return (Object.keys(STAT_FIELDS) as RegressionStat[]).filter((s) => seasonAttempts(log.games, s) > 0)
-  }, [log])
-
-  // one grid, in the app's stat order: role first, then the league's
-  // percentages and counting categories as on every other table
-  const modes = useMemo<CardMode[]>(
-    () => ['minutes', 'usage', ...orderCategories<CardMode>([...availableShootingStats, ...countingCats])],
-    [availableShootingStats, countingCats],
-  )
-
-  const is404 = error && 'status' in error && error.status === 404
+  const { log, error, is404, isLoading, refetch, windowDays, fallback, availableShootingStats, modes, reverse } =
+    usePlayerTrends({ playerId, categories, reverseCategories, timePeriod, customRange })
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-5 sm:p-6 mt-6">

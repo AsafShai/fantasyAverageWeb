@@ -1,0 +1,52 @@
+/* Player Rankings · phone redesign (page-local; shared filter styles in ../../ui/filters.css) */
+.mr-pr-tight { margin: -6px 0 0; }
+.mr-link.mr-pr-inline { min-height: 0; font-size: 12px; display: inline; }
+
+.mr-pr-lab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Blue = calc mode, Purple = display mode (today's legend) */
+.mr-pr-calc .mr-seg-btn[aria-checked="true"] { color: var(--mr-primary-2); }
+.mr-pr-disp .mr-seg-btn[aria-checked="true"] { color: var(--mr-brand-to); }
+.mr-pr-blue { color: var(--mr-primary-2); font-weight: 600; }
+.mr-pr-purple { color: var(--mr-brand-to); font-weight: 600; }
+.dark .mr-pr-disp .mr-seg-btn[aria-checked="true"], .dark .mr-pr-purple { color: #A78BFA; }
+.dark .mr-pr-calc .mr-seg-btn[aria-checked="true"], .dark .mr-pr-blue { color: #60A5FA; }
+
+/* weights card */
+.mr-pr-weights { display: flex; flex-direction: column; gap: 4px; }
+.mr-pr-weights > summary { cursor: pointer; padding: 2px 0 6px; list-style-position: inside; }
+.mr-pr-wrow {
+  display: grid; grid-template-columns: 40px 1fr 30px auto; gap: 8px; align-items: center;
+  padding: 4px 0; border-top: 1px solid var(--mr-divider); font-size: 13px;
+}
+.mr-pr-wrow input[type="range"] { width: 100%; height: 32px; margin: 0; accent-color: var(--mr-primary-2); }
+.mr-pr-wrow.mr-pr-wpunt input[type="range"] { accent-color: var(--mr-down); opacity: 0.6; }
+.mr-pr-wv { font-size: 12px; color: var(--mr-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.mr-pr-punt {
+  min-width: 52px; min-height: 32px; border: none; background: var(--mr-sunken); color: var(--mr-text);
+  border-radius: 7px; padding: 0 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.mr-pr-punt[aria-pressed="true"] { background: var(--mr-down); color: #FFFFFF; }
+.mr-pr-punt:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.mr-pr-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--mr-divider); }
+.mr-pr-foot .mr-meta { flex: 1; }
+
+/* table */
+.mr-pr-results { scroll-margin-top: calc(var(--mr-hdr-h) + 8px); }
+.mr-pr-table { max-height: calc(100dvh - var(--mr-hdr-h) - var(--mr-tabbar-h) - 24px); overflow-y: auto; }
+.mr-pr-table .mr-pin { max-width: 150px; }
+.mr-pr-name { color: var(--mr-text); font-weight: 500; text-decoration: none; }
+.mr-pr-z { font-family: var(--mr-font-num); font-weight: 700; }
+.mr-pr-up { color: var(--mr-up); }
+.mr-pr-down { color: var(--mr-down); }
+.mr-pr-punted { color: var(--mr-faint); opacity: 0.6; }
+.mr-pr-empty { text-align: center; color: var(--mr-muted); padding: 40px 8px; margin: 0; font-size: 14px; }
+.mr-pr-explain { display: flex; flex-direction: column; gap: 6px; font-size: 13px; margin-top: -6px; }
+.mr-pr-explain code { font-size: 12px; color: var(--mr-muted); }
+
+/* filters sheet */
+.mr-pr-mins { display: flex; gap: 16px; }
+.mr-pr-mins .mr-step input {
+  width: 56px; height: 40px; border: none; background: transparent; text-align: center; color: var(--mr-text);
+  font-family: var(--mr-font-num); font-size: 15px; font-weight: 700; -moz-appearance: textfield; appearance: textfield;
+}
+.mr-pr-mins .mr-step input::-webkit-inner-spin-button, .mr-pr-mins .mr-step input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

@@ -31,6 +31,7 @@ export const DEFAULT_API: Record<string, () => MockResponse> = {
   '/players/': () => fixture('players'),
   '/teams/': () => fixture('teams'),
   '/teams/1': () => fixture('team-detail'),
+  '/teams/1/roster-day': () => fixture('team-roster-day'),
   '/nba/schedule': () => fixture('schedule'),
   '/matchups/upcoming-dates': () => fixture('upcoming-dates'),
   '/matchups/current-slate-date': () => fixture('current-slate-date'),

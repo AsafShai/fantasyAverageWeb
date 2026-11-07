@@ -12,6 +12,10 @@ import { getProbColor, formatRankProbabilityPercent, expectedPlace, type Heatmap
 import { ShareCardButton } from '../components/share/ShareCardButton'
 import { RankProbabilityShareCard, ProjectedRankingsShareCard } from '../components/share/EstimatorShareCards'
 import { formatAsOf } from '../components/share/shareCardFormat'
+import { useMobileRedesign } from '../mobile/flag'
+import { useUrlState, enumParam } from '../hooks/useUrlState'
+import { DataTable, type Column } from '../mobile/ui'
+import { EstimatorMobile, EstimatorCard, type EstimatorUrlTab } from '../mobile/pages/analytics/EstimatorMobile'
 
 const STAT_LABELS: Record<string, string> = {
   fg_pct: 'FG%',
@@ -42,6 +46,7 @@ function RankProbabilityHeatmap({ teams, asOf }: { teams: TeamRankProbability[];
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
   useFollowMyTeamId(selectedTeamId, setSelectedTeamId)
   const isDark = useDarkMode()
+  const mobile = useMobileRedesign()
 
   const teamMap = new Map<number, { team_name: string; probs: Map<number, number> }>()
   for (const row of teams) {
@@ -65,25 +70,76 @@ function RankProbabilityHeatmap({ teams, asOf }: { teams: TeamRankProbability[];
   // single likeliest place without being anywhere near the favourite.
   const sorted = [...teamList].sort((a, b) => expectedPlace(a.probs) - expectedPlace(b.probs))
 
+  const share = sorted.length > 0 && (
+    <ShareCardButton
+      title="Rank Probability"
+      highlightOption={myTeamId !== null}
+      renderCard={({ dark, highlightMyTeam }) => (
+        <RankProbabilityShareCard
+          dark={dark}
+          rows={sorted}
+          places={rankCols}
+          asOf={asOf}
+          highlightTeamId={highlightMyTeam ? myTeamId : null}
+        />
+      )}
+    />
+  )
+
+  if (mobile) {
+    const columns: Column<HeatmapRow>[] = [
+      {
+        key: 'team',
+        header: 'Team',
+        pinned: true,
+        cell: (t) => (
+          <button
+            type="button"
+            className="mr-an-teambtn"
+            aria-pressed={selectedTeamId === t.team_id}
+            onClick={() => setSelectedTeamId(prev => prev === t.team_id ? null : t.team_id)}
+          >
+            <span className="mr-an-teamname">{t.team_name}</span>
+            <MyTeamMark teamId={t.team_id} />
+          </button>
+        ),
+      },
+      ...rankCols.map<Column<HeatmapRow>>(r => ({
+        key: String(r),
+        header: r,
+        align: 'center',
+        className: 'mr-es-prob',
+        cell: (t) => {
+          const prob = t.probs.get(r) ?? 0
+          const { bg, text } = getProbColor(prob, isDark)
+          return <span style={{ backgroundColor: bg, color: text }}>{formatRankProbabilityPercent(prob)}</span>
+        },
+      })),
+    ]
+    return (
+      <EstimatorCard
+        title="Rank Probability Heatmap"
+        share={share}
+        explain="How likely is each team to finish in each place by end of season? Cells show percent chance (0–100%). Teams are ordered by their expected finishing place. Tap a team to spotlight it."
+      >
+        <DataTable
+          caption="Rank Probability Heatmap"
+          className="mr-es-table"
+          columns={columns}
+          rows={sorted}
+          rowKey={(t) => String(t.team_id)}
+          isHighlighted={(t) => isMyTeam(t.team_id)}
+          rowClassName={(t) => (selectedTeamId === t.team_id ? 'mr-an-spot' : undefined)}
+        />
+      </EstimatorCard>
+    )
+  }
+
   return (
     <div>
       <div className="flex items-start justify-between gap-3 mb-1">
         <h2 className="text-xl font-semibold">Rank Probability Heatmap</h2>
-        {sorted.length > 0 && (
-          <ShareCardButton
-            title="Rank Probability"
-            highlightOption={myTeamId !== null}
-            renderCard={({ dark, highlightMyTeam }) => (
-              <RankProbabilityShareCard
-                dark={dark}
-                rows={sorted}
-                places={rankCols}
-                asOf={asOf}
-                highlightTeamId={highlightMyTeam ? myTeamId : null}
-              />
-            )}
-          />
-        )}
+        {share}
       </div>
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
         How likely is each team to finish in each place by end of season? Cells show percent chance (0–100%). Teams are ordered by their expected finishing place.
@@ -142,6 +198,7 @@ function RankingTable({ rankings, asOf }: { rankings: TeamRanking[]; asOf: strin
   const { isMyTeam, myTeamId } = useMyTeam()
   const [sortKey, setSortKey] = useState<RankingSortKey>('rank')
   const [sortAsc, setSortAsc] = useState(true)
+  const mobile = useMobileRedesign()
 
   const handleSort = (key: RankingSortKey) => {
     if (key === sortKey) setSortAsc(a => !a)
@@ -154,29 +211,76 @@ function RankingTable({ rankings, asOf }: { rankings: TeamRanking[]; asOf: strin
     return sortAsc ? av - bv : bv - av
   })
 
+  const share = sorted.length > 0 && (
+    <ShareCardButton
+      title="Projected Rankings"
+      highlightOption={myTeamId !== null}
+      renderCard={({ dark, highlightMyTeam }) => (
+        <ProjectedRankingsShareCard
+          dark={dark}
+          rows={sorted}
+          asOf={asOf}
+          highlightTeamId={highlightMyTeam ? myTeamId : null}
+        />
+      )}
+    />
+  )
+
   const thClass = (key: RankingSortKey) =>
     `px-2 py-2 text-center font-medium text-xs cursor-pointer select-none whitespace-nowrap hover:text-blue-600 ${sortKey === key ? 'text-blue-600' : 'text-gray-700 dark:text-gray-200'}`
 
   const arrow = (key: RankingSortKey) => sortKey === key ? (sortAsc ? ' ↑' : ' ↓') : ''
 
+  if (mobile) {
+    const columns: Column<TeamRanking>[] = [
+      {
+        key: 'rank',
+        header: '# Team',
+        headerLabel: 'Rank and team',
+        pinned: true,
+        sortable: true,
+        firstDir: 'asc',
+        cell: (t) => (
+          <>
+            <span className="mr-es-rank">{t.rank}</span> {t.team_name}
+            <MyTeamMark teamId={t.team_id} />
+          </>
+        ),
+      },
+      ...STAT_KEYS.map<Column<TeamRanking>>(k => ({
+        key: `expected_pts_${k}`,
+        header: STAT_LABELS[k],
+        sortable: true,
+        cell: (t) => (t[`expected_pts_${k}` as keyof TeamRanking] as number).toFixed(1),
+      })),
+      { key: 'total_expected_pts', header: 'Total', sortable: true, className: 'mr-es-total', cell: (t) => t.total_expected_pts.toFixed(1) },
+      { key: 'projected_total_gp', header: 'Proj GP', sortable: true, className: 'mr-es-gp', cell: (t) => t.projected_total_gp.toFixed(0) },
+    ]
+    return (
+      <EstimatorCard
+        title="Projected Rankings"
+        share={share}
+        explain="Where each team is projected to finish by end of season. Tap any column to sort. Higher score in a category means a better projected finish in that stat."
+      >
+        <DataTable
+          caption="Projected Rankings"
+          className="mr-es-table"
+          columns={columns}
+          rows={sorted}
+          rowKey={(t) => String(t.team_id)}
+          sort={{ key: sortKey, dir: sortAsc ? 'asc' : 'desc' }}
+          onSortChange={(st) => { setSortKey(st.key as RankingSortKey); setSortAsc(st.dir === 'asc') }}
+          isHighlighted={(t) => isMyTeam(t.team_id)}
+        />
+      </EstimatorCard>
+    )
+  }
+
   return (
     <div>
       <div className="flex items-start justify-between gap-3 mb-1">
         <h2 className="text-xl font-semibold">Projected Rankings</h2>
-        {sorted.length > 0 && (
-          <ShareCardButton
-            title="Projected Rankings"
-            highlightOption={myTeamId !== null}
-            renderCard={({ dark, highlightMyTeam }) => (
-              <ProjectedRankingsShareCard
-                dark={dark}
-                rows={sorted}
-                asOf={asOf}
-                highlightTeamId={highlightMyTeam ? myTeamId : null}
-              />
-            )}
-          />
-        )}
+        {share}
       </div>
       <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
         Where each team is projected to finish by end of season. Click any column to sort. Higher score in a category means a better projected finish in that stat.
@@ -234,6 +338,7 @@ function ProjectionSummary({ predictions }: { predictions: TeamPrediction[] }) {
   const { isMyTeam } = useMyTeam()
   const [sortKey, setSortKey] = useState<ProjectionSortKey>('team_name')
   const [sortAsc, setSortAsc] = useState(true)
+  const mobile = useMobileRedesign()
 
   const handleSort = (key: ProjectionSortKey) => {
     if (key === sortKey) setSortAsc(a => !a)
@@ -257,6 +362,57 @@ function ProjectionSummary({ predictions }: { predictions: TeamPrediction[] }) {
     `px-3 py-2 text-center font-medium text-xs cursor-pointer select-none whitespace-nowrap hover:text-blue-600 ${sortKey === key ? 'text-blue-600' : 'text-gray-700 dark:text-gray-200'}`
 
   const arrow = (key: ProjectionSortKey) => sortKey === key ? (sortAsc ? ' ↑' : ' ↓') : ''
+
+  if (mobile) {
+    const columns: Column<TeamPrediction>[] = [
+      {
+        key: 'team_name',
+        header: 'Team',
+        pinned: true,
+        sortable: true,
+        firstDir: 'asc',
+        cell: (t) => (
+          <>
+            {t.team_name}
+            <MyTeamMark teamId={t.team_id} />
+          </>
+        ),
+      },
+      ...STAT_KEYS.map<Column<TeamPrediction>>(k => ({
+        key: `estimated_final_${k}`,
+        header: STAT_LABELS[k],
+        sortable: true,
+        cell: (t) => {
+          const val = t[`estimated_final_${k}` as keyof TeamPrediction] as number
+          const stddev = Math.sqrt(Math.abs(t[`variance_${k}` as keyof TeamPrediction] as number))
+          return (
+            <>
+              {formatStat(k, val)}
+              <span className="mr-es-sd">+/-{formatStat(k, stddev)}</span>
+            </>
+          )
+        },
+      })),
+      { key: 'projected_total_gp', header: 'Proj GP', sortable: true, className: 'mr-es-gp', cell: (t) => t.projected_total_gp.toFixed(0) },
+    ]
+    return (
+      <EstimatorCard
+        title="Season Projections"
+        explain="Projected end-of-season totals per team. +/- shows standard deviation (uncertainty)."
+      >
+        <DataTable
+          caption="Season Projections"
+          className="mr-es-table"
+          columns={columns}
+          rows={sorted}
+          rowKey={(t) => String(t.team_id)}
+          sort={{ key: sortKey, dir: sortAsc ? 'asc' : 'desc' }}
+          onSortChange={(st) => { setSortKey(st.key as ProjectionSortKey); setSortAsc(st.dir === 'asc') }}
+          isHighlighted={(t) => isMyTeam(t.team_id)}
+        />
+      </EstimatorCard>
+    )
+  }
 
   return (
     <div>
@@ -311,8 +467,13 @@ function ProjectionSummary({ predictions }: { predictions: TeamPrediction[] }) {
   )
 }
 
+// Phone layout only: one section per tab, in the URL (?tab=prob|rank|proj).
+const ESTIMATOR_URL_SCHEMA = { tab: enumParam<EstimatorUrlTab>(['prob', 'rank', 'proj'], 'prob') }
+
 const Estimator = () => {
   const { data, error, isLoading } = useGetEstimatorResultsQuery()
+  const mobile = useMobileRedesign()
+  const [urlState, setUrlState] = useUrlState(ESTIMATOR_URL_SCHEMA)
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'No estimator data available yet. Data is generated daily after NBA games are completed.')} />
@@ -320,6 +481,16 @@ const Estimator = () => {
   if (!data) return <ErrorMessage message="No estimator data available yet." />
 
   const asOf = formatAsOf(data.as_of_date)
+
+  if (mobile) {
+    return (
+      <EstimatorMobile tab={urlState.tab} onTab={(tab) => setUrlState({ tab })}>
+        {urlState.tab === 'prob' && <RankProbabilityHeatmap teams={data.rank_probabilities} asOf={asOf} />}
+        {urlState.tab === 'rank' && <RankingTable rankings={data.rankings} asOf={asOf} />}
+        {urlState.tab === 'proj' && <ProjectionSummary predictions={data.predictions} />}
+      </EstimatorMobile>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 overflow-x-hidden">

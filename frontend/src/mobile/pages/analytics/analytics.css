@@ -1,0 +1,89 @@
+/* League Analytics + Standings Estimator on a phone (mobile redesign, step 5).
+   Page-local: everything here is under .mr-an / .mr-es / .mr-race / .mr-shots. */
+
+.mr-an, .mr-es { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 18px; }
+.mr-an-title { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+
+/* three long tab labels share 358px: let a label wrap instead of overflowing */
+.mr-an-tabs .mr-seg-btn { white-space: normal; line-height: 1.15; padding: 4px 6px; font-size: 12.5px; }
+
+.mr-an-card { display: flex; flex-direction: column; gap: 10px; }
+.mr-an-range-sub { font-weight: 500; color: var(--mr-muted); font-size: 13px; }
+.mr-an-explain { margin: 0; line-height: 1.45; }
+
+.mr-an-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mr-an-lab { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mr-an-lab > .mr-meta { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.mr-an-today { min-height: 20px; font-size: 12px; text-decoration: underline; }
+.mr-an-inp {
+  width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 10px;
+  border: 1px solid var(--mr-border); border-radius: var(--mr-radius-ctl);
+  background: var(--mr-card); color: var(--mr-text); font: inherit; font-size: 13px;
+}
+.mr-an-frow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mr-an-frow > .mr-btn { flex-shrink: 0; }
+.mr-an-frow .mr-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.mr-an-quick { flex: 1; }
+
+.mr-an-note {
+  margin: 0; padding: 8px 12px; border-radius: 12px; font-size: 12.5px;
+  background: var(--mr-pill-quest-bg); color: var(--mr-pill-quest-fg);
+}
+.mr-an-note-err { background: var(--mr-pill-out-bg); color: var(--mr-pill-out-fg); }
+
+/* heat table: the color fills the whole cell, rank in brackets under the value */
+.mr-an-table .mr-t td.mr-an-heat { padding: 0; min-width: 64px; }
+.mr-an-table .mr-t td.mr-an-gp { border-left: 3px solid var(--mr-text-2); }
+.mr-an-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 46px; padding: 4px 6px; box-sizing: border-box;
+}
+.mr-an-val { font-size: 12.5px; font-weight: 500; }
+.mr-an-rank { font-size: 10px; opacity: 0.75; font-weight: 600; }
+.mr-an-teambtn {
+  display: flex; align-items: center; gap: 2px; max-width: 132px; min-height: 30px;
+  border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
+}
+.mr-an-teamname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-an-table .mr-t tbody th.mr-an-team { font-weight: 500; }
+/* spotlighted team: bold name and a frame around the row, like desktop */
+.mr-an-table .mr-t tr.mr-an-spot th, .mr-an-table .mr-t tr.mr-an-spot td {
+  box-shadow: inset 0 2px 0 var(--mr-text), inset 0 -2px 0 var(--mr-text);
+}
+.mr-an-table .mr-t tr.mr-an-spot th { font-weight: 700; box-shadow: inset 2px 2px 0 var(--mr-text), inset 0 -2px 0 var(--mr-text); }
+
+/* ── Rankings Over Time (StandingsRace phone controls) ── */
+.mr-race { display: flex; flex-direction: column; gap: 10px; }
+.mr-race-lab { display: flex; flex-direction: column; gap: 4px; }
+.mr-race-chart { margin: 0 -6px; }
+.mr-race-teams { display: flex; flex-wrap: wrap; gap: 6px; }
+.mr-race-teams .mr-chip { min-height: 32px; padding: 0 10px; gap: 6px; font-size: 12.5px; }
+.mr-race-teams .mr-chip[aria-pressed="true"] { background: var(--mr-card); color: var(--mr-text); border-color: var(--mr-text); }
+.mr-race-teams .mr-chip.mr-race-off { color: var(--mr-muted); }
+.mr-race-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.mr-race-caption { margin: 0; font-size: 13px; font-weight: 600; }
+
+/* ── Shooting Stats ── */
+.mr-shots { display: flex; flex-direction: column; gap: 8px; }
+.mr-shots-head { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.mr-shots .mr-t a { color: var(--mr-primary); font-weight: 600; text-decoration: none; }
+.mr-shots .mr-pct { font-weight: 700; }
+.mr-shots .mr-pct-good { color: var(--mr-up); }
+.mr-shots .mr-pct-mid { color: #CA8A04; }
+.mr-shots .mr-pct-bad { color: var(--mr-down); }
+.dark .mr-shots .mr-pct-mid { color: #FACC15; }
+
+/* ── Standings Estimator ── */
+.mr-es-card { display: flex; flex-direction: column; gap: 10px; }
+.mr-es-card .mr-card-head .mr-es-share { flex-shrink: 0; }
+.mr-es-explain { margin: 0; line-height: 1.45; }
+.mr-es-table .mr-t td.mr-es-prob { padding: 0; min-width: 56px; }
+.mr-es-prob > span { display: flex; align-items: center; justify-content: center; min-height: 36px; font-size: 12px; font-weight: 600; }
+.mr-es-table .mr-t tr.mr-an-spot th, .mr-es-table .mr-t tr.mr-an-spot td {
+  box-shadow: inset 0 2px 0 var(--mr-text), inset 0 -2px 0 var(--mr-text);
+}
+.mr-es-table .mr-t tr.mr-an-spot th { font-weight: 700; box-shadow: inset 2px 2px 0 var(--mr-text), inset 0 -2px 0 var(--mr-text); }
+.mr-es-rank { font-weight: 700; }
+.mr-es-total { font-weight: 700; border-left: 2px solid var(--mr-border); }
+.mr-es-sd { display: block; font-size: 10px; color: var(--mr-muted); }
+.mr-es-gp { color: var(--mr-muted); }

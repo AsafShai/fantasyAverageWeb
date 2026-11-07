@@ -16,7 +16,18 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import type { OverTimeSource, TeamTimeSeriesPoint } from '../types/api'
-import { TOTAL_METRIC, metricOptionsFor, rankValue } from './standingsRaceMetrics'
+import {
+  TOTAL_METRIC,
+  formatStatValue,
+  isPercentCategory,
+  metricOptionsFor,
+  rankValue,
+  statMetricOptionsFor,
+  statValue,
+  type Basis,
+} from './standingsRaceMetrics'
+import { useMobileRedesign } from '../mobile/flag'
+import { Chip, Segmented, SelectSheet } from '../mobile/ui'
 
 const TEAM_COLORS = [
   '#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed',
@@ -26,12 +37,34 @@ const TEAM_COLORS = [
 
 const DIM_COLOR = '#d1d5db'
 
-type ViewMode = 'points' | 'rank'
+type ViewMode = 'points' | 'value' | 'rank'
 
-const SOURCES: { value: OverTimeSource; label: string }[] = [
-  { value: 'rankings_totals', label: 'Rankings by Total' },
-  { value: 'rankings_avg', label: 'Rankings by Avg' },
+const BASES: { value: Basis; label: string }[] = [
+  { value: 'avg', label: 'Per Game' },
+  { value: 'totals', label: 'Season Totals' },
 ]
+
+const VIEWS: { value: ViewMode; label: string }[] = [
+  { value: 'points', label: 'Roto Points' },
+  { value: 'value', label: 'Stat Value' },
+  { value: 'rank', label: 'League Rank' },
+]
+
+// Basis x view -> the /analytics/over-time source that serves it. League Rank
+// is computed client-side from the roto total, so it reads the rankings too.
+const sourceFor = (basis: Basis, view: ViewMode): OverTimeSource => {
+  if (view === 'value') return basis === 'avg' ? 'averages' : 'snapshot'
+  return basis === 'avg' ? 'rankings_avg' : 'rankings_totals'
+}
+
+const toggleClass = (on: boolean) =>
+  `px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap ${
+    on
+      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+      : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100'
+  }`
+
+const GROUP_LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400'
 
 // Matches the app's Tailwind sans stack closely enough to measure label widths.
 const END_LABEL_FONT = '600 11px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
@@ -97,6 +130,7 @@ function EndLabels({
   isOn,
   hasHighlight,
   labelFor,
+  valueText,
 }: {
   row: Record<string, number | string> | undefined
   teams: Team[]
@@ -104,12 +138,13 @@ function EndLabels({
   isOn: (teamId: number) => boolean
   hasHighlight: boolean
   labelFor: (teamName: string) => string
+  valueText?: (value: number) => string
 }) {
   const plot = usePlotArea()
   const yScale = useYAxisScale()
   if (!plot || !yScale || !row) return null
 
-  const labels: { name: string; y: number; color: string }[] = []
+  const labels: { name: string; value?: string; y: number; color: string }[] = []
   teams.forEach((team, idx) => {
     const on = isOn(team.team_id)
     // When a team is spotlighted, only label the highlighted lines to cut clutter.
@@ -120,6 +155,7 @@ function EndLabels({
     if (yPix == null || Number.isNaN(yPix)) return
     labels.push({
       name: labelFor(team.team_name),
+      value: valueText?.(value),
       y: yPix as number,
       color: on ? colorForTeam(idx) : DIM_COLOR,
     })
@@ -150,18 +186,25 @@ function EndLabels({
       {labels.map((l, i) => (
         <text key={i} x={x} y={l.y} fontSize={11} fontWeight={600} fill={l.color} dominantBaseline="middle">
           {l.name}
+          {l.value !== undefined && (
+            <tspan fontWeight={400} className="fill-gray-700 dark:fill-gray-300">{` ${l.value}`}</tspan>
+          )}
         </text>
       ))}
     </g>
   )
 }
 
+
 const StandingsRace = () => {
-  const [source, setSource] = useState<OverTimeSource>('rankings_totals')
+  const mobile = useMobileRedesign()
+  const [basis, setBasis] = useState<Basis>('avg')
   const [view, setView] = useState<ViewMode>('points')
   const [metric, setMetric] = useState<string>(TOTAL_METRIC)
   const [highlighted, setHighlighted] = useState<Set<number>>(new Set())
-  const [brushEnd, setBrushEnd] = useState<number | null>(null)
+  // The Brush's range, tagged with the source it was dragged on: a new source
+  // brings new dates, and the Brush itself remounts (key) to the full range.
+  const [brush, setBrush] = useState<{ source: OverTimeSource; start: number; end: number } | null>(null)
 
   // Track the chart's rendered width so we can size the end-label gutter to the real
   // text — full names when they fit, word-boundary truncation when they don't.
@@ -178,7 +221,11 @@ const StandingsRace = () => {
     return () => ro.disconnect()
   }, [])
 
-  const { data, error, isLoading } = useGetRankingsOverTimeQuery({ source })
+  const source = sourceFor(basis, view)
+  const isValueView = view === 'value'
+  // currentData, not data: while a new source loads, data still holds the
+  // previous source's payload, which would be charted under the new labels.
+  const { currentData: data, error, isFetching } = useGetRankingsOverTimeQuery({ source })
 
   const teams = useMemo(() => {
     if (!data) return []
@@ -189,12 +236,28 @@ const StandingsRace = () => {
 
   const teamIdByName = useMemo(() => new Map(teams.map(t => [t.team_name, t.team_id])), [teams])
 
-  const metricOptions = useMemo(() => metricOptionsFor(data?.data), [data])
+  const metricOptions = useMemo(
+    () => (isValueView ? statMetricOptionsFor(data?.data, data?.categories) : metricOptionsFor(data?.data)),
+    [data, isValueView],
+  )
 
   // A selected category can vanish between payloads (source switch, a league
-  // that stops scoring it). Derived rather than corrected in an effect, so no
-  // render ever charts a metric the data doesn't carry.
-  const activeMetric = metricOptions.some(m => m.value === metric) ? metric : TOTAL_METRIC
+  // that stops scoring it, Stat Value having no Total). Derived rather than
+  // corrected in an effect, so no render ever charts a metric the data doesn't carry.
+  const activeMetric = useMemo(() => {
+    if (metricOptions.some(m => m.value === metric)) return metric
+    if (!isValueView) return TOTAL_METRIC
+    return metricOptions.find(m => m.value === 'PTS')?.value ?? metricOptions[0]?.value ?? 'PTS'
+  }, [metricOptions, metric, isValueView])
+
+  const lowerIsBetter = isValueView && (data?.reverse_categories ?? []).includes(activeMetric)
+  // Season totals only ever grow, so a change arrow there says nothing.
+  const showDeltas = !(isValueView && basis === 'totals')
+
+  const formatValue = (v: number) =>
+    isValueView
+      ? formatStatValue(v, activeMetric, basis)
+      : v.toLocaleString(undefined, { maximumFractionDigits: 1 })
 
   const gpByDateTeam = useMemo(() => {
     const m = new Map<string, number | undefined>()
@@ -208,7 +271,7 @@ const StandingsRace = () => {
     data.data.forEach((p: TeamTimeSeriesPoint) => {
       if (!byDate.has(p.date)) byDate.set(p.date, { date: p.date })
       const entry = byDate.get(p.date)!
-      entry[p.team_name] = rankValue(p, activeMetric)
+      entry[p.team_name] = isValueView ? statValue(p, activeMetric) : rankValue(p, activeMetric)
     })
     let rows = Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)))
 
@@ -227,11 +290,15 @@ const StandingsRace = () => {
       })
     }
     return rows
-  }, [data, activeMetric, view, teams])
+  }, [data, activeMetric, view, isValueView, teams])
+
+  const handleBasisChange = (next: Basis) => setBasis(next)
 
   const handleViewChange = (next: ViewMode) => {
     setView(next)
     if (next === 'rank') setMetric(TOTAL_METRIC)
+    // Stat Value has no Total; keep a category the user picked, else start on PTS.
+    if (next === 'value' && metric === TOTAL_METRIC) setMetric('PTS')
   }
 
   const handleMetricChange = (next: string) => {
@@ -252,27 +319,247 @@ const StandingsRace = () => {
   const hasHighlight = highlighted.size > 0
   const isOn = (teamId: number) => !hasHighlight || highlighted.has(teamId)
 
-  // Anchor the end-of-line labels to the last *visible* point so they don't disappear
-  // when the Brush zooms to a range that excludes the final date.
+  // The Brush's visible range. Change arrows compare against its first day, and
+  // the end-of-line labels anchor to its last day so they don't vanish when the
+  // Brush zooms to a range that excludes the final date.
   const lastIdx = chartData.length - 1
-  const endIdx = brushEnd == null ? lastIdx : Math.min(Math.max(brushEnd, 0), lastIdx)
+  const clampIdx = (i: number) => Math.min(Math.max(i, 0), Math.max(lastIdx, 0))
+  const range = brush && brush.source === source ? brush : null
+  const startIdx = range ? clampIdx(range.start) : 0
+  const endIdx = range ? clampIdx(range.end) : lastIdx
+  const startRow = chartData[startIdx] as Record<string, number | string> | undefined
   const endRow = chartData[endIdx] as Record<string, number | string> | undefined
 
   // Reserve enough gutter to show full team names, but keep the plot dominant —
   // especially on phones, where the graph matters more than fitting every full name.
   // The cap is a small share of the width, so on mobile names trim at a word boundary
   // rather than shrinking the chart; on wider screens full names fit comfortably.
+  // In Stat Value the label also carries the team's number, which gets room first.
   const { labelGutter, fittedNames } = useMemo(() => {
     const width = wrapWidth || 360
+    const lastRow = chartData[chartData.length - 1]
+    const valueWidth = isValueView && lastRow
+      ? teams.reduce((max, t) => {
+          const v = Number(lastRow[t.team_name])
+          return Number.isNaN(v) ? max : Math.max(max, measureText(` ${formatStatValue(v, activeMetric, basis)}`))
+        }, 0)
+      : 0
     const longest = teams.reduce((max, t) => Math.max(max, measureText(t.team_name)), 0)
-    const maxGutter = Math.min(Math.max(width * 0.22, 76), 200)
+    const maxGutter = Math.min(Math.max(width * 0.22, 76), 200) + valueWidth
     // 8px inner padding on each side of the label text.
-    const gutter = Math.round(Math.min(longest + 16, maxGutter))
-    const maxTextWidth = gutter - 12
+    const gutter = Math.round(Math.min(longest + valueWidth + 16, maxGutter))
+    const maxTextWidth = Math.max(gutter - 12 - valueWidth, 24)
     const fitted = new Map(teams.map(t => [t.team_name, fitLabel(t.team_name, maxTextWidth)]))
     return { labelGutter: gutter, fittedNames: fitted }
-  }, [teams, wrapWidth])
+  }, [teams, wrapWidth, chartData, isValueView, activeMetric, basis])
   const labelFor = (teamName: string) => fittedNames.get(teamName) ?? teamName
+
+  const basisWord = basis === 'avg' ? 'per-game averages' : 'season totals'
+  let caption: string
+  if (view === 'rank') caption = `League position by total roto points, ranked on ${basisWord}`
+  else if (view === 'points')
+    caption = `${activeMetric === TOTAL_METRIC ? 'Total roto points' : `${activeMetric} roto points`}, ranked on ${basisWord}`
+  else if (isPercentCategory(activeMetric)) caption = `Season ${activeMetric} as of each day`
+  else if (basis === 'avg') caption = `${activeMetric} per game: each team's season average as of each day`
+  else caption = `Season total ${activeMetric}, accumulated day by day`
+  if (lowerIsBetter) caption += ' (lower is better)'
+
+  const yTickFormatter = (v: number) => {
+    if (!isValueView) return String(v)
+    if (isPercentCategory(activeMetric)) return formatStatValue(v, activeMetric, basis)
+    return v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+  }
+
+  // Positive = the team got better: a higher value, or a smaller rank number
+  // (and for a reverse-scored category like TO, a lower value).
+  const improvement = (from: number, to: number) => (view === 'rank' || lowerIsBetter ? from - to : to - from)
+  const formatDelta = (d: number) => (isValueView ? formatStatValue(Math.abs(d), activeMetric, basis) : formatValue(Math.abs(d)))
+
+  const chart = (
+    <>
+          {isFetching && !data && <LoadingSpinner />}
+          {error && <ErrorMessage message={getErrorMessage(error, 'Failed to load standings history')} />}
+          {!isFetching && !error && chartData.length === 0 && (
+            <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-8">No data available yet. Stats accumulate daily.</p>
+          )}
+
+          {data && !error && chartData.length > 0 && (
+            <>
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">{caption}</p>
+            <ResponsiveContainer width="100%" height={mobile ? 340 : 420} minHeight={320}>
+              <LineChart data={chartData} margin={{ top: 4, right: labelGutter, left: -10, bottom: 36 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-10" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatDate}
+                  tick={{ fontSize: 10 }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  width={isValueView && basis === 'totals' ? 55 : 45}
+                  domain={view === 'rank' ? [1, 12] : ['auto', 'auto']}
+                  reversed={view === 'rank' || lowerIsBetter}
+                  allowDecimals={view !== 'rank'}
+                  ticks={view === 'rank' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : undefined}
+                  tickFormatter={yTickFormatter}
+                />
+                <Tooltip
+                  allowEscapeViewBox={{ x: false, y: true }}
+                  position={{ y: 0 }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) return null
+                    const dateLabel = String(label)
+                    const startDate = startRow ? String(startRow.date) : undefined
+                    const withDeltas = showDeltas && startDate !== undefined && startDate < dateLabel
+                    const sorted = [...payload]
+                      .filter(e => typeof e.value === 'number' && !isNaN(e.value as number))
+                      .sort((a, b) => (view === 'rank' || lowerIsBetter ? (a.value as number) - (b.value as number) : (b.value as number) - (a.value as number)))
+                    return (
+                      <div style={{ fontSize: 11, background: 'var(--tooltip-bg, #fff)', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px', maxHeight: 240, overflowY: 'auto', minWidth: 190 }}
+                           className="bg-white dark:bg-gray-800 dark:border-gray-600 text-gray-800 dark:text-gray-100">
+                        <p style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontWeight: 600 }}>{formatDate(dateLabel)}</span>
+                          {withDeltas && <span className="text-gray-500 dark:text-gray-400">vs {formatDate(startDate!)}</span>}
+                        </p>
+                        {sorted.map(e => {
+                          const teamId = teamIdByName.get(String(e.name))
+                          const gp = teamId !== undefined ? gpByDateTeam.get(`${dateLabel}|${teamId}`) : undefined
+                          const from = startRow ? Number(startRow[String(e.name)]) : NaN
+                          const delta = withDeltas && !Number.isNaN(from) ? improvement(from, e.value as number) : NaN
+                          const deltaText = formatDelta(delta)
+                          const unchanged = Number.isNaN(delta) ? false : Number(deltaText.replace(/[^0-9.]/g, '')) === 0
+                          return (
+                            <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: e.color, flexShrink: 0 }} />
+                              <span>{e.name}:</span>
+                              <span style={{ fontWeight: 600, marginLeft: 'auto', paddingLeft: 8 }}>
+                                {formatValue(e.value as number)}
+                              </span>
+                              {withDeltas && (
+                                <span
+                                  style={{ minWidth: 44, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                                  className={
+                                    Number.isNaN(delta) || unchanged
+                                      ? 'text-gray-500 dark:text-gray-400'
+                                      : delta > 0
+                                        ? 'text-green-700 dark:text-green-400'
+                                        : 'text-red-700 dark:text-red-400'
+                                  }
+                                >
+                                  {Number.isNaN(delta) ? '' : unchanged ? '0' : `${delta > 0 ? '▲' : '▼'}${deltaText}`}
+                                </span>
+                              )}
+                              {gp !== undefined && gp !== null && <span style={{ color: '#9ca3af', fontSize: 10 }}>{gp}gp</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  }}
+                />
+                <Brush
+                  key={source}
+                  dataKey="date"
+                  height={28}
+                  tickFormatter={formatDate}
+                  travellerWidth={10}
+                  stroke="#d1d5db"
+                  fill="#f9fafb"
+                  onChange={r => {
+                    if (r && r.startIndex !== undefined && r.endIndex !== undefined) {
+                      setBrush({ source, start: r.startIndex, end: r.endIndex })
+                    }
+                  }}
+                />
+                {teams.map((team, idx) => {
+                  const color = TEAM_COLORS[idx % TEAM_COLORS.length]
+                  const on = isOn(team.team_id)
+                  return (
+                    <Line
+                      key={team.team_id}
+                      type="monotone"
+                      dataKey={team.team_name}
+                      stroke={on ? color : DIM_COLOR}
+                      strokeWidth={hasHighlight && on ? 3 : 2}
+                      strokeOpacity={on ? 0.95 : 0.4}
+                      dot={false}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  )
+                })}
+                <EndLabels
+                  row={endRow}
+                  teams={teams}
+                  colorForTeam={idx => TEAM_COLORS[idx % TEAM_COLORS.length]}
+                  isOn={isOn}
+                  hasHighlight={hasHighlight}
+                  labelFor={labelFor}
+                  valueText={isValueView ? v => formatStatValue(v, activeMetric, basis) : undefined}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+            {showDeltas && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                ▲/▼ in the tooltip: how much each team improved or slipped since the first day of the selected range.
+                {isValueView && isPercentCategory(activeMetric) && ` ${activeMetric} is a season percentage, so Per Game and Season Totals show the same line.`}
+              </p>
+            )}
+            </>
+          )}
+    </>
+  )
+
+  if (mobile) {
+    return (
+      <div ref={wrapRef} className="mr-race">
+        <h2 className="mr-h2">Standings Race</h2>
+        <p className="mr-meta" style={{ margin: 0 }}>The season's roto race, one line per team. Tap a team to spotlight it.</p>
+        <div className="mr-race-lab">
+          <span className="mr-meta">Basis</span>
+          <Segmented label="Basis" size="sm" options={BASES} value={basis} onChange={handleBasisChange} />
+        </div>
+        <div className="mr-race-lab">
+          <span className="mr-meta">Show</span>
+          <Segmented label="Show" size="sm" options={VIEWS} value={view} onChange={handleViewChange} />
+        </div>
+        <div className="mr-race-lab">
+          <span className="mr-meta">Category</span>
+          <SelectSheet
+            id="race-category"
+            label="Category"
+            wide
+            // League Rank only charts the total (desktop greys the others out).
+            options={view === 'rank' ? metricOptions.filter(m => m.value === TOTAL_METRIC) : metricOptions}
+            value={activeMetric}
+            onChange={handleMetricChange}
+          />
+        </div>
+        <div className="mr-race-chart">{chart}</div>
+        <div className="mr-race-teams" role="group" aria-label="Spotlight teams">
+          {teams.map((team, idx) => {
+            const on = isOn(team.team_id)
+            return (
+              <Chip
+                key={team.team_id}
+                selected={highlighted.has(team.team_id)}
+                className={on ? undefined : 'mr-race-off'}
+                onClick={() => toggleHighlight(team.team_id)}
+              >
+                <span className="mr-race-dot" style={{ backgroundColor: on ? TEAM_COLORS[idx % TEAM_COLORS.length] : DIM_COLOR }} aria-hidden="true" />
+                {team.team_name}
+              </Chip>
+            )
+          })}
+          {hasHighlight && (
+            <Chip onClick={clearHighlight}>✕ Clear</Chip>
+          )}
+        </div>
+        <p className="mr-meta" style={{ margin: 0 }}>Drag the range bar under the chart to zoom into dates.</p>
+      </div>
+    )
+  }
 
   return (
     <div ref={wrapRef}>
@@ -282,50 +569,54 @@ const StandingsRace = () => {
       </p>
 
       <div>
-          <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-start">
-            <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-2 gap-1 sm:flex sm:gap-1">
-              {SOURCES.map(s => (
-                <button
-                  key={s.value}
-                  onClick={() => setSource(s.value)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap ${
-                    source === s.value
-                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
+          <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="flex flex-col gap-1">
+              <span className={GROUP_LABEL}>Basis</span>
+              <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-2 gap-1 sm:flex sm:gap-1">
+                {BASES.map(b => (
+                  <button
+                    key={b.value}
+                    aria-pressed={basis === b.value}
+                    onClick={() => handleBasisChange(b.value)}
+                    className={toggleClass(basis === b.value)}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-2 gap-1 sm:flex sm:gap-1">
-              {(['points', 'rank'] as ViewMode[]).map(v => (
-                <button
-                  key={v}
-                  onClick={() => handleViewChange(v)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap ${
-                    view === v
-                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100'
-                  }`}
-                >
-                  {v === 'points' ? 'Roto Points' : 'League Rank'}
-                </button>
-              ))}
+            <div className="flex flex-col gap-1">
+              <span className={GROUP_LABEL}>Show</span>
+              <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-3 gap-1 sm:flex sm:gap-1">
+                {VIEWS.map(v => (
+                  <button
+                    key={v.value}
+                    aria-pressed={view === v.value}
+                    onClick={() => handleViewChange(v.value)}
+                    className={toggleClass(view === v.value)}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <select
-              value={activeMetric}
-              onChange={e => handleMetricChange(e.target.value)}
-              className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
-            >
-              {metricOptions.map(m => (
-                <option key={m.value} value={m.value} disabled={view === 'rank' && m.value !== TOTAL_METRIC}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="standings-race-category" className={GROUP_LABEL}>Category</label>
+              <select
+                id="standings-race-category"
+                value={activeMetric}
+                onChange={e => handleMetricChange(e.target.value)}
+                className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
+              >
+                {metricOptions.map(m => (
+                  <option key={m.value} value={m.value} disabled={view === 'rank' && m.value !== TOTAL_METRIC}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-x-3 gap-y-1.5 mb-3 overflow-x-auto">
@@ -355,98 +646,7 @@ const StandingsRace = () => {
             )}
           </div>
 
-          {isLoading && <LoadingSpinner />}
-          {error && <ErrorMessage message={getErrorMessage(error, 'Failed to load standings history')} />}
-          {!isLoading && !error && chartData.length === 0 && (
-            <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-8">No data available yet. Stats accumulate daily.</p>
-          )}
-
-          {!isLoading && !error && chartData.length > 0 && (
-            <ResponsiveContainer width="100%" height={420} minHeight={320}>
-              <LineChart data={chartData} margin={{ top: 4, right: labelGutter, left: -10, bottom: 36 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-10" />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={formatDate}
-                  tick={{ fontSize: 10 }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fontSize: 10 }}
-                  width={45}
-                  domain={view === 'rank' ? [1, 12] : ['auto', 'auto']}
-                  reversed={view === 'rank'}
-                  allowDecimals={view !== 'rank'}
-                  ticks={view === 'rank' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : undefined}
-                />
-                <Tooltip
-                  allowEscapeViewBox={{ x: false, y: true }}
-                  position={{ y: 0 }}
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload || payload.length === 0) return null
-                    const dateLabel = String(label)
-                    const sorted = [...payload]
-                      .filter(e => typeof e.value === 'number' && !isNaN(e.value as number))
-                      .sort((a, b) => (view === 'rank' ? (a.value as number) - (b.value as number) : (b.value as number) - (a.value as number)))
-                    return (
-                      <div style={{ fontSize: 11, background: 'var(--tooltip-bg, #fff)', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px', maxHeight: 220, overflowY: 'auto', minWidth: 170 }}
-                           className="bg-white dark:bg-gray-800 dark:border-gray-600 text-gray-800 dark:text-gray-100">
-                        <p style={{ marginBottom: 4, fontWeight: 600 }}>{formatDate(dateLabel)}</p>
-                        {sorted.map(e => {
-                          const teamId = teamIdByName.get(String(e.name))
-                          const gp = teamId !== undefined ? gpByDateTeam.get(`${dateLabel}|${teamId}`) : undefined
-                          return (
-                            <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: e.color, flexShrink: 0 }} />
-                              <span>{e.name}:</span>
-                              <span style={{ fontWeight: 600, marginLeft: 'auto', paddingLeft: 8 }}>
-                                {(e.value as number).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                              </span>
-                              {gp !== undefined && <span style={{ color: '#9ca3af', fontSize: 10 }}>{gp}gp</span>}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  }}
-                />
-                <Brush
-                  dataKey="date"
-                  height={28}
-                  tickFormatter={formatDate}
-                  travellerWidth={10}
-                  stroke="#d1d5db"
-                  fill="#f9fafb"
-                  onChange={range => setBrushEnd(range?.endIndex ?? null)}
-                />
-                {teams.map((team, idx) => {
-                  const color = TEAM_COLORS[idx % TEAM_COLORS.length]
-                  const on = isOn(team.team_id)
-                  return (
-                    <Line
-                      key={team.team_id}
-                      type="monotone"
-                      dataKey={team.team_name}
-                      stroke={on ? color : DIM_COLOR}
-                      strokeWidth={hasHighlight && on ? 3 : 2}
-                      strokeOpacity={on ? 0.95 : 0.4}
-                      dot={false}
-                      connectNulls
-                      isAnimationActive={false}
-                    />
-                  )
-                })}
-                <EndLabels
-                  row={endRow}
-                  teams={teams}
-                  colorForTeam={idx => TEAM_COLORS[idx % TEAM_COLORS.length]}
-                  isOn={isOn}
-                  hasHighlight={hasHighlight}
-                  labelFor={labelFor}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          {chart}
       </div>
     </div>
   )

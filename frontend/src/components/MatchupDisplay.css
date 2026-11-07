@@ -65,6 +65,36 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Full-bleed wrapper inside p-3 roster cards — panel aligns to card side padding */
+.mq-card-expand-bleed {
+  box-sizing: border-box;
+}
+
+/* Embedded in mobile roster cards (Daily) — matches card chrome, no sticky/edge bleed */
+.mq-expand-content--card {
+  position: relative;
+  left: auto;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 12px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(156, 163, 175, 0.35);
+  border-top: 1px solid rgba(156, 163, 175, 0.35);
+  background: rgb(249 250 251);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.mq-card-expand-bleed > .mq-expand-content--card {
+  border-top: none;
+  border-radius: 0 0 0.75rem 0.75rem;
+  padding: 10px 12px;
+}
+.dark .mq-expand-content--card {
+  border-color: rgb(55 65 81 / 0.8);
+  background: rgb(31 41 55 / 0.55);
+  box-shadow: none;
+}
+
 @container mq-scroll (min-width: 0) {
   .mq-expand-content { max-width: 100cqw; }
 }
@@ -75,25 +105,9 @@
   color: #888;
   margin-bottom: 10px;
 }
-
-/* Reachable regardless of horizontal scroll position — sits inside the same
-   sticky-left content box as the rest of the expand row, so it stays visible
-   even after scrolling right through a wide table to read other columns. */
-.mq-expand-close {
-  display: block;
-  margin: 0 auto 10px;
-  padding: 3px 10px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #999;
-  background: rgba(128, 128, 128, 0.12);
-  border: 1px solid rgba(128, 128, 128, 0.25);
-  border-radius: 999px;
-  cursor: pointer;
-}
-.mq-expand-close:hover {
-  background: rgba(128, 128, 128, 0.22);
-  color: #ccc;
+.mq-expand-label--card {
+  margin-bottom: 10px;
+  text-align: left;
 }
 
 .mq-strip-label {
@@ -138,6 +152,70 @@
 
 .mq-strip-item { white-space: nowrap; text-align: center; }
 
+/* Single-column readable rows on narrow cards */
+.mq-strip--card {
+  grid-template-columns: 1fr;
+  gap: 8px 0;
+  padding: 10px 12px;
+  text-align: left;
+}
+.mq-strip--card .mq-strip-item {
+  white-space: normal;
+  text-align: left;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(156, 163, 175, 0.2);
+  font-size: 0.8125rem;
+}
+.dark .mq-strip--card .mq-strip-item {
+  border-bottom-color: rgba(75, 85, 99, 0.45);
+}
+.mq-strip--card .mq-strip-item:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+/* Wider mobile / small tablet: denser grid, less vertical scroll */
+@media (min-width: 380px) {
+  .mq-expand-content--card .mq-strip--card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+    padding: 8px 10px;
+  }
+  .mq-expand-content--card .mq-strip--card .mq-strip-item {
+    border-bottom: none;
+    padding: 4px 2px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (min-width: 520px) {
+  .mq-expand-content--card .mq-strip--card {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px 12px;
+    padding: 8px 10px;
+  }
+}
+
+@media (min-width: 380px) {
+  .mq-expand-content--card .mq-expand-label--card {
+    margin-bottom: 8px;
+  }
+  .mq-expand-content--card .mq-strip-label {
+    margin-top: 6px;
+    margin-bottom: 2px;
+    text-align: left;
+  }
+  .mq-expand-content--card .mq-proj-footer {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+}
+
 .mq-vfrac {
   display: inline-flex;
   flex-direction: column;
@@ -166,14 +244,53 @@
 
 .mq-proj-slider-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .mq-proj-slider-label { font-size: 0.72rem; color: #999; }
-.mq-proj-slider-row input[type=range] { width: 140px; accent-color: #3b82f6; }
+.mq-proj-slider-row input[type=range] {
+  flex: 1 1 200px;
+  min-width: 0;
+  width: 100%;
+  max-width: 280px;
+  accent-color: #3b82f6;
+}
 .mq-proj-slider-value { font-size: 0.8rem; min-width: 18px; text-align: right; }
+
+.mq-expand-content--card .mq-proj-footer {
+  border-top-color: rgba(156, 163, 175, 0.25);
+}
+
+@media (max-width: 639px) {
+  .mq-expand-content:not(.mq-expand-content--card) {
+    padding: 10px 12px;
+  }
+  .mq-expand-label:not(.mq-expand-label--card) {
+    line-height: 1.35;
+    padding: 0 2px;
+  }
+  .mq-strip:not(.mq-strip--card) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    padding: 10px 12px;
+  }
+  .mq-strip:not(.mq-strip--card) .mq-strip-item {
+    white-space: normal;
+    text-align: left;
+    font-size: 0.8125rem;
+  }
+  .mq-proj-slider-row {
+    justify-content: flex-start;
+  }
+  .mq-proj-slider-row input[type=range] {
+    max-width: none;
+  }
+}
 .mq-proj-slider-reset {
   font-size: 0.72rem;
   line-height: 1;

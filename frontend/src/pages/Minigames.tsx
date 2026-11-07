@@ -1,33 +1,11 @@
 import { Link } from 'react-router'
-
-const GAMES = [
-  {
-    slug: 'hangman',
-    title: 'Hangman',
-    emoji: '🔤',
-    description: 'Guess the name — build a streak',
-  },
-  {
-    slug: 'who-he-play-for',
-    title: 'Who He Play For?',
-    emoji: '🏟️',
-    description: 'Pick the team for each player — 30s per round',
-  },
-  {
-    slug: 'who-am-i',
-    title: 'Who Am I?',
-    emoji: '🕵️',
-    description: 'Poeltl-style clues + optional photo hint',
-  },
-  {
-    slug: 'now-you-see-me',
-    title: 'Now You See Me',
-    emoji: '👁️',
-    description: 'Name the player from their photo — 60s per round',
-  },
-] as const
+import { MINIGAMES } from '../minigames/catalog'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileMinigames from '../mobile/minigames/MobileMinigames'
 
 const Minigames = () => {
+  const mobile = useMobileRedesign()
+  if (mobile) return <MobileMinigames games={MINIGAMES} />
   return (
     <div className="max-w-5xl mx-auto px-4 pb-12">
       <div className="mb-8">
@@ -40,7 +18,7 @@ const Minigames = () => {
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        {GAMES.map((g) => (
+        {MINIGAMES.map((g) => (
           <Link
             key={g.slug}
             to={`/minigames/${g.slug}`}

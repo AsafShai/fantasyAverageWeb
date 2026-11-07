@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats } from '../types/api';
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
+import { usePersistedState } from '../hooks/usePersistedState';
 import { coherentInts } from '../utils/coherentRound';
+import { MinutesStepper } from '../mobile/ui/MinutesStepper';
 import './MatchupDisplay.css';
 
 const RANK_LABELS: Record<keyof DefRanks, string> = {
@@ -144,17 +146,30 @@ function VFrac({ m, a }: { m: string; a: string }) {
   );
 }
 
-export function MatchupExpandRow({
+/** Matchup detail + projection (reused by table expand row and mobile roster cards). */
+export function MatchupExpandPanel({
   matchup,
-  colSpan,
-  integerMode = true,
-  onCollapse,
+  integerMode: integerModeProp = true,
+  integerProjectionToggle = false,
+  layout = 'table',
+  minutesStepper = false,
 }: {
   matchup: PlayerMatchup;
-  colSpan: number;
+  /** When `integerProjectionToggle` is false, controls projection rounding from the parent (e.g. Players page). */
   integerMode?: boolean;
-  onCollapse?: () => void;
+  /** Daily roster: show a segmented control inside the panel; uses persisted `matchupPanel.integerProjections`. */
+  integerProjectionToggle?: boolean;
+  /** `table`: wide sticky bar under roster grids. `card`: inside mobile roster cards (rounded, no sticky). */
+  layout?: 'table' | 'card';
+  /** Phone redesign: "− 31 min +" stepper with ↺ instead of the slider (same predict call). */
+  minutesStepper?: boolean;
 }) {
+  const [persistedIntegerProjections, setPersistedIntegerProjections] = usePersistedState(
+    'matchupPanel.integerProjections',
+    true,
+  )
+  const integerMode = integerProjectionToggle ? persistedIntegerProjections : integerModeProp
+
   const paceLabel = paceBadge(matchup.pace, matchup.league_avg_pace);
   const paceColor = paceLabel === 'fast' ? 'green' : paceLabel === 'slow' ? 'red' : 'yellow';
 
@@ -164,12 +179,6 @@ export function MatchupExpandRow({
   const [stats, setStats] = useState<ProjectionStats | null>(proj?.stats ?? null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Re-sync when the underlying slate changes (opponent switches) or the
-  // store recomputes a new default (nightly fold-in) — React reuses
-  // components by key, so stale local minutes/stats would otherwise survive
-  // and show the previous slate's numbers. Keyed on stable primitives, not
-  // the `proj` object identity, so a same-slate refetch (e.g. RTK Query
-  // background revalidation) can't silently wipe an adjusted slider.
   const slateKey = `${matchup.opponent}|${proj?.default_minutes}`;
   const [syncedSlateKey, setSyncedSlateKey] = useState(slateKey);
   if (slateKey !== syncedSlateKey) {
@@ -177,7 +186,6 @@ export function MatchupExpandRow({
     setMinutes(proj?.default_minutes ?? 0);
     setStats(proj?.stats ?? null);
   }
-  // A slider re-predict still pending from the previous slate must not land on this one.
   useEffect(() => () => clearTimeout(timer.current), [slateKey]);
   const projActive = !!proj && proj.status !== 'red' && !!stats;
 
@@ -195,8 +203,6 @@ export function MatchupExpandRow({
     }, 350);
   };
 
-  // Restore default minutes + the original default-t stats (no network round
-  // trip; also cancels any pending re-predict so it can't overwrite them).
   const resetToDefault = () => {
     if (!proj) return;
     clearTimeout(timer.current);
@@ -205,99 +211,173 @@ export function MatchupExpandRow({
   };
   const isAdjusted = !!proj && Math.round(minutes) !== Math.round(proj.default_minutes);
 
-  // Coherent integer rounding: PTS reads like a plain round while the
-  // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
   const coherent = integerMode && stats ? coherentInts(stats) : null;
   const fg = stats ? pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode) : null;
   const ft = stats ? pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode) : null;
 
+  const rootClass =
+    layout === 'card'
+      ? 'mq-expand-content mq-expand-content--card'
+      : 'mq-expand-content'
+
+  return (
+    <div className={rootClass}>
+      <p className={layout === 'card' ? 'mq-expand-label mq-expand-label--card' : 'mq-expand-label'}>
+        <span className="block font-medium text-gray-700 dark:text-gray-200">
+          vs {matchup.opponent}
+        </span>
+        <span className="mt-1 block text-[0.7rem] leading-snug text-gray-500 dark:text-gray-400">
+          Defense ranks (30 teams){projActive ? ' · projection for tonight' : ''}.{' '}
+          <span className="text-green-600 dark:text-green-400">Green ≥ 21</span> weaker defense;{' '}
+          <span className="text-red-600 dark:text-red-400">Red ≤ 10</span> stronger.
+        </span>
+      </p>
+
+      <div className="mq-strip-label">Opponent defense</div>
+      <div className={layout === 'card' ? 'mq-strip mq-strip--card' : 'mq-strip'}>
+        {rankKeys(matchup.def_ranks).map(key => {
+          const rank = matchup.def_ranks[key];
+          return (
+            <span key={key} className="mq-strip-item">
+              <b className={RANK_TEXT_COLOR[rankColor(rank)]}>{RANK_LABELS[key]} #{rank}</b>{' '}
+              <span className="text-gray-500 dark:text-gray-400">{formatDefVal(key, matchup.def_values[key])}</span>
+            </span>
+          );
+        })}
+        <span className="mq-strip-item">
+          <b className={RANK_TEXT_COLOR[paceColor]}>{paceLabel.charAt(0).toUpperCase() + paceLabel.slice(1)}</b>{' '}
+          <span className="text-gray-500 dark:text-gray-400">{matchup.pace} vs {matchup.league_avg_pace} avg</span>
+        </span>
+      </div>
+
+      {projActive && (
+        <>
+          {integerProjectionToggle && (
+            <div
+              className="mb-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3"
+              data-testid="matchup-proj-display-toggle"
+            >
+              <span className="text-[10px] font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                Projection numbers
+              </span>
+              <div
+                className="inline-flex rounded-full border border-gray-200 bg-gray-100/90 p-0.5 shadow-sm dark:border-gray-600 dark:bg-gray-800/90"
+                role="group"
+                aria-label="Projection number format"
+              >
+                <button
+                  type="button"
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                    integerMode
+                      ? 'bg-blue-600 text-white shadow-sm dark:bg-blue-500'
+                      : 'text-gray-600 hover:bg-white/80 dark:text-gray-400 dark:hover:bg-gray-700/80'
+                  }`}
+                  onClick={() => setPersistedIntegerProjections(true)}
+                >
+                  Whole
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                    !integerMode
+                      ? 'bg-blue-600 text-white shadow-sm dark:bg-blue-500'
+                      : 'text-gray-600 hover:bg-white/80 dark:text-gray-400 dark:hover:bg-gray-700/80'
+                  }`}
+                  onClick={() => setPersistedIntegerProjections(false)}
+                >
+                  Decimal
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="mq-strip-label mq-strip-label-row">
+            <ConfidenceDot status={proj!.status} reason={proj!.reason} />
+            <span>TONIGHT&apos;S PROJECTION</span>
+          </div>
+          <div className={layout === 'card' ? 'mq-strip mq-strip--card' : 'mq-strip'}>
+            {rankKeys(matchup.def_ranks).map(key => (
+              <Fragment key={key}>
+                <span className="mq-strip-item">
+                  <span className="text-gray-500 dark:text-gray-400">{RANK_LABELS[key]}</span>{' '}
+                  <b>
+                    {key === 'fg_pct' && fg
+                      ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
+                      : coherent && (key === 'pts' || key === 'three_pm')
+                        ? coherent[key]
+                        : fmtStat(stats![key], integerMode)}
+                  </b>
+                </span>
+                {key === 'fg_pct' && ft && (
+                  <span className="mq-strip-item">
+                    <span className="text-gray-500 dark:text-gray-400">FT%</span>{' '}
+                    <b>{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</b>
+                  </span>
+                )}
+              </Fragment>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="mq-proj-footer">
+        {!projActive && (
+          <span className="mq-proj-insufficient">{proj ? `no projection — ${proj.reason || 'insufficient data'}` : 'no projection available'}</span>
+        )}
+        {projActive && minutesStepper && (
+          <div className="mq-proj-slider-row">
+            <span className="mq-proj-slider-label">Minutes</span>
+            <MinutesStepper
+              value={Math.round(minutes)}
+              defaultValue={Math.round(proj!.default_minutes)}
+              onChange={(v) => (v === Math.round(proj!.default_minutes) ? resetToDefault() : onSlider(v))}
+              playerName={matchup.player_name}
+            />
+          </div>
+        )}
+        {projActive && !minutesStepper && (
+          <div className="mq-proj-slider-row">
+            <span className="mq-proj-slider-label">Minutes</span>
+            <input
+              type="range" min={0} max={48} step={1} value={Math.round(minutes)}
+              onChange={(e) => onSlider(Number(e.target.value))}
+            />
+            <span className="mq-proj-slider-value">{Math.round(minutes)}</span>
+            <button
+              type="button"
+              onClick={resetToDefault}
+              aria-label="Reset to default minutes"
+              title={`Reset to default (${Math.round(proj!.default_minutes)} min)`}
+              className={`mq-proj-slider-reset ${isAdjusted ? '' : 'mq-invisible'}`}
+            >
+              ↺
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function MatchupExpandRow({
+  matchup,
+  colSpan,
+  integerMode = true,
+  integerProjectionToggle = false,
+}: {
+  matchup: PlayerMatchup;
+  colSpan: number;
+  integerMode?: boolean;
+  integerProjectionToggle?: boolean;
+}) {
   return (
     <tr className="mq-expand-row">
       <td colSpan={colSpan} className="mq-expand-td">
-        <div className="mq-expand-content">
-          {onCollapse && (
-            <button className="mq-expand-close" onClick={onCollapse} aria-label="Collapse matchup" title="Collapse">
-              ▲ Close
-            </button>
-          )}
-          <span className="mq-expand-label text-center block">
-            vs {matchup.opponent} — opponent defense rank (out of 30){projActive ? ' + tonight\'s projection' : ''}.{' '}
-            <span className="text-green-600 dark:text-green-400">Green ≥ 21</span> = weak defense.{' '}
-            <span className="text-red-600 dark:text-red-400">Red ≤ 10</span> = strong defense.
-          </span>
-
-          <div className="mq-strip-label">OPPONENT ({matchup.opponent}) DEFENSE</div>
-          <div className="mq-strip">
-            {rankKeys(matchup.def_ranks).map(key => {
-              const rank = matchup.def_ranks[key];
-              return (
-              <span key={key} className="mq-strip-item">
-                <b className={RANK_TEXT_COLOR[rankColor(rank)]}>{RANK_LABELS[key]} #{rank}</b>{' '}
-                <span className="text-gray-500 dark:text-gray-400">{formatDefVal(key, matchup.def_values[key])}</span>
-              </span>
-              );
-            })}
-            <span className="mq-strip-item">
-              <b className={RANK_TEXT_COLOR[paceColor]}>{paceLabel.charAt(0).toUpperCase() + paceLabel.slice(1)}</b>{' '}
-              <span className="text-gray-500 dark:text-gray-400">{matchup.pace} vs {matchup.league_avg_pace} avg</span>
-            </span>
-          </div>
-
-          {projActive && (
-            <>
-              <div className="mq-strip-label mq-strip-label-row">
-                <ConfidenceDot status={proj!.status} reason={proj!.reason} />
-                <span>TONIGHT'S PROJECTION</span>
-              </div>
-              <div className="mq-strip">
-                {rankKeys(matchup.def_ranks).map(key => (
-                  <Fragment key={key}>
-                    <span className="mq-strip-item">
-                      <span className="text-gray-500 dark:text-gray-400">{RANK_LABELS[key]}</span>{' '}
-                      <b>
-                        {key === 'fg_pct' && fg
-                          ? <>{fg.pct}{fg.ok && <VFrac m={fg.m} a={fg.a} />}</>
-                          : coherent && (key === 'pts' || key === 'three_pm')
-                            ? coherent[key]
-                            : fmtStat(stats![key], integerMode)}
-                      </b>
-                    </span>
-                    {key === 'fg_pct' && ft && (
-                      <span className="mq-strip-item">
-                        <span className="text-gray-500 dark:text-gray-400">FT%</span>{' '}
-                        <b>{ft.pct}{ft.ok && <VFrac m={ft.m} a={ft.a} />}</b>
-                      </span>
-                    )}
-                  </Fragment>
-                ))}
-              </div>
-            </>
-          )}
-
-          <div className="mq-proj-footer">
-            {!projActive && (
-              <span className="mq-proj-insufficient">{proj ? `no projection — ${proj.reason || 'insufficient data'}` : 'no projection available'}</span>
-            )}
-            {projActive && (
-              <div className="mq-proj-slider-row">
-                <span className="mq-proj-slider-label">Minutes</span>
-                <input
-                  type="range" min={0} max={48} step={1} value={Math.round(minutes)}
-                  onChange={(e) => onSlider(Number(e.target.value))}
-                />
-                <span className="mq-proj-slider-value">{Math.round(minutes)}</span>
-                <button
-                  onClick={resetToDefault}
-                  aria-label="Reset to default minutes"
-                  title={`Reset to default (${Math.round(proj!.default_minutes)} min)`}
-                  className={`mq-proj-slider-reset ${isAdjusted ? '' : 'mq-invisible'}`}
-                >
-                  ↺
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <MatchupExpandPanel
+          matchup={matchup}
+          integerMode={integerMode}
+          integerProjectionToggle={integerProjectionToggle}
+          layout="table"
+        />
       </td>
     </tr>
   );

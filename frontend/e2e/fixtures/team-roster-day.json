@@ -1,0 +1,208 @@
+{
+  "team_id": 1,
+  "date": "2026-11-02",
+  "scoring_period_id": 14,
+  "is_today": false,
+  "has_games": true,
+  "lock_at": "2026-11-03T00:00:00Z",
+  "first_date": "2026-10-20",
+  "last_date": "2026-11-05",
+  "players": [
+    {
+      "player_id": 4066457,
+      "player_name": "Austin Reaves",
+      "positions": [
+        "PG",
+        "SG"
+      ],
+      "pro_team": "LAL",
+      "lineup_slot": "UTIL",
+      "opponent": "MIA",
+      "status": "played",
+      "stats": {
+        "minutes": 34.0,
+        "fgm": 10.0,
+        "fga": 15.0,
+        "ftm": 3.0,
+        "fta": 4.0,
+        "three_pm": 4.0,
+        "reb": 2.0,
+        "ast": 5.0,
+        "stl": 0.0,
+        "blk": 0.0,
+        "pts": 27.0,
+        "to": 5.0
+      },
+      "added": false,
+      "dropped": false
+    },
+    {
+      "player_id": 6450,
+      "player_name": "Kawhi Leonard",
+      "positions": [
+        "SF",
+        "PF"
+      ],
+      "pro_team": "TOR",
+      "lineup_slot": "BE",
+      "opponent": "LAC",
+      "status": "dnp",
+      "stats": null,
+      "added": false,
+      "dropped": false
+    },
+    {
+      "player_id": 4278039,
+      "player_name": "Nickeil Alexander-Walker",
+      "positions": [
+        "PG",
+        "SG"
+      ],
+      "pro_team": "ATL",
+      "lineup_slot": "G",
+      "opponent": "IND",
+      "status": "played",
+      "stats": {
+        "minutes": 31.0,
+        "fgm": 12.0,
+        "fga": 25.0,
+        "ftm": 1.0,
+        "fta": 1.0,
+        "three_pm": 9.0,
+        "reb": 4.0,
+        "ast": 4.0,
+        "stl": 4.0,
+        "blk": 0.0,
+        "pts": 34.0,
+        "to": 4.0
+      },
+      "added": false,
+      "dropped": false
+    },
+    {
+      "player_id": 4600663,
+      "player_name": "Zach Edey",
+      "positions": [
+        "C"
+      ],
+      "pro_team": "MEM",
+      "lineup_slot": "BE",
+      "opponent": "NOP",
+      "status": "played",
+      "stats": {
+        "minutes": 19.0,
+        "fgm": 2.0,
+        "fga": 6.0,
+        "ftm": 2.0,
+        "fta": 2.0,
+        "three_pm": 0.0,
+        "reb": 9.0,
+        "ast": 1.0,
+        "stl": 0.0,
+        "blk": 2.0,
+        "pts": 6.0,
+        "to": 1.0
+      },
+      "added": false,
+      "dropped": false
+    },
+    {
+      "player_id": 4591725,
+      "player_name": "Ryan Rollins",
+      "positions": [
+        "PG",
+        "SG"
+      ],
+      "pro_team": "MIL",
+      "lineup_slot": "PG",
+      "opponent": "MIN",
+      "status": "played",
+      "stats": {
+        "minutes": 17.0,
+        "fgm": 4.0,
+        "fga": 11.0,
+        "ftm": 1.0,
+        "fta": 2.0,
+        "three_pm": 1.0,
+        "reb": 3.0,
+        "ast": 2.0,
+        "stl": 0.0,
+        "blk": 1.0,
+        "pts": 10.0,
+        "to": 3.0
+      },
+      "added": false,
+      "dropped": false
+    },
+    {
+      "player_id": 5106060,
+      "player_name": "Jarace Walker",
+      "positions": [
+        "SF",
+        "PF"
+      ],
+      "pro_team": "IND",
+      "lineup_slot": "PF",
+      "opponent": "ATL",
+      "status": "played",
+      "stats": {
+        "minutes": 45.0,
+        "fgm": 6.0,
+        "fga": 15.0,
+        "ftm": 2.0,
+        "fta": 3.0,
+        "three_pm": 1.0,
+        "reb": 7.0,
+        "ast": 3.0,
+        "stl": 1.0,
+        "blk": 1.0,
+        "pts": 15.0,
+        "to": 1.0
+      },
+      "added": true,
+      "dropped": true
+    }
+  ],
+  "moves": [
+    {
+      "id": "be9b2e01-888a-4777-ae9c-2eaba6806b72",
+      "kind": "free_agent",
+      "at": "2026-11-02T10:14:46.831000Z",
+      "added": [
+        {
+          "player_id": 5175643,
+          "name": "Egor Demin",
+          "on_roster": false
+        }
+      ],
+      "dropped": [
+        {
+          "player_id": 5279133,
+          "name": "Joan Beringer",
+          "on_roster": false
+        }
+      ],
+      "after_lock": false
+    },
+    {
+      "id": "7e31a6d2-f764-4871-a195-2fbd9da0fd74",
+      "kind": "free_agent",
+      "at": "2026-11-02T18:01:13.620000Z",
+      "added": [
+        {
+          "player_id": 5106060,
+          "name": "Jarace Walker",
+          "on_roster": true
+        }
+      ],
+      "dropped": [
+        {
+          "player_id": 5175643,
+          "name": "Egor Demin",
+          "on_roster": false
+        }
+      ],
+      "after_lock": false
+    }
+  ]
+}

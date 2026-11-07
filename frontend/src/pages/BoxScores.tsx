@@ -17,6 +17,8 @@ import { fantasyApi, useGetAllPlayersQuery, useGetBoxScoreboardQuery, useGetBoxS
 import { useAppSelector } from '../store/hooks'
 import type { BoxScoreGame, BoxTeamSide, SlatePlayerValue } from '../types/boxScore'
 import { getErrorMessage } from '../utils/errorMessage'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileBoxScores from '../mobile/nba/MobileBoxScores'
 
 function easternToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
@@ -191,6 +193,7 @@ export default function BoxScores() {
   const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
   const [revealed, setRevealed] = usePersistedState<string[]>('boxScores.revealedGames', [])
   const today = easternToday()
+  const mobileRedesign = useMobileRedesign()
   const season = useGetNbaSeasonWindowQuery()
   const seasonStart = season.data?.start
   const seasonEnd = season.data?.end
@@ -311,6 +314,87 @@ export default function BoxScores() {
       return
     }
     selectGame(id)
+  }
+
+  if (mobileRedesign) {
+    const openFromMyPlayers = (id: string) => {
+      selectGame(id)
+      requestAnimationFrame(() => document.getElementById('mr-nba-box-panel')?.scrollIntoView({ block: 'start' }))
+    }
+    return (
+      <MobileBoxScores
+        noSpoilers={noSpoilers}
+        onNoSpoilers={setNoSpoilers}
+        date={date}
+        dateLabel={formatSlateLabel(date)}
+        min={seasonStart}
+        max={seasonEnd}
+        prevDate={inSeason(shiftDate(date, -1)) ? shiftDate(date, -1) : null}
+        nextDate={inSeason(shiftDate(date, 1)) ? shiftDate(date, 1) : null}
+        showToday={date !== today && inSeason(today)}
+        onGoTo={goTo}
+        onGoToday={() => goTo(today)}
+        status={
+          <>
+            {board.isLoading && <LoadingSpinner />}
+            {board.isError && <ErrorMessage message={getErrorMessage(board.error, 'Could not load this slate')} />}
+            {games && games.length === 0 && (
+              <div className="mr-card mr-nba-empty">No NBA games on {formatSlateLabel(date)}.</div>
+            )}
+            {games && games.length > 0 && <ScheduledDepthCharts teamIds={scheduledTeamIds} />}
+          </>
+        }
+        cards={games ? games.map(game => ({
+          game,
+          selected: game.game_id === selectedId,
+          hideScores: noSpoilers && !revealed.includes(game.game_id),
+          mineCount: myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds) : null,
+        })) : null}
+        onToggleGame={toggleGame}
+        panel={
+          <div id="mr-nba-box-panel" className="mr-nba-panel">
+            {selectedId && !boxReady && (boxScore.isLoading || boxScore.isFetching) && <LoadingSpinner />}
+            {boxScore.isError && <ErrorMessage message={getErrorMessage(boxScore.error, 'Could not load this box score')} />}
+            {boxReady && (
+              <BoxScorePanel
+                key={boxReady.game_id}
+                game={boxReady}
+                hideScores={noSpoilers}
+                revealed={revealed.includes(boxReady.game_id)}
+                onToggleReveal={() => toggleReveal(boxReady.game_id)}
+                values={values ? valueMap : undefined}
+                pregame={awaitingRoster ? pregame : undefined}
+                pregameLoading={Boolean(awaitingRoster && !pregame && rosterLoading)}
+                pregameError={Boolean(awaitingRoster && rosterError)}
+                mineIds={myTeamId != null ? mineIds : undefined}
+              />
+            )}
+          </div>
+        }
+        extras={
+          <>
+            {games && ranked.length > 0 && (
+              <LinesOfTheNight
+                key={`${date}-${noSpoilers}`}
+                players={ranked}
+                spoilerGuard={noSpoilers}
+                inProgress={!values?.complete}
+                dateLabel={formatSlateLabel(date)}
+                games={games.length}
+              />
+            )}
+            {mineSlate && (
+              <MyPlayers
+                key={`my-players-${date}-${noSpoilers}`}
+                groups={mineSlate}
+                spoilerGuard={noSpoilers}
+                onOpenGame={openFromMyPlayers}
+              />
+            )}
+          </>
+        }
+      />
+    )
   }
 
   return (

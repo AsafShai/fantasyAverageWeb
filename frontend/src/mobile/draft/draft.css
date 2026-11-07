@@ -1,0 +1,56 @@
+/* Draft Report + FA Report on a phone (step 5). Page-local: mr-dr-* only. */
+.mr-page { display: flex; flex-direction: column; gap: 12px; padding: 0 12px; min-width: 0; }
+.mr-page-head { display: flex; flex-direction: column; gap: 2px; padding: 0 2px; }
+
+.mr-dr-note { margin: 0; padding: 0 2px; }
+.mr-dr-pos { color: var(--mr-primary); }
+.mr-dr-neg { color: var(--mr-down); }
+.mr-dr-nowrap { white-space: nowrap; }
+
+/* verdict badges: Steal blue · Solid green · Fair/INJ/DNP grey · Reach/Low GP amber · Bust red */
+.mr-dr-badge { font-size: 10px; padding: 0 6px; border-radius: 6px; }
+.mr-dr-steal { --mr-bg: var(--mr-pill-trade-bg); --mr-fg: var(--mr-pill-trade-fg); }
+.mr-dr-solid { --mr-bg: var(--mr-pill-avail-bg); --mr-fg: var(--mr-pill-avail-fg); }
+.mr-dr-fair  { --mr-bg: var(--mr-pill-dropped-bg); --mr-fg: var(--mr-pill-dropped-fg); }
+.mr-dr-reach { --mr-bg: var(--mr-pill-quest-bg); --mr-fg: var(--mr-pill-quest-fg); }
+.mr-dr-bust  { --mr-bg: var(--mr-pill-out-bg); --mr-fg: var(--mr-pill-out-fg); }
+
+/* draft board: Rd pinned, one column per team, "pick → value · gp" under the name */
+.mr-dr-board .mr-pin { width: 32px; min-width: 32px; }
+.mr-dr-board td { vertical-align: top; min-width: 112px; }
+.mr-dr-board thead th.mr-dr-mine { color: var(--mr-primary); }
+.mr-dr-cell { display: flex; flex-direction: column; gap: 1px; }
+.mr-dr-cell b { font-weight: 600; font-size: 12.5px; }
+.mr-dr-cell .mr-meta { font-size: 10.5px; }
+
+/* team draft value */
+.mr-dr-team { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 132px; }
+.mr-dr-rank { color: var(--mr-muted); font-size: 11px; min-width: 14px; }
+.mr-dr-tname { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.mr-dr-n { color: var(--mr-muted); }
+.mr-dr-caret { display: inline-block; width: 12px; text-align: left; color: var(--mr-pill-quest-fg); }
+.mr-t tr.mr-dr-unranked-row td { background: var(--mr-sunken); white-space: normal; }
+.mr-dr-unranked { display: flex; flex-direction: column; gap: 6px; position: sticky; left: 8px; max-width: calc(100vw - 72px); }
+.mr-dr-unranked ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.mr-dr-unranked li {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 8px;
+  background: var(--mr-card); border: 1px solid var(--mr-divider); font-size: 12px;
+}
+
+/* biggest risers / fallers */
+.mr-dr-movers { list-style: none; margin: 0; padding: 0; }
+.mr-dr-movers li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--mr-divider); font-size: 13px; }
+.mr-dr-movers li:first-child { border-top: none; padding-top: 0; }
+.mr-dr-mover-head { display: flex; align-items: center; gap: 6px; }
+
+/* FA report */
+.mr-fa-search { display: flex; align-items: center; gap: 10px; }
+.mr-fa-input {
+  flex: 1; min-width: 0; min-height: 42px; box-sizing: border-box; padding: 0 12px; border-radius: 12px;
+  border: 1px solid var(--mr-border); background: var(--mr-card); color: var(--mr-text); font: inherit; font-size: 15px;
+}
+.mr-fa-input::placeholder { color: var(--mr-muted); }
+.mr-fa-count { white-space: nowrap; }
+.mr-fa-warn { margin: 0; color: var(--mr-pill-quest-fg); font-size: 12px; }
+.mr-fa-name { color: inherit; text-decoration: none; font-weight: 600; }
+.mr-fa-on-team { color: var(--mr-primary); font-weight: 600; }

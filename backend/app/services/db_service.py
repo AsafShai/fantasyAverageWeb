@@ -8,6 +8,7 @@ import pandas as pd
 from app.config import settings
 from app.utils import category_storage
 from app.utils.category_storage import SNAPSHOT_FIXED_CATEGORIES, TOTAL_KEY
+from app.utils.constants import DERIVED_CATEGORIES
 from app.models.injury_models import InjuryRecord
 from model_stats_inference.research import config as rconfig
 
@@ -524,75 +525,75 @@ class DBService:
     async def get_snapshot_over_time(
         self, team_ids: list[int] | None, league_id: int, season_id: int
     ) -> list[dict]:
-        pool = await self._get_pool()
-        if pool is None:
-            return []
-        cutoff = settings.season_start + timedelta(days=10)
-        try:
-            async with pool.acquire() as conn:
-                if team_ids:
-                    rows = await conn.fetch(
-                        """
-                        SELECT date, team_id, team_name,
-                               fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
-                        FROM team_daily_snapshot
-                        WHERE league_id = $1 AND season_id = $2
-                          AND date >= $3 AND team_id = ANY($4)
-                        ORDER BY date, team_id
-                        """,
-                        league_id, season_id, cutoff, team_ids,
-                    )
-                else:
-                    rows = await conn.fetch(
-                        """
-                        SELECT date, team_id, team_name,
-                               fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
-                        FROM team_daily_snapshot
-                        WHERE league_id = $1 AND season_id = $2 AND date >= $3
-                        ORDER BY date, team_id
-                        """,
-                        league_id, season_id, cutoff,
-                    )
-                return [dict(r) for r in rows]
-        except Exception as e:
-            logger.error(f"Failed to fetch snapshot over time: {type(e).__name__}: {e}")
-            return []
+        """Each team's season totals per day, per category."""
+        return await self._stat_values_over_time(team_ids, league_id, season_id, per_game=False)
 
     async def get_averages_over_time(
         self, team_ids: list[int] | None, league_id: int, season_id: int
     ) -> list[dict]:
+        """Each team's per-game averages per day, per category."""
+        return await self._stat_values_over_time(team_ids, league_id, season_id, per_game=True)
+
+    async def _stat_values_over_time(
+        self, team_ids: list[int] | None, league_id: int, season_id: int, per_game: bool
+    ) -> list[dict]:
         pool = await self._get_pool()
         if pool is None:
             return []
-        _base = """
-            SELECT date, team_id, team_name,
-                   fg_pct,
-                   ft_pct,
-                   ROUND((three_pm::numeric / NULLIF(gp, 0)), 4) AS three_pm,
-                   ROUND((reb::numeric    / NULLIF(gp, 0)), 4) AS reb,
-                   ROUND((ast::numeric    / NULLIF(gp, 0)), 4) AS ast,
-                   ROUND((stl::numeric    / NULLIF(gp, 0)), 4) AS stl,
-                   ROUND((blk::numeric    / NULLIF(gp, 0)), 4) AS blk,
-                   ROUND((pts::numeric    / NULLIF(gp, 0)), 4) AS pts
-            FROM team_daily_snapshot
-            WHERE league_id = $1 AND season_id = $2 AND date >= $3
-        """
         try:
             async with pool.acquire() as conn:
-                cutoff = settings.season_start + timedelta(days=10)
+                dynamic = await self._supports_dynamic_categories(conn)
+                columns = ', '.join(_SNAPSHOT_COL_MAP.values())
+                query = f"""
+                    SELECT date, team_id, team_name, {columns}{', stats' if dynamic else ''}
+                    FROM team_daily_snapshot
+                    WHERE league_id = $1 AND season_id = $2
+                """
                 if team_ids:
                     rows = await conn.fetch(
-                        _base + " AND team_id = ANY($4) ORDER BY date, team_id",
-                        league_id, season_id, cutoff, team_ids,
+                        query + " AND team_id = ANY($3) ORDER BY date, team_id",
+                        league_id, season_id, team_ids,
                     )
                 else:
                     rows = await conn.fetch(
-                        _base + " ORDER BY date, team_id", league_id, season_id, cutoff
+                        query + " ORDER BY date, team_id", league_id, season_id,
                     )
-                return [dict(r) for r in rows]
+                return [self._snapshot_row_to_point(dict(r), per_game) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch averages over time: {type(e).__name__}: {e}")
+            kind = "averages" if per_game else "snapshot"
+            logger.error(f"Failed to fetch {kind} over time: {type(e).__name__}: {e}")
             return []
+
+    @staticmethod
+    def _snapshot_row_to_point(row: dict, per_game: bool) -> dict:
+        """A snapshot row as one over-time point: `values` holds every stored
+        category (fixed columns plus JSONB extras) keyed by category code, and
+        the legacy per-column fields mirror it for the fixed categories.
+
+        Per game, a counted category is divided by games played; a derived one
+        (FG%, A/TO, PPG...) is already a rate and is passed through as is."""
+        fixed = {cat: row.get(col) for cat, col in _SNAPSHOT_COL_MAP.items()}
+        merged = category_storage.merge_categories(fixed, row.get('stats'))
+        gp = merged.pop('GP', None)
+        gp = int(gp) if gp is not None else None
+        values: dict[str, float] = {}
+        for cat, raw in merged.items():
+            value = float(raw)
+            if per_game and cat not in DERIVED_CATEGORIES:
+                if not gp:
+                    continue
+                value = round(value / gp, 4)
+            values[cat] = value
+        point = {
+            'date': row['date'],
+            'team_id': row['team_id'],
+            'team_name': row['team_name'],
+            'gp': gp,
+            'values': values,
+        }
+        for cat in ('FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS'):
+            point[_SNAPSHOT_COL_MAP[cat]] = values.get(cat)
+        return point
 
     async def get_snapshots_for_date_range(
         self, start_date: date, end_date: date, league_id: int, season_id: int
@@ -1993,6 +1994,126 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to fetch surprises {start}..{end}: {type(e).__name__}: {e}")
             return None, []
+
+    # ── Roster by day (fantasy_roster_day / fantasy_roster_moves) ──────────
+
+    async def get_saved_roster_periods(self, periods: list[int], kind: str, team_id: int = 0) -> Optional[set[int]]:
+        """Which of ``periods`` are stored completely for ``kind`` ('roster', per
+        team, or 'moves', league-wide with team_id 0). None when there is no
+        database (or it failed): the caller then treats every period as not stored."""
+        pool = await self._get_pool()
+        if pool is None or not periods:
+            return None if pool is None else set()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT scoring_period_id FROM fantasy_roster_period_saved "
+                    "WHERE league_id = $1 AND season_id = $2 AND kind = $3 AND team_id = $4 "
+                    "AND scoring_period_id = ANY($5::int[])",
+                    settings.league_id, settings.season_id, kind, team_id, periods,
+                )
+                return {r["scoring_period_id"] for r in rows}
+        except Exception as e:
+            logger.error(f"Failed to read saved roster periods: {type(e).__name__}: {e}")
+            return None
+
+    async def get_roster_day_rows(self, period: int, team_id: int) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT player_id, player_name, positions, pro_team_id, lineup_slot, stats "
+                    "FROM fantasy_roster_day "
+                    "WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3 AND team_id = $4 "
+                    "ORDER BY player_id",
+                    settings.league_id, settings.season_id, period, team_id,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to read roster day {period} team {team_id}: {type(e).__name__}: {e}")
+            return []
+
+    async def save_roster_day(self, period: int, team_id: int, rows: list[tuple]) -> bool:
+        """Store one team's roster for one period, then mark it saved, in one
+        transaction. Row tuples: (player_id, player_name, positions, pro_team_id,
+        lineup_slot, stats)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        lid, sid = settings.league_id, settings.season_id
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        "DELETE FROM fantasy_roster_day "
+                        "WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3 AND team_id = $4",
+                        lid, sid, period, team_id,
+                    )
+                    await conn.executemany(
+                        "INSERT INTO fantasy_roster_day (league_id, season_id, scoring_period_id, team_id, player_id, "
+                        "player_name, positions, pro_team_id, lineup_slot, stats) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                        [(lid, sid, period, team_id, *row) for row in rows],
+                    )
+                    await conn.execute(
+                        "INSERT INTO fantasy_roster_period_saved (league_id, season_id, scoring_period_id, kind, team_id) "
+                        "VALUES ($1, $2, $3, 'roster', $4) ON CONFLICT DO NOTHING",
+                        lid, sid, period, team_id,
+                    )
+            logger.info(f"Roster day: stored period {period} team {team_id} ({len(rows)} rows)")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to store roster day {period} team {team_id}: {type(e).__name__}: {e}")
+            return False
+
+    async def get_roster_moves(self, periods: list[int]) -> list[dict]:
+        pool = await self._get_pool()
+        if pool is None or not periods:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT scoring_period_id, tx_id, kind, at, items FROM fantasy_roster_moves "
+                    "WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = ANY($3::int[]) "
+                    "ORDER BY at",
+                    settings.league_id, settings.season_id, periods,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to read roster moves {periods}: {type(e).__name__}: {e}")
+            return []
+
+    async def save_roster_moves(self, period: int, rows: list[tuple]) -> bool:
+        """Store one period's transactions, then mark them saved. Row tuples:
+        (tx_id, kind, at, items)."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        lid, sid = settings.league_id, settings.season_id
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        "DELETE FROM fantasy_roster_moves WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = $3",
+                        lid, sid, period,
+                    )
+                    if rows:
+                        await conn.executemany(
+                            "INSERT INTO fantasy_roster_moves (league_id, season_id, scoring_period_id, tx_id, kind, at, items) "
+                            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                            [(lid, sid, period, *row) for row in rows],
+                        )
+                    await conn.execute(
+                        "INSERT INTO fantasy_roster_period_saved (league_id, season_id, scoring_period_id, kind) "
+                        "VALUES ($1, $2, $3, 'moves') ON CONFLICT DO NOTHING",
+                        lid, sid, period,
+                    )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to store roster moves {period}: {type(e).__name__}: {e}")
+            return False
 
     async def close(self) -> None:
         if self._pool is not None:

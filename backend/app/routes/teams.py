@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from app.models import TeamDetail, TeamPlayers, Team, StatTimePeriod
 from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.services.team_service import TeamService
+from app.services.roster_day_service import get_roster_day_service
+from app.models.roster_day_models import RosterDay
 from typing import Annotated, List, Optional
 from app.utils.utils import latest_client_date
 from datetime import date
@@ -119,3 +121,25 @@ async def get_team_players(
     except Exception as e:
         logger.exception(f"Error getting players for team ID {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team players")
+
+@router.get("/{team_id}/roster-day", response_model=RosterDay)
+async def get_team_roster_day(
+    team_id: int,
+    day: Optional[date] = Query(None, alias="date", description="Day to show (YYYY-MM-DD, US Eastern); default today"),
+):
+    """The team's lineup at that day's lock, each player's stat line that day,
+    and the adds/drops/trades that took effect on it. Past days are read from
+    the database (fetched from ESPN and stored the first time); today is live."""
+    if team_id <= 0:
+        raise HTTPException(status_code=400, detail="Team ID must be positive")
+    try:
+        return await get_roster_day_service().get_roster_day(team_id, day)
+    except InvalidParameterError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error getting roster day for team {team_id} on {day}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve the roster for that day")

@@ -5,10 +5,24 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { FF_DRAFT_STEALS_BUSTS } from '../config/featureFlags'
-import { buildScoredPicks, buildTeamDiffRanking, topSteals, topBusts, MIN_GP_FOR_RANK, LOW_GP_MIN, type ScoredPick, type DraftBadge } from '../utils/draftReport'
+import {
+  buildScoredPicks,
+  buildTeamDiffRanking,
+  topSteals,
+  topBusts,
+  REPORT_MIN_GP,
+  HEAT_MIN_SEASON_MONTHS,
+  heatColor,
+  isHeatReady,
+  valueTag,
+  type ScoredPick,
+  type DraftBadge,
+} from '../utils/draftReport'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileDraftReport from '../mobile/draft/MobileDraftReport'
 
 type SortCol = 'pick' | 'diff' | 'valueRank'
 
@@ -19,6 +33,7 @@ const BADGE_STYLES: Record<DraftBadge, string> = {
   Reach: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   Bust: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
   INJ: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  'Low GP': 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   DNP: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
 }
 
@@ -26,50 +41,23 @@ const BADGE_STYLES: Record<DraftBadge, string> = {
 //   A: 'bg-green-600', B: 'bg-teal-600', C: 'bg-amber-600', D: 'bg-orange-600', F: 'bg-red-600',
 // }
 
-function valueTag(p: ScoredPick): string {
-  if (p.valueRank !== null) return `#${p.valueRank}`
-  if (p.badge === 'DNP') return 'DNP'
-  return `INJ ${p.gp}gp`
-}
-
-function heatColor(p: ScoredPick): string {
-  if (p.badge === 'INJ' || p.badge === 'DNP') return 'rgba(220,38,38,0.35)'
-  const d = Math.max(-60, Math.min(60, p.diff ?? 0))
-  if (d > 8) return `rgba(37,99,235,${(0.08 + (d / 60) * 0.38).toFixed(2)})`
-  if (d < -8) return `rgba(220,38,38,${(0.08 - (d / 60) * 0.38).toFixed(2)})`
-  return 'rgba(156,163,175,0.10)'
-}
-
-// Board heat is noise early on — sample sizes are too small to judge picks.
-// Only color once two months of the season have elapsed.
-const HEAT_MIN_SEASON_MONTHS = 2
-
-function isHeatReady(seasonStart: string | undefined, now: Date = new Date()): boolean {
-  if (!seasonStart) return false
-  const ready = new Date(`${seasonStart}T00:00:00`)
-  if (isNaN(ready.getTime())) return false
-  ready.setMonth(ready.getMonth() + HEAT_MIN_SEASON_MONTHS)
-  return now >= ready
-}
-
 export default function DraftReport() {
   const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('draftReport.calcMode', 'per_game')
-  const [includeLowGp, setIncludeLowGp] = usePersistedState('draftReport.includeLowGp', false)
-  const minGp = includeLowGp ? LOW_GP_MIN : MIN_GP_FOR_RANK
   const { data: draftReport, isLoading: draftLoading, error: draftError } = useGetDraftReportQuery()
   // Same pool Player Rankings uses (season, full ESPN universe) — keeps the
   // draft report's value calc consistent with the rest of the app instead of
   // maintaining a separate data source.
   const { data: playersData, isLoading: poolLoading, error: poolError } = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' })
   const { data: summary } = useGetLeagueSummaryQuery()
+  const mobileRedesign = useMobileRedesign()
   const showHeat = isHeatReady(summary?.season_start)
   const [sortCol, setSortCol] = useState<SortCol>('pick')
   const [sortAsc, setSortAsc] = useState(true)
 
   const scoredPicks = useMemo(() => {
     if (!draftReport || !playersData) return []
-    return buildScoredPicks(draftReport.picks, playersData.players, calcMode, minGp)
-  }, [draftReport, playersData, calcMode, minGp])
+    return buildScoredPicks(draftReport.picks, playersData.players, calcMode)
+  }, [draftReport, playersData, calcMode])
 
   // const teamGrades = useMemo(() => buildTeamGrades(scoredPicks), [scoredPicks])
   const teamDiffs = useMemo(() => buildTeamDiffRanking(scoredPicks), [scoredPicks])
@@ -143,21 +131,34 @@ export default function DraftReport() {
   if (draftLoading || poolLoading) return <LoadingSpinner />
   if (draftError || poolError) return <ErrorMessage message={getErrorMessage(draftError ?? poolError, 'Failed to load draft report.')} />
 
+  if (mobileRedesign) {
+    return (
+      <MobileDraftReport
+        calcMode={calcMode}
+        onCalcModeChange={setCalcMode}
+        showHeat={showHeat}
+        teamColumns={teamColumns}
+        rounds={rounds}
+        gridByRoundTeam={gridByRoundTeam}
+        teamDiffs={FF_DRAFT_STEALS_BUSTS ? teamDiffs : []}
+        steals={FF_DRAFT_STEALS_BUSTS ? steals : []}
+        busts={FF_DRAFT_STEALS_BUSTS ? busts : []}
+        picks={sortedPicks}
+        sortCol={sortCol}
+        sortAsc={sortAsc}
+        onSort={(col, asc) => { setSortCol(col); setSortAsc(asc) }}
+        teamFilter={teamFilter}
+        onTeamFilterChange={setTeamFilter}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
       <div className="max-w-screen-2xl mx-auto space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">📝 Draft Report Card</h1>
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeLowGp}
-                onChange={e => setIncludeLowGp(e.target.checked)}
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              Include low-GP players (&lt;{MIN_GP_FOR_RANK} GP)
-            </label>
             <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
               {(['totals', 'per_game'] as const).map(m => (
                 <button
@@ -175,7 +176,7 @@ export default function DraftReport() {
           Every pick vs realized season value (8-cat z-score rank). Diff = pick number − value rank: positive means the player returned more than draft slot price.
         </p>
         <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-4">
-          Value calc: season stats · min {minGp} GP to qualify · all 8 categories weighted equally.
+          Value calc: season stats · all 8 categories weighted equally · min {REPORT_MIN_GP} GP to rank (1–{REPORT_MIN_GP - 1} GP = Low GP; 0 GP = DNP).
         </p>
 
         <section>
@@ -211,12 +212,12 @@ export default function DraftReport() {
           </div>
           <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
             {showHeat
-              ? 'Blue = returned above slot · Red = below slot / INJ / DNP · Gray = about right.'
+              ? 'Blue = returned above slot · Red = below slot / INJ / Low GP / DNP · Gray = about right.'
               : `Value heat appears after the first ${HEAT_MIN_SEASON_MONTHS} months of the season — too early to judge picks.`}
           </p>
         </section>
 
-        {FF_DRAFT_STEALS_BUSTS && (
+        {FF_DRAFT_STEALS_BUSTS && teamDiffs.length > 0 && (
           <section>
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Team Draft Value — diff vs slot</h2>
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
@@ -229,7 +230,7 @@ export default function DraftReport() {
                     {(['#', 'Team', 'Total Diff', 'Avg Diff', 'Ranked / Picks'] as const).map((label, i) => (
                       <th
                         key={label}
-                        title={label === 'Ranked / Picks' ? `How many of the team's draft picks earned a value rank — only players with ${minGp}+ GP are ranked, so low-GP / DNP picks are left out` : undefined}
+                        title={label === 'Ranked / Picks' ? "How many of the team's draft picks earned a value rank — DNP picks are left out" : undefined}
                         className={`relative px-2 sm:px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 ${i >= 2 ? 'text-right' : 'text-left'}`}
                       >
                         {label}
@@ -270,7 +271,7 @@ export default function DraftReport() {
                           <tr className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-700">
                             <td />
                             <td colSpan={4} className="px-2 sm:px-3 py-2">
-                              <div className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Not ranked (under {minGp} GP — excluded from diff):</div>
+                              <div className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Not ranked (excluded from diff):</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {t.unranked.map(u => (
                                   <span key={u.pick} className="inline-flex items-center gap-1 text-xs bg-white dark:bg-gray-800 rounded px-1.5 py-0.5 border border-gray-200 dark:border-gray-700">
@@ -286,17 +287,14 @@ export default function DraftReport() {
                       </React.Fragment>
                     )
                   })}
-                  {teamDiffs.length === 0 && (
-                    <tr><td colSpan={5} className="px-3 py-2 text-xs text-gray-400">No qualifying picks yet.</td></tr>
-                  )}
                 </tbody>
               </table>
             </div>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Sum / avg of (pick − value rank) over ranked picks. Positive = team's picks returned above draft slot. Rows with ▸ expand to show picks left out (under {minGp} GP). Drag column edges to resize.</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Sum / avg of (pick − value rank) over ranked picks. Positive = team's picks returned above draft slot. Rows with ▸ expand to show unranked picks. Drag column edges to resize.</p>
           </section>
         )}
 
-        {FF_DRAFT_STEALS_BUSTS && (
+        {FF_DRAFT_STEALS_BUSTS && (steals.length > 0 || busts.length > 0) && (
           <>
             {/* <section>
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Team Grades</h2>
@@ -317,37 +315,39 @@ export default function DraftReport() {
               </div>
             </section> */}
 
-            <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">💎 Top Steals (min 50 GP)</h2>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-gray-700">
-                  {steals.map(p => (
-                    <div key={`${p.pick}`} className="p-2.5 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mr-2 ${BADGE_STYLES[p.badge]}`}>Steal</span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{p.player_name}</span>
-                        <div className="text-[11px] text-gray-400 dark:text-gray-500">pick {p.pick} → value {valueTag(p)} · {p.team_name}</div>
+            <section className={`grid gap-4 ${steals.length > 0 && busts.length > 0 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {steals.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">📈 Biggest Risers</h2>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-gray-700">
+                    {steals.map(p => (
+                      <div key={`${p.pick}`} className="p-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mr-2 ${BADGE_STYLES[p.badge]}`}>Steal</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{p.player_name}</span>
+                          <div className="text-[11px] text-gray-400 dark:text-gray-500">pick {p.pick} → value {valueTag(p)} · {p.team_name}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {steals.length === 0 && <div className="p-2.5 text-xs text-gray-400">No qualifying steals yet.</div>}
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">🕳️ Biggest Busts</h2>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-gray-700">
-                  {busts.map(p => (
-                    <div key={`${p.pick}`} className="p-2.5 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mr-2 ${BADGE_STYLES[p.badge]}`}>{p.badge}</span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{p.player_name}</span>
-                        <div className="text-[11px] text-gray-400 dark:text-gray-500">pick {p.pick} → value {valueTag(p)} · {p.team_name}</div>
+              )}
+              {busts.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">📉 Biggest Fallers</h2>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow divide-y divide-gray-100 dark:divide-gray-700">
+                    {busts.map(p => (
+                      <div key={`${p.pick}`} className="p-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mr-2 ${BADGE_STYLES[p.badge]}`}>{p.badge}</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{p.player_name}</span>
+                          <div className="text-[11px] text-gray-400 dark:text-gray-500">pick {p.pick} → value {valueTag(p)} · {p.team_name}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {busts.length === 0 && <div className="p-2.5 text-xs text-gray-400">No busts yet.</div>}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </section>
           </>
         )}

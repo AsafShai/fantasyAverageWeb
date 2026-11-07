@@ -44,6 +44,40 @@ def test_get_over_time_snapshot_source(test_client):
         app.dependency_overrides.pop(DBService, None)
 
 
+def test_get_over_time_averages_carries_league_categories(test_client):
+    row = {"date": date(2025, 11, 5), "team_id": 1, "team_name": "A", "gp": 10,
+           "values": {"PTS": 14.2, "TO": 2.1}, "pts": 14.2}
+    inst = MagicMock()
+    inst.get_averages_over_time = AsyncMock(return_value=[row])
+    app.dependency_overrides[DBService] = lambda: inst
+    try:
+        with patch("app.routes.analytics._data_provider") as provider:
+            provider.get_ranking_categories = AsyncMock(return_value=["PTS", "TO"])
+            provider.get_reverse_categories = AsyncMock(return_value={"TO"})
+            response = test_client.get("/api/analytics/over-time?source=averages")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["categories"] == ["PTS", "TO"]
+        assert body["reverse_categories"] == ["TO"]
+        assert body["data"][0]["values"] == {"PTS": 14.2, "TO": 2.1}
+    finally:
+        app.dependency_overrides.pop(DBService, None)
+
+
+def test_get_over_time_stat_source_survives_missing_league_settings(test_client):
+    inst = MagicMock()
+    inst.get_snapshot_over_time = AsyncMock(return_value=[])
+    app.dependency_overrides[DBService] = lambda: inst
+    try:
+        with patch("app.routes.analytics._data_provider") as provider:
+            provider.get_ranking_categories = AsyncMock(side_effect=RuntimeError("espn down"))
+            response = test_client.get("/api/analytics/over-time?source=snapshot")
+        assert response.status_code == 200
+        assert response.json()["categories"] == []
+    finally:
+        app.dependency_overrides.pop(DBService, None)
+
+
 def test_get_over_time_team_ids(test_client):
     inst = MagicMock()
     inst.get_rankings_over_time = AsyncMock(return_value=[])

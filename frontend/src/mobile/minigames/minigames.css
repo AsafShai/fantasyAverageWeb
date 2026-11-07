@@ -1,0 +1,255 @@
+/* Minigames on a phone (step 5). Page-local: everything is under .mr-mg. */
+.mr-mg { display: flex; flex-direction: column; gap: 12px; padding: 0 12px; min-width: 0; }
+.mr-mg-head { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+.mr-mg-grad {
+  margin: 0; font-family: var(--mr-font-num); font-size: 28px; font-weight: 700; line-height: 1.15;
+  background: linear-gradient(90deg, var(--mr-brand-from), var(--mr-brand-to));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.dark .mr-mg-grad { background-image: linear-gradient(90deg, #60A5FA, #A78BFA); }
+.mr-mg-lead { margin: 0; font-size: 14px; line-height: 1.5; color: var(--mr-muted); }
+.mr-mg-back { align-self: flex-start; padding: 0 2px; font-size: 14px; }
+
+/* list */
+.mr-mg-list { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.mr-mg-game {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-decoration: none;
+  background: var(--mr-card); border-radius: var(--mr-radius-card); padding: var(--mr-pad-card); color: var(--mr-text);
+}
+.mr-mg-game:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.mr-mg-emo { font-size: 26px; line-height: 1.2; }
+.mr-mg-name { font-size: 17px; font-weight: 700; }
+
+/* game page */
+.mr-mg-stats { display: flex; gap: 6px; }
+.mr-mg-stat {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--mr-sunken); border-radius: 10px; padding: 6px 4px;
+}
+.mr-mg-stat b { font-family: var(--mr-font-num); font-size: 18px; line-height: 1.2; }
+.mr-mg-stat span { font-size: 11px; color: var(--mr-muted); white-space: nowrap; }
+.mr-mg-stat.mr-on b { color: var(--mr-primary); }
+.mr-mg-lobby { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px 0 4px; text-align: center; }
+.mr-mg-ball { font-size: 56px; line-height: 1; }
+.mr-mg-lobby .mr-btn { min-height: 44px; padding: 0 20px; font-size: 15px; }
+.mr-mg-controls {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 16px;
+  font-size: 13px; color: var(--mr-text-2);
+}
+.mr-mg-controls .mg-auto-next { min-height: 44px; }
+.mr-mg-controls .mr-link { min-height: 40px; gap: 4px; font-size: 13px; }
+
+/* board content comes from the page (shared with desktop); phone tap sizes + 16px inputs (no iOS zoom) */
+.mr-mg-board { display: flex; flex-direction: column; gap: 12px; }
+.mr-mg-board .mg-timer-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--mr-card);
+}
+.mr-mg-board input { font-size: 16px; min-height: 42px; }
+.mr-mg-board button:not([title]) { min-height: 40px; }
+.mr-mg-board .mg-keys { gap: 5px; width: 100%; align-self: center; }
+.mr-mg-board .mg-keys button { min-height: 42px; font-size: 15px; padding: 0; }
+.mr-mg-board .mg-hints button { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.mr-mg-board ul button { min-height: 44px; }
+/* Who Am I guess cards: compact list, equal-height cells in the 2-column grid */
+.mr-mg-board .mg-whoami-guess-list { gap: 6px; }
+.mr-mg-board .mg-whoami-guess-card { padding: 6px 8px; }
+.mr-mg-board .mg-whoami-field { min-height: 2.65rem; }
+/* Shared mobile toolbar (Who Am I, Hangman) */
+.mg-game-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--mr-border, #e5e7eb);
+  background: var(--mr-sunken, #f3f4f6);
+}
+.dark .mg-game-toolbar {
+  border-color: var(--mr-border, #374151);
+  background: rgba(31, 41, 55, 0.55);
+}
+.mg-game-toolbar--compact {
+  padding: 8px 10px;
+}
+.mg-game-toolbar__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mg-game-toolbar__actions,
+.mg-game-toolbar__hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.mg-game-toolbar__hint-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.mg-game-toolbar__chip {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 7px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--mr-border, #d1d5db);
+  background: var(--mr-card, #fff);
+  color: var(--mr-text, #111827);
+  min-height: 32px;
+}
+.mg-game-toolbar__chip--hint {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 9px;
+}
+.mg-game-toolbar__chip--used {
+  opacity: 0.72;
+  border-style: dashed;
+}
+.mg-game-toolbar__chip:disabled {
+  opacity: 0.45;
+}
+.mg-game-toolbar__chip--muted {
+  font-weight: 500;
+  border-color: transparent;
+  background: transparent;
+  color: var(--mr-down, #dc2626);
+}
+.mg-game-toolbar__chip--map {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  padding-left: 10px;
+  padding-right: 12px;
+}
+.mg-game-toolbar__stat {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--mr-divider, #e5e7eb);
+  background: var(--mr-card, #fff);
+}
+.mg-game-toolbar__stat--urgent {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(254, 226, 226, 0.55);
+}
+.dark .mg-game-toolbar__stat--urgent {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.25);
+}
+.mg-game-toolbar__stat--urgent .mg-game-toolbar__stat-n {
+  color: var(--mr-down, #dc2626);
+}
+.mg-game-toolbar__stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--mr-muted, #6b7280);
+  line-height: 1;
+}
+.mg-game-toolbar__stat-count {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  font-family: var(--mr-font-num, ui-monospace, monospace);
+}
+.mg-game-toolbar__stat-n {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mr-text, #111827);
+  line-height: 1;
+}
+.mg-game-toolbar__stat-sep,
+.mg-game-toolbar__stat-max {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mr-muted, #6b7280);
+  line-height: 1;
+}
+.mg-game-toolbar__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mr-divider, #e5e7eb);
+}
+.mg-game-toolbar__bottom--solo {
+  border-top: none;
+  padding-top: 0;
+}
+.dark .mg-game-toolbar__bottom {
+  border-top-color: var(--mr-divider, #374151);
+}
+.mr-mg-board {
+  padding-bottom: max(72px, calc(56px + env(safe-area-inset-bottom, 0px)));
+}
+.mr-mg-board .mg-game-toolbar button {
+  min-height: 32px;
+}
+.mr-mg-board .mg-game-toolbar .mg-auto-next--compact {
+  min-height: 32px;
+}
+.mr-mg-board .mg-hangman-figure {
+  margin-top: 4px;
+  line-height: 0;
+}
+.mr-mg-board .mg-hangman-figure svg {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.mr-mg-board .mg-hangman-name {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+.mr-mg-board .mg-hangman-reveals {
+  min-height: 2.25rem;
+  margin-bottom: 8px !important;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--mr-text-2, #4b5563);
+}
+.mr-mg-board .mg-hangman-keys {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.dark .mr-mg-board input { background-color: var(--mr-card) !important; border-color: var(--mr-border) !important; color: var(--mr-text) !important; }
+
+/* leaderboard */
+.mr-mg-lb .mr-t td, .mr-mg-lb .mr-t th { font-size: 13px; }
+.mr-mg-lb .mr-t thead th { padding: 8px; text-transform: uppercase; }
+.mr-mg-lb .mr-t td.mr-mg-rank { width: 28px; font-family: var(--mr-font-num); font-weight: 700; color: var(--mr-muted); }
+.mr-mg-lb .mr-t td.mr-mg-best { font-family: var(--mr-font-num); font-weight: 700; color: var(--mr-primary); }
+.mr-mg-lb .mr-t tr.mr-p1 td { background: #FFFBEB; }
+.mr-mg-lb .mr-t tr.mr-p2 td { background: #F3F4F6; }
+.mr-mg-lb .mr-t tr.mr-p3 td { background: #FFF7ED; }
+.dark .mr-mg-lb .mr-t tr.mr-p1 td { background: rgba(120, 53, 15, 0.22); }
+.dark .mr-mg-lb .mr-t tr.mr-p2 td { background: rgba(55, 65, 81, 0.45); }
+.dark .mr-mg-lb .mr-t tr.mr-p3 td { background: rgba(124, 45, 18, 0.22); }
+.mr-mg-lobby p { color: var(--mr-text-2); margin: 0; }
+.mr-mg-lobby strong { color: var(--mr-text); }
+/* `.mr-root button { color: inherit }` is unlayered, so it beats Tailwind's text colours on buttons */
+.mr-mg-board button.text-white { color: #fff; }
+.mr-mg-board button.text-red-600 { color: var(--mr-down); }
+.mr-mg-map button[aria-selected="true"] { color: var(--mr-primary); }
+/* map sheet: let team names wrap instead of truncating in three narrow columns */
+.mr-mg-map .truncate { white-space: normal; overflow: visible; line-height: 1.25; }

@@ -258,10 +258,17 @@ export interface TeamTimeSeriesPoint {
   stl?: number;
   blk?: number;
   pts?: number;
+  /** Stat sources only (snapshot, averages): category code -> value, including
+   *  categories with no column of their own. */
+  values?: Record<string, number> | null;
 }
 
 export interface RankingsOverTimeResponse {
   data: TeamTimeSeriesPoint[];
+  /** Stat sources only: the league's scored categories, in its order. */
+  categories?: string[];
+  /** Stat sources only: categories where a lower value is better (e.g. TO). */
+  reverse_categories?: string[];
 }
 
 export interface DraftPick {
@@ -988,4 +995,64 @@ export interface TodayHub {
   movers: RankMover[];
   roster_health: TeamRosterHealth[];
   last_nightly: NightlyRun | null;
+}
+
+// Roster by day (team page, Daily mode): GET /teams/{id}/roster-day?date=
+export type RosterDayStatus = 'played' | 'dnp' | 'scheduled' | 'no_game'
+
+export interface RosterDayStats {
+  minutes: number
+  fgm: number
+  fga: number
+  ftm: number
+  fta: number
+  three_pm: number
+  reb: number
+  ast: number
+  stl: number
+  blk: number
+  pts: number
+  to: number
+}
+
+export interface RosterDayPlayer {
+  player_id: number
+  player_name: string
+  positions: string[]
+  pro_team: string
+  /** Slot at that day's lock: PG … UTIL, BE, IR. */
+  lineup_slot: string
+  opponent: string | null
+  status: RosterDayStatus
+  stats: RosterDayStats | null
+  added: boolean
+  dropped: boolean
+}
+
+export interface RosterDayMovePlayer {
+  player_id: number
+  name: string
+  on_roster: boolean
+}
+
+export interface RosterDayMove {
+  id: string
+  kind: 'free_agent' | 'waiver' | 'trade'
+  at: string
+  added: RosterDayMovePlayer[]
+  dropped: RosterDayMovePlayer[]
+  after_lock: boolean
+}
+
+export interface RosterDay {
+  team_id: number
+  date: string
+  scoring_period_id: number
+  is_today: boolean
+  has_games: boolean
+  lock_at: string | null
+  first_date: string
+  last_date: string
+  players: RosterDayPlayer[]
+  moves: RosterDayMove[]
 }
