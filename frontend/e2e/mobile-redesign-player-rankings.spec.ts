@@ -31,7 +31,7 @@ test.describe('phone Player Rankings', () => {
     await expectNoHorizontalScroll(page)
   })
 
-  test('position filter picks several positions; chip clears them', async ({ page }) => {
+  test('position filter picks several positions; each chip clears just its position', async ({ page }) => {
     await page.goto('/player-rankings?ff=mobile')
     await expect(page.getByRole('table', { name: 'Player rankings' })).toBeVisible()
     await page.getByRole('button', { name: /^Filters/ }).click()
@@ -42,8 +42,8 @@ test.describe('phone Player Rankings', () => {
     await expect(group.getByRole('button', { name: 'PG', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await expect(group.getByRole('button', { name: 'C', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await page.goBack()
-    await expect(page.getByRole('button', { name: 'Remove filter PG, C' })).toBeVisible()
-    await page.getByRole('button', { name: 'Remove filter PG, C' }).click()
-    await expect(page.getByRole('button', { name: 'Remove filter PG, C' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Remove filter PG' }).click()
+    await expect(page.getByRole('button', { name: 'Remove filter PG' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Remove filter C' })).toBeVisible()
   })
 })

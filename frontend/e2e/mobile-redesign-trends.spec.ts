@@ -146,7 +146,10 @@ test.describe('phone Trends', () => {
     await group.getByRole('button', { name: 'PF', exact: true }).click()
     await expect(page.locator('.mr-tr-name')).toHaveCount(2)
     await page.goBack()
-    await page.getByRole('button', { name: 'Remove filter SG, PF' }).click()
+    await page.getByRole('button', { name: 'Remove filter SG' }).click()
+    await expect(page.locator('.mr-tr-name')).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Remove filter PF' })).toBeVisible()
+    await page.getByRole('button', { name: 'Remove filter PF' }).click()
     await expect(page.locator('.mr-tr-name')).toHaveCount(4)
   })
 

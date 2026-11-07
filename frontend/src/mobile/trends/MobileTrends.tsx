@@ -246,7 +246,7 @@ export default function MobileTrends(p: MobileTrendsProps) {
   // ---- filters -------------------------------------------------------------
   const f = p.filters
   const active: ActiveFilter[] = [
-    ...(p.positions.length ? [{ key: 'pos', label: p.positions.join(', '), onRemove: () => p.setPositions([]) }] : []),
+    ...p.positions.map((pos) => ({ key: `pos-${pos}`, label: pos, onRemove: () => p.setPositions(p.positions.filter((x) => x !== pos)) })),
     ...(p.fantasyTeam ? [{ key: 'team', label: fantasyTeamOptionLabel(p.fantasyTeam, p.fantasyTeam === p.myTeamName), onRemove: () => p.setFantasyTeam(null) }] : []),
     ...(f.minG15 > p.minGamesFloor ? [{ key: 'min', label: `Min ${f.minG15}+ games`, onRemove: () => p.setMinGames(p.minGamesFloor) }] : []),
     ...(p.isShooting && statFilter !== 'all' ? [{ key: 'stat', label: statFilter, onRemove: () => setStatFilter('all') }] : []),

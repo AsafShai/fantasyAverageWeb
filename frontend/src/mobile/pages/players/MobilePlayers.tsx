@@ -171,7 +171,7 @@ export default function MobilePlayers(p: MobilePlayersProps) {
   const active: ActiveFilter[] = []
   if (filters.team_id !== null && filters.team_id !== undefined)
     active.push({ key: 'team', label: teamLabel(filters.team_id), onRemove: () => set({ team_id: null }) })
-  if (filters.positions?.length) active.push({ key: 'pos', label: filters.positions.join(', '), onRemove: () => set({ positions: [] }) })
+  for (const pos of filters.positions ?? []) active.push({ key: `pos-${pos}`, label: pos, onRemove: () => set({ positions: (filters.positions ?? []).filter((x) => x !== pos) }) })
   if (filters.status?.length)
     active.push({
       key: 'status',

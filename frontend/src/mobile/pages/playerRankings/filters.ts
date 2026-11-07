@@ -30,7 +30,7 @@ function fantasyLabel(v: FantasyTeamFilter, teams: Team[]): string {
 /** Chips for the filters that differ from the defaults; tapping one clears it. */
 export function activeFilterChips(f: RankingsFilters, teams: Team[]) {
   const out: { key: string; label: string; clear: () => void }[] = []
-  if (f.positions.length > 0) out.push({ key: 'pos', label: f.positions.join(', '), clear: () => f.setPositions([]) })
+  for (const pos of f.positions) out.push({ key: `pos-${pos}`, label: pos, clear: () => f.setPositions(f.positions.filter((p) => p !== pos)) })
   if (f.fantasyTeam !== null) out.push({ key: 'fan', label: fantasyLabel(f.fantasyTeam, teams), clear: () => f.setFantasyTeam(null) })
   if (f.displayLimit !== null) out.push({ key: 'show', label: `Top ${f.displayLimit}`, clear: () => f.setDisplayLimit(null) })
   if (f.minGp > 0) out.push({ key: 'gp', label: `Min GP ${f.minGp}`, clear: () => f.setMinGp(0) })
