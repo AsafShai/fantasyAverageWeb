@@ -97,8 +97,8 @@ export default function MobileBoxScores(props: MobileBoxScoresProps) {
               )
             })}
           </div>
-          {panel}
           {extras}
+          {panel}
         </>
       )}
     </div>
