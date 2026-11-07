@@ -29,6 +29,7 @@ const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/boom-or-bust': () => import('../pages/BoomOrBust'),
   '/feature-store': () => import('../pages/FeatureStore'),
   '/analytics': () => import('../pages/Analytics'),
+  '/shooting-map': () => import('../pages/ShootingMap'),
   '/players': () => import('../pages/Players'),
   '/estimator': () => import('../pages/Estimator'),
   '/draft/rankings-adp': () => import('../pages/draft/AdpPage'),
@@ -113,6 +114,7 @@ export function getNavGroups(): NavGroupDef[] {
       items: [
         { path: '/analytics', label: 'League Analytics', icon: '📈' },
         { path: '/trends', label: 'Player Trends', icon: '📉' },
+        { path: '/shooting-map', label: 'Player Shooting Map', icon: '🎯' },
         { path: '/projections', label: 'Projections', icon: '🔭' },
         ...(FF_BOOM_OR_BUST ? [{ path: '/boom-or-bust', label: 'Boom or Bust', icon: '💥' }] : []),
         { path: '/estimator', label: 'Standings Estimator', icon: '🔮' },
