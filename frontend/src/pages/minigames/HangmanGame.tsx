@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import LeaderboardCard from '../../components/minigames/LeaderboardCard'
+import MinigameAnswerReveal from '../../components/minigames/MinigameAnswerReveal'
+import MinigameRunOverSummary from '../../components/minigames/MinigameRunOverSummary'
+import AutoNextToggle from '../../components/minigames/AutoNextToggle'
+import HangmanMobileToolbar from '../../components/minigames/HangmanMobileToolbar'
 import NameEntryModal from '../../components/minigames/NameEntryModal'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
@@ -67,6 +71,8 @@ export default function HangmanGame() {
   const [streak, setStreak] = useState(createStreakState())
   const [autoMode, setAutoMode] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [runReveal, setRunReveal] = useState<MinigamePlayer | null>(null)
+  const [lastRunHints, setLastRunHints] = useState<number | null>(null)
 
   const needed = useMemo(() => (player ? lettersInName(player.displayName) : new Set<string>()), [player])
 
@@ -86,20 +92,25 @@ export default function HangmanGame() {
 
   const startNewGame = () => {
     runEnd.clearFinal()
+    setRunReveal(null)
+    setLastRunHints(null)
     setStreak(createStreakState())
     startRound()
   }
 
   const endRun = useCallback(
     (s = streak) => {
+      if (player) setRunReveal(player)
+      setLastRunHints(s.minHintsForBestTie ?? s.runHintsUsed)
       setPhase('lobby')
+      setPlayer(null)
       void runEnd.handleRunEnd({
         bestStreak: s.bestStreak,
         hintsUsed: s.minHintsForBestTie ?? s.runHintsUsed,
       })
       setStreak(onRoundLoss(s))
     },
-    [runEnd, streak],
+    [player, runEnd, streak],
   )
 
   const goNext = useCallback(() => {
@@ -157,8 +168,28 @@ export default function HangmanGame() {
 
   const board = player && (
     <>
-      <HangmanFigure wrong={wrong} />
-      <div className="flex flex-wrap justify-center gap-1.5 my-4 text-2xl font-mono tracking-widest">
+      {(phase === 'playing' || phase === 'won') && mobile && (
+        <HangmanMobileToolbar
+          hintMask={hintMask}
+          onHint={revealHint}
+          hintsEnabled={phase === 'playing'}
+          wrongCount={wrong}
+          maxWrong={HANGMAN_MAX_WRONG}
+          showGiveUp={phase === 'playing'}
+          onGiveUp={() => endRun()}
+          autoNext={autoMode}
+          onAutoNextChange={setAutoMode}
+          showHintRow={phase === 'playing'}
+        />
+      )}
+      <div className={mobile ? 'mg-hangman-figure' : undefined}>
+        <HangmanFigure wrong={wrong} />
+      </div>
+      <div
+        className={`flex flex-wrap justify-center gap-1.5 text-2xl font-mono tracking-widest ${
+          mobile ? 'mg-hangman-name' : 'my-4'
+        }`}
+      >
         {player.displayName.split('').map((ch, i) => {
           const up = ch.toUpperCase()
           const isLetter = up >= 'A' && up <= 'Z'
@@ -168,7 +199,7 @@ export default function HangmanGame() {
               key={i}
               className={`min-w-[1.1rem] text-center border-b-2 ${
                 isLetter ? 'border-gray-400' : 'border-transparent'
-              }`}
+              } ${phase === 'won' && isLetter ? 'text-green-600 dark:text-green-400 font-semibold' : ''}`}
             >
               {show ? ch : ''}
             </span>
@@ -178,23 +209,29 @@ export default function HangmanGame() {
 
       {phase === 'playing' && (
         <>
-          <div className="mg-hints flex flex-wrap gap-2 justify-center mb-4">
-            {HINTS.map((h) => {
-              const used = (hintMask & (1 << h.bit)) !== 0
-              return (
-                <button
-                  key={h.bit}
-                  type="button"
-                  disabled={used}
-                  onClick={() => revealHint(h.bit)}
-                  className="px-2 py-1 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
-                >
-                  {h.label}
-                </button>
-              )
-            })}
-          </div>
-          <div className="space-y-1 text-sm text-center text-gray-600 dark:text-gray-300 mb-4 min-h-[4.5rem]">
+          {!mobile && (
+            <div className="mg-hints flex flex-wrap gap-2 justify-center mb-4">
+              {HINTS.map((h) => {
+                const used = (hintMask & (1 << h.bit)) !== 0
+                return (
+                  <button
+                    key={h.bit}
+                    type="button"
+                    disabled={used}
+                    onClick={() => revealHint(h.bit)}
+                    className="px-2 py-1 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
+                  >
+                    {h.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          <div
+            className={`space-y-1 text-sm text-center text-gray-600 dark:text-gray-300 mb-4 ${
+              mobile ? 'mg-hangman-reveals' : 'min-h-[4.5rem]'
+            }`}
+          >
             {(hintMask & 1) !== 0 && <p>Conference: {player.conference}</p>}
             {(hintMask & 2) !== 0 && <p>Team: {player.team}</p>}
             {(hintMask & 4) !== 0 && <p>Position: {player.position}</p>}
@@ -206,32 +243,40 @@ export default function HangmanGame() {
               />
             )}
           </div>
-          <div className="mg-keys grid grid-cols-9 gap-1 max-w-md mx-auto mb-4">
+          <div
+            className={`mg-keys grid grid-cols-7 sm:grid-cols-9 gap-1.5 max-w-md mx-auto ${
+              mobile ? 'mg-hangman-keys' : 'mb-4'
+            }`}
+          >
             {LETTERS.map((L) => (
               <button
                 key={L}
                 type="button"
                 disabled={guessed.has(L)}
                 onClick={() => onLetter(L)}
-                className="py-1.5 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-800 disabled:opacity-30 hover:bg-blue-100 dark:hover:bg-gray-700"
+                className="py-2 sm:py-1.5 text-sm sm:text-xs font-semibold rounded bg-gray-100 dark:bg-gray-800 disabled:opacity-30 hover:bg-blue-100 dark:hover:bg-gray-700"
               >
                 {L}
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => endRun()}
-            className="block mx-auto text-sm text-red-600 hover:underline"
-          >
-            Give up
-          </button>
+          {!mobile && (
+            <button
+              type="button"
+              onClick={() => endRun()}
+              className="block mx-auto text-sm text-red-600 hover:underline"
+            >
+              Give up
+            </button>
+          )}
         </>
       )}
 
       {phase === 'won' && (
         <div className="text-center">
-          <p className="text-green-600 font-semibold mb-2">Correct!</p>
+          <p className="text-green-600 font-semibold mb-2">
+            Correct! <span className="text-gray-800 dark:text-gray-100">{player.displayName}</span>
+          </p>
           {countdown != null && <p className="text-sm text-gray-500 mb-2">Next in {countdown}…</p>}
           <button
             type="button"
@@ -245,17 +290,20 @@ export default function HangmanGame() {
     </>
   )
 
-  const runOver = runEnd.finalScore != null && (
-    <p className="mb-4 text-lg text-gray-800 dark:text-gray-100">
-      Run over — best streak: <strong>{runEnd.finalScore}</strong>
-    </p>
+  const runOver = (
+    <>
+      <MinigameRunOverSummary bestStreak={runEnd.finalScore} hintsUsed={lastRunHints} />
+      {runReveal ? <MinigameAnswerReveal player={runReveal} /> : null}
+    </>
   )
-  const autoToggle = (
-    <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300 cursor-pointer">
-      <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
-      Auto next (3s)
-    </label>
-  )
+  const showAutoNext = phase === 'playing' || phase === 'won'
+  const autoToggle = showAutoNext ? (
+    <AutoNextToggle
+      checked={autoMode}
+      onChange={setAutoMode}
+      label="Auto next (3s)"
+    />
+  ) : null
   const nameModal = (
     <NameEntryModal
       open={runEnd.showNameModal}
@@ -278,7 +326,7 @@ export default function HangmanGame() {
           { label: 'Best this run', value: streak.bestStreak },
           { label: 'Hints used', value: streak.runHintsUsed },
         ]}
-        controls={autoToggle}
+        controls={undefined}
         lobby={phase === 'lobby' || !player}
         runOver={runOver}
         onStart={startNewGame}

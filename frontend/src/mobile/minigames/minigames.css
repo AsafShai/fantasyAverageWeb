@@ -36,18 +36,202 @@
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 16px;
   font-size: 13px; color: var(--mr-text-2);
 }
-.mr-mg-controls label { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; cursor: pointer; }
-.mr-mg-controls input[type="checkbox"] { width: 18px; height: 18px; }
+.mr-mg-controls .mg-auto-next { min-height: 44px; }
 .mr-mg-controls .mr-link { min-height: 40px; gap: 4px; font-size: 13px; }
 
 /* board content comes from the page (shared with desktop); phone tap sizes + 16px inputs (no iOS zoom) */
 .mr-mg-board { display: flex; flex-direction: column; gap: 12px; }
+.mr-mg-board .mg-timer-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--mr-card);
+}
 .mr-mg-board input { font-size: 16px; min-height: 42px; }
 .mr-mg-board button:not([title]) { min-height: 40px; }
 .mr-mg-board .mg-keys { gap: 5px; width: 100%; align-self: center; }
 .mr-mg-board .mg-keys button { min-height: 42px; font-size: 15px; padding: 0; }
 .mr-mg-board .mg-hints button { min-height: 36px; padding: 0 12px; font-size: 13px; }
 .mr-mg-board ul button { min-height: 44px; }
+/* Who Am I guess cards: compact list, equal-height cells in the 2-column grid */
+.mr-mg-board .mg-whoami-guess-list { gap: 6px; }
+.mr-mg-board .mg-whoami-guess-card { padding: 6px 8px; }
+.mr-mg-board .mg-whoami-field { min-height: 2.65rem; }
+/* Shared mobile toolbar (Who Am I, Hangman) */
+.mg-game-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--mr-border, #e5e7eb);
+  background: var(--mr-sunken, #f3f4f6);
+}
+.dark .mg-game-toolbar {
+  border-color: var(--mr-border, #374151);
+  background: rgba(31, 41, 55, 0.55);
+}
+.mg-game-toolbar--compact {
+  padding: 8px 10px;
+}
+.mg-game-toolbar__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mg-game-toolbar__actions,
+.mg-game-toolbar__hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.mg-game-toolbar__hint-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.mg-game-toolbar__chip {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 7px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--mr-border, #d1d5db);
+  background: var(--mr-card, #fff);
+  color: var(--mr-text, #111827);
+  min-height: 32px;
+}
+.mg-game-toolbar__chip--hint {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 9px;
+}
+.mg-game-toolbar__chip--used {
+  opacity: 0.72;
+  border-style: dashed;
+}
+.mg-game-toolbar__chip:disabled {
+  opacity: 0.45;
+}
+.mg-game-toolbar__chip--muted {
+  font-weight: 500;
+  border-color: transparent;
+  background: transparent;
+  color: var(--mr-down, #dc2626);
+}
+.mg-game-toolbar__chip--map {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  padding-left: 10px;
+  padding-right: 12px;
+}
+.mg-game-toolbar__stat {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--mr-divider, #e5e7eb);
+  background: var(--mr-card, #fff);
+}
+.mg-game-toolbar__stat--urgent {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(254, 226, 226, 0.55);
+}
+.dark .mg-game-toolbar__stat--urgent {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.25);
+}
+.mg-game-toolbar__stat--urgent .mg-game-toolbar__stat-n {
+  color: var(--mr-down, #dc2626);
+}
+.mg-game-toolbar__stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--mr-muted, #6b7280);
+  line-height: 1;
+}
+.mg-game-toolbar__stat-count {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  font-family: var(--mr-font-num, ui-monospace, monospace);
+}
+.mg-game-toolbar__stat-n {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mr-text, #111827);
+  line-height: 1;
+}
+.mg-game-toolbar__stat-sep,
+.mg-game-toolbar__stat-max {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mr-muted, #6b7280);
+  line-height: 1;
+}
+.mg-game-toolbar__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mr-divider, #e5e7eb);
+}
+.mg-game-toolbar__bottom--solo {
+  border-top: none;
+  padding-top: 0;
+}
+.dark .mg-game-toolbar__bottom {
+  border-top-color: var(--mr-divider, #374151);
+}
+.mr-mg-board {
+  padding-bottom: max(72px, calc(56px + env(safe-area-inset-bottom, 0px)));
+}
+.mr-mg-board .mg-game-toolbar button {
+  min-height: 32px;
+}
+.mr-mg-board .mg-game-toolbar .mg-auto-next--compact {
+  min-height: 32px;
+}
+.mr-mg-board .mg-hangman-figure {
+  margin-top: 4px;
+  line-height: 0;
+}
+.mr-mg-board .mg-hangman-figure svg {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.mr-mg-board .mg-hangman-name {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+.mr-mg-board .mg-hangman-reveals {
+  min-height: 2.25rem;
+  margin-bottom: 8px !important;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--mr-text-2, #4b5563);
+}
+.mr-mg-board .mg-hangman-keys {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
 .dark .mr-mg-board input { background-color: var(--mr-card) !important; border-color: var(--mr-border) !important; color: var(--mr-text) !important; }
 
 /* leaderboard */

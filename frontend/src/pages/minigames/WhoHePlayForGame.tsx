@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import LeaderboardCard from '../../components/minigames/LeaderboardCard'
+import MinigameAnswerReveal from '../../components/minigames/MinigameAnswerReveal'
+import MinigameRunOverSummary from '../../components/minigames/MinigameRunOverSummary'
 import NameEntryModal from '../../components/minigames/NameEntryModal'
+import RoundSuccessIndicator from '../../components/minigames/RoundSuccessIndicator'
 import TeamPicker from '../../components/minigames/TeamPicker'
 import TimerBar from '../../components/minigames/TimerBar'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -25,14 +28,15 @@ export default function WhoHePlayForGame() {
   const [player, setPlayer] = useState<MinigamePlayer | null>(null)
   const [timerKey, setTimerKey] = useState(0)
   const [streak, setStreak] = useState(createStreakState())
-  const [reveal, setReveal] = useState<string | null>(null)
+  const [runReveal, setRunReveal] = useState<MinigamePlayer | null>(null)
+  const [roundOk, setRoundOk] = useState(false)
 
   const startRound = useCallback(
     (excludeId?: string) => {
       if (!players.length) return
       setPlayer(pickRandomPlayer(players, excludeId))
       setTimerKey((k) => k + 1)
-      setReveal(null)
+      setRoundOk(false)
       setPhase('playing')
     },
     [players],
@@ -40,28 +44,34 @@ export default function WhoHePlayForGame() {
 
   const startNewGame = () => {
     runEnd.clearFinal()
+    setRunReveal(null)
     setStreak(createStreakState())
     startRound()
   }
 
   const endRun = useCallback(
-    (answerTeam?: string, s = streak) => {
-      setReveal(answerTeam ?? player?.team ?? null)
+    (answer: MinigamePlayer | null = player, s = streak) => {
+      setRunReveal(answer ?? player)
       setPhase('lobby')
       void runEnd.handleRunEnd({ bestStreak: s.bestStreak })
       setStreak(onRoundLoss(s))
     },
-    [player?.team, runEnd, streak],
+    [player, runEnd, streak],
   )
 
   const onPick = (team: NbaTeamOption) => {
-    if (phase !== 'playing' || !player) return
+    if (phase !== 'playing' || !player || roundOk) return
     if (team.abbr === player.teamAbbr) {
       const next = onRoundWin(streak)
       setStreak(next)
-      startRound(player.id)
+      setRoundOk(true)
+      const id = player.id
+      window.setTimeout(() => {
+        setRoundOk(false)
+        startRound(id)
+      }, 650)
     } else {
-      endRun(player.team)
+      endRun(player)
     }
   }
 
@@ -72,35 +82,36 @@ export default function WhoHePlayForGame() {
     <>
       <TimerBar
         totalSeconds={WHO_HE_ROUND_SECONDS}
-        running
+        running={!roundOk}
         resetKey={timerKey}
-        onTimeout={() => endRun(player.team)}
+        onTimeout={() => endRun(player)}
+        prominent={mobile}
       />
+      {roundOk && (
+        <div className="flex justify-center py-1">
+          <RoundSuccessIndicator />
+        </div>
+      )}
       <p className="text-3xl font-bold text-center text-gray-900 dark:text-gray-100 py-6">
         {player.displayName}
       </p>
-      <TeamPicker teams={teams} onPick={onPick} />
       <button
         type="button"
-        onClick={() => endRun(player.team)}
-        className="block mx-auto text-sm text-red-600 hover:underline"
+        onClick={() => endRun(player)}
+        disabled={roundOk}
+        className="relative z-30 block mx-auto text-sm text-red-600 hover:underline disabled:opacity-40"
       >
         Give up
       </button>
+      <TeamPicker teams={teams} disabled={roundOk} onPick={onPick} />
     </>
   )
   const runOver = (
     <>
-      {runEnd.finalScore != null && (
-        <p className="mb-2 text-lg">
-          Run over — best streak: <strong>{runEnd.finalScore}</strong>
-        </p>
-      )}
-      {reveal && (
-        <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
-          Correct team: <strong>{reveal}</strong>
-        </p>
-      )}
+      <MinigameRunOverSummary bestStreak={runEnd.finalScore} />
+      {runReveal ? (
+        <MinigameAnswerReveal player={runReveal} detail={`Team: ${runReveal.team}`} />
+      ) : null}
     </>
   )
   const nameModal = (

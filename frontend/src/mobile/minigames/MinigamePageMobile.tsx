@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
+import { minigameEmoji } from '../../minigames/catalog'
 import type { GameSlug } from '../../minigames/types'
 import { ensureMobileFonts } from '../fonts'
 import { Button, Card } from '../ui'
@@ -12,7 +13,7 @@ interface Props {
   subtitle: ReactNode
   /** Today's streak line ("Streak", "Best", "Hints used" …), as tiles; the first is the live one. */
   stats: { label: string; value: number }[]
-  /** Auto next / View map: shown under the game in every phase. */
+  /** In-round controls (auto next, view map) — only while a run is active. */
   controls?: ReactNode
   /** Lobby (Start New Game) vs a round in progress. */
   lobby: boolean
@@ -56,7 +57,9 @@ export default function MinigamePageMobile({
         </div>
         {lobby ? (
           <div className="mr-mg-lobby">
-            <span className="mr-mg-ball" aria-hidden="true">🏀</span>
+            <span className="mr-mg-ball" aria-hidden="true">
+              {minigameEmoji(slug)}
+            </span>
             {runOver}
             <Button variant="primary" onClick={onStart}>Start New Game</Button>
           </div>
