@@ -1,0 +1,141 @@
+/*
+ * Mobile redesign, step 4: Teams list + Team page (`mr-tm-` prefix).
+ * Kept out of mobile.css so the step 4 page PRs don't collide.
+ */
+
+.mr-page { display: flex; flex-direction: column; gap: 12px; padding: 0 12px; min-width: 0; }
+.mr-page-head { display: flex; flex-direction: column; gap: 2px; padding: 0 2px; }
+
+/* ── Teams list ── */
+.mr-tm-list { display: flex; flex-direction: column; gap: 8px; }
+.mr-tm-row {
+  display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 10px 14px;
+  background: var(--mr-card); border-radius: 12px; color: var(--mr-text); text-decoration: none;
+}
+.mr-tm-row.mr-me { background: var(--mr-row-me); box-shadow: inset 3px 0 0 var(--mr-primary-2); }
+.mr-tm-row:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.mr-tm-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mr-tm-name b { font-family: var(--mr-font-num); font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.mr-tm-chev { color: var(--mr-faint); font-size: 18px; }
+
+/* ── Team page: header card ── */
+.mr-tm-back { align-self: flex-start; padding: 0 2px; }
+.mr-tm-title { margin: 0; font-family: var(--mr-font-num); font-size: 20px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.mr-tm-big { font-family: var(--mr-font-num); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mr-tm-move { font-size: 13px; font-weight: 700; white-space: nowrap; }
+.mr-tm-move.mr-up { color: var(--mr-up); }
+.mr-tm-move.mr-down { color: var(--mr-down); }
+.mr-tm-move.mr-same { color: var(--mr-muted); font-weight: 600; }
+.mr-tm-cats { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.mr-tm-cat {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0; border-radius: 8px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em;
+  background: var(--mr-cat-bg); color: var(--mr-cat-fg);
+}
+.mr-tm-cat b { font-family: var(--mr-font-num); font-size: 13px; }
+.mr-tm-cat-top  { --mr-cat-bg: #1D4ED8; --mr-cat-fg: #FFFFFF; }
+.mr-tm-cat-high { --mr-cat-bg: #B7CAF7; --mr-cat-fg: #1E3A8A; }
+.mr-tm-cat-mid  { --mr-cat-bg: #E3EAFB; --mr-cat-fg: #1E3A8A; }
+.mr-tm-cat-low  { --mr-cat-bg: #FDE2D2; --mr-cat-fg: #9A3412; }
+.dark .mr-tm-cat-top  { --mr-cat-bg: #2563EB; --mr-cat-fg: #FFFFFF; }
+.dark .mr-tm-cat-high { --mr-cat-bg: #2B4A8F; --mr-cat-fg: #DCE6FF; }
+.dark .mr-tm-cat-mid  { --mr-cat-bg: #1E2B45; --mr-cat-fg: #C7D4F3; }
+.dark .mr-tm-cat-low  { --mr-cat-bg: #4A2716; --mr-cat-fg: #FDBA8C; }
+.mr-tm-actions { display: flex; gap: 8px; align-items: stretch; }
+.mr-tm-espn {
+  flex: 1; min-height: 42px; border-radius: var(--mr-radius-ctl); background: #DC2626; color: #FFFFFF;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 14px; font-weight: 700; text-decoration: none;
+}
+.mr-tm-espn:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+/* ShareCardButton keeps its own menu; only its trigger is resized to sit next to ESPN. */
+.mr-tm-share > div > button { min-height: 42px; min-width: 42px; border-radius: var(--mr-radius-ctl); }
+.mr-tm-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+
+/* ── key/value rows + tiles ── */
+.mr-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 3px 0; }
+.mr-kv b { font-family: var(--mr-font-num); font-variant-numeric: tabular-nums; text-align: right; }
+.mr-tiles { display: grid; gap: 6px; }
+.mr-tiles.mr-c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mr-tiles.mr-c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mr-tile { background: var(--mr-sunken); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mr-tile-k { font-size: 10px; font-weight: 700; color: var(--mr-muted); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mr-tile-v { font-family: var(--mr-font-num); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ── controls row ── */
+.mr-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mr-row.mr-wrap { flex-wrap: wrap; }
+.mr-tm-day {
+  position: relative; flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; box-sizing: border-box;
+  border: 1px solid var(--mr-border); border-radius: var(--mr-radius-ctl); background: var(--mr-card);
+  display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--mr-text);
+}
+.mr-tm-day input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.mr-tm-day:focus-within { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.mr-icon-btn { width: 40px; padding: 0; flex-shrink: 0; font-size: 18px; }
+.mr-icon-btn:disabled { color: var(--mr-faint); cursor: default; }
+
+/* ── roster tables ── */
+.mr-tm-table .mr-t th.mr-pin { min-width: 128px; max-width: 150px; white-space: normal; }
+.mr-tm-table .mr-t tbody th.mr-pin a,
+.mr-tm-table .mr-t tbody th.mr-pin button { font-weight: 600; }
+.mr-tm-namecell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; line-height: 1.25; }
+.mr-tm-namecell > span:first-child { overflow-wrap: anywhere; }
+.mr-tm-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.mr-t tr.mr-lit td, .mr-t tr.mr-lit th { background: var(--mr-row-me); }
+.mr-t tr.mr-muted td { color: var(--mr-faint); }
+.mr-t tr.mr-sum td, .mr-t tr.mr-sum th { background: var(--mr-row-me); font-weight: 700; border-top: 2px solid var(--mr-primary-2); }
+.mr-t td.mr-focus, .mr-t th.mr-focus { background: var(--mr-primary-soft); }
+.mr-t td.mr-nodata { text-align: center; font-style: italic; color: var(--mr-faint); }
+.mr-tm-sub { display: block; font-size: 10.5px; color: var(--mr-muted); font-weight: 400; }
+.mr-tm-check { width: 20px; height: 20px; accent-color: var(--mr-primary-2); cursor: pointer; vertical-align: middle; }
+.mr-tm-check:disabled { opacity: 0.4; cursor: not-allowed; }
+.mr-tm-inj { font-size: 13px; line-height: 1; }
+.mr-tm-opp {
+  border: none; background: none; padding: 4px 0; min-height: 32px; cursor: pointer; color: var(--mr-primary);
+  font: inherit; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.mr-tm-opp:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; border-radius: 4px; }
+.mr-th-day { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.mr-th-day i { font-style: normal; font-weight: 400; }
+
+/* ── moves ── */
+.mr-tm-move-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-top: 1px solid var(--mr-divider); font-size: 13px; }
+.mr-tm-move-row:first-of-type { border-top: none; padding-top: 0; }
+.mr-tm-names { display: flex; flex-wrap: wrap; gap: 2px 10px; }
+.mr-tm-add, .mr-tm-drop { border: none; background: none; padding: 0; font: inherit; font-weight: 600; text-align: left; min-height: 24px; }
+.mr-tm-add { color: var(--mr-up); }
+.mr-tm-drop { color: var(--mr-down); }
+button.mr-tm-add, button.mr-tm-drop { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+button.mr-tm-add[aria-pressed="true"], button.mr-tm-drop[aria-pressed="true"] { text-decoration: underline solid; }
+
+/* ── who plays ── */
+.mr-tm-who { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.mr-tm-who li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ── existing slot usage table inside a card ── */
+.mr-tm-slots > div { padding: 0 !important; background: transparent !important; }
+
+/* ── roster coverage ── */
+.mr-cov { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.mr-cov-day {
+  flex-shrink: 0; width: 84px; padding: 8px 4px; box-sizing: border-box; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--mr-border); background: var(--mr-sunken); color: var(--mr-text);
+  display: flex; flex-direction: column; align-items: center; gap: 2px; font: inherit; line-height: 1.2;
+}
+.mr-cov-day[aria-pressed="true"] { border: 2px solid var(--mr-primary); background: var(--mr-card); }
+.mr-cov-day:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.mr-cov-dow { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.mr-cov-date { font-size: 12px; color: var(--mr-text-2); }
+.mr-cov-bar { position: relative; width: 26px; height: 88px; margin: 6px 0; border-radius: 6px 6px 2px 2px; background: #DCE6FB; overflow: hidden; }
+.dark .mr-cov-bar { background: #23345A; }
+.mr-cov-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--mr-primary-2); }
+.mr-cov-n { font-size: 11px; color: var(--mr-muted); }
+.mr-cov-n b { font-family: var(--mr-font-num); font-size: 17px; color: var(--mr-text); }
+.mr-cov-slate { margin-top: 3px; font-size: 10px; font-weight: 600; padding: 2px 4px; border-radius: 6px; background: var(--mr-card); color: var(--mr-text-2); }
+.mr-cov-slate.mr-busy { background: var(--mr-primary-soft); color: var(--mr-primary); }
+.mr-legend { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--mr-muted); }
+.mr-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+/* ── notices from today's components ── */
+.mr-tm-notice > div { margin: 0 !important; }

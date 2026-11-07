@@ -28,6 +28,9 @@ import { RosterDayContent, RosterDayStepper, SlotPill } from '../components/Rost
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { lineupSlotOrder, lockNote } from '../utils/rosterDay'
 import { easternToday, formatSlateDate, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileTeamDetail from '../mobile/team/MobileTeamDetail'
+import { TEAM_TABS, type TeamTab } from '../mobile/team/types'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -56,6 +59,8 @@ const TEAM_DETAIL_URL_SCHEMA = {
   mode: enumParam<PlayerTableMode>(['daily', 'stats', 'schedule'], 'daily'),
   // Daily mode's day; empty = today.
   day: isoDateParam(),
+  // Phone layout's tab (mobile redesign); desktop shows every section at once.
+  tab: enumParam<TeamTab>(TEAM_TABS, 'stats'),
 }
 
 const TeamDetail = () => {
@@ -63,6 +68,7 @@ const TeamDetail = () => {
   const navigate = useNavigate()
   const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
   const [urlState, setUrlState] = useUrlState(TEAM_DETAIL_URL_SCHEMA)
+  const mobileRedesign = useMobileRedesign()
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(urlState.period)
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(() =>
     urlState.from && urlState.to ? { start: urlState.from, end: urlState.to } : null
@@ -89,6 +95,7 @@ const TeamDetail = () => {
   const [tableMode, setTableMode] = useState<PlayerTableMode>(urlState.mode)
   // '' = today (kept out of the URL so a shared link always opens on the current day).
   const [rosterDate, setRosterDate] = useState<string>(urlState.day)
+  const [mobileTab, setMobileTab] = useState<TeamTab>(urlState.tab)
 
   const isCustom = timePeriod === 'custom' && customRange !== null
   useEffect(() => {
@@ -100,8 +107,9 @@ const TeamDetail = () => {
       order: sortOrder,
       mode: tableMode,
       day: tableMode === 'daily' ? rosterDate : '',
+      tab: mobileRedesign ? mobileTab : 'stats',
     })
-  }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder, tableMode, rosterDate])
+  }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder, tableMode, rosterDate, mobileRedesign, mobileTab])
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
   const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
@@ -460,6 +468,83 @@ const TeamDetail = () => {
     )
   }
 
+  const slotUsageSubtitle =
+    typeof leagueSummary?.nba_game_days_left === 'number'
+      ? `${leagueSummary.nba_game_days_left} game days left${typeof leagueSummary?.nba_avg_pace === 'number' ? ` · NBA pace ${leagueSummary.nba_avg_pace.toFixed(1)}` : ''}`
+      : undefined
+
+  if (mobileRedesign) {
+    const awaitingCoverageMatchup = !!coverageSlate && !datedMatchupReady
+    return (
+      <MobileTeamDetail
+        team={team_detail}
+        teamCount={leagueSummary?.total_teams ?? Math.max(...Object.values(team_detail.category_ranks), 1)}
+        espnUpdatedAt={leagueSummary?.espn_updated_at}
+        shareCard={shareCardRender}
+        perGameCategories={perGameCategories}
+        categoryNames={CATEGORY_DISPLAY_NAMES}
+        tab={mobileTab}
+        onTab={setMobileTab}
+        mode={tableMode}
+        onMode={setTableMode}
+        rosterDay={rosterDay}
+        rosterDayFetching={rosterDayFetching}
+        rosterDayError={rosterDayError}
+        rosterDayDate={rosterDate || rosterDay?.date || today}
+        rosterDayLast={rosterDay?.last_date ?? today}
+        onRosterDate={changeRosterDate}
+        matchups={matchupMap}
+        matchupsPending={awaitingCoverageMatchup}
+        timePeriod={timePeriod}
+        onTimePeriod={setTimePeriod}
+        customRange={customRange}
+        onCustomRange={setCustomRange}
+        seasonStart={leagueSummary?.season_start}
+        periodLabel={getTimePeriodLabel()}
+        showAverages={showAverages}
+        onShowAverages={setShowAverages}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={handleSort}
+        showSortReset={showStatsSortReset}
+        onResetSort={resetStatsSort}
+        players={sortedPlayers}
+        statColumns={statColumns}
+        formatStat={formatStat}
+        isIncluded={isPlayerIncluded}
+        onToggleIncluded={togglePlayerInclusion}
+        allIncluded={includedPlayers === null || includedPlayers.size === visiblePlayers.length}
+        onToggleAll={toggleAllPlayers}
+        includedCount={includedPlayers === null ? visiblePlayers.length : includedPlayers.size}
+        teamAverage={teamAverage as unknown as Record<string, number>}
+        weekDays={weekDays}
+        horizon={scheduleHorizon}
+        onHorizon={setScheduleHorizon}
+        focusDate={scheduleSpotlightDate}
+        onFocusDate={setScheduleFocusDate}
+        opponentOn={(proTeam, date) => weekOpponent(opponents, proTeam, date)}
+        gamesIn={proTeam => weekGameCount(opponents, proTeam, weekDays)}
+        whoPlays={scheduleSpotlightRows}
+        whoPlaysHeading={scheduleSummaryHeading}
+        slotMeta={slotUsageSubtitle && <span className="mr-meta">{slotUsageSubtitle}</span>}
+        slotUsageNode={
+          <SlotUsageTable
+            embedded
+            slotUsage={team_detail.slot_usage}
+            avgPace={leagueSummary?.nba_avg_pace}
+            gameDaysLeft={leagueSummary?.nba_game_days_left}
+            gameDaysElapsed={leagueSummary?.nba_game_days_elapsed}
+          />
+        }
+        coverageDate={showSchedule ? scheduleSpotlightDate : coverageDate}
+        onCoverageDate={date => {
+          setCoverageDate(date)
+          setScheduleFocusDate(date)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 space-y-4 sm:space-y-6 pb-4">
       {/* Mobile: compact hero */}
@@ -640,11 +725,7 @@ const TeamDetail = () => {
         <CollapsibleSection
           id="slot-usage"
           title="Slot usage"
-          subtitle={
-            typeof leagueSummary?.nba_game_days_left === 'number'
-              ? `${leagueSummary.nba_game_days_left} game days left${typeof leagueSummary?.nba_avg_pace === 'number' ? ` · NBA pace ${leagueSummary.nba_avg_pace.toFixed(1)}` : ''}`
-              : undefined
-          }
+          subtitle={slotUsageSubtitle}
           open={sectionSlotUsageOpen}
           onOpenChange={setSectionSlotUsageOpen}
           contentClassName="p-0"

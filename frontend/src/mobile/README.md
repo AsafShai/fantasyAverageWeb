@@ -46,4 +46,9 @@ instead of today's nav; pages that are not converted yet render unchanged inside
 - **Standings & Rankings** `pages/rankings/` (step 4): converted pages keep their state, URL and data in
   `src/pages/*` and hand a phone layout the same props. Standings & Rankings:
   `pages/rankings/RankingsMobile.tsx`.
+- **Teams + Team page** `team/` (step 4): `Teams` and `TeamDetail` render
+  `MobileTeams` / `MobileTeamDetail` on a phone. TeamDetail keeps all state and
+  passes it down; the phone tab is `?tab=stats|roster|slots` (roster modes stay
+  `?mode=daily|stats|schedule`). Today's matchup opens in a bottom sheet with the
+  minutes stepper (`MatchupExpandPanel minutesStepper`). Styles in `team/team.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
