@@ -51,6 +51,11 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   passes it down; the phone tab is `?tab=stats|roster|slots` (roster modes stay
   `?mode=daily|stats|schedule`). Today's matchup opens in a bottom sheet with the
   minutes stepper (`MatchupExpandPanel minutesStepper`). Styles in `team/team.css`.
+- **Trends, Projections, Boom or Bust** (step 5): `trends/MobileTrends` (tab chips, Filters sheet,
+  window/scope segmented controls, pinned-player tables, tap a player for the game-by-game chart;
+  shared sort/filter helpers in `utils/trendsShared.ts`), `projections/MobileProjections` (one card per
+  player; row logic in `hooks/useAdjustableProjection.ts`), and Boom or Bust, whose phone layout lives in
+  `pages/BoomOrBust.tsx` (`mobile/bob/bob.css`).
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
 - **League Analytics + Estimator** `pages/analytics/` (step 5): phone tabs in `?tab=heat|race|shots`
   and `?tab=prob|rank|proj`. StandingsRace, ShootingStatsSection and Estimator's sections keep
