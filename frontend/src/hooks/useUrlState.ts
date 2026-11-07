@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 
 export interface UrlParam<T> {
   parse: (raw: string) => T | undefined;
@@ -77,6 +77,7 @@ export function useUrlState<V extends Record<string, unknown>>(
   schema: UrlSchema<V>,
 ): [V, (patch: Partial<V>) => void, ReadonlySet<string>] {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const query = searchParams.toString();
 
   const values = useMemo(() => {
@@ -106,9 +107,11 @@ export function useUrlState<V extends Record<string, unknown>>(
         else next.set(key, raw);
       }
       if (next.toString() === searchParams.toString()) return;
-      setSearchParams(next, { replace: true });
+      // Keep the history entry's state: an open bottom sheet lives there
+      // (mobile redesign), and a filter change must not close it.
+      setSearchParams(next, { replace: true, state: location.state });
     },
-    [schema, searchParams, setSearchParams],
+    [schema, searchParams, setSearchParams, location.state],
   );
 
   return [values, setValues, initialKeys];
