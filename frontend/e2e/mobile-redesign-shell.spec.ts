@@ -3,7 +3,7 @@ import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test
 // Step 2 of the mobile redesign: the phone shell (header, bottom tab bar,
 // ☰ menu sheet, footer) and browser back for its sheets.
 
-const GROUPS = ['LEAGUE', 'PLAYERS', 'INSIGHTS', 'TOOLS', 'NBA', 'MINIGAMES']
+const GROUPS = ['League', 'Players & Trade', 'Insights', 'NBA', 'Minigames']
 const TABS = ['Home', 'Standings', 'Teams', 'Player Ranks', 'Trade']
 
 test.describe('shell is off unless flag + phone width', () => {
@@ -82,12 +82,12 @@ test.describe('phone shell', () => {
     expect(before!.y + before!.height).toBeCloseTo(page.viewportSize()!.height, 0)
   })
 
-  test('menu sheet: same groups as today, back closes it first', async ({ page }) => {
+  test('menu dropdown: accordion groups, back closes it first', async ({ page }) => {
     await page.goto('/rankings')
     await page.getByRole('button', { name: 'Menu' }).click()
     const menu = page.getByRole('dialog', { name: 'Menu' })
     await expect(menu).toBeVisible()
-    for (const g of GROUPS) await expect(menu.getByRole('heading', { name: g })).toBeVisible()
+    for (const g of GROUPS) await expect(menu.getByRole('button', { name: new RegExp(g) })).toBeVisible()
     await expect(menu.getByRole('combobox', { name: 'My team' })).toBeAttached()
     await expect(menu.getByRole('link', { name: /Standings & Rankings/ })).toHaveAttribute('aria-current', 'page')
 
@@ -99,7 +99,9 @@ test.describe('phone shell', () => {
   test('menu item replaces the menu entry: back returns to the page, menu closed', async ({ page }) => {
     await page.goto('/rankings')
     await page.getByRole('button', { name: 'Menu' }).click()
-    await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: /Player Trends/ }).click()
+    const menu = page.getByRole('dialog', { name: 'Menu' })
+    await menu.getByRole('button', { name: /Insights/ }).click()
+    await menu.getByRole('link', { name: /Player Trends/ }).click()
     await expect(page).toHaveURL(/\/trends$/)
     await expect(page.getByRole('dialog', { name: 'Menu' })).toHaveCount(0)
     await page.goBack()

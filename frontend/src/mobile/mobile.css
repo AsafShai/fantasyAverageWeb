@@ -258,13 +258,29 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 .mr-native-select select {
   position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px;
 }
-.mr-menu-group { display: flex; flex-direction: column; gap: 6px; }
-.mr-menu-title { margin: 0; padding-left: 4px; font-size: 11px; font-weight: 700; color: var(--mr-muted); letter-spacing: 0.05em; }
-.mr-menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+/* ☰ menu: a dropdown under the header, accordion groups. */
+.mr-menu-layer { position: fixed; inset: var(--mr-hdr-h) 0 0 0; z-index: 39; display: flex; flex-direction: column; }
+.mr-menu-drop {
+  max-height: calc(100dvh - var(--mr-hdr-h) - 24px); overflow-y: auto; overscroll-behavior: contain;
+  background: var(--mr-page); border-bottom: 1px solid var(--mr-border); border-radius: 0 0 18px 18px;
+  padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+}
+.mr-menu-scrim { flex: 1; min-height: 24px; border: none; background: var(--mr-scrim); cursor: pointer; order: 2; }
+.mr-acc { background: var(--mr-card); border-radius: 14px; overflow: hidden; }
+.mr-acc-h { margin: 0; }
+.mr-acc-btn {
+  width: 100%; min-height: 48px; padding: 0 14px; border: none; background: none; color: var(--mr-text);
+  display: flex; align-items: center; justify-content: space-between; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.mr-acc-btn:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: -2px; }
+.mr-acc-meta { display: flex; align-items: center; gap: 10px; color: var(--mr-muted); font-size: 12px; font-weight: 600; }
+.mr-acc-caret { font-size: 14px; color: var(--mr-text-2); transition: transform 0.15s; }
+.mr-acc-open .mr-acc-caret { transform: rotate(180deg); }
+.mr-acc-list { display: flex; flex-direction: column; padding: 0 6px 8px; }
 .mr-menu-item {
-  display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px; box-sizing: border-box;
-  border-radius: 12px; background: var(--mr-card); color: var(--mr-text); text-decoration: none;
-  font-size: 13px; font-weight: 600; line-height: 1.25; min-width: 0;
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; box-sizing: border-box;
+  border-radius: 10px; color: var(--mr-text); text-decoration: none; font-size: 14px; font-weight: 600; min-width: 0;
 }
 .mr-menu-item[aria-current="page"] { background: var(--mr-primary-soft); color: var(--mr-primary); }
 .mr-menu-icon { font-size: 16px; flex-shrink: 0; }
