@@ -1,0 +1,22 @@
+/* Players page on a phone (mobile redesign step 4). */
+.mr-players .mr-pl-table .mr-t .mr-pl-name { max-width: 150px; font-weight: 600; }
+.mr-players .mr-pl-link {
+  display: block; overflow: hidden; text-overflow: ellipsis; color: var(--mr-text); text-decoration: none;
+}
+.mr-players .mr-pl-status { display: block; margin-top: 2px; line-height: 1; }
+.mr-players .mr-pl-status .mr-pill { font-size: 10px; }
+.mr-players .mr-pl-nodata { color: var(--mr-faint); font-style: italic; }
+.mr-players .mr-pl-error { margin: 0; color: var(--mr-down); font-size: 14px; }
+.mr-players .mr-t td.mr-pl-sel, .mr-players .mr-t th.mr-pl-sel { background: var(--mr-row-me); }
+/* matchup cell + expanded panel come from the desktop component */
+.mr-players .mr-t .mq-cell { padding: 0; font-size: 12.5px; }
+.mr-players .mr-t .mq-expand-td { text-align: left; white-space: normal; }
+.mr-players .mq-expand-content { background: var(--mr-sunken); border-top-color: var(--mr-divider); padding: 12px; }
+
+.mr-pl-statrow { display: flex; gap: 6px; min-width: 0; }
+.mr-pl-statrow .mr-field:first-child { flex: 1; }
+.mr-pl-statrow .mr-pl-op { flex: 0 0 118px; }
+.mr-pl-statrow .mr-pl-val { flex: 0 0 76px; width: 76px; }
+/* empty table: keep the message in view instead of centred across all columns */
+.mr-players .mr-t td.mr-empty { text-align: left; }
+.mr-players .mr-pl-empty { position: sticky; left: 12px; display: inline-block; }
