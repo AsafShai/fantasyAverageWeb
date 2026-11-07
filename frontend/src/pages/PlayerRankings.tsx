@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useTransition, useDeferredValue } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
+import { useWeightDraft } from '../hooks/useWeightDraft'
 import { useGetAllPlayersQuery, useGetLatestMovesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useMyTeam } from '../context/MyTeamContext'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
@@ -15,6 +16,8 @@ import { orderCategories } from '../utils/statOrder'
 import InfoTip from '../components/InfoTip'
 import { METRIC_GLOSSARY, type MetricInfo } from '../constants/metricGlossary'
 import type { TimePeriod, CustomDateRange } from '../types/api'
+import { useMobileRedesign } from '../mobile/flag'
+import PlayerRankingsMobile from '../mobile/pages/playerRankings/PlayerRankingsMobile'
 import {
   computePlayerRankings,
   getRawValue,
@@ -136,6 +139,7 @@ export default function PlayerRankings() {
   const [rankedPlayers, setRankedPlayers] = useState<RankedPlayer[]>([])
   const [hasCalculated, setHasCalculated] = useState(false)
   const [, startTransition] = useTransition()
+  const mobile = useMobileRedesign()
 
   useEffect(() => {
     if (period !== 'custom' || !customRange || excludedPlayers.length === 0) return
@@ -241,6 +245,45 @@ export default function PlayerRankings() {
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players.')} />
+
+  if (mobile) {
+    return (
+      <PlayerRankingsMobile
+        search={search}
+        onSearchChange={setSearch}
+        searchActive={!!searchQuery}
+        hasCalculated={hasCalculated}
+        rows={sortedPlayers}
+        sortCol={sortCol}
+        sortAsc={sortAsc}
+        onSort={(col, asc) => { setSortCol(col as SortCol); setSortAsc(asc) }}
+        calcMode={calcMode}
+        onCalcMode={setCalcMode}
+        displayMode={displayMode}
+        onDisplayMode={setDisplayMode}
+        period={period}
+        onPeriod={setPeriod}
+        customRange={customRange}
+        onCustomRange={setCustomRange}
+        actualStart={playersData?.actual_start}
+        actualEnd={playersData?.actual_end}
+        filters={{ position, setPosition, fantasyTeam, setFantasyTeam, displayLimit, setDisplayLimit, minGp, setMinGp, minMin, setMinMin }}
+        teams={teams ?? []}
+        myTeamId={myTeamId}
+        isMyTeam={isMyTeam}
+        categories={categories}
+        weights={effectiveWeights}
+        onWeights={setWeights}
+        sliderResetKey={sliderResetKey}
+        playersLoaded={players.length}
+        onReset={handleReset}
+        isPunted={isPunted}
+        fantasyAbbrev={teamId => fantasyTeamAbbrev(teamId, abbrevById)}
+        minutesText={ranked => ranked.player.stats.gp > 0 ? fmt(minutesValue(ranked, displayMode), displayMode === 'totals' ? 0 : 1) : '—'}
+        rawText={rawDisplay}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
@@ -531,36 +574,7 @@ function WeightSliders({ categories, initialWeights, onCommit }: {
   initialWeights: Record<RankingCategory, number>
   onCommit: (weights: Record<RankingCategory, number>) => void
 }) {
-  const [weights, setWeights] = useState(initialWeights)
-  const prevWeightsRef = useRef(initialWeights)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-  }, [])
-
-  const isPunted = (cat: RankingCategory) => weights[cat] === 0
-
-  const handleSlide = (cat: RankingCategory, value: number) => {
-    setWeights(w => {
-      const next = { ...w, [cat]: value }
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => onCommit(next), 150)
-      return next
-    })
-  }
-
-  const togglePunt = (cat: RankingCategory) => {
-    setWeights(w => {
-      const next = w[cat] === 0
-        ? { ...w, [cat]: prevWeightsRef.current[cat] }
-        : { ...w, [cat]: 0 }
-      if (w[cat] !== 0) prevWeightsRef.current = { ...prevWeightsRef.current, [cat]: w[cat] }
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      onCommit(next)
-      return next
-    })
-  }
+  const { weights, isPunted, slide: handleSlide, togglePunt } = useWeightDraft(initialWeights, onCommit)
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
