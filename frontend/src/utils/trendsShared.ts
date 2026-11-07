@@ -1,4 +1,4 @@
-import type { MinutesMoverItem, UsageRoleItem, RegressionStatItem, RegressionStat, RegressionMode, CategoryMoverItem, CategoryStatItem } from '../types/api'
+import type { MinutesMoverItem, UsageRoleItem, RegressionStatItem, RegressionStat, RegressionMode, RegressionPlayerGroup, CategoryMoverItem, CategoryStatItem } from '../types/api'
 
 /**
  * Tabs, filters and sort keys of the Trends page, shared by the desktop
@@ -126,3 +126,62 @@ export function normalizeDelta(stat: RegressionStatItem): number {
 }
 
 export const WINDOW_OPTIONS = [7, 15, 30] as const
+
+export type StatFilter = 'all' | RegressionStat
+
+/**
+ * Shooting tabs: one group per player (stats inside a group worst first),
+ * groups ordered by the sort column. A stat column sorts each group by its
+ * most extreme stat.
+ */
+export function sortRegressionGroups(
+  items: RegressionPlayerGroup[],
+  filters: Filters,
+  statFilter: StatFilter,
+  sortCol: string,
+  sortAsc: boolean,
+  isForm: boolean,
+): { group: RegressionPlayerGroup; stats: RegressionStatItem[]; key: number | string }[] {
+  const filtered = items
+    .filter(g => passesShared(g, filters))
+    .map(g => ({ ...g, stats: statFilter === 'all' ? g.stats : g.stats.filter(s => s.stat === statFilter) }))
+    .filter(g => g.stats.length > 0)
+
+  const getVal = REG_SORT_VAL[sortCol] ?? REG_SORT_VAL.dev
+  const identityCol = sortCol === 'stat' ? false : ['player', 'team', 'g15'].includes(sortCol)
+
+  const withKey = filtered.map(g => {
+    const sortedStats = [...g.stats].sort((a, b) => (
+      isForm ? b.drift_score - a.drift_score : Math.abs(b.dev) - Math.abs(a.dev)
+    ))
+    let key: number | string
+    if (identityCol) {
+      key = sortCol === 'player' ? g.player_name : sortCol === 'team' ? g.pro_team : g.games_last_15d
+    } else {
+      const extreme = sortedStats.reduce((best, s) => (Math.abs(getVal(s) as number) > Math.abs(getVal(best) as number) ? s : best), sortedStats[0])
+      key = getVal(extreme)
+    }
+    return { group: g, stats: sortedStats, key }
+  })
+
+  withKey.sort((a, b) => {
+    const cmp = typeof a.key === 'string' ? a.key.localeCompare(b.key as string) : (a.key as number) - (b.key as number)
+    return sortAsc ? cmp : -cmp
+  })
+
+  return withKey
+}
+
+/** Rows that pass the shared filters, ordered by one of the tab's sort keys. */
+export function filterAndSort<T>(
+  rows: T[],
+  pass: (row: T) => boolean,
+  getVal: (row: T) => number | string,
+  asc: boolean,
+): T[] {
+  return rows.filter(pass).sort((a, b) => {
+    const av = getVal(a), bv = getVal(b)
+    const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number)
+    return asc ? cmp : -cmp
+  })
+}

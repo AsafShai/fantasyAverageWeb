@@ -21,10 +21,12 @@ import { countingCategoriesOf, isGoodChange } from '../utils/categoryTrends'
 import { fantasyTeamOptionLabel } from '../myTeam/display'
 import {
   TABS, TAB_MODE, ALL_POSITIONS, BASELINE_OPTIONS, FORM_BASELINE_OPTIONS, OWNERSHIP_OPTIONS, WINDOW_OPTIONS,
-  MIN_SORT_VAL, USG_SORT_VAL, CAT_SORT_VAL, REG_SORT_VAL, MAKES_LABEL, normalizeDelta, passesShared,
+  MIN_SORT_VAL, USG_SORT_VAL, CAT_SORT_VAL, MAKES_LABEL, normalizeDelta, passesShared, sortRegressionGroups,
   type TabKey, type Ownership, type Filters,
 } from '../utils/trendsShared'
 import { useMyTeam } from '../context/MyTeamContext'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileTrends from '../mobile/trends/MobileTrends'
 
 const MIN_CUSTOM_WINDOW_DAYS = 5
 const MAX_CUSTOM_WINDOW_DAYS = 60
@@ -458,36 +460,10 @@ function RegressionTable({ items, filters, windowDays, baselineSeasons, mode }: 
     return next
   })
 
-  const groups = useMemo(() => {
-    const filtered = items
-      .filter(g => passesShared(g, filters))
-      .map(g => ({ ...g, stats: statFilter === 'all' ? g.stats : g.stats.filter(s => s.stat === statFilter) }))
-      .filter(g => g.stats.length > 0)
-
-    const getVal = REG_SORT_VAL[sortCol] ?? REG_SORT_VAL.dev
-    const identityCol = sortCol === 'stat' ? false : ['player', 'team', 'g15'].includes(sortCol)
-
-    const withKey = filtered.map(g => {
-      const sortedStats = [...g.stats].sort((a, b) => (
-        isForm ? b.drift_score - a.drift_score : Math.abs(b.dev) - Math.abs(a.dev)
-      ))
-      let key: number | string
-      if (identityCol) {
-        key = sortCol === 'player' ? g.player_name : sortCol === 'team' ? g.pro_team : g.games_last_15d
-      } else {
-        const extreme = sortedStats.reduce((best, s) => (Math.abs(getVal(s) as number) > Math.abs(getVal(best) as number) ? s : best), sortedStats[0])
-        key = getVal(extreme)
-      }
-      return { group: g, stats: sortedStats, key }
-    })
-
-    withKey.sort((a, b) => {
-      const cmp = typeof a.key === 'string' ? a.key.localeCompare(b.key as string) : (a.key as number) - (b.key as number)
-      return sortAsc ? cmp : -cmp
-    })
-
-    return withKey
-  }, [items, filters, statFilter, sortCol, sortAsc, isForm])
+  const groups = useMemo(
+    () => sortRegressionGroups(items, filters, statFilter, sortCol, sortAsc, isForm),
+    [items, filters, statFilter, sortCol, sortAsc, isForm],
+  )
 
   const handleSort = (col: string) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -632,6 +608,7 @@ const TRENDS_URL_SCHEMA = {
 }
 
 export default function Trends() {
+  const mobile = useMobileRedesign()
   const [urlState, setUrlState, urlKeys] = useUrlState(TRENDS_URL_SCHEMA)
   const urlBaseline = urlKeys.has('baseline') ? urlState.baseline : undefined
   const urlTabIsForm = TAB_MODE[urlState.mode] === 'form'
@@ -801,6 +778,70 @@ export default function Trends() {
     return [myTeam.team_name, ...names.filter(name => name !== myTeam.team_name)]
   }, [minutesQuery.data, usageQuery.data, categoriesQuery.data, regressionQuery.data, myTeam])
 
+  const customPanel = (
+    <>
+          {!anchorIso ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400 py-2">
+              {anchorQuery.isFetching || anchorSourceId === undefined ? 'Loading latest game day…' : 'Could not determine the latest game day.'}
+            </p>
+          ) : (
+            <>
+              <DateRangePicker
+                seasonStart={customMinStartIso}
+                fixedEnd={anchorIso}
+                initialStart={customStartIso ?? ''}
+                onApply={handleCustomApply}
+              />
+              {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
+            </>
+          )}
+    </>
+  )
+
+  if (mobile) {
+    return (
+      <MobileTrends
+        tab={tab}
+        setTab={setTab}
+        isLoading={activeQuery.isLoading}
+        errorMessage={activeQuery.error ? getErrorMessage(activeQuery.error, 'Failed to load trends data.') : null}
+        filters={filters}
+        setSearch={setNameFilter}
+        setPosition={setPosition}
+        setOwnership={(key) => { setOwnership(key); if (key === 'fa') setFantasyTeam(null) }}
+        fantasyTeam={fantasyTeam}
+        setFantasyTeam={(t) => { setFantasyTeam(t); if (t) setOwnership('all') }}
+        teamOptions={teamOptions}
+        myTeamName={myTeam?.team_name}
+        minGames={minGames}
+        setMinGames={setMinGames}
+        minGamesFloor={minGamesFloor}
+        minGamesOptions={minGamesOptions}
+        windowDays={windowDays}
+        customStartIso={customStartIso}
+        selectPreset={selectPreset}
+        customOpen={customOpen}
+        toggleCustom={() => setCustomOpen(o => !o)}
+        customPanel={customPanel}
+        gameNights={gameNights}
+        eligibilityRule={eligibilityRule}
+        isShootingSeasonTab={isShootingSeasonTab}
+        minutes={minutesQuery.data?.items}
+        usage={usageQuery.data?.items}
+        categories={categoriesQuery.data?.items}
+        leagueCats={leagueCats}
+        reverseCats={reverseCats}
+        activeCategory={activeCategory}
+        setCategory={setCategoryChoice}
+        regression={regressionQuery.data}
+        isShooting={isShooting}
+        isFormTab={isFormTab}
+        baselineSeasons={baselineSeasons}
+        setBaselineSeasons={setBaselineSeasons}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
       <div className="max-w-screen-2xl mx-auto">
@@ -881,25 +922,7 @@ export default function Trends() {
                 ⚠ Short window ({windowDays}d) — most rows will be based on very few games and marked <span className="font-semibold">partial</span>.
               </p>
             )}
-            {customOpen && (
-              <div className="col-span-2">
-                {!anchorIso ? (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 py-2">
-                    {anchorQuery.isFetching || anchorSourceId === undefined ? 'Loading latest game day…' : 'Could not determine the latest game day.'}
-                  </p>
-                ) : (
-                  <>
-                    <DateRangePicker
-                      seasonStart={customMinStartIso}
-                      fixedEnd={anchorIso}
-                      initialStart={customStartIso ?? ''}
-                      onApply={handleCustomApply}
-                    />
-                    {customError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">⚠ {customError}</p>}
-                  </>
-                )}
-              </div>
-            )}
+            {customOpen && <div className="col-span-2">{customPanel}</div>}
             <div className="col-span-2 flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm" title="Which players to show: everyone, free agents only, or rostered only">
               {OWNERSHIP_OPTIONS.map(([key, label]) => (
                 <button
