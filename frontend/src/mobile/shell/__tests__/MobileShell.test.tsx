@@ -68,19 +68,26 @@ describe('MobileShell', () => {
     expect(TABS.map((t) => t.path)).toEqual(['/', '/rankings', '/teams', '/player-rankings', '/trade'])
   })
 
-  it('menu dropdown: accordion with the current page\'s group open, every desktop page reachable, a link closes it', async () => {
+  it('menu dropdown: collapsed accordion with the current page\'s group highlighted, every desktop page reachable, a link closes it', async () => {
     renderShell('/rankings')
     await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
-    const menu = screen.getByRole('dialog', { name: 'Menu' })
+    let menu = screen.getByRole('dialog', { name: 'Menu' })
     expect(within(menu).getByRole('combobox', { name: 'My team' })).toBeInTheDocument()
     const heads = within(menu).getAllByRole('heading', { level: 2 })
-    expect(heads.map((h) => h.textContent?.replace(/^\S+\s+/, '').replace(/\d+▾$/, ''))).toEqual([
+    expect(heads.map((h) => h.querySelector('.mr-acc-label')?.textContent)).toEqual([
       'League', 'Players & Trade', 'Insights', 'NBA', 'Minigames',
     ])
-    // the page's own group (League) starts open, the others closed
-    expect(within(menu).getByRole('button', { name: /League/ })).toHaveAttribute('aria-expanded', 'true')
-    expect(within(menu).getByRole('button', { name: /NBA/ })).toHaveAttribute('aria-expanded', 'false')
+    // all groups start collapsed, like master; the page's own group is highlighted
+    for (const b of within(menu).getAllByRole('button', { expanded: false })) expect(b).toHaveAttribute('aria-expanded', 'false')
+    expect(within(menu).queryAllByRole('link')).toHaveLength(0)
+    expect(within(menu).getByRole('button', { name: /League/ })).toHaveClass('mr-acc-current')
+    await userEvent.click(within(menu).getByRole('button', { name: /League/ }))
     expect(within(menu).getByRole('link', { name: /Standings & Rankings/ })).toHaveAttribute('aria-current', 'page')
+    // the header button closes it again
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
+    expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
+    menu = screen.getByRole('dialog', { name: 'Menu' })
 
     // every page of the desktop nav is reachable by opening its group
     const hrefs = new Set<string>()

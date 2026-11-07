@@ -205,7 +205,7 @@
 html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 
 .mr-hdr {
-  position: sticky; top: 0; z-index: 40; height: var(--mr-hdr-h); flex-shrink: 0;
+  height: var(--mr-hdr-h); flex-shrink: 0;
   display: flex; align-items: center; gap: 2px; padding: 0 6px 0 14px;
   background: var(--mr-card); border-bottom: 1px solid var(--mr-border);
 }
@@ -258,31 +258,36 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 .mr-native-select select {
   position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px;
 }
-/* ☰ menu: a dropdown under the header, accordion groups. */
-.mr-menu-layer { position: fixed; inset: var(--mr-hdr-h) 0 0 0; z-index: 39; display: flex; flex-direction: column; }
+/* ☰ menu: inline under the header like master's menu (pushes the page down), accordion groups. */
+.mr-hdr-wrap { position: sticky; top: 0; z-index: 40; flex-shrink: 0; }
 .mr-menu-drop {
-  max-height: calc(100dvh - var(--mr-hdr-h) - 24px); overflow-y: auto; overscroll-behavior: contain;
-  background: var(--mr-page); border-bottom: 1px solid var(--mr-border); border-radius: 0 0 18px 18px;
-  padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 8px;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  max-height: calc(100dvh - var(--mr-hdr-h) - var(--mr-tabbar-h)); overflow-y: auto; overscroll-behavior: contain;
+  background: var(--mr-card); border-bottom: 1px solid var(--mr-border); padding: 4px 14px 14px;
 }
-.mr-menu-scrim { flex: 1; min-height: 24px; border: none; background: var(--mr-scrim); cursor: pointer; order: 2; }
-.mr-acc { background: var(--mr-card); border-radius: 14px; overflow: hidden; }
+.mr-menu-team { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0 6px; }
+.mr-menu-myteam { flex: 1; min-width: 0; color: var(--mr-primary-2); font-size: 15px; font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-menu-select { flex: 0 1 55%; min-width: 0; }
+.mr-native-select { position: relative; }
+.mr-native-select select {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px;
+}
 .mr-acc-h { margin: 0; }
 .mr-acc-btn {
-  width: 100%; min-height: 48px; padding: 0 14px; border: none; background: none; color: var(--mr-text);
-  display: flex; align-items: center; justify-content: space-between; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+  width: 100%; min-height: 54px; padding: 0 12px; border: none; border-radius: 12px; background: none; color: var(--mr-text);
+  display: flex; align-items: center; gap: 14px; font: inherit; font-size: 18px; font-weight: 500; text-align: left; cursor: pointer;
 }
+.mr-acc-btn.mr-acc-current { background: var(--mr-primary-soft); color: var(--mr-primary); }
 .mr-acc-btn:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: -2px; }
-.mr-acc-meta { display: flex; align-items: center; gap: 10px; color: var(--mr-muted); font-size: 12px; font-weight: 600; }
-.mr-acc-caret { font-size: 14px; color: var(--mr-text-2); transition: transform 0.15s; }
-.mr-acc-open .mr-acc-caret { transform: rotate(180deg); }
-.mr-acc-list { display: flex; flex-direction: column; padding: 0 6px 8px; }
+.mr-acc-icon { font-size: 24px; width: 28px; text-align: center; flex-shrink: 0; }
+.mr-acc-label { flex: 1; min-width: 0; }
+.mr-acc-caret { font-size: 12px; color: var(--mr-muted); transition: transform 0.15s; }
+.mr-acc-btn[aria-expanded="true"] .mr-acc-caret { transform: rotate(180deg); }
+.mr-acc-list { display: flex; flex-direction: column; padding: 2px 0 6px 28px; }
 .mr-menu-item {
-  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; box-sizing: border-box;
-  border-radius: 10px; color: var(--mr-text); text-decoration: none; font-size: 14px; font-weight: 600; min-width: 0;
+  display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 12px; box-sizing: border-box;
+  border-radius: 10px; color: var(--mr-text-2); text-decoration: none; font-size: 16px; font-weight: 500; min-width: 0;
 }
-.mr-menu-item[aria-current="page"] { background: var(--mr-primary-soft); color: var(--mr-primary); }
+.mr-menu-item[aria-current="page"] { background: var(--mr-primary-soft); color: var(--mr-primary); font-weight: 600; }
 .mr-menu-icon { font-size: 16px; flex-shrink: 0; }
 
 .mr-foot {
