@@ -262,30 +262,30 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 .mr-hdr-wrap { position: sticky; top: 0; z-index: 40; flex-shrink: 0; }
 .mr-menu-drop {
   max-height: calc(100dvh - var(--mr-hdr-h) - var(--mr-tabbar-h)); overflow-y: auto; overscroll-behavior: contain;
-  background: var(--mr-card); border-bottom: 1px solid var(--mr-border); padding: 4px 14px 14px;
+  background: var(--mr-card); border-bottom: 1px solid var(--mr-border); padding: 2px 12px 8px;
 }
-.mr-menu-team { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0 6px; }
-.mr-menu-myteam { flex: 1; min-width: 0; color: var(--mr-primary-2); font-size: 15px; font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mr-menu-select { flex: 0 1 55%; min-width: 0; }
+.mr-menu-team { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.mr-menu-myteam { flex: 1; min-width: 0; color: var(--mr-primary-2); font-size: 13px; font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-menu-select { flex: 0 1 55%; min-width: 0; min-height: 32px; font-size: 12px; }
 .mr-native-select { position: relative; }
 .mr-native-select select {
   position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px;
 }
 .mr-acc-h { margin: 0; }
 .mr-acc-btn {
-  width: 100%; min-height: 46px; padding: 0 12px; border: none; border-radius: 12px; background: none; color: var(--mr-text);
-  display: flex; align-items: center; gap: 12px; font: inherit; font-size: 16px; font-weight: 500; text-align: left; cursor: pointer;
+  width: 100%; min-height: 40px; padding: 0 10px; border: none; border-radius: 10px; background: none; color: var(--mr-text);
+  display: flex; align-items: center; gap: 10px; font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
 }
 .mr-acc-btn.mr-acc-current { background: var(--mr-primary-soft); color: var(--mr-primary); }
 .mr-acc-btn:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: -2px; }
-.mr-acc-icon { font-size: 20px; width: 24px; text-align: center; flex-shrink: 0; }
+.mr-acc-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
 .mr-acc-label { flex: 1; min-width: 0; }
-.mr-acc-caret { font-size: 12px; color: var(--mr-muted); transition: transform 0.15s; }
+.mr-acc-caret { font-size: 11px; color: var(--mr-muted); transition: transform 0.15s; }
 .mr-acc-btn[aria-expanded="true"] .mr-acc-caret { transform: rotate(180deg); }
-.mr-acc-list { display: flex; flex-direction: column; padding: 0 0 4px 24px; }
+.mr-acc-list { display: flex; flex-direction: column; padding: 0 0 4px 22px; }
 .mr-menu-item {
-  display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 12px; box-sizing: border-box;
-  border-radius: 10px; color: var(--mr-text-2); text-decoration: none; font-size: 15px; font-weight: 500; min-width: 0;
+  display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; box-sizing: border-box;
+  border-radius: 10px; color: var(--mr-text-2); text-decoration: none; font-size: 14px; font-weight: 500; min-width: 0;
 }
 .mr-menu-item[aria-current="page"] { background: var(--mr-primary-soft); color: var(--mr-primary); font-weight: 600; }
 .mr-menu-icon { font-size: 16px; flex-shrink: 0; }
