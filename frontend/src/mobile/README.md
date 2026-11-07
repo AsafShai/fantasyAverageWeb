@@ -51,6 +51,7 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   passes it down; the phone tab is `?tab=stats|roster|slots` (roster modes stay
   `?mode=daily|stats|schedule`). Today's matchup opens in a bottom sheet with the
   minutes stepper (`MatchupExpandPanel minutesStepper`). Styles in `team/team.css`.
+- **Minigames** `minigames/` (step 5): the list and the four games render `MobileMinigames` / `MinigamePageMobile` on a phone; each game keeps its logic and hands the page its board, streak tiles and run-over text. The Who Am I? map is a bottom sheet in browser history. Styles in `minigames/minigames.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
 - **League pages** (step 5): Activity (`activity/`; trade views reuse the desktop
   components), Draft Report + FA Report (`draft/`). Styles in each folder's css.
