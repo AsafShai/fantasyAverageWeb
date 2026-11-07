@@ -114,11 +114,11 @@ export function getNavGroups(): NavGroupDef[] {
       items: [
         { path: '/analytics', label: 'League Analytics', icon: '📈' },
         { path: '/trends', label: 'Player Trends', icon: '📉' },
-        { path: '/shooting-map', label: 'Player Shooting Map', icon: '🎯' },
         { path: '/projections', label: 'Projections', icon: '🔭' },
         ...(FF_BOOM_OR_BUST ? [{ path: '/boom-or-bust', label: 'Boom or Bust', icon: '💥' }] : []),
         { path: '/estimator', label: 'Standings Estimator', icon: '🔮' },
         ...(FF_FEATURE_STORE ? [{ path: '/feature-store', label: 'Feature Store', icon: '🗄️' }] : []),
+        { path: '/shooting-map', label: 'Player Shooting Map', icon: '🎯' },
       ],
     },
     {
