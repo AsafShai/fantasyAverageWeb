@@ -151,6 +151,7 @@
 .dark .mr-t td.mr-nba-heat-3, .dark .mr-nba-heat-3 { background: #1E3A8A; color: #DBEAFE; }
 
 /* ── Injuries ── */
+.mr-nba-notes { display: block; }
 .mr-nba-notes summary { display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 32px; }
 .mr-nba-notes summary::before { content: '▸'; color: var(--mr-muted); font-size: 12px; }
 .mr-nba-notes[open] summary::before { content: '▾'; }

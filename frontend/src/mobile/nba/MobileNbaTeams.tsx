@@ -53,7 +53,9 @@ export default function MobileNbaTeams({ teams, isLoading, error, selectedTeamId
             label="NBA team"
             options={options}
             value={selectedTeamId}
-            onChange={onSelectTeam}
+            // The list closes by stepping back over its history entry; picking after
+            // that lands the ?team= replace on the page's own entry, not the sheet's.
+            onChange={(teamId) => { window.setTimeout(() => onSelectTeam(teamId), 60) }}
             display={selectedTeamId ? undefined : 'Select a team...'}
             wide
           />

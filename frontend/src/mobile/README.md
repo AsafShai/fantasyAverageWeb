@@ -51,6 +51,11 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   passes it down; the phone tab is `?tab=stats|roster|slots` (roster modes stay
   `?mode=daily|stats|schedule`). Today's matchup opens in a bottom sheet with the
   minutes stepper (`MatchupExpandPanel minutesStepper`). Styles in `team/team.css`.
+- **NBA pages** `nba/` (step 5): NBA Teams, Box Scores, Season Schedule and Injuries render
+  `MobileNbaTeams` / `MobileBoxScores` / `MobileSchedule` / `MobileInjuries` on a phone. State and
+  URL stay in `src/pages/*`; shared logic moved to hooks (`useNbaDepthChart`, `useSlateCalendar`,
+  `components/injuries/injuryFormat`). A list picked in a `SelectSheet` that also writes the URL should
+  apply it after the sheet closes (see `MobileNbaTeams`). Styles in `nba/nba.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
 - **League Analytics + Estimator** `pages/analytics/` (step 5): phone tabs in `?tab=heat|race|shots`
   and `?tab=prob|rank|proj`. StandingsRace, ShootingStatsSection and Estimator's sections keep
