@@ -4,7 +4,7 @@ import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetTeamPlayersQuery } f
 import type { Player, ProjectionStats } from '../../types/api'
 import { BottomSheet, MinutesStepper } from '../ui'
 import { usePlayerSheet } from './usePlayerSheet'
-import { tradePresetForPlayer } from './tradePreset'
+import { tradeLinkForPlayer } from './tradePreset'
 import { useSheetProjection, type SheetProjection } from './useSheetProjection'
 
 /*
@@ -125,9 +125,15 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
         <button type="button" className="mr-btn mr-pri mr-grow" onClick={() => sheet.leaveTo(`/player/${playerId}`, profileState)}>
           Full profile
         </button>
-        <button type="button" className="mr-btn mr-grow" onClick={() =>
-            sheet.leaveTo('/trade', player ? { tradePreset: tradePresetForPlayer(player, teams, myTeamId) } : undefined)
-          }>
+        <button
+          type="button"
+          className="mr-btn mr-grow"
+          onClick={() => {
+            if (!player) return sheet.leaveTo('/trade')
+            const link = tradeLinkForPlayer(player, teams, myTeamId)
+            sheet.leaveTo(link.path, link.state)
+          }}
+        >
           Trade Analyzer
         </button>
       </div>

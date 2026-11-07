@@ -23,3 +23,14 @@ export function tradePresetForPlayer(player: Player, teams: Team[], myTeamId: nu
   }
   return { mode: 'team', teamA: owner, teamB: null, playersA: [me], playersB: [] }
 }
+
+/**
+ * Where the sheet's Trade Analyzer button goes: /trade with the preset, on the
+ * side that holds the player (the phone Trade page shows one side at a time
+ * and keeps it in ?side=).
+ */
+export function tradeLinkForPlayer(player: Player, teams: Team[], myTeamId: number | null) {
+  const preset = tradePresetForPlayer(player, teams, myTeamId)
+  const onSideB = preset.playersB.length > 0 || (preset.freeAgents?.length ?? 0) > 0
+  return { path: onSideB ? '/trade?side=B' : '/trade', state: { tradePreset: preset } }
+}

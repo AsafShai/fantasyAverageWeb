@@ -2,7 +2,7 @@ import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { useTradeState } from '../../../hooks/useTradeState'
 import type { Player, Team } from '../../../types/api'
-import { tradePresetForPlayer } from '../tradePreset'
+import { tradeLinkForPlayer, tradePresetForPlayer } from '../tradePreset'
 
 const TEAMS: Team[] = [
   { team_id: 1, team_name: 'Alpha Team' },
@@ -41,5 +41,11 @@ describe('tradePresetForPlayer', () => {
     expect(team.tradeMode).toBe('team')
     expect(team.teamB).toEqual(TEAMS[0])
     expect(team.selectedPlayersB.map((p) => p.player_name)).toEqual(['Alpha Star'])
+  })
+
+  it('opens the phone Trade page on the side that holds the player', () => {
+    expect(tradeLinkForPlayer(rostered, TEAMS, 2).path).toBe('/trade?side=B')
+    expect(tradeLinkForPlayer(free, TEAMS, 2).path).toBe('/trade?side=B')
+    expect(tradeLinkForPlayer(rostered, TEAMS, null).path).toBe('/trade')
   })
 })
