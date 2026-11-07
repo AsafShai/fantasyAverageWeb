@@ -134,25 +134,15 @@ test.describe('phone player sheet', () => {
     const sheet = page.getByRole('dialog', { name: 'Alpha Star' })
     await expect(sheet.getByText('SEASON · PER GAME')).toBeVisible()
 
-    await sheet.getByRole('button', { name: 'Last 15' }).click()
+    await sheet.getByRole('button', { name: /Last 15 Days/ }).click()
     await expect(sheet.getByText('LAST 15 DAYS · PER GAME · 2 GP')).toBeVisible()
     await expect(sheet.getByRole('list', { name: 'Per game' })).toContainText('PTS20.0')
     expect(periods).toContain('last_15')
 
-    await sheet.getByRole('button', { name: 'Custom' }).click()
-    const picker = page.getByRole('dialog', { name: 'Custom range' })
-    await expect(picker).toBeVisible()
-    // back closes the picker only
-    await page.goBack()
-    await expect(picker).toHaveCount(0)
-    await expect(sheet).toBeVisible()
-    await expect(page).toHaveURL(/\?player=100$/)
-
-    await sheet.getByRole('button', { name: 'Custom' }).click()
-    await picker.getByLabel('Start date').fill('2026-10-10')
-    await picker.getByLabel('End date').fill('2026-10-18')
-    await picker.getByRole('button', { name: 'Apply' }).click()
-    await expect(picker).toHaveCount(0)
+    await sheet.getByRole('button', { name: /Custom/ }).click()
+    await sheet.getByLabel('Start date').fill('2026-10-10')
+    await sheet.getByLabel('End date').fill('2026-10-18')
+    await sheet.getByRole('button', { name: 'Apply' }).click()
     await expect(sheet.getByText('OCT 10 – OCT 18 · PER GAME · 2 GP')).toBeVisible()
     expect(periods).toContain('custom 2026-10-10 2026-10-18')
 

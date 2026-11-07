@@ -26,7 +26,7 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   search result) opens the sheet over the current page as `?player=<ESPN id>`
   instead of going to `/player/:id`. Back closes it; a shared link or reload
   opens it directly. Shows team · positions · slot · GP, the fantasy owner, the
-  per-game line (Players list) for Season / Last 7 / 15 / 30 / Custom range,
+  per-game line (Players list) for the shared `PeriodChips` (incl. Custom range),
   and Full profile / Trade Analyzer, which replace the sheet's history entry.
   No projection in the sheet (it stays on the profile).
 - **Filters pattern** `ui/Filters.tsx`: `FilterSearchRow` (search + "Filters (n)"),

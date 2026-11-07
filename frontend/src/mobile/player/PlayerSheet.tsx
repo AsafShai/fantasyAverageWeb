@@ -1,18 +1,18 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useMyTeam } from '../../context/MyTeamContext'
-import DateRangePicker from '../../components/DateRangePicker'
 import { timePeriodLabel } from '../../hooks/usePlayerProfileData'
-import { useGetAllPlayersQuery, useGetLeagueSummaryQuery, useGetNbaPlayerQuery, useGetTeamPlayersQuery } from '../../store/api/fantasyApi'
+import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetTeamPlayersQuery } from '../../store/api/fantasyApi'
 import type { CustomDateRange, Player, TimePeriod } from '../../types/api'
-import { BottomSheet, Chip, ChipRow, useSheetHistory } from '../ui'
+import { BottomSheet, PeriodChips } from '../ui'
 import { usePlayerSheet } from './usePlayerSheet'
 import { tradeLinkForPlayer } from './tradePreset'
 
 /*
  * Player sheet (step 3): a quick look at a player from any player name on a
  * phone, over the page it was opened on. Only data the site already shows:
- * per-game stats from the Players list for Season / Last 7 / 15 / 30 days,
+ * per-game stats from the Players list for the shared period chips (Season,
+ * Last 7 / 15 / 30 days, Custom range),
  * the fantasy owner and lineup slot.
  * No projection here (kept on the full profile). Full profile and Trade
  * Analyzer lead to the full pages.
@@ -27,16 +27,14 @@ function slotLabel(slot: string | null | undefined): string | null {
   return slot === 'BE' ? 'Bench' : slot
 }
 
-type SheetPeriod = Exclude<TimePeriod, 'last_night'>
-type PresetPeriod = Exclude<SheetPeriod, 'custom'>
 
-/** Same periods as the profile's time frame, plus Custom (From/To picker). */
-const PERIODS: { value: PresetPeriod; label: string; heading: string }[] = [
-  { value: 'season', label: 'Season', heading: 'SEASON' },
-  { value: 'last_7', label: 'Last 7', heading: 'LAST 7 DAYS' },
-  { value: 'last_15', label: 'Last 15', heading: 'LAST 15 DAYS' },
-  { value: 'last_30', label: 'Last 30', heading: 'LAST 30 DAYS' },
-]
+
+const HEADINGS: Partial<Record<TimePeriod, string>> = {
+  season: 'SEASON',
+  last_7: 'LAST 7 DAYS',
+  last_15: 'LAST 15 DAYS',
+  last_30: 'LAST 30 DAYS',
+}
 
 function statTiles(p: Player): { k: string; v: string }[] {
   const s = p.stats
@@ -75,12 +73,8 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
   // Not in the league's player list (e.g. no games yet): name and team from the bio.
   const { data: bio } = useGetNbaPlayerQuery(playerId, { skip: listLoading || !!player })
   const { teams, myTeamId } = useMyTeam()
-  const [period, setPeriod] = useState<SheetPeriod>('season')
+  const [period, setPeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
-  // where clearing a custom range goes back to
-  const prevPeriod = useRef<PresetPeriod>('season')
-  const rangeSheet = useSheetHistory('player-range')
-  const { data: summary } = useGetLeagueSummaryQuery(undefined, { skip: !rangeSheet.open })
   const isCustom = period === 'custom' && !!customRange
   // The same per-period list Players / Player Rankings use; Season is the query above.
   const { currentData: periodList, isFetching: periodFetching } = useGetAllPlayersQuery(
@@ -93,7 +87,7 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
       : periodList?.players.find((p) => p.player_id != null && String(p.player_id) === playerId && p.has_data !== false) ?? null
   const heading = isCustom
     ? timePeriodLabel('custom', customRange).toUpperCase()
-    : PERIODS.find((p) => p.value === period)?.heading ?? 'SEASON'
+    : HEADINGS[period] ?? 'SEASON'
 
   const name = player?.player_name ?? bio?.display_name ?? (listLoading ? 'Loading…' : 'Player')
   const sub = player
@@ -118,34 +112,10 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
 
       {player && (
         <>
-          <ChipRow label="Period" wrap className="mr-ps-periods">
-            {PERIODS.map((p) => (
-              <Chip
-                key={p.value}
-                selected={period === p.value}
-                onClick={() => {
-                  prevPeriod.current = p.value
-                  setPeriod(p.value)
-                }}
-              >
-                {p.label}
-              </Chip>
-            ))}
-            <Chip selected={isCustom} onClick={rangeSheet.show} aria-haspopup="dialog">
-              {isCustom ? timePeriodLabel('custom', customRange) : 'Custom'}
-            </Chip>
-            {isCustom && (
-              <Chip
-                aria-label="Clear custom range"
-                onClick={() => {
-                  setCustomRange(null)
-                  setPeriod(prevPeriod.current)
-                }}
-              >
-                ✕
-              </Chip>
-            )}
-          </ChipRow>
+          {/* block wrapper: the chip row is a flex item that would grow in the sheet's column */}
+          <div className="mr-ps-periods">
+            <PeriodChips value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
+          </div>
           <span className="mr-meta mr-ps-label">
             {heading} · PER GAME
             {periodPlayer && period !== 'season' ? ` · ${periodPlayer.stats.gp} GP` : ''}
@@ -164,19 +134,6 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
           )}
         </>
       )}
-
-      <BottomSheet open={rangeSheet.open} onClose={rangeSheet.hide} title="Custom range">
-        <DateRangePicker
-          seasonStart={summary?.season_start}
-          initialStart={customRange?.start ?? ''}
-          initialEnd={customRange?.end ?? ''}
-          onApply={(range) => {
-            setCustomRange(range)
-            setPeriod('custom')
-            rangeSheet.hide()
-          }}
-        />
-      </BottomSheet>
 
       <div className="mr-ps-actions">
         <button type="button" className="mr-btn mr-pri mr-grow" onClick={() => sheet.leaveTo(`/player/${playerId}`, profileState)}>

@@ -132,12 +132,12 @@ describe('player sheet', () => {
     expect(within(sheet).getAllByText('—')).toHaveLength(9)
   })
 
-  it('period chips switch the per-game grid (Season · Last 7 · Last 15 · Last 30 · Custom)', async () => {
+  it('period chips (shared PeriodChips) switch the per-game grid', async () => {
     const user = userEvent.setup()
     renderAt('/players?player=7')
     const sheet = await screen.findByRole('dialog', { name: 'Alpha Star' })
     const chips = within(within(sheet).getByRole('group', { name: 'Period' })).getAllByRole('button')
-    expect(chips.map((c) => c.textContent)).toEqual(['Season', 'Last 7', 'Last 15', 'Last 30', 'Custom'])
+    expect(chips.map((c) => c.textContent)).toEqual(['📅 Full Season', '🔥 Last 7 Days', '📊 Last 15 Days', '📈 Last 30 Days', '📆 Custom'])
     expect(chips[0]).toHaveAttribute('aria-pressed', 'true')
     expect(within(sheet).getByText('SEASON · PER GAME')).toBeInTheDocument()
 
@@ -153,7 +153,7 @@ describe('player sheet', () => {
     const user = userEvent.setup()
     renderAt('/players?player=9')
     const sheet = await screen.findByRole('dialog', { name: 'Free Guy' })
-    await user.click(within(sheet).getByRole('button', { name: 'Last 7' }))
+    await user.click(within(sheet).getByRole('button', { name: /Last 7 Days/ }))
     await within(sheet).findByText('No games in this period.')
   })
 
