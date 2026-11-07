@@ -85,7 +85,7 @@ describe('ShootingMap page', () => {
   it('hides players under the minimum games', async () => {
     renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
-    expect(screen.getByLabelText('Min games')).toHaveValue(2)
+    expect(screen.getByLabelText('Min games')).toHaveValue('2')
     fireEvent.change(screen.getByLabelText('Min games'), { target: { value: '6' } })
     // every fixture player has 5 games
     expect(await screen.findByText('No players with at least 6 games in this period yet.')).toBeInTheDocument()

@@ -1,115 +1,29 @@
-/* Shooting Map: scoreboard header, control rail, then the pan/zoom scatter beside a narrow scouting panel (stacks under 900px). */
+/* Player Shooting Map: chart colors and the few pieces Tailwind can't express.
+   The palette follows the site: gray chrome, green helps, red hurts (as the
+   League Analytics heatmap), and the same values again under .dark. The chart
+   engine reads these variables when it draws. */
 .sm-root {
-  --bg: #ECEFF2; --paper: #F7F8FA; --ink: #14202E; --muted: #5A6676; --rule: #C9D0D8; --grid: #DCE1E7;
-  --hot: #D9541E; --hot-soft: #F2B79A; --cold: #2F62B8; --cold-soft: #A9BFE6; --neutral: #9AA4B1;
-  --sel: #14202E; --chip: #E2E6EB; --chip-on: #14202E; --chip-on-fg: #F7F8FA; --label-halo: #F7F8FA;
-  --display: "Barlow Condensed", "Inter", system-ui, sans-serif;
-  --body: "Barlow", "Inter", system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--body);
-  font-size: 15px;
-  line-height: 1.45;
-  border-radius: 8px;
+  --ink: #111827; --muted: #6b7280; --grid: #e5e7eb; --rule: #d1d5db; --label-halo: #ffffff;
+  --hot: #059669; --hot-soft: #a7f3d0; --cold: #dc2626; --cold-soft: #fecaca; --neutral: #9ca3af;
+  --sel: #111827;
 }
 .dark .sm-root {
-  --bg: #0F151C; --paper: #151D26; --ink: #E8EDF2; --muted: #98A4B3; --rule: #2C3845; --grid: #222C37;
-  --hot: #F07A45; --hot-soft: #7A3B22; --cold: #6E9BEA; --cold-soft: #2A4270; --neutral: #5F6B79;
-  --sel: #FFFFFF; --chip: #202A35; --chip-on: #E8EDF2; --chip-on-fg: #0F151C; --label-halo: #151D26;
-  color-scheme: dark;
+  --ink: #f3f4f6; --muted: #9ca3af; --grid: #374151; --rule: #4b5563; --label-halo: #1f2937;
+  --hot: #34d399; --hot-soft: #065f46; --cold: #f87171; --cold-soft: #7f1d1d; --neutral: #6b7280;
+  --sel: #ffffff;
 }
-.sm-root *, .sm-root *::before, .sm-root *::after { box-sizing: border-box; }
-.sm-wrap { max-width: 1360px; margin: 0 auto; padding: 20px 16px 28px; display: flex; flex-direction: column; gap: 14px; }
-.sm-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; }
-.sm-h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 5vw, 52px); line-height: .95; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
-.sm-sub { color: var(--muted); font-size: 14px; margin-top: 6px; max-width: 70ch; }
-.sm-sub b { color: var(--hot); font-weight: 600; }
-.sm-sub .sm-cold { color: var(--cold); font-weight: 600; }
-.sm-lbl { font: 600 11px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.sm-controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
-.sm-seg { display: inline-flex; background: var(--chip); border-radius: 999px; padding: 3px; gap: 2px; }
-.sm-seg button, .sm-chips button { font: 600 14px/1 var(--display); letter-spacing: .03em; border: 0; background: transparent; color: var(--ink); padding: 9px 14px; border-radius: 999px; cursor: pointer; min-height: 36px; }
-.sm-seg button[aria-pressed="true"], .sm-chips button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
-.sm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.sm-chips button { background: var(--chip); }
-.sm-root button:focus-visible, .sm-root input:focus-visible, .sm-root select:focus-visible { outline: 2px solid var(--hot); outline-offset: 2px; }
-.sm-field { position: relative; flex: 1 1 200px; max-width: 280px; }
-.sm-field input, .sm-field select { width: 100%; font: 500 15px var(--body); padding: 9px 14px; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); min-height: 38px; }
-.sm-field select { appearance: none; padding-right: 34px; cursor: pointer; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
-.sm-field select.sm-on { border-color: var(--ink); font-weight: 600; }
-.sm-miss { position: absolute; left: 14px; top: 100%; margin-top: 2px; font-size: 12px; color: var(--cold); z-index: 2; }
-.sm-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.sm-period { display: flex; align-items: center; }
-.sm-mingp { display: inline-flex; align-items: center; gap: 8px; background: var(--chip); border-radius: 999px; padding: 3px 3px 3px 14px; font: 600 14px/1 var(--display); letter-spacing: .03em; color: var(--ink); }
-.sm-mingp input { width: 58px; min-height: 32px; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper); color: var(--ink); font: 600 15px var(--body); text-align: center; padding: 4px 6px; font-variant-numeric: tabular-nums; }
-.sm-main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
-@media (max-width: 900px) { .sm-main { grid-template-columns: minmax(0, 1fr); } }
-.sm-chartbox { position: relative; background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
 .sm-chart { display: block; width: 100%; height: clamp(440px, 72vh, 780px); touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 .sm-chart.sm-dragging { cursor: grabbing; }
-.sm-chart text { font-family: var(--display); }
-.sm-chartbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
-.sm-thresh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font: 600 13px var(--display); letter-spacing: .03em; color: var(--muted); }
-.sm-thresh label { display: inline-flex; align-items: center; gap: 5px; }
-.sm-thresh input { width: 56px; height: 30px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); color: var(--ink); font: 600 14px var(--body); text-align: center; padding: 2px 4px; font-variant-numeric: tabular-nums; }
-.sm-thresh input:not(:placeholder-shown) { border-color: var(--ink); }
-.sm-thresh .sm-unit { font-weight: 500; }
-.sm-thresh-clear { background: none; border: 0; padding: 0; color: var(--hot); font: 600 13px var(--display); cursor: pointer; }
-.sm-thresh-clear:hover { text-decoration: underline; }
-.sm-zoombar { display: flex; align-items: center; gap: 4px; }
-.sm-zoombar button { width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); font: 700 18px var(--display); cursor: pointer; display: grid; place-items: center; }
-.sm-zoombar button:hover { border-color: var(--ink); }
-.sm-zoomlvl { font: 600 13px var(--display); min-width: 38px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
-.sm-hint { font-size: 12.5px; color: var(--muted); }
-.sm-hint-narrow { display: none; }
-.sm-tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); padding: 8px 10px; border-radius: 6px; font-size: 13px; line-height: 1.35; min-width: 170px; z-index: 3; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
-.sm-tip-n { font: 700 16px var(--display); letter-spacing: .01em; }
-.sm-tip-sub { opacity: .7; font-size: 12px; margin-bottom: 4px; }
+.sm-chart text { font-family: inherit; }
+@media (max-width: 640px) { .sm-chart { height: clamp(380px, 62vh, 560px); } }
+.sm-ramp { display: inline-block; width: 110px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--cold), var(--cold-soft), var(--neutral), var(--hot-soft), var(--hot)); }
+.sm-tip { position: absolute; pointer-events: none; z-index: 3; min-width: 180px; padding: 8px 10px; border-radius: 8px; background: #111827; color: #f9fafb; font-size: 12px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+.dark .sm-tip { background: #f9fafb; color: #111827; }
+.sm-tip-n { font-size: 14px; font-weight: 600; }
+.sm-tip-sub { opacity: .7; margin-bottom: 4px; }
 .sm-tip-r { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
 .sm-tip-r span:first-child { opacity: .7; }
-.sm-tip-pos { color: var(--hot-soft); font-weight: 700; }
-.sm-tip-neg { color: var(--cold-soft); font-weight: 700; }
-/* In dark mode the tip is light, so its impact colors go deep. */
-.dark .sm-root .sm-tip-pos { color: #B4461A; }
-.dark .sm-root .sm-tip-neg { color: #2F62B8; }
-.sm-aside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-@media (max-width: 900px) { .sm-aside { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } }
-.sm-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; }
-.sm-card h2 { font: 700 18px var(--display); margin: 0 0 8px; letter-spacing: .01em; }
-.sm-plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.sm-plist li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 7px 0; border-top: 1px solid var(--grid); }
-.sm-plist li:first-child { border-top: 0; }
-.sm-nm { font: 600 15px var(--display); background: none; border: 0; padding: 0; color: var(--ink); text-align: left; cursor: pointer; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sm-nm:hover { text-decoration: underline; }
-.sm-meta { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.sm-right { display: flex; gap: 8px; align-items: center; }
-.sm-imp { font: 700 14px var(--display); font-variant-numeric: tabular-nums; }
-.sm-pos { color: var(--hot); }
-.sm-neg { color: var(--cold); }
-.sm-x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
-.sm-profile { font-size: 12px; color: var(--muted); text-decoration: none; }
-.sm-profile:hover { color: var(--ink); text-decoration: underline; }
-.sm-empty { color: var(--muted); font-size: 13.5px; margin: 0; }
-.sm-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 12.5px; color: var(--muted); }
-.sm-ramp { display: inline-block; width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--cold), var(--cold-soft), var(--neutral), var(--hot-soft), var(--hot)); vertical-align: middle; }
-.sm-footer { font-size: 12.5px; color: var(--muted); max-width: 90ch; }
-.sm-footer p { margin: 0 0 6px; }
-.sm-status { padding: 60px 16px; text-align: center; color: var(--muted); }
-/* Phones: compact controls so the map starts near the top of the screen. */
-@media (max-width: 560px) {
-  .sm-wrap { padding: 14px 12px 22px; gap: 10px; }
-  .sm-sub { font-size: 13px; }
-  .sm-controls { gap: 8px; }
-  .sm-seg button, .sm-chips button { font-size: 13px; padding: 7px 11px; min-height: 32px; }
-  .sm-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; flex-basis: 100%; margin: 0 -12px; padding: 0 12px; }
-  .sm-chips::-webkit-scrollbar { display: none; }
-  .sm-chips button { flex: none; }
-  .sm-field { max-width: none; flex: 1 1 40%; }
-  .sm-field input, .sm-field select { font-size: 14px; min-height: 34px; padding: 6px 12px; }
-  .sm-field select { padding-right: 30px; }
-  .sm-hint-wide { display: none; }
-  .sm-hint-narrow { display: inline; }
-  .sm-period { flex-basis: 100%; min-width: 0; }
-  .sm-chart { height: clamp(380px, 62vh, 560px); }
-}
-@media (prefers-reduced-motion: reduce) { .sm-root * { transition: none !important; } }
+.sm-tip-pos { color: #34d399; font-weight: 600; }
+.sm-tip-neg { color: #f87171; font-weight: 600; }
+.dark .sm-tip-pos { color: #047857; }
+.dark .sm-tip-neg { color: #b91c1c; }

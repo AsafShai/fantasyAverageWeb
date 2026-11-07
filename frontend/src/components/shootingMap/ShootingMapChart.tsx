@@ -49,18 +49,18 @@ const ShootingMapChart = forwardRef<ShootingMapChartRef, Props>(function Shootin
   useImperativeHandle(ref, () => ({ focus: key => chart.current?.focus(key) }), [])
 
   return (
-    <div className="sm-chartbox" ref={boxRef}>
-      <div className="sm-chartbar">
+    <div className="sm-chartbox relative bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden" ref={boxRef}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
         {toolbar}
-        <div className="sm-hint">
-          <span className="sm-hint-wide">Scroll or pinch to zoom · drag to pan · click a dot to pin a player</span>
-          <span className="sm-hint-narrow">Pinch to zoom · tap a dot to pin</span>
-        </div>
-        <div className="sm-zoombar">
-          <button type="button" aria-label="Zoom out" onClick={() => chart.current?.zoomBy(1 / 1.6)}>−</button>
-          <div className="sm-zoomlvl" aria-live="polite">{zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)}×</div>
-          <button type="button" aria-label="Zoom in" onClick={() => chart.current?.zoomBy(1.6)}>+</button>
-          <button type="button" aria-label="Reset view" style={{ fontSize: 15 }} onClick={() => chart.current?.reset()}>⟲</button>
+        <div className="flex items-center gap-3 ml-auto">
+          <span className="hidden xl:inline text-xs text-gray-400 dark:text-gray-500">Scroll or pinch to zoom · drag to pan · click a dot to pin</span>
+          <span className="sm:hidden text-xs text-gray-400 dark:text-gray-500">Pinch to zoom · tap to pin</span>
+          <div className="flex items-center gap-1 text-sm">
+            <button type="button" aria-label="Zoom out" className="w-8 h-8 grid place-items-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600" onClick={() => chart.current?.zoomBy(1 / 1.6)}>−</button>
+            <div className="min-w-[2.5rem] text-center text-xs text-gray-500 dark:text-gray-400 tabular-nums" aria-live="polite">{zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)}×</div>
+            <button type="button" aria-label="Zoom in" className="w-8 h-8 grid place-items-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600" onClick={() => chart.current?.zoomBy(1.6)}>+</button>
+            <button type="button" aria-label="Reset view" className="w-8 h-8 grid place-items-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 ml-1" onClick={() => chart.current?.reset()}>⟲</button>
+          </div>
         </div>
       </div>
       <svg ref={svgRef} className="sm-chart" role="img" aria-label="Scatter plot of shooting percentage against shot volume" />
