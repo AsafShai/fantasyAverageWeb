@@ -40,6 +40,8 @@
 .sm-miss { position: absolute; left: 14px; top: 100%; margin-top: 2px; font-size: 12px; color: var(--cold); z-index: 2; }
 .sm-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sm-period { display: flex; align-items: center; }
+.sm-mingp { display: inline-flex; align-items: center; gap: 8px; background: var(--chip); border-radius: 999px; padding: 3px 3px 3px 14px; font: 600 14px/1 var(--display); letter-spacing: .03em; color: var(--ink); }
+.sm-mingp input { width: 58px; min-height: 32px; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper); color: var(--ink); font: 600 15px var(--body); text-align: center; padding: 4px 6px; font-variant-numeric: tabular-nums; }
 .sm-main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .sm-main { grid-template-columns: minmax(0, 1fr); } }
 .sm-chartbox { position: relative; background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }

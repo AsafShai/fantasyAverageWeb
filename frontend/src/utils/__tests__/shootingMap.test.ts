@@ -109,6 +109,14 @@ describe('buildShotPool', () => {
   })
 })
 
+describe('buildShotPool min games', () => {
+  it('follows the chosen minimum, never below one game', () => {
+    const players = [player('Two', 'BOS', 2, 5, 10), player('Five', 'BOS', 5, 5, 10), player('None', 'BOS', 0, 0, 0)]
+    expect(buildShotPool(players, undefined, undefined, 5).eligible.map(p => p.player_name)).toEqual(['Five'])
+    expect(buildShotPool(players, undefined, undefined, 0).eligible.map(p => p.player_name)).toEqual(['Two', 'Five'])
+  })
+})
+
 describe('impactLists', () => {
   it('lists only helpers as best and only hurters as worst', () => {
     const d = deriveShotData([player('A', 'X', 4, 8, 10), player('B', 'X', 4, 4, 10), player('C', 'X', 4, 7, 10)], [], new Map(), 'fg', 'pg')

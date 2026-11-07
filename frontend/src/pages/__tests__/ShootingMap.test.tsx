@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Player } from '../../types/api'
@@ -80,6 +80,15 @@ describe('ShootingMap page', () => {
   it('combines the NBA and fantasy team from the link', async () => {
     renderWithProviders(<ShootingMap />, { route: '/shooting-map?team=BOS&fteam=fa' })
     expect(await screen.findByRole('heading', { name: 'Worst for FG% · BOS · Free agents' })).toBeInTheDocument()
+  })
+
+  it('hides players under the minimum games', async () => {
+    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    await screen.findByRole('heading', { name: 'Best for FG%' })
+    expect(screen.getByLabelText('Min games')).toHaveValue(2)
+    fireEvent.change(screen.getByLabelText('Min games'), { target: { value: '6' } })
+    // every fixture player has 5 games
+    expect(await screen.findByText('No players with at least 6 games in this period yet.')).toBeInTheDocument()
   })
 
   it('ignores an unknown team in the link', async () => {

@@ -13,7 +13,7 @@ import { getErrorMessage } from '../utils/errorMessage'
 import { normalizePlayerName } from '../utils/playerName'
 import ShootingMapChart, { type ShootingMapChartRef } from '../components/shootingMap/ShootingMapChart'
 import {
-  buildShotPool, deriveShotData, impactLists, passesFilter, shotLabels, POOL_SIZE, MIN_GP, EXTRA_MIN_FGA, EXTRA_MIN_FTA, signedImpact, inScope, isScoped,
+  buildShotPool, deriveShotData, impactLists, passesFilter, shotLabels, POOL_SIZE, DEFAULT_MIN_GP, EXTRA_MIN_FGA, EXTRA_MIN_FTA, signedImpact, inScope, isScoped,
   type FantasyScope, type ShotFilter, type ShotMode, type ShotScope, type ShotRow, type ShotUnit,
 } from '../utils/shootingMap'
 import type { CustomDateRange, TimePeriod } from '../types/api'
@@ -99,6 +99,7 @@ export default function ShootingMap() {
   const [mode, setMode] = usePersistedState<ShotMode>('shootingMap.mode', 'fg')
   const [unit, setUnit] = usePersistedState<ShotUnit>('shootingMap.unit', 'pg')
   const [filter, setFilter] = useState<ShotFilter>('all')
+  const [minGp, setMinGp] = usePersistedState('shootingMap.minGp', DEFAULT_MIN_GP)
   const [searchParams, setSearchParams] = useSearchParams()
   const teamParam = searchParams.get('team')?.toUpperCase() ?? null
   const fantasyParam = parseFantasyParam(searchParams.get('fteam'))
@@ -113,8 +114,8 @@ export default function ShootingMap() {
   const shotPool = useMemo(() => {
     const players = playersData?.players ?? []
     const cats = playersData?.categories?.length ? playersData.categories : undefined
-    return buildShotPool(players, cats, new Set(reverseKey ? reverseKey.split(',') : []))
-  },[playersData?.players, playersData?.categories, reverseKey])
+    return buildShotPool(players, cats, new Set(reverseKey ? reverseKey.split(',') : []), minGp)
+  }, [playersData?.players, playersData?.categories, reverseKey, minGp])
 
   const teams = useMemo(
     () => [...new Set(shotPool.eligible.map(p => p.pro_team).filter(t => t && t !== 'FA'))].sort(),
@@ -171,7 +172,7 @@ export default function ShootingMap() {
   }
 
   const chartInput = useMemo(() => ({ data, mode, unit, filter, scope, selected }), [data, mode, unit, filter, scope, selected])
-  const viewKey = `${mode}|${unit}|${period}|${customRange?.start ?? ''}|${customRange?.end ?? ''}|${team ?? ''}|${fantasy ?? ''}`
+  const viewKey = `${mode}|${unit}|${period}|${customRange?.start ?? ''}|${customRange?.end ?? ''}|${team ?? ''}|${fantasy ?? ''}|${minGp}`
 
   const byKey = useMemo(() => new Map(data.rows.map(d => [d.key, d])), [data])
   const selectedRows = [...selected].map(k => byKey.get(k)).filter((d): d is ShotRow => d !== undefined)
@@ -259,6 +260,16 @@ export default function ShootingMap() {
               {data.rows.map(d => <option key={d.key} value={d.name} />)}
             </datalist>
           </div>
+          <label className="sm-mingp">
+            <span>Min games</span>
+            <input
+              type="number" min={1} max={82} inputMode="numeric" value={minGp}
+              onChange={e => {
+                const v = Math.round(Number(e.target.value))
+                if (Number.isFinite(v)) setMinGp(Math.min(82, Math.max(1, v)))
+              }}
+            />
+          </label>
           <div className="sm-period">
             {mobile ? (
               <PeriodChips value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
@@ -273,7 +284,7 @@ export default function ShootingMap() {
         ) : isLoading ? (
           <div className="sm-status"><LoadingSpinner /></div>
         ) : data.rows.length === 0 ? (
-          <div className="sm-status">No players with at least {MIN_GP} games in this period yet.</div>
+          <div className="sm-status">No players with at least {minGp} games in this period yet.</div>
         ) : (
           <div className="sm-main" style={{ opacity: isFetching ? 0.6 : 1 }}>
             <ShootingMapChart ref={chartRef} input={chartInput} viewKey={viewKey} onToggle={toggle} />
@@ -311,7 +322,7 @@ export default function ShootingMap() {
         <footer className="sm-footer">
           <p>
             "Top {POOL_SIZE}" = the {categoryCount}-category z-score ranking (same as Player Rankings, per game, equal weights) for the
-            selected period, minimum {MIN_GP} games. Averages, the colors and the ranks always come from those {POOL_SIZE} players;
+            selected period, minimum {minGp} {minGp === 1 ? 'game' : 'games'} (change it with Min games). Averages, the colors and the ranks always come from those {POOL_SIZE} players;
             picking an NBA or fantasy team also shows that team's other players (at least {EXTRA_MIN_FGA} FGA / {EXTRA_MIN_FTA} FTA per game),
             measured against the same pool.
           </p>

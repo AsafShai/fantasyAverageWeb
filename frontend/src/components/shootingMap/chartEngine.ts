@@ -170,24 +170,21 @@ export function createShootingMapChart(
     const reserved: Box[] = []
     const ov = (b: Box) => reserved.some(p => b.x < p.x + p.w && b.x + b.w > p.x && b.y < p.y + p.h && b.y + b.h > p.y)
 
-    // quadrant words, faded out as you zoom in
+    // quadrant names in the corners, faded out as you zoom in
     const ax = sx(data.avgPct, dm), ay = sy(data.avgAtt, dm)
-    const quads: [string, string, number, number][] = [
-      ['WOW', 'High volume, high %', 1, 1], ['BUST', 'High volume, low %', 0, 1],
-      ['OK', 'Low volume, high %', 1, 0], ['NAH', 'Low volume, low %', 0, 0],
+    const quads: [string, number, number][] = [
+      ['High volume, high %', 1, 1], ['High volume, low %', 0, 1],
+      ['Low volume, high %', 1, 0], ['Low volume, low %', 0, 0],
     ]
-    quads.forEach(([a, b, right, top]) => {
-      const x = right ? dm.m.l + dm.W - 14 : dm.m.l + 14, y = top ? dm.m.t + 26 : dm.m.t + dm.H - 30
-      const qo = 0.55 * Math.max(0, Math.min(1, 2.2 - view.k))
+    quads.forEach(([label, right, top]) => {
+      const qs = dm.narrow ? 12 : 14
+      const x = right ? dm.m.l + dm.W - 12 : dm.m.l + 12, y = top ? dm.m.t + 20 : dm.m.t + dm.H - 12
+      const qo = 0.7 * Math.max(0, Math.min(1, 2.2 - view.k))
       if (qo <= 0) return
-      const g = el('g', { opacity: qo, 'pointer-events': 'none' }, plot)
-      const qs = dm.narrow ? 15 : 19
-      const t1 = el('text', { x, y, 'text-anchor': right ? 'end' : 'start', 'font-size': qs, 'font-weight': 800, fill: muted, 'letter-spacing': '.04em' }, g)
-      t1.textContent = a
-      const w = Math.max(textW(a, qs, 800), textW(b, 12, 500))
-      reserved.push({ x: right ? x - w : x, y: y - qs, w, h: qs + 22 })
-      const t2 = el('text', { x, y: y + 16, 'text-anchor': right ? 'end' : 'start', 'font-size': 12, fill: muted }, g)
-      t2.textContent = b
+      const t = el('text', { x, y, 'text-anchor': right ? 'end' : 'start', 'font-size': qs, 'font-weight': 700, fill: muted, opacity: qo, 'pointer-events': 'none', 'letter-spacing': '.02em' }, plot)
+      t.textContent = label
+      const w = textW(label, qs, 700)
+      reserved.push({ x: right ? x - w : x, y: y - qs, w, h: qs + 4 })
     })
 
     // equal-impact curves: pct = avg + c / attempts
