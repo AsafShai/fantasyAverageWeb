@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import CommandPalette from '../../components/CommandPalette'
 import { SocialLinks } from '../../components/Footer'
@@ -8,12 +8,12 @@ import { ensureMobileFonts } from '../fonts'
 import PlayerSheet from '../player/PlayerSheet'
 import { playerIdFromPath } from '../player/playerParam'
 import { usePlayerSheet } from '../player/usePlayerSheet'
-import { BottomSheet, useSheetHistory } from '../ui'
+import { useSheetHistory } from '../ui'
 import { TABS } from './tabs'
 
 /*
  * Phone shell of the redesign (step 2): logo header, page, site footer, the
- * bottom tab bar and the ☰ menu sheet. Pages that are not converted yet render
+ * bottom tab bar and the ☰ menu dropdown. Pages that are not converted yet render
  * unchanged inside it. The menu and the search overlay live in browser history,
  * so the phone's back button closes them before it leaves the page. The player
  * sheet (step 3) opens over any page from a player name: `?player=<id>`.
@@ -37,13 +37,16 @@ const MobileShell = ({ darkMode, setDarkMode }: MobileShellProps) => {
 
   return (
     <div className="mr-shell">
-      <MobileHeader
-        darkMode={darkMode}
-        onToggleDark={() => setDarkMode((d) => !d)}
-        onSearch={search.show}
-        onMenu={menu.show}
-        menuOpen={menu.open}
-      />
+      <div className="mr-hdr-wrap">
+        <MobileHeader
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+          onSearch={search.show}
+          onMenu={menu.open ? menu.hide : menu.show}
+          menuOpen={menu.open}
+        />
+        <MenuDropdown open={menu.open} onClose={menu.hide} />
+      </div>
 
       <main className="mr-shell-main">
         <Outlet />
@@ -52,7 +55,6 @@ const MobileShell = ({ darkMode, setDarkMode }: MobileShellProps) => {
       <MobileFooter />
       <MobileTabBar />
 
-      <MenuSheet open={menu.open} onClose={menu.hide} />
       <CommandPalette
         isOpen={search.open}
         onClose={search.hide}
@@ -103,8 +105,8 @@ function MobileHeader({ darkMode, onToggleDark, onSearch, onMenu, menuOpen }: Mo
         <span className="mr-hdr-emoji" aria-hidden="true">{darkMode ? '☀️' : '🌙'}</span>
       </button>
       <button type="button" className="mr-hdr-btn" onClick={onMenu} aria-label="Menu" aria-haspopup="dialog" aria-expanded={menuOpen}>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-          <path d="M4 7h16M4 12h16M4 17h16" />
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <path d={menuOpen ? 'M6 6l12 12M18 6L6 18' : 'M4 7h16M4 12h16M4 17h16'} />
         </svg>
       </button>
     </header>
@@ -140,59 +142,116 @@ function MobileTabBar() {
   )
 }
 
-// ── ☰ menu sheet ────────────────────────────────────────────────────────
+// ── ☰ menu dropdown ─────────────────────────────────────────────────────
 
-/** Phone menu only: NBA comes before Minigames (desktop keeps its order). */
-function menuOrder(groups: NavGroupDef[]): NavGroupDef[] {
-  const rank = (key: string) => (key === 'nba' ? 0 : key === 'minigames' ? 1 : -1)
-  const tail = groups.filter((g) => rank(g.key) >= 0).sort((a, b) => rank(a.key) - rank(b.key))
-  return [...groups.filter((g) => rank(g.key) < 0), ...tail]
+/*
+ * Phone menu only (desktop nav unchanged): the one-item Tools group joins
+ * Players as "Players & Trade", Today is called Home like the tab, and NBA
+ * comes before Minigames.
+ */
+const MENU_ORDER = ['league', 'players', 'insights', 'nba', 'minigames']
+
+function menuGroups(groups: NavGroupDef[]): NavGroupDef[] {
+  const tools = groups.find((g) => g.key === 'tools')
+  const merged = groups
+    .filter((g) => g.key !== 'tools')
+    .map((g) => {
+      if (g.key === 'players') return { ...g, label: 'Players & Trade', items: [...g.items, ...(tools?.items ?? [])] }
+      if (g.key === 'league') return { ...g, items: g.items.map((i) => (i.path === '/' ? { ...i, label: 'Home', icon: '🏠' } : i)) }
+      return g
+    })
+  // Groups the menu does not list (Draft, behind a flag) keep their place right after Players.
+  const known = merged.filter((g) => MENU_ORDER.includes(g.key)).sort((a, b) => MENU_ORDER.indexOf(a.key) - MENU_ORDER.indexOf(b.key))
+  const extra = merged.filter((g) => !MENU_ORDER.includes(g.key))
+  const at = known.findIndex((g) => g.key === 'players') + 1
+  return [...known.slice(0, at), ...extra, ...known.slice(at)]
 }
 
-function MenuSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * Opens inline under the header and pushes the page down, like the site's menu on
+ * master (not a sheet): the team row, then one collapsed accordion row per group;
+ * the group of the current page is highlighted. One group is open at a time.
+ */
+function MenuDropdown({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Mounted only while open, so every group starts collapsed.
+  return open ? <MenuDropdownBody onClose={onClose} /> : null
+}
+
+function MenuDropdownBody({ onClose }: { onClose: () => void }) {
   const { pathname } = useLocation()
-  const groups: NavGroupDef[] = menuOrder(getNavGroups())
+  const groups = menuGroups(getNavGroups())
+  const [openKey, setOpenKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
-    <BottomSheet open={open} onClose={onClose} title="Menu" hideTitle sunken>
+    <div className="mr-root mr-menu-drop" role="dialog" aria-label="Menu">
       <MyTeamPicker />
-      {groups.map((group) => (
-        <section key={group.key} className="mr-menu-group" aria-labelledby={`mr-menu-${group.key}`}>
-          <h2 id={`mr-menu-${group.key}`} className="mr-menu-title">
-            <span aria-hidden="true">{group.icon}</span> {group.label.toUpperCase()}
-          </h2>
-          <div className="mr-menu-grid">
-            {group.items.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                // Replace the menu's history entry: back from the new page goes
-                // to the page the menu was opened on, not to the open menu.
-                replace
-                className="mr-menu-item"
-                aria-current={pathname === item.path ? 'page' : undefined}
-                onTouchStart={() => prefetchRoute(item.path)}
+      {groups.map((group) => {
+        const isOpen = openKey === group.key
+        const hasCurrent = group.items.some((i) => i.path === pathname)
+        return (
+          <section key={group.key} className="mr-acc">
+            <h2 className="mr-acc-h">
+              <button
+                type="button"
+                className={`mr-acc-btn${hasCurrent ? ' mr-acc-current' : ''}`}
+                aria-expanded={isOpen}
+                aria-controls={`mr-acc-${group.key}`}
+                onClick={() => setOpenKey(isOpen ? null : group.key)}
               >
-                <span className="mr-menu-icon" aria-hidden="true">{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ))}
-    </BottomSheet>
+                <span className="mr-acc-icon" aria-hidden="true">{group.icon}</span>
+                <span className="mr-acc-label">{group.label}</span>
+                <span className="mr-acc-caret" aria-hidden="true">▾</span>
+              </button>
+            </h2>
+            {isOpen && (
+              <div id={`mr-acc-${group.key}`} className="mr-acc-list">
+                {group.items.map((item) => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    // Replace the menu's history entry: back from the new page goes
+                    // to the page the menu was opened on, not to the open menu.
+                    replace
+                    className="mr-menu-item"
+                    aria-current={pathname === item.path ? 'page' : undefined}
+                    onTouchStart={() => prefetchRoute(item.path)}
+                  >
+                    <span className="mr-menu-icon" aria-hidden="true">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        )
+      })}
+    </div>
   )
 }
 
 /**
- * "Select my team", as in today's phone menu: a native select (the phone's own
- * picker) dressed as the design's select button, plus a link to the team page.
+ * My team row, as on master: the team name (a link to the team page) and a
+ * native select (the phone's own picker) to change it.
  */
 function MyTeamPicker() {
   const { teams, myTeam, myTeamId, setMyTeamId } = useMyTeam()
   return (
     <div className="mr-menu-team">
-      <label className="mr-select mr-wide mr-native-select">
-        <span className="mr-select-label">{myTeam ? `My team: ${myTeam.team_name}` : 'Select my team'}</span>
+      {myTeam && (
+        <Link to={`/team/${myTeam.team_id}`} replace className="mr-menu-myteam" aria-label={`Open my team: ${myTeam.team_name}`}>
+          {myTeam.team_name}
+        </Link>
+      )}
+      <label className="mr-select mr-native-select mr-menu-select">
+        <span className="mr-select-label">{myTeam ? myTeam.team_name : 'Select my team'}</span>
         <span className="mr-caret" aria-hidden="true">▾</span>
         <select
           aria-label="My team"
@@ -207,11 +266,6 @@ function MyTeamPicker() {
           ))}
         </select>
       </label>
-      {myTeam && (
-        <Link to={`/team/${myTeam.team_id}`} replace className="mr-link">
-          Open my team ›
-        </Link>
-      )}
     </div>
   )
 }

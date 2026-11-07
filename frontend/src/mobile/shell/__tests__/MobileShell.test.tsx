@@ -68,19 +68,36 @@ describe('MobileShell', () => {
     expect(TABS.map((t) => t.path)).toEqual(['/', '/rankings', '/teams', '/player-rankings', '/trade'])
   })
 
-  it('menu sheet lists every group and page of the desktop nav, and a page link closes it', async () => {
+  it('menu dropdown: collapsed accordion with the current page\'s group highlighted, every desktop page reachable, a link closes it', async () => {
     renderShell('/rankings')
     await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
-    const menu = screen.getByRole('dialog', { name: 'Menu' })
-    for (const group of getNavGroups()) {
-      const section = within(menu).getByRole('region', { name: new RegExp(group.label.toUpperCase()) })
-      expect(within(section).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(group.items.map((i) => i.path))
-    }
+    let menu = screen.getByRole('dialog', { name: 'Menu' })
     expect(within(menu).getByRole('combobox', { name: 'My team' })).toBeInTheDocument()
-    expect(within(menu).getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.replace(/^\S+\s+/, ''))).toEqual([
-      'LEAGUE', 'PLAYERS', 'INSIGHTS', 'TOOLS', 'NBA', 'MINIGAMES',
+    const heads = within(menu).getAllByRole('heading', { level: 2 })
+    expect(heads.map((h) => h.querySelector('.mr-acc-label')?.textContent)).toEqual([
+      'League', 'Players & Trade', 'Insights', 'NBA', 'Minigames',
     ])
+    // all groups start collapsed, like master; the page's own group is highlighted
+    for (const b of within(menu).getAllByRole('button', { expanded: false })) expect(b).toHaveAttribute('aria-expanded', 'false')
+    expect(within(menu).queryAllByRole('link')).toHaveLength(0)
+    expect(within(menu).getByRole('button', { name: /League/ })).toHaveClass('mr-acc-current')
+    await userEvent.click(within(menu).getByRole('button', { name: /League/ }))
+    expect(within(menu).getByRole('link', { name: /Standings & Rankings/ })).toHaveAttribute('aria-current', 'page')
+    // the header button closes it again
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
+    expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
+    menu = screen.getByRole('dialog', { name: 'Menu' })
 
+    // every page of the desktop nav is reachable by opening its group
+    const hrefs = new Set<string>()
+    for (const button of within(menu).getAllByRole('button', { expanded: undefined }).filter((b) => b.hasAttribute('aria-expanded'))) {
+      if (button.getAttribute('aria-expanded') === 'false') await userEvent.click(button)
+      within(menu).getAllByRole('link').forEach((a) => hrefs.add(a.getAttribute('href') as string))
+    }
+    for (const group of getNavGroups()) for (const item of group.items) expect(hrefs).toContain(item.path)
+
+    await userEvent.click(within(menu).getByRole('button', { name: /NBA/ }))
     await userEvent.click(within(menu).getByRole('link', { name: /Injuries/ }))
     expect(screen.getByTestId('where')).toHaveTextContent('/injuries')
     expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
