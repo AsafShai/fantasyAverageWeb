@@ -45,6 +45,8 @@ export const OWNERSHIP_OPTIONS: [Ownership, string][] = [
 export interface Filters {
   nameFilter: string
   position: string | null
+  /** Phone: any-of several positions (empty/absent = all). */
+  positions?: string[]
   minG15: number
   ownership: Ownership
   fantasyTeam: string | null
@@ -59,9 +61,10 @@ export interface SharedFilterable {
 
 export function passesShared<T extends SharedFilterable>(
   row: T,
-  { nameFilter, position, minG15, ownership, fantasyTeam }: Filters
+  { nameFilter, position, positions, minG15, ownership, fantasyTeam }: Filters
 ): boolean {
   if (position && row.position !== position) return false
+  if (positions?.length && !positions.includes(row.position)) return false
   if (row.games_last_15d < minG15) return false
   if (ownership === 'fa' && row.fantasy_status !== 'FA') return false
   if (ownership === 'rostered' && row.fantasy_status === 'FA') return false

@@ -5,9 +5,9 @@ import { mockApi } from './support/mockApi'
 // Step 5 of the mobile redesign: Player Trends on a phone.
 
 const NAMES: [number, string, string, string, string, number][] = [
-  [1, 'Jalen Suggs', 'ORL', 'G', 'FA', 6.5],
-  [2, 'Tre Jones', 'CHI', 'G', 'DORELIT', 5.1],
-  [3, 'Scottie Barnes', 'TOR', 'F', "Khachapuri's Team", -4.2],
+  [1, 'Jalen Suggs', 'ORL', 'PG', 'FA', 6.5],
+  [2, 'Tre Jones', 'CHI', 'SG', 'DORELIT', 5.1],
+  [3, 'Scottie Barnes', 'TOR', 'PF', "Khachapuri's Team", -4.2],
   [4, 'Kel’el Ware', 'MIA', 'C', 'FA', 3.4],
 ]
 const common = { min_season_gp: 10, min_window_gp: 2, window_days: 15, last_updated: '2026-10-19T08:00:00Z' }
@@ -130,6 +130,24 @@ test.describe('phone Trends', () => {
     await page.goBack()
     await expect(sheet).toHaveCount(0)
     await expect(page.locator('.mr-tr-name')).toHaveCount(1)
+  })
+
+  test('position filter picks several positions; chip and Reset clear them', async ({ page }) => {
+    await openTrends(page)
+    await page.getByRole('button', { name: 'Filters' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Filters' })
+    const group = sheet.getByRole('group', { name: 'Position' })
+    await group.getByRole('button', { name: 'PG', exact: true }).click()
+    await group.getByRole('button', { name: 'C', exact: true }).click()
+    await expect(page.locator('.mr-tr-name')).toHaveCount(2)
+    await sheet.getByRole('button', { name: 'Reset' }).click()
+    await expect(page.locator('.mr-tr-name')).toHaveCount(4)
+    await group.getByRole('button', { name: 'SG', exact: true }).click()
+    await group.getByRole('button', { name: 'PF', exact: true }).click()
+    await expect(page.locator('.mr-tr-name')).toHaveCount(2)
+    await page.goBack()
+    await page.getByRole('button', { name: 'Remove filter SG, PF' }).click()
+    await expect(page.locator('.mr-tr-name')).toHaveCount(4)
   })
 
   test('usage, categories and both shooting tabs', async ({ page }) => {

@@ -14,7 +14,7 @@ import {
   type CategoryRow, type Filters, type Ownership, type StatFilter, type TabKey,
 } from '../../utils/trendsShared'
 import {
-  ActiveFilterChips, Card, Chip, ChipRow, DataTable, FilterGroup, FilterSearchRow, FiltersSheet, Segmented,
+  ActiveFilterChips, Card, Chip, ChipRow, DataTable, FilterGroup, FilterSearchRow, FiltersSheet, PositionFilter, Segmented,
   useSheetHistory, type ActiveFilter, type Column, type SortState,
 } from '../ui'
 import './trends.css'
@@ -26,7 +26,8 @@ export interface MobileTrendsProps {
   errorMessage: string | null
   filters: Filters
   setSearch: (v: string) => void
-  setPosition: (v: string | null) => void
+  positions: string[]
+  setPositions: (v: string[]) => void
   setOwnership: (v: Ownership) => void
   fantasyTeam: string | null
   setFantasyTeam: (v: string | null) => void
@@ -245,13 +246,13 @@ export default function MobileTrends(p: MobileTrendsProps) {
   // ---- filters -------------------------------------------------------------
   const f = p.filters
   const active: ActiveFilter[] = [
-    ...(f.position ? [{ key: 'pos', label: f.position, onRemove: () => p.setPosition(null) }] : []),
+    ...(p.positions.length ? [{ key: 'pos', label: p.positions.join(', '), onRemove: () => p.setPositions([]) }] : []),
     ...(p.fantasyTeam ? [{ key: 'team', label: fantasyTeamOptionLabel(p.fantasyTeam, p.fantasyTeam === p.myTeamName), onRemove: () => p.setFantasyTeam(null) }] : []),
     ...(f.minG15 > p.minGamesFloor ? [{ key: 'min', label: `Min ${f.minG15}+ games`, onRemove: () => p.setMinGames(p.minGamesFloor) }] : []),
     ...(p.isShooting && statFilter !== 'all' ? [{ key: 'stat', label: statFilter, onRemove: () => setStatFilter('all') }] : []),
   ]
   const resetFilters = () => {
-    p.setPosition(null)
+    p.setPositions([])
     p.setFantasyTeam(null)
     p.setMinGames(p.minGamesFloor)
     setStatFilter('all')
@@ -347,14 +348,7 @@ export default function MobileTrends(p: MobileTrendsProps) {
       )}
 
       <FiltersSheet open={sheet.open} onClose={sheet.hide} onReset={resetFilters}>
-        <FilterGroup label="Position">
-          <ChipRow label="Position" wrap>
-            <Chip selected={!f.position} onClick={() => p.setPosition(null)}>All positions</Chip>
-            {ALL_POSITIONS.map((pos) => (
-              <Chip key={pos} selected={f.position === pos} onClick={() => p.setPosition(pos)}>{pos}</Chip>
-            ))}
-          </ChipRow>
-        </FilterGroup>
+        <PositionFilter options={ALL_POSITIONS} selected={p.positions} onChange={p.setPositions} />
         <FilterGroup label="Fantasy team">
           <ChipRow label="Fantasy team" wrap>
             <Chip selected={!p.fantasyTeam} onClick={() => p.setFantasyTeam(null)}>All fantasy teams</Chip>

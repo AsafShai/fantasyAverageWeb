@@ -615,6 +615,7 @@ export default function Trends() {
   const [tab, setTab] = useState<TabKey>(urlState.mode)
   const [nameFilter, setNameFilter] = useState('')
   const [position, setPosition] = useState<string | null>(null)
+  const [positions, setPositions] = useState<string[]>([]) // phone: pick several
   const [windowDays, setWindowDays] = usePersistedState<number>(
     'trends.windowDays',
     DEFAULT_WINDOW_DAYS,
@@ -734,7 +735,7 @@ export default function Trends() {
         : 0
   const effectiveMinGames = Math.max(minGames, minGamesFloor)
 
-  const filters: Filters = { nameFilter, position, minG15: effectiveMinGames, ownership, fantasyTeam }
+  const filters: Filters = { nameFilter, position: mobile ? null : position, positions: mobile ? positions : undefined, minG15: effectiveMinGames, ownership, fantasyTeam }
 
   const gpGates = tab === 'minutes' ? minutesQuery.data : tab === 'usage' ? usageQuery.data : undefined
   const regressionGates = isShooting ? regressionQuery.data : undefined
@@ -807,7 +808,8 @@ export default function Trends() {
         errorMessage={activeQuery.error ? getErrorMessage(activeQuery.error, 'Failed to load trends data.') : null}
         filters={filters}
         setSearch={setNameFilter}
-        setPosition={setPosition}
+        positions={positions}
+        setPositions={setPositions}
         setOwnership={(key) => { setOwnership(key); if (key === 'fa') setFantasyTeam(null) }}
         fantasyTeam={fantasyTeam}
         setFantasyTeam={(t) => { setFantasyTeam(t); if (t) setOwnership('all') }}

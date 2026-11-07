@@ -135,6 +135,20 @@ export function FiltersSheet({ open, onClose, onReset, children, title = 'Filter
   )
 }
 
+/** Multi-select Position group: tap to toggle, none selected = all positions. */
+export function PositionFilter({ options, selected, onChange }: { options: readonly string[]; selected: readonly string[]; onChange: (next: string[]) => void }) {
+  const toggle = (pos: string) => onChange(selected.includes(pos) ? selected.filter((p) => p !== pos) : [...selected, pos])
+  return (
+    <FilterGroup label="Position" hint="none = all">
+      <ChipRow label="Position" wrap>
+        {options.map((pos) => (
+          <Chip key={pos} selected={selected.includes(pos)} onClick={() => toggle(pos)}>{pos}</Chip>
+        ))}
+      </ChipRow>
+    </FilterGroup>
+  )
+}
+
 /** One labelled group inside the Filters sheet. */
 export function FilterGroup({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
