@@ -3,7 +3,7 @@ import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test
 // Step 2 of the mobile redesign: the phone shell (header, bottom tab bar,
 // ☰ menu sheet, footer) and browser back for its sheets.
 
-const GROUPS = ['League', 'Players & Trade', 'Insights', 'NBA', 'Minigames']
+const GROUPS = ['League', 'Players', 'Insights', 'Tools', 'NBA', 'Minigames']
 const TABS = ['Home', 'Standings', 'Teams', 'Player Ranks', 'Trade']
 
 test.describe('shell is off unless flag + phone width', () => {
@@ -117,8 +117,8 @@ test.describe('phone shell', () => {
     const select = menu.getByRole('combobox', { name: 'My team' })
     const firstTeam = await select.locator('option').nth(1).textContent()
     await select.selectOption({ index: 1 })
-    await expect(menu.getByRole('link', { name: /Open my team/ })).toContainText(firstTeam ?? '')
-    await menu.getByRole('link', { name: /Open my team/ }).click()
+    await expect(menu).toContainText(firstTeam ?? '')
+    await menu.getByRole('link', { name: /Go to my team/ }).click()
     await expect(page).toHaveURL(/\/team\/\d+$/)
     await expect(page.getByRole('dialog', { name: 'Menu' })).toHaveCount(0)
   })

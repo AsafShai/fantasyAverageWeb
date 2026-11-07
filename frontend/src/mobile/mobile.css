@@ -253,18 +253,20 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 .mr-tab[aria-current="page"] .mr-tab-label { font-weight: 700; }
 
 .mr-sheet.mr-sunken-sheet { padding-left: 14px; padding-right: 14px; }
-.mr-menu-team { display: flex; flex-direction: column; gap: 2px; }
 .mr-native-select { position: relative; }
 .mr-native-select select {
   position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px;
 }
-/* ☰ menu: inline under the header like master's menu (pushes the page down), accordion groups. */
+/* ☰ menu: floats under the header over the page, accordion groups. */
 .mr-hdr-wrap { position: sticky; top: 0; z-index: 40; flex-shrink: 0; }
 .mr-menu-drop {
-  max-height: calc(100dvh - var(--mr-hdr-h) - var(--mr-tabbar-h)); overflow-y: auto; overscroll-behavior: contain;
-  background: var(--mr-card); border-bottom: 1px solid var(--mr-border); padding: 2px 12px 8px;
+  position: absolute; top: 100%; left: 0; right: 0;
+  max-height: calc(100dvh - var(--mr-hdr-h) - var(--mr-tabbar-h) - 12px); overflow-y: auto; overscroll-behavior: contain;
+  background: var(--mr-card); border-bottom: 1px solid var(--mr-border); border-radius: 0 0 16px 16px;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28); padding: 2px 12px 8px;
 }
-.mr-menu-team { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.mr-menu-scrim { position: fixed; inset: var(--mr-hdr-h) 0 0 0; z-index: -1; border: none; background: rgba(14, 23, 38, 0.3); cursor: pointer; }
+.mr-menu-team { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
 .mr-menu-myteam { flex: 1; min-width: 0; color: var(--mr-primary-2); font-size: 13px; font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mr-menu-select { flex: 0 1 55%; min-width: 0; min-height: 32px; font-size: 12px; }
 .mr-native-select { position: relative; }

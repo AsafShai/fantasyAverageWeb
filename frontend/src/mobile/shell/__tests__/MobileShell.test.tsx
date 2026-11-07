@@ -75,7 +75,7 @@ describe('MobileShell', () => {
     expect(within(menu).getByRole('combobox', { name: 'My team' })).toBeInTheDocument()
     const heads = within(menu).getAllByRole('heading', { level: 2 })
     expect(heads.map((h) => h.querySelector('.mr-acc-label')?.textContent)).toEqual([
-      'League', 'Players & Trade', 'Insights', 'NBA', 'Minigames',
+      'League', 'Players', 'Insights', 'Tools', 'NBA', 'Minigames',
     ])
     // all groups start collapsed, like master; the page's own group is highlighted
     for (const b of within(menu).getAllByRole('button', { expanded: false })) expect(b).toHaveAttribute('aria-expanded', 'false')

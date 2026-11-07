@@ -145,32 +145,24 @@ function MobileTabBar() {
 // ── ☰ menu dropdown ─────────────────────────────────────────────────────
 
 /*
- * Phone menu only (desktop nav unchanged): the one-item Tools group joins
- * Players as "Players & Trade", Today is called Home like the tab, and NBA
- * comes before Minigames.
+ * Phone menu only (desktop nav unchanged): the groups are master's, with NBA
+ * before Minigames and Today called Home like the tab.
  */
-const MENU_ORDER = ['league', 'players', 'insights', 'nba', 'minigames']
-
 function menuGroups(groups: NavGroupDef[]): NavGroupDef[] {
-  const tools = groups.find((g) => g.key === 'tools')
-  const merged = groups
-    .filter((g) => g.key !== 'tools')
-    .map((g) => {
-      if (g.key === 'players') return { ...g, label: 'Players & Trade', items: [...g.items, ...(tools?.items ?? [])] }
-      if (g.key === 'league') return { ...g, items: g.items.map((i) => (i.path === '/' ? { ...i, label: 'Home', icon: '🏠' } : i)) }
-      return g
-    })
-  // Groups the menu does not list (Draft, behind a flag) keep their place right after Players.
-  const known = merged.filter((g) => MENU_ORDER.includes(g.key)).sort((a, b) => MENU_ORDER.indexOf(a.key) - MENU_ORDER.indexOf(b.key))
-  const extra = merged.filter((g) => !MENU_ORDER.includes(g.key))
-  const at = known.findIndex((g) => g.key === 'players') + 1
-  return [...known.slice(0, at), ...extra, ...known.slice(at)]
+  const mapped = groups.map((g) =>
+    g.key === 'league' ? { ...g, items: g.items.map((i) => (i.path === '/' ? { ...i, label: 'Home', icon: '🏠' } : i)) } : g,
+  )
+  const nba = mapped.find((g) => g.key === 'nba')
+  if (!nba) return mapped
+  const rest = mapped.filter((g) => g.key !== 'nba')
+  const at = rest.findIndex((g) => g.key === 'minigames')
+  return at < 0 ? mapped : [...rest.slice(0, at), nba, ...rest.slice(at)]
 }
 
 /**
- * Opens inline under the header and pushes the page down, like the site's menu on
- * master (not a sheet): the team row, then one collapsed accordion row per group;
- * the group of the current page is highlighted. One group is open at a time.
+ * Floats over the page right under the header (not a sheet, does not push the
+ * page): the team row, then one collapsed accordion row per group; the group of
+ * the current page is highlighted. One group is open at a time.
  */
 function MenuDropdown({ open, onClose }: { open: boolean; onClose: () => void }) {
   // Mounted only while open, so every group starts collapsed.
@@ -191,6 +183,8 @@ function MenuDropdownBody({ onClose }: { onClose: () => void }) {
   }, [onClose])
 
   return (
+    <>
+    <button type="button" className="mr-root mr-menu-scrim" aria-label="Close menu" onClick={onClose} />
     <div className="mr-root mr-menu-drop" role="dialog" aria-label="Menu">
       <MyTeamPicker />
       {groups.map((group) => {
@@ -234,6 +228,7 @@ function MenuDropdownBody({ onClose }: { onClose: () => void }) {
         )
       })}
     </div>
+    </>
   )
 }
 
@@ -246,8 +241,8 @@ function MyTeamPicker() {
   return (
     <div className="mr-menu-team">
       {myTeam && (
-        <Link to={`/team/${myTeam.team_id}`} replace className="mr-menu-myteam" aria-label={`Open my team: ${myTeam.team_name}`}>
-          {myTeam.team_name}
+        <Link to={`/team/${myTeam.team_id}`} replace className="mr-menu-myteam">
+          Go to my team ›
         </Link>
       )}
       <label className="mr-select mr-native-select mr-menu-select">
