@@ -197,6 +197,11 @@
   padding-bottom: calc(var(--mr-tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
 .mr-shell-main { flex: 1; padding: 16px 0 8px; min-width: 0; }
+/* index.css guards against sideways page scroll with overflow-x: hidden on
+   html and body, which makes body a scroll container that never scrolls, so
+   nothing inside can stick to the window (the header, the Trade Avg Z bar).
+   clip keeps the guard without that side effect; phone shell only. */
+html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 
 .mr-hdr {
   position: sticky; top: 0; z-index: 40; height: var(--mr-hdr-h); flex-shrink: 0;
