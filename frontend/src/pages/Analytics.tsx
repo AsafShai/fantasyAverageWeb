@@ -14,6 +14,9 @@ import { MyTeamMark } from '../components/MyTeamMark'
 import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { orderCategories } from '../utils/statOrder'
+import { useMobileRedesign } from '../mobile/flag'
+import { useUrlState, enumParam } from '../hooks/useUrlState'
+import { AnalyticsMobile, type AnalyticsUrlTab } from '../mobile/pages/analytics/AnalyticsMobile'
 
 type AnalyticsTab = 'heatmap' | 'rankingsOverTime' | 'shootingStats'
 
@@ -38,6 +41,11 @@ interface TeamDataItem {
   ranks_data: number[]
 }
 
+// Phone layout only: the tab is in the URL (?tab=heat|race|shots) so a view has
+// its own link; desktop keeps today's in-page tab state.
+const URL_TABS = ['heat', 'race', 'shots'] as const
+const ANALYTICS_URL_SCHEMA = { tab: enumParam<AnalyticsUrlTab>(URL_TABS, 'heat') }
+
 const formatDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
@@ -50,6 +58,8 @@ const Analytics = () => {
     return () => obs.disconnect()
   }, [])
 
+  const mobile = useMobileRedesign()
+  const [urlState, setUrlState] = useUrlState(ANALYTICS_URL_SCHEMA)
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('heatmap')
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
@@ -169,6 +179,46 @@ const Analytics = () => {
       normalized_data: sortedTeamData.map((item: TeamDataItem) => item.normalized_data),
       ranks_data: sortedTeamData.map((item: TeamDataItem) => item.ranks_data)
     }
+  }
+
+  if (mobile) {
+    const sorted = heatmapData ? getSortedHeatmapData(heatmapData) : null
+    return (
+      <AnalyticsMobile
+        tab={urlState.tab}
+        onTab={(tab) => setUrlState({ tab })}
+        dataDate={heatmapData?.data_date}
+        espnUpdatedAt={summary?.espn_updated_at}
+        heatmap={sorted}
+        sort={sortBy ? { key: sortBy, dir: sortOrder } : null}
+        onSort={(s) => { setSortBy(s.key); setSortOrder(s.dir) }}
+        highlightedTeamId={highlightedTeamId}
+        onTeamTap={handleTeamClick}
+        isMyTeam={isMyTeam}
+        isDark={isDark}
+        startDate={startDate}
+        endDate={endDate}
+        minDate={summary?.season_start}
+        today={today}
+        dateError={dateError}
+        onStartDate={handleStartDate}
+        onEndDate={handleEndDate}
+        onApply={applyDates}
+        onClear={clearDates}
+        onQuickRange={(days) => {
+          setStartDate(getDateNDaysAgo(days))
+          setEndDate(today)
+          setDateError('')
+        }}
+        appliedRangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} - ${formatDate(appliedDates.endDate!)}` : ''}
+        mismatchNote={hasDateMismatch
+          ? `Note: closest available data used - showing ${formatDate(heatmapData!.actual_start_date!)} - ${formatDate(heatmapData!.actual_end_date!)}`
+          : undefined}
+        rangeError={error && isDateRangeActive ? getErrorMessage(error, 'Could not load analytics data for this date range.') : undefined}
+        race={<StandingsRace />}
+        shots={<ShootingStatsSection />}
+      />
+    )
   }
 
   const renderHeatmapTable = (data: HeatmapData | undefined, title: string, description: string): JSX.Element | null => {

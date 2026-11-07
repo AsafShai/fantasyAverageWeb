@@ -9,9 +9,12 @@ import type { TeamShotStats } from '../types/api'
 import { MyTeamMark } from './MyTeamMark'
 import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
+import { useMobileRedesign } from '../mobile/flag'
+import { ShootingStatsMobile } from '../mobile/pages/analytics/ShootingStatsMobile'
 
 const ShootingStatsSection = () => {
   const { isMyTeam } = useMyTeam()
+  const mobile = useMobileRedesign()
   const [sortBy, setSortBy] = useState<string>('fg_percentage')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
@@ -80,6 +83,22 @@ const ShootingStatsSection = () => {
     { key: 'ft_percentage', label: 'FT%', sortable: true },
     { key: 'gp', label: 'GP', sortable: true },
   ]
+
+  if (mobile) {
+    return (
+      <ShootingStatsMobile
+        shots={shots}
+        dataDate={data?.data_date}
+        sort={{ key: sortBy, dir: sortOrder }}
+        onSort={(s) => { setSortBy(s.key); setSortOrder(s.dir) }}
+        isMyTeam={isMyTeam}
+        pctTone={(pct, type) => {
+          const avg = type === 'fg' ? leagueAverageFG : leagueAverageFT
+          return pct >= avg ? 'good' : pct >= avg - 0.03 ? 'mid' : 'bad'
+        }}
+      />
+    )
+  }
 
   return (
     <div className="card">

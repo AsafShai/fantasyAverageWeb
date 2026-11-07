@@ -1,18 +1,21 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useMyTeam } from '../../context/MyTeamContext'
+import { timePeriodLabel } from '../../hooks/usePlayerProfileData'
 import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetTeamPlayersQuery } from '../../store/api/fantasyApi'
-import type { Player, ProjectionStats } from '../../types/api'
-import { BottomSheet, MinutesStepper } from '../ui'
+import type { CustomDateRange, Player, TimePeriod } from '../../types/api'
+import { BottomSheet, PeriodChips } from '../ui'
 import { usePlayerSheet } from './usePlayerSheet'
 import { tradeLinkForPlayer } from './tradePreset'
-import { useSheetProjection, type SheetProjection } from './useSheetProjection'
 
 /*
  * Player sheet (step 3): a quick look at a player from any player name on a
  * phone, over the page it was opened on. Only data the site already shows:
- * the season line from the Players list, the fantasy owner and lineup slot,
- * and the profile's next-game projection with its minutes control. Full
- * profile and Trade Analyzer lead to the full pages.
+ * per-game stats from the Players list for the shared period chips (Season,
+ * Last 7 / 15 / 30 days, Custom range),
+ * the fantasy owner and lineup slot.
+ * No projection here (kept on the full profile). Full profile and Trade
+ * Analyzer lead to the full pages.
  */
 
 const f1 = (v: number) => v.toFixed(1)
@@ -24,7 +27,16 @@ function slotLabel(slot: string | null | undefined): string | null {
   return slot === 'BE' ? 'Bench' : slot
 }
 
-function seasonTiles(p: Player): { k: string; v: string }[] {
+
+
+const HEADINGS: Partial<Record<TimePeriod, string>> = {
+  season: 'SEASON',
+  last_7: 'LAST 7 DAYS',
+  last_15: 'LAST 15 DAYS',
+  last_30: 'LAST 30 DAYS',
+}
+
+function statTiles(p: Player): { k: string; v: string }[] {
   const s = p.stats
   const gp = s.gp
   const per = (v: number) => (gp > 0 ? f1(v / gp) : '—')
@@ -42,31 +54,11 @@ function seasonTiles(p: Player): { k: string; v: string }[] {
   ]
 }
 
-function projTiles(s: ProjectionStats): { k: string; v: string }[] {
-  return [
-    { k: 'PTS', v: f1(s.pts) },
-    { k: 'REB', v: f1(s.reb) },
-    { k: 'AST', v: f1(s.ast) },
-    { k: '3PM', v: f1(s.three_pm) },
-    { k: 'STL', v: f1(s.stl) },
-    { k: 'BLK', v: f1(s.blk) },
-    { k: 'FG%', v: s.fga > 0 ? f3(s.fg_pct) : '—' },
-    { k: 'FT%', v: s.fta > 0 ? f3(s.ft_pct) : '—' },
-  ]
-}
-
-function gameDate(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(`${iso}T12:00:00`)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
 export default function PlayerSheet() {
   const sheet = usePlayerSheet()
   const { playerId } = sheet
   if (!playerId) return null
-  // Keyed so minutes and fetched lines never carry over between players.
+  // Keyed so nothing carries over between players.
   return <PlayerSheetBody key={playerId} playerId={playerId} sheet={sheet} />
 }
 
@@ -80,8 +72,22 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
   const slot = slotLabel(roster?.players.find((p) => p.player_id === player?.player_id)?.lineup_slot)
   // Not in the league's player list (e.g. no games yet): name and team from the bio.
   const { data: bio } = useGetNbaPlayerQuery(playerId, { skip: listLoading || !!player })
-  const { loading: projLoading, projection } = useSheetProjection(playerId)
   const { teams, myTeamId } = useMyTeam()
+  const [period, setPeriod] = useState<TimePeriod>('season')
+  const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
+  const isCustom = period === 'custom' && !!customRange
+  // The same per-period list Players / Player Rankings use; Season is the query above.
+  const { currentData: periodList, isFetching: periodFetching } = useGetAllPlayersQuery(
+    { page: 1, limit: 1200, time_period: period, ...(isCustom ? { start: customRange.start, end: customRange.end } : {}) },
+    { skip: period === 'season' || (period === 'custom' && !customRange) },
+  )
+  const periodPlayer =
+    period === 'season'
+      ? player
+      : periodList?.players.find((p) => p.player_id != null && String(p.player_id) === playerId && p.has_data !== false) ?? null
+  const heading = isCustom
+    ? timePeriodLabel('custom', customRange).toUpperCase()
+    : HEADINGS[period] ?? 'SEASON'
 
   const name = player?.player_name ?? bio?.display_name ?? (listLoading ? 'Loading…' : 'Player')
   const sub = player
@@ -106,20 +112,28 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
 
       {player && (
         <>
-          <span className="mr-meta mr-ps-label">SEASON · PER GAME</span>
-          <div className="mr-ps-grid" role="list" aria-label="Season per game">
-            {seasonTiles(player).map((t) => (
-              <div key={t.k} className="mr-ps-tile" role="listitem">
-                <span className="mr-ps-tl">{t.k}</span>
-                <span className="mr-ps-tv">{t.v}</span>
-              </div>
-            ))}
+          {/* block wrapper: the chip row is a flex item that would grow in the sheet's column */}
+          <div className="mr-ps-periods">
+            <PeriodChips value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
           </div>
+          <span className="mr-meta mr-ps-label">
+            {heading} · PER GAME
+            {periodPlayer && period !== 'season' ? ` · ${periodPlayer.stats.gp} GP` : ''}
+          </span>
+          {periodPlayer ? (
+            <div className="mr-ps-grid" role="list" aria-label="Per game" aria-busy={periodFetching || undefined}>
+              {statTiles(periodPlayer).map((t) => (
+                <div key={t.k} className="mr-ps-tile" role="listitem">
+                  <span className="mr-ps-tl">{t.k}</span>
+                  <span className="mr-ps-tv">{t.v}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mr-meta mr-ps-empty">{periodFetching || !periodList ? 'Loading…' : 'No games in this period.'}</p>
+          )}
         </>
       )}
-
-      {projLoading && <div className="mr-ps-proj mr-ps-skel" aria-hidden="true" />}
-      {projection && <ProjectionBox projection={projection} playerName={name} />}
 
       <div className="mr-ps-actions">
         <button type="button" className="mr-btn mr-pri mr-grow" onClick={() => sheet.leaveTo(`/player/${playerId}`, profileState)}>
@@ -158,33 +172,4 @@ function OwnerBadge({ player, onGo }: { player: Player; onGo: (path: string) => 
     )
   }
   return <span className="mr-ps-badge mr-ps-free">{player.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}</span>
-}
-
-function ProjectionBox({ projection, playerName }: { projection: SheetProjection; playerName: string }) {
-  const { data, minutes, defaultMinutes, stats, setMinutes } = projection
-  const date = gameDate(data.game_date)
-  const vs = `${data.is_home ? 'vs' : '@'} ${data.opponent}`
-  const title = data.scheduled ? `Next: ${vs}${date ? ` · ${date}` : ''}` : `Last played: ${vs}${date ? ` · ${date}` : ''} (debug)`
-  const adjusted = minutes !== defaultMinutes
-  return (
-    <section className="mr-ps-proj" aria-label="Next game projection">
-      <div className="mr-ps-proj-head">
-        <span className="mr-meta mr-ps-next">
-          <b>{title}</b> · projected
-        </span>
-        <MinutesStepper value={minutes} defaultValue={defaultMinutes} onChange={setMinutes} playerName={playerName} />
-      </div>
-      <div className="mr-ps-line">
-        {projTiles(stats).map((t) => (
-          <span key={t.k}>
-            <i>{t.k}</i>
-            <b className="mr-num">{t.v}</b>
-          </span>
-        ))}
-      </div>
-      <span className="mr-meta">
-        {adjusted ? `Projected for ${minutes} min · default ${defaultMinutes} min` : 'Default minutes from the projection model'}
-      </span>
-    </section>
-  )
 }
