@@ -10,6 +10,8 @@ import { pickRandomPlayer } from '../../minigames/players'
 import { createStreakState, incrementHints, onRoundLoss, onRoundWin } from '../../minigames/streak'
 import { useRunEnd } from '../../minigames/useRunEnd'
 import { HANGMAN_MAX_WRONG, type MinigamePlayer } from '../../minigames/types'
+import { useMobileRedesign } from '../../mobile/flag'
+import MinigamePageMobile from '../../mobile/minigames/MinigamePageMobile'
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 const HINTS = [
@@ -55,6 +57,7 @@ function HangmanFigure({ wrong }: { wrong: number }) {
 export default function HangmanGame() {
   const { players, isLoading, error } = useMinigamePlayers()
   const runEnd = useRunEnd('hangman')
+  const mobile = useMobileRedesign()
 
   const [phase, setPhase] = useState<'lobby' | 'playing' | 'won'>('lobby')
   const [player, setPlayer] = useState<MinigamePlayer | null>(null)
@@ -152,6 +155,141 @@ export default function HangmanGame() {
   if (isLoading) return <LoadingSpinner />
   if (error || !players.length) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
+  const board = player && (
+    <>
+      <HangmanFigure wrong={wrong} />
+      <div className="flex flex-wrap justify-center gap-1.5 my-4 text-2xl font-mono tracking-widest">
+        {player.displayName.split('').map((ch, i) => {
+          const up = ch.toUpperCase()
+          const isLetter = up >= 'A' && up <= 'Z'
+          const show = !isLetter || guessed.has(up) || phase === 'won'
+          return (
+            <span
+              key={i}
+              className={`min-w-[1.1rem] text-center border-b-2 ${
+                isLetter ? 'border-gray-400' : 'border-transparent'
+              }`}
+            >
+              {show ? ch : ''}
+            </span>
+          )
+        })}
+      </div>
+
+      {phase === 'playing' && (
+        <>
+          <div className="mg-hints flex flex-wrap gap-2 justify-center mb-4">
+            {HINTS.map((h) => {
+              const used = (hintMask & (1 << h.bit)) !== 0
+              return (
+                <button
+                  key={h.bit}
+                  type="button"
+                  disabled={used}
+                  onClick={() => revealHint(h.bit)}
+                  className="px-2 py-1 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
+                >
+                  {h.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="space-y-1 text-sm text-center text-gray-600 dark:text-gray-300 mb-4 min-h-[4.5rem]">
+            {(hintMask & 1) !== 0 && <p>Conference: {player.conference}</p>}
+            {(hintMask & 2) !== 0 && <p>Team: {player.team}</p>}
+            {(hintMask & 4) !== 0 && <p>Position: {player.position}</p>}
+            {(hintMask & 8) !== 0 && player.photoUrl && (
+              <img
+                src={player.photoUrl}
+                alt=""
+                className="w-20 h-20 mx-auto rounded-full object-cover object-top"
+              />
+            )}
+          </div>
+          <div className="mg-keys grid grid-cols-9 gap-1 max-w-md mx-auto mb-4">
+            {LETTERS.map((L) => (
+              <button
+                key={L}
+                type="button"
+                disabled={guessed.has(L)}
+                onClick={() => onLetter(L)}
+                className="py-1.5 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-800 disabled:opacity-30 hover:bg-blue-100 dark:hover:bg-gray-700"
+              >
+                {L}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => endRun()}
+            className="block mx-auto text-sm text-red-600 hover:underline"
+          >
+            Give up
+          </button>
+        </>
+      )}
+
+      {phase === 'won' && (
+        <div className="text-center">
+          <p className="text-green-600 font-semibold mb-2">Correct!</p>
+          {countdown != null && <p className="text-sm text-gray-500 mb-2">Next in {countdown}…</p>}
+          <button
+            type="button"
+            onClick={goNext}
+            className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium"
+          >
+            Next player
+          </button>
+        </div>
+      )}
+    </>
+  )
+
+  const runOver = runEnd.finalScore != null && (
+    <p className="mb-4 text-lg text-gray-800 dark:text-gray-100">
+      Run over — best streak: <strong>{runEnd.finalScore}</strong>
+    </p>
+  )
+  const autoToggle = (
+    <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300 cursor-pointer">
+      <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
+      Auto next (3s)
+    </label>
+  )
+  const nameModal = (
+    <NameEntryModal
+      open={runEnd.showNameModal}
+      bestStreak={runEnd.pendingScore ?? 0}
+      submitting={runEnd.submitting}
+      error={runEnd.submitError}
+      onSubmit={runEnd.submitName}
+      onDismiss={runEnd.dismissModal}
+    />
+  )
+
+  if (mobile) {
+    return (
+      <MinigamePageMobile
+        slug="hangman"
+        title="Hangman"
+        subtitle="Guess the NBA player — build a streak"
+        stats={[
+          { label: 'Streak', value: streak.currentStreak },
+          { label: 'Best this run', value: streak.bestStreak },
+          { label: 'Hints used', value: streak.runHintsUsed },
+        ]}
+        controls={autoToggle}
+        lobby={phase === 'lobby' || !player}
+        runOver={runOver}
+        onStart={startNewGame}
+        board={board}
+        leaderboardDescription="Top 5 best streaks (fewer hints wins ties)"
+      >
+        {nameModal}
+      </MinigamePageMobile>
+    )
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 pb-12">
       <div className="mb-4">
@@ -172,19 +310,12 @@ export default function HangmanGame() {
             </span>
             <span className="text-gray-500">Best this run: {streak.bestStreak}</span>
             <span className="text-gray-500">Hints used: {streak.runHintsUsed}</span>
-            <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300 cursor-pointer">
-              <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
-              Auto next (3s)
-            </label>
+            {autoToggle}
           </div>
 
           {phase === 'lobby' && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center bg-white dark:bg-gray-900">
-              {runEnd.finalScore != null && (
-                <p className="mb-4 text-lg text-gray-800 dark:text-gray-100">
-                  Run over — best streak: <strong>{runEnd.finalScore}</strong>
-                </p>
-              )}
+              {runOver}
               <button
                 type="button"
                 onClick={startNewGame}
@@ -197,91 +328,7 @@ export default function HangmanGame() {
 
           {(phase === 'playing' || phase === 'won') && player && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-6 bg-white dark:bg-gray-900">
-              <HangmanFigure wrong={wrong} />
-              <div className="flex flex-wrap justify-center gap-1.5 my-4 text-2xl font-mono tracking-widest">
-                {player.displayName.split('').map((ch, i) => {
-                  const up = ch.toUpperCase()
-                  const isLetter = up >= 'A' && up <= 'Z'
-                  const show = !isLetter || guessed.has(up) || phase === 'won'
-                  return (
-                    <span
-                      key={i}
-                      className={`min-w-[1.1rem] text-center border-b-2 ${
-                        isLetter ? 'border-gray-400' : 'border-transparent'
-                      }`}
-                    >
-                      {show ? ch : ''}
-                    </span>
-                  )
-                })}
-              </div>
-
-              {phase === 'playing' && (
-                <>
-                  <div className="flex flex-wrap gap-2 justify-center mb-4">
-                    {HINTS.map((h) => {
-                      const used = (hintMask & (1 << h.bit)) !== 0
-                      return (
-                        <button
-                          key={h.bit}
-                          type="button"
-                          disabled={used}
-                          onClick={() => revealHint(h.bit)}
-                          className="px-2 py-1 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
-                        >
-                          {h.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <div className="space-y-1 text-sm text-center text-gray-600 dark:text-gray-300 mb-4 min-h-[4.5rem]">
-                    {(hintMask & 1) !== 0 && <p>Conference: {player.conference}</p>}
-                    {(hintMask & 2) !== 0 && <p>Team: {player.team}</p>}
-                    {(hintMask & 4) !== 0 && <p>Position: {player.position}</p>}
-                    {(hintMask & 8) !== 0 && player.photoUrl && (
-                      <img
-                        src={player.photoUrl}
-                        alt=""
-                        className="w-20 h-20 mx-auto rounded-full object-cover object-top"
-                      />
-                    )}
-                  </div>
-                  <div className="grid grid-cols-9 gap-1 max-w-md mx-auto mb-4">
-                    {LETTERS.map((L) => (
-                      <button
-                        key={L}
-                        type="button"
-                        disabled={guessed.has(L)}
-                        onClick={() => onLetter(L)}
-                        className="py-1.5 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-800 disabled:opacity-30 hover:bg-blue-100 dark:hover:bg-gray-700"
-                      >
-                        {L}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => endRun()}
-                    className="block mx-auto text-sm text-red-600 hover:underline"
-                  >
-                    Give up
-                  </button>
-                </>
-              )}
-
-              {phase === 'won' && (
-                <div className="text-center">
-                  <p className="text-green-600 font-semibold mb-2">Correct!</p>
-                  {countdown != null && <p className="text-sm text-gray-500 mb-2">Next in {countdown}…</p>}
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium"
-                  >
-                    Next player
-                  </button>
-                </div>
-              )}
+              {board}
             </div>
           )}
         </div>
@@ -293,14 +340,7 @@ export default function HangmanGame() {
         </div>
       </div>
 
-      <NameEntryModal
-        open={runEnd.showNameModal}
-        bestStreak={runEnd.pendingScore ?? 0}
-        submitting={runEnd.submitting}
-        error={runEnd.submitError}
-        onSubmit={runEnd.submitName}
-        onDismiss={runEnd.dismissModal}
-      />
+      {nameModal}
     </div>
   )
 }

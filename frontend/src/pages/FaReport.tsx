@@ -18,6 +18,8 @@ import {
 } from '../utils/faReport'
 import { fantasyTeamOptionLabel } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileFaReport from '../mobile/draft/MobileFaReport'
 
 type SortCol = 'player' | 'lastFa' | 'faTeam' | 'zTotal' | 'valueRank' | 'gp'
 
@@ -35,6 +37,7 @@ export default function FaReport() {
   const { data: activity, error: activityError } = useGetLeagueActivityQuery()
 
   const { isMyTeam } = useMyTeam()
+  const mobileRedesign = useMobileRedesign()
 
   const rows = useMemo(() => {
     if (!draftReport || !playersData) return []
@@ -87,6 +90,22 @@ export default function FaReport() {
   if (draftLoading || poolLoading) return <LoadingSpinner />
   if (draftError || poolError) {
     return <ErrorMessage message={getErrorMessage(draftError ?? poolError, 'Failed to load FA report.')} />
+  }
+
+  if (mobileRedesign) {
+    return (
+      <MobileFaReport
+        calcMode={calcMode}
+        onCalcModeChange={setCalcMode}
+        search={search}
+        onSearchChange={setSearch}
+        activityError={!!activityError}
+        rows={sorted}
+        sortCol={sortCol}
+        sortAsc={sortAsc}
+        onSort={handleSort}
+      />
+    )
   }
 
   return (

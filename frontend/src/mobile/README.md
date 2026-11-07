@@ -56,7 +56,10 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   URL stay in `src/pages/*`; shared logic moved to hooks (`useNbaDepthChart`, `useSlateCalendar`,
   `components/injuries/injuryFormat`). A list picked in a `SelectSheet` that also writes the URL should
   apply it after the sheet closes (see `MobileNbaTeams`). Styles in `nba/nba.css`.
+- **Minigames** `minigames/` (step 5): the list and the four games render `MobileMinigames` / `MinigamePageMobile` on a phone; each game keeps its logic and hands the page its board, streak tiles and run-over text. The Who Am I? map is a bottom sheet in browser history. Styles in `minigames/minigames.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
+- **League pages** (step 5): Activity (`activity/`; trade views reuse the desktop
+  components), Draft Report + FA Report (`draft/`). Styles in each folder's css.
 - **League Analytics + Estimator** `pages/analytics/` (step 5): phone tabs in `?tab=heat|race|shots`
   and `?tab=prob|rank|proj`. StandingsRace, ShootingStatsSection and Estimator's sections keep
   their state and render phone controls/tables themselves. Styles in `analytics.css`.

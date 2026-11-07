@@ -1,4 +1,6 @@
 import { Link } from 'react-router'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileMinigames from '../mobile/minigames/MobileMinigames'
 
 const GAMES = [
   {
@@ -28,6 +30,8 @@ const GAMES = [
 ] as const
 
 const Minigames = () => {
+  const mobile = useMobileRedesign()
+  if (mobile) return <MobileMinigames games={GAMES} />
   return (
     <div className="max-w-5xl mx-auto px-4 pb-12">
       <div className="mb-8">
