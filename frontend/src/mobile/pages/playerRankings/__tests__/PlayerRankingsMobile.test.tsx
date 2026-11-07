@@ -66,7 +66,7 @@ describe('Player Rankings · phone redesign', () => {
 
     await user.click(screen.getByRole('button', { name: /Filters/ }))
     const sheet = screen.getByRole('dialog', { name: 'Filters' })
-    for (const group of ['Position', 'Fantasy team', 'Show']) expect(within(sheet).getByRole('group', { name: group })).toBeInTheDocument()
+    for (const group of ['Position', 'Fantasy team', 'Show', 'Min GP', 'Min MPG']) expect(within(sheet).getAllByRole('group', { name: group }).length).toBeGreaterThan(0)
     expect(within(sheet).getByRole('spinbutton', { name: 'Min GP' })).toBeInTheDocument()
     expect(within(sheet).getByRole('spinbutton', { name: 'Min MPG' })).toBeInTheDocument()
 
@@ -100,9 +100,20 @@ describe('Player Rankings · phone redesign', () => {
   it('offers Last night and Custom among the period chips', async () => {
     renderWithProviders(<PlayerRankings />, { route: '/player-rankings' })
     await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument())
-    const period = screen.getByRole('group', { name: 'Period' })
+    const period = screen.getAllByRole('group', { name: 'Period' })[0]
     expect(within(period).getAllByRole('button').map((b) => b.textContent)).toEqual([
       '📅 Full Season', '🌙 Last night', '🔥 Last 7 Days', '📊 Last 15 Days', '📈 Last 30 Days', '📆 Custom',
     ])
+  })
+
+  it('search filters by name and the × clears it', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PlayerRankings />, { route: '/player-rankings' })
+    await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument())
+    await user.type(screen.getByRole('searchbox', { name: 'Search players' }), 'beta')
+    await waitFor(() => expect(screen.queryByText('Alpha Guard')).not.toBeInTheDocument())
+    expect(screen.getByText(/1 player found · ranks are overall/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument())
   })
 })
