@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { usePersistedState, usePersistedSetState } from '../hooks/usePersistedState';
-import { useGetAllPlayersQuery, useGetNbaTeamsListQuery, useGetNbaTeamDepthChartQuery } from '../store/api/fantasyApi';
+import { useGetNbaTeamsListQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { getErrorMessage } from '../utils/errorMessage';
 import PlayerNameLink from '../components/PlayerNameLink';
 import type { DepthChartPosition } from '../types/api';
-import { applyDepthChartFilters } from '../utils/depthChartFilters';
 import TeamScheduleView from '../components/TeamScheduleView';
-
-const MAX_DEPTH = 5;
-const DEPTH_LABELS = ['Starter', '2nd', '3rd', '4th', '5th'];
-const EXCLUDE_STATUSES = ['Out', 'Doubtful', 'Questionable', 'Probable'] as const;
+import { DEPTH_EXCLUDE_STATUSES as EXCLUDE_STATUSES, DEPTH_LABELS, DEPTH_MAX as MAX_DEPTH, useNbaDepthChart } from '../hooks/useNbaDepthChart';
+import { useMobileRedesign } from '../mobile/flag';
+import MobileNbaTeams from '../mobile/nba/MobileNbaTeams';
 
 const INJURY_STYLES: Record<string, string> = {
   Out: 'bg-red-100 text-red-800',
@@ -111,32 +108,11 @@ function FilterCheckbox({
 }
 
 function DepthChartView({ teamId }: { teamId: string }) {
-  const { data, isLoading, error } = useGetNbaTeamDepthChartQuery(teamId);
-  const { data: playersData } = useGetAllPlayersQuery({ limit: 1200 });
-  const freeAgentIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const player of playersData?.players ?? []) {
-      if (player.player_id != null && player.status === 'FREEAGENT') ids.add(String(player.player_id));
-    }
-    return ids;
-  }, [playersData]);
-  const [excludedStatuses, setExcludedStatuses] = usePersistedSetState<string>(`nbaTeams.${teamId}.excludedStatuses`, new Set());
-  const [removeDuplicates, setRemoveDuplicates] = usePersistedState(`nbaTeams.${teamId}.removeDuplicates`, false);
+  const { data, isLoading, error, freeAgentIds, excludedStatuses, toggleStatus, removeDuplicates, setRemoveDuplicates, positions: filteredPositions } = useNbaDepthChart(teamId);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load depth chart')} />;
   if (!data) return null;
-
-  const toggleStatus = (status: string) => {
-    setExcludedStatuses((prev) => {
-      const next = new Set(prev);
-      if (next.has(status)) next.delete(status);
-      else next.add(status);
-      return next;
-    });
-  };
-
-  const filteredPositions = applyDepthChartFilters(data.positions, excludedStatuses, removeDuplicates);
 
   return (
     <div>
@@ -179,6 +155,7 @@ export default function NbaTeams() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedTeamId, setSelectedTeamId] = useState<string>(searchParams.get('team') ?? '');
   const openedFromLink = useRef(Boolean(searchParams.get('team')));
+  const mobileRedesign = useMobileRedesign();
 
   useEffect(() => {
     if (!openedFromLink.current || isLoading || !selectedTeamId) return;
@@ -190,6 +167,18 @@ export default function NbaTeams() {
     setSelectedTeamId(teamId);
     setSearchParams(teamId ? { team: teamId } : {}, { replace: true });
   };
+
+  if (mobileRedesign) {
+    return (
+      <MobileNbaTeams
+        teams={teams}
+        isLoading={isLoading}
+        error={error}
+        selectedTeamId={selectedTeamId}
+        onSelectTeam={handleSelectTeam}
+      />
+    );
+  }
 
   return (
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -1,32 +1,5 @@
 import type { StoredNotification } from '../../types/injury';
-
-function fmtTimestamp(ts: string): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  return isNaN(d.getTime()) ? ts : d.toLocaleString();
-}
-
-function formatMessage(notif: StoredNotification): string {
-  switch (notif.type) {
-    case 'status_change':
-      return `${notif.player} (${notif.team}): ${notif.old_status} → ${notif.new_status}`;
-    case 'added':
-      return `${notif.player} (${notif.team}): Added — ${notif.new_status}`;
-    case 'removed':
-      return `${notif.player} (${notif.team}): Removed`;
-    default:
-      return `${notif.player} (${notif.team})`;
-  }
-}
-
-function typeIcon(type: StoredNotification['type']): string {
-  switch (type) {
-    case 'status_change': return '🔄';
-    case 'added': return '➕';
-    case 'removed': return '➖';
-    default: return '📋';
-  }
-}
+import { fmtTimestamp, formatNotification as formatMessage, notificationIcon as typeIcon } from './injuryFormat';
 
 interface Props {
   notifications: StoredNotification[];
