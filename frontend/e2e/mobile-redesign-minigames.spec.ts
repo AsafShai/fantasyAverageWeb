@@ -75,7 +75,8 @@ test('desktop keeps today\'s Minigames pages with the flag on', async ({ page })
   await open(page, '/minigames/hangman')
   await expect(page.getByRole('heading', { name: 'Hangman' })).toBeVisible()
   await expect(page.locator('.mr-mg')).toHaveCount(0)
-  await expect(page.getByText('Auto next (3s)')).toBeVisible()
+  await page.getByRole('button', { name: 'Start New Game' }).click()
+  await expect(page.getByRole('switch', { name: 'Auto next (3s)' })).toBeVisible()
 })
 
 test.describe('phone Minigames', () => {
@@ -100,7 +101,6 @@ test.describe('phone Minigames', () => {
     await expect(page.getByRole('heading', { name: 'Hangman' })).toBeVisible()
     await expect(page.getByText('Guess the NBA player — build a streak')).toBeVisible()
     for (const l of ['Streak', 'Best this run', 'Hints used']) await expect(page.getByText(l, { exact: true })).toBeVisible()
-    await expect(page.getByText('Auto next (3s)')).toBeVisible()
     const lb = page.getByRole('table')
     await expect(lb.getByRole('columnheader')).toHaveText(['#', 'Player', 'Best', 'Hints'])
     await expect(lb.getByRole('row')).toHaveCount(4)
@@ -109,6 +109,7 @@ test.describe('phone Minigames', () => {
     await shot(page, 'live-hangman')
 
     await page.getByRole('button', { name: 'Start New Game' }).click()
+    await expect(page.getByRole('switch', { name: 'Auto next (3s)' })).toBeVisible()
     await page.getByRole('button', { name: 'Team', exact: true }).click()
     await expect(page.getByText('Team: New York Knicks')).toBeVisible()
     for (const L of 'JALEXZ') await page.getByRole('button', { name: L, exact: true }).click()

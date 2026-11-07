@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import LeaderboardCard from '../../components/minigames/LeaderboardCard'
+import MinigameAnswerReveal from '../../components/minigames/MinigameAnswerReveal'
+import MinigameRunOverSummary from '../../components/minigames/MinigameRunOverSummary'
+import AutoNextToggle from '../../components/minigames/AutoNextToggle'
+import WhoAmIMobileToolbar from '../../components/minigames/WhoAmIMobileToolbar'
 import NameEntryModal from '../../components/minigames/NameEntryModal'
+import WhoAmIFeedbackLegend from '../../components/minigames/WhoAmIFeedbackLegend'
 import {
   NbaConferenceDivisionMapDialog,
   NbaMapInfoButton,
@@ -51,11 +56,62 @@ function ColumnHeader({
   const showInfo = colKey === 'conference' || colKey === 'division'
   return (
     <th className="p-1 text-center">
-      <span className="inline-flex items-center justify-center gap-0.5">
+      <span className="inline-flex items-center justify-center gap-0.5 min-h-5">
         {label}
-        {showInfo && <NbaMapInfoButton onOpen={onOpenMap} />}
+        {showInfo ? <NbaMapInfoButton onOpen={onOpenMap} /> : <span className="inline-block w-5" aria-hidden />}
       </span>
     </th>
+  )
+}
+
+function WhoAmIMobileField({
+  label,
+  showInfo,
+  onOpenMap,
+  display,
+  state,
+  dir,
+  compact = false,
+}: {
+  label: string
+  showInfo: boolean
+  onOpenMap: () => void
+  display: string
+  state: string
+  dir?: 'higher' | 'lower'
+  compact?: boolean
+}) {
+  return (
+    <div
+      className={`mg-whoami-field flex h-full flex-col ${compact ? 'min-h-[2.65rem]' : 'min-h-[3.5rem]'}`}
+    >
+      <div
+        className={`flex shrink-0 items-center justify-between gap-0.5 font-medium uppercase leading-none tracking-wide text-gray-500 dark:text-gray-400 ${
+          compact
+            ? 'mb-0.5 h-4 text-[9px]'
+            : 'mb-1 h-5 text-[10px]'
+        }`}
+      >
+        <span className="min-w-0 truncate">{label}</span>
+        <span
+          className={`flex shrink-0 items-center justify-center ${compact ? 'h-4 w-4' : 'h-5 w-5'}`}
+        >
+          {showInfo ? <NbaMapInfoButton onOpen={onOpenMap} /> : null}
+        </span>
+      </div>
+      <div
+        className={`flex flex-1 items-center justify-center text-center leading-tight ${cellClass(state)} ${
+          compact
+            ? 'min-h-[1.4rem] rounded px-1 py-0.5 text-[10px]'
+            : 'min-h-[2.25rem] rounded-md px-1.5 py-1 text-xs'
+        }`}
+      >
+        <span className="break-words">
+          {display}
+          {dirArrow(dir)}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -75,6 +131,8 @@ export default function WhoAmIGame() {
   const [autoMode, setAutoMode] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [lastRunHints, setLastRunHints] = useState<number | null>(null)
+  const [hintNotice, setHintNotice] = useState(false)
   const mapOpen = mobile ? mapSheet.open : dialogOpen
   const setMapOpen = (v: boolean) => {
     if (!mobile) setDialogOpen(v)
@@ -101,12 +159,15 @@ export default function WhoAmIGame() {
 
   const startNewGame = () => {
     runEnd.clearFinal()
+    setLastRunHints(null)
+    setHintNotice(false)
     setStreak(createStreakState())
     startRound()
   }
 
   const endRun = useCallback(
     (s = streak) => {
+      setLastRunHints(s.minHintsForBestTie ?? s.runHintsUsed)
       setPhase('lobby')
       void runEnd.handleRunEnd({
         bestStreak: s.bestStreak,
@@ -163,39 +224,64 @@ export default function WhoAmIGame() {
     if (photoHint || phase !== 'playing') return
     setPhotoHint(true)
     setStreak((s) => incrementHints(s))
+    setHintNotice(true)
   }
 
   if (isLoading) return <LoadingSpinner />
   if (error || !players.length) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
+  const inRound = phase === 'playing' || phase === 'won'
+  const autoToggle = inRound ? (
+    <AutoNextToggle checked={autoMode} onChange={setAutoMode} label="Auto next (3s)" />
+  ) : null
+  const mapButton = inRound ? (
+    <button
+      type="button"
+      onClick={() => setMapOpen(true)}
+      className={mobile ? 'mr-link' : 'text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1'}
+    >
+      <span aria-hidden>ⓘ</span> View map
+    </button>
+  ) : null
+
+  const photoHintButton = (
+    <button
+      type="button"
+      disabled={photoHint || phase !== 'playing'}
+      onClick={usePhotoHint}
+      className="px-3 py-2 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
+    >
+      Photo hint
+    </button>
+  )
+  const giveUpButton =
+    phase === 'playing' ? (
+      <button type="button" onClick={() => endRun()} className="text-sm text-red-600 hover:underline">
+        Give up
+      </button>
+    ) : null
+
   const board = secret && (
     <>
-      <div className="flex flex-wrap items-center gap-3">
-        <PlayerPicker
-          players={players}
-          excludeIds={rows.map((r) => r.guessedPlayerId)}
-          hideHeadshot={photoHint}
-          disabled={phase !== 'playing'}
-          onGuess={onGuess}
-        />
-        <button
-          type="button"
-          disabled={photoHint || phase !== 'playing'}
-          onClick={usePhotoHint}
-          className="px-3 py-2 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
-        >
-          Photo hint
-        </button>
-        {phase === 'playing' && (
-          <button
-            type="button"
-            onClick={() => endRun()}
-            className="text-sm text-red-600 hover:underline"
-          >
-            Give up
-          </button>
-        )}
-      </div>
+      <WhoAmIFeedbackLegend />
+      {!mobile && (
+        <div className="flex flex-wrap items-center gap-3">
+          {photoHintButton}
+          {giveUpButton}
+        </div>
+      )}
+      <PlayerPicker
+        players={players}
+        excludeIds={rows.map((r) => r.guessedPlayerId)}
+        hideHeadshot={photoHint}
+        disabled={phase !== 'playing'}
+        onGuess={onGuess}
+      />
+      {hintNotice && (
+        <p className="text-xs text-amber-700 dark:text-amber-400" role="status">
+          Photo hint used — counts toward your hint total for the leaderboard.
+        </p>
+      )}
 
       {photoHint && secret.photoUrl && (
         <img
@@ -242,47 +328,60 @@ export default function WhoAmIGame() {
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-gray-400 mt-2">
-          Guesses: {rows.length}/{WHO_AM_I_MAX_GUESSES}
-        </p>
       </div>
 
-      {/* Mobile guess cards */}
-      <div className="sm:hidden space-y-3">
-        {rows.map((row) => (
+      {mobile && inRound && (
+        <WhoAmIMobileToolbar
+          guessCount={rows.length}
+          maxGuesses={WHO_AM_I_MAX_GUESSES}
+          photoHintUsed={photoHint}
+          canPhotoHint={phase === 'playing'}
+          onPhotoHint={usePhotoHint}
+          showGiveUp={phase === 'playing'}
+          onGiveUp={() => endRun()}
+          autoNext={autoMode}
+          onAutoNextChange={setAutoMode}
+          onOpenMap={() => setMapOpen(true)}
+        />
+      )}
+
+      {/* Mobile guess cards — newest first */}
+      <div className="mg-whoami-guess-list sm:hidden space-y-1.5">
+        {[...rows].reverse().map((row) => (
           <div
             key={row.guessedPlayerId}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2"
+            className="mg-whoami-guess-card rounded-md border border-gray-200 dark:border-gray-700 p-2"
           >
-            <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+            <p className="mb-1 truncate font-semibold text-[11px] leading-tight text-gray-900 dark:text-gray-100">
               {row.guessedName}
             </p>
-            <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <div className="grid grid-cols-2 items-stretch gap-x-1.5 gap-y-1 text-xs">
               {WHO_AM_I_COLUMNS.map((c) => {
                 const cell = row.feedback[c.key]
                 const showInfo = c.key === 'conference' || c.key === 'division'
                 return (
-                  <div key={c.key}>
-                    <div className="mb-0.5 flex items-center gap-0.5 text-[10px] uppercase text-gray-500">
-                      {c.label}
-                      {showInfo && <NbaMapInfoButton onOpen={() => setMapOpen(true)} />}
-                    </div>
-                    <div
-                      className={`rounded px-1.5 py-1 text-center ${cellClass(cell.state)}`}
-                    >
-                      {row.display[c.key]}
-                      {dirArrow(cell.dir)}
-                    </div>
-                  </div>
+                  <WhoAmIMobileField
+                    key={c.key}
+                    compact
+                    label={c.label}
+                    showInfo={showInfo}
+                    onOpenMap={() => setMapOpen(true)}
+                    display={row.display[c.key]}
+                    state={cell.state}
+                    dir={cell.dir}
+                  />
                 )
               })}
             </div>
           </div>
         ))}
-        <p className="text-xs text-gray-400">
+      </div>
+
+      {!mobile && (
+        <p className="text-xs text-gray-400 text-center sm:text-left">
           Guesses: {rows.length}/{WHO_AM_I_MAX_GUESSES}
         </p>
-      </div>
+      )}
 
       {phase === 'won' && (
         <div className="text-center pt-2">
@@ -301,39 +400,9 @@ export default function WhoAmIGame() {
   )
   const runOver = (
     <>
-      {runEnd.finalScore != null && (
-        <p className="mb-2 text-lg">
-          Run over — best streak: <strong>{runEnd.finalScore}</strong>
-        </p>
-      )}
-      {secret && runEnd.finalScore != null && (
-        <div className="mb-4 flex flex-col items-center gap-2">
-          {secret.photoUrl && (
-            <img
-              src={secret.photoUrl}
-              alt=""
-              className="w-20 h-20 rounded-full object-cover object-top"
-            />
-          )}
-          <p className="text-sm text-gray-600">Answer: <strong>{secret.displayName}</strong></p>
-        </div>
-      )}
+      <MinigameRunOverSummary bestStreak={runEnd.finalScore} hintsUsed={lastRunHints} />
+      {secret && runEnd.finalScore != null ? <MinigameAnswerReveal player={secret} /> : null}
     </>
-  )
-  const autoToggle = (
-    <label className="flex items-center gap-1.5 cursor-pointer">
-      <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
-      Auto next
-    </label>
-  )
-  const mapButton = (
-    <button
-      type="button"
-      onClick={() => setMapOpen(true)}
-      className={mobile ? 'mr-link' : 'text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1'}
-    >
-      <span aria-hidden>ⓘ</span> View map
-    </button>
   )
   const modals = (
     <>
@@ -366,12 +435,7 @@ export default function WhoAmIGame() {
           { label: 'Best', value: streak.bestStreak },
           { label: 'Hints', value: streak.runHintsUsed },
         ]}
-        controls={
-          <>
-            {autoToggle}
-            {mapButton}
-          </>
-        }
+        controls={undefined}
         lobby={phase === 'lobby' || !secret}
         runOver={runOver}
         onStart={startNewGame}
