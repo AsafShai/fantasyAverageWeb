@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
-import { ActiveFilterChips, DataTable, FilterGroup, FilterSearchRow, FiltersSheet, type Column } from '..'
+import { ActiveFilterChips, DataTable, FilterGroup, FilterSearchRow, FiltersSheet, PositionFilter, type Column } from '..'
 import { stringParam, useUrlState } from '../../../hooks/useUrlState'
 
 describe('FilterSearchRow', () => {
@@ -38,6 +38,20 @@ describe('ActiveFilterChips', () => {
     expect(screen.queryByText('All Teams')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'Remove filter PG, SG' }))
     expect(remove).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('PositionFilter', () => {
+  it('toggles several positions on and off', async () => {
+    const onChange = vi.fn()
+    const { rerender } = render(<PositionFilter options={['PG', 'SG', 'C']} selected={[]} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'PG' }))
+    expect(onChange).toHaveBeenLastCalledWith(['PG'])
+    rerender(<PositionFilter options={['PG', 'SG', 'C']} selected={['PG']} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'C' }))
+    expect(onChange).toHaveBeenLastCalledWith(['PG', 'C'])
+    await userEvent.click(screen.getByRole('button', { name: 'PG' }))
+    expect(onChange).toHaveBeenLastCalledWith([])
   })
 })
 

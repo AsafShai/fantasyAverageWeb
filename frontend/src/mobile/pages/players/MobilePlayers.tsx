@@ -30,6 +30,7 @@ import {
   PeriodChips,
   Segmented,
   StatusPill,
+  PositionFilter,
   useSheetHistory,
   type ActiveFilter,
   type Column,
@@ -170,7 +171,7 @@ export default function MobilePlayers(p: MobilePlayersProps) {
   const active: ActiveFilter[] = []
   if (filters.team_id !== null && filters.team_id !== undefined)
     active.push({ key: 'team', label: teamLabel(filters.team_id), onRemove: () => set({ team_id: null }) })
-  if (filters.positions?.length) active.push({ key: 'pos', label: filters.positions.join(', '), onRemove: () => set({ positions: [] }) })
+  for (const pos of filters.positions ?? []) active.push({ key: `pos-${pos}`, label: pos, onRemove: () => set({ positions: (filters.positions ?? []).filter((x) => x !== pos) }) })
   if (filters.status?.length)
     active.push({
       key: 'status',
@@ -395,15 +396,7 @@ export default function MobilePlayers(p: MobilePlayersProps) {
           </ChipRow>
         </FilterGroup>
 
-        <FilterGroup label="Position" hint="none = all">
-          <ChipRow label="Position" wrap>
-            {POSITIONS.map((pos) => (
-              <Chip key={pos} selected={!!filters.positions?.includes(pos)} onClick={() => set({ positions: toggleIn(filters.positions, pos) })}>
-                {pos}
-              </Chip>
-            ))}
-          </ChipRow>
-        </FilterGroup>
+        <PositionFilter options={POSITIONS} selected={filters.positions ?? []} onChange={(positions) => set({ positions })} />
 
         <FilterGroup label="Status" hint="none = all">
           <ChipRow label="Status" wrap>

@@ -30,7 +30,7 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   and Full profile / Trade Analyzer, which replace the sheet's history entry.
   No projection in the sheet (it stays on the profile).
 - **Filters pattern** `ui/Filters.tsx`: `FilterSearchRow` (search + "Filters (n)"),
-  `ActiveFilterChips` (× clears one; "All …" defaults when none), `FiltersSheet`
+  `ActiveFilterChips` (× clears one; "All …" defaults when none), `PositionFilter` (multi-select), `FiltersSheet`
   (Reset + Show results) and `FilterGroup`. Pair it with `useSheetHistory('filters')`.
   `ui/PeriodChips.tsx` is TimePeriodSelector as a chip row (Custom opens today's
   date-range picker). `DataTable.renderAfterRow` adds a row under a row (matchup panel).

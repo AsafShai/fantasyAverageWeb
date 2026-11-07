@@ -108,6 +108,17 @@ describe('computePlayerRankings', () => {
     expect(result.some(r => r.player.player_name === 'Guard')).toBe(true)
   })
 
+  it('positions filter keeps players at any of the picked positions', () => {
+    const players = [
+      makePlayer({ name: 'Guard', positions: ['PG', 'SG'] }),
+      makePlayer({ name: 'Wing', positions: ['SF'] }),
+      makePlayer({ name: 'Big', positions: ['PF', 'C'] }),
+    ]
+    const names = computePlayerRankings(players, { ...defaultConfig, positions: ['SG', 'C'] }).map(r => r.player.player_name).sort()
+    expect(names).toEqual(['Big', 'Guard'])
+    expect(computePlayerRankings(players, { ...defaultConfig, positions: [] })).toHaveLength(3)
+  })
+
   it('punted category (weight=0) contributes 0 to totalZ', () => {
     const players = [
       makePlayer({ name: 'A', pts: 40, ast: 1 }),

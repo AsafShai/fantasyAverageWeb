@@ -1,7 +1,7 @@
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../../../myTeam/display'
 import type { Team } from '../../../types/api'
 import { LIMITS, POSITIONS, type RankingsFilters } from './filters'
-import { Chip, ChipRow, FilterGroup, FiltersSheet } from '../../ui'
+import { Chip, ChipRow, FilterGroup, FiltersSheet, PositionFilter } from '../../ui'
 
 interface Props {
   open: boolean
@@ -19,7 +19,7 @@ interface Props {
  */
 export function PlayerRankingsFilters({ open, onClose, filters: f, teams, myTeamId, isMyTeam }: Props) {
   const reset = () => {
-    f.setPosition(null)
+    f.setPositions([])
     f.setFantasyTeam(null)
     f.setDisplayLimit(null)
     f.setMinGp(0)
@@ -27,14 +27,7 @@ export function PlayerRankingsFilters({ open, onClose, filters: f, teams, myTeam
   }
   return (
     <FiltersSheet open={open} onClose={onClose} onReset={reset}>
-      <FilterGroup label="Position">
-        <ChipRow label="Position" wrap>
-          <Chip selected={f.position === null} onClick={() => f.setPosition(null)}>All</Chip>
-          {POSITIONS.map((p) => (
-            <Chip key={p} selected={f.position === p} onClick={() => f.setPosition(p)}>{p}</Chip>
-          ))}
-        </ChipRow>
-      </FilterGroup>
+      <PositionFilter options={POSITIONS} selected={f.positions} onChange={f.setPositions} />
       <FilterGroup label="Fantasy team">
         <ChipRow label="Fantasy team" wrap>
           <Chip selected={f.fantasyTeam === null} onClick={() => f.setFantasyTeam(null)}>All</Chip>

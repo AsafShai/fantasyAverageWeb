@@ -50,7 +50,15 @@ export interface RankingsConfig {
   minGp: number
   minMin: number
   position: string | null
+  /** Phone: any-of several positions (empty/absent = no filter). */
+  positions?: string[]
   weights: Record<RankingCategory, number>
+}
+
+/** True when a player's positions satisfy the single `position` and any-of `positions` filters. */
+export function matchesPositionFilter(playerPositions: string[], position: string | null, positions?: string[]): boolean {
+  if (position !== null && !playerPositions.includes(position)) return false
+  return !positions?.length || positions.some(p => playerPositions.includes(p))
 }
 
 export interface RankedPlayer {
@@ -110,12 +118,12 @@ function categoryZArrays(pool: Player[], categories: RankingCategory[], calcMode
 
 export function computePlayerRankings(players: Player[], config: RankingsConfig, categories: RankingCategory[] = DEFAULT_CATEGORIES,
                                       reverseCategories: Set<RankingCategory> = EMPTY_REVERSE): RankedPlayer[] {
-  const { calcMode, minGp, minMin, position, weights } = config
+  const { calcMode, minGp, minMin, position, positions, weights } = config
 
   const filtered = players.filter(p =>
     p.stats.gp >= minGp &&
     (p.stats.gp > 0 ? p.stats.minutes / p.stats.gp : 0) >= minMin &&
-    (position === null || p.positions.includes(position))
+    matchesPositionFilter(p.positions, position, positions)
   )
 
   if (filtered.length === 0) return []

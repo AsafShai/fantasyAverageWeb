@@ -28,6 +28,7 @@ import {
   type RankingCategory,
   type RankedPlayer,
   type RankingsConfig,
+  matchesPositionFilter,
 } from '../utils/playerRankings'
 
 type SortCol = 'rank' | 'totalZ' | 'gp' | 'min' | RankingCategory | `${RankingCategory}_raw`
@@ -115,6 +116,8 @@ export default function PlayerRankings() {
   const [minGp, setMinGp] = usePersistedState('playerRankings.minGp', 0)
   const [minMin, setMinMin] = usePersistedState('playerRankings.minMin', 0)
   const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
+  // Phone picks several positions; desktop keeps its single select (separate state so each stays as it was).
+  const [positionsPicked, setPositionsPicked] = usePersistedState<string[]>('playerRankings.positions', [])
   const [fantasyTeam, setFantasyTeam] = usePersistedState<FantasyTeamFilter>('playerRankings.fantasyTeam', null)
   const [weights, setWeights] = usePersistedState<Record<RankingCategory, number>>('playerRankings.weights', { ...DEFAULT_WEIGHTS })
   // A persisted weights object from a previous session (or the default 8)
@@ -157,6 +160,7 @@ export default function PlayerRankings() {
     setMinGp(0)
     setMinMin(0)
     setPosition(null)
+    setPositionsPicked([])
     setFantasyTeam(null)
     setWeights({ ...DEFAULT_WEIGHTS })
     setDisplayLimit(null)
@@ -166,7 +170,7 @@ export default function PlayerRankings() {
   const isPunted = (cat: RankingCategory) => effectiveWeights[cat] === 0
 
   const recompute = () => {
-    const config: RankingsConfig = { calcMode, minGp, minMin, position, weights: effectiveWeights }
+    const config: RankingsConfig = { calcMode, minGp, minMin, position: mobile ? null : position, positions: mobile ? positionsPicked : undefined, weights: effectiveWeights }
     const next = computePlayerRankings(players, config, categories, reverseCategories)
     // Low-priority: if another slider tick (or anything urgent) comes in
     // while this 500-row re-render is in flight, React interrupts/discards
@@ -207,7 +211,7 @@ export default function PlayerRankings() {
     const filtered = rankedPlayers.filter(r =>
       r.player.stats.gp >= minGp &&
       (r.player.stats.gp > 0 ? r.player.stats.minutes / r.player.stats.gp : 0) >= minMin &&
-      (position === null || r.player.positions.includes(position))
+      matchesPositionFilter(r.player.positions, mobile ? null : position, mobile ? positionsPicked : undefined)
     )
     // rankedPlayers is already sorted by totalZ descending, so this keeps
     // "top N by rank" regardless of which column is currently sorted below.
@@ -227,7 +231,7 @@ export default function PlayerRankings() {
       const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, fantasyTeam, displayMode, displayLimit, searchQuery])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, positionsPicked, mobile, fantasyTeam, displayMode, displayLimit, searchQuery])
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -267,7 +271,7 @@ export default function PlayerRankings() {
         onCustomRange={setCustomRange}
         actualStart={playersData?.actual_start}
         actualEnd={playersData?.actual_end}
-        filters={{ position, setPosition, fantasyTeam, setFantasyTeam, displayLimit, setDisplayLimit, minGp, setMinGp, minMin, setMinMin }}
+        filters={{ positions: positionsPicked, setPositions: setPositionsPicked, fantasyTeam, setFantasyTeam, displayLimit, setDisplayLimit, minGp, setMinGp, minMin, setMinMin }}
         teams={teams ?? []}
         myTeamId={myTeamId}
         isMyTeam={isMyTeam}
