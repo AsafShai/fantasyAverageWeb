@@ -79,6 +79,18 @@ export function RankingsMobile(p: RankingsMobileProps) {
   // Standings view stays plain: no ▲/▼, no "–", no "+n".
   const moveOf = (teamId: number) => (isStandings ? undefined : p.movesByTeam.get(teamId))
   const openTeam = (t: RankingStats) => navigate(`/team/${t.team.team_id}`)
+  // When moves are on screen every number gets a fixed-width slot for its
+  // ▲/▼, so values (and ranks) stay in a straight column with or without one.
+  const slots = !isStandings && p.movesByTeam.size > 0
+  const withDelta = (value: ReactNode, delta: ReactNode) =>
+    slots ? (
+      <span className="mr-rk-num">
+        {value}
+        <span className="mr-rk-dslot">{delta}</span>
+      </span>
+    ) : (
+      value
+    )
 
   const sortOptions = [
     { value: 'rank', label: 'Rank' },
@@ -123,9 +135,13 @@ export function RankingsMobile(p: RankingsMobileProps) {
       pinned: true,
       cell: (t, i) => (
         <span className="mr-rk-pin">
-          <span className="mr-rk-rank">#{t.rank || i + 1}</span>{' '}
+          <span className="mr-rk-rank">#{t.rank || i + 1}</span>
+          {slots && (
+            <span className="mr-rk-dslot mr-rk-rank-slot">
+              <Delta value={moveOf(t.team.team_id)?.rank_delta} kind="total" />
+            </span>
+          )}
           {teamLink(t, 'mr-rk-name')}
-          <Delta value={moveOf(t.team.team_id)?.rank_delta} kind="total" />
         </span>
       ),
     },
@@ -134,10 +150,7 @@ export function RankingsMobile(p: RankingsMobileProps) {
       header: k,
       sortable: true,
       cell: (t) => (
-        <>
-          {p.cellDisplay(t, k)}
-          <Delta value={moveOf(t.team.team_id)?.categories[k]} digits={1} />
-        </>
+withDelta(p.cellDisplay(t, k), <Delta value={moveOf(t.team.team_id)?.categories[k]} digits={1} />)
       ),
     })),
     {
@@ -148,12 +161,7 @@ export function RankingsMobile(p: RankingsMobileProps) {
       className: 'mr-rk-total',
       cell: (t) => {
         const m = moveOf(t.team.team_id)
-        return (
-          <>
-            {p.cellDisplay(t, 'total_points')}
-            {m && <Delta value={m.total_delta} kind="total" digits={1} />}
-          </>
-        )
+        return withDelta(p.cellDisplay(t, 'total_points'), m && <Delta value={m.total_delta} kind="total" digits={1} />)
       },
     },
     {
@@ -162,10 +170,7 @@ export function RankingsMobile(p: RankingsMobileProps) {
       sortable: true,
       className: 'mr-rk-gp',
       cell: (t) => (
-        <>
-          {p.cellDisplay(t, 'gp')}
-          <Delta value={moveOf(t.team.team_id)?.gp_delta} kind="gp" />
-        </>
+withDelta(p.cellDisplay(t, 'gp'), <Delta value={moveOf(t.team.team_id)?.gp_delta} kind="gp" />)
       ),
     },
   ]
@@ -311,7 +316,7 @@ export function RankingsMobile(p: RankingsMobileProps) {
           onSortChange={(s) => p.onSort(s.key)}
           isHighlighted={(t) => p.isMyTeam(t.team.team_id)}
           onRowClick={openTeam}
-          className="mr-rk-table"
+          className={`mr-rk-table ${slots ? 'mr-rk-slots' : ''}`.trim()}
         />
       ) : (
         <>
@@ -343,22 +348,19 @@ export function RankingsMobile(p: RankingsMobileProps) {
                     <span className="mr-rk-tot">
                       <span className="mr-rk-tl">Total</span>
                       <b>{p.cellDisplay(t, 'total_points')}</b>
-                      {m && <Delta value={m.total_delta} kind="total" digits={1} />}
+                      {m && <span className="mr-rk-tot-d"><Delta value={m.total_delta} kind="total" digits={1} /></span>}
                     </span>
                     <span className="mr-rk-tot">
                       <span className="mr-rk-tl">GP</span>
                       <b>{p.cellDisplay(t, 'gp')}</b>
-                      <Delta value={m?.gp_delta} kind="gp" />
+                      {m && <span className="mr-rk-tot-d"><Delta value={m.gp_delta} kind="gp" /></span>}
                     </span>
                   </div>
                   <div className="mr-rk-cgrid">
                     {p.categoryKeys.map((k) => (
                       <div key={k} className="mr-rk-cg">
                         <span className="mr-rk-tl">{k}</span>
-                        <span>
-                          <b>{p.cellDisplay(t, k)}</b>
-                          <Delta value={m?.categories[k]} digits={1} />
-                        </span>
+                        {withDelta(<b>{p.cellDisplay(t, k)}</b>, <Delta value={m?.categories[k]} digits={1} />)}
                       </div>
                     ))}
                   </div>

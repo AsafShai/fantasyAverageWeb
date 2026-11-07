@@ -152,7 +152,7 @@ function requestUrl(input: RequestInfo | URL): string {
     await screen.findByRole('table');
     await waitFor(() => expect(rowOf('Alpha Squad').textContent).toContain('▲'));
     const alpha = rowOf('Alpha Squad');
-    expect(within(alpha).getByRole('rowheader').textContent).toBe('#1 Alpha Squad▲1');
+    expect(within(alpha).getByRole('rowheader').textContent).toBe('#1▲1Alpha Squad');
     const cells = within(alpha).getAllByRole('cell');
     expect(cells[0].textContent).toBe('3▲2'); // FG% points, up 2
     expect(cells.at(-2)!.textContent).toBe('8▲2'); // total

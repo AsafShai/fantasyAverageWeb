@@ -34,7 +34,7 @@ test.describe('phone Standings & Rankings', () => {
     await expect(page.getByText('⚡ NBA Avg Pace')).toBeVisible()
     await expect(page.getByRole('button', { name: /Hide movers/ })).toBeVisible()
     const first = page.getByRole('table').getByRole('rowheader').first()
-    await expect(first).toContainText('#1 Fantasy One')
+    await expect(first).toContainText('Fantasy One')
     await expect(first).toContainText('▲1')
     await expectNoHorizontalScroll(page)
   })

@@ -54,14 +54,21 @@
 .mr-rk-pinhead { display: flex; align-items: center; }
 .mr-rk-pinhead .mr-rk-hsort { width: auto; padding-right: 4px; }
 .mr-rk-hsort[aria-pressed="true"] { color: var(--mr-primary); }
-.mr-rk-table .mr-pin { max-width: 150px; }
+.mr-rk-table .mr-pin { max-width: 172px; }
 .mr-rk-pin { display: flex; align-items: center; min-width: 0; }
-.mr-rk-rank { flex-shrink: 0; margin-right: 4px; }
+.mr-rk-rank { flex-shrink: 0; min-width: 26px; margin-right: 4px; font-variant-numeric: tabular-nums; }
+/* fixed slot for ▲/▼ so numbers stay in a straight column */
+.mr-rk-num { display: inline-flex; align-items: baseline; justify-content: flex-end; }
+.mr-rk-dslot { display: inline-block; width: 26px; text-align: left; flex-shrink: 0; }
+.mr-rk-dslot .mr-delta { margin-left: 3px; }
+/* headers line up with the numbers, not with the end of the ▲/▼ slot */
+.mr-rk-slots thead th:not(.mr-pin) .mr-th-btn { padding-right: 34px; }
+.mr-rk-rank-slot { width: 24px; margin-right: 2px; }
+.mr-rk-rank-slot .mr-delta { margin-left: 0; }
 .mr-rk-name {
   color: inherit; text-decoration: none; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.mr-rk-pin .mr-delta { flex-shrink: 0; }
 .mr-rk-table td.mr-rk-total { font-weight: 700; }
 
 /* cards */
@@ -74,6 +81,8 @@
 .mr-rk-tot { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
 .mr-rk-tot b { font-family: var(--mr-font-num); font-size: 16px; font-variant-numeric: tabular-nums; }
 .mr-rk-tot .mr-delta { margin-left: 0; }
+/* a delta line under Total and GP even when one is empty, so the two stay level */
+.mr-rk-tot-d { display: block; min-height: 15px; line-height: 15px; }
 .mr-rk-cgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
 .mr-rk-cg {
   display: flex; justify-content: space-between; align-items: baseline; gap: 6px; min-width: 0;
