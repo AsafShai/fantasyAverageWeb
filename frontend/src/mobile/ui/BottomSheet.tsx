@@ -11,6 +11,8 @@ interface BottomSheetProps {
   action?: ReactNode
   /** Grey sheet background (the ☰ menu); default white. */
   sunken?: boolean
+  /** Extra class on the panel (e.g. a sheet with a sticky footer). */
+  className?: string
   children: ReactNode
 }
 
@@ -20,7 +22,7 @@ interface BottomSheetProps {
  * out, and locks page scroll while open. Browser back closing is handled by
  * useSheetHistory (so the URL/back wiring stays outside the visual piece).
  */
-export function BottomSheet({ open, onClose, title, hideTitle = false, action, sunken = false, children }: BottomSheetProps) {
+export function BottomSheet({ open, onClose, title, hideTitle = false, action, sunken = false, className, children }: BottomSheetProps) {
   const panel = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const closeRef = useRef(onClose)
@@ -54,7 +56,7 @@ export function BottomSheet({ open, onClose, title, hideTitle = false, action, s
         aria-labelledby={hideTitle ? undefined : titleId}
         aria-label={hideTitle ? title : undefined}
         tabIndex={-1}
-        className={`mr-sheet mr-noscroll ${sunken ? 'mr-sunken-sheet' : ''}`.trim()}
+        className={['mr-sheet mr-noscroll', sunken && 'mr-sunken-sheet', className].filter(Boolean).join(' ')}
       >
         <div className="mr-grabber" aria-hidden="true" />
         {!hideTitle && (
