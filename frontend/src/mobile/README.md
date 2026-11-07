@@ -35,4 +35,7 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   next-game projection with the minutes stepper, game log with AVG row. Data
   comes from the same hooks as desktop (`hooks/usePlayerProfileData`,
   `hooks/usePlayerTrends`); styles in `profile/profile.css`.
+- **Standings & Rankings** `pages/rankings/` (step 4): converted pages keep their state, URL and data in
+  `src/pages/*` and hand a phone layout the same props. Standings & Rankings:
+  `pages/rankings/RankingsMobile.tsx`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
