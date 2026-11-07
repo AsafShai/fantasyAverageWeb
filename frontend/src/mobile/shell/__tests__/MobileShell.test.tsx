@@ -40,17 +40,17 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('MobileShell', () => {
-  it('tab bar: Home · Standings · Teams · Players · Trade, Home current on /', () => {
+  it('tab bar: Home · Standings · Teams · Player Ranks · Trade, Home current on /', () => {
     renderShell('/')
     const tabs = within(screen.getByRole('navigation', { name: 'Main' })).getAllByRole('link')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Standings', 'Teams', 'Players', 'Trade'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Standings', 'Teams', 'Player Ranks', 'Trade'])
     expect(tabs[0]).toHaveAttribute('aria-current', 'page')
     expect(tabs.slice(1).every((t) => !t.hasAttribute('aria-current'))).toBe(true)
   })
 
   it.each([
     ['/team/4', 'Teams'],
-    ['/player/123', 'Players'],
+    ['/player-rankings', 'Player Ranks'],
     ['/rankings', 'Standings'],
     ['/trade', 'Trade'],
   ])('%s keeps the %s tab current', (route, label) => {
@@ -65,7 +65,7 @@ describe('MobileShell', () => {
   })
 
   it('tab routes match the TABS config', () => {
-    expect(TABS.map((t) => t.path)).toEqual(['/', '/rankings', '/teams', '/players', '/trade'])
+    expect(TABS.map((t) => t.path)).toEqual(['/', '/rankings', '/teams', '/player-rankings', '/trade'])
   })
 
   it('menu sheet lists every group and page of the desktop nav, and a page link closes it', async () => {
