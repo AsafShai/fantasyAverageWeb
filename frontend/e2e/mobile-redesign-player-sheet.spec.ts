@@ -17,29 +17,28 @@ function withIds() {
   return data
 }
 
-const LINE = { pts: 24.3, reb: 8.1, ast: 4, three_pm: 3, stl: 1, blk: 0.5, fgm: 9, fga: 18, fg_pct: 0.5, ftm: 3, fta: 4, ft_pct: 0.75 }
-
 async function mockPlayerApis(page: Page) {
-  const predicted: number[] = []
   const players = withIds()
+  const periods: string[] = []
   // Registered after the default mocks, so these win.
   await page.route(`${API_BASE_URL}/**`, async (route) => {
-    const path = new URL(route.request().url()).pathname.replace(/^\/api/, '')
-    if (path === '/players' || path === '/players/') return route.fulfill({ json: players })
+    const url = new URL(route.request().url())
+    const path = url.pathname.replace(/^\/api/, '')
+    if (path === '/players' || path === '/players/') {
+      const period = url.searchParams.get('time_period') ?? 'season'
+      periods.push([period, url.searchParams.get('start'), url.searchParams.get('end')].filter(Boolean).join(' '))
+      if (period === 'season') return route.fulfill({ json: players })
+      // In any window Alpha Star played 2 games for 40 pts.
+      const windowed = players.players.map((p) =>
+        p.player_id === 100 ? { ...p, stats: { ...(p.stats as object), pts: 40, gp: 2 } } : p,
+      )
+      return route.fulfill({ json: { ...players, players: windowed } })
+    }
     if (path === '/teams/1/players')
       return route.fulfill({ json: { team_id: 1, last_updated: '', players: players.players.filter((p) => p.team_id === 1).map((p) => ({ ...p, lineup_slot: 'PG' })) } })
-    if (path === '/projections/player/100')
-      return route.fulfill({
-        json: { player_name: 'Alpha Star', team: 'LAL', game_date: '2026-10-21', opponent: 'BOS', is_home: true, scheduled: true, default_minutes: 31, status: 'green', reason: '', stats: LINE },
-      })
-    if (path === '/projections/predict') {
-      const body = route.request().postDataJSON() as { minutes: number }
-      predicted.push(body.minutes)
-      return route.fulfill({ json: { stats: { ...LINE, pts: 30.5 } } })
-    }
     return route.fallback()
   })
-  return { predicted }
+  return { periods }
 }
 
 test('desktop: player names still go to the profile page', async ({ page }) => {
@@ -65,9 +64,9 @@ test.describe('phone player sheet', () => {
     await expect(sheet.getByRole('link', { name: 'Alpha Team' })).toBeVisible()
     await expect(sheet.getByText('SEASON · PER GAME')).toBeVisible()
     for (const k of ['MPG', 'PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%']) {
-      await expect(sheet.getByRole('list', { name: 'Season per game' }).getByText(k, { exact: true })).toBeVisible()
+      await expect(sheet.getByRole('list', { name: 'Per game' }).getByText(k, { exact: true })).toBeVisible()
     }
-    await expect(sheet.getByRole('region', { name: 'Next game projection' })).toContainText('Next: vs BOS')
+    await expect(sheet.getByRole('region', { name: 'Next game projection' })).toHaveCount(0)
     await expectNoHorizontalScroll(page)
 
     await page.goBack()
@@ -75,19 +74,6 @@ test.describe('phone player sheet', () => {
     await expect(page).toHaveURL(/\/players$/)
     await page.goBack()
     await expect(page).toHaveURL(/\/teams$/)
-  })
-
-  test('minutes stepper calls POST /projections/predict', async ({ page }) => {
-    const { predicted } = await mockPlayerApis(page)
-    await page.goto('/players?ff=mobile')
-    await page.goto('/players?player=100')
-    const proj = page.getByRole('region', { name: 'Next game projection' })
-    await expect(proj).toContainText('24.3')
-    await proj.getByRole('button', { name: /More minutes/ }).click()
-    await expect(proj).toContainText('30.5')
-    expect(predicted).toEqual([32])
-    await proj.getByRole('button', { name: /Reset to default minutes/ }).click()
-    await expect(proj).toContainText('24.3')
   })
 
   test('shared link opens the sheet; Full profile replaces it, back returns to the page', async ({ page }) => {
@@ -132,13 +118,39 @@ test.describe('phone player sheet', () => {
       await page.setViewportSize({ width, height })
       await page.goto('/players?player=100')
       const sheet = page.getByRole('dialog', { name: 'Alpha Star' })
-      await expect(sheet.getByRole('region', { name: 'Next game projection' })).toBeVisible()
+      await expect(sheet.getByRole('list', { name: 'Per game' })).toBeVisible()
       for (const name of ['Full profile', 'Trade Analyzer']) {
         const box = (await sheet.getByRole('button', { name }).boundingBox())!
         expect(box.y + box.height, `${name} at ${width}x${height}`).toBeLessThanOrEqual(height)
       }
       await expectNoHorizontalScroll(page)
     }
+  })
+
+  test('period chips and a custom range switch the per-game grid', async ({ page }) => {
+    const { periods } = await mockPlayerApis(page)
+    await page.goto('/players?ff=mobile')
+    await page.goto('/players?player=100')
+    const sheet = page.getByRole('dialog', { name: 'Alpha Star' })
+    await expect(sheet.getByText('SEASON · PER GAME')).toBeVisible()
+
+    await sheet.getByRole('button', { name: /Last 15 Days/ }).click()
+    await expect(sheet.getByText('LAST 15 DAYS · PER GAME · 2 GP')).toBeVisible()
+    await expect(sheet.getByRole('list', { name: 'Per game' })).toContainText('PTS20.0')
+    expect(periods).toContain('last_15')
+
+    await sheet.getByRole('button', { name: /Custom/ }).click()
+    await sheet.getByLabel('Start date').fill('2026-10-10')
+    await sheet.getByLabel('End date').fill('2026-10-18')
+    await sheet.getByRole('button', { name: 'Apply' }).click()
+    await expect(sheet.getByText('OCT 10 – OCT 18 · PER GAME · 2 GP')).toBeVisible()
+    expect(periods).toContain('custom 2026-10-10 2026-10-18')
+
+    await sheet.getByRole('button', { name: 'Clear custom range' }).click()
+    await expect(sheet.getByText('LAST 15 DAYS · PER GAME · 2 GP')).toBeVisible()
+    // back from the sheet still returns to the page under it
+    await page.goBack()
+    await expect(sheet).toHaveCount(0)
   })
 
   test('Trade Analyzer opens with the player already in the trade', async ({ page }) => {
