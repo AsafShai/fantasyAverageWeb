@@ -28,7 +28,7 @@ export const TABS: TabDef[] = [
   },
   {
     path: '/player-rankings',
-    label: 'Rankings',
+    label: 'Player Ranks',
     icon: 'M10 6h10M10 12h10M10 18h10M4 5l1.5-1v4M3.5 18.5a1.5 1.5 0 1 1 2.5 1.1L3.5 21H6',
     match: (p) => p === '/player-rankings',
   },

@@ -4,7 +4,7 @@ import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test
 // ☰ menu sheet, footer) and browser back for its sheets.
 
 const GROUPS = ['LEAGUE', 'PLAYERS', 'INSIGHTS', 'TOOLS', 'NBA', 'MINIGAMES']
-const TABS = ['Home', 'Standings', 'Teams', 'Rankings', 'Trade']
+const TABS = ['Home', 'Standings', 'Teams', 'Player Ranks', 'Trade']
 
 test.describe('shell is off unless flag + phone width', () => {
   test('desktop keeps today\'s nav even with the flag on', async ({ page }) => {
@@ -30,8 +30,8 @@ test.describe('phone shell', () => {
     await expect(page.locator('.mr-shell')).toBeVisible()
   })
 
-  test('Rankings tab opens Player Rankings and stays current there', async ({ page }) => {
-    const tab = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Rankings' })
+  test('Player Ranks tab opens Player Rankings and stays current there', async ({ page }) => {
+    const tab = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Player Ranks' })
     await tab.click()
     await expect(page).toHaveURL(/\/player-rankings/)
     await expect(tab).toHaveAttribute('aria-current', 'page')
