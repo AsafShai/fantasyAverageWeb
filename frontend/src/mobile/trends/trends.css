@@ -1,0 +1,23 @@
+/* Player Trends on a phone (mobile redesign step 5). */
+.mr-trends .mr-tr-seg2 { flex-direction: column; }
+.mr-trends .mr-tr-seg2 .mr-seg { width: 100%; }
+.mr-trends .mr-tr-warn {
+  margin: 0; padding: 8px 10px; font-size: 12.5px; border-radius: var(--mr-radius-ctl);
+  background: var(--mr-pill-quest-bg); color: var(--mr-pill-quest-fg);
+}
+.mr-trends .mr-tr-err { margin: 0; color: var(--mr-down); font-size: 14px; }
+.mr-trends .mr-tr-name {
+  all: unset; cursor: pointer; font-weight: 600; color: var(--mr-primary); white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px; max-width: 170px; overflow: hidden; text-overflow: ellipsis;
+}
+.dark .mr-trends .mr-tr-name { color: #93B4FF; }
+.mr-trends .mr-tr-name:focus-visible, .mr-trends .mr-tr-stat:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 2px; }
+.mr-trends .mr-tr-stat { all: unset; cursor: pointer; font-weight: 600; min-height: 32px; display: inline-flex; align-items: center; }
+.mr-trends .mr-tr-sub, .mr-trends .mr-tr-owner { color: var(--mr-muted); }
+.mr-trends .mr-tr-partial { font-size: 10px; }
+.mr-trends .mr-tr-delta { font-weight: 700; white-space: nowrap; }
+.mr-trends .mr-tr-good { color: var(--mr-up); }
+.mr-trends .mr-tr-bad { color: var(--mr-down); }
+.mr-trends .mr-t td.mr-empty { text-align: left; }
+.mr-trends .mr-tr-empty { position: sticky; left: 12px; display: inline-block; }
+.mr-trends .mr-tr-chart { overflow: hidden; }

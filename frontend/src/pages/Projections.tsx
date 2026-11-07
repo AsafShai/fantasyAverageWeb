@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
-import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery, usePredictProjectionMutation, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
+import { useGetMatchupsTodayQuery, useGetMatchupDatesQuery, useGetUpcomingDatesQuery, useGetCurrentSlateDateQuery, useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import type { PlayerMatchup, ProjectionStats } from '../types/api';
+import { useAdjustableProjection, fmtProjStat, projPctParts } from '../hooks/useAdjustableProjection';
+import { useMobileRedesign } from '../mobile/flag';
+import MobileProjections from '../mobile/projections/MobileProjections';
 import { coherentInts } from '../utils/coherentRound';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -14,19 +17,6 @@ import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam';
 const STAT_COLS: [keyof ProjectionStats, string][] = [
   ['three_pm', '3PM'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['pts', 'PTS'],
 ];
-
-function fmtStat(n: number, integer: boolean): string {
-  return integer ? String(Math.round(n)) : n.toFixed(1);
-}
-
-function pctParts(pctVal: number, made: number, att: number, integer: boolean) {
-  if (!(att > 0)) return { pct: '—', m: '', a: '', ok: false };
-  if (integer) {
-    const m = Math.round(made), a = Math.round(att);
-    return { pct: a > 0 ? `${Math.round((m / a) * 100)}%` : '—', m: String(m), a: String(a), ok: a > 0 };
-  }
-  return { pct: `${(pctVal * 100).toFixed(1)}%`, m: made.toFixed(1), a: att.toFixed(1), ok: true };
-}
 
 function VFrac({ m, a }: { m: string; a: string }) {
   return (
@@ -43,50 +33,7 @@ function StatusDot({ status, reason }: { status: 'green' | 'amber' | 'red'; reas
 }
 
 function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integerMode: boolean }) {
-  const proj = matchup.projection;
-  const [predict] = usePredictProjectionMutation();
-  const [minutes, setMinutes] = useState(proj?.default_minutes ?? 0);
-  const [stats, setStats] = useState<ProjectionStats | null>(proj?.stats ?? null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  // Re-sync when the underlying slate changes (opponent switches) or the
-  // store recomputes a new default (nightly fold-in) — React reuses row
-  // components by key, so stale local minutes/stats would otherwise survive
-  // and show the previous slate's numbers. Keyed on stable primitives, not
-  // the `proj` object identity, so a same-slate refetch (e.g. RTK Query
-  // background revalidation) can't silently wipe an adjusted slider.
-  const slateKey = `${matchup.opponent}|${proj?.default_minutes}`;
-  const [syncedSlateKey, setSyncedSlateKey] = useState(slateKey);
-  if (slateKey !== syncedSlateKey) {
-    setSyncedSlateKey(slateKey);
-    setMinutes(proj?.default_minutes ?? 0);
-    setStats(proj?.stats ?? null);
-  }
-  // A slider re-predict still pending from the previous slate must not land on this one.
-  useEffect(() => () => clearTimeout(timer.current), [slateKey]);
-
-  const onSlider = (v: number) => {
-    setMinutes(v);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      try {
-        const res = await predict({
-          player_name: matchup.player_name, opponent: matchup.opponent,
-          is_home: matchup.is_home, minutes: v,
-        }).unwrap();
-        setStats(res.stats);
-      } catch { /* ignore transient predict errors */ }
-    }, 350);
-  };
-
-  // Restore default minutes + the original default-t stats (no network round
-  // trip; also cancels any pending re-predict so it can't overwrite them).
-  const resetToDefault = () => {
-    clearTimeout(timer.current);
-    setMinutes(proj?.default_minutes ?? 0);
-    setStats(proj?.stats ?? null);
-  };
-  const isAdjusted = Math.round(minutes) !== Math.round(proj?.default_minutes ?? 0);
+  const { proj, minutes, stats, setMinutes: onSlider, resetToDefault, isAdjusted } = useAdjustableProjection(matchup);
 
   // No projection at all (e.g. a rookie with no feature-store history yet) is
   // the same "not enough data" case as a red-status/no-stats projection —
@@ -108,8 +55,8 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
   // Coherent integer rounding: PTS reads like a plain round while the
   // displayed identity PTS = 2·FGM + 3PM + FTM stays exact.
   const coherent = integerMode ? coherentInts(stats) : null;
-  const fg = pctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode);
-  const ft = pctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode);
+  const fg = projPctParts(stats.fg_pct, coherent ? coherent.fgm : stats.fgm, coherent ? coherent.fga : stats.fga, integerMode);
+  const ft = projPctParts(stats.ft_pct, coherent ? coherent.ftm : stats.ftm, coherent ? coherent.fta : stats.fta, integerMode);
 
   return (
     <tr className="border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50/40 dark:hover:bg-gray-800/40">
@@ -143,7 +90,7 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
         <td key={key} className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
           {coherent && (key === 'pts' || key === 'three_pm')
             ? coherent[key]
-            : fmtStat(stats[key] as number, integerMode)}
+            : fmtProjStat(stats[key] as number, integerMode)}
         </td>
       ))}
     </tr>
@@ -151,6 +98,7 @@ function ProjectionRow({ matchup, integerMode }: { matchup: PlayerMatchup; integ
 }
 
 export default function Projections() {
+  const mobile = useMobileRedesign();
   // Slate picker: everyone sees the next game days; past dates (what-if/debug
   // view — that day's games with CURRENT player state) are flag-gated.
   const [slateDate, setSlateDate] = useState('');
@@ -207,6 +155,40 @@ export default function Projections() {
       return true;
     });
   }, [withGames, search, nbaTeam, fantasyTeamId, playerTeamMap]);
+
+  // Phone cards link the name to the player sheet, which needs the ESPN id.
+  const playerIdMap = useMemo(() => {
+    const m = new Map<string, number>();
+    allPlayers?.players.forEach((p) => { if (p.player_id != null) m.set(p.player_name, p.player_id); });
+    return m;
+  }, [allPlayers]);
+
+  if (mobile) {
+    return (
+      <MobileProjections
+        isLoading={isLoading}
+        error={!!error}
+        slateDate={slateDate}
+        setSlateDate={setSlateDate}
+        upcomingDates={upcomingDates}
+        pastDates={FF_PAST_SLATES ? pastDates : []}
+        currentSlateDate={currentSlateDate}
+        integerMode={integerMode}
+        setIntegerMode={setIntegerMode}
+        search={search}
+        setSearch={setSearch}
+        nbaTeam={nbaTeam}
+        setNbaTeam={setNbaTeam}
+        nbaTeamOptions={nbaTeamOptions}
+        fantasyTeamId={fantasyTeamId}
+        setFantasyTeamId={setFantasyTeamId}
+        fantasyTeams={leadWithMyTeam(fantasyTeams ?? [], myTeamId).map((t) => ({ id: String(t.team_id), name: t.team_name, mine: isMyTeam(t.team_id) }))}
+        matchups={filtered}
+        totalWithGames={withGames.length}
+        playerIdMap={playerIdMap}
+      />
+    );
+  }
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message="Failed to load projections." />;

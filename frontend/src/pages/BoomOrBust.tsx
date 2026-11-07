@@ -7,6 +7,9 @@ import { SurpriseTable } from '../components/boomOrBust/SurpriseTable';
 import { ShareCardButton } from '../components/share/ShareCardButton';
 import { BoomOrBustShareCard, SHARE_ROWS } from '../components/share/BoomOrBustShareCard';
 import { buildShareMessage } from '../components/share/boomOrBustMessage';
+import { useMobileRedesign } from '../mobile/flag';
+import { Button, Card, Chip, ChipRow } from '../mobile/ui';
+import '../mobile/bob/bob.css';
 
 /** Parse YYYY-MM-DD as a local calendar date (no timezone shift). */
 function parseDay(s: string): Date {
@@ -117,8 +120,9 @@ function CommitSlider({
     setDraft(null);
   };
   const accent = kind === 'good' ? 'accent-blue-500' : 'accent-red-500';
+  const mobile = useMobileRedesign();
   return (
-    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+    <div className={`flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 ${mobile ? 'mr-bob-slider' : ''}`}>
       <label htmlFor={id} className="tabular-nums whitespace-nowrap">{label(shown)}</label>
       <input
         id={id}
@@ -132,7 +136,7 @@ function CommitSlider({
         onKeyUp={commit}
         onBlur={commit}
         aria-label={ariaLabel}
-        className={`w-24 sm:w-32 ${accent}`}
+        className={`${mobile ? 'flex-1 min-w-0' : 'w-24 sm:w-32'} ${accent}`}
       />
       {!isDefault && (
         <button
@@ -192,6 +196,26 @@ function SurpriseCard({
   const pageRows = shown.slice(start, start + PAGE_SIZE);
   // Over a period a row is one player's game: a performance.
   const unit = showDate ? 'performance' : 'player';
+  const mobile = useMobileRedesign();
+  if (mobile) {
+    return (
+      <Card title={<>{title} <span className="mr-meta">({shown.length})</span></>} className="mr-bob-card">
+        {slider}
+        <SurpriseTable rows={pageRows} kind={kind} startRank={start + 1} showDate={showDate} />
+        <div className="mr-bob-foot">
+          {pages > 1 ? (
+            <>
+              <span className="mr-meta">{pageRows.length === 1 ? start + 1 : `${start + 1}–${start + pageRows.length}`} of {shown.length}</span>
+              <Button size="sm" onClick={() => setPage(current - 1)} disabled={current === 0} aria-label="Previous page">‹</Button>
+              <Button size="sm" onClick={() => setPage(current + 1)} disabled={current >= pages - 1} aria-label="Next page">›</Button>
+            </>
+          ) : (
+            <span className="mr-meta">{shown.length} {unit}{shown.length === 1 ? '' : 's'}</span>
+          )}
+        </div>
+      </Card>
+    );
+  }
   const pageBtn = 'px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed';
   return (
     <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -342,6 +366,7 @@ function seasonStart(dates: string[]): string {
 }
 
 export default function BoomOrBust() {
+  const mobile = useMobileRedesign();
   const [preset, setPreset] = useState<Preset>('night');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [custom, setCustom] = useState<{ start: string; end: string } | null>(null);
@@ -420,6 +445,50 @@ export default function BoomOrBust() {
   let subtitle = 'Surprises and disappointments of the last NBA night.';
   if (isPeriod && range) subtitle = fmtRange(range.start, range.end);
   else if (night) subtitle = `${fmtDay(night.game_date, true)} · ${night.games} games · ${night.players_scored} of ${night.players_played} players scored · ${night.players_with_estimate} with a model estimate`;
+
+  if (mobile) {
+    return (
+      <div className="mr-root mr-page mr-bob">
+        <div>
+          <h1 className="mr-h1">Boom or Bust</h1>
+          <p className="mr-meta">{subtitle}</p>
+        </div>
+        {preset === 'night' && (
+          <div className="mr-frow">
+            <Button size="sm" disabled={!prevDate} onClick={() => prevDate && setSelectedDate(prevDate)} aria-label="Previous night">‹</Button>
+            <Button size="sm" disabled={!nextDate} onClick={() => nextDate && setSelectedDate(nextDate)} aria-label="Next night">›</Button>
+            {!onLatest && <Button size="sm" onClick={() => setSelectedDate(null)}>Latest</Button>}
+          </div>
+        )}
+        {dates.length > 0 && (
+          <>
+            <ChipRow label="Period">
+              {PRESETS.map((p) => (
+                <Chip key={p.id} selected={preset === p.id} onClick={() => pick(p.id)}>{p.label}</Chip>
+              ))}
+            </ChipRow>
+            {preset === 'custom' && custom && (
+              <div className="mr-frow">
+                <input type="date" aria-label="From" className="mr-field" value={custom.start}
+                  min={dates[dates.length - 1]} max={latestDate ?? undefined}
+                  onChange={(e) => setCustomEnd('start', e.target.value)} />
+                <span>–</span>
+                <input type="date" aria-label="To" className="mr-field" value={custom.end}
+                  min={dates[dates.length - 1]} max={latestDate ?? undefined}
+                  onChange={(e) => setCustomEnd('end', e.target.value)} />
+              </div>
+            )}
+          </>
+        )}
+        {night && noGamesRun && preset === 'night' && selectedDate === null && (
+          <p className="mr-bob-note">
+            No games on {fmtDay(noGamesRun.game_date, false)} — showing the latest night with results ({fmtDay(night.game_date, false)}).
+          </p>
+        )}
+        {body}
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
