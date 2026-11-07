@@ -3,13 +3,27 @@ import type { Player, Team } from '../types/api';
 
 export type TradeMode = 'team' | 'freeAgent';
 
-/** A trade to open the analyzer on: each team and the players it gives up.
- * Players are matched against the team's roster by id, then by name. */
-export interface TradePreset {
+type PresetPlayer = Pick<Player, 'player_name' | 'player_id'>;
+
+/** Where the analyzer starts: each side's team and the players it gives up.
+ * Players are matched against the team's roster by id, then by name. The phone
+ * player sheet starts it with one side only, or in free-agent mode with the
+ * free agent already picked. */
+export interface TradeStart {
+  teamA: Team | null;
+  teamB: Team | null;
+  playersA: PresetPlayer[];
+  playersB: PresetPlayer[];
+  /** Defaults to 'team'. */
+  mode?: TradeMode;
+  /** Free-agent mode: free agents already picked (matched by name). */
+  freeAgents?: PresetPlayer[];
+}
+
+/** A full two-team trade to open the analyzer on ("Preview in Trade Analyzer"). */
+export interface TradePreset extends TradeStart {
   teamA: Team;
   teamB: Team;
-  playersA: Pick<Player, 'player_name' | 'player_id'>[];
-  playersB: Pick<Player, 'player_name' | 'player_id'>[];
 }
 
 interface UseTradeStateReturn {
@@ -35,15 +49,15 @@ interface UseTradeStateReturn {
   handleFreeAgentRemove: (player: Player) => void;
 }
 
-export const useTradeState = (preset?: TradePreset | null): UseTradeStateReturn => {
+export const useTradeState = (preset?: TradeStart | null): UseTradeStateReturn => {
   const [teamA, setTeamA] = useState<Team | null>(preset?.teamA ?? null);
   const [teamB, setTeamB] = useState<Team | null>(preset?.teamB ?? null);
   // Stand-ins until the rosters load; the page resolves them to full players.
   const [selectedPlayersA, setSelectedPlayersA] = useState<Player[]>((preset?.playersA ?? []) as Player[]);
   const [selectedPlayersB, setSelectedPlayersB] = useState<Player[]>((preset?.playersB ?? []) as Player[]);
-  const [selectedFreeAgents, setSelectedFreeAgents] = useState<Player[]>([]);
+  const [selectedFreeAgents, setSelectedFreeAgents] = useState<Player[]>((preset?.freeAgents ?? []) as Player[]);
   const [viewMode, setViewMode] = useState<'totals' | 'averages'>('averages');
-  const [tradeMode, setTradeMode] = useState<TradeMode>('team');
+  const [tradeMode, setTradeMode] = useState<TradeMode>(preset?.mode ?? 'team');
 
   const handleTeamAChange = useCallback((team: Team | null) => {
     setTeamA(team);
