@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { normalizePlayerName } from '../utils/playerName'
+import { toListHeadshotUrl } from '../utils/adp'
 import ShootingMapChart, { type ShootingMapChartRef } from '../components/shootingMap/ShootingMapChart'
 import {
   buildShotPool, deriveShotData, impactLists, passesFilter, shotLabels, POOL_SIZE, DEFAULT_MIN_GP, EXTRA_MIN_FGA, EXTRA_MIN_FTA, signedImpact, inScope, isScoped, type ShotThresholds,
@@ -54,6 +55,31 @@ function Seg<T extends string>({ label, value, options, onChange }: {
   )
 }
 
+/** Round headshot for the side lists; desktop only (hidden on phones), like Boom or Bust's table. */
+function Headshot({ playerId }: { playerId: number | null | undefined }) {
+  const src = playerId != null ? toListHeadshotUrl(`https://a.espncdn.com/i/headshots/nba/players/full/${playerId}.png`) : null
+  return (
+    <div className="hidden md:block shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+      {src ? (
+        <>
+          <img
+            src={src} alt="" width={32} height={32} loading="lazy" decoding="async"
+            className="w-full h-full object-cover object-top"
+            onError={e => {
+              e.currentTarget.style.display = 'none'
+              const fallback = e.currentTarget.nextElementSibling
+              if (fallback instanceof HTMLElement) fallback.hidden = false
+            }}
+          />
+          <div hidden className="w-full h-full flex items-center justify-center text-sm">🏀</div>
+        </>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-sm">🏀</div>
+      )}
+    </div>
+  )
+}
+
 function PlayerItem({ d, unit, mode, onFocus, onRemove }: {
   d: ShotRow; unit: ShotUnit; mode: ShotMode; onFocus(key: string): void; onRemove?: (key: string) => void
 }) {
@@ -62,28 +88,31 @@ function PlayerItem({ d, unit, mode, onFocus, onRemove }: {
   const n = (v: number) => (unit === 'tot' ? Math.round(v).toString() : v.toFixed(1))
   const id = d.player.player_id
   return (
-    <li className="py-2 border-t border-gray-100 dark:border-gray-700 first:border-t-0">
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" title="Show on the map" onClick={() => onFocus(d.key)}
-          className="min-w-0 truncate text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400">
-          {d.name}
-        </button>
-        <span className="flex items-center gap-2 shrink-0">
-          <span className={`text-sm font-semibold tabular-nums ${d.imp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-            {signedImpact(d.imp, unit)}
+    <li className="py-2 border-t border-gray-100 dark:border-gray-700 first:border-t-0 flex items-center gap-2.5">
+      <Headshot playerId={id} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <button type="button" title="Show on the map" onClick={() => onFocus(d.key)}
+            className="min-w-0 truncate text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400">
+            {d.name}
+          </button>
+          <span className="flex items-center gap-2 shrink-0">
+            <span className={`text-sm font-semibold tabular-nums ${d.imp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {signedImpact(d.imp, unit)}
+            </span>
+            {onRemove && (
+              <button type="button" aria-label={`Remove ${d.name}`} onClick={() => onRemove(d.key)}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-base leading-none">×</button>
+            )}
           </span>
-          {onRemove && (
-            <button type="button" aria-label={`Remove ${d.name}`} onClick={() => onRemove(d.key)}
-              className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-base leading-none">×</button>
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums mt-0.5">
+          {/* Ranks are among the top 200; a team's other players get none. */}
+          {d.team} · {fmtPct(d.pct)} {L.pct}{d.inPool && d.rPct ? ` (#${d.rPct})` : ''} · {n(d.a)} {L.att}{d.inPool ? ` (#${d.rVol})` : ''}
+          {id != null && (
+            <> · <Link className="text-blue-600 dark:text-blue-400 hover:underline" to={`/player/${id}`} state={{ from: `${location.pathname}${location.search}` }}>Profile</Link></>
           )}
-        </span>
-      </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums mt-0.5">
-        {/* Ranks are among the top 200; a team's other players get none. */}
-        {d.team} · {fmtPct(d.pct)} {L.pct}{d.inPool && d.rPct ? ` (#${d.rPct})` : ''} · {n(d.a)} {L.att}{d.inPool ? ` (#${d.rVol})` : ''}
-        {id != null && (
-          <> · <Link className="text-blue-600 dark:text-blue-400 hover:underline" to={`/player/${id}`} state={{ from: `${location.pathname}${location.search}` }}>Profile</Link></>
-        )}
+        </div>
       </div>
     </li>
   )
