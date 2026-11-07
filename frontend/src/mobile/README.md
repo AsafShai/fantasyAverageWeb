@@ -29,4 +29,9 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   season per-game line (Players list), the profile's next-game projection with
   a minutes stepper (POST /projections/predict), and Full profile / Trade
   Analyzer, which replace the sheet's history entry.
+- **Teams + Team page** `team/` (step 4): `Teams` and `TeamDetail` render
+  `MobileTeams` / `MobileTeamDetail` on a phone. TeamDetail keeps all state and
+  passes it down; the phone tab is `?tab=stats|roster|slots` (roster modes stay
+  `?mode=daily|stats|schedule`). Today's matchup opens in a bottom sheet with the
+  minutes stepper (`MatchupExpandPanel minutesStepper`). Styles in `team/team.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
