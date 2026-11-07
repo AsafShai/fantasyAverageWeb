@@ -12,10 +12,13 @@ import { pickRandomPlayerWithPhoto, playersWithPhotos } from '../../minigames/pl
 import { createStreakState, onRoundLoss, onRoundWin } from '../../minigames/streak'
 import { useRunEnd } from '../../minigames/useRunEnd'
 import { NOW_YOU_SEE_ME_ROUND_SECONDS, type MinigamePlayer } from '../../minigames/types'
+import { useMobileRedesign } from '../../mobile/flag'
+import MinigamePageMobile from '../../mobile/minigames/MinigamePageMobile'
 
 export default function NowYouSeeMeGame() {
   const { players, isLoading, error } = useMinigamePlayers()
   const runEnd = useRunEnd('now-you-see-me')
+  const mobile = useMobileRedesign()
   const photoPlayers = playersWithPhotos(players)
 
   const [phase, setPhase] = useState<'lobby' | 'playing'>('lobby')
@@ -66,6 +69,88 @@ export default function NowYouSeeMeGame() {
   if (error || !players.length) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
   if (!photoPlayers.length) return <ErrorMessage message="No players with photos available" />
 
+  const board = player && (
+    <>
+      <TimerBar
+        totalSeconds={NOW_YOU_SEE_ME_ROUND_SECONDS}
+        running
+        resetKey={timerKey}
+        onTimeout={() => endRun(player)}
+      />
+      <div className="flex justify-center py-4">
+        <img
+          src={player.photoUrl!}
+          alt="Mystery player"
+          className="w-40 h-40 sm:w-52 sm:h-52 rounded-full object-cover object-top border-4 border-gray-200 dark:border-gray-700"
+        />
+      </div>
+      <div className="flex justify-center">
+        <PlayerPicker players={players} hideHeadshot onGuess={onGuess} />
+      </div>
+      <button
+        type="button"
+        onClick={() => endRun(player)}
+        className="block mx-auto text-sm text-red-600 hover:underline"
+      >
+        Give up
+      </button>
+    </>
+  )
+  const runOver = (
+    <>
+      {runEnd.finalScore != null && (
+        <p className="mb-2 text-lg">
+          Run over — best streak: <strong>{runEnd.finalScore}</strong>
+        </p>
+      )}
+      {reveal && (
+        <div className="mb-4 flex flex-col items-center gap-2">
+          {reveal.photoUrl && (
+            <img
+              src={reveal.photoUrl}
+              alt=""
+              className="w-24 h-24 rounded-full object-cover object-top"
+            />
+          )}
+          <p className="text-sm text-gray-600">
+            Answer: <strong>{reveal.displayName}</strong>
+          </p>
+        </div>
+      )}
+    </>
+  )
+  const nameModal = (
+    <NameEntryModal
+      open={runEnd.showNameModal}
+      bestStreak={runEnd.pendingScore ?? 0}
+      submitting={runEnd.submitting}
+      error={runEnd.submitError}
+      onSubmit={runEnd.submitName}
+      onDismiss={runEnd.dismissModal}
+    />
+  )
+
+  if (mobile) {
+    return (
+      <MinigamePageMobile
+        slug="now-you-see-me"
+        title="Now You See Me"
+        subtitle={`Name the player from their photo — ${NOW_YOU_SEE_ME_ROUND_SECONDS}s`}
+        stats={[
+          { label: 'Streak', value: streak.currentStreak },
+          { label: 'Best', value: streak.bestStreak },
+        ]}
+        lobby={phase === 'lobby' || !player}
+        runOver={runOver}
+        onStart={startNewGame}
+        board={board}
+        leaderboardDescription="Top 5 best streaks (newer wins ties)"
+      >
+        {nameModal}
+      </MinigamePageMobile>
+    )
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 pb-12">
       <div className="mb-4">
@@ -88,25 +173,7 @@ export default function NowYouSeeMeGame() {
 
           {phase === 'lobby' && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center bg-white dark:bg-gray-900">
-              {runEnd.finalScore != null && (
-                <p className="mb-2 text-lg">
-                  Run over — best streak: <strong>{runEnd.finalScore}</strong>
-                </p>
-              )}
-              {reveal && (
-                <div className="mb-4 flex flex-col items-center gap-2">
-                  {reveal.photoUrl && (
-                    <img
-                      src={reveal.photoUrl}
-                      alt=""
-                      className="w-24 h-24 rounded-full object-cover object-top"
-                    />
-                  )}
-                  <p className="text-sm text-gray-600">
-                    Answer: <strong>{reveal.displayName}</strong>
-                  </p>
-                </div>
-              )}
+              {runOver}
               <button
                 type="button"
                 onClick={startNewGame}
@@ -119,29 +186,7 @@ export default function NowYouSeeMeGame() {
 
           {phase === 'playing' && player && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-6 bg-white dark:bg-gray-900 space-y-4">
-              <TimerBar
-                totalSeconds={NOW_YOU_SEE_ME_ROUND_SECONDS}
-                running
-                resetKey={timerKey}
-                onTimeout={() => endRun(player)}
-              />
-              <div className="flex justify-center py-4">
-                <img
-                  src={player.photoUrl!}
-                  alt="Mystery player"
-                  className="w-40 h-40 sm:w-52 sm:h-52 rounded-full object-cover object-top border-4 border-gray-200 dark:border-gray-700"
-                />
-              </div>
-              <div className="flex justify-center">
-                <PlayerPicker players={players} hideHeadshot onGuess={onGuess} />
-              </div>
-              <button
-                type="button"
-                onClick={() => endRun(player)}
-                className="block mx-auto text-sm text-red-600 hover:underline"
-              >
-                Give up
-              </button>
+              {board}
             </div>
           )}
         </div>
@@ -152,14 +197,7 @@ export default function NowYouSeeMeGame() {
           />
         </div>
       </div>
-      <NameEntryModal
-        open={runEnd.showNameModal}
-        bestStreak={runEnd.pendingScore ?? 0}
-        submitting={runEnd.submitting}
-        error={runEnd.submitError}
-        onSubmit={runEnd.submitName}
-        onDismiss={runEnd.dismissModal}
-      />
+      {nameModal}
     </div>
   )
 }

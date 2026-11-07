@@ -3,6 +3,7 @@ import type { ConferenceDivisionTree } from '../../minigames/conferenceDivisionT
 import { nbaTeamLogoUrl } from '../../minigames/conferenceDivisionTree'
 import type { WhoAmIMapExclusions } from '../../minigames/whoAmIMapExclusions'
 import { emptyWhoAmIMapExclusions } from '../../minigames/whoAmIMapExclusions'
+import { BottomSheet } from '../../mobile/ui'
 
 type ConferenceKey = 'East' | 'West'
 
@@ -59,11 +60,14 @@ export function NbaConferenceDivisionMapDialog({
   onOpenChange,
   tree,
   clueExclusions,
+  sheet = false,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   tree: ConferenceDivisionTree
   clueExclusions?: WhoAmIMapExclusions | null
+  /** Phone redesign: same content in a bottom sheet instead of a centered dialog. */
+  sheet?: boolean
 }) {
   const [tab, setTab] = useState<ConferenceKey>('East')
   const rows = tab === 'East' ? tree.East : tree.West
@@ -90,6 +94,128 @@ export function NbaConferenceDivisionMapDialog({
 
   if (!open) return null
 
+  const description = (
+    <p className="text-sm text-gray-600 dark:text-gray-400">
+      2025-26 season teams in this game, grouped the same way as the Team, Conference, and
+      Division columns.
+      {hasClueNarrowing ? (
+        <>
+          {' '}
+          <span className="text-gray-800 dark:text-gray-200">
+            Dimmed entries match locations ruled out from your past guesses (Team /
+            Conference / Division cells only).
+          </span>
+        </>
+      ) : null}
+    </p>
+  )
+  const tabs = (
+    <div
+      className="flex w-full rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
+      role="tablist"
+      aria-label="Choose conference"
+    >
+      {(
+        [
+          { value: 'East', label: 'Eastern' },
+          { value: 'West', label: 'Western' },
+        ] as const
+      ).map((opt) => {
+        const disabled = !tabConflict && (opt.value === 'East' ? eastOut : westOut)
+        const active = tab === opt.value
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            disabled={disabled}
+            onClick={() => setTab(opt.value)}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              active
+                ? 'bg-white text-blue-600 shadow-sm dark:bg-gray-700 dark:text-blue-300'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-300'
+            }`}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+  const grid = tabConflict ? (
+    <p className="text-sm text-red-600 dark:text-red-400" role="status">
+      Conference clues conflict; both conferences look ruled out. Keep guessing in the
+      main grid to refine.
+    </p>
+  ) : rows.length === 0 ? (
+    <p className="text-sm text-gray-500">No teams loaded for this conference.</p>
+  ) : (
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      {rows.map(({ division, teams }) => {
+        const divOut = isDivisionRuledOut(ex, tab, division)
+        return (
+          <div
+            key={division}
+            className={`flex min-w-0 flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-2.5 dark:border-gray-700 dark:bg-gray-800/40 ${
+              divOut ? 'opacity-45' : ''
+            }`}
+            title={divOut ? RuledOutHint : undefined}
+          >
+            <h3
+              className={`text-center text-[10px] font-bold uppercase leading-tight tracking-wide sm:text-xs ${
+                divOut
+                  ? 'line-through text-gray-400'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              {division}
+            </h3>
+            <ul className="flex min-w-0 flex-col gap-2 sm:gap-2.5">
+              {teams.map((t) => {
+                const teamOut = isTeamRuledOut(ex, tab, division, t.name)
+                return (
+                  <li
+                    key={t.abbr}
+                    className="min-w-0 border-b border-gray-200 pb-2 last:border-0 last:pb-0 dark:border-gray-700"
+                    title={teamOut ? RuledOutHint : undefined}
+                  >
+                    <div
+                      className={`flex min-w-0 items-center gap-1.5 ${
+                        teamOut ? 'opacity-40 grayscale' : ''
+                      }`}
+                    >
+                      <img
+                        src={nbaTeamLogoUrl(t.abbr)}
+                        alt=""
+                        className="h-5 w-5 shrink-0 object-contain"
+                      />
+                      <span className="truncate text-[11px] font-medium text-gray-900 dark:text-gray-100 sm:text-xs">
+                        {t.name}
+                      </span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  if (sheet) {
+    return (
+      <BottomSheet open title="Conferences and divisions" className="mr-mg-map" onClose={() => onOpenChange(false)}>
+        {description}
+        {tabs}
+        <div role="region" aria-label={tab === 'East' ? 'Eastern conference' : 'Western conference'}>
+          {grid}
+        </div>
+      </BottomSheet>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
       <div
@@ -115,54 +241,11 @@ export function NbaConferenceDivisionMapDialog({
               ×
             </button>
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            2025-26 season teams in this game, grouped the same way as the Team, Conference, and
-            Division columns.
-            {hasClueNarrowing ? (
-              <>
-                {' '}
-                <span className="text-gray-800 dark:text-gray-200">
-                  Dimmed entries match locations ruled out from your past guesses (Team /
-                  Conference / Division cells only).
-                </span>
-              </>
-            ) : null}
-          </p>
+          {description}
         </div>
 
         <div className="shrink-0 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-          <div
-            className="flex w-full rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
-            role="tablist"
-            aria-label="Choose conference"
-          >
-            {(
-              [
-                { value: 'East', label: 'Eastern' },
-                { value: 'West', label: 'Western' },
-              ] as const
-            ).map((opt) => {
-              const disabled = !tabConflict && (opt.value === 'East' ? eastOut : westOut)
-              const active = tab === opt.value
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  disabled={disabled}
-                  onClick={() => setTab(opt.value)}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                    active
-                      ? 'bg-white text-blue-600 shadow-sm dark:bg-gray-700 dark:text-blue-300'
-                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-300'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              )
-            })}
-          </div>
+          {tabs}
         </div>
 
         <div
@@ -170,66 +253,7 @@ export function NbaConferenceDivisionMapDialog({
           role="region"
           aria-label={tab === 'East' ? 'Eastern conference' : 'Western conference'}
         >
-          {tabConflict ? (
-            <p className="text-sm text-red-600 dark:text-red-400" role="status">
-              Conference clues conflict; both conferences look ruled out. Keep guessing in the
-              main grid to refine.
-            </p>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-gray-500">No teams loaded for this conference.</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              {rows.map(({ division, teams }) => {
-                const divOut = isDivisionRuledOut(ex, tab, division)
-                return (
-                  <div
-                    key={division}
-                    className={`flex min-w-0 flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-2.5 dark:border-gray-700 dark:bg-gray-800/40 ${
-                      divOut ? 'opacity-45' : ''
-                    }`}
-                    title={divOut ? RuledOutHint : undefined}
-                  >
-                    <h3
-                      className={`text-center text-[10px] font-bold uppercase leading-tight tracking-wide sm:text-xs ${
-                        divOut
-                          ? 'line-through text-gray-400'
-                          : 'text-gray-500 dark:text-gray-400'
-                      }`}
-                    >
-                      {division}
-                    </h3>
-                    <ul className="flex min-w-0 flex-col gap-2 sm:gap-2.5">
-                      {teams.map((t) => {
-                        const teamOut = isTeamRuledOut(ex, tab, division, t.name)
-                        return (
-                          <li
-                            key={t.abbr}
-                            className="min-w-0 border-b border-gray-200 pb-2 last:border-0 last:pb-0 dark:border-gray-700"
-                            title={teamOut ? RuledOutHint : undefined}
-                          >
-                            <div
-                              className={`flex min-w-0 items-center gap-1.5 ${
-                                teamOut ? 'opacity-40 grayscale' : ''
-                              }`}
-                            >
-                              <img
-                                src={nbaTeamLogoUrl(t.abbr)}
-                                alt=""
-                                className="h-5 w-5 shrink-0 object-contain"
-                              />
-                              <span className="truncate text-[11px] font-medium text-gray-900 dark:text-gray-100 sm:text-xs">
-                                {t.name}
-                              </span>
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          {grid}
         </div>
       </div>
     </div>

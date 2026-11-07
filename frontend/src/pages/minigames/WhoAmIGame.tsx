@@ -23,6 +23,9 @@ import {
   type WhoAmIColumnKey,
   type WhoAmIGuessRow,
 } from '../../minigames/types'
+import { useMobileRedesign } from '../../mobile/flag'
+import MinigamePageMobile from '../../mobile/minigames/MinigamePageMobile'
+import { useSheetHistory } from '../../mobile/ui'
 
 function cellClass(state: string) {
   if (state === 'correct') return 'bg-green-200 dark:bg-green-800/60 text-green-900 dark:text-green-100'
@@ -59,6 +62,9 @@ function ColumnHeader({
 export default function WhoAmIGame() {
   const { players, isLoading, error } = useMinigamePlayers()
   const runEnd = useRunEnd('who-am-i')
+  const mobile = useMobileRedesign()
+  // On a phone the map is a bottom sheet in browser history (back closes it).
+  const mapSheet = useSheetHistory('nba-map')
   const tree = useConferenceDivisionTree(players)
 
   const [phase, setPhase] = useState<'lobby' | 'playing' | 'won'>('lobby')
@@ -68,7 +74,13 @@ export default function WhoAmIGame() {
   const [streak, setStreak] = useState(createStreakState())
   const [autoMode, setAutoMode] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
-  const [mapOpen, setMapOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const mapOpen = mobile ? mapSheet.open : dialogOpen
+  const setMapOpen = (v: boolean) => {
+    if (!mobile) setDialogOpen(v)
+    else if (v) mapSheet.show()
+    else mapSheet.hide()
+  }
 
   const clueExclusions = useMemo(
     () => computeWhoAmIMapExclusions(players, rows),
@@ -156,6 +168,221 @@ export default function WhoAmIGame() {
   if (isLoading) return <LoadingSpinner />
   if (error || !players.length) return <ErrorMessage message={getErrorMessage(error, 'Failed to load players')} />
 
+  const board = secret && (
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        <PlayerPicker
+          players={players}
+          excludeIds={rows.map((r) => r.guessedPlayerId)}
+          hideHeadshot={photoHint}
+          disabled={phase !== 'playing'}
+          onGuess={onGuess}
+        />
+        <button
+          type="button"
+          disabled={photoHint || phase !== 'playing'}
+          onClick={usePhotoHint}
+          className="px-3 py-2 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
+        >
+          Photo hint
+        </button>
+        {phase === 'playing' && (
+          <button
+            type="button"
+            onClick={() => endRun()}
+            className="text-sm text-red-600 hover:underline"
+          >
+            Give up
+          </button>
+        )}
+      </div>
+
+      {photoHint && secret.photoUrl && (
+        <img
+          src={secret.photoUrl}
+          alt="Hint"
+          className="w-24 h-24 rounded-full object-cover object-top"
+        />
+      )}
+
+      {/* Desktop guess table */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="min-w-full text-xs">
+          <thead>
+            <tr className="text-left text-gray-500">
+              <th className="p-1">Guess</th>
+              {WHO_AM_I_COLUMNS.map((c) => (
+                <ColumnHeader
+                  key={c.key}
+                  colKey={c.key}
+                  label={c.label}
+                  onOpenMap={() => setMapOpen(true)}
+                />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.guessedPlayerId}>
+                <td className="p-1 font-medium whitespace-nowrap">{row.guessedName}</td>
+                {WHO_AM_I_COLUMNS.map((c) => {
+                  const cell = row.feedback[c.key]
+                  return (
+                    <td key={c.key} className="p-1">
+                      <div
+                        className={`rounded px-1 py-1 text-center whitespace-nowrap ${cellClass(cell.state)}`}
+                      >
+                        {row.display[c.key]}
+                        {dirArrow(cell.dir)}
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-xs text-gray-400 mt-2">
+          Guesses: {rows.length}/{WHO_AM_I_MAX_GUESSES}
+        </p>
+      </div>
+
+      {/* Mobile guess cards */}
+      <div className="sm:hidden space-y-3">
+        {rows.map((row) => (
+          <div
+            key={row.guessedPlayerId}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2"
+          >
+            <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+              {row.guessedName}
+            </p>
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              {WHO_AM_I_COLUMNS.map((c) => {
+                const cell = row.feedback[c.key]
+                const showInfo = c.key === 'conference' || c.key === 'division'
+                return (
+                  <div key={c.key}>
+                    <div className="mb-0.5 flex items-center gap-0.5 text-[10px] uppercase text-gray-500">
+                      {c.label}
+                      {showInfo && <NbaMapInfoButton onOpen={() => setMapOpen(true)} />}
+                    </div>
+                    <div
+                      className={`rounded px-1.5 py-1 text-center ${cellClass(cell.state)}`}
+                    >
+                      {row.display[c.key]}
+                      {dirArrow(cell.dir)}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+        <p className="text-xs text-gray-400">
+          Guesses: {rows.length}/{WHO_AM_I_MAX_GUESSES}
+        </p>
+      </div>
+
+      {phase === 'won' && (
+        <div className="text-center pt-2">
+          <p className="text-green-600 font-semibold mb-2">You got it — {secret.displayName}!</p>
+          {countdown != null && <p className="text-sm text-gray-500 mb-2">Next in {countdown}…</p>}
+          <button
+            type="button"
+            onClick={goNext}
+            className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium"
+          >
+            Next player
+          </button>
+        </div>
+      )}
+    </>
+  )
+  const runOver = (
+    <>
+      {runEnd.finalScore != null && (
+        <p className="mb-2 text-lg">
+          Run over — best streak: <strong>{runEnd.finalScore}</strong>
+        </p>
+      )}
+      {secret && runEnd.finalScore != null && (
+        <div className="mb-4 flex flex-col items-center gap-2">
+          {secret.photoUrl && (
+            <img
+              src={secret.photoUrl}
+              alt=""
+              className="w-20 h-20 rounded-full object-cover object-top"
+            />
+          )}
+          <p className="text-sm text-gray-600">Answer: <strong>{secret.displayName}</strong></p>
+        </div>
+      )}
+    </>
+  )
+  const autoToggle = (
+    <label className="flex items-center gap-1.5 cursor-pointer">
+      <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
+      Auto next
+    </label>
+  )
+  const mapButton = (
+    <button
+      type="button"
+      onClick={() => setMapOpen(true)}
+      className={mobile ? 'mr-link' : 'text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1'}
+    >
+      <span aria-hidden>ⓘ</span> View map
+    </button>
+  )
+  const modals = (
+    <>
+      <NameEntryModal
+        open={runEnd.showNameModal}
+        bestStreak={runEnd.pendingScore ?? 0}
+        submitting={runEnd.submitting}
+        error={runEnd.submitError}
+        onSubmit={runEnd.submitName}
+        onDismiss={runEnd.dismissModal}
+      />
+      <NbaConferenceDivisionMapDialog
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        tree={tree}
+        clueExclusions={clueExclusions}
+        sheet={mobile}
+      />
+    </>
+  )
+
+  if (mobile) {
+    return (
+      <MinigamePageMobile
+        slug="who-am-i"
+        title="Who Am I?"
+        subtitle={`Poeltl-style clues — ${WHO_AM_I_MAX_GUESSES} guesses`}
+        stats={[
+          { label: 'Streak', value: streak.currentStreak },
+          { label: 'Best', value: streak.bestStreak },
+          { label: 'Hints', value: streak.runHintsUsed },
+        ]}
+        controls={
+          <>
+            {autoToggle}
+            {mapButton}
+          </>
+        }
+        lobby={phase === 'lobby' || !secret}
+        runOver={runOver}
+        onStart={startNewGame}
+        board={board}
+        leaderboardDescription="Top 5 best streaks (fewer hints wins ties)"
+      >
+        {modals}
+      </MinigamePageMobile>
+    )
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 pb-12">
       <div className="mb-4">
@@ -175,38 +402,13 @@ export default function WhoAmIGame() {
             <span className="font-semibold">Streak: {streak.currentStreak}</span>
             <span className="text-gray-500">Best: {streak.bestStreak}</span>
             <span className="text-gray-500">Hints: {streak.runHintsUsed}</span>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={autoMode} onChange={(e) => setAutoMode(e.target.checked)} />
-              Auto next
-            </label>
-            <button
-              type="button"
-              onClick={() => setMapOpen(true)}
-              className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-            >
-              <span aria-hidden>ⓘ</span> View map
-            </button>
+            {autoToggle}
+            {mapButton}
           </div>
 
           {phase === 'lobby' && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center bg-white dark:bg-gray-900">
-              {runEnd.finalScore != null && (
-                <p className="mb-2 text-lg">
-                  Run over — best streak: <strong>{runEnd.finalScore}</strong>
-                </p>
-              )}
-              {secret && runEnd.finalScore != null && (
-                <div className="mb-4 flex flex-col items-center gap-2">
-                  {secret.photoUrl && (
-                    <img
-                      src={secret.photoUrl}
-                      alt=""
-                      className="w-20 h-20 rounded-full object-cover object-top"
-                    />
-                  )}
-                  <p className="text-sm text-gray-600">Answer: <strong>{secret.displayName}</strong></p>
-                </div>
-              )}
+              {runOver}
               <button
                 type="button"
                 onClick={startNewGame}
@@ -219,133 +421,7 @@ export default function WhoAmIGame() {
 
           {(phase === 'playing' || phase === 'won') && secret && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6 bg-white dark:bg-gray-900 space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <PlayerPicker
-                  players={players}
-                  excludeIds={rows.map((r) => r.guessedPlayerId)}
-                  hideHeadshot={photoHint}
-                  disabled={phase !== 'playing'}
-                  onGuess={onGuess}
-                />
-                <button
-                  type="button"
-                  disabled={photoHint || phase !== 'playing'}
-                  onClick={usePhotoHint}
-                  className="px-3 py-2 text-xs rounded border border-dashed border-gray-400 disabled:opacity-40"
-                >
-                  Photo hint
-                </button>
-                {phase === 'playing' && (
-                  <button
-                    type="button"
-                    onClick={() => endRun()}
-                    className="text-sm text-red-600 hover:underline"
-                  >
-                    Give up
-                  </button>
-                )}
-              </div>
-
-              {photoHint && secret.photoUrl && (
-                <img
-                  src={secret.photoUrl}
-                  alt="Hint"
-                  className="w-24 h-24 rounded-full object-cover object-top"
-                />
-              )}
-
-              {/* Desktop guess table */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="min-w-full text-xs">
-                  <thead>
-                    <tr className="text-left text-gray-500">
-                      <th className="p-1">Guess</th>
-                      {WHO_AM_I_COLUMNS.map((c) => (
-                        <ColumnHeader
-                          key={c.key}
-                          colKey={c.key}
-                          label={c.label}
-                          onOpenMap={() => setMapOpen(true)}
-                        />
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.guessedPlayerId}>
-                        <td className="p-1 font-medium whitespace-nowrap">{row.guessedName}</td>
-                        {WHO_AM_I_COLUMNS.map((c) => {
-                          const cell = row.feedback[c.key]
-                          return (
-                            <td key={c.key} className="p-1">
-                              <div
-                                className={`rounded px-1 py-1 text-center whitespace-nowrap ${cellClass(cell.state)}`}
-                              >
-                                {row.display[c.key]}
-                                {dirArrow(cell.dir)}
-                              </div>
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="text-xs text-gray-400 mt-2">
-                  Guesses: {rows.length}/{WHO_AM_I_MAX_GUESSES}
-                </p>
-              </div>
-
-              {/* Mobile guess cards */}
-              <div className="sm:hidden space-y-3">
-                {rows.map((row) => (
-                  <div
-                    key={row.guessedPlayerId}
-                    className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2"
-                  >
-                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                      {row.guessedName}
-                    </p>
-                    <div className="grid grid-cols-2 gap-1.5 text-xs">
-                      {WHO_AM_I_COLUMNS.map((c) => {
-                        const cell = row.feedback[c.key]
-                        const showInfo = c.key === 'conference' || c.key === 'division'
-                        return (
-                          <div key={c.key}>
-                            <div className="mb-0.5 flex items-center gap-0.5 text-[10px] uppercase text-gray-500">
-                              {c.label}
-                              {showInfo && <NbaMapInfoButton onOpen={() => setMapOpen(true)} />}
-                            </div>
-                            <div
-                              className={`rounded px-1.5 py-1 text-center ${cellClass(cell.state)}`}
-                            >
-                              {row.display[c.key]}
-                              {dirArrow(cell.dir)}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-                <p className="text-xs text-gray-400">
-                  Guesses: {rows.length}/{WHO_AM_I_MAX_GUESSES}
-                </p>
-              </div>
-
-              {phase === 'won' && (
-                <div className="text-center pt-2">
-                  <p className="text-green-600 font-semibold mb-2">You got it — {secret.displayName}!</p>
-                  {countdown != null && <p className="text-sm text-gray-500 mb-2">Next in {countdown}…</p>}
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium"
-                  >
-                    Next player
-                  </button>
-                </div>
-              )}
+              {board}
             </div>
           )}
         </div>
@@ -356,20 +432,7 @@ export default function WhoAmIGame() {
           />
         </div>
       </div>
-      <NameEntryModal
-        open={runEnd.showNameModal}
-        bestStreak={runEnd.pendingScore ?? 0}
-        submitting={runEnd.submitting}
-        error={runEnd.submitError}
-        onSubmit={runEnd.submitName}
-        onDismiss={runEnd.dismissModal}
-      />
-      <NbaConferenceDivisionMapDialog
-        open={mapOpen}
-        onOpenChange={setMapOpen}
-        tree={tree}
-        clueExclusions={clueExclusions}
-      />
+      {modals}
     </div>
   )
 }
