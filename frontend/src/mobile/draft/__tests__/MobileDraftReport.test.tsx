@@ -93,9 +93,31 @@ describe('MobileDraftReport', () => {
 })
 
 const ROWS: FaReportRow[] = [
-  { player_id: 11, player_name: 'Duncan Robinson', pro_team: 'DET', fantasy_status: 'FREEAGENT', gp: 12, totalZ: 2.31, valueRank: 88, lastFaPickup: { at: '2026-10-20T12:00:00Z', kind: 'add', team_id: 7, team_name: "Roy's Rowdy Team" } },
-  { player_id: null, player_name: 'DeAndre Jordan', pro_team: 'NOP', fantasy_status: 'FREEAGENT', gp: 10, totalZ: 0.5, valueRank: 190, lastFaPickup: null },
-] as FaReportRow[]
+  {
+    player_id: 11,
+    player_name: 'Duncan Robinson',
+    pro_team: 'DET',
+    fantasy_status: 'ONTEAM',
+    fantasy_team_id: 7,
+    fantasy_team_name: "Roy's Rowdy Team",
+    gp: 12,
+    totalZ: 2.31,
+    valueRank: 88,
+    lastFaPickup: { at: '2026-10-20T12:00:00Z', kind: 'add', team_id: 7, team_name: "Roy's Rowdy Team" },
+  },
+  {
+    player_id: null,
+    player_name: 'DeAndre Jordan',
+    pro_team: 'NOP',
+    fantasy_status: 'FREEAGENT',
+    fantasy_team_id: 0,
+    fantasy_team_name: null,
+    gp: 10,
+    totalZ: 0.5,
+    valueRank: 190,
+    lastFaPickup: null,
+  },
+]
 
 describe('MobileFaReport', () => {
   it('shows the same columns, count and search as desktop', async () => {
@@ -109,7 +131,16 @@ describe('MobileFaReport', () => {
     expect(screen.getByText(/FA pickup dates and teams are unavailable/)).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Undrafted free agents' })
     const headers = within(table).getAllByRole('columnheader').map((h) => h.textContent)
-    expect(headers).toEqual(['Player', 'NBA', 'Last FA pickup', 'Picked up by', 'GP', 'zTotal', 'Season rank ▲'])
+    expect(headers).toEqual([
+      'Player',
+      'NBA',
+      'Last FA pickup',
+      'Picked up by',
+      'Status',
+      'GP',
+      'zTotal',
+      'Season rank ▲',
+    ])
     expect(within(table).getByRole('link', { name: 'Duncan Robinson' })).toHaveAttribute('href', '/?player=11')
     expect(within(table).getByText('(add)')).toBeInTheDocument()
     await userEvent.click(within(table).getByRole('button', { name: 'GP' }))

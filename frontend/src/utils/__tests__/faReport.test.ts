@@ -4,6 +4,9 @@ import {
   buildLastFaPickupByPlayerId,
   buildFaReportRows,
   FA_REPORT_MAX_SEASON_RANK,
+  faReportCurrentStatus,
+  FA_REPORT_STATUS_FREE_AGENT,
+  FA_REPORT_STATUS_ON_TEAM,
   formatFaPickupDate,
 } from '../faReport'
 import type { DraftPick, Player } from '../../types/api'
@@ -137,7 +140,7 @@ describe('buildFaReportRows', () => {
     expect(row!.valueRank!).toBeLessThanOrEqual(FA_REPORT_MAX_SEASON_RANK)
   })
 
-  it('excludes undrafted players outside the top season rank cutoff', () => {
+  it('excludes undrafted players outside the top season rank cutoff (full-pool rank)', () => {
     const low = makePlayer({ name: 'Bench Fodder', player_id: 50, gp: 70, pts: 1 })
     const fillers = Array.from({ length: FA_REPORT_MAX_SEASON_RANK + 5 }, (_, i) =>
       makePlayer({ name: `Rank Filler ${i}`, player_id: 200 + i, gp: 70, pts: 15 + (i % 3) }),
@@ -158,6 +161,39 @@ describe('buildFaReportRows', () => {
     const rows = buildFaReportRows([], [free], undefined, 'per_game')
     expect(rows).toHaveLength(1)
     expect(rows[0].lastFaPickup).toBeNull()
+  })
+})
+
+describe('faReportCurrentStatus', () => {
+  it('maps roster to Still on team vs Free Agent', () => {
+    expect(
+      faReportCurrentStatus({
+        player_id: 1,
+        player_name: 'A',
+        pro_team: 'LAL',
+        fantasy_status: 'ONTEAM',
+        fantasy_team_id: 3,
+        fantasy_team_name: 'Roy',
+        gp: 20,
+        totalZ: 1,
+        valueRank: 10,
+        lastFaPickup: null,
+      }),
+    ).toBe(FA_REPORT_STATUS_ON_TEAM)
+    expect(
+      faReportCurrentStatus({
+        player_id: 2,
+        player_name: 'B',
+        pro_team: 'BOS',
+        fantasy_status: 'FREEAGENT',
+        fantasy_team_id: 0,
+        fantasy_team_name: null,
+        gp: 20,
+        totalZ: 1,
+        valueRank: 11,
+        lastFaPickup: null,
+      }),
+    ).toBe(FA_REPORT_STATUS_FREE_AGENT)
   })
 })
 
