@@ -241,8 +241,8 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
   background: var(--mr-card); border-top: 1px solid var(--mr-border);
 }
 .mr-tab {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  text-decoration: none; color: var(--mr-muted); min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
+  padding-top: 8px; text-decoration: none; color: var(--mr-muted); min-width: 0;
 }
 .mr-tab-pill {
   width: 52px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
