@@ -1,14 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { useGetLeagueSummaryQuery } from '../../../store/api/fantasyApi'
 import { CoverageNotice } from '../../../components/DateRangePicker'
-import DateRangePicker from '../../../components/DateRangePicker'
 import PlayerNameLink from '../../../components/PlayerNameLink'
 import { METRIC_GLOSSARY } from '../../../constants/metricGlossary'
 import { formatShort } from '../../../utils/dateRange'
 import { useWeightDraft } from '../../../hooks/useWeightDraft'
 import { CATEGORY_LABELS, type RankedPlayer, type RankingCategory } from '../../../utils/playerRankings'
 import type { CustomDateRange, Team, TimePeriod } from '../../../types/api'
-import { Button, Chip, ChipRow, DataTable, Segmented, useSheetHistory, type Column } from '../../ui'
+import { ActiveFilterChips, Button, DataTable, FilterSearchRow, PeriodChips, Segmented, useSheetHistory, type Column } from '../../ui'
 import { PlayerRankingsFilters } from './PlayerRankingsFilters'
 import { activeFilterChips, type RankingsFilters } from './filters'
 import './playerRankings.css'
@@ -60,14 +58,6 @@ export interface PlayerRankingsMobileProps {
   rawText: (r: RankedPlayer, cat: RankingCategory) => string
 }
 
-const PERIODS: { value: TimePeriod; label: string }[] = [
-  { value: 'season', label: '📅 Full Season' },
-  { value: 'last_night', label: '🌙 Last night' },
-  { value: 'last_7', label: '🔥 Last 7 Days' },
-  { value: 'last_15', label: '📊 Last 15 Days' },
-  { value: 'last_30', label: '📈 Last 30 Days' },
-]
-
 const MODES = [
   { value: 'totals', label: 'Totals' },
   { value: 'per_game', label: 'Per Game' },
@@ -76,7 +66,7 @@ const MODES = [
 const label = (cat: RankingCategory) => CATEGORY_LABELS[cat] ?? cat
 
 export default function PlayerRankingsMobile(p: PlayerRankingsMobileProps) {
-  const filtersSheet = useSheetHistory('player-rankings-filters')
+  const filtersSheet = useSheetHistory('filters')
   const chips = activeFilterChips(p.filters, p.teams)
   const [explain, setExplain] = useState(false)
   const resultsRef = useRef<HTMLDivElement>(null)
@@ -131,19 +121,16 @@ export default function PlayerRankingsMobile(p: PlayerRankingsMobileProps) {
   ]
 
   return (
-    <div className="mr-pr">
+    <div className="mr-page mr-pr">
       <h1 className="mr-h1">Player Rankings</h1>
 
-      <div className="mr-pr-row">
-        <SearchBox value={p.search} onChange={p.onSearchChange} />
-        <Button size="sm" onClick={filtersSheet.show} aria-haspopup="dialog">
-          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <path d="M3 5h14M6 10h8M8.5 15h3" />
-          </svg>
-          Filters
-          {chips.length > 0 && <span className="mr-count">{chips.length}</span>}
-        </Button>
-      </div>
+      <FilterSearchRow
+        search={p.search}
+        onSearchChange={p.onSearchChange}
+        activeCount={chips.length}
+        onOpenFilters={filtersSheet.show}
+        filtersOpen={filtersSheet.open}
+      />
 
       {p.searchActive && p.hasCalculated && (
         <p className="mr-meta mr-pr-tight" aria-live="polite">
@@ -161,17 +148,12 @@ export default function PlayerRankingsMobile(p: PlayerRankingsMobileProps) {
         </p>
       )}
 
-      {chips.length > 0 && (
-        <ChipRow label="Active filters">
-          {chips.map((c) => (
-            <Chip key={c.key} selected removable onClick={c.clear} aria-label={`Remove filter ${c.label}`}>
-              {c.label}
-            </Chip>
-          ))}
-        </ChipRow>
-      )}
+      <ActiveFilterChips
+        active={chips.map((c) => ({ key: c.key, label: c.label, onRemove: c.clear }))}
+        onOpen={filtersSheet.show}
+      />
 
-      <div className="mr-pr-two">
+      <div className="mr-two">
         <div className="mr-pr-lab">
           <span className="mr-meta">Calc mode</span>
           <Segmented size="sm" label="Calc mode" className="mr-pr-calc" options={MODES} value={p.calcMode} onChange={p.onCalcMode} />
@@ -182,7 +164,7 @@ export default function PlayerRankingsMobile(p: PlayerRankingsMobileProps) {
         </div>
       </div>
 
-      <PeriodChips period={p.period} onPeriod={p.onPeriod} customRange={p.customRange} onCustomRange={p.onCustomRange} />
+      <PeriodChips value={p.period} onChange={p.onPeriod} customRange={p.customRange} onCustomRangeChange={p.onCustomRange} showLastNight />
 
       {p.actualStart && p.actualEnd && (
         <span className="mr-meta">
@@ -264,88 +246,6 @@ export default function PlayerRankingsMobile(p: PlayerRankingsMobileProps) {
 
 function Punted({ on, children }: { on: boolean; children: ReactNode }) {
   return <span className={on ? 'mr-pr-punted' : undefined}>{children}</span>
-}
-
-function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const input = useRef<HTMLInputElement>(null)
-  return (
-    <div className="mr-pr-search">
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-        <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 3.4 9.83l3.64 3.63a.75.75 0 1 0 1.06-1.06l-3.63-3.64A5.5 5.5 0 0 0 9 3.5ZM5 9a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" clipRule="evenodd" />
-      </svg>
-      <input
-        ref={input}
-        type="search"
-        inputMode="search"
-        enterKeyHint="search"
-        autoComplete="off"
-        spellCheck={false}
-        aria-label="Search players"
-        placeholder="Search players…"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Escape') onChange('') }}
-      />
-      {value && (
-        <button type="button" aria-label="Clear search" onClick={() => { onChange(''); input.current?.focus() }}>
-          ×
-        </button>
-      )}
-    </div>
-  )
-}
-
-/** Same periods as today's selector (incl. Last night) as a chip row; Custom opens the date range. */
-function PeriodChips({ period, onPeriod, customRange, onCustomRange }: {
-  period: TimePeriod
-  onPeriod: (p: TimePeriod) => void
-  customRange: CustomDateRange | null
-  onCustomRange: (r: CustomDateRange | null) => void
-}) {
-  const { data: summary } = useGetLeagueSummaryQuery()
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [prev, setPrev] = useState<TimePeriod>(period === 'custom' ? 'season' : period)
-
-  const pick = (v: TimePeriod) => {
-    setPrev(v)
-    setPanelOpen(false)
-    onPeriod(v)
-  }
-  const clearCustom = () => {
-    onCustomRange(null)
-    onPeriod(prev)
-    setPanelOpen(false)
-  }
-
-  return (
-    <>
-      <ChipRow label="Period">
-        {PERIODS.map((o) => (
-          <Chip key={o.value} selected={period === o.value} onClick={() => pick(o.value)}>{o.label}</Chip>
-        ))}
-        <Chip selected={period === 'custom'} aria-expanded={panelOpen} onClick={() => setPanelOpen((o) => !o)}>📆 Custom</Chip>
-      </ChipRow>
-      {period === 'custom' && customRange && !panelOpen && (
-        <ChipRow label="Custom range">
-          <Chip selected removable onClick={clearCustom} aria-label="Clear custom range">
-            {formatShort(customRange.start)} – {formatShort(customRange.end)}
-          </Chip>
-        </ChipRow>
-      )}
-      {panelOpen && (
-        <DateRangePicker
-          seasonStart={summary?.season_start}
-          initialStart={customRange?.start ?? ''}
-          initialEnd={customRange?.end ?? ''}
-          onApply={(r) => {
-            onCustomRange(r)
-            onPeriod('custom')
-            setPanelOpen(false)
-          }}
-        />
-      )}
-    </>
-  )
 }
 
 function WeightRows({ categories, initialWeights, onCommit }: {

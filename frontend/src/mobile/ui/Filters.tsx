@@ -41,7 +41,13 @@ export function FilterSearchRow({
           placeholder={placeholder}
           aria-label={placeholder.replace(/[.…]+$/, '')}
           onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') onSearchChange('') }}
         />
+        {search && (
+          <button type="button" className="mr-search-clear" aria-label="Clear search" onClick={() => onSearchChange('')}>
+            ×
+          </button>
+        )}
       </label>
       <Button
         size="sm"
