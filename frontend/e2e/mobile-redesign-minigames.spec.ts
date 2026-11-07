@@ -132,7 +132,8 @@ test.describe('phone Minigames', () => {
     await expectNoHorizontalScroll(page)
     await shot(page, 'live-who-he-play-for-playing')
     await page.getByRole('button', { name: /Boston Celtics/ }).click()
-    await expect(page.getByText('Correct team:')).toContainText('New York Knicks')
+    await expect(page.getByText('Answer:')).toContainText('Jalen Brunson')
+    await expect(page.getByText('Team:')).toContainText('New York Knicks')
     await shot(page, 'live-who-he-play-for')
   })
 
@@ -146,11 +147,11 @@ test.describe('phone Minigames', () => {
       await page.getByRole('button', { name: new RegExp(name) }).click()
       await page.getByRole('button', { name: 'Guess' }).click()
     }
-    await expect(page.getByText('Guesses: 2/8').last()).toBeVisible()
+    await expect(page.getByLabel('2 of 8 guesses used')).toBeVisible()
     await expectNoHorizontalScroll(page)
     await shot(page, 'live-who-am-i-playing')
 
-    await page.getByRole('button', { name: /View map/ }).click()
+    await page.getByRole('button', { name: 'Map' }).click()
     const sheet = page.getByRole('dialog', { name: 'Conferences and divisions' })
     await expect(sheet).toBeVisible()
     await expect(sheet.getByRole('tab', { name: 'Eastern' })).toBeVisible()
@@ -158,7 +159,7 @@ test.describe('phone Minigames', () => {
     await page.goBack()
     await expect(sheet).toHaveCount(0)
     await expect(page).toHaveURL(/\/minigames\/who-am-i$/)
-    await expect(page.getByText('Guesses: 2/8').last()).toBeVisible()
+    await expect(page.getByLabel('2 of 8 guesses used')).toBeVisible()
   })
 
   test('Now You See Me: photo, picker, empty leaderboard', async ({ page }) => {
