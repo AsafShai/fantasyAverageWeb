@@ -12,7 +12,8 @@ export type ShotUnit = 'pg' | 'tot'
 export type ShotFilter = 'all' | 'pct' | 'vol' | 'both' | 'imp'
 
 export const POOL_SIZE = 200
-export const MIN_GP = 2
+/** Games a player needs in the window; the page lets the viewer change it. */
+export const DEFAULT_MIN_GP = 2
 /** Per-game attempts a picked team's player outside the top 200 needs to be shown. */
 export const EXTRA_MIN_FGA = 1
 export const EXTRA_MIN_FTA = 0.5
@@ -70,11 +71,13 @@ export interface ShotPool {
 
 /** The top-200 the map shows, ranked the same way as Player Rankings (per game, equal weights). */
 export function buildShotPool(players: Player[], categories: RankingCategory[] = DEFAULT_CATEGORIES,
-                              reverseCategories?: Set<RankingCategory>): ShotPool {
-  const eligible = players.filter(p => p.has_data !== false && p.stats.gp >= MIN_GP)
+                              reverseCategories?: Set<RankingCategory>, minGp = DEFAULT_MIN_GP): ShotPool {
+  // At least one game, so per-game stats always exist.
+  const gpFloor = Math.max(1, minGp)
+  const eligible = players.filter(p => p.has_data !== false && p.stats.gp >= gpFloor)
   const weights = { ...DEFAULT_WEIGHTS }
   for (const c of categories) if (!(c in weights)) weights[c] = 1
-  const ranked = computePlayerRankings(eligible, { calcMode: 'per_game', minGp: MIN_GP, minMin: 0, position: null, weights },
+  const ranked = computePlayerRankings(eligible, { calcMode: 'per_game', minGp: gpFloor, minMin: 0, position: null, weights },
     categories, reverseCategories)
   const frank = new Map<string, number>()
   ranked.forEach((r, i) => frank.set(playerKey(r.player), i + 1))
@@ -176,8 +179,19 @@ export function inScope(p: Player, scope: ShotScope): boolean {
   return true
 }
 
-export function passesFilter(d: ShotRow, data: ShotData, filter: ShotFilter, scope: ShotScope): boolean {
+/** The viewer's own floors for the X (shooting %, as a fraction) and Y (attempts, in the shown unit) values. */
+export interface ShotThresholds {
+  minPct: number | null
+  minAtt: number | null
+}
+
+export const NO_THRESHOLDS: ShotThresholds = { minPct: null, minAtt: null }
+
+export function passesFilter(d: ShotRow, data: ShotData, filter: ShotFilter, scope: ShotScope,
+                             thresholds: ShotThresholds = NO_THRESHOLDS): boolean {
   if (!inScope(d.player, scope)) return false
+  if (thresholds.minPct !== null && d.pct < thresholds.minPct) return false
+  if (thresholds.minAtt !== null && d.a < thresholds.minAtt) return false
   const hp = d.pct > data.avgPct, hv = d.a > data.avgAtt
   switch (filter) {
     case 'pct': return hp

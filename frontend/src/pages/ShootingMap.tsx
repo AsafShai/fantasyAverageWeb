@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useMyTeam } from '../context/MyTeamContext'
@@ -11,25 +11,22 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { normalizePlayerName } from '../utils/playerName'
+import { toListHeadshotUrl } from '../utils/adp'
 import ShootingMapChart, { type ShootingMapChartRef } from '../components/shootingMap/ShootingMapChart'
 import {
-  buildShotPool, deriveShotData, impactLists, passesFilter, shotLabels, POOL_SIZE, MIN_GP, EXTRA_MIN_FGA, EXTRA_MIN_FTA, signedImpact, inScope, isScoped,
+  buildShotPool, deriveShotData, impactLists, passesFilter, shotLabels, POOL_SIZE, DEFAULT_MIN_GP, EXTRA_MIN_FGA, EXTRA_MIN_FTA, signedImpact, inScope, isScoped, type ShotThresholds,
   type FantasyScope, type ShotFilter, type ShotMode, type ShotScope, type ShotRow, type ShotUnit,
 } from '../utils/shootingMap'
 import type { CustomDateRange, TimePeriod } from '../types/api'
 import '../components/shootingMap/shootingMap.css'
 
-const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap'
-
-/** The page's condensed display face; loaded only when someone opens it. */
-function ensureShootingMapFonts() {
-  if (typeof document === 'undefined' || document.getElementById('sm-fonts')) return
-  const link = document.createElement('link')
-  link.id = 'sm-fonts'
-  link.rel = 'stylesheet'
-  link.href = FONT_HREF
-  document.head.appendChild(link)
-}
+// Site control styles (same classes as Trends / Player Rankings).
+const SEG_GROUP = 'flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-xs sm:text-sm'
+const segBtn = (on: boolean) =>
+  `flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 whitespace-nowrap ${on ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600'}`
+const FIELD = 'px-2 py-2 sm:py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm'
+const CARD = 'bg-white dark:bg-gray-800 rounded-xl shadow'
+const MIN_GP_OPTIONS = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20]
 
 const filterChips = (mode: ShotMode): { key: ShotFilter; label: string }[] => {
   const L = shotLabels(mode)
@@ -50,10 +47,35 @@ function Seg<T extends string>({ label, value, options, onChange }: {
   label: string; value: T; options: [T, string][]; onChange(v: T): void
 }) {
   return (
-    <div className="sm-seg" role="group" aria-label={label}>
+    <div className={SEG_GROUP} role="group" aria-label={label}>
       {options.map(([v, text]) => (
-        <button key={v} type="button" aria-pressed={value === v} onClick={() => onChange(v)}>{text}</button>
+        <button key={v} type="button" aria-pressed={value === v} className={segBtn(value === v)} onClick={() => onChange(v)}>{text}</button>
       ))}
+    </div>
+  )
+}
+
+/** Round headshot for the side lists; desktop only (hidden on phones), like Boom or Bust's table. */
+function Headshot({ playerId }: { playerId: number | null | undefined }) {
+  const src = playerId != null ? toListHeadshotUrl(`https://a.espncdn.com/i/headshots/nba/players/full/${playerId}.png`) : null
+  return (
+    <div className="hidden md:block shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+      {src ? (
+        <>
+          <img
+            src={src} alt="" width={32} height={32} loading="lazy" decoding="async"
+            className="w-full h-full object-cover object-top"
+            onError={e => {
+              e.currentTarget.style.display = 'none'
+              const fallback = e.currentTarget.nextElementSibling
+              if (fallback instanceof HTMLElement) fallback.hidden = false
+            }}
+          />
+          <div hidden className="w-full h-full flex items-center justify-center text-sm">🏀</div>
+        </>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-sm">🏀</div>
+      )}
     </div>
   )
 }
@@ -66,27 +88,37 @@ function PlayerItem({ d, unit, mode, onFocus, onRemove }: {
   const n = (v: number) => (unit === 'tot' ? Math.round(v).toString() : v.toFixed(1))
   const id = d.player.player_id
   return (
-    <li>
-      <button type="button" className="sm-nm" title="Show on the map" onClick={() => onFocus(d.key)}>{d.name}</button>
-      <span className="sm-right">
-        <span className={`sm-imp ${d.imp >= 0 ? 'sm-pos' : 'sm-neg'}`}>{signedImpact(d.imp, unit)}</span>
-        {onRemove && (
-          <button type="button" className="sm-x" aria-label={`Remove ${d.name}`} onClick={() => onRemove(d.key)}>×</button>
-        )}
-      </span>
-      <div className="sm-meta">
-        {/* Ranks are among the top 200; a team's other players get none. */}
-        {d.team} · {fmtPct(d.pct)} {L.pct}{d.inPool && d.rPct ? ` (#${d.rPct})` : ''} · {n(d.a)} {L.att}{d.inPool ? ` (#${d.rVol})` : ''}
-        {id != null && (
-          <> · <Link className="sm-profile" to={`/player/${id}`} state={{ from: `${location.pathname}${location.search}` }}>Profile</Link></>
-        )}
+    <li className="py-2 border-t border-gray-100 dark:border-gray-700 first:border-t-0 flex items-center gap-2.5">
+      <Headshot playerId={id} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <button type="button" title="Show on the map" onClick={() => onFocus(d.key)}
+            className="min-w-0 truncate text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400">
+            {d.name}
+          </button>
+          <span className="flex items-center gap-2 shrink-0">
+            <span className={`text-sm font-semibold tabular-nums ${d.imp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {signedImpact(d.imp, unit)}
+            </span>
+            {onRemove && (
+              <button type="button" aria-label={`Remove ${d.name}`} onClick={() => onRemove(d.key)}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-base leading-none">×</button>
+            )}
+          </span>
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums mt-0.5">
+          {/* Ranks are among the top 200; a team's other players get none. */}
+          {d.team} · {fmtPct(d.pct)} {L.pct}{d.inPool && d.rPct ? ` (#${d.rPct})` : ''} · {n(d.a)} {L.att}{d.inPool ? ` (#${d.rVol})` : ''}
+          {id != null && (
+            <> · <Link className="text-blue-600 dark:text-blue-400 hover:underline" to={`/player/${id}`} state={{ from: `${location.pathname}${location.search}` }}>Profile</Link></>
+          )}
+        </div>
       </div>
     </li>
   )
 }
 
 export default function ShootingMap() {
-  useEffect(ensureShootingMapFonts, [])
   const mobile = useMobileRedesign()
   const [period, setPeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
@@ -96,9 +128,16 @@ export default function ShootingMap() {
     time_period: period,
     ...(period === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   })
-  const [mode, setMode] = usePersistedState<ShotMode>('shootingMap.mode', 'fg')
-  const [unit, setUnit] = usePersistedState<ShotUnit>('shootingMap.unit', 'pg')
+  const [mode, setModeState] = usePersistedState<ShotMode>('shootingMap.mode', 'fg')
+  const [unit, setUnitState] = usePersistedState<ShotUnit>('shootingMap.unit', 'pg')
+  // Threshold boxes hold what was typed ('' = no floor); they mean nothing in
+  // another shot type or unit, so switching either clears them.
+  const [minPctText, setMinPctText] = useState('')
+  const [minAttText, setMinAttText] = useState('')
+  const setMode = (m: ShotMode) => { setModeState(m); setMinPctText(''); setMinAttText('') }
+  const setUnit = (u: ShotUnit) => { setUnitState(u); setMinAttText('') }
   const [filter, setFilter] = useState<ShotFilter>('all')
+  const [minGp, setMinGp] = usePersistedState('shootingMap.minGp', DEFAULT_MIN_GP)
   const [searchParams, setSearchParams] = useSearchParams()
   const teamParam = searchParams.get('team')?.toUpperCase() ?? null
   const fantasyParam = parseFantasyParam(searchParams.get('fteam'))
@@ -113,8 +152,8 @@ export default function ShootingMap() {
   const shotPool = useMemo(() => {
     const players = playersData?.players ?? []
     const cats = playersData?.categories?.length ? playersData.categories : undefined
-    return buildShotPool(players, cats, new Set(reverseKey ? reverseKey.split(',') : []))
-  },[playersData?.players, playersData?.categories, reverseKey])
+    return buildShotPool(players, cats, new Set(reverseKey ? reverseKey.split(',') : []), minGp)
+  }, [playersData?.players, playersData?.categories, reverseKey, minGp])
 
   const teams = useMemo(
     () => [...new Set(shotPool.eligible.map(p => p.pro_team).filter(t => t && t !== 'FA'))].sort(),
@@ -170,12 +209,16 @@ export default function ShootingMap() {
     }, { replace: true })
   }
 
-  const chartInput = useMemo(() => ({ data, mode, unit, filter, scope, selected }), [data, mode, unit, filter, scope, selected])
-  const viewKey = `${mode}|${unit}|${period}|${customRange?.start ?? ''}|${customRange?.end ?? ''}|${team ?? ''}|${fantasy ?? ''}`
+  const minPct = parseThreshold(minPctText)
+  const minAtt = parseThreshold(minAttText)
+  const thresholds = useMemo<ShotThresholds>(() => ({ minPct: minPct === null ? null : minPct / 100, minAtt }), [minPct, minAtt])
+  const chartInput = useMemo(() => ({ data, mode, unit, filter, scope, thresholds, selected }),
+    [data, mode, unit, filter, scope, thresholds, selected])
+  const viewKey = `${mode}|${unit}|${period}|${customRange?.start ?? ''}|${customRange?.end ?? ''}|${team ?? ''}|${fantasy ?? ''}|${minGp}`
 
   const byKey = useMemo(() => new Map(data.rows.map(d => [d.key, d])), [data])
   const selectedRows = [...selected].map(k => byKey.get(k)).filter((d): d is ShotRow => d !== undefined)
-  const listed = useMemo(() => data.rows.filter(d => passesFilter(d, data, 'all', scope)), [data, scope])
+  const listed = useMemo(() => data.rows.filter(d => passesFilter(d, data, 'all', scope, thresholds)), [data, scope, thresholds])
   const { top, bottom } = useMemo(() => impactLists(listed, LIST_SIZE), [listed])
 
   const trySearch = (raw: string) => {
@@ -200,39 +243,54 @@ export default function ShootingMap() {
   const season = seasonLabel(end)
   const span = period === 'season' ? (end ? `Through ${fmtDay(end)}` : 'Season') : start && end ? `${fmtDay(start)} – ${fmtDay(end)}` : ''
 
+  const listCard = (title: string, rows: ShotRow[], empty: string, removable = false) => (
+    <div className={`${CARD} p-4`}>
+      <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">{title}</h2>
+      {rows.length > 0 ? (
+        <ul>
+          {rows.map(d => <PlayerItem key={d.key} d={d} unit={unit} mode={mode} onFocus={focus} onRemove={removable ? remove : undefined} />)}
+        </ul>
+      ) : (
+        <p className="text-sm text-gray-500 dark:text-gray-400">{empty}</p>
+      )}
+    </div>
+  )
+  const scoped = scopeLabel ? ` · ${scopeLabel}` : ''
+
   return (
-    <div className="sm-root">
-      <div className="sm-wrap">
-        <header className="sm-header">
+    <div className="sm-root min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
+      <div className="max-w-screen-2xl mx-auto">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-6">
           <div>
-            <div className="sm-lbl">NBA{season ? ` ${season}` : ''} {span ? `· ${span} ` : ''}· Top {POOL_SIZE} fantasy players{scopeLabel ? ` · ${scopeLabel}` : ''}</div>
-            <h1 className="sm-h1">Player Shooting Map</h1>
-            <div className="sm-sub">
-              Shooting % across, attempts up. Color shows how many makes above or below the pool average a player adds:{' '}
-              <b>orange helps</b>, <span className="sm-cold">blue hurts</span>.
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">🎯 Player Shooting Map</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Shooting % against attempts for the top {POOL_SIZE} fantasy players{season ? ` · NBA ${season}` : ''}{span ? ` · ${span}` : ''}{scoped}.
+              Color shows how many makes above or below the pool average a player adds.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-hidden="true">
+            <span>Hurts</span><span className="sm-ramp" /><span>Helps</span>
+          </div>
+        </div>
+
+        <div className={`${CARD} p-4 mb-6`} role="toolbar" aria-label="Display options">
+          <div className="flex flex-wrap items-center gap-2">
+            <Seg<ShotMode> label="Shot type" value={mode} onChange={setMode} options={[['fg', 'FG%'], ['ft', 'FT%']]} />
+            <Seg<ShotUnit> label="Units" value={unit} onChange={setUnit} options={[['pg', 'Per game'], ['tot', 'Totals']]} />
+            <div className={`${SEG_GROUP} max-w-full overflow-x-auto [scrollbar-width:none]`} role="group" aria-label="Filter">
+              {filterChips(mode).map(f => (
+                <button key={f.key} type="button" aria-pressed={filter === f.key} className={segBtn(filter === f.key)} onClick={() => setFilter(f.key)}>{f.label}</button>
+              ))}
             </div>
           </div>
-          <div className="sm-legend"><span>Hurts</span><span className="sm-ramp" aria-hidden="true" /><span>Helps</span></div>
-        </header>
-
-        <div className="sm-controls" role="toolbar" aria-label="Display options">
-          <Seg<ShotMode> label="Shot type" value={mode} onChange={setMode} options={[['fg', 'FG%'], ['ft', 'FT%']]} />
-          <Seg<ShotUnit> label="Units" value={unit} onChange={setUnit} options={[['pg', 'Per game'], ['tot', 'Totals']]} />
-          <div className="sm-chips" role="group" aria-label="Filter">
-            {filterChips(mode).map(f => (
-              <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>{f.label}</button>
-            ))}
-          </div>
-          <div className="sm-field">
-            <label htmlFor="sm-team" className="sm-sr">NBA team</label>
-            <select id="sm-team" className={team ? 'sm-on' : ''} value={team ?? ''} onChange={e => setParam('team', e.target.value)}>
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <label htmlFor="sm-team" className="sr-only">NBA team</label>
+            <select id="sm-team" className={`${FIELD} min-w-0 basis-[calc(50%-4px)] sm:basis-auto`} value={team ?? ''} onChange={e => setParam('team', e.target.value)}>
               <option value="">All NBA teams</option>
               {teams.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-          </div>
-          <div className="sm-field">
-            <label htmlFor="sm-fteam" className="sm-sr">Fantasy team</label>
-            <select id="sm-fteam" className={fantasy !== null ? 'sm-on' : ''} value={fantasyParamValue(fantasy)}
+            <label htmlFor="sm-fteam" className="sr-only">Fantasy team</label>
+            <select id="sm-fteam" className={`${FIELD} min-w-0 basis-[calc(50%-4px)] sm:basis-auto sm:max-w-[200px]`} value={fantasyParamValue(fantasy)}
               onChange={e => setParam('fteam', e.target.value)}>
               <option value="">All fantasy teams</option>
               <option value="rostered">Rostered</option>
@@ -241,25 +299,34 @@ export default function ShootingMap() {
                 <option key={t.team_id} value={t.team_id}>{fantasyTeamOptionLabel(t.team_name, isMyTeam(t.team_id))}</option>
               ))}
             </select>
+            <div className="relative w-full sm:w-auto">
+              <label htmlFor="sm-q" className="sr-only">Find a player</label>
+              <input
+                id="sm-q" list="sm-names" placeholder="Search player…" autoComplete="off" value={query}
+                className={`${FIELD} w-full sm:min-w-[170px]`}
+                onChange={e => {
+                  setQuery(e.target.value)
+                  setSearchMiss(false)
+                  // Picking from the datalist fills the exact name: jump straight to it.
+                  if (byNameExact(data.rows, e.target.value)) trySearch(e.target.value)
+                }}
+                onKeyDown={e => { if (e.key === 'Enter') trySearch(query) }}
+              />
+              {searchMiss && <div className="absolute left-2 top-full mt-0.5 text-xs text-red-600 dark:text-red-400" role="status">No player found</div>}
+              <datalist id="sm-names">
+                {data.rows.map(d => <option key={d.key} value={d.name} />)}
+              </datalist>
+            </div>
+            <label className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+              <span>Min games</span>
+              <select className={FIELD} value={minGp} onChange={e => setMinGp(Number(e.target.value))}
+                title="Fewest games in the selected period">
+                {(MIN_GP_OPTIONS.includes(minGp) ? MIN_GP_OPTIONS : [...MIN_GP_OPTIONS, minGp].sort((a, b) => a - b))
+                  .map(n => <option key={n} value={n}>{n}+</option>)}
+              </select>
+            </label>
           </div>
-          <div className="sm-field">
-            <label htmlFor="sm-q" className="sm-sr">Find a player</label>
-            <input
-              id="sm-q" list="sm-names" placeholder="Find a player…" autoComplete="off" value={query}
-              onChange={e => {
-                setQuery(e.target.value)
-                setSearchMiss(false)
-                // Picking from the datalist fills the exact name: jump straight to it.
-                if (byNameExact(data.rows, e.target.value)) trySearch(e.target.value)
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') trySearch(query) }}
-            />
-            {searchMiss && <div className="sm-miss" role="status">No player found</div>}
-            <datalist id="sm-names">
-              {data.rows.map(d => <option key={d.key} value={d.name} />)}
-            </datalist>
-          </div>
-          <div className="sm-period">
+          <div className="mt-3">
             {mobile ? (
               <PeriodChips value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
             ) : (
@@ -271,47 +338,50 @@ export default function ShootingMap() {
         {error ? (
           <ErrorMessage message={getErrorMessage(error, 'Failed to load players.')} />
         ) : isLoading ? (
-          <div className="sm-status"><LoadingSpinner /></div>
+          <div className="py-16"><LoadingSpinner /></div>
         ) : data.rows.length === 0 ? (
-          <div className="sm-status">No players with at least {MIN_GP} games in this period yet.</div>
+          <div className={`${CARD} p-8 text-center text-sm text-gray-500 dark:text-gray-400`}>No players with at least {minGp} games in this period yet.</div>
         ) : (
-          <div className="sm-main" style={{ opacity: isFetching ? 0.6 : 1 }}>
-            <ShootingMapChart ref={chartRef} input={chartInput} viewKey={viewKey} onToggle={toggle} />
-            <aside className="sm-aside">
-              <div className="sm-card">
-                <h2>Pinned players</h2>
-                {selectedRows.length > 0 ? (
-                  <ul className="sm-plist">
-                    {selectedRows.map(d => <PlayerItem key={d.key} d={d} unit={unit} mode={mode} onFocus={focus} onRemove={remove} />)}
-                  </ul>
-                ) : (
-                  <p className="sm-empty">Click a dot or search for a player to pin them. Pinned players stay labeled on the map.</p>
-                )}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] items-start" style={{ opacity: isFetching ? 0.6 : 1 }}>
+            <ShootingMapChart
+              ref={chartRef} input={chartInput} viewKey={viewKey} onToggle={toggle}
+              toolbar={(
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-600 dark:text-gray-300" role="group" aria-label="Thresholds">
+                  <label className="flex items-center gap-1.5">
+                    <span>{L.pct} ≥</span>
+                    <input type="number" inputMode="decimal" min={0} max={100} step={1} placeholder="any"
+                      className={`${FIELD} w-16 text-center`}
+                      aria-label={`Minimum ${L.pct}`} value={minPctText} onChange={e => setMinPctText(e.target.value)} />
+                    <span className="text-gray-400">%</span>
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <span>{L.att} ≥</span>
+                    <input type="number" inputMode="decimal" min={0} step={unit === 'tot' ? 5 : 0.5} placeholder="any"
+                      className={`${FIELD} w-16 text-center`}
+                      aria-label={`Minimum ${L.att}${unit === 'pg' ? ' per game' : ''}`} value={minAttText} onChange={e => setMinAttText(e.target.value)} />
+                    {unit === 'pg' && <span className="text-gray-400">/g</span>}
+                  </label>
+                  {(minPct !== null || minAtt !== null) && (
+                    <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={() => { setMinPctText(''); setMinAttText('') }}>Clear</button>
+                  )}
+                </div>
+              )}
+            />
+            <aside className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="sm:col-span-2 lg:col-span-1">
+                {listCard('Pinned players', selectedRows, 'Click a dot or search for a player to pin them. Pinned players stay labeled on the map.', true)}
               </div>
-              <div className="sm-card">
-                <h2>Best for {L.pct}{scopeLabel ? ` · ${scopeLabel}` : ''}</h2>
-                <ul className="sm-plist">
-                  {top.map(d => <PlayerItem key={d.key} d={d} unit={unit} mode={mode} onFocus={focus} />)}
-                </ul>
-              </div>
-              <div className="sm-card">
-                <h2>Worst for {L.pct}{scopeLabel ? ` · ${scopeLabel}` : ''}</h2>
-                {bottom.length > 0 ? (
-                  <ul className="sm-plist">
-                    {bottom.map(d => <PlayerItem key={d.key} d={d} unit={unit} mode={mode} onFocus={focus} />)}
-                  </ul>
-                ) : (
-                  <p className="sm-empty">No other players to show.</p>
-                )}
-              </div>
+              {listCard(`Best for ${L.pct}${scoped}`, top, 'No players to show.')}
+              {listCard(`Worst for ${L.pct}${scoped}`, bottom, 'No other players to show.')}
             </aside>
           </div>
         )}
 
-        <footer className="sm-footer">
+        <div className="mt-6 space-y-2 text-xs text-gray-500 dark:text-gray-400 max-w-4xl">
           <p>
             "Top {POOL_SIZE}" = the {categoryCount}-category z-score ranking (same as Player Rankings, per game, equal weights) for the
-            selected period, minimum {MIN_GP} games. Averages, the colors and the ranks always come from those {POOL_SIZE} players;
+            selected period, minimum {minGp} {minGp === 1 ? 'game' : 'games'} (change it with Min games). Averages, the colors and the ranks always come from those {POOL_SIZE} players;
             picking an NBA or fantasy team also shows that team's other players (at least {EXTRA_MIN_FGA} FGA / {EXTRA_MIN_FTA} FTA per game),
             measured against the same pool.
           </p>
@@ -320,10 +390,17 @@ export default function ShootingMap() {
             join players with equal impact (±1 and ±2 standard deviations); the straight lines are the pool averages.
             Players with no attempts are left out. Percentage ranks need {mode === 'fg' ? '5 FGA' : '1.5 FTA'} per game.
           </p>
-        </footer>
+        </div>
       </div>
     </div>
   )
+}
+
+/** A threshold box's number, or null when empty or not a number. */
+function parseThreshold(text: string): number | null {
+  if (text.trim() === '') return null
+  const v = Number(text)
+  return Number.isFinite(v) && v > 0 ? v : null
 }
 
 /** ?fteam=: a fantasy team id, "fa" (free agents / waivers) or "rostered". */

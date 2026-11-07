@@ -83,6 +83,18 @@ describe('passesFilter', () => {
   })
 })
 
+describe('passesFilter thresholds', () => {
+  it('drops players under the minimum % or attempts', () => {
+    const d = deriveShotData([player('Sharp', 'X', 4, 6, 10), player('Busy', 'X', 4, 9, 20)], [], new Map(), 'fg', 'pg')
+    const names = (minPct: number | null, minAtt: number | null) =>
+      d.rows.filter(r => passesFilter(r, d, 'all', ALL_PLAYERS, { minPct, minAtt })).map(r => r.name)
+    expect(names(0.5, null)).toEqual(['Sharp'])
+    expect(names(null, 15)).toEqual(['Busy'])
+    expect(names(0.5, 15)).toEqual([])
+    expect(names(null, null)).toEqual(['Sharp', 'Busy'])
+  })
+})
+
 describe('inScope', () => {
   const rostered = { ...player('Owned', 'BOS', 4, 5, 10), team_id: 3 }
   const freeAgent = player('Free', 'BOS', 4, 5, 10)
@@ -106,6 +118,14 @@ describe('buildShotPool', () => {
     expect(pool[0].player_name).toBe('P0')
     expect(eligible.some(p => p.player_name === 'One Game')).toBe(false)
     expect(frank.get(String(pool[0].player_id))).toBe(1)
+  })
+})
+
+describe('buildShotPool min games', () => {
+  it('follows the chosen minimum, never below one game', () => {
+    const players = [player('Two', 'BOS', 2, 5, 10), player('Five', 'BOS', 5, 5, 10), player('None', 'BOS', 0, 0, 0)]
+    expect(buildShotPool(players, undefined, undefined, 5).eligible.map(p => p.player_name)).toEqual(['Five'])
+    expect(buildShotPool(players, undefined, undefined, 0).eligible.map(p => p.player_name)).toEqual(['Two', 'Five'])
   })
 })
 

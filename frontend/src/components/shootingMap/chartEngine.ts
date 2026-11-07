@@ -1,4 +1,4 @@
-import { shotLabels, passesFilter, signedImpact, isScoped, type ShotScope, type ShotData, type ShotFilter, type ShotMode, type ShotRow, type ShotUnit } from '../../utils/shootingMap'
+import { shotLabels, passesFilter, signedImpact, isScoped, type ShotScope, type ShotThresholds, type ShotData, type ShotFilter, type ShotMode, type ShotRow, type ShotUnit } from '../../utils/shootingMap'
 
 /*
  * The Shooting Map's pan/zoom scatter, drawn straight into an <svg> outside
@@ -13,6 +13,7 @@ export interface ChartInput {
   unit: ShotUnit
   filter: ShotFilter
   scope: ShotScope
+  thresholds: ShotThresholds
   selected: ReadonlySet<string>
 }
 
@@ -27,7 +28,8 @@ export interface ChartHandle {
 const NS = 'http://www.w3.org/2000/svg'
 const MAX_ZOOM = 12
 let chartCount = 0
-const DISPLAY_FONT = '"Barlow Condensed", "Inter", system-ui, sans-serif'
+// The site's own font (Tailwind's default sans stack), so labels match the page.
+const DISPLAY_FONT = 'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"'
 
 interface Placed { X: number; Y: number; on: boolean; inView: boolean; pri: number }
 type Row = ShotRow & Placed
@@ -135,7 +137,7 @@ export function createShootingMapChart(
     clampView(dm)
     readPalette()
     svg.setAttribute('viewBox', `0 0 ${dm.w} ${dm.h}`)
-    const { mode, unit, filter, scope, selected } = input
+    const { mode, unit, filter, scope, thresholds, selected } = input
     const data = D()
     const L = shotLabels(mode)
     const ink = palette['--ink'], muted = palette['--muted'], grid = palette['--grid'], rule = palette['--rule'], halo = palette['--label-halo']
@@ -161,33 +163,47 @@ export function createShootingMapChart(
     })
     el('rect', { x: dm.m.l, y: dm.m.t, width: dm.W, height: dm.H, fill: 'none', stroke: rule }, gG)
     // axis titles
-    let t = el('text', { x: dm.m.l + dm.W, y: dm.h - 6, 'text-anchor': 'end', 'font-size': 13, 'font-weight': 700, fill: ink, 'letter-spacing': '.06em' }, svg)
+    let t = el('text', { x: dm.m.l + dm.W, y: dm.h - 6, 'text-anchor': 'end', 'font-size': 12, 'font-weight': 600, fill: ink, 'letter-spacing': '.04em' }, svg)
     t.textContent = L.pct + '  →'
-    t = el('text', { transform: `translate(13 ${dm.m.t}) rotate(-90)`, 'text-anchor': 'end', 'font-size': 13, 'font-weight': 700, fill: ink, 'letter-spacing': '.06em' }, svg)
+    t = el('text', { transform: `translate(13 ${dm.m.t}) rotate(-90)`, 'text-anchor': 'end', 'font-size': 12, 'font-weight': 600, fill: ink, 'letter-spacing': '.04em' }, svg)
     t.textContent = (unit === 'tot' ? 'TOTAL ' : '') + L.att + (unit === 'pg' ? ' / GAME' : '') + '  →'
 
     const plot = el('g', { 'clip-path': `url(#${clipId})` }, svg)
     const reserved: Box[] = []
     const ov = (b: Box) => reserved.some(p => b.x < p.x + p.w && b.x + b.w > p.x && b.y < p.y + p.h && b.y + b.h > p.y)
 
-    // quadrant words, faded out as you zoom in
     const ax = sx(data.avgPct, dm), ay = sy(data.avgAtt, dm)
-    const quads: [string, string, number, number][] = [
-      ['WOW', 'High volume, high %', 1, 1], ['BUST', 'High volume, low %', 0, 1],
-      ['OK', 'Low volume, high %', 1, 0], ['NAH', 'Low volume, low %', 0, 0],
+    // average lines
+    el('line', { x1: ax, x2: ax, y1: dm.m.t, y2: dm.m.t + dm.H, stroke: ink, 'stroke-width': 1.3, opacity: 0.75 }, plot)
+    el('line', { x1: dm.m.l, x2: dm.m.l + dm.W, y1: ay, y2: ay, stroke: ink, 'stroke-width': 1.3, opacity: 0.75 }, plot)
+    t = el('text', { x: ax + 6, y: dm.m.t + dm.H - 8, 'font-size': 12, 'font-weight': 700, fill: ink }, plot)
+    t.textContent = 'AVG ' + fmtPct(data.avgPct)
+    reserved.push({ x: ax + 4, y: dm.m.t + dm.H - 22, w: textW(t.textContent, 12, 700) + 4, h: 16 })
+    t = el('text', { x: dm.m.l + dm.W - 8, y: ay - 6, 'text-anchor': 'end', 'font-size': 12, 'font-weight': 700, fill: ink }, plot)
+    t.textContent = 'AVG ' + fmtN(data.avgAtt) + ' ' + L.att
+    {
+      const w = textW(t.textContent, 12, 700) + 4
+      reserved.push({ x: dm.m.l + dm.W - 8 - w, y: ay - 20, w, h: 16 })
+    }
+
+    // quadrant names in the corners, faded out as you zoom in (drawn after the
+    // average labels so they can step aside for them)
+    const quads: [string, number, number][] = [
+      ['High volume, high %', 1, 1], ['High volume, low %', 0, 1],
+      ['Low volume, high %', 1, 0], ['Low volume, low %', 0, 0],
     ]
-    quads.forEach(([a, b, right, top]) => {
-      const x = right ? dm.m.l + dm.W - 14 : dm.m.l + 14, y = top ? dm.m.t + 26 : dm.m.t + dm.H - 30
-      const qo = 0.55 * Math.max(0, Math.min(1, 2.2 - view.k))
+    quads.forEach(([label, right, top]) => {
+      const qs = dm.narrow ? 11 : 12.5
+      const x = right ? dm.m.l + dm.W - 12 : dm.m.l + 12, y = top ? dm.m.t + 20 : dm.m.t + dm.H - 12
+      const qo = 0.7 * Math.max(0, Math.min(1, 2.2 - view.k))
       if (qo <= 0) return
-      const g = el('g', { opacity: qo, 'pointer-events': 'none' }, plot)
-      const qs = dm.narrow ? 15 : 19
-      const t1 = el('text', { x, y, 'text-anchor': right ? 'end' : 'start', 'font-size': qs, 'font-weight': 800, fill: muted, 'letter-spacing': '.04em' }, g)
-      t1.textContent = a
-      const w = Math.max(textW(a, qs, 800), textW(b, 12, 500))
-      reserved.push({ x: right ? x - w : x, y: y - qs, w, h: qs + 22 })
-      const t2 = el('text', { x, y: y + 16, 'text-anchor': right ? 'end' : 'start', 'font-size': 12, fill: muted }, g)
-      t2.textContent = b
+      const t = el('text', { x, y, 'text-anchor': right ? 'end' : 'start', 'font-size': qs, 'font-weight': 600, fill: muted, opacity: qo, 'pointer-events': 'none' }, plot)
+      t.textContent = label
+      const w = textW(label, qs, 600)
+      const box = { x: right ? x - w : x, y: y - qs, w, h: qs + 4 }
+      // An average line's label sits there: that one matters more.
+      if (ov(box)) { t.remove(); return }
+      reserved.push(box)
     })
 
     // equal-impact curves: pct = avg + c / attempts
@@ -213,26 +229,13 @@ export function createShootingMapChart(
       }
     }))
 
-    // average lines
-    el('line', { x1: ax, x2: ax, y1: dm.m.t, y2: dm.m.t + dm.H, stroke: ink, 'stroke-width': 1.3, opacity: 0.75 }, plot)
-    el('line', { x1: dm.m.l, x2: dm.m.l + dm.W, y1: ay, y2: ay, stroke: ink, 'stroke-width': 1.3, opacity: 0.75 }, plot)
-    t = el('text', { x: ax + 6, y: dm.m.t + dm.H - 8, 'font-size': 12, 'font-weight': 700, fill: ink }, plot)
-    t.textContent = 'AVG ' + fmtPct(data.avgPct)
-    reserved.push({ x: ax + 4, y: dm.m.t + dm.H - 22, w: textW(t.textContent, 12, 700) + 4, h: 16 })
-    t = el('text', { x: dm.m.l + dm.W - 8, y: ay - 6, 'text-anchor': 'end', 'font-size': 12, 'font-weight': 700, fill: ink }, plot)
-    t.textContent = 'AVG ' + fmtN(data.avgAtt) + ' ' + L.att
-    {
-      const w = textW(t.textContent, 12, 700) + 4
-      reserved.push({ x: dm.m.l + dm.W - 8 - w, y: ay - 20, w, h: 16 })
-    }
-
     // points
     const r = Math.min(9, 4.6 + Math.log2(view.k) * 1.1) * (dm.narrow ? 0.9 : 1)
     const vis: Row[] = []
     for (const d of rows) {
       d.X = sx(d.pct, dm)
       d.Y = sy(d.a, dm)
-      d.on = passesFilter(d, data, filter, scope)
+      d.on = passesFilter(d, data, filter, scope, thresholds)
       d.inView = d.X >= dm.m.l - 2 && d.X <= dm.m.l + dm.W + 2 && d.Y >= dm.m.t - 2 && d.Y <= dm.m.t + dm.H + 2
       if (d.inView) vis.push(d)
     }
@@ -264,7 +267,7 @@ export function createShootingMapChart(
     // A single team leaves few dots; label them all.
     const budget = isScoped(scope) && cand.length <= 30 ? cand.length : Math.round((dm.W * dm.H / 26000) * Math.pow(view.k, 1.35))
     const placed = reserved.slice()
-    const fs = dm.narrow ? 12 : 13.5
+    const fs = dm.narrow ? 11.5 : 12.5
     const lg = el('g', {}, svg)
     const pointBoxes = cand.map(d => ({ x: d.X - r, y: d.Y - r, w: 2 * r, h: 2 * r, key: d.key }))
     const hit = (b: Box) => placed.some(p => b.x < p.x + p.w && b.x + b.w > p.x && b.y < p.y + p.h && b.y + b.h > p.y)
@@ -276,7 +279,7 @@ export function createShootingMapChart(
       const name = view.k < 1.6 && !forced && d.name.length > 15 ? shortName(d.name) : d.name
       const showAnn = forced || (annot < (dm.narrow ? 3 : 6) && Math.abs(d.z) > 1.2)
       const ann = showAnn ? annText(d) : null
-      const w = Math.max(textW(name, fs, 700), ann ? textW(ann, 11, 600) : 0) + 6, h = ann ? fs + 15 : fs + 4
+      const w = Math.max(textW(name, fs, 600), ann ? textW(ann, 10.5, 500) : 0) + 6, h = ann ? fs + 15 : fs + 4
       const pos = [[r + 4, -h / 2], [-r - 4 - w, -h / 2], [-w / 2, -r - 3 - h], [-w / 2, r + 3], [r + 2, -r - h], [-r - 2 - w, -r - h], [r + 2, r], [-r - 2 - w, r]]
       let best: Box | null = null, bestScore = 1e9
       for (const [ox, oy] of pos) {
@@ -294,10 +297,10 @@ export function createShootingMapChart(
       if (showAnn && !forced) annot++
       const tx = best.x + 3, ty = best.y + fs - 1
       const g = el('g', { 'pointer-events': 'none' }, lg)
-      const tn = el('text', { x: tx, y: ty, 'font-size': fs, 'font-weight': 700, fill: ink, stroke: halo, 'stroke-width': 4, 'stroke-linejoin': 'round', 'paint-order': 'stroke' }, g)
+      const tn = el('text', { x: tx, y: ty, 'font-size': fs, 'font-weight': 600, fill: ink, stroke: halo, 'stroke-width': 4, 'stroke-linejoin': 'round', 'paint-order': 'stroke' }, g)
       tn.textContent = name
       if (ann) {
-        const ta = el('text', { x: tx, y: ty + 14, 'font-size': 11, 'font-weight': 600, fill: d.imp >= 0 ? palette['--hot'] : palette['--cold'], stroke: halo, 'stroke-width': 3.5, 'stroke-linejoin': 'round', 'paint-order': 'stroke' }, g)
+        const ta = el('text', { x: tx, y: ty + 14, 'font-size': 10.5, 'font-weight': 500, fill: d.imp >= 0 ? palette['--hot'] : palette['--cold'], stroke: halo, 'stroke-width': 3.5, 'stroke-linejoin': 'round', 'paint-order': 'stroke' }, g)
         ta.textContent = ann
       }
     }
