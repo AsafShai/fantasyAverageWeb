@@ -13,7 +13,7 @@ import { getErrorMessage } from '../utils/errorMessage'
 import { normalizePlayerName } from '../utils/playerName'
 import ShootingMapChart, { type ShootingMapChartRef } from '../components/shootingMap/ShootingMapChart'
 import {
-  buildShotPool, deriveShotData, impactLists, passesFilter, shotLabels, POOL_SIZE, DEFAULT_MIN_GP, EXTRA_MIN_FGA, EXTRA_MIN_FTA, signedImpact, inScope, isScoped,
+  buildShotPool, deriveShotData, impactLists, passesFilter, shotLabels, POOL_SIZE, DEFAULT_MIN_GP, EXTRA_MIN_FGA, EXTRA_MIN_FTA, signedImpact, inScope, isScoped, type ShotThresholds,
   type FantasyScope, type ShotFilter, type ShotMode, type ShotScope, type ShotRow, type ShotUnit,
 } from '../utils/shootingMap'
 import type { CustomDateRange, TimePeriod } from '../types/api'
@@ -96,8 +96,14 @@ export default function ShootingMap() {
     time_period: period,
     ...(period === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
   })
-  const [mode, setMode] = usePersistedState<ShotMode>('shootingMap.mode', 'fg')
-  const [unit, setUnit] = usePersistedState<ShotUnit>('shootingMap.unit', 'pg')
+  const [mode, setModeState] = usePersistedState<ShotMode>('shootingMap.mode', 'fg')
+  const [unit, setUnitState] = usePersistedState<ShotUnit>('shootingMap.unit', 'pg')
+  // Threshold boxes hold what was typed ('' = no floor); they mean nothing in
+  // another shot type or unit, so switching either clears them.
+  const [minPctText, setMinPctText] = useState('')
+  const [minAttText, setMinAttText] = useState('')
+  const setMode = (m: ShotMode) => { setModeState(m); setMinPctText(''); setMinAttText('') }
+  const setUnit = (u: ShotUnit) => { setUnitState(u); setMinAttText('') }
   const [filter, setFilter] = useState<ShotFilter>('all')
   const [minGp, setMinGp] = usePersistedState('shootingMap.minGp', DEFAULT_MIN_GP)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -171,12 +177,16 @@ export default function ShootingMap() {
     }, { replace: true })
   }
 
-  const chartInput = useMemo(() => ({ data, mode, unit, filter, scope, selected }), [data, mode, unit, filter, scope, selected])
+  const minPct = parseThreshold(minPctText)
+  const minAtt = parseThreshold(minAttText)
+  const thresholds = useMemo<ShotThresholds>(() => ({ minPct: minPct === null ? null : minPct / 100, minAtt }), [minPct, minAtt])
+  const chartInput = useMemo(() => ({ data, mode, unit, filter, scope, thresholds, selected }),
+    [data, mode, unit, filter, scope, thresholds, selected])
   const viewKey = `${mode}|${unit}|${period}|${customRange?.start ?? ''}|${customRange?.end ?? ''}|${team ?? ''}|${fantasy ?? ''}|${minGp}`
 
   const byKey = useMemo(() => new Map(data.rows.map(d => [d.key, d])), [data])
   const selectedRows = [...selected].map(k => byKey.get(k)).filter((d): d is ShotRow => d !== undefined)
-  const listed = useMemo(() => data.rows.filter(d => passesFilter(d, data, 'all', scope)), [data, scope])
+  const listed = useMemo(() => data.rows.filter(d => passesFilter(d, data, 'all', scope, thresholds)), [data, scope, thresholds])
   const { top, bottom } = useMemo(() => impactLists(listed, LIST_SIZE), [listed])
 
   const trySearch = (raw: string) => {
@@ -287,7 +297,28 @@ export default function ShootingMap() {
           <div className="sm-status">No players with at least {minGp} games in this period yet.</div>
         ) : (
           <div className="sm-main" style={{ opacity: isFetching ? 0.6 : 1 }}>
-            <ShootingMapChart ref={chartRef} input={chartInput} viewKey={viewKey} onToggle={toggle} />
+            <ShootingMapChart
+              ref={chartRef} input={chartInput} viewKey={viewKey} onToggle={toggle}
+              toolbar={(
+                <div className="sm-thresh" role="group" aria-label="Thresholds">
+                  <label>
+                    <span>{L.pct} ≥</span>
+                    <input type="number" inputMode="decimal" min={0} max={100} step={1} placeholder="any"
+                      aria-label={`Minimum ${L.pct}`} value={minPctText} onChange={e => setMinPctText(e.target.value)} />
+                    <span className="sm-unit">%</span>
+                  </label>
+                  <label>
+                    <span>{L.att} ≥</span>
+                    <input type="number" inputMode="decimal" min={0} step={unit === 'tot' ? 5 : 0.5} placeholder="any"
+                      aria-label={`Minimum ${L.att}${unit === 'pg' ? ' per game' : ''}`} value={minAttText} onChange={e => setMinAttText(e.target.value)} />
+                    {unit === 'pg' && <span className="sm-unit">/g</span>}
+                  </label>
+                  {(minPct !== null || minAtt !== null) && (
+                    <button type="button" className="sm-thresh-clear" onClick={() => { setMinPctText(''); setMinAttText('') }}>Clear</button>
+                  )}
+                </div>
+              )}
+            />
             <aside className="sm-aside">
               <div className="sm-card">
                 <h2>Pinned players</h2>
@@ -335,6 +366,13 @@ export default function ShootingMap() {
       </div>
     </div>
   )
+}
+
+/** A threshold box's number, or null when empty or not a number. */
+function parseThreshold(text: string): number | null {
+  if (text.trim() === '') return null
+  const v = Number(text)
+  return Number.isFinite(v) && v > 0 ? v : null
 }
 
 /** ?fteam=: a fantasy team id, "fa" (free agents / waivers) or "rostered". */

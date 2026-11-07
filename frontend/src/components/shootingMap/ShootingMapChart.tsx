@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { createShootingMapChart, type ChartHandle, type ChartInput } from './chartEngine'
 
 export interface ShootingMapChartRef {
@@ -10,10 +10,12 @@ interface Props {
   /** Changes when the axes change (mode, unit, period, team): the view zooms back out. */
   viewKey: string
   onToggle(key: string): void
+  /** Controls shown in the bar above the chart (the page's threshold inputs). */
+  toolbar?: ReactNode
 }
 
 /** React shell around the imperative chart: owns the svg, the tooltip and the zoom bar. */
-const ShootingMapChart = forwardRef<ShootingMapChartRef, Props>(function ShootingMapChart({ input, viewKey, onToggle }, ref) {
+const ShootingMapChart = forwardRef<ShootingMapChartRef, Props>(function ShootingMapChart({ input, viewKey, onToggle, toolbar }, ref) {
   const boxRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -49,6 +51,7 @@ const ShootingMapChart = forwardRef<ShootingMapChartRef, Props>(function Shootin
   return (
     <div className="sm-chartbox" ref={boxRef}>
       <div className="sm-chartbar">
+        {toolbar}
         <div className="sm-hint">
           <span className="sm-hint-wide">Scroll or pinch to zoom · drag to pan · click a dot to pin a player</span>
           <span className="sm-hint-narrow">Pinch to zoom · tap a dot to pin</span>

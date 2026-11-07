@@ -91,6 +91,23 @@ describe('ShootingMap page', () => {
     expect(await screen.findByText('No players with at least 6 games in this period yet.')).toBeInTheDocument()
   })
 
+  it('narrows the lists with the % and attempts thresholds, and clears them', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    const best = (await screen.findByRole('heading', { name: 'Best for FG%' })).parentElement!
+    await waitFor(() => expect(within(best).getByText('Sharp Center')).toBeInTheDocument())
+
+    // Sharp Center takes 12 FGA a game, Brick Guard 18
+    await user.type(screen.getByLabelText('Minimum FGA per game'), '15')
+    expect(within(best).queryByText('Sharp Center')).not.toBeInTheDocument()
+    const worst = screen.getByRole('heading', { name: 'Worst for FG%' }).parentElement!
+    expect(within(worst).getByText('Brick Guard')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(screen.getByLabelText('Minimum FGA per game')).toHaveValue(null)
+    expect(within(best).getByText('Sharp Center')).toBeInTheDocument()
+  })
+
   it('ignores an unknown team in the link', async () => {
     renderWithProviders(<ShootingMap />, { route: '/shooting-map?team=xyz' })
     expect(await screen.findByRole('heading', { name: 'Best for FG%' })).toBeInTheDocument()

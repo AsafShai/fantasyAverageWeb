@@ -49,6 +49,13 @@
 .sm-chart.sm-dragging { cursor: grabbing; }
 .sm-chart text { font-family: var(--display); }
 .sm-chartbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+.sm-thresh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font: 600 13px var(--display); letter-spacing: .03em; color: var(--muted); }
+.sm-thresh label { display: inline-flex; align-items: center; gap: 5px; }
+.sm-thresh input { width: 56px; height: 30px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); color: var(--ink); font: 600 14px var(--body); text-align: center; padding: 2px 4px; font-variant-numeric: tabular-nums; }
+.sm-thresh input:not(:placeholder-shown) { border-color: var(--ink); }
+.sm-thresh .sm-unit { font-weight: 500; }
+.sm-thresh-clear { background: none; border: 0; padding: 0; color: var(--hot); font: 600 13px var(--display); cursor: pointer; }
+.sm-thresh-clear:hover { text-decoration: underline; }
 .sm-zoombar { display: flex; align-items: center; gap: 4px; }
 .sm-zoombar button { width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); font: 700 18px var(--display); cursor: pointer; display: grid; place-items: center; }
 .sm-zoombar button:hover { border-color: var(--ink); }

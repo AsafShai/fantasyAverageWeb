@@ -179,8 +179,19 @@ export function inScope(p: Player, scope: ShotScope): boolean {
   return true
 }
 
-export function passesFilter(d: ShotRow, data: ShotData, filter: ShotFilter, scope: ShotScope): boolean {
+/** The viewer's own floors for the X (shooting %, as a fraction) and Y (attempts, in the shown unit) values. */
+export interface ShotThresholds {
+  minPct: number | null
+  minAtt: number | null
+}
+
+export const NO_THRESHOLDS: ShotThresholds = { minPct: null, minAtt: null }
+
+export function passesFilter(d: ShotRow, data: ShotData, filter: ShotFilter, scope: ShotScope,
+                             thresholds: ShotThresholds = NO_THRESHOLDS): boolean {
   if (!inScope(d.player, scope)) return false
+  if (thresholds.minPct !== null && d.pct < thresholds.minPct) return false
+  if (thresholds.minAtt !== null && d.a < thresholds.minAtt) return false
   const hp = d.pct > data.avgPct, hv = d.a > data.avgAtt
   switch (filter) {
     case 'pct': return hp

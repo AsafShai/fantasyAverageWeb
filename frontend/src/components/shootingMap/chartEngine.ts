@@ -1,4 +1,4 @@
-import { shotLabels, passesFilter, signedImpact, isScoped, type ShotScope, type ShotData, type ShotFilter, type ShotMode, type ShotRow, type ShotUnit } from '../../utils/shootingMap'
+import { shotLabels, passesFilter, signedImpact, isScoped, type ShotScope, type ShotThresholds, type ShotData, type ShotFilter, type ShotMode, type ShotRow, type ShotUnit } from '../../utils/shootingMap'
 
 /*
  * The Shooting Map's pan/zoom scatter, drawn straight into an <svg> outside
@@ -13,6 +13,7 @@ export interface ChartInput {
   unit: ShotUnit
   filter: ShotFilter
   scope: ShotScope
+  thresholds: ShotThresholds
   selected: ReadonlySet<string>
 }
 
@@ -135,7 +136,7 @@ export function createShootingMapChart(
     clampView(dm)
     readPalette()
     svg.setAttribute('viewBox', `0 0 ${dm.w} ${dm.h}`)
-    const { mode, unit, filter, scope, selected } = input
+    const { mode, unit, filter, scope, thresholds, selected } = input
     const data = D()
     const L = shotLabels(mode)
     const ink = palette['--ink'], muted = palette['--muted'], grid = palette['--grid'], rule = palette['--rule'], halo = palette['--label-halo']
@@ -229,7 +230,7 @@ export function createShootingMapChart(
     for (const d of rows) {
       d.X = sx(d.pct, dm)
       d.Y = sy(d.a, dm)
-      d.on = passesFilter(d, data, filter, scope)
+      d.on = passesFilter(d, data, filter, scope, thresholds)
       d.inView = d.X >= dm.m.l - 2 && d.X <= dm.m.l + dm.W + 2 && d.Y >= dm.m.t - 2 && d.Y <= dm.m.t + dm.H + 2
       if (d.inView) vis.push(d)
     }
