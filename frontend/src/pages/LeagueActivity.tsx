@@ -11,6 +11,9 @@ import TradesTab from '../components/activity/TradesTab'
 import TradeTree from '../components/activity/TradeTree'
 import ReleasedPlayers from '../components/activity/ReleasedPlayers'
 import PendingTradesTab from '../components/activity/PendingTradesTab'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileActivity from '../mobile/activity/MobileActivity'
+import MobileActivityFeed from '../mobile/activity/MobileActivityFeed'
 
 const TABS = ['activity', 'trades', 'pending', 'tree', 'released'] as const
 type Tab = (typeof TABS)[number]
@@ -50,6 +53,62 @@ export default function LeagueActivity() {
 
   const selectTrade = (id: string) => setUrl({ tab: 'trades', trade: id })
   const openTree = (tradeId: string, teamId: number) => setUrl({ tab: 'tree', trade: tradeId, team: teamId })
+  const mobileRedesign = useMobileRedesign()
+
+  const panel = isLoading ? (
+    <LoadingSpinner />
+  ) : error || !data ? (
+    <ErrorMessage message={getErrorMessage(error, 'Failed to load league activity')} />
+  ) : (
+    <div
+      role={mobileRedesign ? 'region' : 'tabpanel'}
+      aria-labelledby={mobileRedesign ? undefined : `activity-tab-${url.tab}`}
+      aria-label={mobileRedesign ? TAB_LABEL[url.tab] : undefined}
+    >
+      {url.tab === 'activity' && (mobileRedesign ? <MobileActivityFeed activity={data} /> : <ActivityFeed activity={data} />)}
+      {url.tab === 'trades' && (
+        <TradesTab
+          activity={data}
+          categories={categories}
+          selectedId={url.trade || null}
+          onSelect={selectTrade}
+          onOpenTree={openTree}
+          mode={mode}
+          onModeChange={setMode}
+          overrides={overrides}
+          onOverridesChange={setOverrides}
+        />
+      )}
+      {url.tab === 'pending' && <PendingTradesTab activity={data} />}
+      {url.tab === 'tree' && (
+        <TradeTree
+          activity={data}
+          tradeId={url.trade || null}
+          teamId={url.team || null}
+          onChange={(trade, team) => setUrl({ trade, team })}
+          onSelectTrade={selectTrade}
+        />
+      )}
+      {url.tab === 'released' && (
+        <ReleasedPlayers activity={data} categories={categories} mode={mode} onModeChange={setMode} />
+      )}
+    </div>
+  )
+
+  if (mobileRedesign) {
+    return (
+      <MobileActivity
+        tabs={TABS}
+        labels={TAB_LABEL}
+        tab={url.tab}
+        onTabChange={(t) => setUrl({ tab: t })}
+        pendingTab="pending"
+        pendingCount={pendingCount}
+      >
+        {panel}
+      </MobileActivity>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
@@ -88,41 +147,7 @@ export default function LeagueActivity() {
         ))}
       </div>
 
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : error || !data ? (
-        <ErrorMessage message={getErrorMessage(error, 'Failed to load league activity')} />
-      ) : (
-        <div role="tabpanel" aria-labelledby={`activity-tab-${url.tab}`}>
-          {url.tab === 'activity' && <ActivityFeed activity={data} />}
-          {url.tab === 'trades' && (
-            <TradesTab
-              activity={data}
-              categories={categories}
-              selectedId={url.trade || null}
-              onSelect={selectTrade}
-              onOpenTree={openTree}
-              mode={mode}
-              onModeChange={setMode}
-              overrides={overrides}
-              onOverridesChange={setOverrides}
-            />
-          )}
-          {url.tab === 'pending' && <PendingTradesTab activity={data} />}
-          {url.tab === 'tree' && (
-            <TradeTree
-              activity={data}
-              tradeId={url.trade || null}
-              teamId={url.team || null}
-              onChange={(trade, team) => setUrl({ trade, team })}
-              onSelectTrade={selectTrade}
-            />
-          )}
-          {url.tab === 'released' && (
-            <ReleasedPlayers activity={data} categories={categories} mode={mode} onModeChange={setMode} />
-          )}
-        </div>
-      )}
+      {panel}
     </div>
   )
 }
