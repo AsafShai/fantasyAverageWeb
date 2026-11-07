@@ -31,6 +31,25 @@ const SCOREBOARD = {
   ],
 }
 
+const line = (id: string, name: string, pts: string) => ({
+  player_id: id, name, jersey: '1', position: 'G', ejected: false, on_court: false, min: '30', pts, fg: '5-10', fg3: '1-3', ft: '2-2',
+  reb: '4', ast: '3', tov: '1', stl: '1', blk: '0', oreb: '1', dreb: '3', pf: '2', plus_minus: '+4',
+})
+const side = (abbreviation: string, score: number, winner: boolean) => ({
+  ...team(abbreviation, score, winner), linescores: ['25', '25', '25', '25'],
+  starters: [line(`${abbreviation}1`, `${abbreviation} Starter`, '22')], bench: [line(`${abbreviation}2`, `${abbreviation} Bench`, '9')], did_not_play: [],
+  totals: { min: '240', pts: String(score), fg: '40-85', fg3: '12-30', ft: '10-12', reb: '40', ast: '22', tov: '10', stl: '6', blk: '4', oreb: '9', dreb: '31' },
+  shooting: { fg_pct: '47', fg3_pct: '40', ft_pct: '83', points_in_paint: '40', fast_break_points: '12' },
+})
+const BOX_G1 = {
+  game_id: 'g1', status: 'final', status_detail: 'Final', start_time: '2026-10-19T23:00:00Z', broadcast: '', venue: 'Rocket Arena', periods: ['1', '2', '3', '4'],
+  away: side('BOS', 101, false), home: side('CLE', 110, true),
+  plays: [
+    { id: 'p1', period: 4, clock: '0:30', text: 'CLE Starter makes layup', team_id: 'CLE', scoring: true, points: 2, away_score: 99, home_score: 108, kind: 'score' },
+    { id: 'p2', period: 4, clock: '0:00', text: 'End of game', team_id: '', scoring: false, points: 0, away_score: 101, home_score: 110, kind: 'period' },
+  ],
+}
+
 const INJURIES = [
   { game: '07:00(ET) BOS@CHA', team: 'Charlotte Hornets', player: 'Michael Ajayi', status: 'Out', injury: 'G League-Two-Way', last_update: '2026-11-05T22:00:00Z', game_time_utc: '2026-11-06T00:00:00Z' },
   { game: '', team: 'Boston Celtics', player: 'Jayson Tatum', status: 'Questionable', injury: 'Ankle', last_update: '2026-11-04T22:00:00Z' },
@@ -44,6 +63,7 @@ test.describe('phone NBA pages', () => {
       '/nba-teams/1/depthchart': DEPTH,
       '/nba-teams': NBA_TEAMS,
       '/nba/season': { start: '2026-10-01', end: '2027-04-30' },
+      '/nba/games/g1/boxscore': BOX_G1,
       '/nba/scoreboard/values': { date: '2026-10-19', complete: false, games_counted: 1, categories: [], reverse_categories: [], players: [] },
       '/nba/scoreboard': SCOREBOARD,
       '/injuries/notifications': [],
@@ -83,6 +103,17 @@ test.describe('phone NBA pages', () => {
     await page.getByRole('radio', { name: 'Full box' }).click()
     await cards.first().click()
     await expect(page).toHaveURL(/game=g1/)
+    // Play-by-play sits between the game cards and the player box score.
+    const panel = page.locator('#mr-nba-box-panel')
+    const pbp = panel.getByText('Play-by-play', { exact: true })
+    await expect(pbp).toBeVisible()
+    const [cardsBox, pbpBox, tableBox] = await Promise.all([
+      cards.last().boundingBox(), pbp.boundingBox(), panel.getByRole('tablist', { name: 'Team' }).boundingBox(),
+    ])
+    expect(cardsBox!.y).toBeLessThan(pbpBox!.y)
+    expect(pbpBox!.y).toBeLessThan(tableBox!.y)
+    await pbp.evaluate(el => { el.scrollIntoView({ block: 'start' }); window.scrollBy(0, -80) })
+    if (process.env.MR_SHOTS) await page.screenshot({ path: `${process.env.MR_SHOTS}/box-scores-pbp-order.png` })
     await page.getByRole('button', { name: 'Next day' }).click()
     await expect(page).toHaveURL(/date=2026-10-20/)
     await expectNoHorizontalScroll(page)

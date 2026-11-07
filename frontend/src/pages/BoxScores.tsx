@@ -367,6 +367,7 @@ export default function BoxScores() {
                 pregameLoading={Boolean(awaitingRoster && !pregame && rosterLoading)}
                 pregameError={Boolean(awaitingRoster && rosterError)}
                 mineIds={myTeamId != null ? mineIds : undefined}
+                playByPlayFirst
               />
             )}
           </div>

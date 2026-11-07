@@ -530,6 +530,7 @@ export default function BoxScorePanel({
   pregameLoading = false,
   pregameError = false,
   mineIds,
+  playByPlayFirst = false,
 }: {
   game: GameBoxScore
   hideScores: boolean
@@ -540,6 +541,8 @@ export default function BoxScorePanel({
   pregameLoading?: boolean
   pregameError?: boolean
   mineIds?: ReadonlySet<string>
+  /** Phone layout: show the play-by-play between the linescore and the player tables. */
+  playByPlayFirst?: boolean
 }) {
   const [side, setSide] = useState<'away' | 'home'>('away')
   const spoilable = hideScores && game.status !== 'scheduled'
@@ -586,6 +589,8 @@ export default function BoxScorePanel({
         <Linescore game={game} hideScores={hide} />
       </div>
 
+      {playByPlayFirst && !hide && <PlayByPlay game={game} mineIds={mineIds} />}
+
       {awaitingTip ? (
         <PregameRosters game={game} players={pregame ?? null} loading={pregameLoading} error={pregameError} mineIds={mineIds} />
       ) : (
@@ -613,7 +618,7 @@ export default function BoxScorePanel({
           </div>
         </>
       )}
-      {!hide && <PlayByPlay game={game} mineIds={mineIds} />}
+      {!playByPlayFirst && !hide && <PlayByPlay game={game} mineIds={mineIds} />}
     </section>
   )
 }
