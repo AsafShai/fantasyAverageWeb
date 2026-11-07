@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
 
 export type SortDir = 'asc' | 'desc'
 export interface SortState {
@@ -40,6 +40,11 @@ interface DataTableProps<R> {
   maxHeight?: number
   empty?: ReactNode
   className?: string
+  /**
+   * Extra content after a row, e.g. an expanded matchup panel. Return a whole
+   * `<tr>` (span it with `colSpan={columns.length}`) or null.
+   */
+  renderAfterRow?: (row: R, index: number) => ReactNode
 }
 
 /**
@@ -59,6 +64,7 @@ export function DataTable<R>({
   maxHeight,
   empty = 'No rows',
   className = '',
+  renderAfterRow,
 }: DataTableProps<R>) {
   const boxStyle: CSSProperties | undefined = maxHeight ? { maxHeight, overflowY: 'auto' } : undefined
   const alignCls = (c: Column<R>) => (c.align === 'left' ? 'mr-l' : c.align === 'center' ? 'mr-c' : '')
@@ -104,18 +110,21 @@ export function DataTable<R>({
             rows.map((r, i) => {
               const cls = `${isHighlighted?.(r) ? 'mr-me' : ''} ${onRowClick ? 'mr-click' : ''}`.trim()
               return (
-                <tr key={rowKey(r, i)} className={cls || undefined} onClick={onRowClick ? () => onRowClick(r) : undefined}>
-                  {columns.map((c) => {
-                    const ccls = `${c.pinned ? 'mr-pin' : ''} ${alignCls(c)} ${c.className ?? ''}`.trim()
-                    return c.pinned ? (
-                      <th key={c.key} scope="row" className={ccls}>
-                        {c.cell(r, i)}
-                      </th>
-                    ) : (
-                      <td key={c.key} className={ccls || undefined}>{c.cell(r, i)}</td>
-                    )
-                  })}
-                </tr>
+                <Fragment key={rowKey(r, i)}>
+                  <tr className={cls || undefined} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+                    {columns.map((c) => {
+                      const ccls = `${c.pinned ? 'mr-pin' : ''} ${alignCls(c)} ${c.className ?? ''}`.trim()
+                      return c.pinned ? (
+                        <th key={c.key} scope="row" className={ccls}>
+                          {c.cell(r, i)}
+                        </th>
+                      ) : (
+                        <td key={c.key} className={ccls || undefined}>{c.cell(r, i)}</td>
+                      )
+                    })}
+                  </tr>
+                  {renderAfterRow?.(r, i)}
+                </Fragment>
               )
             })
           )}

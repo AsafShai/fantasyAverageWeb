@@ -3,6 +3,7 @@ import type { DefRanks, DefValues, PlayerMatchup, PlayerStats, ProjectionStats }
 import { usePredictProjectionMutation } from '../store/api/fantasyApi';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { coherentInts } from '../utils/coherentRound';
+import { MinutesStepper } from '../mobile/ui/MinutesStepper';
 import './MatchupDisplay.css';
 
 const RANK_LABELS: Record<keyof DefRanks, string> = {
@@ -151,6 +152,7 @@ export function MatchupExpandPanel({
   integerMode: integerModeProp = true,
   integerProjectionToggle = false,
   layout = 'table',
+  minutesStepper = false,
 }: {
   matchup: PlayerMatchup;
   /** When `integerProjectionToggle` is false, controls projection rounding from the parent (e.g. Players page). */
@@ -159,6 +161,8 @@ export function MatchupExpandPanel({
   integerProjectionToggle?: boolean;
   /** `table`: wide sticky bar under roster grids. `card`: inside mobile roster cards (rounded, no sticky). */
   layout?: 'table' | 'card';
+  /** Phone redesign: "− 31 min +" stepper with ↺ instead of the slider (same predict call). */
+  minutesStepper?: boolean;
 }) {
   const [persistedIntegerProjections, setPersistedIntegerProjections] = usePersistedState(
     'matchupPanel.integerProjections',
@@ -319,7 +323,18 @@ export function MatchupExpandPanel({
         {!projActive && (
           <span className="mq-proj-insufficient">{proj ? `no projection — ${proj.reason || 'insufficient data'}` : 'no projection available'}</span>
         )}
-        {projActive && (
+        {projActive && minutesStepper && (
+          <div className="mq-proj-slider-row">
+            <span className="mq-proj-slider-label">Minutes</span>
+            <MinutesStepper
+              value={Math.round(minutes)}
+              defaultValue={Math.round(proj!.default_minutes)}
+              onChange={(v) => (v === Math.round(proj!.default_minutes) ? resetToDefault() : onSlider(v))}
+              playerName={matchup.player_name}
+            />
+          </div>
+        )}
+        {projActive && !minutesStepper && (
           <div className="mq-proj-slider-row">
             <span className="mq-proj-slider-label">Minutes</span>
             <input

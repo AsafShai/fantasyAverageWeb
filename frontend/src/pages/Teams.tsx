@@ -6,14 +6,18 @@ import { getErrorMessage } from '../utils/errorMessage'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { leadWithMyTeam, myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileTeams from '../mobile/team/MobileTeams'
 
 const Teams = () => {
   const { data: teams, error, isLoading } = useGetTeamsListQuery()
   const { myTeamId, isMyTeam } = useMyTeam()
+  const mobileRedesign = useMobileRedesign()
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load teams')} />
   if (!teams || teams.length === 0) return <ErrorMessage message="No teams found" />
+  if (mobileRedesign) return <MobileTeams teams={teams} />
 
   return (
     <div className="max-w-7xl mx-auto px-4">
