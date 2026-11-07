@@ -10,6 +10,8 @@ import { getErrorMessage } from '../utils/errorMessage'
 import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
 import LatestMovesCard from '../components/activity/LatestMovesCard'
 import EspnUpdatedNote from '../components/EspnUpdatedNote'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileToday from '../mobile/today/MobileToday'
 
 function formatSlate(slateDate: string | null): string {
   if (!slateDate) return 'No games scheduled'
@@ -20,7 +22,7 @@ function formatSlate(slateDate: string | null): string {
   })
 }
 
-const Today = () => {
+const DesktopToday = () => {
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
   const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
   const { data: hub, isLoading: hubLoading, isError: hubError } = useGetTodayHubQuery()
@@ -76,5 +78,8 @@ const Today = () => {
     </div>
   )
 }
+
+/** Phones with the redesign on get the mobile page; everyone else today's layout. */
+const Today = () => (useMobileRedesign() ? <MobileToday /> : <DesktopToday />)
 
 export default Today
