@@ -13,6 +13,8 @@ import { samePlayer } from './utils/tradeShare';
 import { useTradeData } from '../../hooks/useTradeData';
 import TimePeriodSelector from '../../components/TimePeriodSelector';
 import { formatShort } from '../../utils/dateRange';
+import { useMobileRedesign } from '../../mobile/flag';
+import { TradeMobile } from './mobile/TradeMobile';
 
 const PERIOD_LABELS: Record<Exclude<TimePeriod, 'custom'>, string> = {
   season: 'Season',
@@ -65,6 +67,7 @@ export const Trade: React.FC = () => {
   } = useTradeData(teamA, teamB, tradeMode, timePeriod, customRange);
 
   const { myTeamId } = useMyTeam();
+  const mobile = useMobileRedesign();
   const tradeTarget = teams.some(team => team.team_id === myTeamId) ? myTeamId : null;
   useFollowMyTeamValue(teamA?.team_id ?? null, tradeTarget, (id) => {
     const team = teams.find(item => item.team_id === id);
@@ -111,6 +114,54 @@ export const Trade: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timePeriod, customRange, teamAData, teamBData, freeAgents])
+
+  const periodLabel = timePeriod === 'custom'
+    ? (customRange ? `${formatShort(customRange.start)} – ${formatShort(customRange.end)}` : 'Custom range')
+    : PERIOD_LABELS[timePeriod];
+
+  if (mobile) {
+    return (
+      <TradeMobile
+        tradeMode={tradeMode}
+        setTradeMode={setTradeMode}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        timePeriod={timePeriod}
+        setTimePeriod={setTimePeriod}
+        customRange={customRange}
+        setCustomRange={setCustomRange}
+        periodLabel={periodLabel}
+        teams={teams}
+        isLoadingTeams={isLoadingTeams}
+        teamsError={teamsError}
+        teamA={teamA}
+        teamB={teamB}
+        onTeamAChange={handleTeamAChange}
+        onTeamBChange={handleTeamBChange}
+        teamAPlayers={teamAData?.players || []}
+        teamBPlayers={teamBData?.players || []}
+        teamARanks={teamAData?.category_ranks}
+        teamBRanks={teamBData?.category_ranks}
+        isFetchingTeamA={isFetchingTeamA}
+        isFetchingTeamB={isFetchingTeamB}
+        teamAError={teamAError}
+        teamBError={teamBError}
+        selectedA={currentSelectedPlayersA}
+        selectedB={currentSelectedPlayersB}
+        selectedFreeAgents={currentSelectedFreeAgents}
+        onPlayerASelect={handlePlayerASelect}
+        onPlayerARemove={handlePlayerARemove}
+        onPlayerBSelect={handlePlayerBSelect}
+        onPlayerBRemove={handlePlayerBRemove}
+        onFreeAgentSelect={handleFreeAgentSelect}
+        onFreeAgentRemove={handleFreeAgentRemove}
+        freeAgents={freeAgents}
+        isFetchingFreeAgents={isFetchingFreeAgents}
+        freeAgentsError={freeAgentsError}
+        playerValue={playerValue}
+      />
+    );
+  }
 
   return (
     <div className="max-w-none mx-auto px-4 py-3">
@@ -199,9 +250,7 @@ export const Trade: React.FC = () => {
           viewMode={viewMode}
           tradeMode={tradeMode}
           playerValue={playerValue}
-          periodLabel={timePeriod === 'custom'
-            ? (customRange ? `${formatShort(customRange.start)} – ${formatShort(customRange.end)}` : 'Custom range')
-            : PERIOD_LABELS[timePeriod]}
+          periodLabel={periodLabel}
         />
       </div>
     </div>

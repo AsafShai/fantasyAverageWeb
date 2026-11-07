@@ -37,4 +37,10 @@ instead of today's nav; pages that are not converted yet render unchanged inside
 - **Pages** `pages/<page>/`: a converted page keeps its state, data and URL params in
   `src/pages/<Page>.tsx` and renders the phone layout from here when
   `useMobileRedesign()` is on. Step 4: Players.
+- **Player profile** `profile/` (step 4): `/player/:id` on a phone. Header with
+  owner badge, Bio folded, time frame chips (Custom opens a From/To sheet),
+  Fantasy Value with z-bars, Stats table, Trends tiles + game-by-game chart,
+  next-game projection with the minutes stepper, game log with AVG row. Data
+  comes from the same hooks as desktop (`hooks/usePlayerProfileData`,
+  `hooks/usePlayerTrends`); styles in `profile/profile.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).

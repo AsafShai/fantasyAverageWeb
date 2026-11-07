@@ -148,7 +148,8 @@
   border-radius: var(--mr-radius-sheet) var(--mr-radius-sheet) 0 0;
   padding: 10px 16px calc(20px + env(safe-area-inset-bottom, 0px));
   display: flex; flex-direction: column; gap: 12px;
-  max-height: 88vh; overflow-y: auto; box-sizing: border-box; outline: none;
+  max-height: 88vh; max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain;
+  box-sizing: border-box; outline: none;
 }
 .mr-sheet.mr-sunken-sheet { background: var(--mr-page); }
 .mr-grabber { width: 40px; height: 5px; border-radius: 999px; background: var(--mr-grabber); align-self: center; flex-shrink: 0; }
@@ -197,6 +198,11 @@
   padding-bottom: calc(var(--mr-tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
 .mr-shell-main { flex: 1; padding: 16px 0 8px; min-width: 0; }
+/* index.css guards against sideways page scroll with overflow-x: hidden on
+   html and body, which makes body a scroll container that never scrolls, so
+   nothing inside can stick to the window (the header, the Trade Avg Z bar).
+   clip keeps the guard without that side effect; phone shell only. */
+html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 
 .mr-hdr {
   position: sticky; top: 0; z-index: 40; height: var(--mr-hdr-h); flex-shrink: 0;
@@ -301,10 +307,27 @@
 }
 .mr-ps-skel { height: 118px; box-sizing: border-box; opacity: 0.6; }
 .mr-ps-proj-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.mr-ps-next { flex: 1; min-width: 0; }
+.mr-ps-next { flex: 1 1 120px; min-width: 0; }
 .mr-ps-next b { color: var(--mr-text); }
 .mr-ps-line { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; }
 .mr-ps-line span { display: flex; flex-direction: column; }
 .mr-ps-line i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--mr-muted); }
 .mr-ps-line b { font-family: var(--mr-font-num); font-size: 15px; }
 .mr-ps-actions { display: flex; gap: 8px; }
+/* The sheet scrolls inside on short screens; the two buttons stay on screen. */
+.mr-sheet.mr-ps-sheet { padding-bottom: 0; }
+.mr-ps-sheet .mr-ps-actions {
+  position: sticky; bottom: 0; z-index: 1; flex-shrink: 0;
+  margin: 0 -16px; padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--mr-card); box-shadow: 0 -10px 12px -10px rgba(14, 23, 38, 0.18);
+}
+@media (max-height: 720px) {
+  .mr-ps-sheet { gap: 8px; }
+  .mr-ps-sheet .mr-h1 { font-size: 20px; }
+  .mr-ps-grid { gap: 4px; }
+  .mr-ps-tile { padding: 5px 8px; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 4px; }
+  .mr-ps-tv { font-size: 15px; }
+  .mr-ps-proj { padding: 8px 10px; gap: 6px; }
+  .mr-ps-line b { font-size: 14px; }
+  .mr-ps-sheet .mr-ps-actions { padding-top: 8px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+}
