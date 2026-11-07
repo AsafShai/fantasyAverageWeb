@@ -42,6 +42,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Player Rankings', path: '/player-rankings', icon: '📋', group: 'Players' },
   { label: 'League Analytics', path: '/analytics', icon: '📈', group: 'Insights' },
   { label: 'Player Trends', path: '/trends', icon: '📉', group: 'Insights' },
+  { label: 'Player Shooting Map', path: '/shooting-map', icon: '🎯', group: 'Insights' },
   { label: 'Projections', path: '/projections', icon: '🔭', group: 'Insights' },
   ...(FF_BOOM_OR_BUST ? [{ label: 'Boom or Bust', path: '/boom-or-bust', icon: '💥', group: 'Insights' }] : []),
   { label: 'Standings Estimator', path: '/estimator', icon: '🔮', group: 'Insights' },
