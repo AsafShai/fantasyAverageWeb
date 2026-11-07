@@ -237,7 +237,7 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
   height: calc(var(--mr-tabbar-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box;
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(5, minmax(max-content, 1fr));
   background: var(--mr-card); border-top: 1px solid var(--mr-border);
 }
 .mr-tab {
@@ -247,7 +247,7 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 .mr-tab-pill {
   width: 52px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
 }
-.mr-tab-label { font-size: 11px; font-weight: 500; }
+.mr-tab-label { font-size: 11px; font-weight: 500; white-space: nowrap; }
 .mr-tab[aria-current="page"] { color: var(--mr-primary); }
 .mr-tab[aria-current="page"] .mr-tab-pill { background: var(--mr-primary-soft); }
 .mr-tab[aria-current="page"] .mr-tab-label { font-weight: 700; }
