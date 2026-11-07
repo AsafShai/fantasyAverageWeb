@@ -294,6 +294,8 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 .mr-ps-owner:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
 .mr-ps-free { background: var(--mr-pill-avail-bg); color: var(--mr-pill-avail-fg); }
 .mr-ps-label { font-weight: 700; }
+.mr-ps-periods { flex: none; }
+.mr-ps-empty { margin: 0; min-height: 60px; display: flex; align-items: center; }
 .mr-ps-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .mr-ps-tile {
   background: var(--mr-sunken); border-radius: 10px; padding: 8px;
@@ -301,18 +303,6 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
 }
 .mr-ps-tl { font-size: 10px; font-weight: 700; color: var(--mr-muted); letter-spacing: 0.04em; text-transform: uppercase; }
 .mr-ps-tv { font-family: var(--mr-font-num); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.mr-ps-proj {
-  background: var(--mr-sunken); border-radius: 12px; padding: 10px 12px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.mr-ps-skel { height: 118px; box-sizing: border-box; opacity: 0.6; }
-.mr-ps-proj-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.mr-ps-next { flex: 1 1 120px; min-width: 0; }
-.mr-ps-next b { color: var(--mr-text); }
-.mr-ps-line { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; }
-.mr-ps-line span { display: flex; flex-direction: column; }
-.mr-ps-line i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--mr-muted); }
-.mr-ps-line b { font-family: var(--mr-font-num); font-size: 15px; }
 .mr-ps-actions { display: flex; gap: 8px; }
 /* The sheet scrolls inside on short screens; the two buttons stay on screen. */
 .mr-sheet.mr-ps-sheet { padding-bottom: 0; }
@@ -327,7 +317,5 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
   .mr-ps-grid { gap: 4px; }
   .mr-ps-tile { padding: 5px 8px; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 4px; }
   .mr-ps-tv { font-size: 15px; }
-  .mr-ps-proj { padding: 8px 10px; gap: 6px; }
-  .mr-ps-line b { font-size: 14px; }
   .mr-ps-sheet .mr-ps-actions { padding-top: 8px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
 }

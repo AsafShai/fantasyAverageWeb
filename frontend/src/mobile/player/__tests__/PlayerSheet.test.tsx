@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Provider } from 'react-redux'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
@@ -26,23 +26,20 @@ const PLAYERS = {
   total_count: 2, page: 1, limit: 1200, has_more: false,
 }
 const ROSTER = { team_id: 1, last_updated: '', players: [{ ...PLAYERS.players[0], lineup_slot: 'BE' }] }
-const LINE = { pts: 24.3, reb: 8.1, ast: 4, three_pm: 3, stl: 1, blk: 0.5, fgm: 9, fga: 18, fg_pct: 0.5, ftm: 3, fta: 4, ft_pct: 0.75 }
-const NEXT = {
-  player_name: 'Alpha Star', team: 'LAL', game_date: '2026-11-07', opponent: 'BOS', is_home: true, scheduled: true,
-  default_minutes: 31.2, status: 'green', reason: '', stats: LINE,
-}
-
 const fetchMock = vi.fn(async (input: Request | string) => {
   const req = typeof input === 'string' ? new Request(input) : input
   const path = new URL(req.url).pathname.replace(/^\/api/, '')
   const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
-  if (path.startsWith('/players')) return json(PLAYERS)
-  if (path === '/teams/1/players') return json(ROSTER)
-  if (path === '/projections/player/7') return json(NEXT)
-  if (path === '/projections/predict') {
-    const body = await req.json()
-    return json({ stats: { ...LINE, pts: body.minutes } })
+  if (path.startsWith('/players')) {
+    const period = new URL(req.url).searchParams.get('time_period')
+    if (period === 'last_7') {
+      // Alpha played 2 games (60 pts); Free Guy none in the window.
+      const alpha = { ...PLAYERS.players[0], stats: { ...PLAYERS.players[0].stats, pts: 60, minutes: 70, gp: 2 } }
+      return json({ ...PLAYERS, players: [alpha, { ...PLAYERS.players[1], has_data: false }] })
+    }
+    return json(PLAYERS)
   }
+  if (path === '/teams/1/players') return json(ROSTER)
   return new Response(JSON.stringify({ detail: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
 })
 
@@ -115,45 +112,49 @@ describe('player sheet', () => {
     await within(sheet).findByText('LAL · PG/SG · Bench · 10 GP')
     expect(within(sheet).getByRole('link', { name: 'Trust the process' })).toHaveAttribute('href', '/team/1')
 
-    const tiles = within(within(sheet).getByRole('list', { name: 'Season per game' })).getAllByRole('listitem')
+    const tiles = within(within(sheet).getByRole('list', { name: 'Per game' })).getAllByRole('listitem')
     expect(tiles.map((t) => t.textContent)).toEqual([
       'MPG32.0', 'PTS25.0', 'REB8.0', 'AST4.0', 'STL1.0', 'BLK0.5', '3PM3.0', 'FG%.500', 'FT%.800',
     ])
 
-    const proj = await within(sheet).findByRole('region', { name: 'Next game projection' })
-    expect(proj).toHaveTextContent('Next: vs BOS')
-    expect(proj).toHaveTextContent('PTS24.3')
-    expect(within(proj).getByText(/^31/)).toBeInTheDocument()
+    // No projection in the sheet (it stays on the full profile), and none is fetched.
+    expect(within(sheet).queryByRole('region', { name: 'Next game projection' })).toBeNull()
+    expect(fetchMock.mock.calls.some(([r]) => typeof r !== 'string' && r.url.includes('/projections/'))).toBe(false)
     expect(within(sheet).getByRole('button', { name: 'Full profile' })).toBeInTheDocument()
     expect(within(sheet).getByRole('button', { name: 'Trade Analyzer' })).toBeInTheDocument()
   })
 
-  it('minutes stepper re-asks the model (POST /projections/predict); ↺ goes back to the default', async () => {
-    const user = userEvent.setup()
-    renderAt('/players?player=7')
-    const sheet = await screen.findByRole('dialog', { name: 'Alpha Star' })
-    const proj = await within(sheet).findByRole('region', { name: 'Next game projection' })
-    await user.click(within(proj).getByRole('button', { name: 'More minutes for Alpha Star' }))
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.some(([r]) => typeof r !== 'string' && r.url.endsWith('/projections/predict'))).toBe(true),
-    )
-    const predictReq = fetchMock.mock.calls.map(([r]) => r as Request).find((r) => r.url.endsWith('/projections/predict'))!
-    expect(predictReq.method).toBe('POST')
-    await waitFor(() => expect(proj).toHaveTextContent('PTS32.0'))
-    expect(proj).toHaveTextContent('Projected for 32 min · default 31 min')
-
-    await user.click(within(proj).getByRole('button', { name: 'Reset to default minutes for Alpha Star' }))
-    expect(proj).toHaveTextContent('PTS24.3')
-    expect(proj).toHaveTextContent('Default minutes from the projection model')
-  })
-
-  it('free agent: badge, dashes without games, no projection block', async () => {
+  it('free agent: badge, dashes without games', async () => {
     renderAt('/players?player=9')
     const sheet = await screen.findByRole('dialog', { name: 'Free Guy' })
     expect(within(sheet).getByText('Free Agent')).toBeInTheDocument()
     expect(within(sheet).getByText('BOS · C · 0 GP')).toBeInTheDocument()
-    await waitFor(() => expect(within(sheet).queryByRole('region', { name: 'Next game projection' })).toBeNull())
     expect(within(sheet).getAllByText('—')).toHaveLength(9)
+  })
+
+  it('period chips switch the per-game grid (Season · Last 7 · Last 15 · Last 30 · Custom)', async () => {
+    const user = userEvent.setup()
+    renderAt('/players?player=7')
+    const sheet = await screen.findByRole('dialog', { name: 'Alpha Star' })
+    const chips = within(within(sheet).getByRole('group', { name: 'Period' })).getAllByRole('button')
+    expect(chips.map((c) => c.textContent)).toEqual(['Season', 'Last 7', 'Last 15', 'Last 30', 'Custom'])
+    expect(chips[0]).toHaveAttribute('aria-pressed', 'true')
+    expect(within(sheet).getByText('SEASON · PER GAME')).toBeInTheDocument()
+
+    await user.click(chips[1])
+    await within(sheet).findByText('LAST 7 DAYS · PER GAME · 2 GP')
+    const tiles = within(within(sheet).getByRole('list', { name: 'Per game' })).getAllByRole('listitem')
+    expect(tiles.slice(0, 2).map((t) => t.textContent)).toEqual(['MPG35.0', 'PTS30.0'])
+    // the header line stays the season's
+    expect(within(sheet).getByText('LAL · PG/SG · Bench · 10 GP')).toBeInTheDocument()
+  })
+
+  it('a period with no games says so', async () => {
+    const user = userEvent.setup()
+    renderAt('/players?player=9')
+    const sheet = await screen.findByRole('dialog', { name: 'Free Guy' })
+    await user.click(within(sheet).getByRole('button', { name: 'Last 7' }))
+    await within(sheet).findByText('No games in this period.')
   })
 
   it('closing (Escape, opened from a shared link) drops ?player= and keeps the page', async () => {

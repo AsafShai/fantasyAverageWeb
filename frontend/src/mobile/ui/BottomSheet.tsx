@@ -35,7 +35,10 @@ export function BottomSheet({ open, onClose, title, hideTitle = false, action, s
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeRef.current()
+      // Only the top sheet closes (a picker sheet can open over another).
+      if (e.key !== 'Escape') return
+      const sheets = document.querySelectorAll('.mr-sheet')
+      if (sheets[sheets.length - 1] === panel.current) closeRef.current()
     }
     document.addEventListener('keydown', onKey)
     return () => {

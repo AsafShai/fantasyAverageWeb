@@ -26,9 +26,9 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   search result) opens the sheet over the current page as `?player=<ESPN id>`
   instead of going to `/player/:id`. Back closes it; a shared link or reload
   opens it directly. Shows team · positions · slot · GP, the fantasy owner, the
-  season per-game line (Players list), the profile's next-game projection with
-  a minutes stepper (POST /projections/predict), and Full profile / Trade
-  Analyzer, which replace the sheet's history entry.
+  per-game line (Players list) for Season / Last 7 / 15 / 30 / Custom range,
+  and Full profile / Trade Analyzer, which replace the sheet's history entry.
+  No projection in the sheet (it stays on the profile).
 - **Player profile** `profile/` (step 4): `/player/:id` on a phone. Header with
   owner badge, Bio folded, time frame chips (Custom opens a From/To sheet),
   Fantasy Value with z-bars, Stats table, Trends tiles + game-by-game chart,
