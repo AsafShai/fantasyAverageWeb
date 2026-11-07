@@ -68,3 +68,15 @@ def test_health_verbose_leaks_no_connection_details(test_client):
 def test_health_response_carries_process_time_header(test_client):
     response = test_client.get("/health")
     assert float(response.headers["X-Process-Time"]) >= 0
+
+
+def test_health_reports_deployed_commit(test_client, monkeypatch):
+    # Render sets RENDER_GIT_COMMIT on git-backed services; the post-deploy
+    # smoke check polls /health until it reports the commit it just deployed.
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abc123")
+    assert test_client.get("/health").json()["commit"] == "abc123"
+
+
+def test_health_commit_is_null_outside_render(test_client, monkeypatch):
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
+    assert test_client.get("/health").json()["commit"] is None

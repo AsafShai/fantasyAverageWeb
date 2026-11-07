@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import time
 from datetime import datetime
@@ -99,6 +100,9 @@ async def collect(verbose: bool) -> dict:
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "service": "Fantasy League Dashboard API",
+        # Set by Render for git-backed services; the deploy workflow's smoke
+        # check waits until this matches the commit it deployed.
+        "commit": os.environ.get("RENDER_GIT_COMMIT"),
     }
     if not verbose:
         return base
