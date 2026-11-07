@@ -6,31 +6,16 @@ import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import type { ScheduleGame } from '../types/api'
+import { formatScheduleDate as formatDate, monthKey, monthLabel, remainingSchedule, slateLevel } from '../utils/teamSchedule'
 
 interface TeamScheduleViewProps {
   teamId: string
 }
 
-// Schedule dates are NBA (Eastern) calendar days.
-function easternToday(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
-}
-
-function formatDate(date: string, options: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat('en-US', options).format(new Date(`${date}T12:00:00`))
-}
-
-function monthKey(date: string): string {
-  return date.slice(0, 7)
-}
-
-function monthLabel(date: string): string {
-  return formatDate(`${date.slice(0, 7)}-01`, { month: 'long', year: 'numeric' })
-}
-
 function slateClass(game: ScheduleGame): string {
-  if (game.slate_size >= 12) return 'bg-blue-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100'
-  if (game.high_volume || game.slate_size >= 10) return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
+  const level = slateLevel(game)
+  if (level === 2) return 'bg-blue-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100'
+  if (level === 1) return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
   return 'text-gray-700'
 }
 
@@ -55,10 +40,7 @@ export default function TeamScheduleView({ teamId }: TeamScheduleViewProps) {
   if (!team) return <p className="text-sm text-gray-500">Select a team to view its schedule.</p>
 
   // Only what is left: games before today are gone from the table and the counts.
-  const today = easternToday()
-  const games = team.games.filter(game => game.date >= today)
-  const b2bLeft = games.filter(game => game.rest_days === 0).length
-  const highVolumeLeft = games.filter(game => game.high_volume).length
+  const { games, b2bLeft, highVolumeLeft } = remainingSchedule(team)
 
   return (
     <div>
