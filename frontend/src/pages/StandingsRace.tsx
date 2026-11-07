@@ -26,6 +26,8 @@ import {
   statValue,
   type Basis,
 } from './standingsRaceMetrics'
+import { useMobileRedesign } from '../mobile/flag'
+import { Chip, Segmented, SelectSheet } from '../mobile/ui'
 
 const TEAM_COLORS = [
   '#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed',
@@ -195,6 +197,7 @@ function EndLabels({
 
 
 const StandingsRace = () => {
+  const mobile = useMobileRedesign()
   const [basis, setBasis] = useState<Basis>('avg')
   const [view, setView] = useState<ViewMode>('points')
   const [metric, setMetric] = useState<string>(TOTAL_METRIC)
@@ -372,91 +375,8 @@ const StandingsRace = () => {
   const improvement = (from: number, to: number) => (view === 'rank' || lowerIsBetter ? from - to : to - from)
   const formatDelta = (d: number) => (isValueView ? formatStatValue(Math.abs(d), activeMetric, basis) : formatValue(Math.abs(d)))
 
-  return (
-    <div ref={wrapRef}>
-      <h2 className="text-xl font-semibold mb-1">Standings Race</h2>
-      <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-        The season's roto race, one line per team. Click a team to spotlight it.
-      </p>
-
-      <div>
-          <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-end">
-            <div className="flex flex-col gap-1">
-              <span className={GROUP_LABEL}>Basis</span>
-              <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-2 gap-1 sm:flex sm:gap-1">
-                {BASES.map(b => (
-                  <button
-                    key={b.value}
-                    aria-pressed={basis === b.value}
-                    onClick={() => handleBasisChange(b.value)}
-                    className={toggleClass(basis === b.value)}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <span className={GROUP_LABEL}>Show</span>
-              <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-3 gap-1 sm:flex sm:gap-1">
-                {VIEWS.map(v => (
-                  <button
-                    key={v.value}
-                    aria-pressed={view === v.value}
-                    onClick={() => handleViewChange(v.value)}
-                    className={toggleClass(view === v.value)}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label htmlFor="standings-race-category" className={GROUP_LABEL}>Category</label>
-              <select
-                id="standings-race-category"
-                value={activeMetric}
-                onChange={e => handleMetricChange(e.target.value)}
-                className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
-              >
-                {metricOptions.map(m => (
-                  <option key={m.value} value={m.value} disabled={view === 'rank' && m.value !== TOTAL_METRIC}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-x-3 gap-y-1.5 mb-3 overflow-x-auto">
-            {teams.map((team, idx) => {
-              const color = TEAM_COLORS[idx % TEAM_COLORS.length]
-              const on = isOn(team.team_id)
-              return (
-                <button
-                  key={team.team_id}
-                  onClick={() => toggleHighlight(team.team_id)}
-                  className="flex items-center gap-1.5 shrink-0"
-                >
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: on ? color : DIM_COLOR }}
-                  />
-                  <span className={`text-xs leading-none whitespace-nowrap ${on ? 'text-gray-800 dark:text-gray-100 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {team.team_name}
-                  </span>
-                </button>
-              )
-            })}
-            {hasHighlight && (
-              <button onClick={clearHighlight} className="text-xs text-red-500 hover:text-red-700 font-medium">
-                ✕ Clear
-              </button>
-            )}
-          </div>
-
+  const chart = (
+    <>
           {isFetching && !data && <LoadingSpinner />}
           {error && <ErrorMessage message={getErrorMessage(error, 'Failed to load standings history')} />}
           {!isFetching && !error && chartData.length === 0 && (
@@ -466,7 +386,7 @@ const StandingsRace = () => {
           {data && !error && chartData.length > 0 && (
             <>
             <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">{caption}</p>
-            <ResponsiveContainer width="100%" height={420} minHeight={320}>
+            <ResponsiveContainer width="100%" height={mobile ? 340 : 420} minHeight={320}>
               <LineChart data={chartData} margin={{ top: 4, right: labelGutter, left: -10, bottom: 36 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-10" />
                 <XAxis
@@ -588,6 +508,145 @@ const StandingsRace = () => {
             )}
             </>
           )}
+    </>
+  )
+
+  if (mobile) {
+    return (
+      <div ref={wrapRef} className="mr-race">
+        <h2 className="mr-h2">Standings Race</h2>
+        <p className="mr-meta" style={{ margin: 0 }}>The season's roto race, one line per team. Tap a team to spotlight it.</p>
+        <div className="mr-race-lab">
+          <span className="mr-meta">Basis</span>
+          <Segmented label="Basis" size="sm" options={BASES} value={basis} onChange={handleBasisChange} />
+        </div>
+        <div className="mr-race-lab">
+          <span className="mr-meta">Show</span>
+          <Segmented label="Show" size="sm" options={VIEWS} value={view} onChange={handleViewChange} />
+        </div>
+        <div className="mr-race-lab">
+          <span className="mr-meta">Category</span>
+          <SelectSheet
+            id="race-category"
+            label="Category"
+            wide
+            // League Rank only charts the total (desktop greys the others out).
+            options={view === 'rank' ? metricOptions.filter(m => m.value === TOTAL_METRIC) : metricOptions}
+            value={activeMetric}
+            onChange={handleMetricChange}
+          />
+        </div>
+        <div className="mr-race-chart">{chart}</div>
+        <div className="mr-race-teams" role="group" aria-label="Spotlight teams">
+          {teams.map((team, idx) => {
+            const on = isOn(team.team_id)
+            return (
+              <Chip
+                key={team.team_id}
+                selected={highlighted.has(team.team_id)}
+                className={on ? undefined : 'mr-race-off'}
+                onClick={() => toggleHighlight(team.team_id)}
+              >
+                <span className="mr-race-dot" style={{ backgroundColor: on ? TEAM_COLORS[idx % TEAM_COLORS.length] : DIM_COLOR }} aria-hidden="true" />
+                {team.team_name}
+              </Chip>
+            )
+          })}
+          {hasHighlight && (
+            <Chip onClick={clearHighlight}>✕ Clear</Chip>
+          )}
+        </div>
+        <p className="mr-meta" style={{ margin: 0 }}>Drag the range bar under the chart to zoom into dates.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={wrapRef}>
+      <h2 className="text-xl font-semibold mb-1">Standings Race</h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+        The season's roto race, one line per team. Click a team to spotlight it.
+      </p>
+
+      <div>
+          <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="flex flex-col gap-1">
+              <span className={GROUP_LABEL}>Basis</span>
+              <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-2 gap-1 sm:flex sm:gap-1">
+                {BASES.map(b => (
+                  <button
+                    key={b.value}
+                    aria-pressed={basis === b.value}
+                    onClick={() => handleBasisChange(b.value)}
+                    className={toggleClass(basis === b.value)}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className={GROUP_LABEL}>Show</span>
+              <div className="bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg grid grid-cols-3 gap-1 sm:flex sm:gap-1">
+                {VIEWS.map(v => (
+                  <button
+                    key={v.value}
+                    aria-pressed={view === v.value}
+                    onClick={() => handleViewChange(v.value)}
+                    className={toggleClass(view === v.value)}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="standings-race-category" className={GROUP_LABEL}>Category</label>
+              <select
+                id="standings-race-category"
+                value={activeMetric}
+                onChange={e => handleMetricChange(e.target.value)}
+                className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
+              >
+                {metricOptions.map(m => (
+                  <option key={m.value} value={m.value} disabled={view === 'rank' && m.value !== TOTAL_METRIC}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 mb-3 overflow-x-auto">
+            {teams.map((team, idx) => {
+              const color = TEAM_COLORS[idx % TEAM_COLORS.length]
+              const on = isOn(team.team_id)
+              return (
+                <button
+                  key={team.team_id}
+                  onClick={() => toggleHighlight(team.team_id)}
+                  className="flex items-center gap-1.5 shrink-0"
+                >
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: on ? color : DIM_COLOR }}
+                  />
+                  <span className={`text-xs leading-none whitespace-nowrap ${on ? 'text-gray-800 dark:text-gray-100 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
+                    {team.team_name}
+                  </span>
+                </button>
+              )
+            })}
+            {hasHighlight && (
+              <button onClick={clearHighlight} className="text-xs text-red-500 hover:text-red-700 font-medium">
+                ✕ Clear
+              </button>
+            )}
+          </div>
+
+          {chart}
       </div>
     </div>
   )
