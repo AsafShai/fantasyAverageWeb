@@ -45,6 +45,8 @@ interface DataTableProps<R> {
    * `<tr>` (span it with `colSpan={columns.length}`) or null.
    */
   renderAfterRow?: (row: R, index: number) => ReactNode
+  /** Extra class on a body row, e.g. a tapped (spotlighted) team. */
+  rowClassName?: (row: R) => string | undefined
 }
 
 /**
@@ -65,6 +67,7 @@ export function DataTable<R>({
   empty = 'No rows',
   className = '',
   renderAfterRow,
+  rowClassName,
 }: DataTableProps<R>) {
   const boxStyle: CSSProperties | undefined = maxHeight ? { maxHeight, overflowY: 'auto' } : undefined
   const alignCls = (c: Column<R>) => (c.align === 'left' ? 'mr-l' : c.align === 'center' ? 'mr-c' : '')
@@ -108,7 +111,7 @@ export function DataTable<R>({
             </tr>
           ) : (
             rows.map((r, i) => {
-              const cls = `${isHighlighted?.(r) ? 'mr-me' : ''} ${onRowClick ? 'mr-click' : ''}`.trim()
+              const cls = `${isHighlighted?.(r) ? 'mr-me' : ''} ${onRowClick ? 'mr-click' : ''} ${rowClassName?.(r) ?? ''}`.trim()
               return (
                 <Fragment key={rowKey(r, i)}>
                   <tr className={cls || undefined} onClick={onRowClick ? () => onRowClick(r) : undefined}>
