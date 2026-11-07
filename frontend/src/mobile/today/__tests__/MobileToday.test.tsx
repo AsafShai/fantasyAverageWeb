@@ -102,11 +102,11 @@ afterEach(() => {
 })
 
 describe('groupMovers', () => {
-  it('groups per team: TOTAL as the number, categories biggest first, biggest move first', () => {
+  it('groups per team: TOTAL as the number, categories biggest first, teams by signed total (gains first)', () => {
     const groups = groupMovers(hub.movers, null)
-    expect(groups.map((g) => g.team_name)).toEqual(["Khachapuri's Team", "Oriel's Team", 'Small Mover'])
-    expect(groups[0]).toMatchObject({ total: -6, parts: [{ category: 'STL', delta: -3 }, { category: '3PM', delta: -2 }] })
-    expect(groups[2].total).toBeNull()
+    expect(groups.map((g) => g.team_name)).toEqual(["Oriel's Team", 'Small Mover', "Khachapuri's Team"])
+    expect(groups[2]).toMatchObject({ total: -6, parts: [{ category: 'STL', delta: -3 }, { category: '3PM', delta: -2 }] })
+    expect(groups[1].total).toBeNull()
   })
 
   it('puts my team first', () => {

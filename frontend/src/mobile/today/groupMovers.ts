@@ -29,8 +29,8 @@ export function partLabel(p: { category: string; delta: number }): string {
 
 /**
  * Groups the per-category mover rows by team: the TOTAL row becomes the big
- * number, the other rows the "STL −3 · 3PM −2" line. My team first, then the
- * biggest total move.
+ * number, the other rows the "STL −3 · 3PM −2" line. My team first, then by
+ * the signed total change: biggest gain first, biggest drop last.
  */
 export function groupMovers(movers: RankMover[], myTeamId: number | null): MoverGroup[] {
   const groups = new Map<number, MoverGroup>()
@@ -45,10 +45,9 @@ export function groupMovers(movers: RankMover[], myTeamId: number | null): Mover
   }
   const list = [...groups.values()]
   for (const g of list) g.parts.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-  const size = (g: MoverGroup) => Math.abs(g.total ?? 0)
   return list.sort((a, b) => {
     const mine = Number(b.team_id === myTeamId) - Number(a.team_id === myTeamId)
     if (mine) return mine
-    return size(b) - size(a) || a.team_name.localeCompare(b.team_name)
+    return (b.total ?? 0) - (a.total ?? 0) || a.team_name.localeCompare(b.team_name)
   })
 }
