@@ -7,18 +7,27 @@ import { useGetScheduleQuery } from '../store/api/fantasyApi'
 import { METRIC_GLOSSARY } from '../constants/metricGlossary'
 import { getErrorMessage } from '../utils/errorMessage'
 import { formatSlateDate, weekStart } from '../utils/slateWindow'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileSchedule from '../mobile/nba/MobileSchedule'
 
 const MONTHS = ['October', 'November', 'December', 'January', 'February', 'March', 'April']
 
 type Grain = 'months' | 'weeks'
 
-function heatClass(value: number, min: number, max: number): string {
-  if (value === 0) return 'bg-gray-50 text-gray-400'
-  if (max === min) return 'bg-blue-50 text-blue-800'
+/** 0 = no games, 1 = low, 2 = mid, 3 = high. */
+function heatLevel(value: number, min: number, max: number): 0 | 1 | 2 | 3 {
+  if (value === 0) return 0
+  if (max === min) return 2
   const ratio = (value - min) / (max - min)
-  if (ratio >= 0.75) return 'bg-blue-100 text-blue-900'
-  if (ratio >= 0.35) return 'bg-blue-50 text-blue-800'
-  return 'bg-white text-gray-700'
+  if (ratio >= 0.75) return 3
+  if (ratio >= 0.35) return 2
+  return 1
+}
+
+const HEAT_CLASS = ['bg-gray-50 text-gray-400', 'bg-white text-gray-700', 'bg-blue-50 text-blue-800', 'bg-blue-100 text-blue-900']
+
+function heatClass(value: number, min: number, max: number): string {
+  return HEAT_CLASS[heatLevel(value, min, max)]
 }
 
 function MetricHeader({ label, metric }: { label: string; metric: keyof typeof METRIC_GLOSSARY }) {
@@ -34,6 +43,7 @@ function MetricHeader({ label, metric }: { label: string; metric: keyof typeof M
 export default function Schedule() {
   const { data, isLoading, error } = useGetScheduleQuery()
   const [grain, setGrain] = useState<Grain>('months')
+  const mobileRedesign = useMobileRedesign()
 
   const weeks = useMemo(() => {
     const starts = new Set<string>()
@@ -72,6 +82,19 @@ export default function Schedule() {
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load NBA schedule')} />
   if (!data) return null
+
+  if (mobileRedesign) {
+    return (
+      <MobileSchedule
+        data={data}
+        grain={grain}
+        onGrain={setGrain}
+        columns={columns}
+        valueFor={(team, column) => grain === 'months' ? team.monthly_games[column] ?? 0 : weeklyGames.get(team.team_id)?.[column] ?? 0}
+        heatLevel={value => heatLevel(value, minCell, maxCell)}
+      />
+    )
+  }
 
   const scheduleGap = data.published_games_min > 0 && data.published_games_min < 82
 

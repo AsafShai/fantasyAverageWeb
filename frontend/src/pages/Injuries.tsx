@@ -9,6 +9,8 @@ import ErrorMessage from '../components/ErrorMessage';
 import { useMyTeam } from '../context/MyTeamContext';
 import { useGetNbaTeamsListQuery, useGetTeamDetailQuery } from '../store/api/fantasyApi';
 import { normalizePlayerName } from '../utils/playerName';
+import { useMobileRedesign } from '../mobile/flag';
+import MobileInjuries from '../mobile/nba/MobileInjuries';
 
 interface Filters {
   search: string;
@@ -96,6 +98,7 @@ export default function Injuries() {
   );
   const nbaTeamsQuery = useGetNbaTeamsListQuery(undefined, { skip: myTeamId == null || scope !== 'teams' });
   const debouncedSearch = useDebounce(filters.search, 300);
+  const mobileRedesign = useMobileRedesign();
 
   const rosterNames = useMemo(() => {
     const names = new Set<string>();
@@ -166,6 +169,30 @@ export default function Injuries() {
         return matchesSearch && matchesTeam && matchesStatus && matchesRoster && matchesNbaTeam;
       })
   }, [records, debouncedSearch, filters.teams, filters.statuses, rosterFilterOn, rosterNames, nbaTeamsFilterOn, myNbaTeamKeys]);
+
+  if (mobileRedesign) {
+    return (
+      <MobileInjuries
+        loading={loading}
+        error={error}
+        records={records}
+        filteredRecords={filteredRecords}
+        notifications={notifications}
+        lastReportTime={lastReportTime}
+        filters={filters}
+        onFilters={setFilters}
+        teamOptions={teamOptions}
+        teamsDisabled={scopeDataLoading}
+        teamsPlaceholder={myTeam && scope !== 'all' ? 'All teams in view' : 'All Teams'}
+        scopes={myTeam ? INJURY_SCOPES : null}
+        scope={scope}
+        onScope={setScope}
+        rosterError={rosterNeeded && rosterQuery.isError}
+        teamsError={scope === 'teams' && nbaTeamsQuery.isError}
+        rosterLoading={Boolean(myTeam && rosterNeeded && (rosterQuery.isLoading || (scope === 'teams' && nbaTeamsQuery.isLoading)))}
+      />
+    );
+  }
 
   return (
     <>

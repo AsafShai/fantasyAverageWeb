@@ -56,6 +56,11 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   shared sort/filter helpers in `utils/trendsShared.ts`), `projections/MobileProjections` (one card per
   player; row logic in `hooks/useAdjustableProjection.ts`), and Boom or Bust, whose phone layout lives in
   `pages/BoomOrBust.tsx` (`mobile/bob/bob.css`).
+- **NBA pages** `nba/` (step 5): NBA Teams, Box Scores, Season Schedule and Injuries render
+  `MobileNbaTeams` / `MobileBoxScores` / `MobileSchedule` / `MobileInjuries` on a phone. State and
+  URL stay in `src/pages/*`; shared logic moved to hooks (`useNbaDepthChart`, `useSlateCalendar`,
+  `components/injuries/injuryFormat`). A list picked in a `SelectSheet` that also writes the URL should
+  apply it after the sheet closes (see `MobileNbaTeams`). Styles in `nba/nba.css`.
 - **Minigames** `minigames/` (step 5): the list and the four games render `MobileMinigames` / `MinigamePageMobile` on a phone; each game keeps its logic and hands the page its board, streak tiles and run-over text. The Who Am I? map is a bottom sheet in browser history. Styles in `minigames/minigames.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
 - **League pages** (step 5): Activity (`activity/`; trade views reuse the desktop
