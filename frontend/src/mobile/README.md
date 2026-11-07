@@ -29,12 +29,23 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   season per-game line (Players list), the profile's next-game projection with
   a minutes stepper (POST /projections/predict), and Full profile / Trade
   Analyzer, which replace the sheet's history entry.
+- **Filters pattern** `ui/Filters.tsx`: `FilterSearchRow` (search + "Filters (n)"),
+  `ActiveFilterChips` (× clears one; "All …" defaults when none), `FiltersSheet`
+  (Reset + Show results) and `FilterGroup`. Pair it with `useSheetHistory('filters')`.
+  `ui/PeriodChips.tsx` is TimePeriodSelector as a chip row (Custom opens today's
+  date-range picker). `DataTable.renderAfterRow` adds a row under a row (matchup panel).
+- **Pages** `pages/<page>/`: a converted page keeps its state, data and URL params in
+  `src/pages/<Page>.tsx` and renders the phone layout from here when
+  `useMobileRedesign()` is on. Step 4: Players.
 - **Player profile** `profile/` (step 4): `/player/:id` on a phone. Header with
   owner badge, Bio folded, time frame chips (Custom opens a From/To sheet),
   Fantasy Value with z-bars, Stats table, Trends tiles + game-by-game chart,
   next-game projection with the minutes stepper, game log with AVG row. Data
   comes from the same hooks as desktop (`hooks/usePlayerProfileData`,
   `hooks/usePlayerTrends`); styles in `profile/profile.css`.
+- **Standings & Rankings** `pages/rankings/` (step 4): converted pages keep their state, URL and data in
+  `src/pages/*` and hand a phone layout the same props. Standings & Rankings:
+  `pages/rankings/RankingsMobile.tsx`.
 - **Teams + Team page** `team/` (step 4): `Teams` and `TeamDetail` render
   `MobileTeams` / `MobileTeamDetail` on a phone. TeamDetail keeps all state and
   passes it down; the phone tab is `?tab=stats|roster|slots` (roster modes stay
