@@ -3,7 +3,7 @@ import type { DraftPick, Player } from '../types/api'
 import { buildSeasonValueRankByName, REPORT_MIN_GP } from './draftReport'
 import { normalizePlayerName } from './playerName'
 
-/** Undrafted FA report only lists players ranked this high or better in the season value pool. */
+/** Undrafted FA report only lists players ranked this high or better (full-pool season rank). */
 export const FA_REPORT_MAX_SEASON_RANK = 200
 
 export interface LastFaPickup {
@@ -18,10 +18,21 @@ export interface FaReportRow {
   player_name: string
   pro_team: string
   fantasy_status: Player['status']
+  fantasy_team_id: number
+  fantasy_team_name: string | null
   gp: number
   totalZ: number | null
   valueRank: number | null
   lastFaPickup: LastFaPickup | null
+}
+
+export const FA_REPORT_STATUS_ON_TEAM = 'Still on team'
+export const FA_REPORT_STATUS_FREE_AGENT = 'Free Agent'
+
+export function faReportCurrentStatus(row: FaReportRow): string {
+  return row.fantasy_status === 'ONTEAM' && row.fantasy_team_id !== 0
+    ? FA_REPORT_STATUS_ON_TEAM
+    : FA_REPORT_STATUS_FREE_AGENT
 }
 
 export function buildDraftedNameKeys(picks: DraftPick[]): Set<string> {
@@ -58,7 +69,8 @@ export function buildFaReportRows(
   calcMode: 'totals' | 'per_game',
 ): FaReportRow[] {
   const drafted = buildDraftedNameKeys(draftPicks)
-  const valueByName = buildSeasonValueRankByName(allPlayers, calcMode, REPORT_MIN_GP)
+  // Season rank vs full league pool (min 1 GP for z-score pool); row visibility still requires REPORT_MIN_GP.
+  const valueByName = buildSeasonValueRankByName(allPlayers, calcMode, 0)
   const lastFa = activity
     ? buildLastFaPickupByPlayerId(activity.moves, activity.teams)
     : new Map<number, LastFaPickup>()
@@ -77,6 +89,8 @@ export function buildFaReportRows(
       player_name: player.player_name,
       pro_team: player.pro_team,
       fantasy_status: player.status,
+      fantasy_team_id: player.team_id,
+      fantasy_team_name: player.fantasy_team_name ?? null,
       gp: player.stats.gp,
       totalZ: value?.totalZ ?? null,
       valueRank: rank,

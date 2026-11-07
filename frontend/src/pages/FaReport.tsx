@@ -13,6 +13,9 @@ import { REPORT_MIN_GP } from '../utils/draftReport'
 import {
   buildFaReportRows,
   FA_REPORT_MAX_SEASON_RANK,
+  FA_REPORT_STATUS_FREE_AGENT,
+  FA_REPORT_STATUS_ON_TEAM,
+  faReportCurrentStatus,
   formatFaPickupDate,
   type FaReportRow,
 } from '../utils/faReport'
@@ -21,7 +24,7 @@ import { useMyTeam } from '../context/MyTeamContext'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileFaReport from '../mobile/draft/MobileFaReport'
 
-type SortCol = 'player' | 'lastFa' | 'faTeam' | 'zTotal' | 'valueRank' | 'gp'
+type SortCol = 'player' | 'lastFa' | 'faTeam' | 'status' | 'zTotal' | 'valueRank' | 'gp'
 
 export default function FaReport() {
   const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('faReport.calcMode', 'per_game')
@@ -58,6 +61,8 @@ export default function FaReport() {
       switch (sortCol) {
         case 'player':
           return a.player_name.localeCompare(b.player_name)
+        case 'status':
+          return faReportCurrentStatus(a).localeCompare(faReportCurrentStatus(b))
         case 'lastFa': {
           const atA = a.lastFaPickup?.at ?? ''
           const atB = b.lastFaPickup?.at ?? ''
@@ -83,7 +88,7 @@ export default function FaReport() {
     if (col === sortCol) setSortAsc(a => !a)
     else {
       setSortCol(col)
-      setSortAsc(col === 'player' || col === 'faTeam')
+      setSortAsc(col === 'player' || col === 'faTeam' || col === 'status')
     }
   }
 
@@ -127,7 +132,7 @@ export default function FaReport() {
           </div>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Undrafted players only, top {FA_REPORT_MAX_SEASON_RANK} by season value rank (same 8-category z-score pool as the Draft Report; min {REPORT_MIN_GP} GP to rank).
+          Undrafted only, at least {REPORT_MIN_GP} GP, top {FA_REPORT_MAX_SEASON_RANK} by season rank vs the full player pool (8-category z-score; min 1 GP to enter the rank pool).
         </p>
         {activityError && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -154,6 +159,7 @@ export default function FaReport() {
                 <th className="px-2 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 hidden sm:table-cell">NBA</th>
                 <SortTh col="lastFa" label="Last FA pickup" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} align="left" />
                 <SortTh col="faTeam" label="Picked up by" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} align="left" />
+                <SortTh col="status" label="Status" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} align="left" />
                 <SortTh col="gp" label="GP" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} align="right" />
                 <SortTh col="zTotal" label="zTotal" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} align="right" />
                 <SortTh col="valueRank" label="Season rank" sortCol={sortCol} sortAsc={sortAsc} onSort={handleSort} align="right" />
@@ -181,6 +187,13 @@ export default function FaReport() {
                       ? fantasyTeamOptionLabel(row.lastFaPickup.team_name, isMyTeam(row.lastFaPickup.team_id))
                       : '—'}
                   </td>
+                  <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300 text-xs whitespace-nowrap">
+                    {faReportCurrentStatus(row) === FA_REPORT_STATUS_ON_TEAM ? (
+                      <span className="text-green-700 dark:text-green-400">{FA_REPORT_STATUS_ON_TEAM}</span>
+                    ) : (
+                      <span className="text-gray-500 dark:text-gray-400">{FA_REPORT_STATUS_FREE_AGENT}</span>
+                    )}
+                  </td>
                   <td className="px-2 py-1.5 text-right text-gray-700 dark:text-gray-300 tabular-nums">{row.gp}</td>
                   <td className="px-2 py-1.5 text-right font-mono text-xs text-gray-700 dark:text-gray-300 tabular-nums">
                     {row.totalZ !== null ? row.totalZ.toFixed(2) : '—'}
@@ -192,7 +205,7 @@ export default function FaReport() {
               ))}
               {sorted.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-400">No undrafted players match.</td>
+                  <td colSpan={8} className="px-3 py-6 text-center text-sm text-gray-400">No undrafted players match.</td>
                 </tr>
               )}
             </tbody>

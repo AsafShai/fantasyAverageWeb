@@ -2,12 +2,18 @@ import { useMyTeam } from '../../context/MyTeamContext'
 import PlayerNameLink from '../../components/PlayerNameLink'
 import { fantasyTeamOptionLabel } from '../../myTeam/display'
 import { REPORT_MIN_GP } from '../../utils/draftReport'
-import { FA_REPORT_MAX_SEASON_RANK, formatFaPickupDate, type FaReportRow } from '../../utils/faReport'
+import {
+  FA_REPORT_MAX_SEASON_RANK,
+  FA_REPORT_STATUS_ON_TEAM,
+  faReportCurrentStatus,
+  formatFaPickupDate,
+  type FaReportRow,
+} from '../../utils/faReport'
 import { DataTable, Segmented, type Column } from '../ui'
 import './draft.css'
 
 type CalcMode = 'totals' | 'per_game'
-export type FaSortCol = 'player' | 'lastFa' | 'faTeam' | 'zTotal' | 'valueRank' | 'gp'
+export type FaSortCol = 'player' | 'lastFa' | 'faTeam' | 'status' | 'zTotal' | 'valueRank' | 'gp'
 
 interface Props {
   calcMode: CalcMode
@@ -63,6 +69,17 @@ export default function MobileFaReport({ calcMode, onCalcModeChange, search, onS
       sortable: true,
       cell: (r) => (r.lastFaPickup ? fantasyTeamOptionLabel(r.lastFaPickup.team_name, isMyTeam(r.lastFaPickup.team_id)) : '—'),
     },
+    {
+      key: 'status',
+      header: 'Status',
+      align: 'left',
+      sortable: true,
+      cell: (r) => (
+        <span className={faReportCurrentStatus(r) === FA_REPORT_STATUS_ON_TEAM ? 'mr-fa-on-team' : 'mr-meta'}>
+          {faReportCurrentStatus(r)}
+        </span>
+      ),
+    },
     { key: 'gp', header: 'GP', sortable: true, cell: (r) => <span className="mr-num">{r.gp}</span> },
     { key: 'zTotal', header: 'zTotal', sortable: true, cell: (r) => <span className="mr-num">{r.totalZ !== null ? r.totalZ.toFixed(2) : '—'}</span> },
     {
@@ -80,8 +97,8 @@ export default function MobileFaReport({ calcMode, onCalcModeChange, search, onS
       </div>
       <Segmented label="Value calc" options={CALC_OPTIONS} value={calcMode} onChange={onCalcModeChange} size="sm" />
       <p className="mr-meta mr-dr-note">
-        Undrafted players only, top {FA_REPORT_MAX_SEASON_RANK} by season value rank (same 8-category z-score pool as the
-        Draft Report; min {REPORT_MIN_GP} GP to rank).
+        Undrafted only, at least {REPORT_MIN_GP} GP, top {FA_REPORT_MAX_SEASON_RANK} by season rank vs the full player pool
+        (8-category z-score; min 1 GP in the rank pool).
       </p>
       {activityError && (
         <p className="mr-fa-warn">Could not load league activity; FA pickup dates and teams are unavailable.</p>

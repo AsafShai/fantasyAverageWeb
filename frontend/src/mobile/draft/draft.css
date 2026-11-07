@@ -53,3 +53,4 @@
 .mr-fa-count { white-space: nowrap; }
 .mr-fa-warn { margin: 0; color: var(--mr-pill-quest-fg); font-size: 12px; }
 .mr-fa-name { color: inherit; text-decoration: none; font-weight: 600; }
+.mr-fa-on-team { color: var(--mr-primary); font-weight: 600; }
