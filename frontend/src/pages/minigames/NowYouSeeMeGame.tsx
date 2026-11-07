@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router'
 import LeaderboardCard from '../../components/minigames/LeaderboardCard'
+import MinigameAnswerReveal from '../../components/minigames/MinigameAnswerReveal'
+import MinigameRunOverSummary from '../../components/minigames/MinigameRunOverSummary'
 import NameEntryModal from '../../components/minigames/NameEntryModal'
 import PlayerPicker from '../../components/minigames/PlayerPicker'
+import RoundSuccessIndicator from '../../components/minigames/RoundSuccessIndicator'
 import TimerBar from '../../components/minigames/TimerBar'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
@@ -26,6 +29,7 @@ export default function NowYouSeeMeGame() {
   const [timerKey, setTimerKey] = useState(0)
   const [streak, setStreak] = useState(createStreakState())
   const [reveal, setReveal] = useState<MinigamePlayer | null>(null)
+  const [roundOk, setRoundOk] = useState(false)
 
   const startRound = useCallback(
     (excludeId?: string) => {
@@ -33,6 +37,7 @@ export default function NowYouSeeMeGame() {
       setPlayer(pickRandomPlayerWithPhoto(photoPlayers, excludeId))
       setTimerKey((k) => k + 1)
       setReveal(null)
+      setRoundOk(false)
       setPhase('playing')
     },
     [photoPlayers],
@@ -55,11 +60,16 @@ export default function NowYouSeeMeGame() {
   )
 
   const onGuess = (guess: MinigamePlayer) => {
-    if (phase !== 'playing' || !player) return
+    if (phase !== 'playing' || !player || roundOk) return
     if (guess.id === player.id) {
       const next = onRoundWin(streak)
       setStreak(next)
-      startRound(player.id)
+      setRoundOk(true)
+      const id = player.id
+      window.setTimeout(() => {
+        setRoundOk(false)
+        startRound(id)
+      }, 650)
     } else {
       endRun(player)
     }
@@ -71,12 +81,20 @@ export default function NowYouSeeMeGame() {
 
   const board = player && (
     <>
-      <TimerBar
-        totalSeconds={NOW_YOU_SEE_ME_ROUND_SECONDS}
-        running
-        resetKey={timerKey}
-        onTimeout={() => endRun(player)}
-      />
+      <div className={mobile ? 'mg-timer-sticky -mx-1 px-1 pb-2 bg-white dark:bg-gray-900' : ''}>
+        <TimerBar
+          totalSeconds={NOW_YOU_SEE_ME_ROUND_SECONDS}
+          running={!roundOk}
+          resetKey={timerKey}
+          onTimeout={() => endRun(player)}
+          prominent
+        />
+      </div>
+      {roundOk && (
+        <div className="flex justify-center py-1">
+          <RoundSuccessIndicator />
+        </div>
+      )}
       <div className="flex justify-center py-4">
         <img
           src={player.photoUrl!}
@@ -84,39 +102,23 @@ export default function NowYouSeeMeGame() {
           className="w-40 h-40 sm:w-52 sm:h-52 rounded-full object-cover object-top border-4 border-gray-200 dark:border-gray-700"
         />
       </div>
-      <div className="flex justify-center">
-        <PlayerPicker players={players} hideHeadshot onGuess={onGuess} />
-      </div>
       <button
         type="button"
         onClick={() => endRun(player)}
-        className="block mx-auto text-sm text-red-600 hover:underline"
+        disabled={roundOk}
+        className="block mx-auto text-sm text-red-600 hover:underline disabled:opacity-40"
       >
         Give up
       </button>
+      <div className="flex justify-center w-full">
+        <PlayerPicker players={players} hideHeadshot disabled={roundOk} onGuess={onGuess} />
+      </div>
     </>
   )
   const runOver = (
     <>
-      {runEnd.finalScore != null && (
-        <p className="mb-2 text-lg">
-          Run over — best streak: <strong>{runEnd.finalScore}</strong>
-        </p>
-      )}
-      {reveal && (
-        <div className="mb-4 flex flex-col items-center gap-2">
-          {reveal.photoUrl && (
-            <img
-              src={reveal.photoUrl}
-              alt=""
-              className="w-24 h-24 rounded-full object-cover object-top"
-            />
-          )}
-          <p className="text-sm text-gray-600">
-            Answer: <strong>{reveal.displayName}</strong>
-          </p>
-        </div>
-      )}
+      <MinigameRunOverSummary bestStreak={runEnd.finalScore} />
+      {reveal ? <MinigameAnswerReveal player={reveal} /> : null}
     </>
   )
   const nameModal = (

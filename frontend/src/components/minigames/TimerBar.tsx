@@ -6,37 +6,35 @@ export default function TimerBar({
   running,
   resetKey,
   onTimeout,
+  prominent = false,
 }: {
   totalSeconds: number
   running: boolean
   resetKey: string | number
   onTimeout: () => void
+  /** Larger bar and type — e.g. sticky header on phone for photo games. */
+  prominent?: boolean
 }) {
-  const [remainingMs, setRemainingMs] = useState(totalSeconds * 1000)
+  const totalMs = totalSeconds * 1000
+  const [remainingMs, setRemainingMs] = useState(totalMs)
   const onTimeoutRef = useRef(onTimeout)
   useLayoutEffect(() => {
     onTimeoutRef.current = onTimeout
   })
 
-  // A new round, a pause/resume or a new duration refills the bar. Done while
-  // rendering so the refilled bar is what paints, not a frame of the old one.
-  const timerKey = `${running}|${resetKey}|${totalSeconds}`
-  const [filledFor, setFilledFor] = useState(timerKey)
-  if (timerKey !== filledFor) {
-    setFilledFor(timerKey)
-    setRemainingMs(totalSeconds * 1000)
-  }
+  useEffect(() => {
+    setRemainingMs(totalMs)
+  }, [resetKey, totalMs])
 
   useEffect(() => {
-    const total = totalSeconds * 1000
     if (!running) return
 
-    const deadline = performance.now() + total
-    let frame = 0
+    const startedAt = performance.now()
     let fired = false
+    let frame = 0
 
     const tick = (now: number) => {
-      const left = Math.max(0, deadline - now)
+      const left = Math.max(0, totalMs - (now - startedAt))
       setRemainingMs(left)
       if (left <= 0) {
         if (!fired) {
@@ -49,16 +47,18 @@ export default function TimerBar({
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [running, resetKey, totalSeconds])
+  }, [running, resetKey, totalMs])
 
-  const pct = Math.max(0, Math.min(100, (remainingMs / (totalSeconds * 1000)) * 100))
+  const pct = Math.max(0, Math.min(100, (remainingMs / totalMs) * 100))
   const secs = Math.ceil(remainingMs / 1000)
   const urgent = secs <= 10
   const warn = secs <= 20
 
+  const fillColor = urgent ? 'bg-red-500' : warn ? 'bg-amber-500' : 'bg-blue-500'
+
   return (
-    <div className="w-full">
-      <div className="flex justify-between text-xs mb-1">
+    <div className={`w-full ${prominent ? 'mg-timer-prominent' : ''}`}>
+      <div className={`flex justify-between mb-1 ${prominent ? 'text-sm' : 'text-xs'}`}>
         <span className={urgent ? 'text-red-600 font-semibold' : 'text-gray-500'}>Time</span>
         <span
           className={
@@ -72,10 +72,16 @@ export default function TimerBar({
           {secs}s
         </span>
       </div>
-      <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+      <div
+        className={`rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden ${prominent ? 'h-3' : 'h-2'}`}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={totalSeconds}
+        aria-valuenow={secs}
+      >
         <div
-          className={`h-full ${urgent ? 'bg-red-500' : warn ? 'bg-amber-500' : 'bg-blue-500'}`}
-          style={{ width: `${pct}%` }}
+          className={`h-full w-full origin-left ${fillColor}`}
+          style={{ transform: `scaleX(${pct / 100})` }}
         />
       </div>
     </div>
