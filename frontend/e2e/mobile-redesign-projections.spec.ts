@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test'
 import { mockApi, fixture } from './support/mockApi'
 
@@ -48,7 +48,7 @@ async function openProjections(page: Page) {
   await mockApi(page, {
     '/matchups/today': MATCHUPS,
     '/players/': PLAYER_LIST,
-    '/projections/predict': async (route) => {
+    '/projections/predict': async (route: Route) => {
       predicted += 1
       const body = route.request().postDataJSON() as { minutes: number; player_name: string }
       await route.fulfill({ json: { stats: line(body.minutes, body.minutes) } })

@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { test, expect, isMobile, expectNoHorizontalScroll } from './support/test'
 import { mockApi } from './support/mockApi'
 
@@ -62,7 +62,7 @@ async function openTrends(page: Page, query = '') {
     '/trends/minutes': MINUTES,
     '/trends/usage': USAGE,
     '/trends/categories': CATEGORIES,
-    '/trends/regression': async (route) => {
+    '/trends/regression': async (route: Route) => {
       const mode = new URL(route.request().url()).searchParams.get('mode') === 'form' ? 'form' : 'season'
       await route.fulfill({ json: reg(mode) })
     },
