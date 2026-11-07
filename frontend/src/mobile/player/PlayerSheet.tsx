@@ -1,8 +1,10 @@
 import { Link } from 'react-router'
+import { useMyTeam } from '../../context/MyTeamContext'
 import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetTeamPlayersQuery } from '../../store/api/fantasyApi'
 import type { Player, ProjectionStats } from '../../types/api'
 import { BottomSheet, MinutesStepper } from '../ui'
 import { usePlayerSheet } from './usePlayerSheet'
+import { tradePresetForPlayer } from './tradePreset'
 import { useSheetProjection, type SheetProjection } from './useSheetProjection'
 
 /*
@@ -79,6 +81,7 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
   // Not in the league's player list (e.g. no games yet): name and team from the bio.
   const { data: bio } = useGetNbaPlayerQuery(playerId, { skip: listLoading || !!player })
   const { loading: projLoading, projection } = useSheetProjection(playerId)
+  const { teams, myTeamId } = useMyTeam()
 
   const name = player?.player_name ?? bio?.display_name ?? (listLoading ? 'Loading…' : 'Player')
   const sub = player
@@ -92,7 +95,7 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
   const profileState = { from: sheet.behind }
 
   return (
-    <BottomSheet open onClose={sheet.close} title={name} hideTitle>
+    <BottomSheet open onClose={sheet.close} title={name} hideTitle className="mr-ps-sheet">
       <div className="mr-card-head mr-ps-head">
         <div className="mr-ps-who">
           <h2 className="mr-h1">{name}</h2>
@@ -122,7 +125,9 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
         <button type="button" className="mr-btn mr-pri mr-grow" onClick={() => sheet.leaveTo(`/player/${playerId}`, profileState)}>
           Full profile
         </button>
-        <button type="button" className="mr-btn mr-grow" onClick={() => sheet.leaveTo('/trade')}>
+        <button type="button" className="mr-btn mr-grow" onClick={() =>
+            sheet.leaveTo('/trade', player ? { tradePreset: tradePresetForPlayer(player, teams, myTeamId) } : undefined)
+          }>
           Trade Analyzer
         </button>
       </div>

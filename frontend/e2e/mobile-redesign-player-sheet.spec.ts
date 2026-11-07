@@ -124,4 +124,31 @@ test.describe('phone player sheet', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(page).toHaveURL(/\/teams$/)
   })
+
+  test('short screens: the sheet scrolls inside and its buttons stay on screen', async ({ page }) => {
+    await mockPlayerApis(page)
+    await page.goto('/players?ff=mobile')
+    for (const [width, height] of [[341, 605], [320, 568], [390, 480]]) {
+      await page.setViewportSize({ width, height })
+      await page.goto('/players?player=100')
+      const sheet = page.getByRole('dialog', { name: 'Alpha Star' })
+      await expect(sheet.getByRole('region', { name: 'Next game projection' })).toBeVisible()
+      for (const name of ['Full profile', 'Trade Analyzer']) {
+        const box = (await sheet.getByRole('button', { name }).boundingBox())!
+        expect(box.y + box.height, `${name} at ${width}x${height}`).toBeLessThanOrEqual(height)
+      }
+      await expectNoHorizontalScroll(page)
+    }
+  })
+
+  test('Trade Analyzer opens with the player already in the trade', async ({ page }) => {
+    await mockPlayerApis(page)
+    await page.goto('/players?ff=mobile')
+    await page.goto('/players?player=100')
+    await page.getByRole('dialog', { name: 'Alpha Star' }).getByRole('button', { name: 'Trade Analyzer' }).click()
+    await expect(page).toHaveURL(/\/trade$/)
+    // Picked on his team's side (no My Team set). Visible text only, so a
+    // closed <select> listing him does not count.
+    await expect(page.getByRole('main').getByText('Alpha Star', { exact: true }).filter({ visible: true }).first()).toBeVisible()
+  })
 })
