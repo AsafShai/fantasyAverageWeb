@@ -121,6 +121,27 @@ test.describe('phone Trends', () => {
     await shots(page, 'trends-chart')
   })
 
+  test('chart opens right under the tapped row and links to the player', async ({ page }) => {
+    await openTrends(page)
+    await page.locator('.mr-tr-name', { hasText: 'Scottie Barnes' }).click()
+    const chart = page.locator('.mr-tr-chart')
+    await expect(chart).toContainText('Scottie Barnes')
+    // the chart's row follows the tapped player's row
+    const after = page.locator('tr', { has: page.locator('.mr-tr-name', { hasText: 'Scottie Barnes' }) }).locator('+ tr')
+    await expect(after.locator('.mr-tr-chart')).toBeVisible()
+    await expectNoHorizontalScroll(page)
+    await shots(page, 'trends-inline-chart')
+    await chart.getByRole('link', { name: /Full profile/ }).click()
+    await expect(page).toHaveURL(/\/player\/3/)
+  })
+
+  test('chart links to the player sheet', async ({ page }) => {
+    await openTrends(page)
+    await page.locator('.mr-tr-name').nth(1).click()
+    await page.locator('.mr-tr-chart').getByRole('button', { name: 'Player sheet' }).click()
+    await expect(page).toHaveURL(/player=2/)
+  })
+
   test('filters sheet: position, closed by back', async ({ page }) => {
     await openTrends(page)
     await page.getByRole('button', { name: 'Filters' }).click()
