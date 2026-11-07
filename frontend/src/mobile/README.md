@@ -17,7 +17,7 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   `MinutesStepper`. Wrap redesigned screens in `.mr-root`; call
   `ensureMobileFonts()` once (Inter + Space Grotesk).
 - **Shell** `shell/`: logo header (search, dark mode, ☰), bottom tab bar
-  (Home · Standings · Teams · Players · Trade, `tabs.ts`), ☰ menu sheet with
+  (Home · Standings · Teams · Rankings · Trade, `tabs.ts`), ☰ menu sheet with
   Select my team and the same groups as desktop (`components/navConfig.ts` is
   shared by both), site footer. The menu and the search overlay are history
   entries: back closes them; a menu/search pick replaces that entry, so back

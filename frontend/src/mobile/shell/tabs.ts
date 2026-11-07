@@ -27,10 +27,10 @@ export const TABS: TabDef[] = [
     match: (p) => p === '/teams' || p.startsWith('/team/'),
   },
   {
-    path: '/players',
-    label: 'Players',
-    icon: 'M11 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M3 21v-1a6 6 0 0 1 9.5-4.9M17 14v6M14 17h6',
-    match: (p) => p === '/players' || p.startsWith('/player/'),
+    path: '/player-rankings',
+    label: 'Rankings',
+    icon: 'M10 6h10M10 12h10M10 18h10M4 5l1.5-1v4M3.5 18.5a1.5 1.5 0 1 1 2.5 1.1L3.5 21H6',
+    match: (p) => p === '/player-rankings',
   },
   {
     path: '/trade',
