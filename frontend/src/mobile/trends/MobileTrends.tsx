@@ -1,4 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router'
+import { usePlayerSheet } from '../player/usePlayerSheet'
 import TrendGameLogChart from '../../components/TrendGameLogChart'
 import { BASELINE_LABEL } from '../../utils/trendBaseline'
 import { formatShort } from '../../utils/dateRange'
@@ -90,13 +92,14 @@ interface ShootRow {
 /**
  * Player Trends on a phone: tab chips, search + Filters sheet, 7d/15d/30d/Custom
  * window and All / Free agents / Rostered scope, then a table with the player
- * pinned. Tapping a player opens their game-by-game chart in a card above the
- * table. Trends.tsx keeps all state and data.
+ * pinned. Tapping a player opens their game-by-game chart in a card right
+ * under that row (with links to the player sheet and full page). Trends.tsx keeps all state and data.
  */
 export default function MobileTrends(p: MobileTrendsProps) {
   const sheet = useSheetHistory('filters')
   const [sort, setSort] = useState<SortState>({ key: 'delta', dir: 'desc' })
   const [selected, setSelected] = useState<{ id: number; name: string; stat?: RegressionStat } | null>(null)
+  const playerSheet = usePlayerSheet()
   const [statFilter, setStatFilter] = useState<StatFilter>('all')
   const w = p.windowDays
   const asc = sort.dir === 'asc'
@@ -122,6 +125,58 @@ export default function MobileTrends(p: MobileTrendsProps) {
     key, header, headerLabel, sortable: true,
   })
 
+  // ---- chart card ----------------------------------------------------------
+  const shootingStats = useMemo(
+    () => (selected && p.isShooting && p.regression
+      ? p.regression.items.find((g) => g.player_id === selected.id)?.stats.map((s) => s.stat) ?? []
+      : []),
+    [selected, p.isShooting, p.regression],
+  )
+  const [catOverride, setCatOverride] = useState<{ id: number; cat: CountingCategory } | null>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (selected) chartRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selected])
+  const chart = selected && (
+    <Card
+      title={selected.name}
+      action={<button type="button" className="mr-link" onClick={() => setSelected(null)}>Close</button>}
+      className="mr-tr-chart"
+    >
+      <div className="mr-tr-links">
+        <button type="button" className="mr-link" onClick={() => playerSheet.open(String(selected.id))}>Player sheet</button>
+        <Link className="mr-link" to={`/player/${selected.id}`}>Full profile →</Link>
+      </div>
+      <TrendGameLogChart
+        key={`${selected.id}-${p.tab}`}
+        playerId={selected.id}
+        playerName={selected.name}
+        mode={p.tab === 'minutes' ? 'minutes' : p.tab === 'usage' ? 'usage' : p.tab === 'categories' ? 'category' : 'shooting'}
+        regressionMode={p.isShooting ? (p.isFormTab ? 'form' : 'season') : undefined}
+        windowDays={w}
+        baselineSeasons={p.baselineSeasons}
+        stat={selected.stat}
+        qualifiedStats={shootingStats}
+        onStatChange={(stat) => setSelected({ ...selected, stat })}
+        category={catOverride?.id === selected.id ? catOverride.cat : p.activeCategory}
+        categories={p.leagueCats}
+        onCategoryChange={(cat) => setCatOverride({ id: selected.id, cat })}
+      />
+    </Card>
+  )
+
+  /** The chart as a full-width row right under the selected player's row. */
+  function chartRow(id: number, last: boolean, colSpan: number) {
+    if (!chart || selected?.id !== id || !last) return null
+    return (
+      <tr className="mr-tr-chart-row">
+        <td colSpan={colSpan}>
+          <div className="mr-tr-inline" ref={chartRef}>{chart}</div>
+        </td>
+      </tr>
+    )
+  }
+
   // ---- tables --------------------------------------------------------------
   let table: ReactNode = null
   let noneQualify = false
@@ -140,7 +195,8 @@ export default function MobileTrends(p: MobileTrendsProps) {
       { key: 'owner', header: 'OWNER', headerLabel: 'Fantasy owner', align: 'left', cell: (r) => <Owner status={r.fantasy_status} /> },
     ]
     table = <DataTable caption="Minutes movers" columns={cols} rows={rows} rowKey={(r) => String(r.player_id)} sort={sort} onSortChange={onSort}
-      isHighlighted={(r) => selected?.id === r.player_id} empty={<span className="mr-tr-empty">{noneQualify ? 'No players qualify yet.' : 'No players match current filters.'}</span>} />
+      isHighlighted={(r) => selected?.id === r.player_id} className="mr-tr-scroll" renderAfterRow={(r) => chartRow(r.player_id, true, cols.length)}
+      empty={<span className="mr-tr-empty">{noneQualify ? 'No players qualify yet.' : 'No players match current filters.'}</span>} />
   } else if (p.tab === 'usage' && p.usage) {
     const rows = filterAndSort(p.usage, pass, USG_SORT_VAL[sort.key] ?? USG_SORT_VAL.delta, asc)
     noneQualify = p.usage.length === 0
@@ -161,7 +217,8 @@ export default function MobileTrends(p: MobileTrendsProps) {
       { key: 'owner', header: 'OWNER', headerLabel: 'Fantasy owner', align: 'left', cell: (r) => <Owner status={r.fantasy_status} /> },
     ]
     table = <DataTable caption="Usage and role" columns={cols} rows={rows} rowKey={(r) => String(r.player_id)} sort={sort} onSortChange={onSort}
-      isHighlighted={(r) => selected?.id === r.player_id} empty={<span className="mr-tr-empty">{noneQualify ? 'No players qualify yet.' : 'No players match current filters.'}</span>} />
+      isHighlighted={(r) => selected?.id === r.player_id} className="mr-tr-scroll" renderAfterRow={(r) => chartRow(r.player_id, true, cols.length)}
+      empty={<span className="mr-tr-empty">{noneQualify ? 'No players qualify yet.' : 'No players match current filters.'}</span>} />
   } else if (p.tab === 'categories' && p.categories) {
     const flagged: CategoryRow[] = p.categories.flatMap((item) => {
       const stat = item.stats.find((s: CategoryStatItem) => s.cat === p.activeCategory)
@@ -181,7 +238,8 @@ export default function MobileTrends(p: MobileTrendsProps) {
       { key: 'owner', header: 'OWNER', headerLabel: 'Fantasy owner', align: 'left', cell: (r) => <Owner status={r.item.fantasy_status} /> },
     ]
     table = <DataTable caption={`${cat} movers`} columns={cols} rows={rows} rowKey={(r) => String(r.item.player_id)} sort={sort} onSortChange={onSort}
-      isHighlighted={(r) => selected?.id === r.item.player_id} empty={<span className="mr-tr-empty">{noneQualify ? 'No players qualify yet.' : 'No players match current filters.'}</span>} />
+      isHighlighted={(r) => selected?.id === r.item.player_id} className="mr-tr-scroll" renderAfterRow={(r) => chartRow(r.item.player_id, true, cols.length)}
+      empty={<span className="mr-tr-empty">{noneQualify ? 'No players qualify yet.' : 'No players match current filters.'}</span>} />
   } else if (p.isShooting && p.regression) {
     const isForm = p.regression.mode === 'form'
     const groups = sortRegressionGroups(p.regression.items, p.filters, statFilter, sort.key, asc, isForm)
@@ -211,36 +269,10 @@ export default function MobileTrends(p: MobileTrendsProps) {
     ]
     table = <DataTable caption="Shooting trends" columns={cols} rows={rows} rowKey={(r) => `${r.group.player_id}-${r.stat.stat}`} sort={sort} onSortChange={onSort}
       isHighlighted={(r) => selected?.id === r.group.player_id && selected.stat === r.stat.stat}
+      className="mr-tr-scroll"
+      renderAfterRow={(r, i) => chartRow(r.group.player_id, rows[i + 1]?.group.player_id !== r.group.player_id, cols.length)}
       empty={<span className="mr-tr-empty">{noneQualify ? 'No players qualify yet.' : 'No players match current filters.'}</span>} />
   }
-
-  // ---- chart card ----------------------------------------------------------
-  const shootingStats = useMemo(
-    () => (selected && p.isShooting && p.regression
-      ? p.regression.items.find((g) => g.player_id === selected.id)?.stats.map((s) => s.stat) ?? []
-      : []),
-    [selected, p.isShooting, p.regression],
-  )
-  const [catOverride, setCatOverride] = useState<{ id: number; cat: CountingCategory } | null>(null)
-  const chart = selected && (
-    <Card title={selected.name} action={<button type="button" className="mr-link" onClick={() => setSelected(null)}>Close</button>} className="mr-tr-chart">
-      <TrendGameLogChart
-        key={`${selected.id}-${p.tab}`}
-        playerId={selected.id}
-        playerName={selected.name}
-        mode={p.tab === 'minutes' ? 'minutes' : p.tab === 'usage' ? 'usage' : p.tab === 'categories' ? 'category' : 'shooting'}
-        regressionMode={p.isShooting ? (p.isFormTab ? 'form' : 'season') : undefined}
-        windowDays={w}
-        baselineSeasons={p.baselineSeasons}
-        stat={selected.stat}
-        qualifiedStats={shootingStats}
-        onStatChange={(stat) => setSelected({ ...selected, stat })}
-        category={catOverride?.id === selected.id ? catOverride.cat : p.activeCategory}
-        categories={p.leagueCats}
-        onCategoryChange={(cat) => setCatOverride({ id: selected.id, cat })}
-      />
-    </Card>
-  )
 
   // ---- filters -------------------------------------------------------------
   const f = p.filters
@@ -340,7 +372,6 @@ export default function MobileTrends(p: MobileTrendsProps) {
       ) : (
         <>
           {p.eligibilityRule && <p className="mr-meta">{p.eligibilityRule}</p>}
-          {chart}
           {table}
           <TabNote tab={p.tab} cat={p.activeCategory} reverse={p.reverseCats} baselineSeasons={p.baselineSeasons} />
         </>

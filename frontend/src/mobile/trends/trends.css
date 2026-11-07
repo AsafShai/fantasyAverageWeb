@@ -21,3 +21,9 @@
 .mr-trends .mr-t td.mr-empty { text-align: left; }
 .mr-trends .mr-tr-empty { position: sticky; left: 12px; display: inline-block; }
 .mr-trends .mr-tr-chart { overflow: hidden; }
+/* The chart sits in a full-width row under the selected player: pinned to the
+   left edge and as wide as the table's scroll box, so it never scrolls sideways. */
+.mr-trends .mr-tr-chart-row > td { padding: 0 !important; border-bottom: 1px solid var(--mr-border, rgba(128,128,128,.25)); }
+.mr-trends .mr-tr-inline { position: sticky; left: 0; width: 100cqw; box-sizing: border-box; padding: 8px; text-align: left; white-space: normal; }
+.mr-trends .mr-tr-links { display: flex; gap: 16px; margin: -4px 0 8px; font-size: 13px; }
+.mr-trends .mr-tr-scroll { container-type: inline-size; }
