@@ -52,6 +52,8 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   `?mode=daily|stats|schedule`). Today's matchup opens in a bottom sheet with the
   minutes stepper (`MatchupExpandPanel minutesStepper`). Styles in `team/team.css`.
 - **Preview**: `npm run dev` → `/mobile-kit.html` (dev only, not in the build).
+- **League pages** (step 5): Activity (`activity/`; trade views reuse the desktop
+  components), Draft Report + FA Report (`draft/`). Styles in each folder's css.
 - **League Analytics + Estimator** `pages/analytics/` (step 5): phone tabs in `?tab=heat|race|shots`
   and `?tab=prob|rank|proj`. StandingsRace, ShootingStatsSection and Estimator's sections keep
   their state and render phone controls/tables themselves. Styles in `analytics.css`.

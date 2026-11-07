@@ -11,12 +11,18 @@ import {
   topSteals,
   topBusts,
   REPORT_MIN_GP,
+  HEAT_MIN_SEASON_MONTHS,
+  heatColor,
+  isHeatReady,
+  valueTag,
   type ScoredPick,
   type DraftBadge,
 } from '../utils/draftReport'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
 import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
+import { useMobileRedesign } from '../mobile/flag'
+import MobileDraftReport from '../mobile/draft/MobileDraftReport'
 
 type SortCol = 'pick' | 'diff' | 'valueRank'
 
@@ -35,33 +41,6 @@ const BADGE_STYLES: Record<DraftBadge, string> = {
 //   A: 'bg-green-600', B: 'bg-teal-600', C: 'bg-amber-600', D: 'bg-orange-600', F: 'bg-red-600',
 // }
 
-function valueTag(p: ScoredPick): string {
-  if (p.valueRank !== null) return `#${p.valueRank}`
-  if (p.badge === 'Low GP') return `${p.gp}gp · min ${REPORT_MIN_GP}`
-  if (p.badge === 'DNP') return 'DNP'
-  return `INJ ${p.gp}gp`
-}
-
-function heatColor(p: ScoredPick): string {
-  if (p.badge === 'INJ' || p.badge === 'DNP' || p.badge === 'Low GP') return 'rgba(220,38,38,0.35)'
-  const d = Math.max(-60, Math.min(60, p.diff ?? 0))
-  if (d > 8) return `rgba(37,99,235,${(0.08 + (d / 60) * 0.38).toFixed(2)})`
-  if (d < -8) return `rgba(220,38,38,${(0.08 - (d / 60) * 0.38).toFixed(2)})`
-  return 'rgba(156,163,175,0.10)'
-}
-
-// Board heat is noise early on — sample sizes are too small to judge picks.
-// Only color once two months of the season have elapsed.
-const HEAT_MIN_SEASON_MONTHS = 2
-
-function isHeatReady(seasonStart: string | undefined, now: Date = new Date()): boolean {
-  if (!seasonStart) return false
-  const ready = new Date(`${seasonStart}T00:00:00`)
-  if (isNaN(ready.getTime())) return false
-  ready.setMonth(ready.getMonth() + HEAT_MIN_SEASON_MONTHS)
-  return now >= ready
-}
-
 export default function DraftReport() {
   const [calcMode, setCalcMode] = usePersistedState<'totals' | 'per_game'>('draftReport.calcMode', 'per_game')
   const { data: draftReport, isLoading: draftLoading, error: draftError } = useGetDraftReportQuery()
@@ -70,6 +49,7 @@ export default function DraftReport() {
   // maintaining a separate data source.
   const { data: playersData, isLoading: poolLoading, error: poolError } = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' })
   const { data: summary } = useGetLeagueSummaryQuery()
+  const mobileRedesign = useMobileRedesign()
   const showHeat = isHeatReady(summary?.season_start)
   const [sortCol, setSortCol] = useState<SortCol>('pick')
   const [sortAsc, setSortAsc] = useState(true)
@@ -150,6 +130,28 @@ export default function DraftReport() {
 
   if (draftLoading || poolLoading) return <LoadingSpinner />
   if (draftError || poolError) return <ErrorMessage message={getErrorMessage(draftError ?? poolError, 'Failed to load draft report.')} />
+
+  if (mobileRedesign) {
+    return (
+      <MobileDraftReport
+        calcMode={calcMode}
+        onCalcModeChange={setCalcMode}
+        showHeat={showHeat}
+        teamColumns={teamColumns}
+        rounds={rounds}
+        gridByRoundTeam={gridByRoundTeam}
+        teamDiffs={FF_DRAFT_STEALS_BUSTS ? teamDiffs : []}
+        steals={FF_DRAFT_STEALS_BUSTS ? steals : []}
+        busts={FF_DRAFT_STEALS_BUSTS ? busts : []}
+        picks={sortedPicks}
+        sortCol={sortCol}
+        sortAsc={sortAsc}
+        onSort={(col, asc) => { setSortCol(col); setSortAsc(asc) }}
+        teamFilter={teamFilter}
+        onTeamFilterChange={setTeamFilter}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">

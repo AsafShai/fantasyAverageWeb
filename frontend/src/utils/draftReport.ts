@@ -302,3 +302,32 @@ export function topBusts(scoredPicks: ScoredPick[], limit = 5): ScoredPick[] {
     .sort((a, b) => pickSurplus(a) - pickSurplus(b))
     .slice(0, limit)
 }
+
+// Draft board helpers, shared by the desktop page and the phone layout.
+
+export function valueTag(p: ScoredPick): string {
+  if (p.valueRank !== null) return `#${p.valueRank}`
+  if (p.badge === 'Low GP') return `${p.gp}gp · min ${REPORT_MIN_GP}`
+  if (p.badge === 'DNP') return 'DNP'
+  return `INJ ${p.gp}gp`
+}
+
+export function heatColor(p: ScoredPick): string {
+  if (p.badge === 'INJ' || p.badge === 'DNP' || p.badge === 'Low GP') return 'rgba(220,38,38,0.35)'
+  const d = Math.max(-60, Math.min(60, p.diff ?? 0))
+  if (d > 8) return `rgba(37,99,235,${(0.08 + (d / 60) * 0.38).toFixed(2)})`
+  if (d < -8) return `rgba(220,38,38,${(0.08 - (d / 60) * 0.38).toFixed(2)})`
+  return 'rgba(156,163,175,0.10)'
+}
+
+// Board heat is noise early on — sample sizes are too small to judge picks.
+// Only color once two months of the season have elapsed.
+export const HEAT_MIN_SEASON_MONTHS = 2
+
+export function isHeatReady(seasonStart: string | undefined, now: Date = new Date()): boolean {
+  if (!seasonStart) return false
+  const ready = new Date(`${seasonStart}T00:00:00`)
+  if (isNaN(ready.getTime())) return false
+  ready.setMonth(ready.getMonth() + HEAT_MIN_SEASON_MONTHS)
+  return now >= ready
+}
