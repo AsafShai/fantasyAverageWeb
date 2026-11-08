@@ -227,27 +227,32 @@
 
 .mgr-hint-line-name {
   display: inline-flex;
-  flex: 0 1 auto;
   align-items: center;
   gap: 0.3rem;
-  min-width: 0;
-  max-width: min(11rem, 42vw);
   font-weight: 600;
 }
 
+/* Mobile: horizontal scroll row — cap name width only there */
 .mgr-hint-player-line--mobile .mgr-hint-line-name {
   flex: 0 0 auto;
-  max-width: none;
+  min-width: 0;
+  max-width: min(11rem, 42vw);
 }
 
-.mgr-hint-line-name a {
+.mgr-hint-player-line--mobile .mgr-hint-line-name a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
 
-.mgr-hint-player-line--mobile .mgr-hint-line-name a {
+/* Desktop: full names; matchup + ranks wrap to the next line when needed */
+.mgr-hint-player-line:not(.mgr-hint-player-line--mobile) .mgr-hint-line-name {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+.mgr-hint-player-line:not(.mgr-hint-player-line--mobile) .mgr-hint-line-name a {
   white-space: nowrap;
 }
 
