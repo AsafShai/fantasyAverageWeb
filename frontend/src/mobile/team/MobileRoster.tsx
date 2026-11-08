@@ -7,7 +7,8 @@ import ErrorMessage from '../../components/ErrorMessage'
 import { SCHEDULE_HORIZONS, type ScheduleHorizon } from '../../components/PlayerWeekColumns'
 import { getErrorMessage } from '../../utils/errorMessage'
 import { addDays } from '../../utils/slateWindow'
-import { dayLabel, isBench, lineupSlotOrder, lockNote, moveNote, moveTime, pct, starterTotals } from '../../utils/rosterDay'
+import { RosterDayOnlyPlayedToggle } from '../../components/RosterDayView'
+import { dayLabel, isBench, lineupSlotOrder, lockNote, moveNote, moveTime, pct, rosterDayPlayerPlayed, starterTotals } from '../../utils/rosterDay'
 import { BottomSheet, Button, Card, Chip, ChipRow, InjuryMark, Segmented, SlotPill, useSheetHistory } from '../ui'
 import type { MobileTeamDetailProps } from './types'
 
@@ -92,10 +93,12 @@ function DailyRoster(p: MobileTeamDetailProps) {
   const { rosterDay: day, rosterDayFetching: fetching, rosterDayError: error } = p
   const [lit, setLit] = useState<{ date: string; id: number } | null>(null)
   const matchupSheet = useMatchupSheet()
-  const players = useMemo(
-    () => (day ? [...day.players].sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot)) : []),
-    [day],
-  )
+  const onlyPlayed = Boolean(day && !day.is_today && p.rosterDayOnlyPlayed)
+  const players = useMemo(() => {
+    if (!day) return []
+    const sorted = [...day.players].sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot))
+    return onlyPlayed ? sorted.filter(rosterDayPlayerPlayed) : sorted
+  }, [day, onlyPlayed])
   const starterPlayers = useMemo(() => players.filter((x) => !isBench(x.lineup_slot)), [players])
   const benchPlayers = useMemo(() => players.filter((x) => isBench(x.lineup_slot)), [players])
   const totals = useMemo(() => starterTotals(players), [players])
@@ -221,6 +224,11 @@ function DailyRoster(p: MobileTeamDetailProps) {
   return (
     <>
       {stepper}
+      {showStats && (
+        <div className="mr-tm-daily-filter">
+          <RosterDayOnlyPlayedToggle compact checked={p.rosterDayOnlyPlayed} onChange={p.onRosterDayOnlyPlayed} />
+        </div>
+      )}
       {note && <span className="mr-meta" data-testid="roster-day-note">{note}</span>}
       <Card title="Moves" action={day.moves.length ? <span className="mr-meta">{day.moves.length} {day.is_today ? 'today' : 'this day'}</span> : undefined} data-testid="roster-day-moves">
         {day.moves.length === 0 ? (
@@ -251,7 +259,9 @@ function DailyRoster(p: MobileTeamDetailProps) {
         className="mr-tm-table"
       >
         {players.length === 0 ? (
-          <span className="mr-meta">No roster for this day.</span>
+          <span className="mr-meta">
+            {onlyPlayed && day.players.length > 0 ? 'No players logged a game this day.' : 'No roster for this day.'}
+          </span>
         ) : (
           <div className="mr-tw mr-noscroll" role="region" aria-label="Roster for the day" tabIndex={0}>
             <table className="mr-t" data-testid="roster-day-table">
