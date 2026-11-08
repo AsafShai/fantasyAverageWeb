@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { coverageBarPlayingSplit, rosterDayCoverage } from '../rosterCoverage'
 import { opponentsByTeamDate } from '../slateWindow'
-import type { Player, ScheduleGame, ScheduleResponse, ScheduleTeam } from '../../types/api'
+import type { Player, ScheduleGame, ScheduleResponse } from '../../types/api'
 
 function game(partial: Pick<ScheduleGame, 'date' | 'opponent_abbreviation' | 'is_home'>): ScheduleGame {
   return {
