@@ -27,8 +27,8 @@ export function buildHintPlayerLine(
 }
 
 export function considerStartRankNotes(
-  season: PlayerRankRef | undefined,
-  l15: PlayerRankRef | undefined,
+  season: PlayerRankRef | null | undefined,
+  l15: PlayerRankRef | null | undefined,
   seasonMax: number,
   l15Max: number,
 ): string[] {
@@ -43,8 +43,8 @@ export function considerStartRankNotes(
 }
 
 export function considerBenchRankNotes(
-  season: PlayerRankRef | undefined,
-  l15: PlayerRankRef | undefined,
+  season: PlayerRankRef | null | undefined,
+  l15: PlayerRankRef | null | undefined,
   seasonOutsideTop: number,
   l15OutsideTop: number,
 ): string[] {
