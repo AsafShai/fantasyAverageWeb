@@ -31,6 +31,7 @@ import { easternToday, formatSlateDate, opponentsByTeamDate, weekGameCount, week
 import { useMobileRedesign } from '../mobile/flag'
 import MobileTeamDetail from '../mobile/team/MobileTeamDetail'
 import { TEAM_TABS, type TeamTab } from '../mobile/team/types'
+import { ManagerHintsTeamSection } from '../components/hints/ManagerHintsCard'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -627,6 +628,8 @@ const TeamDetail = () => {
           </div>
         </div>
       </div>
+
+      <ManagerHintsTeamSection teamId={teamIdNumber} layout="desktop" teamDetail={team_detail} />
 
       <CollapsibleSection
         id="team-stats"
