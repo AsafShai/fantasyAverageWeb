@@ -8,45 +8,12 @@ import { SCHEDULE_HORIZONS, type ScheduleHorizon } from '../../components/Player
 import { getErrorMessage } from '../../utils/errorMessage'
 import { addDays } from '../../utils/slateWindow'
 import { dayLabel, isBench, lineupSlotOrder, lockNote, moveNote, moveTime, pct, starterTotals } from '../../utils/rosterDay'
-import { BottomSheet, Button, Card, Chip, ChipRow, Segmented, SlotPill, statusKey, useSheetHistory } from '../ui'
+import { BottomSheet, Button, Card, Chip, ChipRow, InjuryMark, Segmented, SlotPill, useSheetHistory } from '../ui'
 import type { MobileTeamDetailProps } from './types'
 
 const MATCHUP_SHEET_ID = 'team-matchup'
 
 // ── shared bits ────────────────────────────────────────────────────────────
-
-const SHORT_STATUS: Record<string, string> = {
-  DOUBTFUL: 'D',
-  QUESTIONABLE: 'Q',
-  DAY_TO_DAY: 'DTD',
-  PROBABLE: 'P',
-  SUSPENSION: 'SUSP',
-}
-const STATUS_CLASS: Record<string, string> = {
-  DOUBTFUL: 'mr-pill-doubt',
-  QUESTIONABLE: 'mr-pill-quest',
-  DAY_TO_DAY: 'mr-pill-quest',
-  PROBABLE: 'mr-pill-prob',
-  SUSPENSION: 'mr-pill-out',
-}
-
-/** Injury status next to a name: 🩹 for Out, a short colored pill otherwise. */
-function InjuryMark({ status }: { status?: string | null }) {
-  if (!status) return null
-  const key = statusKey(status)
-  if (key === 'ACTIVE' || key === 'AVAILABLE') return null
-  if (key === 'OUT' || key === 'INJURY_RESERVE')
-    return (
-      <span className="mr-tm-inj" title={status} role="img" aria-label={status}>
-        🩹
-      </span>
-    )
-  return (
-    <span className={`mr-pill mr-square ${STATUS_CLASS[key] ?? 'mr-pill-bench'}`} title={status} aria-label={status}>
-      {SHORT_STATUS[key] ?? status}
-    </span>
-  )
-}
 
 function NameCell({ name, id, status, tags }: { name: string; id?: number | null; status?: string | null; tags?: ReactNode }) {
   return (
@@ -129,6 +96,8 @@ function DailyRoster(p: MobileTeamDetailProps) {
     () => (day ? [...day.players].sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot)) : []),
     [day],
   )
+  const starterPlayers = useMemo(() => players.filter((x) => !isBench(x.lineup_slot)), [players])
+  const benchPlayers = useMemo(() => players.filter((x) => isBench(x.lineup_slot)), [players])
   const totals = useMemo(() => starterTotals(players), [players])
   // Today nobody has played yet: count the starters who have a game instead.
   const starterGames = day?.is_today ? players.filter((x) => !isBench(x.lineup_slot) && !!x.opponent).length : totals.games
@@ -184,6 +153,45 @@ function DailyRoster(p: MobileTeamDetailProps) {
     )
 
   const showStats = !day.is_today
+
+  const renderDailyRow = (pl: (typeof players)[number]) => {
+    const matchup = day.is_today ? p.matchups.get(pl.player_name) : undefined
+    const muted = showStats && (isBench(pl.lineup_slot) || pl.status !== 'played')
+    const cls = [litId === pl.player_id && 'mr-lit', muted && 'mr-muted'].filter(Boolean).join(' ')
+    return (
+      <tr key={pl.player_id} className={cls || undefined} data-testid="roster-day-row">
+        <th scope="row" className="mr-pin">
+          <NameCell
+            name={pl.player_name}
+            id={pl.player_id}
+            status={matchup?.injury_status}
+            tags={
+              <>
+                {pl.added && <span className="mr-pill mr-square mr-pill-added" title="First day on this roster">Added</span>}
+                {pl.dropped && <span className="mr-pill mr-square mr-pill-out" title="Last day on this roster">Dropped</span>}
+              </>
+            }
+          />
+        </th>
+        <td className="mr-l">{slotOf(pl.lineup_slot)}</td>
+        <td className="mr-l">{pl.positions.join('/')}</td>
+        <td className="mr-l">{pl.pro_team}</td>
+        <td className="mr-l">
+          {matchup ? (
+            <button type="button" className="mr-tm-opp" onClick={() => matchupSheet.open(matchup)} aria-label={`${pl.player_name} vs ${matchup.opponent}: show matchup and projection`}>
+              vs {matchup.opponent} <span aria-hidden="true">›</span>
+            </button>
+          ) : pl.opponent ? (
+            `vs ${pl.opponent}`
+          ) : (
+            <span title={day.is_today ? 'No game today' : 'No game'}>—</span>
+          )}
+        </td>
+        {showStats && statCells(pl).map((v, i) => <td key={i}>{v}</td>)}
+      </tr>
+    )
+  }
+
   const moveName = (pl: { player_id: number; name: string; on_roster: boolean }, added: boolean) => {
     const cls = added ? 'mr-tm-add' : 'mr-tm-drop'
     const text = `${added ? 'Added' : 'Dropped'} ${pl.name}`
@@ -258,43 +266,7 @@ function DailyRoster(p: MobileTeamDetailProps) {
                 </tr>
               </thead>
               <tbody>
-                {players.map((pl) => {
-                  const matchup = day.is_today ? p.matchups.get(pl.player_name) : undefined
-                  const muted = showStats && (isBench(pl.lineup_slot) || pl.status !== 'played')
-                  const cls = [litId === pl.player_id && 'mr-lit', muted && 'mr-muted'].filter(Boolean).join(' ')
-                  return (
-                    <tr key={pl.player_id} className={cls || undefined} data-testid="roster-day-row">
-                      <th scope="row" className="mr-pin">
-                        <NameCell
-                          name={pl.player_name}
-                          id={pl.player_id}
-                          status={matchup?.injury_status}
-                          tags={
-                            <>
-                              {pl.added && <span className="mr-pill mr-square mr-pill-added" title="First day on this roster">Added</span>}
-                              {pl.dropped && <span className="mr-pill mr-square mr-pill-out" title="Last day on this roster">Dropped</span>}
-                            </>
-                          }
-                        />
-                      </th>
-                      <td className="mr-l">{slotOf(pl.lineup_slot)}</td>
-                      <td className="mr-l">{pl.positions.join('/')}</td>
-                      <td className="mr-l">{pl.pro_team}</td>
-                      <td className="mr-l">
-                        {matchup ? (
-                          <button type="button" className="mr-tm-opp" onClick={() => matchupSheet.open(matchup)} aria-label={`${pl.player_name} vs ${matchup.opponent}: show matchup and projection`}>
-                            vs {matchup.opponent} <span aria-hidden="true">›</span>
-                          </button>
-                        ) : pl.opponent ? (
-                          `vs ${pl.opponent}`
-                        ) : (
-                          <span title={day.is_today ? 'No game today' : 'No game'}>—</span>
-                        )}
-                      </td>
-                      {showStats && statCells(pl).map((v, i) => <td key={i}>{v}</td>)}
-                    </tr>
-                  )
-                })}
+                {starterPlayers.map(renderDailyRow)}
                 {showStats && (
                   <tr className="mr-sum" data-testid="roster-day-totals">
                     <th scope="row" className="mr-pin">Starters ({dayLabel(day.date)})</th>
@@ -312,6 +284,7 @@ function DailyRoster(p: MobileTeamDetailProps) {
                     ).map((v, i) => <td key={i}>{v}</td>)}
                   </tr>
                 )}
+                {benchPlayers.map(renderDailyRow)}
               </tbody>
             </table>
           </div>

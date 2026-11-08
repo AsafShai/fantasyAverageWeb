@@ -190,6 +190,40 @@ export function scoreAgainstPool(player: Player, referencePool: Player[], calcMo
   return categories.reduce((sum, cat) => sum + zScores[cat] * weights[cat], 0) / categories.length
 }
 
+/** Per-game value ranks for everyone with GP > 0 — same baseline as Player Rankings (minGp 0). */
+export function buildPerGameValueRanksByPlayerId(
+  players: Player[],
+  categories: RankingCategory[] = DEFAULT_CATEGORIES,
+  reverseCategories: Set<RankingCategory> = EMPTY_REVERSE,
+): Map<number, { rank: number; totalZ: number }> {
+  const { available } = partitionByDataAvailability(players)
+  const weights = Object.fromEntries(categories.map((c) => [c, 1])) as Record<RankingCategory, number>
+  const ranked = computePlayerRankings(
+    available,
+    { calcMode: 'per_game', minGp: 0, minMin: 0, position: null, weights },
+    categories,
+    reverseCategories,
+  )
+  const referencePool = ranked.map((r) => r.player)
+  const zByName = new Map(ranked.map((r) => [r.player.player_name, r.totalZ]))
+  const fullyRanked = available
+    .filter((p) => p.stats.gp > 0)
+    .map((p) => ({
+      player: p,
+      totalZ:
+        zByName.get(p.player_name) ??
+        scoreAgainstPool(p, referencePool, 'per_game', weights, categories, reverseCategories),
+    }))
+    .sort((a, b) => b.totalZ - a.totalZ)
+
+  const map = new Map<number, { rank: number; totalZ: number }>()
+  fullyRanked.forEach((row, i) => {
+    const id = row.player.player_id
+    if (id != null) map.set(id, { rank: i + 1, totalZ: row.totalZ })
+  })
+  return map
+}
+
 export interface PlayerRankSummary {
   /** 1-based overall rank, or null when the player falls outside the ranked pool. */
   rank: number | null

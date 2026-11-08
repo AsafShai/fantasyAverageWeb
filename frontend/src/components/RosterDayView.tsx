@@ -223,6 +223,52 @@ function rosterDayStatsToPlayerStats(s: RosterDayStats | null | undefined): Play
   }
 }
 
+function RosterDayDesktopStartersTotalsRow({
+  day,
+  totals,
+  showStatColumns,
+}: {
+  day: RosterDay
+  totals: StarterTotals
+  showStatColumns: boolean
+}) {
+  return (
+    <tr
+      className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold dark:from-blue-950/40 dark:to-indigo-950/40 [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0"
+      data-testid="roster-day-totals"
+    >
+      <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
+      <td className="sticky left-0 z-10 border-r border-r-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-3 text-sm font-bold whitespace-nowrap text-blue-900 dark:border-gray-700 dark:from-blue-950/50 dark:to-indigo-950/50 dark:text-blue-100">
+        Starters<span className="hidden sm:inline"> ({dayLabel(day.date)})</span>
+      </td>
+      <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">
+        {totals.games} {totals.games === 1 ? 'game' : 'games'}
+      </td>
+      <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
+      <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
+      {showStatColumns &&
+        (totals.games
+          ? [
+              totals.minutes,
+              <>{pct(totals.fgm, totals.fga)}<span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-300">{totals.fgm}/{totals.fga}</span></>,
+              <>{pct(totals.ftm, totals.fta)}<span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-300">{totals.ftm}/{totals.fta}</span></>,
+              totals.three_pm,
+              totals.reb,
+              totals.ast,
+              totals.stl,
+              totals.blk,
+              totals.pts,
+            ]
+          : Array(9).fill('—')
+        ).map((value, i) => (
+          <td key={i} className="px-3 py-3 whitespace-nowrap text-sm text-right text-blue-900 dark:text-blue-100">
+            {value}
+          </td>
+        ))}
+    </tr>
+  )
+}
+
 function RosterDayMobileStartersTotals({ day, totals }: { day: RosterDay; totals: StarterTotals }) {
   const hasGames = totals.games > 0
   const label = 'block text-[8px] uppercase text-blue-800/80 dark:text-blue-300/90'
@@ -479,6 +525,74 @@ export function RosterDayContent({
     INFO_COLUMNS.length +
     (showStatColumns ? STAT_HEADER_COLUMNS.length : 0)
 
+  const renderDesktopPlayerRow = (player: (typeof players)[number]) => {
+    const bench = isBench(player.lineup_slot)
+    const lit = activeHighlight === player.player_id
+    const tone = player.status === 'played' && !bench ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
+    const matchup = day.is_today ? matchups?.get(player.player_name) : undefined
+    const isExpanded = expandedMatchupNames.has(player.player_name)
+    const stickyBg = lit ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-white dark:bg-gray-800'
+    const cells = showStatColumns ? statCells(player, day.is_today) : []
+    return (
+      <Fragment key={player.player_id}>
+        <tr className={lit ? 'bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'} data-testid="roster-day-row">
+          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-400 dark:text-gray-500">
+            <SlotPill slot={player.lineup_slot} activeTitle="Lineup slot at lock" />
+          </td>
+          <td className={`px-3 py-3 ${nameCellWrapClass(player.player_name)} text-sm font-medium text-gray-900 sticky left-0 z-10 border-r border-r-gray-200 dark:border-gray-700 ${stickyBg}`}>
+            <PlayerNameLink name={wrapFriendlyName(player.player_name)} playerId={player.player_id} />
+            {(player.added || player.dropped) && (
+              <span className="mt-1 flex w-fit overflow-hidden rounded text-xs font-medium whitespace-nowrap ring-1 ring-inset ring-gray-200 sm:mt-0 sm:ml-1.5 sm:inline-flex sm:align-middle dark:ring-gray-600">
+                {player.added && (
+                  <span className="bg-blue-500/10 px-1.5 py-0.5 text-blue-700 dark:bg-sky-400/15 dark:text-sky-300" title="First day on this roster">Added</span>
+                )}
+                {player.dropped && (
+                  <span className={`bg-red-500/10 px-1.5 py-0.5 text-red-700 dark:bg-red-400/15 ${player.added ? 'border-l border-gray-200 dark:border-gray-600' : ''}`} title="Last day on this roster">Dropped</span>
+                )}
+              </span>
+            )}
+          </td>
+          {day.is_today && (
+            <td className="px-3 py-3 whitespace-nowrap align-top text-sm">
+              <InjuryBadge status={matchup?.injury_status} />
+            </td>
+          )}
+          {day.is_today && (
+            <td className="px-3 py-3 whitespace-nowrap align-top text-sm">
+              <MatchupCell
+                matchup={matchup}
+                isExpanded={isExpanded}
+                onToggle={() => toggleMatchupExpand(player.player_name)}
+                playerStats={rosterDayStatsToPlayerStats(player.stats)}
+              />
+            </td>
+          )}
+          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{player.positions.join(', ')}</td>
+          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{player.pro_team}</td>
+          <td className={`px-3 py-3 whitespace-nowrap text-sm ${bench ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
+            {player.opponent ? (
+              <span className="mq-opp">vs {player.opponent}</span>
+            ) : day.is_today ? (
+              <span className="mq-no-game text-gray-500 dark:text-gray-400">{NO_GAME_TODAY}</span>
+            ) : (
+              <span className="mq-no-game">—</span>
+            )}
+          </td>
+          {cells.map((value, i) => (
+            <td key={i} className={`px-3 py-3 whitespace-nowrap text-sm text-right ${tone}`}>{value}</td>
+          ))}
+        </tr>
+        {day.is_today && isExpanded && matchup && (
+          <MatchupExpandRow
+            matchup={matchup}
+            colSpan={desktopColSpan}
+            integerProjectionToggle
+          />
+        )}
+      </Fragment>
+    )
+  }
+
   return (
     <>
       <MovesStrip day={day} highlight={activeHighlight} onPick={pick} />
@@ -567,96 +681,11 @@ export function RosterDayContent({
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800">
-              {players.map(player => {
-                const bench = isBench(player.lineup_slot)
-                const lit = activeHighlight === player.player_id
-                const tone = player.status === 'played' && !bench ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
-                const matchup = day.is_today ? matchups?.get(player.player_name) : undefined
-                const isExpanded = expandedMatchupNames.has(player.player_name)
-                const stickyBg = lit ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-white dark:bg-gray-800'
-                const cells = showStatColumns ? statCells(player, day.is_today) : []
-                return (
-                  <Fragment key={player.player_id}>
-                    <tr className={lit ? 'bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'} data-testid="roster-day-row">
-                      <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-400 dark:text-gray-500">
-                        <SlotPill slot={player.lineup_slot} activeTitle="Lineup slot at lock" />
-                      </td>
-                      <td className={`px-3 py-3 ${nameCellWrapClass(player.player_name)} text-sm font-medium text-gray-900 sticky left-0 z-10 border-r border-r-gray-200 dark:border-gray-700 ${stickyBg}`}>
-                        <PlayerNameLink name={wrapFriendlyName(player.player_name)} playerId={player.player_id} />
-                        {(player.added || player.dropped) && (
-                          <span className="mt-1 flex w-fit overflow-hidden rounded text-xs font-medium whitespace-nowrap ring-1 ring-inset ring-gray-200 sm:mt-0 sm:ml-1.5 sm:inline-flex sm:align-middle dark:ring-gray-600">
-                            {player.added && (
-                              <span className="bg-blue-500/10 px-1.5 py-0.5 text-blue-700 dark:bg-sky-400/15 dark:text-sky-300" title="First day on this roster">Added</span>
-                            )}
-                            {player.dropped && (
-                              <span className={`bg-red-500/10 px-1.5 py-0.5 text-red-700 dark:bg-red-400/15 ${player.added ? 'border-l border-gray-200 dark:border-gray-600' : ''}`} title="Last day on this roster">Dropped</span>
-                            )}
-                          </span>
-                        )}
-                      </td>
-                      {day.is_today && (
-                        <td className="px-3 py-3 whitespace-nowrap align-top text-sm">
-                          <InjuryBadge status={matchup?.injury_status} />
-                        </td>
-                      )}
-                      {day.is_today && (
-                        <td className="px-3 py-3 whitespace-nowrap align-top text-sm">
-                          <MatchupCell
-                            matchup={matchup}
-                            isExpanded={isExpanded}
-                            onToggle={() => toggleMatchupExpand(player.player_name)}
-                            playerStats={rosterDayStatsToPlayerStats(player.stats)}
-                          />
-                        </td>
-                      )}
-                      <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{player.positions.join(', ')}</td>
-                      <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{player.pro_team}</td>
-                      <td className={`px-3 py-3 whitespace-nowrap text-sm ${bench ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
-                        {player.opponent ? (
-                          <span className="mq-opp">vs {player.opponent}</span>
-                        ) : day.is_today ? (
-                          <span className="mq-no-game text-gray-500 dark:text-gray-400">{NO_GAME_TODAY}</span>
-                        ) : (
-                          <span className="mq-no-game">—</span>
-                        )}
-                      </td>
-                      {cells.map((value, i) => (
-                        <td key={i} className={`px-3 py-3 whitespace-nowrap text-sm text-right ${tone}`}>{value}</td>
-                      ))}
-                    </tr>
-                    {day.is_today && isExpanded && matchup && (
-                      <MatchupExpandRow
-                        matchup={matchup}
-                        colSpan={desktopColSpan}
-                        integerProjectionToggle
-                      />
-                    )}
-                  </Fragment>
-                )
-              })}
+              {mobileGroups.starters.map(renderDesktopPlayerRow)}
               {!day.is_today && (
-              <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold dark:from-blue-950/40 dark:to-indigo-950/40 [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0" data-testid="roster-day-totals">
-                <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
-                <td className="sticky left-0 z-10 border-r border-r-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-3 text-sm font-bold whitespace-nowrap text-blue-900 dark:border-gray-700 dark:from-blue-950/50 dark:to-indigo-950/50 dark:text-blue-100">
-                  Starters<span className="hidden sm:inline"> ({dayLabel(day.date)})</span>
-                </td>
-                <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">{totals.games} {totals.games === 1 ? 'game' : 'games'}</td>
-                <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
-                <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
-                {showStatColumns &&
-                  (totals.games
-                    ? [
-                        totals.minutes,
-                        <>{pct(totals.fgm, totals.fga)}<span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-300">{totals.fgm}/{totals.fga}</span></>,
-                        <>{pct(totals.ftm, totals.fta)}<span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-300">{totals.ftm}/{totals.fta}</span></>,
-                        totals.three_pm, totals.reb, totals.ast, totals.stl, totals.blk, totals.pts,
-                      ]
-                    : Array(9).fill('—')
-                  ).map((value, i) => (
-                    <td key={i} className="px-3 py-3 whitespace-nowrap text-sm text-right text-blue-900 dark:text-blue-100">{value}</td>
-                  ))}
-              </tr>
+                <RosterDayDesktopStartersTotalsRow day={day} totals={totals} showStatColumns={showStatColumns} />
               )}
+              {mobileGroups.bench.map(renderDesktopPlayerRow)}
             </tbody>
           </table>
         </div>

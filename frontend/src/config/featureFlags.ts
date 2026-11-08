@@ -15,3 +15,6 @@ export const FF_LEAGUE_ACTIVITY = import.meta.env.VITE_FF_LEAGUE_ACTIVITY === 't
 // owner can also switch it on for one browser with ?ff=mobile (and back off
 // with ?ff=off). See src/mobile/flag.ts for the runtime override.
 export const FF_MOBILE_REDESIGN = import.meta.env.VITE_FF_MOBILE_REDESIGN === 'true';
+// Personalized lineup / roster coaching hints on your Team page (my team only).
+export const FF_MANAGER_HINTS =
+  import.meta.env.VITE_FF_MANAGER_HINTS === 'false' ? false : true;
