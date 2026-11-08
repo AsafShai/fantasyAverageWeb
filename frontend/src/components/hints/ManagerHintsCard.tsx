@@ -33,7 +33,9 @@ function HintRow({
           <p className="mgr-hint-title">{hint.title}</p>
           <p className="mgr-hint-body">{hint.body}</p>
           {hint.players && hint.players.length > 0 && (
-            <ul className="mgr-hint-players">
+            <ul
+              className={`mgr-hint-players${layout === 'mobile' ? ' mgr-hint-players--mobile' : ''}`}
+            >
               {hint.players.map((pl) => (
                 <HintPlayerRow key={pl.playerId ?? pl.name} player={pl} layout={layout} />
               ))}

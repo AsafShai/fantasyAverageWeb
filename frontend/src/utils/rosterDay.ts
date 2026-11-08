@@ -11,6 +11,11 @@ export function lineupSlotOrder(slot?: string | null): number {
 
 export const isBench = (slot: string) => slot === 'BE' || slot === 'IR'
 
+/** Box score landed for this roster day (starters or bench). */
+export function rosterDayPlayerPlayed(player: RosterDayPlayer): boolean {
+  return player.status === 'played'
+}
+
 const EASTERN = 'America/New_York'
 
 function easternTime(iso: string, options: Intl.DateTimeFormatOptions): string {

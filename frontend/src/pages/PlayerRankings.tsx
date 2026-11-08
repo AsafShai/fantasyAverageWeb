@@ -3,8 +3,8 @@ import { usePersistedState } from '../hooks/usePersistedState'
 import { useWeightDraft } from '../hooks/useWeightDraft'
 import { useGetAllPlayersQuery, useGetLatestMovesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useMyTeam } from '../context/MyTeamContext'
-import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { FantasyTeamFilterChips } from '../components/playerRankings/FantasyTeamFilterChips'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
@@ -37,14 +37,11 @@ const DEFAULT_WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) 
 
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
-/** null = everyone, 0 = free agents / waivers, 'rostered' = on any fantasy team. */
-type FantasyTeamFilter = number | 'rostered' | null
-
-function matchesFantasyTeam(teamId: number, filter: FantasyTeamFilter): boolean {
-  if (filter === null) return true
-  if (filter === 'rostered') return teamId !== 0
-  return teamId === filter
-}
+import {
+  matchesFantasyTeam,
+  parseFantasyTeamFilter,
+  type FantasyTeamFilter,
+} from '../mobile/pages/playerRankings/filters'
 
 /** Short fantasy code. team_id 0 is a free agent or on waivers. */
 function fantasyTeamAbbrev(teamId: number, abbrevById: Map<number, string>): string {
@@ -118,7 +115,11 @@ export default function PlayerRankings() {
   const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
   // Phone picks several positions; desktop keeps its single select (separate state so each stays as it was).
   const [positionsPicked, setPositionsPicked] = usePersistedState<string[]>('playerRankings.positions', [])
-  const [fantasyTeam, setFantasyTeam] = usePersistedState<FantasyTeamFilter>('playerRankings.fantasyTeam', null)
+  const [fantasyTeamRaw, setFantasyTeam] = usePersistedState<FantasyTeamFilter>('playerRankings.fantasyTeam', null)
+  const fantasyTeam = useMemo(() => parseFantasyTeamFilter(fantasyTeamRaw), [fantasyTeamRaw])
+  useEffect(() => {
+    if (JSON.stringify(fantasyTeamRaw) !== JSON.stringify(fantasyTeam)) setFantasyTeam(fantasyTeam)
+  }, [fantasyTeam, fantasyTeamRaw, setFantasyTeam])
   const [weights, setWeights] = usePersistedState<Record<RankingCategory, number>>('playerRankings.weights', { ...DEFAULT_WEIGHTS })
   // A persisted weights object from a previous session (or the default 8)
   // may be missing an entry for a category this league scores (e.g. TO) —
@@ -386,26 +387,17 @@ export default function PlayerRankings() {
               </select>
             </div>
 
-            {/* min-w-0 + w-full keep long team names from pushing the select past the mobile grid cell. */}
-            <div className="min-w-0">
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fantasy team</label>
-              <select
-                value={fantasyTeam ?? ''}
-                onChange={e => {
-                  const value = e.target.value
-                  setFantasyTeam(value === '' ? null : value === 'rostered' ? 'rostered' : Number(value))
-                }}
-                className="w-full sm:w-auto sm:max-w-[14rem] truncate px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              >
-                <option value="">All</option>
-                <option value="rostered">Rostered</option>
-                <option value="0">Free Agents / Waivers</option>
-                {leadWithMyTeam(teams ?? [], myTeamId).map(team => (
-                  <option key={team.team_id} value={team.team_id}>
-                    {fantasyTeamOptionLabel(team.team_name, isMyTeam(team.team_id))}
-                  </option>
-                ))}
-              </select>
+            <div className="min-w-0 sm:col-span-2 lg:col-span-3">
+              <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Fantasy team</span>
+              <FantasyTeamFilterChips
+                wrap
+                className="pr-fantasy-team-chips"
+                value={fantasyTeam}
+                onChange={setFantasyTeam}
+                teams={teams ?? []}
+                myTeamId={myTeamId}
+                isMyTeam={isMyTeam}
+              />
             </div>
 
             <div>
