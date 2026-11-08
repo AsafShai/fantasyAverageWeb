@@ -80,12 +80,21 @@ export function useTeamHints(teamId: number | null, options?: UseTeamHintsOption
     return buildRankLookups(seasonPool.players, last15Pool.players, seasonPool)
   }, [seasonPool, last15Pool])
 
+  const last15GpByPlayerId = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const p of last15Pool?.players ?? []) {
+      if (p.player_id != null) map.set(p.player_id, p.stats?.gp ?? 0)
+    }
+    return map
+  }, [last15Pool])
+
   const hintsResult = useMemo(() => {
     if (!teamDetail || !ranks) return null
     return buildTeamHints(
       {
         teamDetail,
         ranks,
+        last15GpByPlayerId,
         rosterDay: rosterDay ?? null,
         injuryStatusByPlayerName,
         injuryReportTeamKeys,
@@ -93,7 +102,7 @@ export function useTeamHints(teamId: number | null, options?: UseTeamHintsOption
       },
       dismissedSet,
     )
-  }, [teamDetail, ranks, rosterDay, dismissedSet, injuryStatusByPlayerName, injuryReportTeamKeys, nbaTeams])
+  }, [teamDetail, ranks, last15GpByPlayerId, rosterDay, dismissedSet, injuryStatusByPlayerName, injuryReportTeamKeys, nbaTeams])
 
   const dismiss = useCallback(
     (hint: TeamHint) => {

@@ -80,6 +80,7 @@ describe('buildTeamHints', () => {
     const { all } = buildTeamHints({
       teamDetail: minimalTeamDetail([hot, cold]),
       ranks,
+      last15GpByPlayerId: new Map([[1, 5]]),
       rosterDay,
     })
     expect(all.some((h) => h.id === 'lineup-consider-starting' && h.players?.some((pl) => pl.name === 'Hot Bench'))).toBe(true)
