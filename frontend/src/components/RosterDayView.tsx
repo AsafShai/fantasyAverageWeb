@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Chip, ChipRow } from '../mobile/ui'
 import type { PlayerMatchup, PlayerStats, RosterDay, RosterDayPlayer, RosterDayStats } from '../types/api'
 import PlayerNameLink from './PlayerNameLink'
 import InjuryBadge from './InjuryBadge'
@@ -6,7 +7,7 @@ import LoadingSpinner from './LoadingSpinner'
 import { MatchupCell, MatchupExpandPanel, MatchupExpandRow } from './MatchupDisplay'
 import { nameCellWrapClass, wrapFriendlyName } from '../utils/wrapName'
 import { addDays } from '../utils/slateWindow'
-import { dayLabel, isBench, lineupSlotOrder, moveNote, moveTime, pct, starterTotals, type StarterTotals } from '../utils/rosterDay'
+import { dayLabel, isBench, lineupSlotOrder, moveNote, moveTime, pct, rosterDayPlayerPlayed, starterTotals, type StarterTotals } from '../utils/rosterDay'
 import './MatchupDisplay.css'
 
 /** The Slot cell's content: IR pill, active-slot pill, or plain BE. */
@@ -93,6 +94,65 @@ export function RosterDayStepper({
           Today
         </button>
       </div>
+    </div>
+  )
+}
+
+function rosterFilterBtnClass(active: boolean) {
+  return [
+    'flex-1 whitespace-nowrap text-center font-medium transition-all duration-200 sm:flex-none sm:min-w-[5.5rem] px-3 py-1.5 text-xs',
+    active
+      ? 'bg-blue-600 text-white dark:bg-blue-500'
+      : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700',
+  ].join(' ')
+}
+
+/** Past days only — All vs Played only (same pill pattern as Per Game / Totals). */
+export function RosterDayOnlyPlayedToggle({
+  checked,
+  onChange,
+  compact = false,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  compact?: boolean
+}) {
+  if (compact) {
+    return (
+      <ChipRow label="Roster rows" wrap className="mr-tm-roster-filter">
+        <Chip selected={!checked} onClick={() => onChange(false)}>
+          All players
+        </Chip>
+        <Chip selected={checked} onClick={() => onChange(true)}>
+          Played only
+        </Chip>
+      </ChipRow>
+    )
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label="Roster rows"
+      data-testid="roster-day-only-played"
+      className="flex w-full min-w-0 overflow-hidden rounded border border-gray-300 sm:w-auto dark:border-gray-600"
+    >
+      <button
+        type="button"
+        aria-pressed={!checked}
+        className={`${rosterFilterBtnClass(!checked)} border-r border-gray-300 dark:border-gray-600`}
+        onClick={() => onChange(false)}
+      >
+        All players
+      </button>
+      <button
+        type="button"
+        aria-pressed={checked}
+        className={rosterFilterBtnClass(checked)}
+        onClick={() => onChange(true)}
+      >
+        Played only
+      </button>
     </div>
   )
 }
@@ -480,20 +540,25 @@ export function RosterDayContent({
   day,
   loading,
   matchups,
+  onlyPlayed = false,
 }: {
   day: RosterDay | undefined
   loading: boolean
   /** Today's matchups by player name, for the injury badge (today only). */
   matchups?: Map<string, PlayerMatchup>
+  /** Past days: hide players who did not play (status !== played). */
+  onlyPlayed?: boolean
 }) {
   const [highlight, setHighlight] = useState<number | null>(null)
   const [highlightDate, setHighlightDate] = useState<string | null>(null)
   const [expandedMatchupNames, setExpandedMatchupNames] = useState<Set<string>>(new Set())
   const activeHighlight = day && highlightDate === day.date ? highlight : null
-  const players = useMemo(
-    () => (day ? [...day.players].sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot)) : []),
-    [day],
-  )
+  const players = useMemo(() => {
+    if (!day) return []
+    const sorted = [...day.players].sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot))
+    if (!onlyPlayed || day.is_today) return sorted
+    return sorted.filter(rosterDayPlayerPlayed)
+  }, [day, onlyPlayed])
   const totals = useMemo(() => starterTotals(players), [players])
   /** Hide Min/FG%/… columns on today’s daily roster; show them for past days. */
   const showStatColumns = day ? !day.is_today : false
@@ -597,7 +662,11 @@ export function RosterDayContent({
     <>
       <MovesStrip day={day} highlight={activeHighlight} onPick={pick} />
       {players.length === 0 ? (
-        <div className="py-12 text-center text-gray-400 text-sm">No roster for this day.</div>
+        <div className="py-12 text-center text-gray-400 text-sm">
+          {onlyPlayed && day && !day.is_today && day.players.length > 0
+            ? 'No players logged a game this day.'
+            : 'No roster for this day.'}
+        </div>
       ) : (
         <>
         <div className="space-y-4 sm:hidden">

@@ -75,6 +75,9 @@
 .mr-icon-btn { width: 40px; padding: 0; flex-shrink: 0; font-size: 18px; }
 .mr-icon-btn:disabled { color: var(--mr-faint); cursor: default; }
 
+.mr-tm-daily-filter { margin-top: 8px; }
+.mr-tm-roster-filter { width: 100%; justify-content: flex-start; }
+
 /* ── roster tables ── */
 .mr-tm-table .mr-t th.mr-pin { min-width: 128px; max-width: 150px; white-space: normal; }
 .mr-tm-table .mr-t tbody th.mr-pin a,

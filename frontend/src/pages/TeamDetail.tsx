@@ -24,7 +24,7 @@ import { TeamShareCard } from '../components/share/TeamShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
 import { orderCategories } from '../utils/statOrder'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
-import { RosterDayContent, RosterDayStepper, SlotPill } from '../components/RosterDayView'
+import { RosterDayContent, RosterDayOnlyPlayedToggle, RosterDayStepper, SlotPill } from '../components/RosterDayView'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { lineupSlotOrder, lockNote } from '../utils/rosterDay'
 import { easternToday, formatSlateDate, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
@@ -112,6 +112,7 @@ const TeamDetail = () => {
     })
   }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder, tableMode, rosterDate, mobileRedesign, mobileTab])
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
+  const [rosterDayOnlyPlayed, setRosterDayOnlyPlayed] = usePersistedState('teamDetail.rosterDayOnlyPlayed', false)
   const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
   const [, setActiveCoverageDate] = useState<string | null>(null)
@@ -494,6 +495,8 @@ const TeamDetail = () => {
         rosterDayDate={rosterDate || rosterDay?.date || today}
         rosterDayLast={rosterDay?.last_date ?? today}
         onRosterDate={changeRosterDate}
+        rosterDayOnlyPlayed={rosterDayOnlyPlayed}
+        onRosterDayOnlyPlayed={setRosterDayOnlyPlayed}
         matchups={matchupMap}
         matchupsPending={awaitingCoverageMatchup}
         timePeriod={timePeriod}
@@ -801,14 +804,19 @@ const TeamDetail = () => {
               </div>
             )}
             {showDaily && (
-              <RosterDayStepper
-                compact
-                date={rosterDate || rosterDay?.date || today}
-                firstDate={rosterDay?.first_date}
-                lastDate={rosterDay?.last_date ?? today}
-                note={rosterDay && !rosterDayFetching ? lockNote(rosterDay) : rosterDayFetching ? 'Loading this day…' : undefined}
-                onChange={changeRosterDate}
-              />
+              <div className="flex w-full flex-col gap-2">
+                {rosterDay && !rosterDay.is_today && (
+                  <RosterDayOnlyPlayedToggle compact checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
+                )}
+                <RosterDayStepper
+                  compact
+                  date={rosterDate || rosterDay?.date || today}
+                  firstDate={rosterDay?.first_date}
+                  lastDate={rosterDay?.last_date ?? today}
+                  note={rosterDay && !rosterDayFetching ? lockNote(rosterDay) : rosterDayFetching ? 'Loading this day…' : undefined}
+                  onChange={changeRosterDate}
+                />
+              </div>
             )}
           </div>
           {showStats && (
@@ -890,7 +898,10 @@ const TeamDetail = () => {
               )}
             </div>
             {showDaily ? (
-              <div className="w-full sm:flex sm:justify-end">
+              <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                {rosterDay && !rosterDay.is_today && (
+                  <RosterDayOnlyPlayedToggle checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
+                )}
                 <RosterDayStepper
                   date={rosterDate || rosterDay?.date || today}
                   firstDate={rosterDay?.first_date}
@@ -979,7 +990,12 @@ const TeamDetail = () => {
           rosterDayError && !rosterDayFetching ? (
             <ErrorMessage message={getErrorMessage(rosterDayError, 'Failed to load the roster for this day')} />
           ) : (
-            <RosterDayContent day={rosterDay} loading={rosterDayFetching && !rosterDay} matchups={matchupMap} />
+            <RosterDayContent
+              day={rosterDay}
+              loading={rosterDayFetching && !rosterDay}
+              matchups={matchupMap}
+              onlyPlayed={Boolean(rosterDay && !rosterDay.is_today && rosterDayOnlyPlayed)}
+            />
           )
         ) : !team_detail.players ? (
           <div className="py-12 text-center text-gray-400 text-sm dark:text-gray-500">
