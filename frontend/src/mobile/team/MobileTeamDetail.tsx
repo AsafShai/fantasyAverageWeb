@@ -9,6 +9,7 @@ import { Card, Segmented } from '../ui'
 import MobileRoster from './MobileRoster'
 import MobileRosterCoverage from './MobileRosterCoverage'
 import type { MobileTeamDetailProps, TeamTab } from './types'
+import { ManagerHintsTeamSection } from '../../components/hints/ManagerHintsCard'
 import './team.css'
 
 const TAB_OPTIONS: { value: TeamTab; label: string }[] = [
@@ -90,6 +91,10 @@ export default function MobileTeamDetail(p: MobileTeamDetailProps) {
             <ShareCardButton title={`${t.team.team_name} Report`} renderCard={p.shareCard} />
           </span>
         </div>
+      </Card>
+
+      <Card title="Manager hints" className="mr-hints-card" aria-label="Manager hints">
+        <ManagerHintsTeamSection teamId={t.team.team_id} layout="mobile" teamDetail={t} />
       </Card>
 
       <Segmented label="Team page section" options={TAB_OPTIONS} value={p.tab} onChange={p.onTab} />

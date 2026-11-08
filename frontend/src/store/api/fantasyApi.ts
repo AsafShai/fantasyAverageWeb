@@ -1,5 +1,6 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, CategoryResponse, RosterDay } from '../../types/api';
+import type { InjuryRecord } from '../../types/injury';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves } from '../../types/activity';
@@ -151,6 +152,10 @@ export const fantasyApi = createApi({
     }),
     getMatchupsToday: builder.query<PlayerMatchup[], string | void>({
       query: (date) => date ? `/matchups/today?date=${date}` : '/matchups/today',
+    }),
+    getInjuryRecords: builder.query<InjuryRecord[], void>({
+      query: () => '/injuries/',
+      keepUnusedDataFor: 120,
     }),
     getMatchupDates: builder.query<string[], void>({
       query: () => '/matchups/dates',
@@ -352,6 +357,7 @@ export const {
   useGetNbaPlayerGamesQuery,
   useGetNbaPlayerStatsQuery,
   useGetMatchupsTodayQuery,
+  useGetInjuryRecordsQuery,
   useGetMatchupDatesQuery,
   useGetUpcomingDatesQuery,
   useGetCurrentSlateDateQuery,
