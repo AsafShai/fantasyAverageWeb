@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ScheduleGame, ScheduleResponse, ScheduleTeam } from '../../types/api'
-import { opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../slateWindow'
+import { isBackToBackGameDay, opponentsByTeamDate, teamPlaysOnDate, weekGameCount, weekOpponent, weekScheduleDays } from '../slateWindow'
 
 function game(partial: Pick<ScheduleGame, 'date' | 'opponent_abbreviation' | 'is_home'> & { game_id?: string }): ScheduleGame {
   return {
@@ -83,5 +83,29 @@ describe('opponentsByTeamDate', () => {
     expect(weekGameCount(opponents, 'BOS', days)).toBe(1)
     expect(weekGameCount(opponents, 'LAL', days)).toBe(1)
     expect(weekGameCount(opponents, 'DEN', days)).toBe(0)
+  })
+})
+
+describe('isBackToBackGameDay', () => {
+  const opponents = opponentsByTeamDate(schedule([
+    team('LAL', [
+      game({ date: '2026-10-18', opponent_abbreviation: 'GSW', is_home: true }),
+      game({ date: '2026-10-19', opponent_abbreviation: 'DEN', is_home: false }),
+    ]),
+    team('BOS', [game({ date: '2026-10-20', opponent_abbreviation: 'NYK', is_home: true })]),
+  ]))
+
+  it('marks both nights of a consecutive pair', () => {
+    expect(isBackToBackGameDay(opponents, 'LAL', '2026-10-18')).toBe(true)
+    expect(isBackToBackGameDay(opponents, 'LAL', '2026-10-19')).toBe(true)
+  })
+
+  it('is false on a single-game day', () => {
+    expect(isBackToBackGameDay(opponents, 'BOS', '2026-10-20')).toBe(false)
+  })
+
+  it('is false when the team is off', () => {
+    expect(teamPlaysOnDate(opponents, 'BOS', '2026-10-18')).toBe(false)
+    expect(isBackToBackGameDay(opponents, 'BOS', '2026-10-18')).toBe(false)
   })
 })

@@ -24,10 +24,12 @@ import { TeamShareCard } from '../components/share/TeamShareCard'
 import { formatAsOf } from '../components/share/shareCardFormat'
 import { orderCategories } from '../utils/statOrder'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
-import { RosterDayContent, RosterDayStepper, SlotPill } from '../components/RosterDayView'
+import { RosterDayContent, RosterDayOnlyPlayedToggle, RosterDayStepper, SlotPill } from '../components/RosterDayView'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { lineupSlotOrder, lockNote } from '../utils/rosterDay'
-import { easternToday, formatSlateDate, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
+import { easternToday, formatSlateDate, isBackToBackGameDay, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
+import { rosterScheduleCellClass, rosterScheduleMiniCellClass } from '../utils/rosterScheduleTone'
+import BackToBackMark from '../components/BackToBackMark'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileTeamDetail from '../mobile/team/MobileTeamDetail'
 import { TEAM_TABS, type TeamTab } from '../mobile/team/types'
@@ -112,6 +114,7 @@ const TeamDetail = () => {
     })
   }, [setUrlState, timePeriod, isCustom, customRange, sortBy, sortOrder, tableMode, rosterDate, mobileRedesign, mobileTab])
   const [showAverages, setShowAverages] = usePersistedState('teamDetail.showAverages', true)
+  const [rosterDayOnlyPlayed, setRosterDayOnlyPlayed] = usePersistedState('teamDetail.rosterDayOnlyPlayed', false)
   const [scheduleHorizon, setScheduleHorizon] = useState<ScheduleHorizon>(7)
   const [coverageDate, setCoverageDate] = useState<string | null>(null)
   const [, setActiveCoverageDate] = useState<string | null>(null)
@@ -494,6 +497,8 @@ const TeamDetail = () => {
         rosterDayDate={rosterDate || rosterDay?.date || today}
         rosterDayLast={rosterDay?.last_date ?? today}
         onRosterDate={changeRosterDate}
+        rosterDayOnlyPlayed={rosterDayOnlyPlayed}
+        onRosterDayOnlyPlayed={setRosterDayOnlyPlayed}
         matchups={matchupMap}
         matchupsPending={awaitingCoverageMatchup}
         timePeriod={timePeriod}
@@ -524,6 +529,7 @@ const TeamDetail = () => {
         focusDate={scheduleSpotlightDate}
         onFocusDate={setScheduleFocusDate}
         opponentOn={(proTeam, date) => weekOpponent(opponents, proTeam, date)}
+        isBackToBackOn={(proTeam, date) => isBackToBackGameDay(opponents, proTeam, date)}
         gamesIn={proTeam => weekGameCount(opponents, proTeam, weekDays)}
         whoPlays={scheduleSpotlightRows}
         whoPlaysHeading={scheduleSummaryHeading}
@@ -801,14 +807,19 @@ const TeamDetail = () => {
               </div>
             )}
             {showDaily && (
-              <RosterDayStepper
-                compact
-                date={rosterDate || rosterDay?.date || today}
-                firstDate={rosterDay?.first_date}
-                lastDate={rosterDay?.last_date ?? today}
-                note={rosterDay && !rosterDayFetching ? lockNote(rosterDay) : rosterDayFetching ? 'Loading this day…' : undefined}
-                onChange={changeRosterDate}
-              />
+              <div className="flex w-full flex-col gap-2">
+                {rosterDay && !rosterDay.is_today && (
+                  <RosterDayOnlyPlayedToggle compact checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
+                )}
+                <RosterDayStepper
+                  compact
+                  date={rosterDate || rosterDay?.date || today}
+                  firstDate={rosterDay?.first_date}
+                  lastDate={rosterDay?.last_date ?? today}
+                  note={rosterDay && !rosterDayFetching ? lockNote(rosterDay) : rosterDayFetching ? 'Loading this day…' : undefined}
+                  onChange={changeRosterDate}
+                />
+              </div>
             )}
           </div>
           {showStats && (
@@ -890,7 +901,10 @@ const TeamDetail = () => {
               )}
             </div>
             {showDaily ? (
-              <div className="w-full sm:flex sm:justify-end">
+              <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                {rosterDay && !rosterDay.is_today && (
+                  <RosterDayOnlyPlayedToggle checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
+                )}
                 <RosterDayStepper
                   date={rosterDate || rosterDay?.date || today}
                   firstDate={rosterDay?.first_date}
@@ -947,10 +961,12 @@ const TeamDetail = () => {
                 <ul className="mt-2 space-y-1.5 text-sm">
                   {scheduleSpotlightRows.map(p => {
                     const opp = weekOpponent(opponents, p.pro_team, scheduleSpotlightDate!)
+                    const b2b = isBackToBackGameDay(opponents, p.pro_team, scheduleSpotlightDate!)
                     return (
-                      <li key={p.player_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <li key={p.player_id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <SlotPill slot={p.lineup_slot} />
                         <PlayerNameLink name={wrapFriendlyName(p.player_name)} playerId={p.player_id} />
+                        {b2b ? <BackToBackMark /> : null}
                         <span className="text-gray-500 dark:text-gray-400">
                           {p.pro_team}
                           {opp && (
@@ -979,7 +995,12 @@ const TeamDetail = () => {
           rosterDayError && !rosterDayFetching ? (
             <ErrorMessage message={getErrorMessage(rosterDayError, 'Failed to load the roster for this day')} />
           ) : (
-            <RosterDayContent day={rosterDay} loading={rosterDayFetching && !rosterDay} matchups={matchupMap} />
+            <RosterDayContent
+              day={rosterDay}
+              loading={rosterDayFetching && !rosterDay}
+              matchups={matchupMap}
+              onlyPlayed={Boolean(rosterDay && !rosterDay.is_today && rosterDayOnlyPlayed)}
+            />
           )
         ) : !team_detail.players ? (
           <div className="py-12 text-center text-gray-400 text-sm dark:text-gray-500">
@@ -1056,14 +1077,12 @@ const TeamDetail = () => {
                       {weekGameCount(opponents, player.pro_team, weekDays)} games
                     </span>
                     <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
-                      {weekDays.map(day => (
+                      {weekDays.map(day => {
+                        const b2b = isBackToBackGameDay(opponents, player.pro_team, day.date)
+                        return (
                         <div
                           key={day.date}
-                          className={`shrink-0 rounded-md border px-2 py-1.5 text-center text-[10px] leading-tight ${
-                            day.date === scheduleSpotlightDate
-                              ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
-                              : 'border-gray-200 dark:border-gray-600'
-                          }`}
+                          className={rosterScheduleMiniCellClass(day.date === scheduleSpotlightDate, b2b)}
                         >
                           <div className="font-semibold text-gray-800 dark:text-gray-200">{day.weekday}</div>
                           <div className="text-gray-500 dark:text-gray-400">{day.label}</div>
@@ -1071,7 +1090,8 @@ const TeamDetail = () => {
                             <WeekOpponent opponent={weekOpponent(opponents, player.pro_team, day.date)} />
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -1210,14 +1230,17 @@ const TeamDetail = () => {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{player.pro_team}</td>
                       {showSchedule ? (
                         <>
-                          {weekDays.map(day => (
+                          {weekDays.map(day => {
+                            const b2b = isBackToBackGameDay(opponents, player.pro_team, day.date)
+                            return (
                             <td
                               key={day.date}
-                              className={`px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 ${day.date === scheduleSpotlightDate ? 'bg-blue-100 dark:bg-blue-950/40' : ''}`}
+                              className={`px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 ${rosterScheduleCellClass(day.date === scheduleSpotlightDate, b2b)}`}
                             >
                               <WeekOpponent opponent={weekOpponent(opponents, player.pro_team, day.date)} />
                             </td>
-                          ))}
+                            )
+                          })}
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-center font-semibold text-gray-900">
                             {weekGameCount(opponents, player.pro_team, weekDays)}
                           </td>

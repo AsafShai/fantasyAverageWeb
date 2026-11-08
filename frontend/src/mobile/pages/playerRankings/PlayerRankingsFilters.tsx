@@ -1,5 +1,5 @@
-import { fantasyTeamOptionLabel, leadWithMyTeam } from '../../../myTeam/display'
 import type { Team } from '../../../types/api'
+import { FantasyTeamFilterChips } from '../../../components/playerRankings/FantasyTeamFilterChips'
 import { LIMITS, POSITIONS, type RankingsFilters } from './filters'
 import { Chip, ChipRow, FilterGroup, FiltersSheet, PositionFilter } from '../../ui'
 
@@ -29,16 +29,14 @@ export function PlayerRankingsFilters({ open, onClose, filters: f, teams, myTeam
     <FiltersSheet open={open} onClose={onClose} onReset={reset}>
       <PositionFilter options={POSITIONS} selected={f.positions} onChange={f.setPositions} />
       <FilterGroup label="Fantasy team">
-        <ChipRow label="Fantasy team" wrap>
-          <Chip selected={f.fantasyTeam === null} onClick={() => f.setFantasyTeam(null)}>All</Chip>
-          <Chip selected={f.fantasyTeam === 'rostered'} onClick={() => f.setFantasyTeam('rostered')}>Rostered</Chip>
-          <Chip selected={f.fantasyTeam === 0} onClick={() => f.setFantasyTeam(0)}>Free Agents / Waivers</Chip>
-          {leadWithMyTeam(teams, myTeamId).map((t) => (
-            <Chip key={t.team_id} selected={f.fantasyTeam === t.team_id} onClick={() => f.setFantasyTeam(t.team_id)}>
-              {fantasyTeamOptionLabel(t.team_name, isMyTeam(t.team_id))}
-            </Chip>
-          ))}
-        </ChipRow>
+        <FantasyTeamFilterChips
+          wrap
+          value={f.fantasyTeam}
+          onChange={f.setFantasyTeam}
+          teams={teams}
+          myTeamId={myTeamId}
+          isMyTeam={isMyTeam}
+        />
       </FilterGroup>
       <FilterGroup label="Show">
         <ChipRow label="Show" wrap>

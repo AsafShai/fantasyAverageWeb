@@ -45,6 +45,8 @@ export interface MobileTeamDetailProps {
   rosterDayDate: string
   rosterDayLast: string
   onRosterDate: (date: string) => void
+  rosterDayOnlyPlayed: boolean
+  onRosterDayOnlyPlayed: (value: boolean) => void
   /** Matchups by player name (today's, or the coverage day's in Stats mode). */
   matchups: Map<string, PlayerMatchup>
   /** True while the coverage day's matchups are still loading (Stats mode). */
@@ -81,6 +83,7 @@ export interface MobileTeamDetailProps {
   focusDate: string | null
   onFocusDate: (date: string) => void
   opponentOn: (proTeam: string, date: string) => string | undefined
+  isBackToBackOn: (proTeam: string, date: string) => boolean
   gamesIn: (proTeam: string) => number
   whoPlays: Player[]
   whoPlaysHeading: string

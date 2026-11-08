@@ -32,6 +32,16 @@ const renderDay = (day: RosterDay | undefined = DAY, loading = false) =>
   render(<MemoryRouter><RosterDayContent day={day} loading={loading} /></MemoryRouter>)
 
 describe('RosterDayContent', () => {
+  it('with onlyPlayed hides DNP and unplayed rows on past days', () => {
+    render(
+      <MemoryRouter>
+        <RosterDayContent day={DAY} loading={false} onlyPlayed />
+      </MemoryRouter>,
+    )
+    const rows = screen.getAllByTestId('roster-day-row')
+    expect(rows.map((r) => within(r).getByRole('link').textContent)).toEqual(['Jarace Walker', 'Zach Edey'])
+  })
+
   it('lists the roster in lineup order with tags, FG% and starter-only totals', () => {
     renderDay()
     const rows = screen.getAllByTestId('roster-day-row')
