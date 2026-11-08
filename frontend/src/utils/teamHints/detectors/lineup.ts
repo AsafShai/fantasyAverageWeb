@@ -1,19 +1,13 @@
 import { isPlayerOutOnInjuryReport } from '../../playerInjury'
 import { rankForPlayer } from '../ranks'
 import {
-  BENCH_HOT_MAX_RANK,
-  FORM_RANK_DELTA,
-  SEASON_STARTER_POOR_MIN,
-  STARTER_COLD_MIN_RANK,
+  CONSIDER_BENCH_L15_OUTSIDE_TOP,
+  CONSIDER_BENCH_SEASON_OUTSIDE_TOP,
+  CONSIDER_START_L15_MAX_RANK,
+  CONSIDER_START_SEASON_MAX_RANK,
 } from '../thresholds'
 import type { HintPlayerLine, RosterPlayer, TeamHint, TeamHintsInput } from '../types'
-import {
-  buildHintPlayerLine,
-  coolingReason,
-  hasLineupValueExplanation,
-  heatingReason,
-  strongL15StartExplanation,
-} from '../playerReasons'
+import { buildHintPlayerLine, considerBenchRankNotes, considerStartRankNotes } from '../playerReasons'
 import { benchPlayers, injuredStarters, isStarterSlot } from '../lineupSlots'
 import { lineupHintsDayActive, playsTonight, tonightGameNoteForPlayer } from '../rosterDayNotes'
 
@@ -44,6 +38,33 @@ function groupedHint(
   }
 }
 
+function qualifiesConsiderStart(seasonRank: number | undefined, l15Rank: number | undefined): boolean {
+  if (seasonRank != null && seasonRank <= CONSIDER_START_SEASON_MAX_RANK) return true
+  if (l15Rank != null && l15Rank <= CONSIDER_START_L15_MAX_RANK) return true
+  return false
+}
+
+function qualifiesConsiderBench(seasonRank: number | undefined, l15Rank: number | undefined): boolean {
+  if (seasonRank != null && seasonRank > CONSIDER_BENCH_SEASON_OUTSIDE_TOP) return true
+  if (l15Rank != null && l15Rank > CONSIDER_BENCH_L15_OUTSIDE_TOP) return true
+  return false
+}
+
+function startSortPriority(seasonRank: number | undefined, l15Rank: number | undefined): number {
+  const good: number[] = []
+  if (seasonRank != null && seasonRank <= CONSIDER_START_SEASON_MAX_RANK) good.push(seasonRank)
+  if (l15Rank != null && l15Rank <= CONSIDER_START_L15_MAX_RANK) good.push(l15Rank)
+  if (good.length === 0) return 0
+  return 1000 - Math.min(...good)
+}
+
+function benchSortPriority(seasonRank: number | undefined, l15Rank: number | undefined): number {
+  const bad: number[] = []
+  if (seasonRank != null && seasonRank > CONSIDER_BENCH_SEASON_OUTSIDE_TOP) bad.push(seasonRank)
+  if (l15Rank != null && l15Rank > CONSIDER_BENCH_L15_OUTSIDE_TOP) bad.push(l15Rank)
+  return bad.length ? Math.max(...bad) : 0
+}
+
 export function detectLineupHints(input: TeamHintsInput): TeamHint[] {
   const players = input.teamDetail.players ?? []
   if (players.length === 0) return []
@@ -58,20 +79,20 @@ export function detectLineupHints(input: TeamHintsInput): TeamHint[] {
     for (const p of benchPlayers(players)) {
       if (!playsTonight(p.player_id, rosterDay)) continue
       if (isPlayerOutOnInjuryReport(p, injuryMap)) continue
+      const season = rankForPlayer(ranks, p, 'season')
       const l15 = rankForPlayer(ranks, p, 'last_15')
-      if (!l15) continue
+      const seasonRank = season?.rank
+      const l15Rank = l15?.rank
+      if (!qualifiesConsiderStart(seasonRank, l15Rank)) continue
       const notes: string[] = []
       const gameNote = tonightGameNoteForPlayer(p.player_id, rosterDay)
       if (gameNote) notes.push(gameNote)
-      const heat = heatingReason(p, ranks, FORM_RANK_DELTA)
-      if (heat) notes.push(heat)
-      const hotL15 = l15.rank <= BENCH_HOT_MAX_RANK
-      if (!hotL15 && !heat) continue
-      if (!hasLineupValueExplanation(notes)) {
-        notes.push(strongL15StartExplanation(l15))
-      }
-      const priority = 80 + Math.max(0, BENCH_HOT_MAX_RANK - l15.rank)
-      startCandidates.push({ player: p, priority, notes })
+      notes.push(...considerStartRankNotes(season, l15, CONSIDER_START_SEASON_MAX_RANK, CONSIDER_START_L15_MAX_RANK))
+      startCandidates.push({
+        player: p,
+        priority: startSortPriority(seasonRank, l15Rank),
+        notes,
+      })
     }
     startCandidates.sort((a, b) => b.priority - a.priority)
     const seenStart = new Set<number | string>()
@@ -97,19 +118,21 @@ export function detectLineupHints(input: TeamHintsInput): TeamHint[] {
     for (const p of players.filter((x) => isStarterSlot(x.lineup_slot))) {
       if (!playsTonight(p.player_id, rosterDay)) continue
       const season = rankForPlayer(ranks, p, 'season')
+      const l15 = rankForPlayer(ranks, p, 'last_15')
+      const seasonRank = season?.rank
+      const l15Rank = l15?.rank
+      if (!qualifiesConsiderBench(seasonRank, l15Rank)) continue
       const notes: string[] = []
       const gameNote = tonightGameNoteForPlayer(p.player_id, rosterDay)
       if (gameNote) notes.push(gameNote)
-      const cool = coolingReason(p, ranks, FORM_RANK_DELTA, STARTER_COLD_MIN_RANK)
-      if (cool) notes.push(cool)
-      const weakSeason = season && season.rank >= SEASON_STARTER_POOR_MIN
-      if (!weakSeason && !cool) continue
-      if (weakSeason && season) {
-        notes.push(`Season value is weak for a starter (${season.rank} among qualified players)`)
-      }
-      const priority =
-        (weakSeason ? 70 + Math.min(20, season!.rank - SEASON_STARTER_POOR_MIN) : 0) + (cool ? 15 : 0)
-      benchCandidates.push({ player: p, priority, notes })
+      notes.push(
+        ...considerBenchRankNotes(season, l15, CONSIDER_BENCH_SEASON_OUTSIDE_TOP, CONSIDER_BENCH_L15_OUTSIDE_TOP),
+      )
+      benchCandidates.push({
+        player: p,
+        priority: benchSortPriority(seasonRank, l15Rank),
+        notes,
+      })
     }
     benchCandidates.sort((a, b) => b.priority - a.priority)
     const seenBench = new Set<number | string>()

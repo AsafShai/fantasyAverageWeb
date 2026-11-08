@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { Player, RosterDay, TeamDetail } from '../../../types/api'
 import { normalizePlayerName } from '../../../utils/playerName'
 import { detectScheduleHints } from '../detectors/schedule'
 import type { RankLookups } from '../types'
+import { minimalRosterDay, minimalTeamDetail } from './fixtures'
 
 const ranks: RankLookups = {
   season: new Map(),
@@ -11,28 +11,9 @@ const ranks: RankLookups = {
   poolSizeLast15: 100,
 }
 
-function team(players: Player[]): TeamDetail {
-  return {
-    team: { team_id: 1, team_name: 'Mine' },
-    espn_url: '',
-    players,
-    shot_chart: { fgm: 0, fga: 0, fg_percentage: 0, ftm: 0, fta: 0, ft_percentage: 0, gp: 0 },
-    raw_averages: { gp: 1, fg_percentage: 0, ft_percentage: 0, fgm: 0, fga: 0, ftm: 0, fta: 0, three_pm: 0, reb: 0, ast: 0, stl: 0, blk: 0, pts: 0, team: { team_id: 1, team_name: 'Mine' } },
-    ranking_stats: { team: { team_id: 1, team_name: 'Mine' }, rank: 1, total_points: 100, stats: {} },
-    category_ranks: {},
-    slot_usage: {},
-  }
-}
-
 describe('detectScheduleHints', () => {
   it('lists bench players who play tonight with injury status, without naming starters to bench', () => {
-    const rosterDay: RosterDay = {
-      team_id: 1,
-      date: '2026-03-01',
-      has_games: true,
-      is_today: true,
-      lock_at: null,
-      players: [
+    const rosterDay = minimalRosterDay([
         {
           player_id: 1,
           player_name: 'Idle Starter',
@@ -69,11 +50,9 @@ describe('detectScheduleHints', () => {
           added: false,
           dropped: false,
         },
-      ],
-      moves: [],
-    }
+    ])
     const hints = detectScheduleHints({
-      teamDetail: team([]),
+      teamDetail: minimalTeamDetail([]),
       ranks,
       rosterDay,
       injuryStatusByPlayerName: new Map([[normalizePlayerName('Bench GTD'), 'Questionable']]),
@@ -88,30 +67,22 @@ describe('detectScheduleHints', () => {
   })
 
   it('omits Out players on the injury report', () => {
-    const rosterDay: RosterDay = {
-      team_id: 1,
-      date: '2026-03-01',
-      has_games: true,
-      is_today: true,
-      lock_at: null,
-      players: [
-        {
-          player_id: 2,
-          player_name: 'Out Bench',
-          positions: ['C'],
-          pro_team: 'SAC',
-          lineup_slot: 'BE',
-          opponent: 'LAL',
-          status: 'scheduled',
-          stats: null,
-          added: false,
-          dropped: false,
-        },
-      ],
-      moves: [],
-    }
+    const rosterDay = minimalRosterDay([
+      {
+        player_id: 2,
+        player_name: 'Out Bench',
+        positions: ['C'],
+        pro_team: 'SAC',
+        lineup_slot: 'BE',
+        opponent: 'LAL',
+        status: 'scheduled',
+        stats: null,
+        added: false,
+        dropped: false,
+      },
+    ])
     const hints = detectScheduleHints({
-      teamDetail: team([]),
+      teamDetail: minimalTeamDetail([]),
       ranks,
       rosterDay,
       injuryStatusByPlayerName: new Map([[normalizePlayerName('Out Bench'), 'Out']]),

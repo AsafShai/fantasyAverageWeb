@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { RosterDay } from '../../../types/api'
 import { lineupHintsDayActive, playsTonight } from '../rosterDayNotes'
+import { minimalRosterDay } from './fixtures'
 
-const rosterDay: RosterDay = {
-  team_id: 1,
-  date: '2026-03-01',
-  has_games: true,
-  is_today: true,
-  lock_at: null,
-  players: [
+const rosterDay = minimalRosterDay([
     {
       player_id: 1,
       player_name: 'A',
@@ -33,9 +27,7 @@ const rosterDay: RosterDay = {
       added: false,
       dropped: false,
     },
-  ],
-  moves: [],
-}
+])
 
 describe('rosterDayNotes', () => {
   it('detects active lineup day and tonight eligibility', () => {

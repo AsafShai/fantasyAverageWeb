@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Player, RosterDay, TeamDetail } from '../../../types/api'
+import type { Player } from '../../../types/api'
 import { normalizePlayerName } from '../../../utils/playerName'
 import { detectLineupHints } from '../detectors/lineup'
 import type { RankLookups } from '../types'
+import { minimalRosterDay, minimalTeamDetail } from './fixtures'
 
 function p(id: number, name: string, slot: string): Player {
   return {
@@ -27,24 +28,11 @@ function emptyRanks(): RankLookups {
   }
 }
 
-function team(players: Player[]): TeamDetail {
-  return {
-    team: { team_id: 1, team_name: 'Mine' },
-    espn_url: '',
-    players,
-    shot_chart: { fgm: 0, fga: 0, fg_percentage: 0, ftm: 0, fta: 0, ft_percentage: 0, gp: 0 },
-    raw_averages: { gp: 1, fg_percentage: 0, ft_percentage: 0, fgm: 0, fga: 0, ftm: 0, fta: 0, three_pm: 0, reb: 0, ast: 0, stl: 0, blk: 0, pts: 0, team: { team_id: 1, team_name: 'Mine' } },
-    ranking_stats: { team: { team_id: 1, team_name: 'Mine' }, rank: 1, total_points: 100, stats: {} },
-    category_ranks: {},
-    slot_usage: {},
-  }
-}
-
 describe('detectLineupHints (grouped)', () => {
   it('merges injured starters into one hint without naming replacements', () => {
     const ranks = emptyRanks()
     const hints = detectLineupHints({
-      teamDetail: team([p(1, 'Player A', 'PG'), p(2, 'Player B', 'C')]),
+      teamDetail: minimalTeamDetail([p(1, 'Player A', 'PG'), p(2, 'Player B', 'C')]),
       ranks,
       injuryStatusByPlayerName: new Map([
         [normalizePlayerName('Player A'), 'Out'],
@@ -60,30 +48,22 @@ describe('detectLineupHints (grouped)', () => {
 
   it('adds tonight matchup on injured starters when roster day has a game', () => {
     const ranks = emptyRanks()
-    const rosterDay: RosterDay = {
-      team_id: 1,
-      date: '2026-03-01',
-      has_games: true,
-      is_today: true,
-      lock_at: null,
-      players: [
-        {
-          player_id: 1,
-          player_name: 'Player A',
-          positions: ['PG'],
-          pro_team: 'LAL',
-          lineup_slot: 'PG',
-          opponent: 'GSW',
-          status: 'scheduled',
-          stats: null,
-          added: false,
-          dropped: false,
-        },
-      ],
-      moves: [],
-    }
+    const rosterDay = minimalRosterDay([
+      {
+        player_id: 1,
+        player_name: 'Player A',
+        positions: ['PG'],
+        pro_team: 'LAL',
+        lineup_slot: 'PG',
+        opponent: 'GSW',
+        status: 'scheduled',
+        stats: null,
+        added: false,
+        dropped: false,
+      },
+    ])
     const hints = detectLineupHints({
-      teamDetail: team([p(1, 'Player A', 'PG')]),
+      teamDetail: minimalTeamDetail([p(1, 'Player A', 'PG')]),
       ranks,
       rosterDay,
       injuryStatusByPlayerName: new Map([[normalizePlayerName('Player A'), 'Questionable']]),
@@ -92,16 +72,8 @@ describe('detectLineupHints (grouped)', () => {
     expect(injured.players![0].notes).toContain('Tonight vs GSW')
   })
 
-  function rosterDayFor(...entries: RosterDay['players']): RosterDay {
-    return {
-      team_id: 1,
-      date: '2026-03-01',
-      has_games: true,
-      is_today: true,
-      lock_at: null,
-      players: entries,
-      moves: [],
-    }
+  function rosterDayFor(...entries: Parameters<typeof minimalRosterDay>[0]) {
+    return minimalRosterDay(entries)
   }
 
   it('omits consider starting/benching without today roster day', () => {
@@ -109,7 +81,7 @@ describe('detectLineupHints (grouped)', () => {
     ranks.last15.set(1, { rank: 50, window: 'last_15' })
     ranks.season.set(2, { rank: 200, window: 'season' })
     const hints = detectLineupHints({
-      teamDetail: team([p(1, 'Hot Bench', 'BE'), p(2, 'Cold Starter', 'C')]),
+      teamDetail: minimalTeamDetail([p(1, 'Hot Bench', 'BE'), p(2, 'Cold Starter', 'C')]),
       ranks,
     })
     expect(hints.some((h) => h.id === 'lineup-consider-starting')).toBe(false)
@@ -123,7 +95,7 @@ describe('detectLineupHints (grouped)', () => {
     ranks.season.set(2, { rank: 200, window: 'season' })
     ranks.last15.set(2, { rank: 170, window: 'last_15' })
     const hints = detectLineupHints({
-      teamDetail: team([p(1, 'Hot Bench', 'BE'), p(2, 'Cold Starter', 'C')]),
+      teamDetail: minimalTeamDetail([p(1, 'Hot Bench', 'BE'), p(2, 'Cold Starter', 'C')]),
       ranks,
       rosterDay: rosterDayFor(
         {
@@ -156,17 +128,14 @@ describe('detectLineupHints (grouped)', () => {
     expect(hints.some((h) => h.id === 'lineup-consider-benching')).toBe(true)
     const start = hints.find((h) => h.id === 'lineup-consider-starting')!
     expect(start.players![0].notes).toContain('Tonight vs SAC')
-    expect(start.players![0].notes?.some((n) => n.startsWith('Recent form:') || n.startsWith('Strong last 15 days:'))).toBe(
-      true,
-    )
+    expect(start.players![0].notes?.some((n) => n.startsWith('Last 15 rank in top'))).toBe(true)
   })
 
-  it('adds strong L15 explanation when bench qualifies without heating form', () => {
+  it('suggests starting when only season rank is inside top 120', () => {
     const ranks = emptyRanks()
-    ranks.last15.set(1, { rank: 60, window: 'last_15' })
-    ranks.season.set(1, { rank: 55, window: 'season' })
+    ranks.season.set(1, { rank: 100, window: 'season' })
     const hints = detectLineupHints({
-      teamDetail: team([p(1, 'Hot Bench', 'BE')]),
+      teamDetail: minimalTeamDetail([p(1, 'Hot Bench', 'BE')]),
       ranks,
       rosterDay: rosterDayFor({
         player_id: 1,
@@ -182,15 +151,15 @@ describe('detectLineupHints (grouped)', () => {
       }),
     })
     const start = hints.find((h) => h.id === 'lineup-consider-starting')!
-    expect(start.players![0].notes?.some((n) => n.startsWith('Strong last 15 days:'))).toBe(true)
+    expect(start.players![0].notes?.some((n) => n.startsWith('Season rank in top 120'))).toBe(true)
   })
 
-  it('does not suggest benching for cooling form when L15 is still inside top 120', () => {
+  it('does not suggest benching when season and L15 are both inside cutoffs', () => {
     const ranks = emptyRanks()
     ranks.season.set(2, { rank: 50, window: 'season' })
     ranks.last15.set(2, { rank: 100, window: 'last_15' })
     const hints = detectLineupHints({
-      teamDetail: team([p(2, 'Still Good L15', 'C')]),
+      teamDetail: minimalTeamDetail([p(2, 'Still Good L15', 'C')]),
       ranks,
       rosterDay: rosterDayFor({
         player_id: 2,

@@ -35,7 +35,8 @@ describe('buildRankLookups window min GP', () => {
     const season = [player(1, 20), player(2, 20)]
     const last15 = [player(1, 5), player(2, 4)]
     const lookups = buildRankLookups(season, last15)
-    const roster = { player_id: 1, player_name: 'P1', lineup_slot: 'BE' } as const
+    const roster = player(1, 20)
+    roster.lineup_slot = 'BE'
     expect(rankForPlayer(lookups, roster, 'last_15')).not.toBeNull()
     expect(rankForPlayer(lookups, roster, 'season')).not.toBeNull()
   })

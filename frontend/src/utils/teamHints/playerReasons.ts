@@ -26,41 +26,34 @@ export function buildHintPlayerLine(
   }
 }
 
-export function heatingReason(player: RosterPlayer, ranks: RankLookups, minDelta: number): string | null {
-  const season = rankForPlayer(ranks, player, 'season')
-  const l15 = rankForPlayer(ranks, player, 'last_15')
-  if (!season || !l15) return null
-  const delta = season.rank - l15.rank
-  if (delta < minDelta) return null
-  return `Recent form: heating up (#${l15.rank} over last 15 vs #${season.rank} for the season)`
+export function considerStartRankNotes(
+  season: PlayerRankRef | undefined,
+  l15: PlayerRankRef | undefined,
+  seasonMax: number,
+  l15Max: number,
+): string[] {
+  const notes: string[] = []
+  if (season && season.rank <= seasonMax) {
+    notes.push(`Season rank in top ${seasonMax}: ${formatRankShort(season)}`)
+  }
+  if (l15 && l15.rank <= l15Max) {
+    notes.push(`Last 15 rank in top ${l15Max}: ${formatRankShort(l15)}`)
+  }
+  return notes
 }
 
-/** Row-2 copy for consider start/bench (not matchup). */
-export function hasLineupValueExplanation(notes: string[]): boolean {
-  return notes.some(
-    (n) =>
-      n.startsWith('Recent form:') ||
-      n.startsWith('Season value is weak') ||
-      n.startsWith('Strong last 15 days:'),
-  )
-}
-
-export function strongL15StartExplanation(l15: PlayerRankRef): string {
-  return `Strong last 15 days: ${formatRankShort(l15)}`
-}
-
-export function coolingReason(
-  player: RosterPlayer,
-  ranks: RankLookups,
-  minDelta: number,
-  /** When set, skip “cooling” if L15 is still this good (rank ≤ cutoff). Used for bench hints. */
-  minL15RankForCooling?: number,
-): string | null {
-  const season = rankForPlayer(ranks, player, 'season')
-  const l15 = rankForPlayer(ranks, player, 'last_15')
-  if (!season || !l15) return null
-  const delta = l15.rank - season.rank
-  if (delta < minDelta) return null
-  if (minL15RankForCooling != null && l15.rank < minL15RankForCooling) return null
-  return `Recent form: cooling off (was #${season.rank} for the season, now #${l15.rank} over last 15)`
+export function considerBenchRankNotes(
+  season: PlayerRankRef | undefined,
+  l15: PlayerRankRef | undefined,
+  seasonOutsideTop: number,
+  l15OutsideTop: number,
+): string[] {
+  const notes: string[] = []
+  if (season && season.rank > seasonOutsideTop) {
+    notes.push(`Season rank outside top ${seasonOutsideTop}: ${formatRankShort(season)}`)
+  }
+  if (l15 && l15.rank > l15OutsideTop) {
+    notes.push(`Last 15 rank outside top ${l15OutsideTop}: ${formatRankShort(l15)}`)
+  }
+  return notes
 }

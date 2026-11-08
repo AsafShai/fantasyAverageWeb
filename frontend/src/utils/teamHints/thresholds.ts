@@ -1,13 +1,14 @@
 import { REPORT_MIN_GP } from '../draftReport'
 
-/** Bench player inside this rank (L15) triggers a consider-start hint. */
-export const BENCH_HOT_MAX_RANK = 80
-export const STARTER_COLD_MIN_RANK = 120
+/** Bench player: season rank ≤ this → consider starting. */
+export const CONSIDER_START_SEASON_MAX_RANK = 120
+/** Bench player: last-15 rank ≤ this → consider starting. */
+export const CONSIDER_START_L15_MAX_RANK = 90
 
-export const SEASON_STARTER_POOR_MIN = 150
-
-/** L15 vs season rank delta for heating / cooling copy. */
-export const FORM_RANK_DELTA = 45
+/** Starter: season rank > this (outside top N) → consider benching. */
+export const CONSIDER_BENCH_SEASON_OUTSIDE_TOP = 180
+/** Starter: last-15 rank > this (outside top N) → consider benching. */
+export const CONSIDER_BENCH_L15_OUTSIDE_TOP = 210
 
 /** Season value ranks in hints (full-season sample). */
 export const HINTS_MIN_GP = REPORT_MIN_GP

@@ -1,6 +1,7 @@
 import { isPlayerOutOnInjuryReport } from '../../playerInjury'
 import { rankForPlayer } from '../ranks'
 import { buildHintPlayerLine } from '../playerReasons'
+import { rosterPlayerFromDayPlayer } from '../rosterDayPlayer'
 import type { HintPlayerLine, TeamHint, TeamHintsInput } from '../types'
 
 const MAX_PLAYERS = 6
@@ -20,11 +21,12 @@ export function detectScheduleHints(input: TeamHintsInput): TeamHint[] {
 
   if (candidates.length === 0) return []
 
+  const teamId = day.team_id
   const ranked = candidates
-    .map((p) => ({
-      p,
-      l15: rankForPlayer(input.ranks, p, 'last_15'),
-    }))
+    .map((p) => {
+      const roster = rosterPlayerFromDayPlayer(p, teamId)
+      return { p, roster, l15: rankForPlayer(input.ranks, roster, 'last_15') }
+    })
     .sort((a, b) => {
       const ar = a.l15?.rank ?? 9999
       const br = b.l15?.rank ?? 9999
@@ -32,10 +34,10 @@ export function detectScheduleHints(input: TeamHintsInput): TeamHint[] {
     })
 
   const players: HintPlayerLine[] = []
-  for (const { p } of ranked) {
+  for (const { p, roster } of ranked) {
     const notes: string[] = []
     if (p.opponent) notes.push(`Tonight vs ${p.opponent}`)
-    players.push(buildHintPlayerLine(p, input.ranks, injuryMap, notes))
+    players.push(buildHintPlayerLine(roster, input.ranks, injuryMap, notes))
     if (players.length >= MAX_PLAYERS) break
   }
 

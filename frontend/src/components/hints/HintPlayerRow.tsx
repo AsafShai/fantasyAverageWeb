@@ -25,12 +25,12 @@ function InlineRanks({ ranks }: { ranks: HintPlayerRanks }) {
 
 function noteClass(note: string): string {
   if (note.startsWith('Tonight vs ')) return 'mgr-hint-tail mgr-hint-tail--matchup'
-  if (note.startsWith('Strong last 15 days:')) {
+  if (note.startsWith('Season rank in top') || note.startsWith('Last 15 rank in top')) {
     return 'mgr-hint-tail mgr-hint-tail--up'
   }
-  if (note.startsWith('Recent form: heating')) return 'mgr-hint-tail mgr-hint-tail--up'
-  if (note.startsWith('Recent form: cooling')) return 'mgr-hint-tail mgr-hint-tail--down'
-  if (note.startsWith('Season value is weak')) return 'mgr-hint-tail mgr-hint-tail--warn'
+  if (note.startsWith('Season rank outside') || note.startsWith('Last 15 rank outside')) {
+    return 'mgr-hint-tail mgr-hint-tail--down'
+  }
   return 'mgr-hint-tail'
 }
 

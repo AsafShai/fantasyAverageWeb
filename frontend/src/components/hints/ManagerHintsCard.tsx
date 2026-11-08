@@ -75,7 +75,7 @@ export default function ManagerHintsCard({
   layout = 'desktop',
   embedded = false,
 }: ManagerHintsCardProps) {
-  const { isLoading, visible, hidden, hiddenCount, dismiss, teamName: loadedName, expandAll } = useTeamHints(teamId, {
+  const { isLoading, visible, hiddenCount, dismiss, teamName: loadedName, expandAll } = useTeamHints(teamId, {
     teamDetail,
     rosterDay,
     slateDate,

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Player, TeamDetail } from '../../../types/api'
+import type { Player } from '../../../types/api'
 import { normalizePlayerName } from '../../../utils/playerName'
 import { detectRosterHints } from '../detectors/roster'
 import type { RankLookups } from '../types'
+import { minimalTeamDetail } from './fixtures'
 
 const ranks: RankLookups = {
   season: new Map(),
@@ -25,23 +26,10 @@ function player(id: number, name: string, slot: string): Player {
   }
 }
 
-function team(players: Player[]): TeamDetail {
-  return {
-    team: { team_id: 1, team_name: 'Mine' },
-    espn_url: '',
-    players,
-    shot_chart: { fgm: 0, fga: 0, fg_percentage: 0, ftm: 0, fta: 0, ft_percentage: 0, gp: 0 },
-    raw_averages: { gp: 1, fg_percentage: 0, ft_percentage: 0, fgm: 0, fga: 0, ftm: 0, fta: 0, three_pm: 0, reb: 0, ast: 0, stl: 0, blk: 0, pts: 0, team: { team_id: 1, team_name: 'Mine' } },
-    ranking_stats: { team: { team_id: 1, team_name: 'Mine' }, rank: 1, total_points: 100, stats: {} },
-    category_ranks: {},
-    slot_usage: {},
-  }
-}
-
 describe('detectRosterHints (IR)', () => {
   it('suggests clearing IR when occupant is not Out and their NBA team is on the report', () => {
     const hints = detectRosterHints({
-      teamDetail: team([player(1, 'Returner', 'IR')]),
+      teamDetail: minimalTeamDetail([player(1, 'Returner', 'IR')]),
       ranks,
       injuryStatusByPlayerName: new Map([[normalizePlayerName('Returner'), 'Probable']]),
       injuryReportTeamKeys: new Set(['losangeleslakers']),
@@ -53,7 +41,7 @@ describe('detectRosterHints (IR)', () => {
 
   it('does not suggest review IR when the player NBA team is missing from the injury report', () => {
     const hints = detectRosterHints({
-      teamDetail: team([player(1, 'Returner', 'IR')]),
+      teamDetail: minimalTeamDetail([player(1, 'Returner', 'IR')]),
       ranks,
       injuryStatusByPlayerName: new Map(),
       injuryReportTeamKeys: new Set(['sacramentokings']),
@@ -64,7 +52,7 @@ describe('detectRosterHints (IR)', () => {
 
   it('does not flag IR occupant who is still Out', () => {
     const hints = detectRosterHints({
-      teamDetail: team([player(1, 'Hurt', 'IR')]),
+      teamDetail: minimalTeamDetail([player(1, 'Hurt', 'IR')]),
       ranks,
       injuryStatusByPlayerName: new Map([[normalizePlayerName('Hurt'), 'Out']]),
     })
@@ -73,7 +61,7 @@ describe('detectRosterHints (IR)', () => {
 
   it('suggests moving Out player to IR when slot is empty', () => {
     const hints = detectRosterHints({
-      teamDetail: team([player(1, 'Hurt', 'BE')]),
+      teamDetail: minimalTeamDetail([player(1, 'Hurt', 'BE')]),
       ranks,
       injuryStatusByPlayerName: new Map([[normalizePlayerName('Hurt'), 'Out']]),
     })
