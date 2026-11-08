@@ -505,15 +505,19 @@ function ScheduleRoster(p: MobileTeamDetailProps) {
           <span className="mr-meta">No games for your roster this day.</span>
         ) : (
           <ul className="mr-tm-who">
-            {p.whoPlays.map((pl) => (
+            {p.whoPlays.map((pl) => {
+              const b2b = p.focusDate ? p.isBackToBackOn(pl.pro_team, p.focusDate) : false
+              return (
               <li key={pl.player_id ?? pl.player_name}>
                 {slotOf(pl.lineup_slot)}
                 <PlayerNameLink name={pl.player_name} playerId={pl.player_id} />
+                {b2b ? <span className="mr-b2b-mark" title="Back-to-back game">B2B</span> : null}
                 <span className="mr-meta">
                   {pl.pro_team} vs {p.focusDate ? p.opponentOn(pl.pro_team, p.focusDate) : ''}
                 </span>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </Card>
@@ -555,8 +559,10 @@ function ScheduleRoster(p: MobileTeamDetailProps) {
                     <td className="mr-l">{pl.pro_team}</td>
                     {p.weekDays.map((d) => {
                       const opp = p.opponentOn(pl.pro_team, d.date)
+                      const b2b = p.isBackToBackOn(pl.pro_team, d.date)
+                      const tone = [d.date === p.focusDate ? 'mr-focus' : '', b2b && opp ? 'mr-b2b' : ''].filter(Boolean).join(' ')
                       return (
-                        <td key={d.date} className={`mr-c ${d.date === p.focusDate ? 'mr-focus' : ''}`.trim()}>
+                        <td key={d.date} className={`mr-c ${tone}`.trim()}>
                           {opp ? `vs ${opp}` : ''}
                         </td>
                       )

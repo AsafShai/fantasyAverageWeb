@@ -83,6 +83,7 @@ export interface MobileTeamDetailProps {
   focusDate: string | null
   onFocusDate: (date: string) => void
   opponentOn: (proTeam: string, date: string) => string | undefined
+  isBackToBackOn: (proTeam: string, date: string) => boolean
   gamesIn: (proTeam: string) => number
   whoPlays: Player[]
   whoPlaysHeading: string
