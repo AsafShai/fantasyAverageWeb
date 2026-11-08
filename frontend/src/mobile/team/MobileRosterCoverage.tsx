@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { useGetScheduleQuery } from '../../store/api/fantasyApi'
 import type { Player } from '../../types/api'
 import { SCHEDULE_HORIZONS, type ScheduleHorizon } from '../../components/PlayerWeekColumns'
-import { firstScheduleDay, formatSlateDate } from '../../utils/slateWindow'
+import { coverageBarPlayingSplit, rosterDayCoverage, teamsPlayingOnDate } from '../../utils/rosterCoverage'
+import { firstScheduleDay, formatSlateDate, opponentsByTeamDate } from '../../utils/slateWindow'
 import { getErrorMessage } from '../../utils/errorMessage'
 import { Card, Segmented } from '../ui'
 
@@ -34,23 +35,25 @@ export default function MobileRosterCoverage({
     const i = days.findIndex((d) => d.date === start)
     return days.slice(i, i + horizon)
   }, [days, start, horizon])
+  const opponents = useMemo(
+    () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
+    [schedule],
+  )
   const coverage = useMemo(
     () =>
       visible.map((day) => {
-        const playing = new Set(
-          (schedule?.teams ?? []).filter((t) => t.games.some((g) => g.date === day.date)).map((t) => t.abbreviation),
-        )
-        return { day, count: players.filter((p) => playing.has(p.pro_team)).length }
+        const playingTeams = teamsPlayingOnDate(schedule, day.date)
+        const { count, b2bCount } = rosterDayCoverage(players, playingTeams, day.date, opponents)
+        return { day, count, b2bCount }
       }),
-    [visible, schedule, players],
+    [visible, schedule, players, opponents],
   )
   const active = visible.some((d) => d.date === selectedDate) ? selectedDate : visible[0]?.date
 
   return (
     <Card title="Roster coverage">
       <span className="mr-meta">
-        Games on your roster vs. the NBA slate. Bar height = rostered players with an NBA game; the slate label is the
-        total number of NBA games that day.
+        Blue bar = players with a game; orange at the bottom = players on B2B.
       </span>
       <Segmented
         label="Coverage days"
@@ -65,33 +68,62 @@ export default function MobileRosterCoverage({
         <span className="mr-meta">{getErrorMessage(error, 'Failed to load schedule coverage')}</span>
       ) : (
         <div className="mr-cov mr-noscroll">
-          {coverage.map(({ day, count }) => (
+          {coverage.map(({ day, count, b2bCount }) => {
+            const { totalPct, b2bInsidePct, nonB2bInsidePct } = coverageBarPlayingSplit(
+              players.length,
+              count,
+              b2bCount,
+            )
+            const allB2b = count > 0 && b2bCount >= count
+            return (
             <button
               key={day.date}
               type="button"
               className="mr-cov-day"
               aria-pressed={active === day.date}
-              aria-label={`${formatSlateDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${players.length} rostered players have an NBA game; ${day.slate_size} NBA games on the slate`}
+              aria-label={`${formatSlateDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${players.length} rostered players have an NBA game${b2bCount ? `, ${b2bCount} on a back-to-back` : ''}; ${day.slate_size} NBA games on the slate`}
               onClick={() => onSelectDate(day.date)}
             >
               <span className="mr-cov-dow">{formatSlateDate(day.date, { weekday: 'short' })}</span>
               <span className="mr-cov-date">{formatSlateDate(day.date, { month: 'short', day: 'numeric' })}</span>
               <span className="mr-cov-bar" aria-hidden="true">
-                <span className="mr-cov-fill" style={{ height: `${players.length ? (count / players.length) * 100 : 0}%` }} />
+                {totalPct > 0 ? (
+                  <span
+                    className={`mr-cov-fill mr-cov-fill--stack ${allB2b ? 'mr-cov-fill--all-b2b' : ''}`.trim()}
+                    style={{ height: `${totalPct}%` }}
+                  >
+                    {!allB2b && nonB2bInsidePct > 0 ? (
+                      <span className="mr-cov-fill-slice mr-cov-fill-slice--play" style={{ height: `${nonB2bInsidePct}%` }} />
+                    ) : null}
+                    {!allB2b && b2bInsidePct > 0 ? (
+                      <span className="mr-cov-fill-slice mr-cov-fill-slice--b2b" style={{ height: `${b2bInsidePct}%` }} />
+                    ) : null}
+                  </span>
+                ) : null}
               </span>
               <span className="mr-cov-n">
                 <b>{count}</b> of {players.length}
               </span>
               <span className="mr-cov-n">rostered</span>
+              {b2bCount > 0 ? (
+                <span className="mr-cov-b2b">
+                  {b2bCount} players on B2B
+                </span>
+              ) : null}
               <span className={`mr-cov-slate ${day.slate_size >= 12 || day.high_volume ? 'mr-busy' : ''}`.trim()}>
                 {day.slate_size} NBA games
               </span>
             </button>
-          ))}
+            )
+          })}
         </div>
       )}
       <div className="mr-legend">
-        <span><i style={{ background: 'var(--mr-primary-2)' }} />Bar height = rostered players with a game</span>
+        <span><i style={{ background: 'var(--mr-primary-2)' }} />Players with a game</span>
+        <span>
+          <i className="mr-cov-legend-b2b" />
+          Players on B2B
+        </span>
         <span><i className="mr-cov-bar" style={{ width: 11, height: 11, margin: 0 }} />Slate label = total NBA games</span>
       </div>
     </Card>

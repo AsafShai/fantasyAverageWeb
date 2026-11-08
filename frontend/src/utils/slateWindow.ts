@@ -111,6 +111,27 @@ export function weekGameCount(
   )
 }
 
+export function teamPlaysOnDate(
+  opponents: Map<string, string>,
+  abbreviation: string,
+  date: string,
+): boolean {
+  return opponents.has(`${abbreviation}|${date}`)
+}
+
+/** Either night of a back-to-back: the team plays on `date` and again the day before or after. */
+export function isBackToBackGameDay(
+  opponents: Map<string, string>,
+  abbreviation: string,
+  date: string,
+): boolean {
+  if (!teamPlaysOnDate(opponents, abbreviation, date)) return false
+  return (
+    teamPlaysOnDate(opponents, abbreviation, addDays(date, -1)) ||
+    teamPlaysOnDate(opponents, abbreviation, addDays(date, 1))
+  )
+}
+
 /** Monday-start week key, matching how fantasy weeks are usually drawn. */
 export function weekStart(date: string): string {
   const value = new Date(`${date}T12:00:00`)

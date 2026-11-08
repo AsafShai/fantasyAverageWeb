@@ -4,7 +4,9 @@ import type { Player, ScheduleCalendarDay } from '../types/api'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
-import { firstScheduleDay, formatSlateDate } from '../utils/slateWindow'
+import { RosterCoverageBar } from './RosterCoverageBar'
+import { rosterDayCoverage, teamsPlayingOnDate } from '../utils/rosterCoverage'
+import { firstScheduleDay, formatSlateDate, opponentsByTeamDate } from '../utils/slateWindow'
 import { SCHEDULE_HORIZONS, type ScheduleHorizon } from './PlayerWeekColumns'
 
 interface RosterCoverageProps {
@@ -57,12 +59,19 @@ export default function RosterCoverage({
     return days.slice(startIndex, startIndex + horizon)
   }, [days, horizon, startDate])
 
-  const coverage = useMemo(() => visibleDays.map(day => {
-    const activeTeams = new Set(
-      (schedule?.teams ?? []).filter(team => team.games.some(game => game.date === day.date)).map(team => team.abbreviation)
-    )
-    return { day, count: roster.filter(player => activeTeams.has(player.pro_team)).length }
-  }), [roster, schedule, visibleDays])
+  const opponents = useMemo(
+    () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),
+    [schedule],
+  )
+  const coverage = useMemo(
+    () =>
+      visibleDays.map((day) => {
+        const playingTeams = teamsPlayingOnDate(schedule, day.date)
+        const { count, b2bCount } = rosterDayCoverage(roster, playingTeams, day.date, opponents)
+        return { day, count, b2bCount }
+      }),
+    [roster, schedule, visibleDays, opponents],
+  )
 
   const activeDate = visibleDays.some(day => day.date === selectedDate) ? selectedDate : visibleDays[0]?.date ?? ''
 
@@ -93,10 +102,10 @@ export default function RosterCoverage({
             <h2 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-100">Roster coverage</h2>
           )}
           <p className="mt-1 text-xs text-gray-500 sm:hidden dark:text-gray-400">
-            Bar = rostered players with a game; slate = NBA games that day.
+            Blue bar = players with a game; orange at bottom = players on B2B.
           </p>
           <p className="mt-1 hidden text-xs text-gray-500 sm:block dark:text-gray-400">
-            Bar height = rostered players with an NBA game. The slate label is the total number of NBA games that day.
+            Blue bar = rostered players with a game; orange at the bottom = players on B2B (count under each day).
           </p>
         </div>
         <div className="flex rounded-lg border border-gray-200 p-1 text-xs">
@@ -114,7 +123,7 @@ export default function RosterCoverage({
       </div>
 
       <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-        {coverage.map(({ day, count }) => (
+        {coverage.map(({ day, count, b2bCount }) => (
           <button
             type="button"
             key={day.date}
@@ -124,30 +133,34 @@ export default function RosterCoverage({
             }}
             className={`w-16 min-w-16 shrink-0 rounded-lg px-1.5 py-2 text-center leading-none transition-shadow ${daySurface(day)} ${activeDate === day.date ? 'border-[3px] border-blue-700 shadow-sm' : 'border-2 border-gray-200'}`}
             aria-pressed={activeDate === day.date}
-            aria-label={`${formatSlateDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${roster.length} rostered players have an NBA game; ${day.slate_size} NBA games on the slate`}
+            aria-label={`${formatSlateDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${count} of ${roster.length} rostered players have an NBA game${b2bCount ? `, ${b2bCount} on a back-to-back` : ''}; ${day.slate_size} NBA games on the slate`}
           >
             <div className="text-[10px] font-semibold uppercase leading-none">{formatSlateDate(day.date, { weekday: 'short' })}</div>
             <div className="text-xs leading-none">{formatSlateDate(day.date, { month: 'short', day: 'numeric' })}</div>
             <div className="mt-2 flex h-24 items-end justify-center" aria-hidden="true">
-              <div className="relative h-full w-6 overflow-hidden rounded-t bg-blue-100">
-                <div
-                  className="absolute inset-x-0 bottom-0 rounded-t bg-blue-600"
-                  style={{ height: `${roster.length ? (count / roster.length) * 100 : 0}%` }}
-                />
-              </div>
+              <RosterCoverageBar rosterSize={roster.length} count={count} b2bCount={b2bCount} />
             </div>
             <div className="mt-2 flex items-baseline justify-center gap-1 leading-none">
               <span className="text-lg font-bold">{count}</span>
               <span className="text-[9px] font-semibold uppercase">of {roster.length}</span>
             </div>
             <div className="mt-1 text-[9px] leading-none">rostered</div>
+            {b2bCount > 0 ? (
+              <div className="mt-0.5 text-[9px] font-medium leading-tight text-orange-800/85 dark:text-orange-200/80">
+                {b2bCount} players on B2B
+              </div>
+            ) : null}
             <div className={`mt-1 rounded-md px-1 py-1 text-[9px] font-medium leading-tight ${slateTone(day)}`}>{day.slate_size} NBA games</div>
           </button>
         ))}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500">
-        <span><span className="mr-1 inline-block h-3 w-3 rounded-sm bg-blue-600 align-[-2px]" />Bar height = rostered players with a game</span>
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+        <span><span className="mr-1 inline-block h-3 w-3 rounded-sm bg-blue-600 align-[-2px]" />Players with a game</span>
+        <span>
+          <span className="mr-1 inline-block h-3 w-3 rounded-sm bg-orange-400 align-[-2px] dark:bg-orange-600" />
+          Players on B2B
+        </span>
         <span><span className="mr-1 inline-block h-3 w-3 rounded-sm bg-blue-100 align-[-2px]" />Slate label = total NBA games</span>
       </div>
     </div>
