@@ -42,6 +42,8 @@ export interface HintPlayerLine {
 export interface TeamHintsInput {
   teamDetail: TeamDetail
   ranks: RankLookups
+  /** GP in the last-15 stats window (from the last_15 players pool), keyed by player_id. */
+  last15GpByPlayerId?: Map<number, number>
   rosterDay?: RosterDay | null
   injuryStatusByPlayerName?: Map<string, string>
   injuryReportTeamKeys?: Set<string>

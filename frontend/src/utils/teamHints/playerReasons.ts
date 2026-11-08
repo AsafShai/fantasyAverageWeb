@@ -31,12 +31,14 @@ export function considerStartRankNotes(
   l15: PlayerRankRef | null | undefined,
   seasonMax: number,
   l15Max: number,
+  l15Gp: number,
+  l15MinGp: number,
 ): string[] {
   const notes: string[] = []
   if (season && season.rank <= seasonMax) {
     notes.push(`Season rank in top ${seasonMax}: ${formatRankShort(season)}`)
   }
-  if (l15 && l15.rank <= l15Max) {
+  if (l15Gp >= l15MinGp && l15 && l15.rank <= l15Max) {
     notes.push(`Last 15 rank in top ${l15Max}: ${formatRankShort(l15)}`)
   }
   return notes
@@ -47,12 +49,14 @@ export function considerBenchRankNotes(
   l15: PlayerRankRef | null | undefined,
   seasonOutsideTop: number,
   l15OutsideTop: number,
+  l15Gp: number,
+  l15MinGp: number,
 ): string[] {
   const notes: string[] = []
   if (season && season.rank > seasonOutsideTop) {
     notes.push(`Season rank outside top ${seasonOutsideTop}: ${formatRankShort(season)}`)
   }
-  if (l15 && l15.rank > l15OutsideTop) {
+  if (l15Gp >= l15MinGp && l15 && l15.rank > l15OutsideTop) {
     notes.push(`Last 15 rank outside top ${l15OutsideTop}: ${formatRankShort(l15)}`)
   }
   return notes

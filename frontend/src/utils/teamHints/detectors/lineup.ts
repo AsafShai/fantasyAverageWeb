@@ -3,6 +3,7 @@ import { rankForPlayer } from '../ranks'
 import {
   CONSIDER_BENCH_L15_OUTSIDE_TOP,
   CONSIDER_BENCH_SEASON_OUTSIDE_TOP,
+  CONSIDER_L15_MIN_GP,
   CONSIDER_START_L15_MAX_RANK,
   CONSIDER_START_SEASON_MAX_RANK,
 } from '../thresholds'
@@ -38,30 +39,55 @@ function groupedHint(
   }
 }
 
-function qualifiesConsiderStart(seasonRank: number | undefined, l15Rank: number | undefined): boolean {
+function last15Gp(input: TeamHintsInput, playerId: number | null | undefined): number {
+  if (playerId == null) return 0
+  return input.last15GpByPlayerId?.get(playerId) ?? 0
+}
+
+function qualifiesConsiderStart(
+  seasonRank: number | undefined,
+  l15Rank: number | undefined,
+  l15Gp: number,
+): boolean {
   if (seasonRank != null && seasonRank <= CONSIDER_START_SEASON_MAX_RANK) return true
-  if (l15Rank != null && l15Rank <= CONSIDER_START_L15_MAX_RANK) return true
+  if (l15Gp >= CONSIDER_L15_MIN_GP && l15Rank != null && l15Rank <= CONSIDER_START_L15_MAX_RANK) return true
   return false
 }
 
-function qualifiesConsiderBench(seasonRank: number | undefined, l15Rank: number | undefined): boolean {
+function qualifiesConsiderBench(
+  seasonRank: number | undefined,
+  l15Rank: number | undefined,
+  l15Gp: number,
+): boolean {
   if (seasonRank != null && seasonRank > CONSIDER_BENCH_SEASON_OUTSIDE_TOP) return true
-  if (l15Rank != null && l15Rank > CONSIDER_BENCH_L15_OUTSIDE_TOP) return true
+  if (l15Gp >= CONSIDER_L15_MIN_GP && l15Rank != null && l15Rank > CONSIDER_BENCH_L15_OUTSIDE_TOP) return true
   return false
 }
 
-function startSortPriority(seasonRank: number | undefined, l15Rank: number | undefined): number {
+function startSortPriority(
+  seasonRank: number | undefined,
+  l15Rank: number | undefined,
+  l15Gp: number,
+): number {
   const good: number[] = []
   if (seasonRank != null && seasonRank <= CONSIDER_START_SEASON_MAX_RANK) good.push(seasonRank)
-  if (l15Rank != null && l15Rank <= CONSIDER_START_L15_MAX_RANK) good.push(l15Rank)
+  if (l15Gp >= CONSIDER_L15_MIN_GP && l15Rank != null && l15Rank <= CONSIDER_START_L15_MAX_RANK) {
+    good.push(l15Rank)
+  }
   if (good.length === 0) return 0
   return 1000 - Math.min(...good)
 }
 
-function benchSortPriority(seasonRank: number | undefined, l15Rank: number | undefined): number {
+function benchSortPriority(
+  seasonRank: number | undefined,
+  l15Rank: number | undefined,
+  l15Gp: number,
+): number {
   const bad: number[] = []
   if (seasonRank != null && seasonRank > CONSIDER_BENCH_SEASON_OUTSIDE_TOP) bad.push(seasonRank)
-  if (l15Rank != null && l15Rank > CONSIDER_BENCH_L15_OUTSIDE_TOP) bad.push(l15Rank)
+  if (l15Gp >= CONSIDER_L15_MIN_GP && l15Rank != null && l15Rank > CONSIDER_BENCH_L15_OUTSIDE_TOP) {
+    bad.push(l15Rank)
+  }
   return bad.length ? Math.max(...bad) : 0
 }
 
@@ -83,14 +109,24 @@ export function detectLineupHints(input: TeamHintsInput): TeamHint[] {
       const l15 = rankForPlayer(ranks, p, 'last_15')
       const seasonRank = season?.rank
       const l15Rank = l15?.rank
-      if (!qualifiesConsiderStart(seasonRank, l15Rank)) continue
+      const l15Games = last15Gp(input, p.player_id)
+      if (!qualifiesConsiderStart(seasonRank, l15Rank, l15Games)) continue
       const notes: string[] = []
       const gameNote = tonightGameNoteForPlayer(p.player_id, rosterDay)
       if (gameNote) notes.push(gameNote)
-      notes.push(...considerStartRankNotes(season, l15, CONSIDER_START_SEASON_MAX_RANK, CONSIDER_START_L15_MAX_RANK))
+      notes.push(
+        ...considerStartRankNotes(
+          season,
+          l15,
+          CONSIDER_START_SEASON_MAX_RANK,
+          CONSIDER_START_L15_MAX_RANK,
+          l15Games,
+          CONSIDER_L15_MIN_GP,
+        ),
+      )
       startCandidates.push({
         player: p,
-        priority: startSortPriority(seasonRank, l15Rank),
+        priority: startSortPriority(seasonRank, l15Rank, l15Games),
         notes,
       })
     }
@@ -121,16 +157,24 @@ export function detectLineupHints(input: TeamHintsInput): TeamHint[] {
       const l15 = rankForPlayer(ranks, p, 'last_15')
       const seasonRank = season?.rank
       const l15Rank = l15?.rank
-      if (!qualifiesConsiderBench(seasonRank, l15Rank)) continue
+      const l15Games = last15Gp(input, p.player_id)
+      if (!qualifiesConsiderBench(seasonRank, l15Rank, l15Games)) continue
       const notes: string[] = []
       const gameNote = tonightGameNoteForPlayer(p.player_id, rosterDay)
       if (gameNote) notes.push(gameNote)
       notes.push(
-        ...considerBenchRankNotes(season, l15, CONSIDER_BENCH_SEASON_OUTSIDE_TOP, CONSIDER_BENCH_L15_OUTSIDE_TOP),
+        ...considerBenchRankNotes(
+          season,
+          l15,
+          CONSIDER_BENCH_SEASON_OUTSIDE_TOP,
+          CONSIDER_BENCH_L15_OUTSIDE_TOP,
+          l15Games,
+          CONSIDER_L15_MIN_GP,
+        ),
       )
       benchCandidates.push({
         player: p,
-        priority: benchSortPriority(seasonRank, l15Rank),
+        priority: benchSortPriority(seasonRank, l15Rank, l15Games),
         notes,
       })
     }

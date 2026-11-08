@@ -28,6 +28,10 @@ function emptyRanks(): RankLookups {
   }
 }
 
+function l15Gp(...pairs: [number, number][]): Map<number, number> {
+  return new Map(pairs)
+}
+
 describe('detectLineupHints (grouped)', () => {
   it('merges injured starters into one hint without naming replacements', () => {
     const ranks = emptyRanks()
@@ -97,6 +101,7 @@ describe('detectLineupHints (grouped)', () => {
     const hints = detectLineupHints({
       teamDetail: minimalTeamDetail([p(1, 'Hot Bench', 'BE'), p(2, 'Cold Starter', 'C')]),
       ranks,
+      last15GpByPlayerId: l15Gp([1, 5], [2, 5]),
       rosterDay: rosterDayFor(
         {
           player_id: 1,
@@ -137,6 +142,7 @@ describe('detectLineupHints (grouped)', () => {
     const hints = detectLineupHints({
       teamDetail: minimalTeamDetail([p(1, 'Hot Bench', 'BE')]),
       ranks,
+      last15GpByPlayerId: l15Gp([1, 0]),
       rosterDay: rosterDayFor({
         player_id: 1,
         player_name: 'Hot Bench',
@@ -152,6 +158,54 @@ describe('detectLineupHints (grouped)', () => {
     })
     const start = hints.find((h) => h.id === 'lineup-consider-starting')!
     expect(start.players![0].notes?.some((n) => n.startsWith('Season rank in top 120'))).toBe(true)
+  })
+
+  it('omits L15-only consider starting when last-15 GP is below 2', () => {
+    const ranks = emptyRanks()
+    ranks.last15.set(1, { rank: 50, window: 'last_15' })
+    ranks.season.set(1, { rank: 200, window: 'season' })
+    const hints = detectLineupHints({
+      teamDetail: minimalTeamDetail([p(1, 'Hot Bench', 'BE')]),
+      ranks,
+      last15GpByPlayerId: l15Gp([1, 1]),
+      rosterDay: rosterDayFor({
+        player_id: 1,
+        player_name: 'Hot Bench',
+        positions: ['C'],
+        pro_team: 'LAL',
+        lineup_slot: 'BE',
+        opponent: 'SAC',
+        status: 'scheduled',
+        stats: null,
+        added: false,
+        dropped: false,
+      }),
+    })
+    expect(hints.some((h) => h.id === 'lineup-consider-starting')).toBe(false)
+  })
+
+  it('allows L15-only consider starting with at least 2 GP in the window', () => {
+    const ranks = emptyRanks()
+    ranks.last15.set(1, { rank: 50, window: 'last_15' })
+    ranks.season.set(1, { rank: 200, window: 'season' })
+    const hints = detectLineupHints({
+      teamDetail: minimalTeamDetail([p(1, 'Hot Bench', 'BE')]),
+      ranks,
+      last15GpByPlayerId: l15Gp([1, 2]),
+      rosterDay: rosterDayFor({
+        player_id: 1,
+        player_name: 'Hot Bench',
+        positions: ['C'],
+        pro_team: 'LAL',
+        lineup_slot: 'BE',
+        opponent: 'SAC',
+        status: 'scheduled',
+        stats: null,
+        added: false,
+        dropped: false,
+      }),
+    })
+    expect(hints.some((h) => h.id === 'lineup-consider-starting')).toBe(true)
   })
 
   it('does not suggest benching when season and L15 are both inside cutoffs', () => {
