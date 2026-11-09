@@ -27,8 +27,19 @@ function matchupFromNotes(notes: string[]): string | null {
   return note ? compactNote(note) : null
 }
 
-function InlineNotes({ notes }: { notes: string[] }) {
+function InlineNotes({ notes, stacked }: { notes: string[]; stacked?: boolean }) {
   if (notes.length === 0) return null
+  if (stacked) {
+    return (
+      <>
+        {notes.map((note) => (
+          <div key={note} className={`mgr-hint-detail-row ${noteClass(note)}`} title={note}>
+            {compactNote(note)}
+          </div>
+        ))}
+      </>
+    )
+  }
   return (
     <>
       {notes.map((note) => (
@@ -110,7 +121,7 @@ export function HintPlayerRow({ player, layout }: { player: HintPlayerLine; layo
       </div>
       {otherNotes.length > 0 ? (
         <div className="mgr-hint-line-detail">
-          <InlineNotes notes={otherNotes} />
+          <InlineNotes notes={otherNotes} stacked={mobile} />
         </div>
       ) : null}
     </li>
