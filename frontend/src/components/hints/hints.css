@@ -2,6 +2,13 @@
 
 .mr-hints-card {
   min-width: 0;
+  overflow: hidden;
+}
+
+.mr-hints-card .mgr-hints-section,
+.mr-hints-card .mgr-hint-row-head {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .mr-hints-card .mgr-hints-head {
@@ -182,7 +189,9 @@
   grid-template-columns: minmax(0, 1fr) 4.25rem 4.25rem;
   column-gap: 0.3rem;
   width: 100%;
-  min-width: max-content;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .mgr-hint-players--mobile .mgr-hint-col--player {
@@ -192,7 +201,42 @@
 
 .mgr-hint-players--mobile .mgr-hint-line-grid {
   width: 100%;
-  min-width: max-content;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mgr-hint-row--mobile .mgr-hint-body {
+  overflow-wrap: anywhere;
+}
+
+.mgr-hint-player-line--mobile .mgr-hint-player-identity {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.mgr-hint-player-line--mobile .mgr-hint-line-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  flex-wrap: nowrap;
+  padding: 0.15rem 0 0.2rem;
+  box-sizing: border-box;
+}
+
+.mgr-hint-detail-row {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mgr-hint-player-line--mobile .mgr-hint-line-detail .mgr-hint-detail-row {
+  color: inherit;
 }
 
 .mgr-hint-players::-webkit-scrollbar {
@@ -322,6 +366,12 @@
 .mgr-hint-players--mobile .mgr-hint-col--l15,
 .mgr-hint-players--mobile .mgr-hint-col--szn {
   min-width: 4.25rem;
+}
+
+.mgr-hint-player-line--mobile .mgr-hint-player-name-wrap a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .mgr-hint-player-line--mobile .mgr-hint-name-link {
