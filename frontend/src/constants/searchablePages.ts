@@ -46,7 +46,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   ...(FF_BOOM_OR_BUST ? [{ label: 'Boom or Bust', path: '/boom-or-bust', icon: '💥', group: 'Insights' }] : []),
   { label: 'Standings Estimator', path: '/estimator', icon: '🔮', group: 'Insights' },
   ...(FF_FEATURE_STORE ? [{ label: 'Feature Store', path: '/feature-store', icon: '🗄️', group: 'Insights' }] : []),
-  { label: 'Player Shooting Map', path: '/shooting-map', icon: '🎯', group: 'Insights' },
+  { label: 'Player Scatter Map', path: '/shooting-map', icon: '🎯', group: 'Insights' },
   { label: 'Trade Analyzer', path: '/trade', icon: '🔄', group: 'Tools' },
   { label: 'Minigames', path: '/minigames', icon: '🎮', group: 'Minigames' },
   { label: 'Hangman', path: '/minigames/hangman', icon: '🔤', group: 'Minigames' },

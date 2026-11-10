@@ -1,18 +1,19 @@
-/* Player Shooting Map: chart colors and the few pieces Tailwind can't express.
+/* Player Scatter Map: chart colors and the few pieces Tailwind can't express.
    The palette follows the site: gray chrome, green helps, red hurts (as the
    League Analytics heatmap), and the same values again under .dark. The chart
    engine reads these variables when it draws. */
 .sm-root {
   --ink: #111827; --muted: #6b7280; --grid: #e5e7eb; --rule: #d1d5db; --label-halo: #ffffff;
   --hot: #059669; --hot-soft: #a7f3d0; --cold: #dc2626; --cold-soft: #fecaca; --neutral: #9ca3af;
-  --sel: #111827;
+  --sel: #111827; --hot-ink: #047857; --cold-ink: #b91c1c; --box: #2563eb;
 }
 .dark .sm-root {
   --ink: #f3f4f6; --muted: #9ca3af; --grid: #374151; --rule: #4b5563; --label-halo: #1f2937;
   --hot: #34d399; --hot-soft: #065f46; --cold: #f87171; --cold-soft: #7f1d1d; --neutral: #6b7280;
-  --sel: #ffffff;
+  --sel: #ffffff; --hot-ink: #34d399; --cold-ink: #f87171; --box: #60a5fa;
 }
 .sm-chart { display: block; width: 100%; height: clamp(440px, 72vh, 780px); touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.sm-chart.sm-boxing { cursor: crosshair; }
 .sm-chart.sm-dragging { cursor: grabbing; }
 .sm-chart text { font-family: inherit; }
 @media (max-width: 640px) { .sm-chart { height: clamp(380px, 62vh, 560px); } }
