@@ -398,7 +398,7 @@ export default function ShootingMap() {
                   <div className="flex max-w-full overflow-x-auto rounded-lg border border-gray-300 dark:border-gray-600 text-sm" role="group" aria-label={title}>
                     {AXIS_ORDER.map(id => (
                       <button key={id} type="button" aria-pressed={value === id} onClick={() => pickAxis(axis, id)}
-                        className={`min-w-[52px] px-3 py-[7px] whitespace-nowrap font-semibold ${value === id ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600'}`}>{id}</button>
+                        className={`shrink-0 min-w-[52px] px-3 py-[7px] whitespace-nowrap font-semibold ${value === id ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600'}`}>{id}</button>
                     ))}
                   </div>
                   <span className="text-sm text-gray-600 dark:text-gray-300">{STATS[value].name}{STATS[value].kind === 'pct' ? '' : ' per game'}</span>
