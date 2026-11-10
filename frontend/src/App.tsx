@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router'
+import { Routes, Route, Navigate, useLocation } from 'react-router'
 import Layout from './components/Layout'
 import GlobalLoadingBar from './components/GlobalLoadingBar'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -42,6 +42,12 @@ const MockDraftPage = lazy(() => import('./pages/draft/MockDraftPage'))
 const MoversPage = lazy(() => import('./pages/draft/MoversPage'))
 const LeagueActivity = lazy(() => import('./pages/LeagueActivity'))
 
+/** The Scatter Map's old address: links to it keep working, team filters included. */
+function ShootingMapRedirect() {
+  const { search } = useLocation()
+  return <Navigate to={`/scatter-map${search}`} replace />
+}
+
 function App() {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -79,7 +85,8 @@ function App() {
               {FF_DRAFT_PAGES && <Route path="draft/mock" element={<MockDraftPage />} />}
               {FF_DRAFT_PAGES && <Route path="draft/movers" element={<MoversPage />} />}
               <Route path="trends" element={<Trends />} />
-              <Route path="shooting-map" element={<ShootingMap />} />
+              <Route path="scatter-map" element={<ShootingMap />} />
+              <Route path="shooting-map" element={<ShootingMapRedirect />} />
               {FF_LEAGUE_ACTIVITY && <Route path="activity" element={<LeagueActivity />} />}
               <Route path="minigames" element={<Minigames />} />
               <Route path="minigames/hangman" element={<HangmanGame />} />

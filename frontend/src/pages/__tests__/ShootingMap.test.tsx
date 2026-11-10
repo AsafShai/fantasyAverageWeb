@@ -50,7 +50,7 @@ describe('ShootingMap page', () => {
 
   it('lists who helps and hurts FG%, and narrows the lists to one NBA team', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     const helps = await screen.findByRole('heading', { name: 'Best for FG%' })
     const helpList = helps.parentElement!
     await waitFor(() => expect(within(helpList).getByText('Sharp Center')).toBeInTheDocument())
@@ -64,7 +64,7 @@ describe('ShootingMap page', () => {
 
   it('narrows to a fantasy team, and to free agents', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     await waitFor(() => expect(screen.getByRole('option', { name: 'Roy Team' })).toBeInTheDocument())
 
@@ -78,12 +78,12 @@ describe('ShootingMap page', () => {
   })
 
   it('combines the NBA and fantasy team from the link', async () => {
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map?team=BOS&fteam=fa' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map?team=BOS&fteam=fa' })
     expect(await screen.findByRole('heading', { name: 'Worst for FG% · BOS · Free agents' })).toBeInTheDocument()
   })
 
   it('hides players under the minimum games', async () => {
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     expect(screen.getByLabelText('Min games')).toHaveValue('2')
     fireEvent.change(screen.getByLabelText('Min games'), { target: { value: '6' } })
@@ -93,7 +93,7 @@ describe('ShootingMap page', () => {
 
   it('narrows the lists with the % and attempts thresholds, and clears them', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     const best = (await screen.findByRole('heading', { name: 'Best for FG%' })).parentElement!
     await waitFor(() => expect(within(best).getByText('Sharp Center')).toBeInTheDocument())
 
@@ -109,19 +109,19 @@ describe('ShootingMap page', () => {
   })
 
   it('ignores an unknown team in the link', async () => {
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map?team=xyz' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map?team=xyz' })
     expect(await screen.findByRole('heading', { name: 'Best for FG%' })).toBeInTheDocument()
   })
 
   it('reads a lowercase team from the link', async () => {
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map?team=lal' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map?team=lal' })
     expect(await screen.findByRole('heading', { name: 'Best for FG% · LAL' })).toBeInTheDocument()
     expect(screen.getByLabelText('NBA team')).toHaveValue('LAL')
   })
 
   it('says so when the search finds nobody', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     await user.type(screen.getByLabelText('Find a player'), 'zzz{Enter}')
     expect(screen.getByRole('status')).toHaveTextContent('No player found')
@@ -129,7 +129,7 @@ describe('ShootingMap page', () => {
 
   it('pins a player found by search', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     await user.type(screen.getByLabelText('Find a player'), 'brick{Enter}')
     const pinned = screen.getByRole('heading', { name: 'Pinned players' }).parentElement!
@@ -140,7 +140,7 @@ describe('ShootingMap page', () => {
 
   it('opens with FG% × FGA and picks another shooting chart from the menu', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     const shooting = screen.getByRole('button', { name: /^Shooting: FG% × FGA/ })
     expect(shooting).toHaveAttribute('aria-pressed', 'true')
@@ -160,7 +160,7 @@ describe('ShootingMap page', () => {
 
   it('closes a menu with Escape without changing the chart', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     await user.click(screen.getByRole('button', { name: /^Per minute/ }))
     expect(within(screen.getByRole('menu', { name: 'Per minute' })).getAllByRole('menuitemradio')).toHaveLength(6)
@@ -171,7 +171,7 @@ describe('ShootingMap page', () => {
 
   it('charts a stat per minute, with a minutes floor and no units', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     expect(screen.getByRole('group', { name: 'Units' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Min minutes per game')).not.toBeInTheDocument()
@@ -191,7 +191,7 @@ describe('ShootingMap page', () => {
 
   it('picks any two stats in Custom, swaps them, and comes back to them', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     await user.click(screen.getByRole('button', { name: 'Custom' }))
     expect(await screen.findByRole('heading', { name: 'Best STL + BLK' })).toBeInTheDocument()
@@ -229,7 +229,7 @@ describe('ShootingMap page', () => {
 
   it('charts the shooting impact as a stat of its own', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
     await user.click(screen.getByRole('button', { name: 'Custom' }))
     await user.click(within(screen.getByRole('group', { name: 'X axis' })).getByRole('button', { name: 'FG Imp' }))
@@ -242,7 +242,7 @@ describe('ShootingMap page', () => {
 
   it('narrows the lists to the picked positions, any of several', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     const best = (await screen.findByRole('heading', { name: 'Best for FG%' })).parentElement!
     await waitFor(() => expect(within(best).getByText('Sharp Center')).toBeInTheDocument())
     const positions = screen.getByRole('group', { name: 'Positions' })
@@ -259,7 +259,7 @@ describe('ShootingMap page', () => {
   it('falls back to the default chart when the stored one no longer exists', async () => {
     localStorage.setItem('fw:shootingMap.chart', JSON.stringify('custom'))
     localStorage.setItem('fw:shootingMap.pairs', JSON.stringify({ custom: ['STL', 'NOPE'] }))
-    renderWithProviders(<ShootingMap />, { route: '/shooting-map' })
+    renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     expect(await screen.findByRole('heading', { name: 'Best STL + BLK' })).toBeInTheDocument()
   })
 })
