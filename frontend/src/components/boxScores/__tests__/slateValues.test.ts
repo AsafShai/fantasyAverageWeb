@@ -7,6 +7,7 @@ function line(id: string, stats: Record<string, number>): SlateLine {
     player_id: id, name: `P${id}`, position: 'G', team_abbr: 'LAL', team_logo: '', opponent_abbr: 'UTAH',
     is_home: false, game_id: '1', game_status: 'final', min: String(stats.MIN), pts: '', reb: '', ast: '',
     stl: '', blk: '', tov: '', fg: '', fg3: '', ft: '', stats, fantasy_team: null, fantasy_team_name: null,
+    lineup_slot: null, started: null,
   }
 }
 

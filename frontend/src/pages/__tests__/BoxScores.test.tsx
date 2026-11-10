@@ -76,13 +76,14 @@ const valuePlayer = {
   opponent_abbr: 'UTAH', is_home: false, game_id: '100', game_status: 'final',
   min: '34', pts: '28', reb: '4', ast: '6', stl: '1', blk: '0', tov: '2',
   fg: '10-18', fg3: '3-7', ft: '5-5', fantasy_team: 'TTP', fantasy_team_name: 'Trust the process',
-  stats: { MIN: 34, PTS: 28, REB: 4 },
+  lineup_slot: 'SG', started: true, stats: { MIN: 34, PTS: 28, REB: 4 },
 }
 
 // A second line so the slate has a spread: Reaves is +1 in both categories.
 const otherPlayer = {
   ...valuePlayer, player_id: '2', name: 'Bench Guy', min: '12', pts: '4', reb: '2',
-  fantasy_team: null, fantasy_team_name: null, stats: { MIN: 12, PTS: 4, REB: 2 },
+  fantasy_team: null, fantasy_team_name: null, lineup_slot: null, started: null,
+  stats: { MIN: 12, PTS: 4, REB: 2 },
 }
 
 const values = {
@@ -92,6 +93,21 @@ const values = {
   categories: ['PTS', 'REB'],
   reverse_categories: [],
   players: [otherPlayer, valuePlayer],
+}
+
+/** Slate-values payload while every game is still scheduled (no box lines yet). */
+function preTipSlateValues(date: string) {
+  return {
+    date,
+    complete: false,
+    games_counted: 0,
+    categories: values.categories,
+    reverse_categories: values.reverse_categories,
+    players: [],
+    fantasy_players: {
+      '23': { fantasy_team: 'DOR', fantasy_team_name: "Dor's Injured Team", lineup_slot: 'SF', started: true },
+    },
+  }
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -500,6 +516,7 @@ describe('BoxScores', () => {
       if (url.includes('/teams')) {
         return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       }
+      if (url.includes('/nba/scoreboard/values')) return json(preTipSlateValues(date ?? '2026-10-25'))
       if (url.includes('/nba/scoreboard')) return json({ date, games: [scheduled] })
       if (url.includes('/boxscore')) {
         return json({ ...scheduled, periods: [], away: { ...scheduled.away, ...blank }, home: { ...scheduled.home, ...blank } })
@@ -579,6 +596,7 @@ describe('BoxScores', () => {
         })
       }
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
+      if (url.includes('/nba/scoreboard/values')) return json(preTipSlateValues(date ?? '2026-10-25'))
       if (url.includes('/nba/scoreboard')) return json({ date, games: [scheduled] })
       if (url.includes('/boxscore')) return json({ ...scheduled, periods: [], away: { ...scheduled.away, ...blank }, home: { ...scheduled.home, ...blank } })
       return json({}, 404)
@@ -644,6 +662,7 @@ describe('BoxScores', () => {
         return json({ players: roster, total_count: roster.length, page: 1, limit: 1200, has_more: false })
       }
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
+      if (url.includes('/nba/scoreboard/values')) return json(preTipSlateValues(date ?? '2026-10-25'))
       if (url.includes('/nba/scoreboard')) return json({ date, games: [scheduled] })
       if (url.includes('/boxscore')) return json({ ...scheduled, periods: [], away: { ...scheduled.away, ...blank }, home: { ...scheduled.home, ...blank } })
       return json({}, 404)

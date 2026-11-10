@@ -64,7 +64,9 @@ async def test_slate_values_tags_owner_on_that_night_and_free_agents():
     assert "z" not in luka
     assert luka["stats"]["PTS"] == 52 and quiet["stats"]["MIN"] == 0
     assert luka["fantasy_team"] == "TTP" and luka["fantasy_team_name"] == "Trust the process"
-    assert bench["fantasy_team"] is None
+    assert luka["lineup_slot"] == "PG" and luka["started"] is True
+    assert bench["fantasy_team"] is None and bench["started"] is None
+    assert result["fantasy_players"]["1"]["started"] is True
     assert luka["opponent_abbr"] == "UTAH" and bench["is_home"] is True
 
 

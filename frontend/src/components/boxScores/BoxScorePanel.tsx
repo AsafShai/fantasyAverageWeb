@@ -7,7 +7,8 @@ import { PlayByPlay } from './PlayByPlay'
 import { countdownLabel, gameClockLabel, localClock } from './tipTime'
 import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName'
 import { signedZ } from './linesOfTheNightFormat'
-import type { BoxPlayerLine, BoxTeamBox, BoxTeamTotals, GameBoxScore, SlatePlayerValue } from '../../types/boxScore'
+import type { BoxPlayerLine, BoxTeamBox, BoxTeamTotals, FantasyNightContext, GameBoxScore, SlatePlayerValue } from '../../types/boxScore'
+import { fantasyLineupState, FantasyLineupMark, resolveFantasyContext } from './fantasyLineupMark'
 
 export type PlayerValues = Map<string, SlatePlayerValue>
 
@@ -171,29 +172,40 @@ const TAG_CLASS = 'inline-block rounded bg-indigo-50 px-1.5 py-0.5 align-middle 
  * name (roomy places like Lines of the night); otherwise the abbreviation,
  * which a tap swaps for the full name (phones have no hover title).
  */
-export function FantasyTeamTag({ value, full = false }: {
-  value: { fantasy_team: string | null; fantasy_team_name: string | null } | undefined
+export function FantasyTeamTag({ value, full = false, showLineup = true }: {
+  value: FantasyNightContext | undefined
   full?: boolean
+  /** Show started / bench dot for rostered players. */
+  showLineup?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   if (!value) return <span className="text-gray-300 dark:text-gray-600">—</span>
   if (!value.fantasy_team) {
     return <span className="text-[10px] font-semibold uppercase text-gray-400" title="Free agent that night">FA</span>
   }
+  const lineup = showLineup ? fantasyLineupState(value) : null
   const name = value.fantasy_team_name ?? value.fantasy_team
-  if (full) return <span className={`${TAG_CLASS} min-w-0 max-w-full truncate`}>{name}</span>
-  if (name === value.fantasy_team) return <span className={TAG_CLASS}>{name}</span>
+  const teamEl = (() => {
+    if (full) return <span className={`${TAG_CLASS} min-w-0 max-w-full truncate`}>{name}</span>
+    if (name === value.fantasy_team) return <span className={TAG_CLASS}>{name}</span>
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(current => !current)}
+        aria-expanded={expanded}
+        aria-label={expanded ? `${name}, show abbreviation` : `${value.fantasy_team}: ${name}`}
+        title={name}
+        className={`${TAG_CLASS} cursor-pointer whitespace-nowrap hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:hover:bg-indigo-900`}
+      >
+        {expanded ? name : value.fantasy_team}
+      </button>
+    )
+  })()
   return (
-    <button
-      type="button"
-      onClick={() => setExpanded(current => !current)}
-      aria-expanded={expanded}
-      aria-label={expanded ? `${name}, show abbreviation` : `${value.fantasy_team}: ${name}`}
-      title={name}
-      className={`${TAG_CLASS} cursor-pointer whitespace-nowrap hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:hover:bg-indigo-900`}
-    >
-      {expanded ? name : value.fantasy_team}
-    </button>
+    <span className="inline-flex items-center gap-1">
+      {teamEl}
+      {lineup && <FantasyLineupMark state={lineup} compact />}
+    </span>
   )
 }
 
@@ -204,10 +216,11 @@ function isMine(ids: ReadonlySet<string> | undefined, playerId: string | number 
   return Boolean(ids && playerId != null && playerId !== '' && ids.has(String(playerId)))
 }
 
-function PlayerTable({ team, hideScores, values, mineIds, live }: {
+function PlayerTable({ team, hideScores, values, fantasyPlayers, mineIds, live }: {
   team: BoxTeamBox
   hideScores: boolean
   values?: PlayerValues
+  fantasyPlayers?: Record<string, FantasyNightContext>
   mineIds?: ReadonlySet<string>
   live: boolean
 }) {
@@ -231,7 +244,7 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
       {groups.length === 0 ? (
         <p className="py-6 text-sm text-gray-400">The box score is not available yet.</p>
       ) : hideScores ? (
-        <NameList groups={groups} teamName={team.name} mineIds={mineIds} live={live} starterIds={starterIds} />
+        <NameList groups={groups} teamName={team.name} mineIds={mineIds} live={live} starterIds={starterIds} values={values} fantasyPlayers={fantasyPlayers} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="min-w-full text-xs">
@@ -266,7 +279,15 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
                   </th>
                 </tr>
                 {group.players.map(player => (
-                  <PlayerRow key={player.player_id || player.name} player={player} values={values} mine={isMine(mineIds, player.player_id)} live={live} started={starterIds?.has(player.player_id || player.name) ?? false} />
+                  <PlayerRow
+                    key={player.player_id || player.name}
+                    player={player}
+                    values={values}
+                    fantasyPlayers={fantasyPlayers}
+                    mine={isMine(mineIds, player.player_id)}
+                    live={live}
+                    started={starterIds?.has(player.player_id || player.name) ?? false}
+                  />
                 ))}
               </tbody>
             ))}
@@ -293,12 +314,14 @@ function PlayerTable({ team, hideScores, values, mineIds, live }: {
           {team.did_not_play.map((player, index) => {
             const label = hideScores || !player.reason ? player.name : `${player.name} (${player.reason})`
             const mine = isMine(mineIds, player.player_id)
+            const ctx = resolveFantasyContext(player.player_id, values, fantasyPlayers)
             return (
               <span key={player.player_id || player.name}>
                 {index > 0 && ', '}
-                <span className={mine ? 'rounded-sm bg-blue-100 px-0.5 font-medium text-blue-900 dark:bg-blue-900 dark:text-blue-100' : undefined}>
+                <span className={`inline-flex flex-wrap items-center gap-1 ${mine ? 'rounded-sm bg-blue-100 px-0.5 font-medium text-blue-900 dark:bg-blue-900 dark:text-blue-100' : ''}`}>
                   {player.jersey && <span className="mr-1 tabular-nums font-medium text-gray-500 dark:text-gray-400">{player.jersey}</span>}
                   <span>{label}</span>
+                  {ctx?.fantasy_team && <FantasyTeamTag value={ctx} showLineup />}
                 </span>
               </span>
             )
@@ -338,12 +361,14 @@ function PlayerName({ player, live, nameOnly = false, started = false }: { playe
   )
 }
 
-function NameList({ groups, teamName, mineIds, live, starterIds }: {
+function NameList({ groups, teamName, mineIds, live, starterIds, values, fantasyPlayers }: {
   groups: { label: string; players: BoxPlayerLine[] }[]
   teamName: string
   mineIds?: ReadonlySet<string>
   live: boolean
   starterIds: ReadonlySet<string> | null
+  values?: PlayerValues
+  fantasyPlayers?: Record<string, FantasyNightContext>
 }) {
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700">
@@ -355,7 +380,13 @@ function NameList({ groups, teamName, mineIds, live, starterIds }: {
           <ul>
             {group.players.map(player => (
               <li key={player.player_id || player.name} className={`border-t border-gray-100 px-3 py-1.5 text-xs font-medium dark:border-gray-800 ${isMine(mineIds, player.player_id) ? `${MINE_ROW} ${MINE_EDGE}` : ''}`}>
-                <PlayerName player={player} live={live} nameOnly started={starterIds?.has(player.player_id || player.name) ?? false} />
+                <span className="flex flex-wrap items-center gap-2">
+                  <PlayerName player={player} live={live} nameOnly started={starterIds?.has(player.player_id || player.name) ?? false} />
+                  {(() => {
+                    const ctx = resolveFantasyContext(player.player_id, values, fantasyPlayers)
+                    return ctx?.fantasy_team ? <FantasyTeamTag value={ctx} /> : null
+                  })()}
+                </span>
               </li>
             ))}
           </ul>
@@ -366,8 +397,22 @@ function NameList({ groups, teamName, mineIds, live, starterIds }: {
   )
 }
 
-function PlayerRow({ player, values, mine, live, started }: { player: BoxPlayerLine; values?: PlayerValues; mine: boolean; live: boolean; started: boolean }) {
-  const value = values?.get(player.player_id)
+function PlayerRow({
+  player,
+  values,
+  fantasyPlayers,
+  mine,
+  live,
+  started,
+}: {
+  player: BoxPlayerLine
+  values?: PlayerValues
+  fantasyPlayers?: Record<string, FantasyNightContext>
+  mine: boolean
+  live: boolean
+  started: boolean
+}) {
+  const value = resolveFantasyContext(player.player_id, values, fantasyPlayers)
   return (
     <tr className={`border-t border-gray-100 dark:border-gray-800 ${mine ? MINE_ROW : ''}`}>
       {live && (
@@ -451,11 +496,12 @@ function TipCountdown({ startTime }: { startTime: string }) {
   )
 }
 
-function PregameSide({ team, players, mineIds, hideUnrostered }: {
+function PregameSide({ team, players, mineIds, hideUnrostered, fantasyPlayers }: {
   team: BoxTeamBox
   players: PregamePlayer[]
   mineIds?: ReadonlySet<string>
   hideUnrostered: boolean
+  fantasyPlayers?: Record<string, FantasyNightContext>
 }) {
   const accent = team.color ? `#${team.color}` : undefined
   return (
@@ -478,7 +524,14 @@ function PregameSide({ team, players, mineIds, hideUnrostered }: {
                 {player.position && <span className="ml-1.5 text-[11px] text-gray-400">{player.position}</span>}
                 {player.injury && <span className="ml-1.5 align-middle"><InjuryBadge status={player.injury} /></span>}
               </span>
-              <FantasyTeamTag value={{ fantasy_team: player.fantasyTeam, fantasy_team_name: player.fantasyTeamName }} />
+              <FantasyTeamTag
+                value={resolveFantasyContext(player.playerId, undefined, fantasyPlayers) ?? {
+                  fantasy_team: player.fantasyTeam,
+                  fantasy_team_name: player.fantasyTeamName,
+                  lineup_slot: null,
+                  started: null,
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -487,12 +540,13 @@ function PregameSide({ team, players, mineIds, hideUnrostered }: {
   )
 }
 
-function PregameRosters({ game, players, loading, error, mineIds }: {
+function PregameRosters({ game, players, loading, error, mineIds, fantasyPlayers }: {
   game: GameBoxScore
   players: { away: PregamePlayer[]; home: PregamePlayer[] } | null
   loading: boolean
   error: boolean
   mineIds?: ReadonlySet<string>
+  fantasyPlayers?: Record<string, FantasyNightContext>
 }) {
   const [hideUnrostered, setHideUnrostered] = useState(false)
   const visible = (side: PregamePlayer[]) => hideUnrostered ? side.filter(player => player.rostered) : side
@@ -512,8 +566,8 @@ function PregameRosters({ game, players, loading, error, mineIds }: {
       {error && <p className="mt-4 text-center text-sm text-rose-600">Could not load the rosters.</p>}
       {players && (
         <div className="mt-4 grid gap-6 sm:grid-cols-2">
-          <PregameSide team={game.away} players={visible(players.away)} mineIds={mineIds} hideUnrostered={hideUnrostered} />
-          <PregameSide team={game.home} players={visible(players.home)} mineIds={mineIds} hideUnrostered={hideUnrostered} />
+          <PregameSide team={game.away} players={visible(players.away)} mineIds={mineIds} hideUnrostered={hideUnrostered} fantasyPlayers={fantasyPlayers} />
+          <PregameSide team={game.home} players={visible(players.home)} mineIds={mineIds} hideUnrostered={hideUnrostered} fantasyPlayers={fantasyPlayers} />
         </div>
       )}
     </div>
@@ -526,6 +580,7 @@ export default function BoxScorePanel({
   revealed = false,
   onToggleReveal,
   values,
+  fantasyPlayers,
   pregame,
   pregameLoading = false,
   pregameError = false,
@@ -536,6 +591,7 @@ export default function BoxScorePanel({
   revealed?: boolean
   onToggleReveal?: () => void
   values?: PlayerValues
+  fantasyPlayers?: Record<string, FantasyNightContext>
   pregame?: { away: PregamePlayer[]; home: PregamePlayer[] } | null
   pregameLoading?: boolean
   pregameError?: boolean
@@ -587,7 +643,7 @@ export default function BoxScorePanel({
       </div>
 
       {awaitingTip ? (
-        <PregameRosters game={game} players={pregame ?? null} loading={pregameLoading} error={pregameError} mineIds={mineIds} />
+        <PregameRosters game={game} players={pregame ?? null} loading={pregameLoading} error={pregameError} mineIds={mineIds} fantasyPlayers={fantasyPlayers} />
       ) : (
         <>
           <div role="tablist" aria-label="Team" className="mt-5 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
@@ -609,7 +665,7 @@ export default function BoxScorePanel({
             })}
           </div>
           <div className="mt-4">
-            <PlayerTable team={shown} hideScores={hide} values={hide ? undefined : values} mineIds={mineIds} live={game.status === 'live'} />
+            <PlayerTable team={shown} hideScores={hide} values={hide ? undefined : values} fantasyPlayers={fantasyPlayers} mineIds={mineIds} live={game.status === 'live'} />
           </div>
         </>
       )}

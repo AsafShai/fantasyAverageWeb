@@ -18,7 +18,7 @@ from datetime import date
 from app.exceptions import DataSourceError
 from app.services.box_score_service import _eastern_today, boxscore_for, scoreboard_for
 from app.services.data_provider import get_data_provider
-from app.services.surprise_service import fantasy_roster_for
+from app.services.surprise_service import NOT_STARTED_SLOTS, fantasy_roster_for
 from app.utils.constants import RANKING_CATEGORIES
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,29 @@ async def _fantasy_teams() -> tuple[dict[int, str], dict[int, str]]:
         return {}, {}
 
 
+def _fantasy_row_fields(
+    owner: dict | None,
+    abbrevs: dict[int, str],
+    names: dict[int, str],
+) -> dict:
+    if not owner:
+        return {
+            "fantasy_team": None,
+            "fantasy_team_name": None,
+            "lineup_slot": None,
+            "started": None,
+        }
+    team_id = owner["team_id"]
+    slot = owner.get("slot")
+    abbrev = abbrevs.get(team_id, str(team_id))
+    return {
+        "fantasy_team": abbrev,
+        "fantasy_team_name": names.get(team_id) or abbrev,
+        "lineup_slot": slot,
+        "started": (slot not in NOT_STARTED_SLOTS) if slot else None,
+    }
+
+
 async def _roster_on(day: date) -> dict[int, dict]:
     """Who owned whom on that night. A past night's rosters never change; today's
     can until lock, so they are refetched every few minutes."""
@@ -170,11 +193,14 @@ async def slate_values(day: date) -> dict:
     (categories, reverse), roster, (abbrevs, names) = await asyncio.gather(
         _league_categories(), _roster_on(day), _fantasy_teams(),
     )
+    fantasy_players: dict[str, dict] = {}
+    for pid, owner in roster.items():
+        fields = _fantasy_row_fields(owner, abbrevs, names)
+        fantasy_players[str(pid)] = fields
+
     for row in rows:
         owner = roster.get(int(row["player_id"])) if row["player_id"].isdigit() else None
-        team_id = owner["team_id"] if owner else None
-        row["fantasy_team"] = abbrevs.get(team_id, str(team_id)) if team_id is not None else None
-        row["fantasy_team_name"] = (names.get(team_id) or row["fantasy_team"]) if team_id is not None else None
+        row.update(_fantasy_row_fields(owner, abbrevs, names))
 
     complete = bool(games) and all(game["status"] == "final" for game in games)
     payload = {
@@ -184,6 +210,7 @@ async def slate_values(day: date) -> dict:
         "categories": categories,
         "reverse_categories": [c for c in categories if c in reverse],
         "players": rows,
+        "fantasy_players": fantasy_players,
     }
     _cache[key] = (time.monotonic() + _ttl(games, day, complete), payload)
     return payload

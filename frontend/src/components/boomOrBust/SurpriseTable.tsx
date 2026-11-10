@@ -1,4 +1,5 @@
 import type { SurpriseRow } from '../../types/api';
+import { FANTASY_LINEUP_DOT_CLASS } from '../boxScores/fantasyLineupMark';
 import PlayerNameLink from '../PlayerNameLink';
 import { toListHeadshotUrl } from '../../utils/adp';
 import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName';
@@ -35,7 +36,11 @@ function FantasyBullet({ row }: { row: SurpriseRow }) {
     return <span className="text-gray-400 dark:text-gray-500 max-sm:basis-full"><span className="max-sm:hidden">· </span>FA</span>;
   }
   const state = row.started === null ? null : row.started ? 'started' : row.lineup_slot === 'IR' ? 'IR' : 'bench';
-  const dot = state === 'started' ? 'bg-emerald-500' : state === 'IR' ? 'bg-amber-400' : 'bg-gray-400';
+  const dot = state === 'started'
+    ? FANTASY_LINEUP_DOT_CLASS.started
+    : state === 'IR'
+      ? FANTASY_LINEUP_DOT_CLASS.ir
+      : FANTASY_LINEUP_DOT_CLASS.bench;
   // The team's full name, capped so a long one ("Amihai's Awesome Team 🏆")
   // ends in "…" instead of widening the player column (and the share image);
   // the whole name is on hover. On a phone the team (with its dot) always

@@ -136,8 +136,8 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
                     onClick={() => setChosenPeriod(item)}
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                       selected
-                        ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                        ? 'bg-gray-900 !text-gray-100 hover:bg-gray-800 active:bg-gray-900 active:!text-gray-100 dark:bg-gray-100 dark:!text-gray-800 dark:hover:bg-gray-200 dark:active:bg-gray-100 dark:active:!text-gray-800'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-200 active:text-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:active:bg-gray-700 dark:active:text-gray-300'
                     }`}
                   >
                     {tabLabel(item)}
@@ -156,8 +156,8 @@ export function PlayByPlay({ game, mineIds }: { game: GameBoxScore; mineIds?: Re
                     onClick={() => setFilter(id)}
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                       selected
-                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
-                        : 'text-gray-500 dark:text-gray-400'
+                        ? 'bg-white !text-gray-600 shadow-sm active:bg-white active:!text-gray-600 dark:bg-gray-900 dark:!text-gray-300 dark:active:bg-gray-900 dark:active:!text-gray-300'
+                        : 'text-gray-500 active:text-gray-500 dark:text-gray-400 dark:active:text-gray-400'
                     }`}
                   >
                     {label}

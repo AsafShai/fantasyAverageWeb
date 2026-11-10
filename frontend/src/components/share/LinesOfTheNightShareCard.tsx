@@ -1,6 +1,7 @@
 import type { SlatePlayerValue } from '../../types/boxScore'
 import { toListHeadshotUrl } from '../../utils/adp'
 import { lineSummary, signedZ } from '../boxScores/linesOfTheNightFormat'
+import { fantasyLineupState, FantasyLineupMark } from '../boxScores/fantasyLineupMark'
 import type { ShareCardTheme } from './ShareCard'
 
 interface LinesOfTheNightShareCardProps extends ShareCardTheme {
@@ -70,13 +71,19 @@ export const LinesOfTheNightShareCard = ({
                   On the court
                 </span>
               )}
-              <span
-                className={player.fantasy_team
-                  ? 'rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300'
-                  : 'text-[10px] font-semibold uppercase text-gray-400'}
-              >
-                {player.fantasy_team_name ?? player.fantasy_team ?? 'FA'}
-              </span>
+              {player.fantasy_team ? (
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300">
+                    {player.fantasy_team_name ?? player.fantasy_team}
+                  </span>
+                  {(() => {
+                    const lineup = fantasyLineupState(player)
+                    return lineup ? <FantasyLineupMark state={lineup} compact /> : null
+                  })()}
+                </span>
+              ) : (
+                <span className="text-[10px] font-semibold uppercase text-gray-400">FA</span>
+              )}
             </div>
             <div className="mt-0.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">{lineSummary(player)}</div>
             <div className="whitespace-nowrap text-[11px] text-gray-400">

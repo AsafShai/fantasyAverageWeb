@@ -4,6 +4,7 @@ import BoxScorePanel from '../components/boxScores/BoxScorePanel'
 import SlateDatePicker from '../components/boxScores/SlateDatePicker'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
 import MyPlayers from '../components/boxScores/MyPlayers'
+import FantasyLineupLegend from '../components/boxScores/FantasyLineupLegend'
 import { groupAppearances, myAppearances } from '../components/boxScores/myPlayerGroups'
 import { mineCount, outPlayerIds, rosterSide } from '../components/boxScores/pregameRoster'
 import { nbaTeamId } from '../components/boxScores/proTeam'
@@ -55,7 +56,7 @@ function slatePoll(games: BoxScoreGame[] | undefined, date: string): number {
 // Z-scores and lines of the night read every started box. Refresh them much
 // more slowly than the open game so a live slate is not fetched in full.
 function valuesPoll(games: BoxScoreGame[] | undefined, date: string): number {
-  if (!games || !games.some(game => game.status !== 'scheduled')) return 0
+  if (!games?.length) return 0
   if (games.some(game => game.status === 'live')) return 120_000
   if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 120_000
   return 0
@@ -213,11 +214,11 @@ export default function BoxScores() {
   const boxReady = boxScore.data?.game_id === selectedId ? boxScore.data : undefined
   const nextBoxPoll = boxReady?.status === 'live' ? 60_000 : 0
   if (nextBoxPoll !== boxPoll) setBoxPoll(nextBoxPoll)
-  const anyStarted = games?.some(game => game.status !== 'scheduled') ?? false
   const nextValuesPoll = valuesPoll(games, date)
   if (nextValuesPoll !== slateValuesPoll) setSlateValuesPoll(nextValuesPoll)
-  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: slateValuesPoll })
+  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !games?.length, pollingInterval: slateValuesPoll })
   const values = slateValues.data?.date === date ? slateValues.data : undefined
+  const fantasyPlayers = values?.fantasy_players
   // Z comes from the Player Rankings page's own code, so the two never disagree.
   const ranked = useMemo(() => (values ? slatePlayerValues(values) : []), [values])
   const valueMap = useMemo(() => {
@@ -341,7 +342,12 @@ export default function BoxScores() {
             {games && games.length === 0 && (
               <div className="mr-card mr-nba-empty">No NBA games on {formatSlateLabel(date)}.</div>
             )}
-            {games && games.length > 0 && <ScheduledDepthCharts teamIds={scheduledTeamIds} />}
+            {games && games.length > 0 && (
+              <>
+                <FantasyLineupLegend className="mb-2 px-1" />
+                <ScheduledDepthCharts teamIds={scheduledTeamIds} />
+              </>
+            )}
           </>
         }
         cards={games ? games.map(game => ({
@@ -363,6 +369,7 @@ export default function BoxScores() {
                 revealed={revealed.includes(boxReady.game_id)}
                 onToggleReveal={() => toggleReveal(boxReady.game_id)}
                 values={values ? valueMap : undefined}
+                fantasyPlayers={fantasyPlayers}
                 pregame={awaitingRoster ? pregame : undefined}
                 pregameLoading={Boolean(awaitingRoster && !pregame && rosterLoading)}
                 pregameError={Boolean(awaitingRoster && rosterError)}
@@ -388,6 +395,7 @@ export default function BoxScores() {
                 key={`my-players-${date}-${noSpoilers}`}
                 groups={mineSlate}
                 spoilerGuard={noSpoilers}
+                fantasyPlayers={fantasyPlayers}
                 onOpenGame={openFromMyPlayers}
               />
             )}
@@ -407,6 +415,7 @@ export default function BoxScores() {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {noSpoilers ? 'Names only. Scores and stats stay hidden.' : 'Every NBA game on the slate, with the full box.'}
           </p>
+          {games && games.length > 0 && <FantasyLineupLegend className="mt-2 max-w-2xl" />}
         </div>
         <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />
       </div>
@@ -475,6 +484,7 @@ export default function BoxScores() {
               key={`my-players-${date}-${noSpoilers}`}
               groups={mineSlate}
               spoilerGuard={noSpoilers}
+              fantasyPlayers={fantasyPlayers}
               onOpenGame={selectGame}
             />
           )}
@@ -502,6 +512,7 @@ export default function BoxScores() {
                 revealed={revealed.includes(boxReady.game_id)}
                 onToggleReveal={() => toggleReveal(boxReady.game_id)}
                 values={values ? valueMap : undefined}
+                fantasyPlayers={fantasyPlayers}
                 pregame={awaitingRoster ? pregame : undefined}
                 pregameLoading={Boolean(awaitingRoster && !pregame && rosterLoading)}
                 pregameError={Boolean(awaitingRoster && rosterError)}
