@@ -144,6 +144,7 @@ class TestScoring:
             df.at[idx, f"PRED_{s}"] = 0.0
         df = surprise.add_errors(df)
         calibration["norm"].update({f"ERR_{s}": {"mean": 0.0, "std": 5.0} for s in surprise.ERR_WEIGHTS})
+        calibration["rarity"].update({f"ERR_{s}": list(surprise.RARITY_GRID * 5.0) for s in surprise.ERR_WEIGHTS})
         scored = surprise.score_frame(df, calibration)
         assert scored.at[idx, "HAS_ESTIMATE"]
         assert scored["HAS_ESTIMATE"].sum() == 1
@@ -325,3 +326,70 @@ def test_blend_leans_on_the_model_for_booms_and_on_averages_for_busts():
     assert (b["w1_neg"], b["w2_neg"]) == (0.75, 0.25)     # bust: 75% averages, 25% model
     out = surprise.blend(pd.Series([1.0, -1.0]), pd.Series([2.0, -2.0]))
     assert list(out) == [pytest.approx(1.75), pytest.approx(-1.25)]
+
+
+def test_bust_side_weights_points_up_and_leaves_the_boom_side():
+    boom1, boom2 = surprise.metric_columns()
+    bust1, bust2 = surprise.metric_columns(bust=True)
+    assert bust1["PZ_L10_PTS"] == 2.5 * boom1["PZ_L10_PTS"] and bust2["ERR_PTS"] == 2.5 * boom2["ERR_PTS"]
+    assert bust2["ERR_EFF_FT"] == 0.5 and boom2["ERR_EFF_FT"] == 0.7
+    others = [c for c in boom1 if not c.endswith(("_PTS", "_EFF_FT")) and "_ALL_" not in c and "_L5_" not in c]
+    assert all(bust1[c] == boom1[c] for c in others)
+    assert bust1["PZ_ALL_REB"] == 0.5 and boom1["PZ_ALL_REB"] == pytest.approx(0.1)   # the long run counts more on a bust
+    assert bust1["PZ_L5_REB"] == 0.25 and boom1["PZ_L5_REB"] == 0.5                    # the last 5 count less
+    assert set(surprise.required_columns()) == set(boom1) | set(boom2)
+
+
+def test_rarity_scores_rise_with_the_value_and_split_a_tie():
+    grid = surprise.RARITY_GRID
+    # a season whose value is 0.0 over the grid's lower half (a counting stat's floor)
+    quantiles = np.where(grid < 0, 0.0, grid)
+    values = pd.Series([-1.0, 0.0, 0.5, 1.0, 9.0, np.nan])
+    out = surprise.rarity_scores(values, list(quantiles))
+    assert out.iloc[0] == grid[0] and out.iloc[4] == grid[-1]      # bounded by the grid's ends
+    assert out.iloc[1] == pytest.approx(-2.0)                       # the tie's middle, not its end
+    assert out.iloc[2] == pytest.approx(0.5) and out.iloc[3] == pytest.approx(1.0)
+    assert np.isnan(out.iloc[5])
+    dense = pd.Series(np.linspace(-1, 5, 400))
+    assert (np.diff(surprise.rarity_scores(dense, list(quantiles))) >= 0).all()
+
+
+def test_bust_reads_a_scoring_collapse_above_a_cold_stripe():
+    """Two starters, same minutes: one loses his points (rare), the other only
+    misses free throws (a column that often runs far below its mean). On the
+    rarity scale with points doubled the first is the bigger bust."""
+    cols = {f"RARE_PZ_L10_{s}": [0.0, 0.0] for s in surprise.Z_WEIGHTS}
+    cols.update({f"NORM_PZ_L10_{s}": [0.0, 0.0] for s in surprise.Z_WEIGHTS})
+    cols["RARE_PZ_L10_PTS"] = [-2.5, 0.0]
+    cols["RARE_PZ_L10_EFF_FT"] = [0.0, -2.5]
+    cols["NORM_PZ_L10_PTS"] = [-2.5, 0.0]
+    cols["NORM_PZ_L10_EFF_FT"] = [0.0, -4.0]         # in standard deviations the stripe ran deeper
+    raw = surprise.final_raw(pd.DataFrame({"MIN": [34.0, 34.0], **cols}))
+    assert raw["METRIC_Z"].iloc[0] < raw["METRIC_Z"].iloc[1] < 0
+
+
+def test_boom_side_ignores_the_bust_scale():
+    cols = {"NORM_PZ_L10_PTS": [2.0], "RARE_PZ_L10_PTS": [0.5], "MIN": [30.0]}
+    boom1, _ = surprise.metric_columns()
+    raw = surprise.final_raw(pd.DataFrame(cols))
+    assert raw["METRIC_Z"].iloc[0] == pytest.approx(2.0 * boom1["PZ_L10_PTS"] / sum(boom1.values()))
+
+
+def test_bust_volume_softens_a_short_stint_but_stops_at_thirty_minutes():
+    cols = {"RARE_PZ_L10_PTS": [-2.0] * 3, "NORM_PZ_L10_PTS": [-2.0] * 3, "MIN": [12.0, 30.0, 40.0]}
+    z = surprise.final_raw(pd.DataFrame(cols))["METRIC_Z"]
+    assert z.iloc[0] > z.iloc[1]                      # 12 minutes: softened
+    assert z.iloc[2] == pytest.approx(z.iloc[1])      # 40 minutes: no deeper than 30
+    boom = surprise.final_raw(pd.DataFrame({"NORM_PZ_L10_PTS": [2.0] * 2, "RARE_PZ_L10_PTS": [2.0] * 2, "MIN": [30.0, 40.0]}))["METRIC_Z"]
+    assert boom.iloc[1] > boom.iloc[0]                # the boom side keeps its volume
+
+
+def test_one_collapse_outweighs_several_medium_dips():
+    """The same total on the rarity scale: one stat at -3 against two at -1.5.
+    The collapse is the bigger bust; on the boom side nothing is raised."""
+    base = {f"RARE_PZ_L10_{s}": [0.0, 0.0] for s in ("REB", "AST")}
+    base.update({"RARE_PZ_L10_REB": [-3.0, -1.5], "RARE_PZ_L10_AST": [0.0, -1.5]})
+    base.update({c.replace("RARE_", "NORM_"): v for c, v in base.items()})
+    z = surprise.final_raw(pd.DataFrame({"MIN": [30.0, 30.0], **base}))["METRIC_Z"]
+    assert z.iloc[0] < z.iloc[1] < 0
+    assert surprise.BUST_COLLAPSE_POWER == 1.5
