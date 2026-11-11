@@ -16,12 +16,23 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   `BottomSheet` + `useSheetHistory` (browser back closes the sheet first),
   `MinutesStepper`. Wrap redesigned screens in `.mr-root`; call
   `ensureMobileFonts()` once (Inter + Space Grotesk).
-- **Shell** `shell/`: logo header (search, dark mode, ☰), bottom tab bar
-  (Home · Standings · Teams · Player Ranks · Trade, `tabs.ts`), ☰ menu sheet with
-  Select my team and the same groups as desktop (`components/navConfig.ts` is
-  shared by both), site footer. The menu and the search overlay are history
-  entries: back closes them; a menu/search pick replaces that entry, so back
-  from the new page returns to the page they were opened on.
+- **Shell** `shell/`: logo header (search, dark mode, ⚙ settings, ☰), bottom tab bar,
+  ☰ menu sheet with Select my team and the same groups as desktop
+  (`components/navConfig.ts` is shared by both), site footer. The menu and the search
+  overlay are history entries: back closes them; a menu/search pick replaces that entry,
+  so back from the new page returns to the page they were opened on.
+- **Tab bar** `shell/tabs.ts`, `tabPrefs.ts`, `useTabContext.ts`: the bar is the user's
+  own, 3 to 5 tabs, chosen in Settings and saved in this browser (`fw:mobile.tabBar`;
+  default Home · Standings · Teams · Player Ranks · Trade). `tabs.ts` is the catalog:
+  pages, and shortcuts that are not a fixed page: **My Team** (`/team/<myTeamId>`, a dot
+  and a trip to Settings until a team is chosen), **Tonight** (Box Scores on today),
+  **Recent** (the last two pages opened from outside the bar; the ☰ menu before there
+  are any) and **Search**. To add a tab, add it to the catalog; a shortcut with `to()`
+  and `match()` needs nothing else. Unknown ids in storage are dropped, so a retired
+  page never breaks the bar.
+- **Settings** `settings/` + `/settings` (phone with the flag only; elsewhere it goes
+  home): my team, the tab bar editor (presets, reorder, add, remove, labels on/off, reset).
+  The bar under the page is the live preview, so there is no Save.
 - **Player sheet** `player/`: on a phone every `PlayerNameLink` (and a player
   search result) opens the sheet over the current page as `?player=<ESPN id>`
   instead of going to `/player/:id`. Back closes it; a shared link or reload

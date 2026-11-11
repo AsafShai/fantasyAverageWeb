@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getNavGroups } from '../../../components/navConfig'
 import { createTestStore } from '../../../test/helpers'
 import MobileShell from '../MobileShell'
-import { TABS } from '../tabs'
+import { DEFAULT_TAB_IDS, getTab } from '../tabs'
+import { resetTabPrefsCache } from '../tabPrefs'
 
 function Where() {
   const loc = useLocation()
@@ -35,6 +36,8 @@ function renderShell(route = '/') {
 }
 
 beforeEach(() => {
+  localStorage.clear()
+  resetTabPrefsCache()
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('[]', { headers: { 'Content-Type': 'application/json' } }))))
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -64,8 +67,8 @@ describe('MobileShell', () => {
     expect(tabs.some((t) => t.hasAttribute('aria-current'))).toBe(false)
   })
 
-  it('tab routes match the TABS config', () => {
-    expect(TABS.map((t) => t.path)).toEqual(['/', '/rankings', '/teams', '/player-rankings', '/trade'])
+  it('the default tab routes', () => {
+    expect(DEFAULT_TAB_IDS.map((id) => getTab(id)?.to({ myTeamId: null, recentPath: null }))).toEqual(['/', '/rankings', '/teams', '/player-rankings', '/trade'])
   })
 
   it('menu dropdown: collapsed accordion with the current page\'s group highlighted, every desktop page reachable, a link closes it', async () => {
@@ -106,6 +109,7 @@ describe('MobileShell', () => {
   it('header: logo goes home, dark toggle flips the icon, footer has the social links', async () => {
     renderShell('/teams')
     expect(screen.getByRole('link', { name: 'Fantasy League' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
     const toggle = screen.getByRole('button', { name: 'Toggle dark mode' })
     expect(toggle).toHaveTextContent('🌙')
     await userEvent.click(toggle)
