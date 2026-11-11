@@ -396,6 +396,7 @@ export default function BoxScores() {
                 groups={mineSlate}
                 spoilerGuard={noSpoilers}
                 fantasyPlayers={fantasyPlayers}
+                playerValues={valueMap}
                 onOpenGame={openFromMyPlayers}
               />
             )}
@@ -485,6 +486,7 @@ export default function BoxScores() {
               groups={mineSlate}
               spoilerGuard={noSpoilers}
               fantasyPlayers={fantasyPlayers}
+              playerValues={valueMap}
               onOpenGame={selectGame}
             />
           )}
