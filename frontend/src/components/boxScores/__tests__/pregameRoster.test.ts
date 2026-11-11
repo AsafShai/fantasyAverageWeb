@@ -82,4 +82,10 @@ describe('mineCount', () => {
   it('still counts an out player once the game has started', () => {
     expect(mineCount({ ...game, status: 'live' }, roster, new Set(['2']))).toBe(2)
   })
+
+  it('on a final game only counts roster players who logged minutes that night', () => {
+    const final = { ...game, game_id: '99', status: 'final' as const }
+    const played = new Map([['99', new Set(['1'])]])
+    expect(mineCount(final, roster, new Set(), played)).toBe(1)
+  })
 })

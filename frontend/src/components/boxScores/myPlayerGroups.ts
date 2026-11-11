@@ -1,5 +1,5 @@
 import { fantasyProTeam } from './proTeam'
-import type { BoxPlayerLine, BoxScoreGame, GameBoxScore } from '../../types/boxScore'
+import type { BoxPlayerLine, BoxScoreGame, GameBoxScore, SlateValues } from '../../types/boxScore'
 
 export interface MyAppearance {
   playerId: string
@@ -61,6 +61,37 @@ export function myAppearances(players: RosterPlayer[], games: BoxScoreGame[]): M
   return rows.sort((a, b) => a.game.start_time.localeCompare(b.game.start_time)
     || a.game.game_id.localeCompare(b.game.game_id)
     || a.name.localeCompare(b.name))
+}
+
+/** Who logged minutes in each finished game, from the slate-values payload. */
+export function playedMinutesByGame(values: SlateValues): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>()
+  for (const line of values.players) {
+    if (line.game_status !== 'final') continue
+    if ((line.stats?.MIN ?? 0) <= 0) continue
+    let set = map.get(line.game_id)
+    if (!set) {
+      set = new Set()
+      map.set(line.game_id, set)
+    }
+    set.add(line.player_id)
+  }
+  return map
+}
+
+/** Scheduled: drop Out. Final: only players who played, when slate lines are available. */
+export function filterMineAppearances(
+  rows: MyAppearance[],
+  outIds: ReadonlySet<string>,
+  playedByGame?: ReadonlyMap<string, ReadonlySet<string>>,
+): MyAppearance[] {
+  return rows.filter(row => {
+    if (row.game.status === 'scheduled' && outIds.has(row.playerId)) return false
+    if (row.game.status === 'final' && playedByGame) {
+      return playedByGame.get(row.game.game_id)?.has(row.playerId) ?? false
+    }
+    return true
+  })
 }
 
 export function groupAppearances(rows: MyAppearance[]): MyGroups {

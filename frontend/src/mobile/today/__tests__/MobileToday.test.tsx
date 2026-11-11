@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TodayHub } from '../../../types/api'
 import type { LatestMoves } from '../../../types/activity'
+import { FF_LEAGUE_ACTIVITY } from '../../../config/featureFlags'
 import { renderWithProviders } from '../../../test/helpers'
 import Today from '../../../pages/Today'
 import { LatestMovesCard } from '../LatestMovesCard'
@@ -121,7 +122,14 @@ describe('Today page on a phone (redesign on)', () => {
     await waitFor(() => expect(screen.getByText('Rank movers')).toBeInTheDocument())
 
     const headings = screen.getAllByRole('heading').map((h) => h.textContent)
-    expect(headings).toEqual(['Today', 'Top 5 Teams (average)', 'Rank movers', 'Roster health today', 'League averages'])
+    expect(headings).toEqual([
+      'Today',
+      'Top 5 Teams (average)',
+      'Rank movers',
+      'Roster health today',
+      ...(FF_LEAGUE_ACTIVITY ? ['Latest moves'] : []),
+      'League averages',
+    ])
     expect(screen.getByRole('link', { name: /Fri, Sep 18 · 8 games/ })).toHaveAttribute('href', '/box-scores')
   })
 

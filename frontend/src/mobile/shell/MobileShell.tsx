@@ -197,7 +197,7 @@ function MobileTabBar({ onSearch, onMenu }: MobileTabBarProps) {
  * Phone menu only (desktop nav unchanged): the groups are master's, with NBA
  * before Minigames and Today called Home like the tab.
  */
-function menuGroups(groups: NavGroupDef[]): NavGroupDef[] {
+export function menuGroups(groups: NavGroupDef[]): NavGroupDef[] {
   const mapped = groups.map((g) =>
     g.key === 'league' ? { ...g, items: g.items.map((i) => (i.path === '/' ? { ...i, label: 'Home', icon: '🏠' } : i)) } : g,
   )

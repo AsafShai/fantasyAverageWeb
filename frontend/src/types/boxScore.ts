@@ -162,6 +162,16 @@ export interface SlateLine {
   /** Fantasy team abbreviation on the night of the game; null = free agent. */
   fantasy_team: string | null
   fantasy_team_name: string | null
+  lineup_slot: string | null
+  /** False = bench or IR; null when unrostered or slot unknown. */
+  started: boolean | null
+}
+
+export interface FantasyNightContext {
+  fantasy_team: string | null
+  fantasy_team_name?: string | null
+  lineup_slot?: string | null
+  started?: boolean | null
 }
 
 /** A line with its Z: the Player Rankings value of that night (computed in
@@ -178,4 +188,6 @@ export interface SlateValues {
   categories: string[]
   reverse_categories: string[]
   players: SlateLine[]
+  /** Every rostered player that night (including pre-tip), keyed by ESPN player id. */
+  fantasy_players?: Record<string, FantasyNightContext>
 }

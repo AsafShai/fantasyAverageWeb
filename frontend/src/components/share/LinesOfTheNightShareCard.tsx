@@ -1,6 +1,7 @@
 import type { SlatePlayerValue } from '../../types/boxScore'
 import { toListHeadshotUrl } from '../../utils/adp'
 import { lineSummary, signedZ } from '../boxScores/linesOfTheNightFormat'
+import { fantasyLineupState, FantasyLineupMark, ON_COURT_DOT_CLASS, ON_COURT_MARK_TEXT_CLASS } from '../boxScores/fantasyLineupMark'
 import type { ShareCardTheme } from './ShareCard'
 
 interface LinesOfTheNightShareCardProps extends ShareCardTheme {
@@ -65,18 +66,24 @@ export const LinesOfTheNightShareCard = ({
                 </span>
               )}
               {player.game_status === 'live' && player.on_court && (
-                <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${ON_COURT_MARK_TEXT_CLASS}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${ON_COURT_DOT_CLASS}`} />
                   On the court
                 </span>
               )}
-              <span
-                className={player.fantasy_team
-                  ? 'rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300'
-                  : 'text-[10px] font-semibold uppercase text-gray-400'}
-              >
-                {player.fantasy_team_name ?? player.fantasy_team ?? 'FA'}
-              </span>
+              {player.fantasy_team ? (
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300">
+                    {player.fantasy_team_name ?? player.fantasy_team}
+                  </span>
+                  {(() => {
+                    const lineup = fantasyLineupState(player)
+                    return lineup ? <FantasyLineupMark state={lineup} compact /> : null
+                  })()}
+                </span>
+              ) : (
+                <span className="text-[10px] font-semibold uppercase text-gray-400">FA</span>
+              )}
             </div>
             <div className="mt-0.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">{lineSummary(player)}</div>
             <div className="whitespace-nowrap text-[11px] text-gray-400">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { clusterByGame, groupAppearances, myAppearances, myLine } from '../myPlayerGroups'
-import type { BoxScoreGame, GameBoxScore } from '../../../types/boxScore'
+import { clusterByGame, filterMineAppearances, groupAppearances, myAppearances, myLine, playedMinutesByGame } from '../myPlayerGroups'
+import type { BoxScoreGame, GameBoxScore, SlateLine, SlateValues } from '../../../types/boxScore'
 
 const lakers: BoxScoreGame = {
   game_id: '1',
@@ -70,6 +70,42 @@ describe('myAppearances', () => {
     expect(groups.upcoming.map(row => row.name)).toEqual(['LeBron James'])
     expect(groups.live.map(row => row.name)).toEqual(['Boston Guy'])
     expect(groups.done.map(row => row.name)).toEqual(['Chicago Guy'])
+  })
+})
+
+describe('playedMinutesByGame', () => {
+  function line(id: string, gameId: string, min: number): SlateLine {
+    return {
+      player_id: id, name: id, position: 'G', team_abbr: 'LAL', team_logo: '', opponent_abbr: 'BOS',
+      is_home: true, game_id: gameId, game_status: 'final', min: String(min), pts: '', reb: '', ast: '',
+      stl: '', blk: '', tov: '', fg: '', fg3: '', ft: '', stats: { MIN: min }, fantasy_team: null,
+      fantasy_team_name: null, lineup_slot: null, started: null,
+    }
+  }
+
+  it('keeps only finished games with minutes', () => {
+    const values: SlateValues = {
+      date: 'x', complete: true, games_counted: 1, categories: [], reverse_categories: [],
+      players: [line('1', 'g', 20), line('2', 'g', 0), line('3', 'g2', 5)],
+    }
+    const map = playedMinutesByGame(values)
+    expect([...map.get('g')!]).toEqual(['1'])
+    expect(map.get('g2')).toEqual(new Set(['3']))
+  })
+})
+
+describe('filterMineAppearances', () => {
+  it('drops rostered players who did not play on a final slate', () => {
+    const done = {
+      ...lakers,
+      game_id: '3',
+      status: 'final' as const,
+      away: { ...lakers.away, abbreviation: 'CHI' },
+      home: { ...lakers.home, abbreviation: 'MIA' },
+    }
+    const rows = myAppearances([player('Chicago Guy', 'CHI', 7), player('Bench Guy', 'CHI', 8)], [done])
+    const filtered = filterMineAppearances(rows, new Set(), new Map([['3', new Set(['7'])]]))
+    expect(filtered.map(row => row.name)).toEqual(['Chicago Guy'])
   })
 })
 
