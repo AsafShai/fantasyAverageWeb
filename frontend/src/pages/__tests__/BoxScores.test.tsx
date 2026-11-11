@@ -75,14 +75,25 @@ const valuePlayer = {
   player_id: '1', name: 'Austin Reaves', position: 'G', team_abbr: 'LAL', team_logo: '',
   opponent_abbr: 'UTAH', is_home: false, game_id: '100', game_status: 'final',
   min: '34', pts: '28', reb: '4', ast: '6', stl: '1', blk: '0', tov: '2',
-  fg: '10-18', fg3: '3-7', ft: '5-5', fantasy_team: 'TTP', fantasy_team_name: 'Trust the process',
+  fg: '10-18', fg3: '3-7', ft: '5-5',   fantasy_team: 'TTP', fantasy_team_name: 'Trust the process',
+  lineup_slot: 'SG', started: true,
   stats: { MIN: 34, PTS: 28, REB: 4 },
 }
 
 // A second line so the slate has a spread: Reaves is +1 in both categories.
 const otherPlayer = {
   ...valuePlayer, player_id: '2', name: 'Bench Guy', min: '12', pts: '4', reb: '2',
-  fantasy_team: null, fantasy_team_name: null, stats: { MIN: 12, PTS: 4, REB: 2 },
+  fantasy_team: null, fantasy_team_name: null, lineup_slot: null, started: null,
+  stats: { MIN: 12, PTS: 4, REB: 2 },
+}
+
+const emptySlateValues = {
+  complete: false,
+  games_counted: 0,
+  categories: [] as string[],
+  reverse_categories: [] as string[],
+  players: [] as typeof valuePlayer[],
+  fantasy_players: {} as Record<string, { fantasy_team: string | null; fantasy_team_name: string | null; lineup_slot?: string | null; started?: boolean | null }>,
 }
 
 const values = {
@@ -117,7 +128,7 @@ describe('BoxScores', () => {
         const date = new URL(url, 'http://localhost').searchParams.get('date')
         return json({ ...values, date })
       }
-      if (url.includes('/nba/scoreboard')) {
+      if (url.includes('/nba/scoreboard') && !url.includes('/values')) {
         const date = new URL(url, 'http://localhost').searchParams.get('date')
         return json({ ...board, date })
       }
@@ -146,7 +157,7 @@ describe('BoxScores', () => {
       const url = requestUrl(input)
       if (url.includes('/nba/season')) return json({ start: '2026-10-20', end: '2027-04-11' })
       if (url.includes('/nba/scoreboard/values')) return json(values)
-      if (url.includes('/nba/scoreboard')) return json(board)
+      if (url.includes('/nba/scoreboard') && !url.includes('/values')) return json(board)
       if (url.includes('/boxscore')) return json(withPlays)
       return json({}, 404)
     }))
@@ -206,7 +217,7 @@ describe('BoxScores', () => {
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       if (url.includes('/nba/season')) return json({ start: '2026-10-20', end: '2027-04-11' })
       if (url.includes('/nba/scoreboard/values')) return json(values)
-      if (url.includes('/nba/scoreboard')) return json(board)
+      if (url.includes('/nba/scoreboard') && !url.includes('/values')) return json(board)
       if (url.includes('/boxscore')) return json(withPlays)
       return json({}, 404)
     }))
@@ -500,6 +511,7 @@ describe('BoxScores', () => {
       if (url.includes('/teams')) {
         return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       }
+      if (url.includes('/nba/scoreboard/values')) return json({ ...emptySlateValues, date })
       if (url.includes('/nba/scoreboard')) return json({ date, games: [scheduled] })
       if (url.includes('/boxscore')) {
         return json({ ...scheduled, periods: [], away: { ...scheduled.away, ...blank }, home: { ...scheduled.home, ...blank } })
@@ -579,6 +591,7 @@ describe('BoxScores', () => {
         })
       }
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
+      if (url.includes('/nba/scoreboard/values')) return json({ ...emptySlateValues, date })
       if (url.includes('/nba/scoreboard')) return json({ date, games: [scheduled] })
       if (url.includes('/boxscore')) return json({ ...scheduled, periods: [], away: { ...scheduled.away, ...blank }, home: { ...scheduled.home, ...blank } })
       return json({}, 404)
@@ -644,6 +657,7 @@ describe('BoxScores', () => {
         return json({ players: roster, total_count: roster.length, page: 1, limit: 1200, has_more: false })
       }
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
+      if (url.includes('/nba/scoreboard/values')) return json({ ...emptySlateValues, date })
       if (url.includes('/nba/scoreboard')) return json({ date, games: [scheduled] })
       if (url.includes('/boxscore')) return json({ ...scheduled, periods: [], away: { ...scheduled.away, ...blank }, home: { ...scheduled.home, ...blank } })
       return json({}, 404)
@@ -679,12 +693,12 @@ describe('BoxScores', () => {
       }
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       if (url.includes('/nba/scoreboard/values')) return json({ ...values, date })
-      if (url.includes('/nba/scoreboard')) return json({ ...board, date })
+      if (url.includes('/nba/scoreboard') && !url.includes('/values')) return json({ ...board, date })
       if (url.includes('/boxscore')) return json(box)
       return json({}, 404)
     }))
     renderWithProviders(<MyTeamProvider><BoxScores /></MyTeamProvider>, { route: '/box-scores?date=2026-10-25' })
-    const card = await screen.findByRole('button', { name: /2 from your team/ })
+    const card = await screen.findByRole('button', { name: /1 from your team/ })
     await user.click(card)
     const table = await screen.findByRole('table', { name: /box score/ })
     expect(within(table).getByRole('link', { name: 'Austin Reaves' }).closest('tr')).toHaveClass('bg-blue-50')
@@ -714,7 +728,7 @@ describe('BoxScores', () => {
       }
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       if (url.includes('/nba/scoreboard/values')) return json({ ...values, date })
-      if (url.includes('/nba/scoreboard')) return json({ ...board, date })
+      if (url.includes('/nba/scoreboard') && !url.includes('/values')) return json({ ...board, date })
       if (url.includes('/boxscore')) return json(box)
       return json({}, 404)
     }))
@@ -742,7 +756,8 @@ describe('BoxScores', () => {
     await user.click(screen.getByRole('button', { name: 'Show results' }))
     expect(await within(opened).findByText('28')).toBeInTheDocument()
     expect(within(opened).getByRole('button', { name: /LAL 129 @ UTAH 117/ })).toBeInTheDocument()
-    expect(within(opened).getByText("Did not play · Coach's Decision")).toBeInTheDocument()
+    expect(within(opened).queryByText("Did not play · Coach's Decision")).not.toBeInTheDocument()
+    expect(within(opened).queryByRole('link', { name: 'Sit Out' })).not.toBeInTheDocument()
   })
 
   it('moves to the next date', async () => {

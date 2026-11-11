@@ -4,7 +4,8 @@ import BoxScorePanel from '../components/boxScores/BoxScorePanel'
 import SlateDatePicker from '../components/boxScores/SlateDatePicker'
 import LinesOfTheNight from '../components/boxScores/LinesOfTheNight'
 import MyPlayers from '../components/boxScores/MyPlayers'
-import { groupAppearances, myAppearances } from '../components/boxScores/myPlayerGroups'
+import FantasyLineupLegend from '../components/boxScores/FantasyLineupLegend'
+import { filterMineAppearances, groupAppearances, myAppearances, playedMinutesByGame } from '../components/boxScores/myPlayerGroups'
 import { mineCount, outPlayerIds, rosterSide } from '../components/boxScores/pregameRoster'
 import { nbaTeamId } from '../components/boxScores/proTeam'
 import { slatePlayerValues } from '../components/boxScores/slateValues'
@@ -213,13 +214,13 @@ export default function BoxScores() {
   const boxReady = boxScore.data?.game_id === selectedId ? boxScore.data : undefined
   const nextBoxPoll = boxReady?.status === 'live' ? 60_000 : 0
   if (nextBoxPoll !== boxPoll) setBoxPoll(nextBoxPoll)
-  const anyStarted = games?.some(game => game.status !== 'scheduled') ?? false
   const nextValuesPoll = valuesPoll(games, date)
   if (nextValuesPoll !== slateValuesPoll) setSlateValuesPoll(nextValuesPoll)
-  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !anyStarted, pollingInterval: slateValuesPoll })
+  const slateValues = useGetBoxSlateValuesQuery(date, { skip: !games?.length, pollingInterval: slateValuesPoll })
   const values = slateValues.data?.date === date ? slateValues.data : undefined
+  const fantasyPlayers = values?.fantasy_players
   // Z comes from the Player Rankings page's own code, so the two never disagree.
-  const ranked = useMemo(() => (values ? slatePlayerValues(values) : []), [values])
+  const ranked = useMemo(() => (values?.categories != null ? slatePlayerValues(values) : []), [values])
   const valueMap = useMemo(() => {
     const map = new Map<string, SlatePlayerValue>()
     for (const player of ranked) map.set(player.player_id, player)
@@ -256,12 +257,12 @@ export default function BoxScores() {
     return [...outPlayerIds(charts)].sort().join(',')
   })
   const outIds = useMemo(() => new Set(outKey ? outKey.split(',') : []), [outKey])
+  const playedByGame = useMemo(() => (values ? playedMinutesByGame(values) : undefined), [values])
   const mineSlate = useMemo(() => {
     if (myTeamId == null || !myRoster.data || !games) return null
-    const rows = myAppearances(myRoster.data.players, games)
-      .filter(row => row.game.status !== 'scheduled' || !outIds.has(row.playerId))
+    const rows = filterMineAppearances(myAppearances(myRoster.data.players, games), outIds, playedByGame)
     return groupAppearances(rows)
-  }, [myTeamId, myRoster.data, games, outIds])
+  }, [myTeamId, myRoster.data, games, outIds, playedByGame])
   const pool = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' }, { skip: !awaitingRoster })
   const teams = useGetTeamsListQuery(undefined, { skip: !awaitingRoster })
   const pregame = useMemo(() => {
@@ -341,14 +342,19 @@ export default function BoxScores() {
             {games && games.length === 0 && (
               <div className="mr-card mr-nba-empty">No NBA games on {formatSlateLabel(date)}.</div>
             )}
-            {games && games.length > 0 && <ScheduledDepthCharts teamIds={scheduledTeamIds} />}
+            {games && games.length > 0 && (
+              <>
+                <FantasyLineupLegend className="mb-2 px-1" />
+                <ScheduledDepthCharts teamIds={scheduledTeamIds} />
+              </>
+            )}
           </>
         }
         cards={games ? games.map(game => ({
           game,
           selected: game.game_id === selectedId,
           hideScores: noSpoilers && !revealed.includes(game.game_id),
-          mineCount: myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds) : null,
+          mineCount: myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds, playedByGame) : null,
         })) : null}
         onToggleGame={toggleGame}
         panel={
@@ -363,6 +369,7 @@ export default function BoxScores() {
                 revealed={revealed.includes(boxReady.game_id)}
                 onToggleReveal={() => toggleReveal(boxReady.game_id)}
                 values={values ? valueMap : undefined}
+                fantasyPlayers={fantasyPlayers}
                 pregame={awaitingRoster ? pregame : undefined}
                 pregameLoading={Boolean(awaitingRoster && !pregame && rosterLoading)}
                 pregameError={Boolean(awaitingRoster && rosterError)}
@@ -388,6 +395,8 @@ export default function BoxScores() {
                 key={`my-players-${date}-${noSpoilers}`}
                 groups={mineSlate}
                 spoilerGuard={noSpoilers}
+                fantasyPlayers={fantasyPlayers}
+                playerValues={valueMap}
                 onOpenGame={openFromMyPlayers}
               />
             )}
@@ -407,6 +416,7 @@ export default function BoxScores() {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {noSpoilers ? 'Names only. Scores and stats stay hidden.' : 'Every NBA game on the slate, with the full box.'}
           </p>
+          {games && games.length > 0 && <FantasyLineupLegend className="mt-2 max-w-2xl" />}
         </div>
         <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />
       </div>
@@ -475,6 +485,8 @@ export default function BoxScores() {
               key={`my-players-${date}-${noSpoilers}`}
               groups={mineSlate}
               spoilerGuard={noSpoilers}
+              fantasyPlayers={fantasyPlayers}
+              playerValues={valueMap}
               onOpenGame={selectGame}
             />
           )}
@@ -485,7 +497,7 @@ export default function BoxScores() {
                 game={game}
                 selected={game.game_id === selectedId}
                 hideScores={noSpoilers && !revealed.includes(game.game_id)}
-                mineCount={myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds) : null}
+                mineCount={myTeamId != null && myRoster.data ? mineCount(game, myRoster.data.players, outIds, playedByGame) : null}
                 onSelect={() => toggleGame(game.game_id)}
               />
             ))}
@@ -502,6 +514,7 @@ export default function BoxScores() {
                 revealed={revealed.includes(boxReady.game_id)}
                 onToggleReveal={() => toggleReveal(boxReady.game_id)}
                 values={values ? valueMap : undefined}
+                fantasyPlayers={fantasyPlayers}
                 pregame={awaitingRoster ? pregame : undefined}
                 pregameLoading={Boolean(awaitingRoster && !pregame && rosterLoading)}
                 pregameError={Boolean(awaitingRoster && rosterError)}

@@ -27,6 +27,17 @@ across the season rather than relative to that one night:
              either (ranked among all rows they came out too narrow and
              leaning to booms), so the first weeks of a season still have a
              page.
+  BUST SIDE — the same two metrics, read the way the league reads a bad night
+             (November 2026, from the league's own ranking of the 20 worst
+             nights): points at 2.5 times the weight and the free-throw impact
+             eased (BUST_Z_WEIGHTS), one collapse counted above a string of
+             medium dips (BUST_COLLAPSE_POWER), his whole
+             history at 0.5 instead of 0.1 (BUST_WINDOW_WEIGHTS), the volume
+             weight capped at 30 minutes (BUST_VOLUME_CAP), and every
+             column measured by how rare its value is in the reference season
+             (rarity_normalize) instead of by its size, so a scoring collapse
+             counts for what it is and a cold line at the stripe or a string
+             of small dips no longer adds up to one. The boom side is unchanged.
 
 The stat weights: shooting through the two impacts, threes at half weight
 (October 2026); the window weights and the blend were set by the league in October 2026. They live
@@ -82,6 +93,47 @@ Z_WEIGHTS = {
     "EFF_FG": 0.7, "EFF_FT": 0.7,
 }
 ERR_WEIGHTS = dict(Z_WEIGHTS)
+# The bust side of both metrics weights points 2.5 times. Measured against the
+# league's ranking of the season's 20 worst nights (three ballots, 11.11.2026):
+# agreement with it (NDCG@10) rose from 0.63 to 0.93 with the rest of the bust
+# side below, the voters agree with each other at 0.92-0.96; 2 to 3 is a
+# plateau. Dropping the shooting impacts made it worse (0.42), and so did
+# lifting the volume weight (early exits of 6-8 minutes took the top); the
+# free-throw impact alone is eased to 0.5 (a 4-of-8 night at the stripe held
+# Brown's 16 points in the season's top ten with no vote from the league).
+BUST_Z_WEIGHTS = {**Z_WEIGHTS, "PTS": 2.5, "EFF_FT": 0.5}
+BUST_ERR_WEIGHTS = dict(BUST_Z_WEIGHTS)
+# One collapse outweighs a string of medium dips: each rarity score is raised
+# to this power (sign kept) before the weighted sum, so -3 counts 5.2 and -1.5
+# counts 1.8. Lillard's 9 points, with every stat a little under his norm and
+# none far under, stood 3rd of the season against one vote of three; 7th now,
+# behind Booker's 3 points, Sabonis's 0 and Murray's 6, the league's own top 3.
+BUST_COLLAPSE_POWER = 1.5
+# A bust is also judged against who he is over the long run, not only his
+# last 10: the league put Gilgeous-Alexander's 17 points 7th of the 20, the
+# score had it 24th of the season, because 13 under a 30-point average is an
+# ordinary dip on the league's scale of recent form. With his whole history at
+# 0.5 it is 17th and all ten of the league's picks are in the season's top 17.
+# Not higher: at 1.0 the score leans to busts out of sample (1.22% busts past
+# -2.2 against 0.94% booms past 2.1 on 2026-27; 0.91% / 0.94% at 0.5), a
+# long-run average being a stale expectation for a player whose role changed.
+# His last 5 at half its weight (0.25): the same agreement with both rounds of
+# ballots, and fewer busts out of sample (0.97% past -2.2 on 2026-27 against
+# 1.14%; the booms' 0.94% past 2.1), a five-game window being the noisiest.
+BUST_WINDOW_WEIGHTS = {**WINDOW_WEIGHTS, "ALL": 0.5, "L5": 0.25}
+# The volume weight sqrt(MIN / 30) softens a bust in a short stint (an early
+# exit is not a bad game) but no longer deepens one past 30 minutes: Brown's
+# 16 points in 40 minutes stood 10th of the season with no vote from the
+# league, 16th with the cap, and agreement with the ballots rose to 0.91.
+BUST_VOLUME_CAP = 1.0
+# The bust side reads each column on a rarity scale: the rank of its value in
+# the reference season, as a normal score (rarity_normalize), fitted with the
+# calibration. In standard deviations the columns are not comparable on the
+# way down: a counting stat stops at zero (points never went below -2.6) while
+# the shooting impacts run to -5, so 10% of starters' nights had a shooting
+# column at -1.5 or worse against 1.8% for points. The grid is spaced evenly
+# in normal scores so the tails, where busts live, keep their resolution.
+RARITY_GRID = np.round(np.linspace(-4.0, 4.0, 161), 2)
 VOLUME_WEIGHT = True
 # Blend of (z vs his own averages, model error), by side: a boom is mostly
 # "beat what the model expected for his minutes" (75% model, 25% averages); a
@@ -362,21 +414,27 @@ def add_errors(df: pd.DataFrame) -> pd.DataFrame:
 
 # --- Scoring ------------------------------------------------------------------
 
-def metric_columns() -> tuple[dict[str, float], dict[str, float]]:
+def metric_columns(bust: bool = False) -> tuple[dict[str, float], dict[str, float]]:
     """(metric-1 column weights, metric-2 column weights) on the RAW z / error
-    columns. Calibration standardizes each column before weighting."""
+    columns, for the boom side or the bust side. Calibration normalizes each
+    column before weighting."""
+    z_weights, err_weights = (BUST_Z_WEIGHTS, BUST_ERR_WEIGHTS) if bust else (Z_WEIGHTS, ERR_WEIGHTS)
     m1 = {
         f"{BASIS}_{win}_{stat}": ww * sw
-        for win, ww in WINDOW_WEIGHTS.items() if ww
-        for stat, sw in Z_WEIGHTS.items() if sw
+        for win, ww in (BUST_WINDOW_WEIGHTS if bust else WINDOW_WEIGHTS).items() if ww
+        for stat, sw in z_weights.items() if sw
     }
-    m2 = {f"ERR_{stat}": w for stat, w in ERR_WEIGHTS.items() if w}
+    m2 = {f"ERR_{stat}": w for stat, w in err_weights.items() if w}
     return m1, m2
 
 
 def required_columns() -> list[str]:
-    m1, m2 = metric_columns()
-    return list(m1) + list(m2)
+    """Every raw column either side weights."""
+    cols: dict[str, None] = {}
+    for bust in (False, True):
+        for part in metric_columns(bust):
+            cols.update(dict.fromkeys(part))
+    return list(cols)
 
 
 def standardize(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
@@ -390,10 +448,42 @@ def standardize(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
     return out
 
 
-def weighted_metric(df: pd.DataFrame, col_weights: dict[str, float]) -> pd.Series:
+def rarity_scores(values: pd.Series, quantiles: list[float]) -> pd.Series:
+    """Normal score of each value by its rank in the reference season:
+    ``quantiles`` are the season's values at the normal scores RARITY_GRID. A
+    value the season repeats (a tie over several grid points) gets the middle
+    of its stretch. Rising, and bounded by the grid's ends."""
+    q = np.asarray(quantiles, dtype=float)
+    v = values.to_numpy(dtype=float)
+    lo = np.searchsorted(q, v, side="left")
+    hi = np.searchsorted(q, v, side="right")
+    last = len(q) - 1
+    # between two grid points: linear in the value; on a tie: the stretch's middle
+    left = np.clip(lo - 1, 0, last)
+    right = np.clip(lo, 0, last)
+    span = q[right] - q[left]
+    frac = np.divide(v - q[left], span, out=np.zeros_like(v), where=span > 0)
+    between = RARITY_GRID[left] + frac * (RARITY_GRID[right] - RARITY_GRID[left])
+    tied = (RARITY_GRID[np.clip(lo, 0, last)] + RARITY_GRID[np.clip(hi - 1, 0, last)]) / 2.0
+    out = np.where(hi > lo, tied, between)
+    return pd.Series(out, index=values.index).where(values.notna())
+
+
+def rarity_normalize(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
+    """RARE_<col> = the column's value as a normal score of its rank in the
+    reference season (the bust side's scale)."""
+    out = pd.DataFrame(index=df.index)
+    for col, quantiles in calibration.get("rarity", {}).items():
+        if col in df.columns:
+            out[f"RARE_{col}"] = rarity_scores(df[col], quantiles)
+    return out
+
+
+def weighted_metric(df: pd.DataFrame, col_weights: dict[str, float], prefix: str = "NORM_") -> pd.Series:
     """Sum(w · NORM_col) / Sum(|w|); NaN components contribute 0, rows where
     every weighted component is NaN stay NaN. Season-window columns are scaled
-    per row by season_factor (their weight grows with the games behind them)."""
+    per row by season_factor (their weight grows with the games behind them).
+    ``prefix`` picks the scale: NORM_ (standardized) or RARE_ (rarity)."""
     factor = season_factor(df)
     total = sum(abs(w) for w in col_weights.values() if w)
     if total == 0:
@@ -401,7 +491,7 @@ def weighted_metric(df: pd.DataFrame, col_weights: dict[str, float]) -> pd.Serie
     acc = pd.Series(0.0, index=df.index)
     any_valid = pd.Series(False, index=df.index)
     for col, w in col_weights.items():
-        norm_col = f"NORM_{col}"
+        norm_col = f"{prefix}{col}"
         if not w or norm_col not in df.columns:
             continue
         weight = w * factor if "_SEASON_" in col else w
@@ -412,36 +502,46 @@ def weighted_metric(df: pd.DataFrame, col_weights: dict[str, float]) -> pd.Serie
 
 def final_raw(df: pd.DataFrame) -> pd.DataFrame:
     """METRIC_Z, METRIC_ERR and the un-normalized FINAL on a frame that already
-    carries the NORM_ columns and MIN."""
-    m1, m2 = metric_columns()
+    carries the NORM_ columns (boom side), the RARE_ columns (bust side) and
+    MIN. Each metric is built twice, with the boom side's weights and scale
+    and with the bust side's; the stored METRIC_Z / METRIC_ERR are the boom
+    reading where positive plus the bust reading where negative."""
     out = pd.DataFrame(index=df.index)
-    mz = weighted_metric(df, m1)
-    if VOLUME_WEIGHT:
-        mz = mz * np.sqrt(df["MIN"].astype(float) / 30.0)
-    me = weighted_metric(df, m2)
-    out["METRIC_Z"] = mz
-    out["METRIC_ERR"] = me
-    out["FINAL_RAW"] = blend(mz, me)
+    volume = np.sqrt(df["MIN"].astype(float) / 30.0) if VOLUME_WEIGHT else 1.0
+    boom1, boom2 = metric_columns()
+    bust1, bust2 = metric_columns(bust=True)
+    bust_volume = volume.clip(upper=BUST_VOLUME_CAP) if VOLUME_WEIGHT else 1.0
+    rare = [c for c in df.columns if c.startswith("RARE_")]
+    df = df.assign(**{c: np.sign(df[c]) * df[c].abs() ** BUST_COLLAPSE_POWER for c in rare})
+    mz, mz_bust = weighted_metric(df, boom1) * volume, weighted_metric(df, bust1, "RARE_") * bust_volume
+    me, me_bust = weighted_metric(df, boom2), weighted_metric(df, bust2, "RARE_")
+    out["METRIC_Z"] = mz.clip(lower=0) + mz_bust.clip(upper=0)
+    out["METRIC_ERR"] = me.clip(lower=0) + me_bust.clip(upper=0)
+    out["FINAL_RAW"] = blend(mz, me, mz_bust, me_bust)
     return out
 
 
-def by_side(z, err):
+def by_side(z, err, z_bust=None, err_bust=None):
     """BLEND of metric 1 (or a stat's z) and metric 2 (or its error): the
     boom-side blend where positive plus the bust-side blend where negative.
     When both sides agree that is the one side's blend; when they disagree
     they cancel toward 0. Rising in both inputs and continuous, so a better
     game never scores lower (picking one side by the sign of the other let a
-    worse model error flip a 0 into +1.3). Works on Series and DataFrames."""
+    worse model error flip a 0 into +1.3). ``z_bust`` / ``err_bust`` are the
+    bust side's own reading of the two metrics (its weights and scale); the
+    same inputs when not given. Works on Series and DataFrames."""
     b = BLEND
+    z_bust = z if z_bust is None else z_bust
+    err_bust = err if err_bust is None else err_bust
     fp = (b["w1_pos"] * z + b["w2_pos"] * err) / ((abs(b["w1_pos"]) + abs(b["w2_pos"])) or 1.0)
-    fn = (b["w1_neg"] * z + b["w2_neg"] * err) / ((abs(b["w1_neg"]) + abs(b["w2_neg"])) or 1.0)
+    fn = (b["w1_neg"] * z_bust + b["w2_neg"] * err_bust) / ((abs(b["w1_neg"]) + abs(b["w2_neg"])) or 1.0)
     return fp.clip(lower=0) + fn.clip(upper=0)
 
 
-def blend(mz: pd.Series, me: pd.Series) -> pd.Series:
+def blend(mz: pd.Series, me: pd.Series, mz_bust: pd.Series | None = None, me_bust: pd.Series | None = None) -> pd.Series:
     """The final's raw value from metric 1 and metric 2 (by_side). NaN where
     metric 2 is (no model estimate)."""
-    return by_side(mz, me)
+    return by_side(mz, me, mz_bust, me_bust)
 
 
 def to_standard_normal_with(final: pd.Series, quantiles: list[float], count: int) -> pd.Series:
@@ -465,7 +565,7 @@ def score_frame(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
     (compute_zscores) and the ERR_ columns (add_errors). Returns METRIC_Z,
     METRIC_ERR, FINAL_RAW and SCORE (the final on the N(0,1) scale)."""
     carry = ["MIN"] + (["SEASON_GAMES"] if "SEASON_GAMES" in df.columns else [])
-    normed = pd.concat([df[carry], standardize(df, calibration)], axis=1)
+    normed = pd.concat([df[carry], standardize(df, calibration), rarity_normalize(df, calibration)], axis=1)
     out = final_raw(normed)
     with_estimate = to_standard_normal(out["FINAL_RAW"], calibration)
     z_only = to_standard_normal_with(
@@ -595,9 +695,14 @@ def build_calibration(df: pd.DataFrame, source: str, n_quantiles: int = 1001) ->
             continue
         s = df[col].dropna()
         norm_moments[col] = {"mean": float(s.mean()), "std": float(s.std()), "count": int(len(s))}
-    calibration = {"source": source, "norm": norm_moments}
+    # The bust side's scale: each column's values at the normal scores RARITY_GRID.
+    rarity = {
+        col: [float(v) for v in np.quantile(df[col].dropna(), norm.cdf(RARITY_GRID))]
+        for col, moments in norm_moments.items() if moments["count"]
+    }
+    calibration = {"source": source, "norm": norm_moments, "rarity": rarity}
     carry = ["MIN"] + (["SEASON_GAMES"] if "SEASON_GAMES" in df.columns else [])
-    normed = pd.concat([df[carry], standardize(df, calibration)], axis=1)
+    normed = pd.concat([df[carry], standardize(df, calibration), rarity_normalize(df, calibration)], axis=1)
     raw = final_raw(normed)
     grid = np.linspace(0, 1, n_quantiles)
     if raw["METRIC_Z"].dropna().empty:
@@ -629,6 +734,10 @@ def calibration_settings() -> dict:
         "basis": BASIS, "window_weights": WINDOW_WEIGHTS, "season_full_games": SEASON_FULL_GAMES,
         "z_weights": Z_WEIGHTS,
         "err_weights": ERR_WEIGHTS, "volume_weight": VOLUME_WEIGHT, "blend": BLEND, "blend_rule": "by_side",
+        "bust_z_weights": BUST_Z_WEIGHTS, "bust_err_weights": BUST_ERR_WEIGHTS,
+        "bust_window_weights": BUST_WINDOW_WEIGHTS, "bust_volume_cap": BUST_VOLUME_CAP,
+        "bust_collapse_power": BUST_COLLAPSE_POWER,
+        "bust_scale": "rarity", "rarity_grid": [float(RARITY_GRID[0]), float(RARITY_GRID[-1]), len(RARITY_GRID)],
         "efficiency": {name: p for name, (_, _, p) in EFFICIENCY.items()}, "efficiency_window": "difference",
     }
 

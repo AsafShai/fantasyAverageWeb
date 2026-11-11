@@ -64,8 +64,18 @@ async def test_slate_values_tags_owner_on_that_night_and_free_agents():
     assert "z" not in luka
     assert luka["stats"]["PTS"] == 52 and quiet["stats"]["MIN"] == 0
     assert luka["fantasy_team"] == "TTP" and luka["fantasy_team_name"] == "Trust the process"
+    assert luka["lineup_slot"] == "PG" and luka["started"] is True
     assert bench["fantasy_team"] is None
+    assert bench["lineup_slot"] is None and bench["started"] is None
     assert luka["opponent_abbr"] == "UTAH" and bench["is_home"] is True
+    assert result["fantasy_players"] == {
+        "1": {
+            "fantasy_team": "TTP",
+            "fantasy_team_name": "Trust the process",
+            "lineup_slot": "PG",
+            "started": True,
+        },
+    }
 
 
 @pytest.mark.asyncio
@@ -84,6 +94,28 @@ async def test_slate_values_is_incomplete_while_a_game_is_live():
     assert result["complete"] is False
     assert result["players"][0]["on_court"] is False
     box.assert_awaited_once_with("100")
+
+
+@pytest.mark.asyncio
+async def test_slate_values_marks_bench_and_ir_slots():
+    svc.clear_box_score_value_cache()
+    board = {"date": "2026-10-25", "games": [{"game_id": "100", "status": "final"}]}
+    roster = {
+        1: {"team_id": 7, "slot": "BE"},
+        2: {"team_id": 7, "slot": "IR"},
+        3: {"team_id": 8, "slot": "UTIL"},
+    }
+    with patch.object(svc, "scoreboard_for", AsyncMock(return_value=board)), \
+         patch.object(svc, "boxscore_for", AsyncMock(return_value=_box("100", "final", [_player("1", "A"), _player("2", "B")], [_player("3", "C")]))), \
+         patch.object(svc, "fantasy_roster_for", AsyncMock(return_value=roster)), \
+         patch.object(svc, "_league_categories", AsyncMock(return_value=(["PTS"], set()))), \
+         patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({7: "AAA", 8: "BBB"}, {7: "Team A", 8: "Team B"}))):
+        result = await slate_values(date(2026, 10, 25))
+    by_id = {row["player_id"]: row for row in result["players"]}
+    assert by_id["1"]["started"] is False and by_id["1"]["lineup_slot"] == "BE"
+    assert by_id["2"]["started"] is False and by_id["2"]["lineup_slot"] == "IR"
+    assert by_id["3"]["started"] is True and by_id["3"]["lineup_slot"] == "UTIL"
+    assert set(result["fantasy_players"]) == {"1", "2", "3"}
 
 
 @pytest.mark.asyncio

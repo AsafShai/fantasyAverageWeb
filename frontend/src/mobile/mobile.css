@@ -237,17 +237,25 @@ html:has(.mr-shell), html:has(.mr-shell) body { overflow-x: clip; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
   height: calc(var(--mr-tabbar-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box;
-  display: grid; grid-template-columns: repeat(5, minmax(max-content, 1fr));
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
   background: var(--mr-card); border-top: 1px solid var(--mr-border);
 }
+/* Labels off (Settings): a shorter bar, the page's bottom padding follows --mr-tabbar-h. */
+.mr-tabbar-bare { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
 .mr-tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   text-decoration: none; color: var(--mr-muted); min-width: 0;
 }
 .mr-tab-pill {
-  width: 52px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+  position: relative; width: 52px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
 }
-.mr-tab-label { font-size: 11px; font-weight: 500; white-space: nowrap; }
+.mr-tab-label { font-size: 11px; font-weight: 500; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* A shortcut that still needs setup (no team chosen): a dot on its icon. */
+.mr-tab-dot {
+  position: absolute; top: 1px; right: 9px; width: 9px; height: 9px; border-radius: 999px;
+  background: var(--mr-pill-doubt-fg); border: 2px solid var(--mr-card); box-sizing: content-box;
+}
+button.mr-tab { border: none; background: none; padding: 0; cursor: pointer; font: inherit; }
 .mr-tab[aria-current="page"] { color: var(--mr-primary); }
 .mr-tab[aria-current="page"] .mr-tab-pill { background: var(--mr-primary-soft); }
 .mr-tab[aria-current="page"] .mr-tab-label { font-weight: 700; }

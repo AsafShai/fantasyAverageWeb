@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Player } from '../../types/api'
-import { ALL_PLAYERS, buildShotPool, deriveShotData, impactLists, inScope, passesFilter, POOL_SIZE, signedImpact } from '../shootingMap'
+import { ALL_PLAYERS, buildShotPool, inScope, POOL_SIZE, rankIn } from '../shootingMap'
 
 let nextId = 1
 function player(name: string, team: string, gp: number, fgm: number, fga: number, ftm = 2, fta = 3, pts = 10): Player {
@@ -19,81 +19,6 @@ function player(name: string, team: string, gp: number, fgm: number, fga: number
     status: 'FREEAGENT',
   }
 }
-
-describe('deriveShotData', () => {
-  const a = player('Accurate Big', 'BOS', 4, 8, 10)
-  const b = player('Volume Guard', 'LAL', 4, 8, 20)
-  const frank = new Map<string, number>()
-
-  it('measures impact against the pool average percentage', () => {
-    const d = deriveShotData([a, b], [], frank, 'fg', 'pg')
-    // pool: 16 makes on 30 attempts per game
-    expect(d.avgPct).toBeCloseTo(16 / 30)
-    expect(d.avgAtt).toBe(15)
-    const acc = d.rows.find(r => r.name === 'Accurate Big')!
-    expect(acc.imp).toBeCloseTo(8 - (16 / 30) * 10)
-    expect(acc.imp).toBeGreaterThan(0)
-    expect(acc.rImp).toBe(1)
-    expect(d.rows.find(r => r.name === 'Volume Guard')!.rVol).toBe(1)
-  })
-
-  it('keeps the same average % per game and in totals', () => {
-    const few = player('Few Games', 'X', 2, 9, 10)
-    const many = player('Many Games', 'X', 10, 4, 10)
-    const pg = deriveShotData([few, many], [], frank, 'fg', 'pg')
-    const tot = deriveShotData([few, many], [], frank, 'fg', 'tot')
-    expect(pg.avgPct).toBeCloseTo((18 + 40) / (20 + 100))
-    expect(tot.avgPct).toBeCloseTo(pg.avgPct)
-  })
-
-  it('switches to season totals', () => {
-    const d = deriveShotData([a, b], [], frank, 'fg', 'tot')
-    expect(d.rows.find(r => r.name === 'Accurate Big')!.a).toBe(40)
-  })
-
-  it('drops players with no attempts', () => {
-    const noFt = player('No Free Throws', 'BOS', 4, 5, 10, 0, 0)
-    const d = deriveShotData([a, noFt], [], frank, 'ft', 'pg')
-    expect(d.rows.map(r => r.name)).toEqual(['Accurate Big'])
-  })
-
-  it('measures extra players without moving the pool averages', () => {
-    const extra = player('Bench Shooter', 'BOS', 4, 1, 1)
-    const withExtra = deriveShotData([a, b], [extra], frank, 'fg', 'pg')
-    const without = deriveShotData([a, b], [], frank, 'fg', 'pg')
-    expect(withExtra.avgPct).toBe(without.avgPct)
-    const row = withExtra.rows.find(r => r.name === 'Bench Shooter')!
-    expect(row.inPool).toBe(false)
-    // below the attempt minimum: no percentage rank
-    expect(row.rPct).toBeNull()
-  })
-
-  it('leaves out a team\'s bench players with too few attempts', () => {
-    const garbageTime = player('Garbage Time', 'BOS', 4, 0, 0.5)
-    const d = deriveShotData([a, b], [garbageTime], frank, 'fg', 'pg')
-    expect(d.rows.some(r => r.name === 'Garbage Time')).toBe(false)
-  })
-})
-
-describe('passesFilter', () => {
-  it('keeps only the picked NBA team', () => {
-    const d = deriveShotData([player('A', 'BOS', 4, 8, 10), player('B', 'LAL', 4, 8, 20)], [], new Map(), 'fg', 'pg')
-    expect(d.rows.filter(r => passesFilter(r, d, 'all', { nba: 'BOS', fantasy: null })).map(r => r.name)).toEqual(['A'])
-    expect(d.rows.filter(r => passesFilter(r, d, 'imp', ALL_PLAYERS)).map(r => r.name)).toEqual(['A'])
-  })
-})
-
-describe('passesFilter thresholds', () => {
-  it('drops players under the minimum % or attempts', () => {
-    const d = deriveShotData([player('Sharp', 'X', 4, 6, 10), player('Busy', 'X', 4, 9, 20)], [], new Map(), 'fg', 'pg')
-    const names = (minPct: number | null, minAtt: number | null) =>
-      d.rows.filter(r => passesFilter(r, d, 'all', ALL_PLAYERS, { minPct, minAtt })).map(r => r.name)
-    expect(names(0.5, null)).toEqual(['Sharp'])
-    expect(names(null, 15)).toEqual(['Busy'])
-    expect(names(0.5, 15)).toEqual([])
-    expect(names(null, null)).toEqual(['Sharp', 'Busy'])
-  })
-})
 
 describe('inScope', () => {
   const rostered = { ...player('Owned', 'BOS', 4, 5, 10), team_id: 3 }
@@ -129,20 +54,19 @@ describe('buildShotPool min games', () => {
   })
 })
 
-describe('impactLists', () => {
-  it('lists only helpers as best and only hurters as worst', () => {
-    const d = deriveShotData([player('A', 'X', 4, 8, 10), player('B', 'X', 4, 4, 10), player('C', 'X', 4, 7, 10)], [], new Map(), 'fg', 'pg')
-    const { top, bottom } = impactLists(d.rows, 6)
-    expect(top.map(r => r.name)).toEqual(['A', 'C'])
-    expect(bottom.map(r => r.name)).toEqual(['B'])
+describe('inScope positions', () => {
+  it('matches any of the picked positions', () => {
+    const wing = { ...player('Wing', 'BOS', 4, 5, 10), positions: ['SG', 'SF'] }
+    expect(inScope(wing, { nba: null, fantasy: null, positions: ['SF', 'C'] })).toBe(true)
+    expect(inScope(wing, { nba: null, fantasy: null, positions: ['PG', 'C'] })).toBe(false)
+    expect(inScope(wing, { nba: null, fantasy: null, positions: [] })).toBe(true)
   })
 })
 
-describe('signedImpact', () => {
-  it('drops the sign when the value rounds to zero', () => {
-    expect(signedImpact(0.3, 'tot')).toBe('0')
-    expect(signedImpact(-0.04, 'pg')).toBe('0')
-    expect(signedImpact(1.26, 'pg')).toBe('+1.3')
-    expect(signedImpact(-2.6, 'tot')).toBe('−3')
+describe('rankIn', () => {
+  it('shares a rank between ties', () => {
+    expect(rankIn([9, 7, 7, 3], 9)).toBe(1)
+    expect(rankIn([9, 7, 7, 3], 7)).toBe(2)
+    expect(rankIn([9, 7, 7, 3], 3)).toBe(4)
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import CommandPalette from '../../components/CommandPalette'
 import { SocialLinks } from '../../components/Footer'
@@ -9,11 +9,12 @@ import PlayerSheet from '../player/PlayerSheet'
 import { playerIdFromPath } from '../player/playerParam'
 import { usePlayerSheet } from '../player/usePlayerSheet'
 import { useSheetHistory } from '../ui'
-import { TABS } from './tabs'
+import { useTabPrefs } from './tabPrefs'
+import { useBarTabs } from './useTabContext'
 
 /*
  * Phone shell of the redesign (step 2): logo header, page, site footer, the
- * bottom tab bar and the ☰ menu dropdown. Pages that are not converted yet render
+ * bottom tab bar (the user's own tabs, chosen in Settings) and the ☰ menu dropdown. Pages that are not converted yet render
  * unchanged inside it. The menu and the search overlay live in browser history,
  * so the phone's back button closes them before it leaves the page. The player
  * sheet (step 3) opens over any page from a player name: `?player=<id>`.
@@ -32,11 +33,13 @@ const MobileShell = ({ darkMode, setDarkMode }: MobileShellProps) => {
   const menu = useSheetHistory(MENU_SHEET_ID)
   const search = useSheetHistory(SEARCH_SHEET_ID)
   const playerSheet = usePlayerSheet()
+  const { labels } = useTabPrefs()
 
   useEffect(() => ensureMobileFonts(), [])
 
   return (
-    <div className="mr-shell">
+    // Without labels the bar is shorter; the page's bottom padding follows it.
+    <div className="mr-shell" style={labels ? undefined : ({ '--mr-tabbar-h': '60px' } as CSSProperties)}>
       <div className="mr-hdr-wrap">
         <MobileHeader
           darkMode={darkMode}
@@ -53,7 +56,7 @@ const MobileShell = ({ darkMode, setDarkMode }: MobileShellProps) => {
       </main>
 
       <MobileFooter />
-      <MobileTabBar />
+      <MobileTabBar onSearch={search.show} onMenu={menu.show} />
 
       <CommandPalette
         isOpen={search.open}
@@ -83,6 +86,7 @@ interface MobileHeaderProps {
 }
 
 function MobileHeader({ darkMode, onToggleDark, onSearch, onMenu, menuOpen }: MobileHeaderProps) {
+  const { pathname } = useLocation()
   return (
     <header className="mr-root mr-hdr">
       <Link to="/" className="mr-hdr-logo">
@@ -104,6 +108,17 @@ function MobileHeader({ darkMode, onToggleDark, onSearch, onMenu, menuOpen }: Mo
       >
         <span className="mr-hdr-emoji" aria-hidden="true">{darkMode ? '☀️' : '🌙'}</span>
       </button>
+      <Link
+        to="/settings"
+        className="mr-hdr-btn"
+        aria-label="Settings"
+        aria-current={pathname === '/settings' ? 'page' : undefined}
+      >
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </Link>
       <button type="button" className="mr-hdr-btn" onClick={onMenu} aria-label="Menu" aria-haspopup="dialog" aria-expanded={menuOpen}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
           <path d={menuOpen ? 'M6 6l12 12M18 6L6 18' : 'M4 7h16M4 12h16M4 17h16'} />
@@ -115,26 +130,60 @@ function MobileHeader({ darkMode, onToggleDark, onSearch, onMenu, menuOpen }: Mo
 
 // ── bottom tab bar ──────────────────────────────────────────────────────
 
-function MobileTabBar() {
-  const { pathname } = useLocation()
+interface MobileTabBarProps {
+  onSearch: () => void
+  onMenu: () => void
+}
+
+function MobileTabBar({ onSearch, onMenu }: MobileTabBarProps) {
+  const { tabs: ids, labels } = useTabPrefs()
+  const { tabs, ctx, current } = useBarTabs(ids)
   return (
-    <nav className="mr-root mr-tabbar" aria-label="Main">
-      {TABS.map((tab) => {
-        const on = tab.match(pathname)
-        return (
-          <Link
-            key={tab.path}
-            to={tab.path}
-            className="mr-tab"
-            aria-current={on ? 'page' : undefined}
-            onTouchStart={() => prefetchRoute(tab.path)}
-          >
+    <nav
+      className={`mr-root mr-tabbar${labels ? '' : ' mr-tabbar-bare'}`}
+      aria-label="Main"
+      style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+    >
+      {tabs.map((tab, i) => {
+        // A team shortcut with no team chosen sends you to Settings, where My team is first.
+        const needsSetup = tab.needsTeam === true && ctx.myTeamId == null
+        const to = needsSetup ? '/settings' : tab.to(ctx)
+        const body = (
+          <>
             <span className="mr-tab-pill" aria-hidden="true">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d={tab.icon} />
               </svg>
+              {needsSetup && <span className="mr-tab-dot" />}
             </span>
-            <span className="mr-tab-label">{tab.label}</span>
+            {labels && <span className="mr-tab-label">{tab.label}</span>}
+          </>
+        )
+        const label = labels ? undefined : tab.label
+        if (to === null) {
+          // Search, or Recent before anything was opened (it points at the ☰ menu then).
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              className="mr-tab"
+              aria-label={label}
+              onClick={tab.action === 'search' ? onSearch : onMenu}
+            >
+              {body}
+            </button>
+          )
+        }
+        return (
+          <Link
+            key={tab.id}
+            to={to}
+            className="mr-tab"
+            aria-label={label}
+            aria-current={i === current ? 'page' : undefined}
+            onTouchStart={() => prefetchRoute(to)}
+          >
+            {body}
           </Link>
         )
       })}
@@ -148,7 +197,7 @@ function MobileTabBar() {
  * Phone menu only (desktop nav unchanged): the groups are master's, with NBA
  * before Minigames and Today called Home like the tab.
  */
-function menuGroups(groups: NavGroupDef[]): NavGroupDef[] {
+export function menuGroups(groups: NavGroupDef[]): NavGroupDef[] {
   const mapped = groups.map((g) =>
     g.key === 'league' ? { ...g, items: g.items.map((i) => (i.path === '/' ? { ...i, label: 'Home', icon: '🏠' } : i)) } : g,
   )
