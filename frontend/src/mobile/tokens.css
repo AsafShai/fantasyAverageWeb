@@ -40,10 +40,6 @@
   --mr-on-ink: #FFFFFF;
   --mr-on-primary: #FFFFFF;
 
-  /* shortcut tabs (Settings) */
-  --mr-shortcut-bg: #EDE9FE;
-  --mr-shortcut-fg: #5B21B6;
-
   /* deltas (Rankings view only) */
   --mr-up: #059669;
   --mr-down: #DC2626;
@@ -107,8 +103,6 @@
   --mr-on-ink: #0B1220;
   --mr-on-primary: #0B1220;
 
-  --mr-shortcut-bg: #2E1F5E;
-  --mr-shortcut-fg: #C4B5FD;
   --mr-up: #34D399;
   --mr-down: #F87171;
   --mr-same: #6F7A8C;

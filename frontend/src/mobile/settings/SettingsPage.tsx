@@ -13,7 +13,7 @@ import './settings.css'
 
 function TabIcon({ tab }: { tab: TabDef }) {
   return (
-    <span className={`mr-set-ico${tab.group === 'Shortcuts' ? ' mr-set-ico-shortcut' : ''}`} aria-hidden="true">
+    <span className="mr-set-ico" aria-hidden="true">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d={tab.icon} />
       </svg>
@@ -138,7 +138,7 @@ export default function SettingsPage() {
           <section key={group} className="mr-set-group" aria-label={group}>
             <h4 className="mr-set-h4">
               {group}
-              {group === 'Shortcuts' && <span className="mr-set-h4-note"> · follow your team and the calendar</span>}
+              {group === 'Shortcuts' && <span className="mr-set-h4-note"> · jump to your team, recent pages or search</span>}
             </h4>
             <ul className="mr-set-list">
               {items.map((tab) => (

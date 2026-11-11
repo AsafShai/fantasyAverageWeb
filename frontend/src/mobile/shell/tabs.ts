@@ -2,7 +2,7 @@ import { FF_BOOM_OR_BUST, FF_DRAFT_PAGES, FF_LEAGUE_ACTIVITY } from '../../confi
 
 /*
  * Everything that can sit in the phone tab bar. A tab is either a page or a
- * shortcut: a tab that follows the user (my team), the calendar (tonight), what
+ * shortcut: a tab that follows the user (my team), what
  * was opened last (recent) or just does something (search). The bar itself is
  * chosen in Settings (`tabPrefs.ts`); this file only describes the choices.
  */
@@ -98,16 +98,6 @@ const SHORTCUTS: TabDef[] = [
     match: (p, _s, ctx) => ctx.myTeamId != null && p === `/team/${ctx.myTeamId}`,
   },
   {
-    id: 'tonight',
-    label: 'Tonight',
-    group: 'Shortcuts',
-    description: 'Box scores on today’s date, every day',
-    icon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
-    to: () => '/box-scores',
-    // A past or future date is Box Scores, not Tonight.
-    match: (p, s) => p === '/box-scores' && !new URLSearchParams(s).has('date'),
-  },
-  {
     id: 'recent',
     label: 'Recent',
     group: 'Shortcuts',
@@ -144,8 +134,8 @@ export interface TabPreset {
 
 const ALL_PRESETS: TabPreset[] = [
   { id: 'default', label: 'Default', tabs: DEFAULT_TAB_IDS },
-  { id: 'my-team', label: 'My team', tabs: ['home', 'my-team', 'tonight', 'standings', 'recent'] },
-  { id: 'game-night', label: 'Game night', tabs: ['tonight', 'my-team', 'standings', 'injuries', 'search'] },
+  { id: 'my-team', label: 'My team', tabs: ['home', 'my-team', 'box-scores', 'standings', 'recent'] },
+  { id: 'game-night', label: 'Game night', tabs: ['box-scores', 'my-team', 'standings', 'injuries', 'search'] },
   { id: 'draft', label: 'Draft', tabs: ['home', 'adp', 'draft-board', 'mock-draft', 'player-ranks'] },
 ]
 
