@@ -38,7 +38,7 @@ test.describe('phone settings', () => {
     await page.getByRole('button', { name: 'Add My Team' }).scrollIntoViewIfNeeded()
     await shot(page, '3-add-shortcuts')
     await page.getByRole('button', { name: 'Add My Team' }).click()
-    await page.getByRole('button', { name: 'Add Tonight' }).click()
+    await page.getByRole('button', { name: 'Add Box Scores' }).click()
     await page.getByRole('button', { name: 'Remove Trade' }).click()
     await page.getByRole('button', { name: 'Add Search' }).click()
     await expect(tabbar.getByRole('link')).toHaveCount(4)
@@ -58,16 +58,16 @@ test.describe('phone settings', () => {
     await expect(tabbar.getByRole('link', { name: 'My Team' })).toHaveAttribute('aria-current', 'page')
     await shot(page, '5-my-team-tab')
 
-    await tabbar.getByRole('link', { name: 'Tonight' }).click()
+    await tabbar.getByRole('link', { name: 'Box Scores' }).click()
     await expect(page).toHaveURL(/\/box-scores$/)
-    await expect(tabbar.getByRole('link', { name: 'Tonight' })).toHaveAttribute('aria-current', 'page')
+    await expect(tabbar.getByRole('link', { name: 'Box Scores' })).toHaveAttribute('aria-current', 'page')
 
     await tabbar.getByRole('button', { name: 'Search' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.keyboard.press('Escape')
 
     await page.reload()
-    await expect(tabbar.getByRole('link', { name: 'Tonight' })).toBeVisible()
+    await expect(tabbar.getByRole('link', { name: 'Box Scores' })).toBeVisible()
     await expect(tabbar.getByRole('link', { name: 'Home' })).toHaveCount(0)
   })
 

@@ -25,8 +25,7 @@ instead of today's nav; pages that are not converted yet render unchanged inside
   own, 3 to 5 tabs, chosen in Settings and saved in this browser (`fw:mobile.tabBar`;
   default Home · Standings · Teams · Player Ranks · Trade). `tabs.ts` is the catalog:
   pages, and shortcuts that are not a fixed page: **My Team** (`/team/<myTeamId>`, a dot
-  and a trip to Settings until a team is chosen), **Tonight** (Box Scores on today),
-  **Recent** (the last two pages opened from outside the bar; the ☰ menu before there
+  and a trip to Settings until a team is chosen), **Recent** (the last two pages opened from outside the bar; the ☰ menu before there
   are any) and **Search**. To add a tab, add it to the catalog; a shortcut with `to()`
   and `match()` needs nothing else. Unknown ids in storage are dropped, so a retired
   page never breaks the bar.

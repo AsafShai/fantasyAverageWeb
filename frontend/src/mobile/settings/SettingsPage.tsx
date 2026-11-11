@@ -138,7 +138,7 @@ export default function SettingsPage() {
           <section key={group} className="mr-set-group" aria-label={group}>
             <h4 className="mr-set-h4">
               {group}
-              {group === 'Shortcuts' && <span className="mr-set-h4-note"> · follow your team and the calendar</span>}
+              {group === 'Shortcuts' && <span className="mr-set-h4-note"> · jump to your team, recent pages or search</span>}
             </h4>
             <ul className="mr-set-list">
               {items.map((tab) => (

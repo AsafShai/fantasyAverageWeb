@@ -77,16 +77,6 @@ describe('tab bar from saved settings', () => {
     expect(within(bar()).queryByText('Standings')).not.toBeInTheDocument()
   })
 
-  it('Tonight opens Box Scores and is current there, but not on another date', () => {
-    localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ tabs: ['home', 'tonight', 'standings'], labels: true }))
-    const { unmount } = renderShell('/box-scores')
-    expect(within(bar()).getByRole('link', { name: 'Tonight' })).toHaveAttribute('href', '/box-scores')
-    expect(within(bar()).getByRole('link', { name: 'Tonight' })).toHaveAttribute('aria-current', 'page')
-    unmount()
-    renderShell('/box-scores?date=2026-10-01')
-    expect(within(bar()).getByRole('link', { name: 'Tonight' })).not.toHaveAttribute('aria-current')
-  })
-
   it('My Team with no team chosen goes to Settings and wears a dot', () => {
     localStorage.setItem(TAB_PREFS_KEY, JSON.stringify({ tabs: ['home', 'my-team', 'standings'], labels: true }))
     renderShell('/')
@@ -136,20 +126,20 @@ describe('Settings page', () => {
     expect(screen.getByRole('button', { name: 'Move Standings earlier' })).toBeDisabled()
 
     // add a shortcut; the bar is full at 5
-    await userEvent.click(screen.getByRole('button', { name: 'Add Tonight' }))
-    expect(barNames()).toEqual(['Standings', 'Teams', 'Trade', 'Player Ranks', 'Tonight'])
+    await userEvent.click(screen.getByRole('button', { name: 'Add Box Scores' }))
+    expect(barNames()).toEqual(['Standings', 'Teams', 'Trade', 'Player Ranks', 'Box Scores'])
     expect(screen.getByRole('status')).toHaveTextContent('The bar is full')
     expect(screen.getByRole('button', { name: 'Add Injuries' })).toBeDisabled()
 
     // minimum 3
-    for (const name of ['Tonight', 'Player Ranks']) await userEvent.click(screen.getByRole('button', { name: `Remove ${name}` }))
+    for (const name of ['Box Scores', 'Player Ranks']) await userEvent.click(screen.getByRole('button', { name: `Remove ${name}` }))
     expect(screen.getByRole('button', { name: 'Remove Trade' })).toBeDisabled()
 
     // preset, labels, reset
     await userEvent.click(screen.getByRole('button', { name: 'Game night' }))
-    expect(barNames()).toEqual(['Tonight', 'My Team', 'Standings', 'Injuries', 'Search'])
+    expect(barNames()).toEqual(['Box Scores', 'My Team', 'Standings', 'Injuries', 'Search'])
     await userEvent.click(screen.getByRole('switch', { name: 'Show tab labels' }))
-    expect(within(bar()).queryByText('Tonight')).not.toBeInTheDocument()
+    expect(within(bar()).queryByText('Box Scores')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(barNames()).toEqual(['Home', 'Standings', 'Teams', 'Player Ranks', 'Trade'])
   })
