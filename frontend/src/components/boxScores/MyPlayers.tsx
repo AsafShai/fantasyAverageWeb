@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import { useGetGameBoxScoreQuery } from '../../store/api/fantasyApi'
-import { BOX_LINE_COLUMNS, JerseyNumber, LiveMark, OnCourtMark, PlayerStatus } from './BoxScorePanel'
+import { BOX_LINE_COLUMNS, FantasyTeamTag, JerseyNumber, LiveMark, OnCourtMark, PlayerStatus } from './BoxScorePanel'
+import { resolveFantasyContext } from './fantasyLineupMark'
 import { fouledOut } from './lineupGroups'
 import { clusterByGame, myLine, type MyAppearance, type MyGroups } from './myPlayerGroups'
 import { gameClockLabel } from './tipTime'
-import type { BoxPlayerLine, BoxScoreGame } from '../../types/boxScore'
+import type { BoxPlayerLine, BoxScoreGame, FantasyNightContext } from '../../types/boxScore'
 
 function summary(groups: MyGroups): string {
   const parts = [
@@ -94,14 +95,16 @@ function StatStrip({ line, hideLabelsOnWide = false }: { line: BoxPlayerLine; hi
   )
 }
 
-function PlayerIdentity({ player, jersey = '', live = false, onCourt = false, ejected = false, fouled = false }: {
+function PlayerIdentity({ player, jersey = '', live = false, onCourt = false, ejected = false, fouled = false, fantasyPlayers }: {
   player: MyAppearance
   jersey?: string
   live?: boolean
   onCourt?: boolean
   ejected?: boolean
   fouled?: boolean
+  fantasyPlayers?: Record<string, FantasyNightContext>
 }) {
+  const fantasy = resolveFantasyContext(player.playerId, undefined, fantasyPlayers)
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
       {player.teamLogo
@@ -117,14 +120,16 @@ function PlayerIdentity({ player, jersey = '', live = false, onCourt = false, ej
       {live && <LiveMark />}
       {onCourt && <OnCourtMark />}
       <PlayerStatus ejected={ejected} fouledOut={fouled} />
+      {fantasy && <FantasyTeamTag value={fantasy} />}
     </div>
   )
 }
 
-function UpcomingCluster({ game, players, onOpenGame }: {
+function UpcomingCluster({ game, players, onOpenGame, fantasyPlayers }: {
   game: BoxScoreGame
   players: MyAppearance[]
   onOpenGame: (gameId: string) => void
+  fantasyPlayers?: Record<string, FantasyNightContext>
 }) {
   return (
     <li className="px-4 py-2">
@@ -137,19 +142,20 @@ function UpcomingCluster({ game, players, onOpenGame }: {
       </button>
       <ul>
         {players.map(player => (
-          <li key={player.playerId} className="py-1"><PlayerIdentity player={player} /></li>
+          <li key={player.playerId} className="py-1"><PlayerIdentity player={player} fantasyPlayers={fantasyPlayers} /></li>
         ))}
       </ul>
     </li>
   )
 }
 
-function ResultCluster({ game, players, hide, live, onOpenGame }: {
+function ResultCluster({ game, players, hide, live, onOpenGame, fantasyPlayers }: {
   game: BoxScoreGame
   players: MyAppearance[]
   hide: boolean
   live: boolean
   onOpenGame: (gameId: string) => void
+  fantasyPlayers?: Record<string, FantasyNightContext>
 }) {
   const box = useGetGameBoxScoreQuery(game.game_id, { pollingInterval: live ? 60_000 : 0 })
   const ready = box.data?.game_id === game.game_id ? box.data : undefined
@@ -195,6 +201,7 @@ function ResultCluster({ game, players, hide, live, onOpenGame }: {
                   onCourt={!hide && live && found?.kind === 'played' && found.line.on_court}
                   ejected={!hide && found?.kind === 'played' && found.line.ejected}
                   fouled={!hide && found?.kind === 'played' && fouledOut(found.line.pf)}
+                  fantasyPlayers={fantasyPlayers}
                 />
               </div>
               <div className="min-w-0 w-full flex-1">
@@ -225,10 +232,11 @@ function Group({ title, live = false, children }: { title: string; live?: boolea
  * Every player from My Team who has a game on this slate. Lines for games
  * that have tipped stay hidden while No spoilers is on, until Show results.
  */
-export default function MyPlayers({ groups, spoilerGuard, onOpenGame }: {
+export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPlayers }: {
   groups: MyGroups
   spoilerGuard: boolean
   onOpenGame: (gameId: string) => void
+  fantasyPlayers?: Record<string, FantasyNightContext>
 }) {
   const hasResults = groups.live.length + groups.done.length > 0
   const [open, setOpen] = useState(false)
@@ -279,21 +287,21 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame }: {
       {open && live.length > 0 && (
         <Group title="Playing" live>
           {live.map(cluster => (
-            <ResultCluster key={cluster.game.game_id} game={cluster.game} players={cluster.players} hide={hide} live onOpenGame={onOpenGame} />
+            <ResultCluster key={cluster.game.game_id} game={cluster.game} players={cluster.players} hide={hide} live onOpenGame={onOpenGame} fantasyPlayers={fantasyPlayers} />
           ))}
         </Group>
       )}
       {open && upcoming.length > 0 && (
         <Group title="Yet to play">
           {upcoming.map(cluster => (
-            <UpcomingCluster key={cluster.game.game_id} game={cluster.game} players={cluster.players} onOpenGame={onOpenGame} />
+            <UpcomingCluster key={cluster.game.game_id} game={cluster.game} players={cluster.players} onOpenGame={onOpenGame} fantasyPlayers={fantasyPlayers} />
           ))}
         </Group>
       )}
       {open && done.length > 0 && (
         <Group title="Finished">
           {done.map(cluster => (
-            <ResultCluster key={cluster.game.game_id} game={cluster.game} players={cluster.players} hide={hide} live={false} onOpenGame={onOpenGame} />
+            <ResultCluster key={cluster.game.game_id} game={cluster.game} players={cluster.players} hide={hide} live={false} onOpenGame={onOpenGame} fantasyPlayers={fantasyPlayers} />
           ))}
         </Group>
       )}

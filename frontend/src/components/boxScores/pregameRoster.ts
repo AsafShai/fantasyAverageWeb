@@ -81,15 +81,20 @@ export function mineCount(
   game: BoxScoreGame,
   players: { player_id?: number | null; pro_team: string }[],
   outIds: ReadonlySet<string>,
+  playedByGame?: ReadonlyMap<string, ReadonlySet<string>>,
 ): number {
   const teams = new Set([
     fantasyProTeam(game.away.abbreviation),
     fantasyProTeam(game.home.abbreviation),
   ])
+  const played = game.status === 'final' ? playedByGame?.get(game.game_id) : undefined
   let count = 0
   for (const player of players) {
     if (!player.pro_team || !teams.has(player.pro_team)) continue
     if (game.status === 'scheduled' && player.player_id != null && outIds.has(String(player.player_id))) continue
+    if (played) {
+      if (player.player_id == null || !played.has(String(player.player_id))) continue
+    }
     count += 1
   }
   return count

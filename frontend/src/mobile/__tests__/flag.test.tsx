@@ -1,5 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../config/featureFlags', () => ({
+  FF_MOBILE_REDESIGN: false,
+}))
+
 import { FF_OVERRIDE_KEY, applyFeatureFlagQuery, isMobileRedesignFlagOn, useMobileRedesign } from '../flag'
 
 function setUrl(path: string) {
@@ -7,7 +12,10 @@ function setUrl(path: string) {
 }
 
 describe('mobile redesign flag', () => {
-  beforeEach(() => setUrl('/'))
+  beforeEach(() => {
+    localStorage.clear()
+    setUrl('/')
+  })
 
   it('is off by default (build flag off, no override)', () => {
     expect(isMobileRedesignFlagOn(false)).toBe(false)
@@ -54,6 +62,7 @@ describe('useMobileRedesign', () => {
   let listeners: (() => void)[] = []
 
   beforeEach(() => {
+    localStorage.clear()
     phone = false
     listeners = []
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
