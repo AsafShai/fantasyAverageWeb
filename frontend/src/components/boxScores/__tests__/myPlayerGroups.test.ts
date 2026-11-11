@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clusterByGame, filterMineAppearances, groupAppearances, myAppearances, myLine, playedMinutesByGame } from '../myPlayerGroups'
+import { clusterByGame, filterMineAppearances, filterMyGroups, groupAppearances, isFantasyActiveLineup, myAppearances, myLine, playedMinutesByGame } from '../myPlayerGroups'
 import type { BoxScoreGame, GameBoxScore, SlateLine, SlateValues } from '../../../types/boxScore'
 
 const lakers: BoxScoreGame = {
@@ -123,5 +123,25 @@ describe('myLine', () => {
     expect(myLine(box, '1').kind).toBe('played')
     expect(myLine(box, '9')).toEqual({ kind: 'dnp', reason: "Coach's Decision", jersey: '0' })
     expect(myLine(box, '50')).toEqual({ kind: 'out' })
+  })
+})
+
+describe('active lineup filter', () => {
+  const fantasy = {
+    '23': { fantasy_team: 'DOR', started: true, lineup_slot: 'PG' },
+    '24': { fantasy_team: 'DOR', started: false, lineup_slot: 'BE' },
+  }
+
+  it('treats only started slots as active', () => {
+    expect(isFantasyActiveLineup('23', fantasy)).toBe(true)
+    expect(isFantasyActiveLineup('24', fantasy)).toBe(false)
+    expect(isFantasyActiveLineup('99', fantasy)).toBe(false)
+  })
+
+  it('filters grouped appearances', () => {
+    const rows = myAppearances([player('LeBron James', 'LAL', 23), player('Lauri Markkanen', 'UTA', 24)], [lakers])
+    const groups = groupAppearances(rows)
+    const active = filterMyGroups(groups, row => isFantasyActiveLineup(row.playerId, fantasy))
+    expect(active.upcoming.map(row => row.name)).toEqual(['LeBron James'])
   })
 })

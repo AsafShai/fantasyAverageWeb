@@ -1,5 +1,6 @@
+import { fantasyLineupState, resolveFantasyContext } from './fantasyLineupMark'
 import { fantasyProTeam } from './proTeam'
-import type { BoxPlayerLine, BoxScoreGame, GameBoxScore, SlateValues } from '../../types/boxScore'
+import type { BoxPlayerLine, BoxScoreGame, FantasyNightContext, GameBoxScore, SlatePlayerValue, SlateValues } from '../../types/boxScore'
 
 export interface MyAppearance {
   playerId: string
@@ -102,6 +103,22 @@ export function groupAppearances(rows: MyAppearance[]): MyGroups {
     else groups.upcoming.push(row)
   }
   return groups
+}
+
+export function isFantasyActiveLineup(
+  playerId: string,
+  fantasyPlayers?: Record<string, FantasyNightContext>,
+  values?: Map<string, SlatePlayerValue>,
+): boolean {
+  return fantasyLineupState(resolveFantasyContext(playerId, values, fantasyPlayers)) === 'started'
+}
+
+export function filterMyGroups(groups: MyGroups, keep: (row: MyAppearance) => boolean): MyGroups {
+  return {
+    upcoming: groups.upcoming.filter(keep),
+    live: groups.live.filter(keep),
+    done: groups.done.filter(keep),
+  }
 }
 
 /** The player's line in a fetched box, or that he did not play. */

@@ -1,12 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import PlayerNameLink from '../PlayerNameLink'
 import { useGetGameBoxScoreQuery } from '../../store/api/fantasyApi'
 import { BOX_LINE_COLUMNS, FantasyTeamTag, JerseyNumber, LiveMark, OnCourtMark, PlayerStatus } from './BoxScorePanel'
 import { resolveFantasyContext } from './fantasyLineupMark'
 import { fouledOut } from './lineupGroups'
-import { clusterByGame, myLine, type MyAppearance, type MyGroups } from './myPlayerGroups'
+import { FANTASY_LINEUP_DOT_CLASS } from './fantasyLineupMark'
+import { clusterByGame, filterMyGroups, isFantasyActiveLineup, myLine, type MyAppearance, type MyGroups } from './myPlayerGroups'
 import { gameClockLabel } from './tipTime'
-import type { BoxPlayerLine, BoxScoreGame, FantasyNightContext } from '../../types/boxScore'
+import type { BoxPlayerLine, BoxScoreGame, FantasyNightContext, SlatePlayerValue } from '../../types/boxScore'
 
 function summary(groups: MyGroups): string {
   const parts = [
@@ -232,21 +233,31 @@ function Group({ title, live = false, children }: { title: string; live?: boolea
  * Every player from My Team who has a game on this slate. Lines for games
  * that have tipped stay hidden while No spoilers is on, until Show results.
  */
-export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPlayers }: {
+export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPlayers, playerValues }: {
   groups: MyGroups
   spoilerGuard: boolean
   onOpenGame: (gameId: string) => void
   fantasyPlayers?: Record<string, FantasyNightContext>
+  playerValues?: Map<string, SlatePlayerValue>
 }) {
   const hasResults = groups.live.length + groups.done.length > 0
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState(false)
+  const [activeOnly, setActiveOnly] = useState(false)
   const hide = spoilerGuard && !shown
-  const label = summary(groups)
-  const upcoming = clusterByGame(groups.upcoming)
-  const live = clusterByGame(groups.live)
-  const done = clusterByGame(groups.done)
-  const empty = !label
+  const canFilterLineup = Boolean(fantasyPlayers && Object.keys(fantasyPlayers).length > 0)
+  const visibleGroups = useMemo(() => {
+    if (!activeOnly || !canFilterLineup) return groups
+    const keepActive = (row: MyAppearance) => isFantasyActiveLineup(row.playerId, fantasyPlayers, playerValues)
+    return filterMyGroups(groups, keepActive)
+  }, [activeOnly, canFilterLineup, fantasyPlayers, groups, playerValues])
+  const label = summary(visibleGroups)
+  const upcoming = clusterByGame(visibleGroups.upcoming)
+  const live = clusterByGame(visibleGroups.live)
+  const done = clusterByGame(visibleGroups.done)
+  const rosteredOnSlate = groups.upcoming.length + groups.live.length + groups.done.length
+  const empty = rosteredOnSlate === 0
+  const filteredEmpty = !empty && activeOnly && !label
 
   return (
     <section aria-label="My players" className="mb-4 w-full overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm dark:border-blue-500/30 dark:bg-gray-900">
@@ -279,9 +290,50 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPla
           </div>
         )}
       </div>
+      {open && canFilterLineup && !empty && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-blue-100 px-4 py-2 dark:border-gray-800">
+          <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Show</span>
+          <div
+            role="group"
+            aria-label="Which of my players to list"
+            className="inline-flex rounded-full bg-blue-50 p-0.5 ring-1 ring-blue-100 dark:bg-gray-800 dark:ring-gray-700"
+          >
+            <button
+              type="button"
+              aria-pressed={!activeOnly}
+              onClick={() => setActiveOnly(false)}
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                !activeOnly
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+              }`}
+            >
+              Full roster
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeOnly}
+              onClick={() => setActiveOnly(true)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                activeOnly
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+              }`}
+            >
+              <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${FANTASY_LINEUP_DOT_CLASS.started}`} aria-hidden />
+              Active lineup
+            </button>
+          </div>
+        </div>
+      )}
       {open && empty && (
         <p className="border-t border-blue-100 px-4 py-4 text-sm text-gray-400 dark:border-gray-800">
           None of your players are on this slate.
+        </p>
+      )}
+      {open && filteredEmpty && (
+        <p className="border-t border-blue-100 px-4 py-4 text-sm text-gray-400 dark:border-gray-800">
+          No active-lineup players on this slate. Bench and IR are hidden — switch to Full roster to see everyone.
         </p>
       )}
       {open && live.length > 0 && (
