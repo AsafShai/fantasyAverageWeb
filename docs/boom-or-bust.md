@@ -26,6 +26,51 @@ reference season. Positive = surprise, negative = disappointment. A player witho
 model estimate yet (fewer than 10 career games, or not yet in the model's data) is
 scored on metric 1 alone, ranked among last season's rows without an estimate, and tagged "history only" on the page.
 
+**The bust side** (November 2026). The league ranked the 20 worst nights of the
+season's first three weeks (round 1: three ballots, 10 picks each, in order) and
+disagreed with the score: 28 points of Durant sat at #6, Trae Young's 4 points at
+#20. The bust side still blends the same two metrics, but reads them differently
+from the boom side (all in `surprise.py`, each constant with the night that
+motivated it):
+
+- points at 2.5 times the weight, the free-throw impact eased to 0.5 (`BUST_Z_WEIGHTS`);
+- every column on a rarity scale, its rank in the reference season as a normal
+  score (`rarity_normalize`), instead of standard deviations, where a counting
+  stat stops at zero while the shooting impacts run to −5;
+- one collapse above a string of medium dips: each rarity score to the power 1.5
+  (`BUST_COLLAPSE_POWER`);
+- his whole history at 0.5 instead of 0.1 and his last 5 at 0.25 instead of 0.5
+  (`BUST_WINDOW_WEIGHTS`);
+- the volume weight capped at 30 minutes (`BUST_VOLUME_CAP`): a short stint still
+  softens a bust, 40 minutes no longer deepen it.
+
+Agreement with the round 1 ballots (NDCG@10) went from 0.63 to 0.93. A second
+round on the new score's own top 30 (three ballots, 15 picks; the voters saw the
+score's order, so it is not a blind test) agrees at 0.97; the voters agree with
+each other at 0.92–0.96 in both rounds. The booms' scores are unchanged.
+
+Checked against both rounds together and found no better: 108 combinations of
+the constants above; each stat's weight moved alone from 0 to 4 (every one sits
+at its best value or within noise of it; without points agreement falls to 0.40);
+the averages' share of the blend (0.75 best of 0.5–0.9); the recent windows.
+Tried and dropped: a lower weight on both shooting impacts (round 1 alone: 0.42),
+no volume weight on busts (early exits of 6–8 minutes took the top), points as a
+plain drop from his average, and a bust scaled by what the player normally gives
+(no gain, and it lifted nights the league gave no vote).
+
+Out of sample on 2026-27 the score leans to busts at ±1.8 (2.8% / 2.1%), not on
+the page's bars (35 busts past −2.2, 34 booms past 2.1); walk-forward inside
+2025-26 (fitted on the first half, scored on the second) it does not lean more
+than before the change (3.0% busts both ways), so the lean is October's, players
+under their long-run averages, and is to be watched as the season goes on. The
+constants were tuned on 50 nights and three voters; a blind ballot on later
+nights is the real test.
+
+After the merge the nights already stored have to be scored again, or the page
+mixes two scores: `uv run python scripts/rescore_boom_or_bust.py --database-url …`
+(from `backend/`, on a checkout with the new score; it prints the booms and busts
+before and after).
+
 **Per-stat verdicts** (the coloured cells): for every stat of a scored row the same
 two ingredients are blended for that stat alone, its z against his own windows and
 the model's standardized error for it (makes, not percentages, for FG/FT), with the
