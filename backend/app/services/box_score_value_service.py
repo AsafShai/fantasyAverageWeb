@@ -18,7 +18,7 @@ from datetime import date
 from app.exceptions import DataSourceError
 from app.services.box_score_service import _eastern_today, boxscore_for, scoreboard_for
 from app.services.data_provider import get_data_provider
-from app.services.surprise_service import fantasy_roster_for
+from app.services.surprise_service import NOT_STARTED_SLOTS, fantasy_roster_for
 from app.utils.constants import RANKING_CATEGORIES
 
 logger = logging.getLogger(__name__)
@@ -115,6 +115,34 @@ async def _roster_on(day: date) -> dict[int, dict]:
     return roster
 
 
+def _started(slot: str | None) -> bool | None:
+    if not slot:
+        return None
+    return slot not in NOT_STARTED_SLOTS
+
+
+def _fantasy_player_context(
+    team_id: int | None,
+    slot: str | None,
+    abbrevs: dict[int, str],
+    names: dict[int, str],
+) -> dict:
+    if team_id is None:
+        return {
+            "fantasy_team": None,
+            "fantasy_team_name": None,
+            "lineup_slot": None,
+            "started": None,
+        }
+    abbrev = abbrevs.get(team_id, str(team_id))
+    return {
+        "fantasy_team": abbrev,
+        "fantasy_team_name": names.get(team_id) or abbrev,
+        "lineup_slot": slot,
+        "started": _started(slot),
+    }
+
+
 def _ttl(games: list[dict], day: date, complete: bool) -> float:
     if complete and day < _eastern_today():
         return 6 * 60 * 60
@@ -170,11 +198,20 @@ async def slate_values(day: date) -> dict:
     (categories, reverse), roster, (abbrevs, names) = await asyncio.gather(
         _league_categories(), _roster_on(day), _fantasy_teams(),
     )
+    fantasy_players: dict[str, dict] = {}
+    for player_id, owner in roster.items():
+        fantasy_players[str(player_id)] = _fantasy_player_context(
+            owner.get("team_id"), owner.get("slot"), abbrevs, names,
+        )
+
     for row in rows:
         owner = roster.get(int(row["player_id"])) if row["player_id"].isdigit() else None
         team_id = owner["team_id"] if owner else None
+        slot = owner.get("slot") if owner else None
         row["fantasy_team"] = abbrevs.get(team_id, str(team_id)) if team_id is not None else None
         row["fantasy_team_name"] = (names.get(team_id) or row["fantasy_team"]) if team_id is not None else None
+        row["lineup_slot"] = slot
+        row["started"] = _started(slot)
 
     complete = bool(games) and all(game["status"] == "final" for game in games)
     payload = {
@@ -184,6 +221,7 @@ async def slate_values(day: date) -> dict:
         "categories": categories,
         "reverse_categories": [c for c in categories if c in reverse],
         "players": rows,
+        "fantasy_players": fantasy_players,
     }
     _cache[key] = (time.monotonic() + _ttl(games, day, complete), payload)
     return payload
