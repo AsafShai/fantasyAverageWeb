@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { useGetNbaTeamsListQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -153,7 +153,8 @@ function DepthChartView({ teamId }: { teamId: string }) {
 export default function NbaTeams() {
   const { data: teams, isLoading, error } = useGetNbaTeamsListQuery();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedTeamId, setSelectedTeamId] = useState<string>(searchParams.get('team') ?? '');
+  // URL is the source of truth so in-page navigation (e.g. global search) switches teams.
+  const selectedTeamId = searchParams.get('team') ?? '';
   const openedFromLink = useRef(Boolean(searchParams.get('team')));
   const mobileRedesign = useMobileRedesign();
 
@@ -164,7 +165,6 @@ export default function NbaTeams() {
   }, [isLoading, selectedTeamId]);
 
   const handleSelectTeam = (teamId: string) => {
-    setSelectedTeamId(teamId);
     setSearchParams(teamId ? { team: teamId } : {}, { replace: true });
   };
 

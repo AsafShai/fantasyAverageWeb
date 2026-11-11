@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Link } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TeamDepthChart } from '../../types/api';
 import { renderWithProviders } from '../../test/helpers';
@@ -180,6 +181,40 @@ describe('NbaTeams page', () => {
     );
     const inj = screen.queryByRole('checkbox', { name: /^out$/i });
     expect(inj).not.toBeChecked();
+  });
+
+  it('follows in-app navigation to another team via ?team= (global search)', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('depthchart')) {
+          const id = url.match(/nba-teams\/(\d+)/)?.[1];
+          return jsonResponse({ ...depthChart, team_id: id ?? '13', team_name: id === '14' ? 'Celtics' : 'Lakers' });
+        }
+        if (url.includes('/nba-teams/')) {
+          return jsonResponse([...nbaTeams, { team_id: '14', abbreviation: 'BOS', team_name: 'Celtics' }]);
+        }
+        return new Response('not found', { status: 404 });
+      }),
+    );
+    renderWithProviders(
+      <>
+        <Link to="/nba-teams?team=14">go celtics</Link>
+        <NbaTeams />
+      </>,
+      { route: '/nba-teams?team=13' },
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 2, name: /lakers/i })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByText('go celtics'));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 2, name: /celtics/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('combobox')).toHaveValue('14');
   });
 
   it('loading teams shows spinner', () => {
