@@ -41,6 +41,7 @@ const PreDraftRankingsPage = lazy(() => import('./pages/draft/PreDraftRankingsPa
 const MockDraftPage = lazy(() => import('./pages/draft/MockDraftPage'))
 const MoversPage = lazy(() => import('./pages/draft/MoversPage'))
 const LeagueActivity = lazy(() => import('./pages/LeagueActivity'))
+const Settings = lazy(() => import('./pages/Settings'))
 
 /** The Scatter Map's old address: links to it keep working, team filters included. */
 function ShootingMapRedirect() {
@@ -88,6 +89,7 @@ function App() {
               <Route path="scatter-map" element={<ShootingMap />} />
               <Route path="shooting-map" element={<ShootingMapRedirect />} />
               {FF_LEAGUE_ACTIVITY && <Route path="activity" element={<LeagueActivity />} />}
+              <Route path="settings" element={<Settings />} />
               <Route path="minigames" element={<Minigames />} />
               <Route path="minigames/hangman" element={<HangmanGame />} />
               <Route path="minigames/who-he-play-for" element={<WhoHePlayForGame />} />
