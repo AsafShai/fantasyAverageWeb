@@ -20,8 +20,6 @@
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--mr-primary-soft); color: var(--mr-primary);
 }
-/* Shortcuts read as a different kind of tab from pages. */
-.mr-set-ico-shortcut { background: var(--mr-shortcut-bg); color: var(--mr-shortcut-fg); }
 .mr-set-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 15px; font-weight: 600; text-align: left; }
 .mr-set-sub { font-size: 12px; font-weight: 400; color: var(--mr-muted); line-height: 1.35; }
 
