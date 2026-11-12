@@ -394,6 +394,8 @@ export default function BoxScores() {
                 spoilerGuard={noSpoilers}
                 fantasyPlayers={fantasyPlayers}
                 playerValues={valueMap}
+                leagueCategories={values?.categories}
+                slateComplete={values?.complete}
                 onOpenGame={openFromMyPlayers}
               />
             )}
@@ -484,6 +486,8 @@ export default function BoxScores() {
               spoilerGuard={noSpoilers}
               fantasyPlayers={fantasyPlayers}
               playerValues={valueMap}
+              leagueCategories={values?.categories}
+              slateComplete={values?.complete}
               onOpenGame={selectGame}
             />
           )}
