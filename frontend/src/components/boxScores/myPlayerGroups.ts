@@ -121,6 +121,116 @@ export function filterMyGroups(groups: MyGroups, keep: (row: MyAppearance) => bo
   }
 }
 
+/** Counting totals for rostered players who logged minutes on a completed slate. */
+export interface MySlateTotals {
+  players: number
+  min: number
+  pts: number
+  reb: number
+  ast: number
+  stl: number
+  blk: number
+  tov: number
+  threePm: number
+  fg3a: number
+  fgm: number
+  fga: number
+  ftm: number
+  fta: number
+  oreb: number
+  dreb: number
+  pf: number
+}
+
+export function mySlateTotals(
+  appearances: MyAppearance[],
+  playerValues?: Map<string, SlatePlayerValue>,
+): MySlateTotals | null {
+  if (!playerValues) return null
+  const totals: MySlateTotals = {
+    players: 0,
+    min: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, threePm: 0, fg3a: 0,
+    fgm: 0, fga: 0, ftm: 0, fta: 0, oreb: 0, dreb: 0, pf: 0,
+  }
+  for (const row of appearances) {
+    const line = playerValues.get(row.playerId)
+    const stats = line?.stats
+    if (!stats || (stats.MIN ?? 0) <= 0) continue
+    totals.players += 1
+    totals.min += stats.MIN ?? 0
+    totals.pts += stats.PTS ?? 0
+    totals.reb += stats.REB ?? 0
+    totals.ast += stats.AST ?? 0
+    totals.stl += stats.STL ?? 0
+    totals.blk += stats.BLK ?? 0
+    totals.tov += stats.TO ?? 0
+    totals.threePm += stats['3PM'] ?? 0
+    totals.fg3a += stats['3PA'] ?? 0
+    totals.fgm += stats.FGM ?? 0
+    totals.fga += stats.FGA ?? 0
+    totals.ftm += stats.FTM ?? 0
+    totals.fta += stats.FTA ?? 0
+    totals.oreb += stats.OREB ?? 0
+    totals.dreb += stats.DREB ?? 0
+    totals.pf += stats.PF ?? 0
+  }
+  return totals.players > 0 ? totals : null
+}
+
+/** Percentage category -> makes and attempts in a slate line's stats dict. */
+const SLATE_PCT_PARTS: Record<string, [string, string]> = {
+  'FG%': ['FGM', 'FGA'],
+  'FT%': ['FTM', 'FTA'],
+  '3P%': ['3PM', '3PA'],
+}
+
+export interface MySlateCategoryTotals {
+  players: number
+  min: number
+  /** Aggregated value per league category (percentages as 0–1 ratios). */
+  categories: Record<string, number>
+  /** Combined makes/attempts for percentage scoring categories (FG%, FT%, 3P%). */
+  shooting: Partial<Record<keyof typeof SLATE_PCT_PARTS, { made: number; att: number }>>
+}
+
+/** Sum each scoring category across my players who logged minutes (percentages from combined makes/attempts). */
+export function mySlateCategoryTotals(
+  appearances: MyAppearance[],
+  playerValues: Map<string, SlatePlayerValue> | undefined,
+  categories: string[],
+): MySlateCategoryTotals | null {
+  if (!playerValues || categories.length === 0) return null
+  const sums = Object.fromEntries(categories.filter(c => !(c in SLATE_PCT_PARTS)).map(c => [c, 0])) as Record<string, number>
+  const parts = Object.fromEntries(
+    categories.filter(c => c in SLATE_PCT_PARTS).map(c => [c, { made: 0, att: 0 }]),
+  ) as Record<string, { made: number; att: number }>
+  let players = 0
+  let min = 0
+  for (const row of appearances) {
+    const line = playerValues.get(row.playerId)
+    const stats = line?.stats
+    if (!stats || (stats.MIN ?? 0) <= 0) continue
+    players += 1
+    min += stats.MIN ?? 0
+    for (const cat of categories) {
+      const pair = SLATE_PCT_PARTS[cat]
+      if (pair) {
+        const [madeKey, attKey] = pair
+        parts[cat].made += stats[madeKey] ?? 0
+        parts[cat].att += stats[attKey] ?? 0
+      } else {
+        sums[cat] = (sums[cat] ?? 0) + (stats[cat] ?? 0)
+      }
+    }
+  }
+  if (players === 0) return null
+  const out: Record<string, number> = { ...sums }
+  for (const [cat, { made, att }] of Object.entries(parts)) {
+    out[cat] = att > 0 ? made / att : 0
+  }
+  return { players, min, categories: out, shooting: parts }
+}
+
 /** The player's line in a fetched box, or that he did not play. */
 export function myLine(box: GameBoxScore, playerId: string): MyLine {
   for (const team of [box.away, box.home]) {

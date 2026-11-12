@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { clusterByGame, filterMineAppearances, filterMyGroups, groupAppearances, isFantasyActiveLineup, myAppearances, myLine, playedMinutesByGame } from '../myPlayerGroups'
-import type { BoxScoreGame, GameBoxScore, SlateLine, SlateValues } from '../../../types/boxScore'
+import { clusterByGame, filterMineAppearances, filterMyGroups, groupAppearances, isFantasyActiveLineup, myAppearances, myLine, mySlateCategoryTotals, mySlateTotals, playedMinutesByGame } from '../myPlayerGroups'
+import type { BoxScoreGame, GameBoxScore, SlatePlayerValue, SlateLine, SlateValues } from '../../../types/boxScore'
+
+function slateValue(stats: Record<string, number>): SlatePlayerValue {
+  return { stats } as unknown as SlatePlayerValue
+}
 
 const lakers: BoxScoreGame = {
   game_id: '1',
@@ -123,6 +127,35 @@ describe('myLine', () => {
     expect(myLine(box, '1').kind).toBe('played')
     expect(myLine(box, '9')).toEqual({ kind: 'dnp', reason: "Coach's Decision", jersey: '0' })
     expect(myLine(box, '50')).toEqual({ kind: 'out' })
+  })
+})
+
+describe('mySlateTotals', () => {
+  it('sums counting stats for players who played', () => {
+    const rows = myAppearances([player('LeBron James', 'LAL', 23), player('Bench', 'LAL', 99)], [lakers])
+    const values = new Map<string, SlatePlayerValue>([
+      ['23', slateValue({ MIN: 30, PTS: 25, REB: 8, AST: 5, STL: 1, BLK: 0, TO: 2, '3PM': 3, '3PA': 7, FGM: 10, FGA: 18, FTM: 2, FTA: 2, OREB: 1, DREB: 7, PF: 2 })],
+      ['99', slateValue({ MIN: 0, PTS: 0 })],
+    ])
+    const totals = mySlateTotals(rows, values)
+    expect(totals).toMatchObject({ players: 1, min: 30, pts: 25, reb: 8, ast: 5, threePm: 3, fg3a: 7, fgm: 10, fga: 18 })
+  })
+})
+
+describe('mySlateCategoryTotals', () => {
+  it('sums counting categories and blends percentage categories from makes/attempts', () => {
+    const rows = myAppearances([player('LeBron James', 'LAL', 23), player('Buddy', 'LAL', 24)], [lakers])
+    const values = new Map<string, SlatePlayerValue>([
+      ['23', slateValue({ MIN: 30, PTS: 20, REB: 5, FGM: 8, FGA: 16, FTM: 4, FTA: 5 })],
+      ['24', slateValue({ MIN: 20, PTS: 10, REB: 3, FGM: 4, FGA: 8, FTM: 1, FTA: 1 })],
+    ])
+    const cats = ['PTS', 'REB', 'FG%', 'FT%'] as const
+    const totals = mySlateCategoryTotals(rows, values, [...cats])
+    expect(totals).toMatchObject({ players: 2, min: 50, categories: { PTS: 30, REB: 8 } })
+    expect(totals?.categories['FG%']).toBeCloseTo(12 / 24)
+    expect(totals?.categories['FT%']).toBeCloseTo(5 / 6)
+    expect(totals?.shooting['FG%']).toEqual({ made: 12, att: 24 })
+    expect(totals?.shooting['FT%']).toEqual({ made: 5, att: 6 })
   })
 })
 
