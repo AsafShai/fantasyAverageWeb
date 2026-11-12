@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clusterByGame, filterMineAppearances, filterMyGroups, groupAppearances, isFantasyActiveLineup, myAppearances, myLine, mySlateCategoryTotals, mySlateTotals, playedMinutesByGame } from '../myPlayerGroups'
+import { clusterByGame, filterMineAppearances, filterMyGroups, groupAppearances, isFantasyActiveLineup, minePlayersFromRosterDay, myAppearances, myLine, mySlateCategoryTotals, mySlateTotals, playedMinutesByGame } from '../myPlayerGroups'
 import type { BoxScoreGame, GameBoxScore, SlatePlayerValue, SlateLine, SlateValues } from '../../../types/boxScore'
 
 function slateValue(stats: Record<string, number>): SlatePlayerValue {
@@ -98,8 +98,18 @@ describe('playedMinutesByGame', () => {
   })
 })
 
+describe('minePlayersFromRosterDay', () => {
+  it('omits players with no_game', () => {
+    const rows = minePlayersFromRosterDay([
+      { player_id: 1, player_name: 'A', positions: ['G'], pro_team: 'LAL', lineup_slot: 'PG', opponent: 'UTA', status: 'played', stats: null, added: false, dropped: false },
+      { player_id: 2, player_name: 'B', positions: ['G'], pro_team: 'BOS', lineup_slot: 'BE', opponent: null, status: 'no_game', stats: null, added: false, dropped: false },
+    ])
+    expect(rows.map(r => r.player_name)).toEqual(['A'])
+  })
+})
+
 describe('filterMineAppearances', () => {
-  it('drops rostered players who did not play on a final slate', () => {
+  it('can drop rostered players who did not play on a final slate when playedByGame is passed', () => {
     const done = {
       ...lakers,
       game_id: '3',

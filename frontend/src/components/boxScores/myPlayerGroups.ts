@@ -1,5 +1,6 @@
 import { fantasyLineupState, resolveFantasyContext } from './fantasyLineupMark'
 import { fantasyProTeam } from './proTeam'
+import type { RosterDayPlayer } from '../../types/api'
 import type { BoxPlayerLine, BoxScoreGame, FantasyNightContext, GameBoxScore, SlatePlayerValue, SlateValues } from '../../types/boxScore'
 
 export interface MyAppearance {
@@ -22,11 +23,23 @@ export interface MyGroups {
   done: MyAppearance[]
 }
 
-interface RosterPlayer {
+export interface MineRosterPlayer {
   player_id?: number | null
   player_name: string
   pro_team: string
   positions: string[]
+}
+
+/** Roster as of the slate date — anyone except `no_game` can appear when their NBA team plays. */
+export function minePlayersFromRosterDay(players: RosterDayPlayer[]): MineRosterPlayer[] {
+  return players
+    .filter(player => player.status !== 'no_game')
+    .map(player => ({
+      player_id: player.player_id,
+      player_name: player.player_name,
+      pro_team: player.pro_team,
+      positions: player.positions,
+    }))
 }
 
 export type MyLine =
@@ -35,7 +48,7 @@ export type MyLine =
   | { kind: 'out' }
 
 /** Roster players whose NBA team is on this slate, in tip order then name. */
-export function myAppearances(players: RosterPlayer[], games: BoxScoreGame[]): MyAppearance[] {
+export function myAppearances(players: MineRosterPlayer[], games: BoxScoreGame[]): MyAppearance[] {
   const byTeam = new Map<string, { game: BoxScoreGame; home: boolean }>()
   for (const game of games) {
     byTeam.set(fantasyProTeam(game.away.abbreviation), { game, home: false })
