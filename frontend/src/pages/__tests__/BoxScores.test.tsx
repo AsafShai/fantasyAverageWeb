@@ -118,6 +118,52 @@ function json(body: unknown, status = 200) {
   })
 }
 
+type RosterDayStubPlayer = {
+  player_id: number
+  player_name: string
+  pro_team: string
+  positions: string[]
+  status?: 'played' | 'dnp' | 'scheduled' | 'no_game'
+  lineup_slot?: string
+  opponent?: string | null
+}
+
+function rosterDayResponse(url: string, players: RosterDayStubPlayer[]) {
+  if (!url.includes('/roster-day')) return null
+  const parsed = new URL(url, 'http://localhost')
+  const teamId = Number(parsed.pathname.match(/\/teams\/(\d+)\/roster-day/)?.[1] ?? 0)
+  const date = parsed.searchParams.get('date') ?? '2026-10-25'
+  return json({
+    team_id: teamId,
+    date,
+    scoring_period_id: 1,
+    is_today: false,
+    has_games: players.some(p => p.status !== 'no_game'),
+    lock_at: null,
+    first_date: '2026-10-20',
+    last_date: '2027-04-11',
+    moves: [],
+    players: players.map(p => ({
+      player_id: p.player_id,
+      player_name: p.player_name,
+      positions: p.positions,
+      pro_team: p.pro_team,
+      lineup_slot: p.lineup_slot ?? 'UTIL',
+      opponent: p.opponent ?? null,
+      status: p.status ?? 'scheduled',
+      stats: null,
+      added: false,
+      dropped: false,
+    })),
+  })
+}
+
+const finishedLalRosterDay: RosterDayStubPlayer[] = [
+  { player_id: 1, player_name: 'Austin Reaves', pro_team: 'LAL', positions: ['G'], status: 'played' },
+  { player_id: 9, player_name: 'Sit Out', pro_team: 'LAL', positions: ['F'], status: 'dnp' },
+  { player_id: 50, player_name: 'Boston Guy', pro_team: 'BOS', positions: ['SG'], status: 'no_game' },
+]
+
 describe('BoxScores', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -195,7 +241,6 @@ describe('BoxScores', () => {
   it('filters plays to my players, sub in and out included, and marks their names', async () => {
     localStorage.setItem('fw:myTeam.id', '8')
     const user = userEvent.setup()
-    const stats = { gp: 1, minutes: 30, pts: 20, reb: 4, ast: 4, stl: 1, blk: 0, three_pm: 2, fg_percentage: 0.5, ft_percentage: 0.8, fgm: 8, fga: 16, ftm: 4, fta: 5 }
     const withPlays = {
       ...box,
       plays: [
@@ -207,13 +252,8 @@ describe('BoxScores', () => {
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
-      if (url.includes('/teams/') && url.includes('/players')) {
-        return json({
-          team_id: 8,
-          last_updated: '2026-10-25',
-          players: [{ player_name: 'Austin Reaves', pro_team: 'LAL', positions: ['SG'], team_id: 8, status: 'ONTEAM', player_id: 1, fantasy_team_name: "Dor's Injured Team", stats }],
-        })
-      }
+      const rosterDay = rosterDayResponse(url, [{ player_id: 1, player_name: 'Austin Reaves', pro_team: 'LAL', positions: ['SG'], status: 'played' }])
+      if (rosterDay) return rosterDay
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       if (url.includes('/nba/season')) return json({ start: '2026-10-20', end: '2027-04-11' })
       if (url.includes('/nba/scoreboard/values')) return json(values)
@@ -561,16 +601,11 @@ describe('BoxScores', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
       const date = new URL(url, 'http://localhost').searchParams.get('date')
-      if (url.includes('/teams/') && url.includes('/players')) {
-        return json({
-          team_id: 8,
-          last_updated: '2026-10-25',
-          players: [
-            { player_name: 'LeBron James', pro_team: 'LAL', positions: ['SF'], team_id: 8, status: 'ONTEAM', player_id: 23, fantasy_team_name: "Dor's Injured Team", stats },
-            { player_name: 'Boston Guy', pro_team: 'BOS', positions: ['SG'], team_id: 8, status: 'ONTEAM', player_id: 50, fantasy_team_name: "Dor's Injured Team", stats },
-          ],
-        })
-      }
+      const rosterDay = rosterDayResponse(url, [
+        { player_id: 23, player_name: 'LeBron James', pro_team: 'LAL', positions: ['SF'], status: 'scheduled' },
+        { player_id: 50, player_name: 'Boston Guy', pro_team: 'BOS', positions: ['SG'], status: 'no_game' },
+      ])
+      if (rosterDay) return rosterDay
       if (url.includes('/depthchart')) {
         const teamId = url.match(/nba-teams\/(\d+)/)?.[1]
         const athletes = teamId === '26'
@@ -637,9 +672,14 @@ describe('BoxScores', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
       const date = new URL(url, 'http://localhost').searchParams.get('date')
-      if (url.includes('/teams/') && url.includes('/players')) {
-        return json({ team_id: 8, last_updated: '2026-10-25', players: roster })
-      }
+      const rosterDay = rosterDayResponse(url, roster.map(p => ({
+        player_id: p.player_id,
+        player_name: p.player_name,
+        pro_team: p.pro_team,
+        positions: p.positions,
+        status: 'scheduled' as const,
+      })))
+      if (rosterDay) return rosterDay
       if (url.includes('/depthchart')) {
         const teamId = url.match(/nba-teams\/(\d+)/)?.[1]
         const athletes = teamId === '13'
@@ -676,21 +716,11 @@ describe('BoxScores', () => {
   it('highlights my players in a finished box, including who did not play', async () => {
     localStorage.setItem('fw:myTeam.id', '8')
     const user = userEvent.setup()
-    const stats = { gp: 1, minutes: 30, pts: 20, reb: 4, ast: 4, stl: 1, blk: 0, three_pm: 2, fg_percentage: 0.5, ft_percentage: 0.8, fgm: 8, fga: 16, ftm: 4, fta: 5 }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
       const date = new URL(url, 'http://localhost').searchParams.get('date')
-      if (url.includes('/teams/') && url.includes('/players')) {
-        return json({
-          team_id: 8,
-          last_updated: '2026-10-25',
-          players: [
-            { player_name: 'Austin Reaves', pro_team: 'LAL', positions: ['G'], team_id: 8, status: 'ONTEAM', player_id: 1, fantasy_team_name: "Dor's Injured Team", stats },
-            { player_name: 'Sit Out', pro_team: 'LAL', positions: ['F'], team_id: 8, status: 'ONTEAM', player_id: 9, fantasy_team_name: "Dor's Injured Team", stats },
-            { player_name: 'Boston Guy', pro_team: 'BOS', positions: ['SG'], team_id: 8, status: 'ONTEAM', player_id: 50, fantasy_team_name: "Dor's Injured Team", stats },
-          ],
-        })
-      }
+      const rosterDay = rosterDayResponse(url, finishedLalRosterDay)
+      if (rosterDay) return rosterDay
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       if (url.includes('/nba/scoreboard/values')) return json({ ...values, date })
       if (url.includes('/nba/scoreboard') && !url.includes('/values')) return json({ ...board, date })
@@ -698,7 +728,7 @@ describe('BoxScores', () => {
       return json({}, 404)
     }))
     renderWithProviders(<MyTeamProvider><BoxScores /></MyTeamProvider>, { route: '/box-scores?date=2026-10-25' })
-    const card = await screen.findByRole('button', { name: /1 from your team/ })
+    const card = await screen.findByRole('button', { name: /2 from your team/ })
     await user.click(card)
     const table = await screen.findByRole('table', { name: /box score/ })
     expect(within(table).getByRole('link', { name: 'Austin Reaves' }).closest('tr')).toHaveClass('bg-blue-50')
@@ -711,21 +741,11 @@ describe('BoxScores', () => {
   it('hides finished lines in My players while No spoilers is on', async () => {
     localStorage.setItem('fw:myTeam.id', '8')
     const user = userEvent.setup()
-    const stats = { gp: 1, minutes: 30, pts: 20, reb: 4, ast: 4, stl: 1, blk: 0, three_pm: 2, fg_percentage: 0.5, ft_percentage: 0.8, fgm: 8, fga: 16, ftm: 4, fta: 5 }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input)
       const date = new URL(url, 'http://localhost').searchParams.get('date')
-      if (url.includes('/teams/') && url.includes('/players')) {
-        return json({
-          team_id: 8,
-          last_updated: '2026-10-25',
-          players: [
-            { player_name: 'Austin Reaves', pro_team: 'LAL', positions: ['G'], team_id: 8, status: 'ONTEAM', player_id: 1, fantasy_team_name: "Dor's Injured Team", stats },
-            { player_name: 'Sit Out', pro_team: 'LAL', positions: ['F'], team_id: 8, status: 'ONTEAM', player_id: 9, fantasy_team_name: "Dor's Injured Team", stats },
-            { player_name: 'Boston Guy', pro_team: 'BOS', positions: ['SG'], team_id: 8, status: 'ONTEAM', player_id: 50, fantasy_team_name: "Dor's Injured Team", stats },
-          ],
-        })
-      }
+      const rosterDay = rosterDayResponse(url, finishedLalRosterDay)
+      if (rosterDay) return rosterDay
       if (url.includes('/teams')) return json([{ team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DOR' }])
       if (url.includes('/nba/scoreboard/values')) return json({ ...values, date })
       if (url.includes('/nba/scoreboard') && !url.includes('/values')) return json({ ...board, date })
@@ -757,8 +777,8 @@ describe('BoxScores', () => {
     const austinLineShown = await within(opened).findByRole('table', { name: 'Austin Reaves line' })
     expect(within(austinLineShown).getByText('28')).toBeInTheDocument()
     expect(within(opened).getByRole('button', { name: /LAL 129 @ UTAH 117/ })).toBeInTheDocument()
-    expect(within(opened).queryByText("Did not play · Coach's Decision")).not.toBeInTheDocument()
-    expect(within(opened).queryByRole('link', { name: 'Sit Out' })).not.toBeInTheDocument()
+    expect(within(opened).getByText("Did not play · Coach's Decision")).toBeInTheDocument()
+    expect(within(opened).getByRole('link', { name: 'Sit Out' })).toBeInTheDocument()
   })
 
   it('moves to the next date', async () => {
