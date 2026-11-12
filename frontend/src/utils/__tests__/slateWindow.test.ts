@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ScheduleGame, ScheduleResponse, ScheduleTeam } from '../../types/api'
-import { isBackToBackGameDay, opponentsByTeamDate, teamPlaysOnDate, weekGameCount, weekOpponent, weekScheduleDays } from '../slateWindow'
+import { isBackToBackGameDay, nbaSlateToday, opponentsByTeamDate, teamPlaysOnDate, weekGameCount, weekOpponent, weekScheduleDays } from '../slateWindow'
 
 function game(partial: Pick<ScheduleGame, 'date' | 'opponent_abbreviation' | 'is_home'> & { game_id?: string }): ScheduleGame {
   return {
@@ -107,5 +107,23 @@ describe('isBackToBackGameDay', () => {
   it('is false when the team is off', () => {
     expect(teamPlaysOnDate(opponents, 'BOS', '2026-10-18')).toBe(false)
     expect(isBackToBackGameDay(opponents, 'BOS', '2026-10-18')).toBe(false)
+  })
+})
+
+describe('nbaSlateToday', () => {
+  it('still shows the previous day in the morning after the games (07:00 Israel = 00:00 ET)', () => {
+    expect(nbaSlateToday(new Date('2026-11-12T05:00:00Z'))).toBe('2026-11-11')
+  })
+
+  it('stays on the previous day until 09:00 ET', () => {
+    expect(nbaSlateToday(new Date('2026-11-12T13:59:00Z'))).toBe('2026-11-11')
+  })
+
+  it('rolls over to the new day at 09:00 ET (~16:00 Israel)', () => {
+    expect(nbaSlateToday(new Date('2026-11-12T14:00:00Z'))).toBe('2026-11-12')
+  })
+
+  it('shows the same day through the evening games', () => {
+    expect(nbaSlateToday(new Date('2026-11-13T03:00:00Z'))).toBe('2026-11-12')
   })
 })
