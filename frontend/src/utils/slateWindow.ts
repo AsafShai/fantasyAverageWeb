@@ -44,6 +44,17 @@ export function easternToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
 }
 
+/** The day Box Scores shows by default. Unlike easternToday() it rolls over at
+ *  09:00 ET (~16:00 Israel), not midnight: the last games end around 01:00 ET,
+ *  and the first tip is hours after 09:00 ET, so until then "today" is still
+ *  the slate that just finished. */
+export const SLATE_ROLLOVER_HOUR_ET = 9
+
+export function nbaSlateToday(now: Date = new Date()): string {
+  const shifted = new Date(now.getTime() - SLATE_ROLLOVER_HOUR_ET * 60 * 60 * 1000)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(shifted)
+}
+
 export function firstScheduleDay(days: ScheduleCalendarDay[]): string {
   const today = easternToday()
   return days.find(day => day.date >= today)?.date ?? days[0]?.date ?? ''
