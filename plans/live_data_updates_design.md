@@ -256,6 +256,28 @@ are covered by defaults plus guards.
 
 Mockups of every affected screen: https://claude.ai/artifact/APmBcZdJicKURzHzHHEDwi
 
+6. Mobile is in scope for the build (its pages are separate components), but
+   gets no extra mockups beyond the standings screen. On mobile the badge is
+   shortened to "LIVE · 2 of 4" and the "averages count finished games only"
+   note opens from a tap on the badge instead of a permanent line.
+7. The live UI reuses the existing movers (▲/▼ and "GP +N"): while a slate is
+   live or final-but-unofficial they mean "change tonight" against this
+   morning's official standings, and return to "since last night" after
+   ESPN's update.
+
+### What each view counts while games are in progress
+
+| View | A player whose game is still in progress | A player whose game is final |
+|---|---|---|
+| Averages: values, category ranks, roto points, heatmap, Top 5, movers | not counted yet (neither his stats nor his GP) | counted |
+| Totals: values, category ranks, roto points | counted, stats so far and GP +1 | counted |
+| Team page Daily roster and "Starters" row | shown live | shown |
+| Slot usage | counted (+1 live) | counted |
+
+FG% and FT% follow the view they are shown in: in the Averages view they are
+built from finished games only, in the Totals view from everything so far.
+Once every game of the night is final the two views cover the same games.
+
 ## 9. Polling vs refresh
 
 Polling is the low-risk option here, because the browser polls **our** backend,
