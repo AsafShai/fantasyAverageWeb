@@ -5,11 +5,13 @@ import { BOX_LINE_COLUMNS, FantasyTeamTag, JerseyNumber, LiveMark, OnCourtMark, 
 import { resolveFantasyContext } from './fantasyLineupMark'
 import { fouledOut } from './lineupGroups'
 import { FANTASY_LINEUP_DOT_CLASS } from './fantasyLineupMark'
-import { clusterByGame, filterMyGroups, isFantasyActiveLineup, myLine, type MyAppearance, type MyGroups } from './myPlayerGroups'
+import { clusterByGame, filterMyGroups, isFantasyActiveLineup, myLine, mySlateCategoryTotals, mySlateTotals, type MyAppearance, type MyGroups, type MySlateCategoryTotals, type MySlateTotals } from './myPlayerGroups'
+import { orderCategories } from '../../utils/statOrder'
+import { CATEGORY_LABELS } from '../../utils/playerRankings'
 import { gameClockLabel } from './tipTime'
 import type { BoxPlayerLine, BoxScoreGame, FantasyNightContext, SlatePlayerValue } from '../../types/boxScore'
 
-function summary(groups: MyGroups): string {
+function groupSummary(groups: MyGroups): string {
   const parts = [
     groups.live.length > 0 ? `${groups.live.length} playing` : '',
     groups.upcoming.length > 0 ? `${groups.upcoming.length} yet to play` : '',
@@ -233,17 +235,171 @@ function Group({ title, live = false, children }: { title: string; live?: boolea
  * Every player from My Team who has a game on this slate. Lines for games
  * that have tipped stay hidden while No spoilers is on, until Show results.
  */
-export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPlayers, playerValues }: {
+function shootingPct(made: number, attempted: number): string | undefined {
+  if (attempted <= 0) return undefined
+  return `${((100 * made) / attempted).toFixed(1)}%`
+}
+
+function formatCategoryTotal(cat: string, value: number): string {
+  if (cat.endsWith('%')) return `${(value * 100).toFixed(1)}%`
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10)
+}
+
+type SlateTotalView = 'all' | 'categories'
+
+function slateItemsAll(totals: MySlateTotals): { label: string; main: string; sub?: string }[] {
+  return [
+    { label: 'MIN', main: String(Math.round(totals.min)) },
+    { label: 'PTS', main: String(totals.pts) },
+    { label: 'FG', main: `${totals.fgm}-${totals.fga}`, sub: shootingPct(totals.fgm, totals.fga) },
+    { label: '3PT', main: `${totals.threePm}-${totals.fg3a}`, sub: shootingPct(totals.threePm, totals.fg3a) },
+    { label: 'FT', main: `${totals.ftm}-${totals.fta}`, sub: shootingPct(totals.ftm, totals.fta) },
+    { label: 'REB', main: String(totals.reb) },
+    { label: 'AST', main: String(totals.ast) },
+    { label: 'TO', main: String(totals.tov) },
+    { label: 'STL', main: String(totals.stl) },
+    { label: 'BLK', main: String(totals.blk) },
+    { label: 'OREB', main: String(totals.oreb) },
+    { label: 'DREB', main: String(totals.dreb) },
+    { label: 'PF', main: String(totals.pf) },
+  ]
+}
+
+const CATEGORY_SHOOTING_LABEL: Record<string, string> = {
+  'FG%': 'FG',
+  'FT%': 'FT',
+  '3P%': '3PT',
+}
+
+function slateItemsCategories(totals: MySlateCategoryTotals, leagueCategories: string[]): { label: string; main: string; sub?: string }[] {
+  const ordered = orderCategories(leagueCategories)
+  return [
+    { label: 'MIN', main: String(Math.round(totals.min)) },
+    ...ordered.map(cat => {
+      const shot = totals.shooting[cat as keyof typeof totals.shooting]
+      if (shot) {
+        return {
+          label: CATEGORY_SHOOTING_LABEL[cat] ?? (CATEGORY_LABELS[cat] ?? cat),
+          main: `${shot.made}-${shot.att}`,
+          sub: shootingPct(shot.made, shot.att),
+        }
+      }
+      return {
+        label: CATEGORY_LABELS[cat] ?? cat,
+        main: formatCategoryTotal(cat, totals.categories[cat] ?? 0),
+      }
+    }),
+  ]
+}
+
+function SlateTotalBar({
+  totals,
+  categoryTotals,
+  leagueCategories,
+  view,
+  onViewChange,
+  activeOnly,
+}: {
+  totals: MySlateTotals
+  categoryTotals: MySlateCategoryTotals | null
+  leagueCategories: string[]
+  view: SlateTotalView
+  onViewChange: (view: SlateTotalView) => void
+  activeOnly: boolean
+}) {
+  const canShowCategories = categoryTotals != null && leagueCategories.length > 0
+  const items = view === 'categories' && canShowCategories
+    ? slateItemsCategories(categoryTotals, leagueCategories)
+    : slateItemsAll(totals)
+  const catLabel = leagueCategories.length === 8 ? '8 categories' : 'Categories'
+  return (
+    <footer className="border-t border-blue-200 bg-blue-50/60 px-4 py-3 dark:border-blue-500/30 dark:bg-blue-950/40">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-200">
+          Slate total
+          <span className="font-normal normal-case text-gray-600 dark:text-gray-400">
+            {' · '}
+            {totals.players} played
+            {activeOnly ? ' (active lineup)' : ''}
+          </span>
+        </p>
+        {canShowCategories && (
+          <div
+            role="group"
+            aria-label="Slate total stat columns"
+            className="inline-flex rounded-full bg-blue-100/80 p-0.5 ring-1 ring-blue-200 dark:bg-gray-800 dark:ring-gray-700"
+          >
+            <button
+              type="button"
+              aria-pressed={view === 'all'}
+              onClick={() => onViewChange('all')}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                view === 'all'
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+              }`}
+            >
+              All stats
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === 'categories'}
+              onClick={() => onViewChange('categories')}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                view === 'categories'
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+              }`}
+            >
+              {catLabel}
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[32rem] table-fixed text-[11px] lg:min-w-full">
+          <caption className="sr-only">Combined box line for my players this slate</caption>
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {items.map(({ label }) => (
+                <th key={label} className="px-1 py-0.5 text-right font-medium">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="tabular-nums font-semibold text-gray-900 dark:text-gray-100">
+              {items.map(({ label, main, sub }) => (
+                <td key={label} className="whitespace-nowrap px-1 py-0.5 text-right align-top">
+                  <span className="block">{main}</span>
+                  {sub && (
+                    <span className="block text-[10px] font-normal text-gray-500 dark:text-gray-400">{sub}</span>
+                  )}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </footer>
+  )
+}
+
+export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPlayers, playerValues, leagueCategories, slateComplete = false }: {
   groups: MyGroups
   spoilerGuard: boolean
   onOpenGame: (gameId: string) => void
   fantasyPlayers?: Record<string, FantasyNightContext>
   playerValues?: Map<string, SlatePlayerValue>
+  /** League scoring categories from the slate values response (for the category total view). */
+  leagueCategories?: string[]
+  /** Every game on the slate is final — past days and complete nights. */
+  slateComplete?: boolean
 }) {
   const hasResults = groups.live.length + groups.done.length > 0
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState(false)
   const [activeOnly, setActiveOnly] = useState(false)
+  const [slateTotalView, setSlateTotalView] = useState<SlateTotalView>('all')
   const hide = spoilerGuard && !shown
   const canFilterLineup = Boolean(fantasyPlayers && Object.keys(fantasyPlayers).length > 0)
   const visibleGroups = useMemo(() => {
@@ -251,13 +407,27 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPla
     const keepActive = (row: MyAppearance) => isFantasyActiveLineup(row.playerId, fantasyPlayers, playerValues)
     return filterMyGroups(groups, keepActive)
   }, [activeOnly, canFilterLineup, fantasyPlayers, groups, playerValues])
-  const label = summary(visibleGroups)
+  const label = groupSummary(visibleGroups)
   const upcoming = clusterByGame(visibleGroups.upcoming)
   const live = clusterByGame(visibleGroups.live)
   const done = clusterByGame(visibleGroups.done)
   const rosteredOnSlate = groups.upcoming.length + groups.live.length + groups.done.length
   const empty = rosteredOnSlate === 0
   const filteredEmpty = !empty && activeOnly && !label
+  const finishedAppearances = useMemo(
+    () => (slateComplete ? [...visibleGroups.done, ...visibleGroups.live] : []),
+    [slateComplete, visibleGroups.done, visibleGroups.live],
+  )
+  const slateTotals = useMemo(
+    () => (slateComplete ? mySlateTotals(finishedAppearances, playerValues) : null),
+    [slateComplete, finishedAppearances, playerValues],
+  )
+  const slateCategoryTotals = useMemo(
+    () => (slateComplete && leagueCategories?.length
+      ? mySlateCategoryTotals(finishedAppearances, playerValues, leagueCategories)
+      : null),
+    [slateComplete, finishedAppearances, playerValues, leagueCategories],
+  )
 
   return (
     <section aria-label="My players" className="mb-4 w-full overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm dark:border-blue-500/30 dark:bg-gray-900">
@@ -356,6 +526,21 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPla
             <ResultCluster key={cluster.game.game_id} game={cluster.game} players={cluster.players} hide={hide} live={false} onOpenGame={onOpenGame} fantasyPlayers={fantasyPlayers} />
           ))}
         </Group>
+      )}
+      {open && slateComplete && slateTotals && !hide && (
+        <SlateTotalBar
+          totals={slateTotals}
+          categoryTotals={slateCategoryTotals}
+          leagueCategories={leagueCategories ?? []}
+          view={slateTotalView}
+          onViewChange={setSlateTotalView}
+          activeOnly={activeOnly && canFilterLineup}
+        />
+      )}
+      {open && slateComplete && slateTotals && hide && (
+        <p className="border-t border-blue-100 px-4 py-3 text-[11px] text-gray-400 dark:border-gray-800">
+          Show results to see the slate total for my players.
+        </p>
       )}
     </section>
   )
