@@ -271,6 +271,19 @@ Mockups of every affected screen: https://claude.ai/artifact/APmBcZdJicKURzHzHHE
    header, and each section subtitle (Team statistics, Slot usage, Roster)
    carries its own short live status.
 
+9. No separate waiting period before implementation (supersedes the "Phase 0
+   first" part of decision 4). Everything is built in one go behind
+   `LIVE_STANDINGS_ENABLED` and verified after it is merged:
+   - staging/dev: flag on, real league, watched through a few live slates and
+     morning hand-overs;
+   - production (master): flag off. The live calculation still runs in shadow
+     there and logs the morning reconciliation (G2), so production hand-overs
+     are checked without anything being shown;
+   - the flag is turned on in production once the staging slates and the
+     shadow logs are clean.
+   The live layer writes nothing to the database, so a staging service that
+   shares the production database cannot corrupt it through this feature.
+
 ### What each view counts while games are in progress
 
 | View | A player whose game is still in progress | A player whose game is final |
