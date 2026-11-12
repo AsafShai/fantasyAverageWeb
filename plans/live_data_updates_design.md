@@ -265,6 +265,12 @@ Mockups of every affected screen: https://claude.ai/artifact/APmBcZdJicKURzHzHHE
    morning's official standings, and return to "since last night" after
    ESPN's update.
 
+8. The live badge is tappable on every page it appears on (desktop and
+   mobile) and opens tonight's games with their status, plus when ESPN's
+   official data was last updated. On the team page the badge stays in the
+   header, and each section subtitle (Team statistics, Slot usage, Roster)
+   carries its own short live status.
+
 ### What each view counts while games are in progress
 
 | View | A player whose game is still in progress | A player whose game is final |
