@@ -244,8 +244,32 @@ are covered by defaults plus guards.
 - Date ranges ending today; live movers vs this morning; live point on the
   standings race; G1 hardening of `_sync_db_if_needed`.
 
-## 8. Decisions needed
+## 8. Decisions (approved 2026-11-12)
 
-1. Averages during games: settled-only (recommended) or in-progress with a warning.
-2. Live as the default view with a badge (recommended), or an explicit Live/Official toggle on Rankings.
-3. Whether Phase 3 items are wanted at all.
+1. Averages during games count finished games only; totals include games in progress.
+2. Live is the default view, marked with a badge. No Live/Official toggle.
+3. Phase 3 items are in scope.
+4. Phases 1, 2 and 3 are built together as one delivery, after Phase 0. Phase 0
+   stays separate: it is the safety net (live probe + a few mornings of
+   reconciliation logs) and nothing user-visible ships before it is clean.
+5. Updates reach the browser by polling (see §9), not manual refresh only.
+
+Mockups of every affected screen: https://claude.ai/artifact/APmBcZdJicKURzHzHHEDwi
+
+## 9. Polling vs refresh
+
+Polling is the low-risk option here, because the browser polls **our** backend,
+never ESPN. ESPN load is set by the backend TTLs (30 s league payload, 60 s box
+scores) and does not grow with the number of open tabs or the poll rate.
+
+- Interval 60 s, only while the response says `live.active && games_live > 0`.
+  Before tip-off, after the last final and all day long there is no polling.
+- `skipPollingIfUnfocused`: hidden tabs do not poll; a tab that regains focus
+  refetches once.
+- A poll that changes nothing costs one memo hit on the backend. To make it
+  nearly free on the wire too, add the live endpoints to `HttpCacheMiddleware`
+  so an unchanged response is an empty 304. `last_updated` must stop changing
+  on every memo hit for that to work (today `memo_response` stamps a fresh
+  `last_updated` per request).
+- Box Scores already polls at 60 s in production with the same pattern.
+- Manual refresh keeps working and returns live data either way.
