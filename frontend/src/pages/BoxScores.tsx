@@ -20,10 +20,7 @@ import type { BoxScoreGame, BoxTeamSide, SlatePlayerValue } from '../types/boxSc
 import { getErrorMessage } from '../utils/errorMessage'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileBoxScores from '../mobile/nba/MobileBoxScores'
-
-function easternToday(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
-}
+import { nbaSlateToday } from '../utils/slateWindow'
 
 function shiftDate(iso: string, days: number): string {
   const [year, month, day] = iso.split('-').map(Number)
@@ -49,7 +46,7 @@ const MAX_REVEALED = 60
 function slatePoll(games: BoxScoreGame[] | undefined, date: string): number {
   if (!games) return 0
   if (games.some(game => game.status === 'live')) return 60_000
-  if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 60_000
+  if (date === nbaSlateToday() && games.some(game => game.status === 'scheduled')) return 60_000
   return 0
 }
 
@@ -58,7 +55,7 @@ function slatePoll(games: BoxScoreGame[] | undefined, date: string): number {
 function valuesPoll(games: BoxScoreGame[] | undefined, date: string): number {
   if (!games || !games.some(game => game.status !== 'scheduled')) return 0
   if (games.some(game => game.status === 'live')) return 120_000
-  if (date === easternToday() && games.some(game => game.status === 'scheduled')) return 120_000
+  if (date === nbaSlateToday() && games.some(game => game.status === 'scheduled')) return 120_000
   return 0
 }
 
@@ -189,11 +186,11 @@ function DepthChartRequest({ teamId }: { teamId: string }) {
 export default function BoxScores() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { myTeamId } = useMyTeam()
-  const date = searchParams.get('date') || easternToday()
+  const date = searchParams.get('date') || nbaSlateToday()
   const gameId = searchParams.get('game') ?? ''
   const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
   const [revealed, setRevealed] = usePersistedState<string[]>('boxScores.revealedGames', [])
-  const today = easternToday()
+  const today = nbaSlateToday()
   const mobileRedesign = useMobileRedesign()
   const season = useGetNbaSeasonWindowQuery()
   const seasonStart = season.data?.start
