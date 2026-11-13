@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import { getErrorMessage } from '../../utils/errorMessage'
 import { backLabel, usePlayerProfileData } from '../../hooks/usePlayerProfileData'
+import { useSectionOpen } from '../../hooks/useSectionOpen'
 import { Card, DataTable, Segmented, type Column } from '../ui'
 import TimeFrameChips from './TimeFrameChips'
 import FantasyValueCard from './FantasyValueCard'
@@ -55,6 +56,7 @@ export default function PlayerProfileMobile() {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const [perGame, setPerGame] = useState<'pg' | 'tot'>('pg')
+  const [statsOpen, toggleStats] = useSectionOpen('stats')
 
   const d = usePlayerProfileData(playerId, timePeriod, customRange)
 
@@ -150,7 +152,7 @@ export default function PlayerProfileMobile() {
         />
       )}
 
-      <Card title={`Stats · ${d.periodLabel}`} aria-label="Stats">
+      <Card title={`Stats · ${d.periodLabel}`} aria-label="Stats" fold={{ open: statsOpen, onToggle: toggleStats }}>
         <Segmented
           label="Stats"
           size="sm"
@@ -182,9 +184,9 @@ export default function PlayerProfileMobile() {
         )}
       </Card>
 
-      <LeagueHistoryCard playerId={playerId} />
-
       <PastSeasonsCard playerId={playerId} />
+
+      <LeagueHistoryCard playerId={playerId} />
 
       <TrendsCard
         playerId={Number(playerId)}

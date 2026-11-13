@@ -1,18 +1,23 @@
+import { FoldTitle } from './FoldTitle'
+import { useSectionOpen } from '../hooks/useSectionOpen'
 import { useGetNbaPlayerSeasonsQuery } from '../store/api/fantasyApi'
 import { PAST_SEASON_COLS } from '../utils/pastSeasons'
 import LoadingSpinner from './LoadingSpinner'
 
 /** Per-game averages for the player's last few completed seasons (ESPN). */
 const PlayerPastSeasonsCard = ({ playerId }: { playerId: string }) => {
+  const [open, toggle] = useSectionOpen('past-seasons')
   const { data, isLoading, isError } = useGetNbaPlayerSeasonsQuery(playerId, { skip: !playerId })
   const seasons = data?.seasons ?? []
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6 mt-6">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-        Previous Seasons <span className="text-base font-normal text-gray-500 dark:text-gray-400">· per game</span>
+      <h2 className={`text-2xl font-bold text-gray-900 dark:text-gray-100 ${open ? 'mb-4' : ''}`}>
+        <FoldTitle open={open} onToggle={toggle}>
+          Previous Seasons <span className="text-base font-normal text-gray-500 dark:text-gray-400">· per game</span>
+        </FoldTitle>
       </h2>
-      {isLoading ? (
+      {!open ? null : isLoading ? (
         <div className="py-8"><LoadingSpinner /></div>
       ) : isError ? (
         <p className="py-6 text-center text-gray-400 text-sm">Couldn't load previous seasons from ESPN.</p>

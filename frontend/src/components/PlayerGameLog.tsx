@@ -1,3 +1,5 @@
+import { FoldTitle } from './FoldTitle'
+import { useSectionOpen } from '../hooks/useSectionOpen'
 import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { useGetNbaPlayerGamesQuery } from '../store/api/fantasyApi'
@@ -37,6 +39,7 @@ const stickyAvg = 'sticky z-30 bg-gray-100 dark:bg-gray-800'
 const pinnedEdge = 'shadow-[4px_0_6px_-4px_rgba(0,0,0,0.45)]'
 
 export default function PlayerGameLog({ playerId }: { playerId: string }) {
+  const [open, toggle] = useSectionOpen('game-log')
   const { data, error, isLoading } = useGetNbaPlayerGamesQuery(playerId, { skip: !playerId })
   const shown = useMemo(
     () => (data?.games ?? []).filter((game) => game.season === data?.current_season),
@@ -45,8 +48,10 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
 
   return (
     <section className="mt-6 bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Game log</h2>
+      <div className={open ? 'mb-4' : ''}>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <FoldTitle open={open} onToggle={toggle}>Game log</FoldTitle>
+        </h2>
         {data && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {data.current_season}
@@ -56,7 +61,7 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
         )}
       </div>
 
-      {isLoading ? (
+      {!open ? null : isLoading ? (
         <div className="py-10">
           <LoadingSpinner />
         </div>

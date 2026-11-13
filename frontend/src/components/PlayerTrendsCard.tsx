@@ -1,3 +1,5 @@
+import { FoldTitle } from './FoldTitle'
+import { useSectionOpen } from '../hooks/useSectionOpen'
 import { useState } from 'react'
 import TrendGameLogChart from './TrendGameLogChart'
 import type { CustomDateRange, CountingCategory, TimePeriod } from '../types/api'
@@ -34,6 +36,7 @@ interface Props {
 }
 
 export default function PlayerTrendsCard({ playerId, categories, reverseCategories, timePeriod = 'season', customRange = null }: Props) {
+  const [open, toggle] = useSectionOpen('trends')
   // which stat's chart is open; clicking the open one again closes it
   const [mode, setMode] = useState<CardMode | null>('minutes')
   const { log, error, is404, isLoading, refetch, windowDays, fallback, availableShootingStats, modes, reverse } =
@@ -41,7 +44,10 @@ export default function PlayerTrendsCard({ playerId, categories, reverseCategori
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-5 sm:p-6 mt-6">
-      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3">Trends</h2>
+      <h2 className={`text-xl font-bold text-gray-900 dark:text-gray-100 ${open ? 'mb-3' : ''}`}>
+        <FoldTitle open={open} onToggle={toggle}>Trends</FoldTitle>
+      </h2>
+      {open && (<>
 
       {isLoading && <Skeleton />}
 
@@ -145,6 +151,7 @@ export default function PlayerTrendsCard({ playerId, categories, reverseCategori
         </>
         )
       })()}
+      </>)}
     </div>
   )
 }

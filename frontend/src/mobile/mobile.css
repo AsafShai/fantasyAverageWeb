@@ -29,6 +29,14 @@
 .mr-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mr-h1 { margin: 0; font-family: var(--mr-font-num); font-size: 22px; font-weight: 700; line-height: 1.15; }
 .mr-h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.mr-fold {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0; border: none; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 6px;
+}
+.mr-fold:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 2px; }
+.mr-fold-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--mr-faint); transition: transform 0.15s; }
+.mr-fold-closed { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .mr-fold-chev { transition: none; } }
 .mr-meta { font-size: 12px; color: var(--mr-muted); }
 .mr-link {
   border: none; background: none; padding: 0; min-height: 32px; cursor: pointer;
