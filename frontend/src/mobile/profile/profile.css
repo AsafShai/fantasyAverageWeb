@@ -117,3 +117,4 @@
 .mr-pp-sub.mr-pp-win b, .mr-pp-sub.mr-pp-loss b { font-weight: 700; }
 .mr-pp-date { display: block; line-height: 1.2; font-weight: 400; }
 .mr-pp-opp { display: flex; flex-direction: column; line-height: 1.25; color: var(--mr-primary); text-decoration: none; min-height: 32px; justify-content: center; }
+

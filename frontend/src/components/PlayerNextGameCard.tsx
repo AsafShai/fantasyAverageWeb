@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGetPlayerNextGameProjectionQuery, usePredictProjectionMutation } from '../store/api/fantasyApi'
 import { usePersistedState } from '../hooks/usePersistedState'
+import { useSectionOpen } from '../hooks/useSectionOpen'
+import { FoldTitle } from './FoldTitle'
 import { FF_PAST_SLATES } from '../config/featureFlags'
 import type { ProjectionStats, ProjectionStatus } from '../types/api'
 import { coherentInts } from '../utils/coherentRound'
@@ -27,6 +29,7 @@ function Skeleton() {
 }
 
 const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
+  const [open, toggle] = useSectionOpen('next-game')
   const { data, isLoading, isError } = useGetPlayerNextGameProjectionQuery(playerId, { skip: !playerId })
   const [predict] = usePredictProjectionMutation()
   const [integerMode, setIntegerMode] = usePersistedState('playerProjection.integerMode', true)
@@ -101,6 +104,10 @@ const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
 
   return (
     <div className="mt-4 bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 px-4 py-3.5">
+      <h2 className={`text-base font-bold text-gray-900 dark:text-gray-100 ${open ? 'mb-2' : ''}`}>
+        <FoldTitle open={open} onToggle={toggle}>Next game</FoldTitle>
+      </h2>
+      {open && (<>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-3">
         <span className="inline-flex items-center text-[9px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-800 rounded px-1.5 py-0.5">
           Projected
@@ -183,6 +190,7 @@ const PlayerNextGameCard = ({ playerId }: { playerId: string }) => {
           </tbody>
         </table>
       </div>
+      </>)}
     </div>
   )
 }

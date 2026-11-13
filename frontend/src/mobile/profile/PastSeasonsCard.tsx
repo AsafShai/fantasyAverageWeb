@@ -1,3 +1,4 @@
+import { useSectionOpen } from '../../hooks/useSectionOpen'
 import { useGetNbaPlayerSeasonsQuery } from '../../store/api/fantasyApi'
 import type { PlayerSeasonLine } from '../../types/api'
 import { PAST_SEASON_COLS, shortSeasonLabel } from '../../utils/pastSeasons'
@@ -6,6 +7,7 @@ import { Card, DataTable, type Column } from '../ui'
 
 /** Phone version of "Previous seasons": per-game averages, season column pinned. */
 export default function PastSeasonsCard({ playerId }: { playerId: string }) {
+  const [open, toggle] = useSectionOpen('past-seasons')
   const { data, isLoading, isError } = useGetNbaPlayerSeasonsQuery(playerId, { skip: !playerId })
   const seasons = data?.seasons ?? []
 
@@ -21,7 +23,7 @@ export default function PastSeasonsCard({ playerId }: { playerId: string }) {
   ]
 
   return (
-    <Card title="Previous seasons · per game" aria-label="Previous seasons">
+    <Card title="Previous seasons · per game" aria-label="Previous seasons" fold={{ open, onToggle: toggle }}>
       {isLoading ? (
         <div className="mr-pp-loading"><LoadingSpinner /></div>
       ) : isError ? (
