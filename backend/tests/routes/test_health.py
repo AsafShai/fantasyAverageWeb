@@ -32,7 +32,7 @@ def test_health_verbose_has_all_sections(test_client):
         response = test_client.get("/health?verbose=1")
     assert response.status_code == 200
     body = response.json()
-    for key in ("uptime_s", "db", "espn", "injury", "nightly", "estimator", "schedulers", "slow_requests_1h"):
+    for key in ("uptime_s", "db", "espn", "injury", "nightly", "estimator", "schedulers", "slow_requests_1h", "live"):
         assert key in body
     assert body["injury"]["ok"] is True
     assert body["schedulers"]["injury_next"]
@@ -68,3 +68,17 @@ def test_health_verbose_leaks_no_connection_details(test_client):
 def test_health_response_carries_process_time_header(test_client):
     response = test_client.get("/health")
     assert float(response.headers["X-Process-Time"]) >= 0
+
+
+def test_health_verbose_reports_the_live_shadow_run(test_client):
+    status = {"ok": True, "enabled": False, "period": 24, "last_reconcile": {"status": "ok"}}
+    with patch.object(health_service.DBService, "_get_pool", AsyncMock(return_value=None)), \
+         patch.object(health_service.DBService, "get_latest_model_nightly_run", AsyncMock(return_value=None)), \
+         patch.object(health_service, "DataProvider") as provider:
+        provider.return_value.live_health.return_value = status
+        body = test_client.get("/health?verbose=1").json()
+    assert body["live"] == status
+
+
+def test_health_default_response_has_no_live_section(test_client):
+    assert "live" not in test_client.get("/health").json()

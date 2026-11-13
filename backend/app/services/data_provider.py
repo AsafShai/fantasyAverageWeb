@@ -18,6 +18,10 @@ from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
 from app.utils.ssl_context import shared_ssl_context
 from app.utils import background_tasks
+from app.services import box_score_service
+from app.services import live_overlay as lo
+from app.services import live_overlay_service
+from app.services.live_overlay_service import LiveOverlayService, LiveState
 
 PRO_TEAM_SCHEDULES_TTL_SECONDS = 24 * 60 * 60
 # One page load fans out to several endpoints that all need standings; within
@@ -54,11 +58,17 @@ class DataProvider:
             self._players_inflight: dict[int, asyncio.Future] = {}
             self._lineup_slots_lock = asyncio.Lock()
             # Averages/rankings are pure functions of the cached totals frame;
-            # see _averages_for / _rankings_for.
-            self._averages_memo: Optional[tuple] = None
-            self._rankings_memo: Optional[tuple] = None
-            # Built responses per (name, request params); see memo_response.
+            # see _averages_for / _rankings_for. One slot per mode (official,
+            # live), so alternating live and official requests never evict
+            # each other.
+            self._averages_memo: dict = {}
+            self._rankings_memo: dict = {}
+            # Built responses per (name, request params, live); see memo_response.
             self._response_memo: dict = {}
+            # Live overlay (plans/live_data_updates_design.md): in-memory only.
+            self.live = LiveOverlayService()
+            self._live_frame_memo: dict = {}
+            self._schedule_games_memo: Optional[tuple] = None
             # Create httpx client with connection pooling
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0, connect=10.0),
@@ -111,8 +121,20 @@ class DataProvider:
             raise DataSourceError("Error fetching pro team schedules from ESPN API")
 
 
-    async def get_totals_df(self) -> pd.DataFrame:
-        """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure."""
+    async def get_totals_df(self, live: bool = False) -> pd.DataFrame:
+        """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure.
+
+        ``live=True`` adds tonight's games in progress (the totals flavour,
+        plan 3.4) when LIVE_STANDINGS_ENABLED is on and guard G1 allows it;
+        otherwise, and whenever there is nothing to add, it returns the
+        official frame object itself. The live frame is never cached as the
+        official one, so the DB sync, estimator and nightly jobs (which never
+        pass ``live``) only ever see ESPN's official totals."""
+        if live:
+            return await self._live_totals(settled=False)
+        return await self._official_totals_df()
+
+    async def _official_totals_df(self) -> pd.DataFrame:
         async with self._fetch_lock:
             cache = self.cache_manager.totals_cache
             checked_at = cache.get('espn_checked_at')
@@ -142,7 +164,10 @@ class DataProvider:
                 self.cache_manager.totals_cache['raw'] = api_data
 
                 categories = self.data_transformer.resolve_ranking_categories(api_data)
-                totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
+                totals_df = self._keep_official_identity(
+                    self.data_transformer.raw_standings_to_totals_df(api_data, categories)
+                )
+                self._observe_live(api_data, totals_df)
 
                 scoring_period_id = api_data.get('scoringPeriodId', 0)
                 self.cache_manager.totals_cache['etag'] = response.headers.get('ETag')
@@ -157,7 +182,8 @@ class DataProvider:
                 )
 
                 background_tasks.spawn(
-                    self._sync_db_if_needed(scoring_period_id, totals_df), name="standings-db-sync"
+                    self._sync_db_if_needed(scoring_period_id, totals_df, self._standings_updated_ms(api_data)),
+                    name="standings-db-sync",
                 )
 
                 return totals_df
@@ -191,7 +217,10 @@ class DataProvider:
                     response.raise_for_status()
                     api_data = response.json()
                     categories = self.data_transformer.resolve_ranking_categories(api_data)
-                    totals_df = self.data_transformer.raw_standings_to_totals_df(api_data, categories)
+                    totals_df = self._keep_official_identity(
+                        self.data_transformer.raw_standings_to_totals_df(api_data, categories)
+                    )
+                    self._observe_live(api_data, totals_df)
                     scoring_period_id = api_data.get('scoringPeriodId', 0)
                     cache['etag'] = response.headers.get('ETag')
                     cache['data'] = totals_df
@@ -212,8 +241,153 @@ class DataProvider:
             self.logger.info(f"sync_db_now: snapshot already current (period {completed_period}), skipping")
             return False
 
-        await self._sync_db_if_needed(scoring_period_id, totals_df)
-        return True
+        written = await self._sync_db_if_needed(
+            scoring_period_id, totals_df, self._standings_updated_ms(self.cache_manager.totals_cache.get('raw'))
+        )
+        return written is not False
+
+    # -- live overlay ----------------------------------------------------------
+
+    def _keep_official_identity(self, totals_df: pd.DataFrame) -> pd.DataFrame:
+        """During games the payload changes on every poll while valuesByStat
+        does not: keep the cached frame object when the new one is equal, so
+        every memo keyed on it (averages, rankings, responses) stays valid."""
+        cache = self.cache_manager.totals_cache
+        previous = cache.get('data')
+        if (
+            previous is not None
+            and cache.get('data_date') is None
+            and isinstance(previous, pd.DataFrame)
+            and isinstance(totals_df, pd.DataFrame)
+            and previous.equals(totals_df)
+        ):
+            return previous
+        return totals_df
+
+    def _observe_live(self, api_data: Dict, totals_df: pd.DataFrame) -> None:
+        """Shadow run, flag on or off: capture tonight's overlay and reconcile
+        ESPN's morning update against it (guard G2). Uses the pro-team
+        schedule only if it is already cached; never makes a request."""
+        cache = self.cache_manager.totals_cache
+        previous = cache.get('data')
+        previous_from_espn = previous is not None and cache.get('data_date') is None and cache.get('etag') is not None
+        schedule_payload = self.cache_manager.pro_team_schedules_cache.get('data')
+        schedule = self._games_by_period(schedule_payload) if schedule_payload else None
+        self.live.observe(api_data, previous, totals_df, previous_from_espn, schedule)
+
+    @staticmethod
+    def _standings_updated_ms(raw: Optional[Dict]) -> Optional[int]:
+        try:
+            return (raw or {}).get('status', {}).get('standingsUpdateDate')
+        except Exception:
+            return None
+
+    def _games_by_period(self, payload: Dict) -> Dict[int, Dict[str, int]]:
+        memo = self._schedule_games_memo
+        if memo is None or memo[0] is not payload:
+            memo = (payload, lo.games_by_period(payload))
+            self._schedule_games_memo = memo
+        return memo[1]
+
+    async def _schedule_games(self) -> Dict[int, Dict[str, int]]:
+        return self._games_by_period(await self.get_pro_team_schedules())
+
+    async def _live_context(self):
+        """(overlay, tonight's games {game_id: tip ms}) when the overlay may
+        be applied: flag on, ESPN (not the DB fallback) serving, something to
+        add, and guard G1 passing. None otherwise, meaning "serve official"."""
+        if not settings.live_standings_enabled or self.get_data_date() is not None:
+            return None
+        raw = self.cache_manager.totals_cache.get('raw')
+        if not raw:
+            return None
+        overlay = self.live.overlay_for(raw)
+        if overlay.is_empty:
+            return None
+        schedule = await self._schedule_games()
+        if not self.live.check_g1(raw, overlay.period, schedule).ok:
+            return None
+        return overlay, dict(schedule.get(overlay.period) or {})
+
+    async def _live_totals(self, settled: bool) -> pd.DataFrame:
+        """Official totals plus tonight: every started game (``settled``
+        False, the totals flavour) or finished games only (``settled`` True,
+        what averages are built from). Any failure serves official: live can
+        never turn a 200 into a 5xx."""
+        official = await self._official_totals_df()
+        try:
+            ctx = await self._live_context()
+            if ctx is None:
+                return official
+            overlay, games = ctx
+            if settled:
+                finals = await self.live.final_game_ids(
+                    overlay.period, games, box_score_service.scoreboard_for, live_overlay_service._now_ms()
+                )
+                key = ('settled', overlay.version, finals)
+                per_team = overlay.per_team(finals)
+            else:
+                key = ('progress', overlay.version, None)
+                per_team = None
+            memo = self._live_frame_memo.get(key[0])
+            if memo is not None and memo[0] is official and memo[1] == key:
+                return memo[2]
+            frame = lo.apply_overlay(official, per_team if per_team is not None else overlay.per_team())
+            self._live_frame_memo[key[0]] = (official, key, frame)
+            return frame
+        except Exception as e:
+            self.logger.error(f"Live overlay failed, serving official: {type(e).__name__}: {e}", exc_info=True)
+            return official
+
+    async def get_live_state(self, include_finals: bool = False) -> Optional[LiveState]:
+        """The ``live`` block for a response, or None while
+        LIVE_STANDINGS_ENABLED is off (responses then stay exactly as before).
+
+        ``include_finals`` asks the scoreboard which games are final (plan
+        section 2: only for the averages view, only for games 1 h 45 min past
+        tip); without it, only finals already known are counted."""
+        if not settings.live_standings_enabled:
+            return None
+        await self._official_totals_df()
+        raw = self.cache_manager.totals_cache.get('raw')
+        fallback = self.get_data_date() is not None
+        updated = None if fallback or not raw else self.data_transformer.resolve_standings_updated_at(raw)
+
+        def inactive(reason, period=None, total=0):
+            return LiveState(False, period, None, total, 0, 0, updated, reason)
+
+        if fallback:
+            return inactive('serving the DB fallback')
+        if not raw:
+            return inactive('no standings payload')
+        try:
+            overlay = self.live.overlay_for(raw)
+            schedule = await self._schedule_games()
+            games = dict(schedule.get(overlay.period) or {})
+            g1 = self.live.check_g1(raw, overlay.period, schedule)
+            if not g1.ok:
+                return inactive(g1.reason, overlay.period, len(games))
+            now = live_overlay_service._now_ms()
+            started = {g for g, tip in games.items() if tip <= now} | set(overlay.game_ids)
+            if not started:
+                return inactive('no game started yet', overlay.period, len(games))
+            if include_finals:
+                finals = await self.live.final_game_ids(overlay.period, games, box_score_service.scoreboard_for, now)
+            else:
+                finals = self.live.known_final(overlay.period)
+            final_count = len(set(finals) & started)
+            return LiveState(
+                active=True, period=overlay.period, as_of=overlay.as_of,
+                games_total=max(len(games), len(started)),
+                games_live=len(started) - final_count, games_final=final_count,
+                official_updated_at=updated,
+            )
+        except Exception as e:
+            self.logger.error(f"Live state failed, reporting inactive: {type(e).__name__}: {e}", exc_info=True)
+            return inactive('error')
+
+    def live_health(self) -> dict:
+        return self.live.status(settings.live_standings_enabled)
 
     async def _fallback_from_db(self) -> pd.DataFrame:
         """Build a totals DataFrame from the latest DB snapshot. Stores data_date in cache."""
@@ -432,18 +606,37 @@ class DataProvider:
         """The raw totals payload already held for this season, or None."""
         return self.cache_manager.totals_cache.get('raw')
 
-    async def get_slot_usage(self, raw: Optional[Dict] = None) -> Dict[int, Dict[str, int]]:
+    async def get_slot_usage(self, raw: Optional[Dict] = None, live: bool = False) -> Dict[int, Dict[str, int]]:
         """Get games used per roster slot for all teams, parsed from cached mMatchupScore data.
 
         Callers that already fetched totals earlier in the same request can pass
         that raw payload to skip a redundant ESPN round trip; omit it (or pass
-        None) to revalidate totals first, same as before."""
+        None) to revalidate totals first, same as before. ``live=True`` adds
+        tonight's games, in progress included, when the overlay applies."""
         if raw is None:
             await self.get_totals_df()
             raw = self.cache_manager.totals_cache.get('raw')
         if not raw:
             return {}
-        return self.data_transformer.parse_slot_usage(raw)
+        usage = self.data_transformer.parse_slot_usage(raw)
+        if not live:
+            return usage
+        try:
+            ctx = await self._live_context()
+            if ctx is None or raw is not self.cache_manager.totals_cache.get('raw'):
+                return usage
+            overlay = ctx[0]
+            out = {team: dict(slots) for team, slots in usage.items()}
+            for team, slots in overlay.slot_gp.items():
+                if team not in out:
+                    continue
+                for slot, gp in slots.items():
+                    if slot in out[team]:
+                        out[team][slot] += gp
+            return out
+        except Exception as e:
+            self.logger.error(f"Live slot usage failed, serving official: {type(e).__name__}: {e}", exc_info=True)
+            return usage
 
     async def get_lineup_slots(self) -> Dict[int, str]:
         """{espn_player_id: current lineup slot label} for every rostered player.
@@ -535,60 +728,83 @@ class DataProvider:
     # from the same totals frame, which only changes when ESPN returns new
     # standings. Both are pure functions of their inputs, so each is computed
     # once per input and handed out as a copy (callers may modify what they get).
-    def _averages_for(self, totals_df: pd.DataFrame, categories: list) -> pd.DataFrame:
-        memo = self._averages_memo
+    @staticmethod
+    def _mode(live: bool) -> str:
+        return 'live' if live else 'official'
+
+    def _averages_for(self, totals_df: pd.DataFrame, categories: list, live: bool = False) -> pd.DataFrame:
+        memo = self._averages_memo.get(self._mode(live))
         if memo is None or memo[0] is not totals_df or memo[1] != categories:
             memo = (totals_df, list(categories),
                     self.data_transformer.totals_to_averages_df(totals_df, categories))
-            self._averages_memo = memo
+            self._averages_memo[self._mode(live)] = memo
         return memo[2]
 
-    def _rankings_for(self, averages_df: pd.DataFrame, reverse_categories: set) -> pd.DataFrame:
-        memo = self._rankings_memo
+    def _rankings_for(self, averages_df: pd.DataFrame, reverse_categories: set, live: bool = False) -> pd.DataFrame:
+        memo = self._rankings_memo.get(self._mode(live))
         if memo is None or memo[0] is not averages_df or memo[1] != reverse_categories:
             memo = (averages_df, set(reverse_categories),
                     self.data_transformer.averages_to_rankings_df(averages_df, reverse_categories))
-            self._rankings_memo = memo
+            self._rankings_memo[self._mode(live)] = memo
         return memo[2]
 
-    async def memo_response(self, name: str, params: tuple, build):
+    async def _frames_for(self, live: bool) -> tuple:
+        """The frames a response is built from: the official totals, or the
+        live totals (games in progress) and the live settled totals (finished
+        games only, what averages and rankings use)."""
+        if not live:
+            totals_df = await self.get_totals_df()
+            return totals_df, totals_df
+        return await self._live_totals(settled=False), await self._live_totals(settled=True)
+
+    async def memo_response(self, name: str, params: tuple, build, live: bool = False):
         """``await build()``, reused until the standings frame or the league's
         categories change: rankings and heatmap are built from nothing else.
-        A reused response gets a fresh ``last_updated``, as a rebuild would."""
-        totals_df = await self.get_totals_df()
+        A reused response gets a fresh ``last_updated``, as a rebuild would.
+
+        ``live=True`` keys the memo on the live frames instead; with nothing
+        live to add they are the official objects, so the response is the
+        same one the official view built."""
+        frames = await self._frames_for(live)
         key = (
             tuple(await self.get_ranking_categories()),
             frozenset(await self.get_reverse_categories()),
             self.get_data_date(),
         )
-        hit = self._response_memo.get((name, params))
-        if hit is not None and hit[0] is totals_df and hit[1] == key:
+        slot = (name, params, live) if live else (name, params)
+        hit = self._response_memo.get(slot)
+        if hit is not None and len(hit[0]) == len(frames) and all(a is b for a, b in zip(hit[0], frames)) and hit[1] == key:
             return hit[2].model_copy(update={'last_updated': datetime.now()})
         result = await build()
-        self._response_memo[(name, params)] = (totals_df, key, result)
+        self._response_memo[slot] = (frames, key, result)
         return result
 
-    async def get_averages_df(self) -> pd.DataFrame:
-        """Get averages DataFrame with caching"""
-        totals_df = await self.get_totals_df()
+    async def get_averages_df(self, live: bool = False) -> pd.DataFrame:
+        """Get averages DataFrame with caching. ``live=True`` counts tonight's
+        finished games only (plan decision 1)."""
+        totals_df = await (self._live_totals(settled=True) if live else self.get_totals_df())
         categories = await self.get_ranking_categories()
-        return self._averages_for(totals_df, categories).copy()
+        return self._averages_for(totals_df, categories, live).copy()
 
-    async def get_rankings_df(self) -> pd.DataFrame:
-        """Get rankings DataFrame with caching"""
-        totals_df = await self.get_totals_df()
+    async def get_rankings_df(self, live: bool = False) -> pd.DataFrame:
+        """Get rankings DataFrame with caching. ``live=True`` ranks the live
+        averages (finished games only)."""
+        totals_df = await (self._live_totals(settled=True) if live else self.get_totals_df())
         categories = await self.get_ranking_categories()
-        averages_df = self._averages_for(totals_df, categories)
+        averages_df = self._averages_for(totals_df, categories, live)
         reverse_categories = await self.get_reverse_categories()
-        return self._rankings_for(averages_df, reverse_categories).copy()
+        return self._rankings_for(averages_df, reverse_categories, live).copy()
 
-    async def get_all_dataframes(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Get all three main DataFrames at once (optimized for endpoints that need multiple)"""
-        totals_df = await self.get_totals_df()
+    async def get_all_dataframes(self, live: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Get all three main DataFrames at once (optimized for endpoints that need multiple).
+
+        ``live=True``: totals include games in progress; averages and
+        rankings count finished games only."""
+        totals_df, settled_df = await self._frames_for(live)
         categories = await self.get_ranking_categories()
         reverse_categories = await self.get_reverse_categories()
-        averages_df = self._averages_for(totals_df, categories)
-        rankings_df = self._rankings_for(averages_df, reverse_categories)
+        averages_df = self._averages_for(settled_df, categories, live)
+        rankings_df = self._rankings_for(averages_df, reverse_categories, live)
 
         return totals_df, averages_df.copy(), rankings_df.copy()
     
@@ -612,11 +828,30 @@ class DataProvider:
             for _, row in full.iterrows()
         }
 
-    async def _sync_db_if_needed(self, scoring_period_id: int, totals_df: pd.DataFrame) -> None:
+    async def _snapshot_guard(self, completed_period: int, standings_updated_ms: Optional[int]) -> lo.GuardResult:
+        """G1 for the DB sync (see live_overlay.snapshot_is_safe). Without the
+        schedule it cannot tell and lets the write go ahead, as before."""
+        try:
+            schedule = await self._schedule_games()
+        except Exception as e:
+            self.logger.warning(f"DB sync guard: schedule unavailable, writing as before: {type(e).__name__}: {e}")
+            return lo.GuardResult(True, "schedule unavailable")
+        return lo.snapshot_is_safe(standings_updated_ms, completed_period, schedule)
+
+    async def _sync_db_if_needed(self, scoring_period_id: int, totals_df: pd.DataFrame,
+                                 standings_updated_ms: Optional[int] = None) -> Optional[bool]:
+        """Write day ``scoring_period_id - 1`` the first time a new period is
+        seen. Returns False when guard G1 held the write back (ESPN rolled the
+        period before its standings absorbed the finished day); the next
+        payload retries."""
         completed_period = scoring_period_id - 1
         async with self._db_sync_lock:
             if self._last_synced_period >= completed_period:
-                return
+                return None
+            guard = await self._snapshot_guard(completed_period, standings_updated_ms)
+            if not guard.ok:
+                self.logger.warning(f"DB sync held back for period {completed_period}: {guard.reason}")
+                return False
             try:
                 categories = await self.get_ranking_categories()
                 reverse_categories = await self.get_reverse_categories()

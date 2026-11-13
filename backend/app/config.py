@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     # season before he can be listed. Lower it on a staging service early in the
     # season, when nobody has 10 games yet, to see the tabs with real data.
     trends_min_season_gp: int = Field(default=10, ge=1, alias="TRENDS_MIN_SEASON_GP")
+    # Live standings (plans/live_data_updates_design.md): tonight's games on
+    # top of ESPN's official totals, computed in memory and never stored. Off,
+    # every response is exactly as before; the overlay still runs in shadow
+    # and logs the morning reconciliation (/health?verbose=1, "live").
+    live_standings_enabled: bool = Field(default=False, alias="LIVE_STANDINGS_ENABLED")
     model_config = SettingsConfigDict(
         env_file=".env",             # Loads .env if it exists
         env_file_encoding="utf-8",
