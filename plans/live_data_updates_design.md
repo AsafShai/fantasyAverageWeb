@@ -164,7 +164,7 @@ warning.)
 | Rankings with date range | DB snapshot deltas | when the range ends today, add the overlay to the end snapshot |
 | Today: league summary, top teams, league averages | `get_averages_df` / `get_rankings_df` | live=True |
 | Today: rank movers, `rank-changes` | DB, two latest periods | official day-over-day stays; adds a Tonight view: live movers vs this morning |
-| Analytics heatmap (season) | `memo_response('heatmap')` | live=True; no extra markers, only the badge |
+| Analytics heatmap (season) | `memo_response('heatmap')` | live=True; values and ranks update, GP shows "+N" for games counted tonight; no outlines or arrows |
 | Team detail header (totals, averages, ranks) | `get_all_dataframes` | live=True |
 | Team detail slot usage | `statBySlot` | + overlay `per_slot_gp` |
 | Team detail Daily (roster-day, today) | `mRoster`, 5 min TTL, status `scheduled/played` | in-game lines, `live`/`final` status, 60 s; use ESPN period instead of `eastern_today()` |
@@ -238,8 +238,8 @@ order, not separate releases.
 
 **2. Live standings**
 - `live=` plumbing in `DataProvider`, per-mode memos, stable official identity.
-- Rankings (season), Today (league averages, Top 5), heatmap (values only, no
-  extra markers), team header + slot usage.
+- Rankings (season), Today (league averages, Top 5), heatmap (values update and
+  GP shows "+N"; no other markers), team header + slot usage.
 - `live` block in responses; tappable `LiveBadge` on every affected page;
   movers and "GP +N" switch to "tonight" while live; conditional polling;
   share-card stamp. Desktop and mobile components.
