@@ -207,6 +207,7 @@ describe('live stamp on share cards', () => {
     render(<RankingsShareCard dark={false} rows={rows} categories={['FG%', 'PTS']} view="rankings" mode="averages" asOf="Nov 12, 2026" highlightTeamId={null} live={live} />);
     expect(screen.getByText(/^LIVE · /)).toBeInTheDocument();
     expect(screen.getByText(/Live standings · 2 of 4 games still in progress/)).toBeInTheDocument();
+    expect(screen.getByText(/^Live as of /)).toBeInTheDocument();
   });
 
   it('stamps it FINAL · NOT YET OFFICIAL once every game is final', () => {

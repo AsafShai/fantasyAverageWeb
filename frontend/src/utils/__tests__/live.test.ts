@@ -63,6 +63,26 @@ describe('averagesNote', () => {
 
 import { liveShare } from '../live'
 
+describe('averagesNote on a phone', () => {
+  it('uses the phone sheet wording', () => {
+    expect(averagesNote(block(), 'averages', true)).toBe('Averages count finished games only. 2 games still in progress.')
+    expect(averagesNote(block(), 'totals', true)).toBe('Totals include the 2 games in progress.')
+  })
+})
+
+describe('liveBadgeText for the heatmap', () => {
+  it('says finished games are counted instead of the update time', () => {
+    expect(liveBadgeText(block(), false, 'finished')).toBe('2 of 4 games in progress · finished games counted')
+  })
+})
+
+describe('liveShare footer', () => {
+  it('says when a live card is as of and that a final card counted tonight', () => {
+    expect(liveShare(block())!.footer).toMatch(/^Live as of \w{3} \w{3} \d+, /)
+    expect(liveShare(block({ games_live: 0, games_final: 4 }))!.footer).toMatch(/^Tonight counted, \w{3} \w{3} \d+$/)
+  })
+})
+
 describe('liveShare', () => {
   it('stamps a live card with the time and says how many games are in progress', () => {
     const s = liveShare(block())!

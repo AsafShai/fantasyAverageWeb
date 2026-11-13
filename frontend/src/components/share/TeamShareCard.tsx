@@ -33,7 +33,7 @@ export const TeamShareCard = ({ teamName, rank, totalPoints, teamCount, categori
     title={teamName}
     stamp={stamp ? { label: stamp.stamp, tone: stamp.tone } : undefined}
     subtitle={stamp ? stamp.subtitle : `Season averages · as of ${asOf}`}
-    footer={<><span>Bar = how close to 1st in the league</span><span>GP {gp}</span></>}
+    footer={<><span>{stamp ? stamp.footer : 'Bar = how close to 1st in the league'}</span><span>GP {gp}</span></>}
   >
     <div className="share-card__tiles">
       <div className="share-card__tile">

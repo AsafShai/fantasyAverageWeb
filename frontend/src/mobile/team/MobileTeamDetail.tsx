@@ -82,7 +82,7 @@ export default function MobileTeamDetail(p: MobileTeamDetailProps) {
         </div>
         <div className="mr-tm-meta-row">
           <span className="mr-meta">Ranking summary (averages) · GP {t.raw_averages.gp}</span>
-          {t.data_date ? <DataDateBadge dataDate={t.data_date} /> : <LiveBadgeMobile live={t.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(t.live, 'averages')} />}
+          {t.data_date ? <DataDateBadge dataDate={t.data_date} /> : <LiveBadgeMobile live={t.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(t.live, 'averages', true)} />}
         </div>
         <div className="mr-tm-actions">
           <a className="mr-tm-espn" href={t.espn_url} target="_blank" rel="noopener noreferrer">

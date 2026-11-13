@@ -130,7 +130,7 @@ export function AnalyticsMobile(p: AnalyticsMobileProps) {
     <div className="mr-root mr-an">
       <div className="mr-an-title">
         <h1 className="mr-h1">League Analytics</h1>
-        {p.dataDate ? <DataDateBadge dataDate={p.dataDate} /> : <LiveBadgeMobile live={p.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(p.live, 'averages')} />}
+        {p.dataDate ? <DataDateBadge dataDate={p.dataDate} /> : <LiveBadgeMobile live={p.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(p.live, 'averages', true)} />}
       </div>
 
       <Segmented label="League Analytics section" className="mr-an-tabs" options={ANALYTICS_TAB_OPTIONS} value={p.tab} onChange={p.onTab} />

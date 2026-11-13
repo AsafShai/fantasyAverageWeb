@@ -31,7 +31,7 @@ const SCOREBOARD = (live: Live) => ({
 async function withLive(page: Page, live: Live) {
   // Fixtures carry a data_date (the DB-fallback "Data as of" mode); live data is never in that mode.
   const withBlock = <T extends object>(body: T) => {
-    const rest: Record<string, unknown> = { ...body }
+    const rest: Record<string, unknown> = { ...(body as object) }
     delete rest.data_date
     return live ? { ...rest, live } : rest
   }
@@ -61,7 +61,7 @@ async function shot(page: Page, name: string) {
 }
 
 for (const pg of PAGES) {
-  for (const [moment, live] of Object.entries({ ...MOMENTS, [NO_LIVE_BLOCK]: undefined })) {
+  for (const [moment, live] of Object.entries<Live>({ ...MOMENTS, [NO_LIVE_BLOCK]: undefined })) {
     test(`${pg.name}: ${moment}`, async ({ page }) => {
       await withLive(page, live)
       await page.goto(`${pg.path}${isMobile(page) ? (pg.path.includes('?') ? '&' : '?') + 'ff=mobile' : ''}`)

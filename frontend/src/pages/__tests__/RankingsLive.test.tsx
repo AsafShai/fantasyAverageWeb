@@ -61,7 +61,7 @@ describe.each([['desktop', false], ['mobile', true]])('Rankings live badge (%s)'
     const badge = await screen.findByRole('button', { name: /LIVE/ })
     if (isMobile) {
       await userEvent.click(badge)
-      expect(await screen.findByText(/Averages count finished games only/)).toBeInTheDocument()
+      expect(await screen.findByText('Averages count finished games only. 2 games still in progress.')).toBeInTheDocument()
     } else {
       expect(screen.getByText(/Averages count finished games only/)).toBeInTheDocument()
       await userEvent.click(screen.getByRole('button', { name: /^totals$/i }))

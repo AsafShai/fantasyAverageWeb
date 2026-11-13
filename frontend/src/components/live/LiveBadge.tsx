@@ -12,6 +12,8 @@ interface LiveBadgeProps {
   espnUpdatedAt?: string | null
   /** Which side of the badge the sheet opens toward. */
   align?: 'left' | 'right'
+  /** 'finished': say finished games are counted instead of the update time (heatmap). */
+  liveDetail?: 'finished'
   className?: string
 }
 
@@ -20,7 +22,7 @@ interface LiveBadgeProps {
  * yet official) it replaces the "ESPN updated" note and opens tonight's games on
  * tap. Otherwise it renders that note, exactly as before.
  */
-const LiveBadge = ({ live, espnUpdatedAt, align = 'right', className = '' }: LiveBadgeProps) => {
+const LiveBadge = ({ live, espnUpdatedAt, align = 'right', liveDetail, className = '' }: LiveBadgeProps) => {
   const moment = liveMoment(live)
   const [open, setOpen] = useState(false)
   const [noSpoilers] = usePersistedState('boxScores.noSpoilers', false)
@@ -51,7 +53,7 @@ const LiveBadge = ({ live, espnUpdatedAt, align = 'right', className = '' }: Liv
           className={`h-2 w-2 rounded-full ${isLive ? 'animate-pulse bg-emerald-600' : 'bg-amber-600'}`}
         />
         <span className="font-bold">{isLive ? 'LIVE' : 'FINAL'}</span>
-        <span>{liveBadgeText(live)}{isLive && asOf ? ` · updated ${asOf}` : ''}</span>
+        <span>{liveBadgeText(live, false, liveDetail)}{isLive && asOf && !liveDetail ? ` · updated ${asOf}` : ''}</span>
         <span aria-hidden="true">▾</span>
       </button>
       {open && (

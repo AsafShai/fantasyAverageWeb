@@ -81,3 +81,11 @@ describe('LiveBadge', () => {
     expect(screen.getByText('In progress')).toBeInTheDocument()
   })
 })
+
+describe('LiveBadge heatmap wording', () => {
+  it('says finished games are counted instead of the update time', () => {
+    renderWithProviders(<LiveBadge live={live} liveDetail="finished" />)
+    expect(screen.getByRole('button', { name: /LIVE/ })).toHaveTextContent('2 of 4 games in progress · finished games counted')
+    expect(screen.queryByText(/updated/)).toBeNull()
+  })
+})

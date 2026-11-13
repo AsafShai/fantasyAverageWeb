@@ -274,7 +274,7 @@ const Rankings = () => {
         dataDate={data?.data_date}
         espnUpdatedAt={summary?.espn_updated_at}
         live={data?.live}
-        liveNote={liveNote}
+        liveNote={averagesNote(data?.live, mode, true)}
         share={shareButton('neutral')}
         layout={layout}
         onLayout={setLayout}

@@ -195,7 +195,7 @@ export default function MobileToday() {
       <div className="mr-today-pt">
         <div className="mr-today-ptl">
           <h1 className="mr-h1">Today</h1>
-          <LiveBadgeMobile live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} note={averagesNote(summary?.live, 'averages')} noteClassName="mr-today-espn" />
+          <LiveBadgeMobile live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} note={averagesNote(summary?.live, 'averages', true)} noteClassName="mr-today-espn" />
         </div>
         {hub ? (
           <Link to="/box-scores" className="mr-link mr-today-slate">

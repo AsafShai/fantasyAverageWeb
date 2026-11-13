@@ -420,7 +420,7 @@ const Analytics = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">League Analytics</h1>
           {heatmapData?.data_date
             ? <DataDateBadge dataDate={heatmapData.data_date} />
-            : <LiveBadge live={heatmapData?.live} espnUpdatedAt={summary?.espn_updated_at} />}
+            : <LiveBadge liveDetail="finished" live={heatmapData?.live} espnUpdatedAt={summary?.espn_updated_at} />}
         </div>
         {/* mobile: the three tabs split the width (a long label wraps) instead of
             scrolling the last one off screen */}

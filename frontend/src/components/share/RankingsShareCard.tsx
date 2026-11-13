@@ -47,7 +47,7 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
       title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
       stamp={stamp ? { label: stamp.stamp, tone: stamp.tone } : undefined}
       subtitle={stamp ? stamp.subtitle : `${period} ${modeLabel} · as of ${asOf}`}
-      footer={<><span>{moves ? '▲▼ = change since last night' : ''}</span><span>{teamCount} teams</span></>}
+      footer={<><span>{stamp ? stamp.footer : moves ? '▲▼ = change since last night' : ''}</span><span>{teamCount} teams</span></>}
     >
       <div className="share-card__body">
         <table>
