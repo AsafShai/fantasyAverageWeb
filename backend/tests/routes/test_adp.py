@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models.adp import AdpIndexResponse, AdpPlayer, AdpResponse, SiteAdp
+from app.models.adp import AdpIndexResponse, AdpPlayer, AdpResponse, LastYearStats, SiteAdp
 from app.services.adp_service import get_adp_response, reset_adp_cache
 
 
@@ -235,7 +235,10 @@ def test_adp_route_rankings_view_uses_the_rankings_blend(test_client):
             },
         ],
     }
-    with patch("app.services.adp_service.fetch_live_adp_payload", new_callable=AsyncMock, return_value=payload):
+    # Played last season, so the rankings-only player is not filtered as fringe.
+    played = {4433134: LastYearStats(gp=60, fg_pct=0.45, ft_pct=0.8, ppg=10.0, rpg=4.0, apg=2.0, spg=1.0, bpg=0.5, three_pm=1.0)}
+    with patch("app.services.adp_service.fetch_live_adp_payload", new_callable=AsyncMock, return_value=payload), \
+         patch("app.services.adp_service.load_espn_stat_splits", AsyncMock(return_value=("2025-26", played, "2026-27", {}))):
         adp_view = test_client.get("/api/adp?metric=adp")
         rank_view = test_client.get("/api/adp?metric=rank&rank_sites=sleeper")
 
