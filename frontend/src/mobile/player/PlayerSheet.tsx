@@ -143,28 +143,24 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
             <>
             {rankSummary && (
               <div className="mr-ps-value" aria-label="Fantasy value" data-testid="sheet-rank" aria-busy={periodFetching || undefined}>
-                <div className="mr-ps-tile">
-                  <span className="mr-ps-tl">Overall rank</span>
-                  {rankSummary.rank != null ? (
-                    <span className="mr-ps-tv">
-                      #{rankSummary.rank} <span className="mr-meta">of {rankSummary.poolSize}</span>
-                    </span>
-                  ) : (
-                    <span className="mr-ps-tv mr-ps-rank-out">Outside top {rankSummary.poolSize}</span>
-                  )}
-                  {rankSummary.positionRanks.length > 0 && (
-                    <span className="mr-meta mr-ps-pos">
-                      {rankSummary.positionRanks.map(({ position, rank }) => `#${rank} ${position}`).join(' · ')}
-                    </span>
-                  )}
-                </div>
-                <div className="mr-ps-tile">
-                  <span className="mr-ps-tl">Z-score</span>
-                  <span className={`mr-ps-tv ${zTone(rankSummary.totalZ)}`} data-testid="sheet-z">
-                    {rankSummary.totalZ >= 0 ? '+' : ''}
-                    {rankSummary.totalZ.toFixed(2)}
+                <span className="mr-ps-tl">Rank</span>
+                {rankSummary.rank != null ? (
+                  <span className="mr-ps-tv">
+                    #{rankSummary.rank} <span className="mr-meta">of {rankSummary.poolSize}</span>
                   </span>
-                </div>
+                ) : (
+                  <span className="mr-ps-tv mr-ps-rank-out">Outside top {rankSummary.poolSize}</span>
+                )}
+                <span className="mr-ps-tl mr-ps-zl">Z</span>
+                <span className={`mr-ps-tv ${zTone(rankSummary.totalZ)}`} data-testid="sheet-z">
+                  {rankSummary.totalZ >= 0 ? '+' : ''}
+                  {rankSummary.totalZ.toFixed(2)}
+                </span>
+                {rankSummary.positionRanks.length > 0 && (
+                  <span className="mr-meta mr-ps-pos">
+                    {rankSummary.positionRanks.map(({ position, rank }) => `#${rank} ${position}`).join(' · ')}
+                  </span>
+                )}
               </div>
             )}
             <div className="mr-ps-grid" role="list" aria-label="Per game" aria-busy={periodFetching || undefined}>
