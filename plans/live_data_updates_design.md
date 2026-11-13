@@ -34,23 +34,32 @@ from `valuesByStat` shows yesterday. That is the gap to close.
 | ESPN supports ETag/304 on all of these | `mRoster` conditional GET returned 304 |
 | Site box-score API (already used by Box Scores, 60 s TTL while live) uses the same player ids | `box_score_value_service` already joins it to fantasy rosters |
 
-### Open question (cannot be observed at 2 PM ET)
+### Live probe result (2026-11-13 00:36 UTC, two games in the 1st quarter)
 
-Does `rosterForCurrentScoringPeriod[].player.stats` (or `mRoster` for the
-current period) carry **in-progress** lines during games, or only after the
-game is final? `stats` is `[]` pre-game. A probe is scheduled for 01:30 UTC
-tonight during live games; this section will be updated with the answer.
+The open question is answered: **the league payload we already poll carries
+in-progress stat lines.** Source A is confirmed; no new ESPN request is needed
+for the live standings.
 
-It changes only *where the day's lines come from*, not the design:
+| Checked | Observed |
+|---|---|
+| `schedule[0].teams[].rosterForCurrentScoringPeriod.entries[].player.stats` in the existing standings request | 25 single-day lines for players in started games, 21 with numbers (the other 4 had not checked in). Each has `scoringPeriodId 24`, `statSplitTypeId 5`, `statSourceId 0`, and `externalId` = the game id |
+| GP mid-game | stat `42` is already `1` as soon as the player has minutes |
+| Against the site box score, 21 players | counting stats agree; two players were one play apart (the two feeds refresh a few seconds apart) |
+| `teams[].valuesByStat`, `scoringPeriodId`, `standingsUpdateDate` | unchanged from the afternoon — the official baseline does not move during games, as the design assumes |
+| `cumulativeScoreLive.statBySlot` | ESPN already includes tonight's games per slot (team 1: SF 10→11, F 9→10), so live slot usage can be read directly |
+| `teams[].pointsLive` | ESPN's own live roto points, differs from `points` for 9 of 12 teams. Not used for display (it is computed on ESPN's totals view), but useful as a cross-check in the shadow logs |
+| `lineupLocked` | true for the 25 players whose game had started, false for the rest |
+| Payload churn | 116 KB; the ETag changed about every 20–40 s during games, so each 30 s poll is a full download instead of a 304. Same request count as today |
+| `view=mRoster` for the current period | carries the same live lines (1.9 MB); not needed for standings |
 
-- **Source A (preferred if live lines exist):** the league payload we already
-  poll. Zero new ESPN requests, ESPN's own fantasy numbers, GP included.
-- **Source B (works regardless):** site-API box scores for started games (the
-  cache Box Scores already fills) joined to the lineup slots from the league
-  payload. `GP = 1` when the player has minutes.
+One thing the fantasy payload does **not** say is whether a game is final. The
+"finished games only" rule for averages therefore takes game status from the
+site scoreboard (one small request per minute, already cached for Box Scores),
+joined on the line's `externalId`.
 
-The overlay service takes "today's lines per player" behind one function, so
-either source — or A with B as cross-check — plugs in.
+The overlay service still takes "today's lines per player" behind one
+function, so the box-score source remains available as a fallback and as a
+cross-check.
 
 ## 3. Design: an official layer and a live overlay
 
