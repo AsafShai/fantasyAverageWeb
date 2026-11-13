@@ -124,3 +124,6 @@
    re-encodes photos as JPEG and transparent corners would turn black. */
 .share-card-canvas { display: inline-block; padding: 12px; background: #e8eef7; }
 .share-card-canvas--dark { background: #0b1220; }
+.share-card__stamp { padding: 1px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; }
+.share-card__stamp--live { background: #d1fae5; color: #065f46; }
+.share-card__stamp--final { background: #fef3c7; color: #92400e; }

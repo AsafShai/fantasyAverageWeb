@@ -50,6 +50,10 @@ class MockDataProvider:
     def __init__(self):
         import pandas as pd
         self.db_service = MockDBService()
+        # What get_live_state returns: None is the flag-off behaviour (no live
+        # block); a test sets a LiveState to simulate the flag on.
+        self.live_state = None
+        self.live_calls = []
 
         # Sample DataFrames that match the expected structure
         self.sample_totals_df = pd.DataFrame({
@@ -122,22 +126,31 @@ class MockDataProvider:
             'MIN': [28.5, 27.4, 30.1, 26.8, 29.6, 27.8]
         })
     
-    async def get_totals_df(self):
+    async def get_totals_df(self, live=False, settled=False):
+        self.live_calls.append(('totals', live))
         return self.sample_totals_df
 
-    async def memo_response(self, name, params, build):
+    async def memo_response(self, name, params, build, live=False):
+        self.live_calls.append((name, live))
         return await build()
+
+    async def get_live_state(self, include_finals=False):
+        self.live_calls.append(('state', include_finals))
+        return self.live_state
     
-    async def get_averages_df(self):
+    async def get_averages_df(self, live=False):
+        self.live_calls.append(('averages', live))
         return self.sample_averages_df
     
-    async def get_rankings_df(self):
+    async def get_rankings_df(self, live=False):
+        self.live_calls.append(('rankings', live))
         return self.sample_rankings_df
 
     async def get_players_df(self, stat_split_type_id: int = 0):
         return self.sample_players_df
 
-    async def get_all_dataframes(self):
+    async def get_all_dataframes(self, live=False):
+        self.live_calls.append(('all', live))
         return (self.sample_totals_df, self.sample_averages_df, self.sample_rankings_df)
 
     async def get_ranking_categories(self):
@@ -156,8 +169,13 @@ class MockDataProvider:
     def cached_totals_raw(self):
         return None
 
-    async def get_slot_usage(self, raw=None):
+    async def get_slot_usage(self, raw=None, live=False):
+        self.live_calls.append(('slots', live))
         return {}
+
+    async def get_starters_live(self, team_id):
+        self.live_calls.append(('starters', True))
+        return 2
 
     async def get_lineup_slots(self):
         return {}

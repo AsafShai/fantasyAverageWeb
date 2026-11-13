@@ -1,13 +1,13 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { Chip, ChipRow } from '../mobile/ui'
-import type { PlayerMatchup, PlayerStats, RosterDay, RosterDayPlayer, RosterDayStats } from '../types/api'
+import type { PlayerMatchup, PlayerStats, RosterDay, RosterDayGame, RosterDayPlayer, RosterDayStats } from '../types/api'
 import PlayerNameLink from './PlayerNameLink'
 import InjuryBadge from './InjuryBadge'
 import LoadingSpinner from './LoadingSpinner'
 import { MatchupCell, MatchupExpandPanel, MatchupExpandRow } from './MatchupDisplay'
 import { nameCellWrapClass, wrapFriendlyName } from '../utils/wrapName'
 import { addDays } from '../utils/slateWindow'
-import { dayLabel, isBench, lineupSlotOrder, moveNote, moveTime, pct, rosterDayPlayerPlayed, starterTotals, type StarterTotals } from '../utils/rosterDay'
+import { dayLabel, gameLabel, startersDayLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayPlayerPlayed, starterTotals, type StarterTotals } from '../utils/rosterDay'
 import './MatchupDisplay.css'
 
 /** The Slot cell's content: IR pill, active-slot pill, or plain BE. */
@@ -20,6 +20,28 @@ export function SlotPill({ slot, activeTitle = 'Active lineup slot' }: { slot?: 
   }
   return <>{slot ?? '—'}</>
 }
+
+/**
+ * The player's game on his roster line: the result once it is over, the score
+ * and clock while it is on, the tip time before. Hidden scores in no-spoilers mode.
+ */
+export function GameTag({ game, noSpoilers = false, className = '' }: { game?: RosterDayGame | null; noSpoilers?: boolean; className?: string }) {
+  // No spoilers: the line shows the opponent only, as before.
+  if (!game || noSpoilers) return null
+  const label = gameLabel(game)
+  if (!label) return null
+  if (game.status === 'live') {
+    return (
+      <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 ${className}`} data-testid="roster-game-tag">
+        LIVE <span className="font-semibold tabular-nums">{label}</span>
+      </span>
+    )
+  }
+  const tone = game.status === 'final' ? 'font-semibold text-gray-700 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'
+  return <span className={`whitespace-nowrap text-xs tabular-nums ${tone} ${className}`} data-testid="roster-game-tag">{label}</span>
+}
+
+const hasLine = (player: RosterDayPlayer) => (player.status === 'played' || player.status === 'live') && !!player.stats
 
 // ---------------------------------------------------------------------------
 // Stepper (sits where the period selector does in Stats mode)
@@ -226,9 +248,9 @@ function oppLabel(isToday: boolean, player: RosterDayPlayer): string {
   return isToday ? NO_GAME_TODAY : '—'
 }
 
-function statCells(player: RosterDayPlayer, isToday: boolean): ReactNode[] {
+function statCells(player: RosterDayPlayer): ReactNode[] {
   const s = player.stats
-  if (player.status === 'played' && s) {
+  if (hasLine(player) && s) {
     const muted = isBench(player.lineup_slot)
     return [
       s.minutes,
@@ -237,12 +259,8 @@ function statCells(player: RosterDayPlayer, isToday: boolean): ReactNode[] {
       s.three_pm, s.reb, s.ast, s.stl, s.blk, s.pts,
     ]
   }
-  const first =
-    player.status === 'dnp'
-      ? 'DNP'
-      : isToday && !player.opponent
-        ? NO_GAME_TODAY
-        : '—'
+  // Today's "No game today" is already in the Opp column.
+  const first = player.status === 'dnp' ? 'DNP' : '—'
   return [first, '—', '—', '—', '—', '—', '—', '—', '—']
 }
 
@@ -299,13 +317,17 @@ function RosterDayDesktopStartersTotalsRow({
     >
       <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
       <td className="sticky left-0 z-10 border-r border-r-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-3 text-sm font-bold whitespace-nowrap text-blue-900 dark:border-gray-700 dark:from-blue-950/50 dark:to-indigo-950/50 dark:text-blue-100">
-        Starters<span className="hidden sm:inline"> ({dayLabel(day.date)})</span>
+        Starters<span className="hidden sm:inline"> ({startersDayLabel(day)})</span>
       </td>
       <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">
         {totals.games} {totals.games === 1 ? 'game' : 'games'}
       </td>
       <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
       <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
+      {/* Today's table has Status and Matchup columns too. */}
+      {day.is_today && [0, 1].map(i => (
+        <td key={`today-${i}`} className="px-3 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
+      ))}
       {showStatColumns &&
         (totals.games
           ? [
@@ -340,7 +362,7 @@ function RosterDayMobileStartersTotals({ day, totals }: { day: RosterDay; totals
       data-testid="roster-day-mobile-totals"
     >
       <p className="text-[11px] font-bold text-blue-900 dark:text-blue-100">
-        Starters ({day.is_today ? 'Today' : dayLabel(day.date)}) · {totals.games} {totals.games === 1 ? 'game' : 'games'}
+        Starters ({startersDayLabel(day)}) · {totals.games} {totals.games === 1 ? 'game' : 'games'}
       </p>
       {hasGames ? (
         <>
@@ -404,6 +426,7 @@ function RosterDayMobilePlayerCard({
   isExpanded,
   onToggleMatchup,
   showStatDetails = true,
+  noSpoilers = false,
 }: {
   player: RosterDayPlayer
   day: RosterDay
@@ -413,6 +436,7 @@ function RosterDayMobilePlayerCard({
   onToggleMatchup: () => void
   /** When false (e.g. today's slate), hide the per-player stat grid on mobile. */
   showStatDetails?: boolean
+  noSpoilers?: boolean
 }) {
   const bench = isBench(player.lineup_slot)
   const s = player.stats
@@ -420,7 +444,7 @@ function RosterDayMobilePlayerCard({
   const metaLine = [player.positions.join(', '), player.pro_team, opp].join(' · ')
   /** Past days: full stat grid. Today with stats hidden: only DNP needs a short line. */
   const showMobileStatsBlock = showStatDetails
-    ? !day.is_today || player.status === 'dnp' || (player.status === 'played' && !!s)
+    ? !day.is_today || player.status === 'dnp' || hasLine(player)
     : day.is_today && player.status === 'dnp'
 
   return (
@@ -453,6 +477,7 @@ function RosterDayMobilePlayerCard({
           )}
           <p className="mt-1 min-w-0 break-words text-[11px] leading-snug text-gray-500 dark:text-gray-400">
             {metaLine}
+            {player.game && <GameTag game={player.game} noSpoilers={noSpoilers} className="ml-1.5" />}
           </p>
           {day.is_today && matchup?.injury_status && (
             <div className="mt-1">
@@ -471,7 +496,7 @@ function RosterDayMobilePlayerCard({
           )}
           {showMobileStatsBlock && (
             <div className="mt-2 border-t border-gray-100 pt-2 dark:border-gray-700">
-              {player.status === 'played' && s ? (
+              {hasLine(player) && s ? (
                 <>
                   <div className="grid grid-cols-3 gap-2 text-[10px] tabular-nums">
                     <div>
@@ -541,6 +566,7 @@ export function RosterDayContent({
   loading,
   matchups,
   onlyPlayed = false,
+  noSpoilers = false,
 }: {
   day: RosterDay | undefined
   loading: boolean
@@ -548,6 +574,8 @@ export function RosterDayContent({
   matchups?: Map<string, PlayerMatchup>
   /** Past days: hide players who did not play (status !== played). */
   onlyPlayed?: boolean
+  /** Box Scores' No spoilers: no results, scores or live lines; today shows opponents only. */
+  noSpoilers?: boolean
 }) {
   const [highlight, setHighlight] = useState<number | null>(null)
   const [highlightDate, setHighlightDate] = useState<string | null>(null)
@@ -560,8 +588,8 @@ export function RosterDayContent({
     return sorted.filter(rosterDayPlayerPlayed)
   }, [day, onlyPlayed])
   const totals = useMemo(() => starterTotals(players), [players])
-  /** Hide Min/FG%/… columns on today’s daily roster; show them for past days. */
-  const showStatColumns = day ? !day.is_today : false
+  /** Hide Min/FG%/… columns on today’s daily roster until games are counted live; show them for past days. */
+  const showStatColumns = day ? !day.is_today || liveRosterMoment(day, noSpoilers) !== null : false
   const mobileGroups = useMemo(() => {
     const starters = players.filter(p => !isBench(p.lineup_slot))
     const bench = players.filter(p => isBench(p.lineup_slot))
@@ -593,14 +621,15 @@ export function RosterDayContent({
   const renderDesktopPlayerRow = (player: (typeof players)[number]) => {
     const bench = isBench(player.lineup_slot)
     const lit = activeHighlight === player.player_id
-    const tone = player.status === 'played' && !bench ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
+    const tone = hasLine(player) && !bench ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
+    const onCourt = !noSpoilers && player.status === 'live' && !bench && (player.stats?.minutes ?? 0) > 0
     const matchup = day.is_today ? matchups?.get(player.player_name) : undefined
     const isExpanded = expandedMatchupNames.has(player.player_name)
-    const stickyBg = lit ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-white dark:bg-gray-800'
-    const cells = showStatColumns ? statCells(player, day.is_today) : []
+    const stickyBg = lit ? 'bg-blue-50 dark:bg-blue-950/30' : onCourt ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-white dark:bg-gray-800'
+    const cells = showStatColumns ? statCells(player) : []
     return (
       <Fragment key={player.player_id}>
-        <tr className={lit ? 'bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'} data-testid="roster-day-row">
+        <tr className={lit ? 'bg-blue-50 dark:bg-blue-950/20' : onCourt ? 'bg-emerald-50 dark:bg-emerald-950/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'} data-testid="roster-day-row" data-on-court={onCourt || undefined}>
           <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-400 dark:text-gray-500">
             <SlotPill slot={player.lineup_slot} activeTitle="Lineup slot at lock" />
           </td>
@@ -636,7 +665,10 @@ export function RosterDayContent({
           <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{player.pro_team}</td>
           <td className={`px-3 py-3 whitespace-nowrap text-sm ${bench ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
             {player.opponent ? (
-              <span className="mq-opp">vs {player.opponent}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="mq-opp">vs {player.opponent}</span>
+                <GameTag game={player.game} noSpoilers={noSpoilers} />
+              </span>
             ) : day.is_today ? (
               <span className="mq-no-game text-gray-500 dark:text-gray-400">{NO_GAME_TODAY}</span>
             ) : (
@@ -688,6 +720,7 @@ export function RosterDayContent({
                         isExpanded={isExpanded}
                         onToggleMatchup={() => toggleMatchupExpand(player.player_name)}
                         showStatDetails={showStatColumns}
+                        noSpoilers={noSpoilers}
                       />
                     </li>
                   )
@@ -695,7 +728,7 @@ export function RosterDayContent({
               </ul>
             </div>
           )}
-          {!day.is_today && <RosterDayMobileStartersTotals day={day} totals={totals} />}
+          {showStatColumns && <RosterDayMobileStartersTotals day={day} totals={totals} />}
           {mobileGroups.bench.length > 0 && (
             <div>
               <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Bench · IR</h3>
@@ -714,6 +747,7 @@ export function RosterDayContent({
                         isExpanded={isExpanded}
                         onToggleMatchup={() => toggleMatchupExpand(player.player_name)}
                         showStatDetails={showStatColumns}
+                        noSpoilers={noSpoilers}
                       />
                     </li>
                   )
@@ -751,7 +785,7 @@ export function RosterDayContent({
             </thead>
             <tbody className="bg-white dark:bg-gray-800">
               {mobileGroups.starters.map(renderDesktopPlayerRow)}
-              {!day.is_today && (
+              {showStatColumns && (
                 <RosterDayDesktopStartersTotalsRow day={day} totals={totals} showStatColumns={showStatColumns} />
               )}
               {mobileGroups.bench.map(renderDesktopPlayerRow)}

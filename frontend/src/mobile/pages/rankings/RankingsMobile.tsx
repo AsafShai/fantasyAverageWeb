@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
-import type { RankingStats, TeamRankChange } from '../../../types/api'
+import type { LiveBlock, RankingStats, TeamRankChange } from '../../../types/api'
 import DataDateBadge from '../../../components/DataDateBadge'
-import EspnUpdatedNote from '../../../components/EspnUpdatedNote'
 import { MyTeamMark } from '../../../components/MyTeamMark'
+import { LiveBadgeMobile } from '../../ui/LiveBadgeMobile'
 import { Button, Chip, ChipRow, DataTable, Delta, Segmented, SelectSheet, type Column } from '../../ui'
 import './rankings.css'
 
@@ -27,6 +27,9 @@ export interface RankingsMobileProps {
   explainer: string
   dataDate?: string
   espnUpdatedAt?: string | null
+  live?: LiveBlock | null
+  /** The averages/totals live note; it opens from the badge on a phone. */
+  liveNote?: string | null
   share: ReactNode
 
   layout: RankingsLayout
@@ -183,7 +186,7 @@ withDelta(p.cellDisplay(t, 'gp'), <Delta value={moveOf(t.team.team_id)?.gp_delta
         <div className="mr-rk-title-text">
           <h1 className="mr-h1">{p.title}</h1>
           {p.appliedRangeLabel && <span className="mr-rk-range-sub">{p.appliedRangeLabel}</span>}
-          {p.dataDate ? <DataDateBadge dataDate={p.dataDate} /> : <EspnUpdatedNote updatedAt={p.espnUpdatedAt} />}
+          {p.dataDate ? <DataDateBadge dataDate={p.dataDate} /> : <LiveBadgeMobile live={p.live} espnUpdatedAt={p.espnUpdatedAt} note={p.liveNote} />}
         </div>
         <div className="mr-rk-share">{p.share}</div>
       </div>

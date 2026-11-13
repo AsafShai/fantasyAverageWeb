@@ -1,0 +1,4000 @@
+{
+ "schedule": [
+  {
+   "teams": [
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 9.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 39.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 15.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 9.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 39.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 15.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 4,
+        "playerId": 5104157,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Victor Wembanyama",
+          "id": 5104157,
+          "proTeamId": 24,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3975,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Stephen Curry",
+          "id": 3975,
+          "proTeamId": 9,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3934672,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jalen Brunson",
+          "id": 3934672,
+          "proTeamId": 18,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 5061575,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kon Knueppel",
+          "id": 5061575,
+          "proTeamId": 30,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 1966,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "LeBron James",
+          "id": 1966,
+          "proTeamId": 20,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 2595516,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Norman Powell",
+          "id": 2595516,
+          "proTeamId": 4,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4395628,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Zion Williamson",
+          "id": 4395628,
+          "proTeamId": 3,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5142718,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "AJ Dybantsa",
+          "id": 5142718,
+          "proTeamId": 27,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4395625,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "RJ Barrett",
+          "id": 4395625,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 5174563,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kyshawn George",
+          "id": 5174563,
+          "proTeamId": 27,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4395630,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Devin Vassell",
+          "id": 4395630,
+          "proTeamId": 24,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 4433249,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Moussa Diabate",
+          "id": 4433249,
+          "proTeamId": 30,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 3157465,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Duncan Robinson",
+          "id": 3157465,
+          "proTeamId": 8,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4397183,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Aaron Wiggins",
+          "id": 4397183,
+          "proTeamId": 1,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3936099,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Derrick Jones Jr.",
+          "id": 3936099,
+          "proTeamId": 12,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 4278580,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Sandro Mamukelashvili",
+          "id": 4278580,
+          "proTeamId": 13,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 6
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 31.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 31.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 12,
+        "playerId": 3945274,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Luka Doncic",
+          "id": 3945274,
+          "proTeamId": 13,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4433136,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Walker Kessler",
+          "id": 4433136,
+          "proTeamId": 13,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 4395725,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Tyler Herro",
+          "id": 4395725,
+          "proTeamId": 15,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4395651,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Coby White",
+          "id": 4395651,
+          "proTeamId": 30,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 5175737,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Yaxel Lendeborg",
+          "id": 5175737,
+          "proTeamId": 9,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 6430,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jimmy Butler III",
+          "id": 6430,
+          "proTeamId": 9,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4566434,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Franz Wagner",
+          "id": 4566434,
+          "proTeamId": 19,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4395724,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Immanuel Quickley",
+          "id": 4395724,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3064514,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Julius Randle",
+          "id": 3064514,
+          "proTeamId": 17,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 0,
+        "playerId": 4278053,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Davion Mitchell",
+          "id": 4278053,
+          "proTeamId": 14,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 6475,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Klay Thompson",
+          "id": 6475,
+          "proTeamId": 14,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4278067,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Nic Claxton",
+          "id": 4278067,
+          "proTeamId": 4,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4431767,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Christian Braun",
+          "id": 4431767,
+          "proTeamId": 7,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 4017837,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ivica Zubac",
+          "id": 4017837,
+          "proTeamId": 11,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5041951,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Meleek Thomas",
+          "id": 5041951,
+          "proTeamId": 5,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3138196,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Cameron Johnson",
+          "id": 3138196,
+          "proTeamId": 7,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 4
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 33.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 33.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 3,
+        "playerId": 4701230,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jalen Johnson",
+          "id": 4701230,
+          "proTeamId": 1,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 4433134,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Scottie Barnes",
+          "id": 4433134,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4432816,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "LaMelo Ball",
+          "id": 4432816,
+          "proTeamId": 16,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 4433627,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Keyonte George",
+          "id": 4433627,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4431680,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Onyeka Okongwu",
+          "id": 4431680,
+          "proTeamId": 1,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 3059318,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Joel Embiid",
+          "id": 3059318,
+          "proTeamId": 20,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4432194,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Day'Ron Sharpe",
+          "id": 4432194,
+          "proTeamId": 17,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4066648,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Rui Hachimura",
+          "id": 4066648,
+          "proTeamId": 12,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 2991350,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Alex Caruso",
+          "id": 2991350,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 4711294,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Matas Buzelis",
+          "id": 4711294,
+          "proTeamId": 4,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 0,
+        "playerId": 4065733,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ty Jerome",
+          "id": 4065733,
+          "proTeamId": 29,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 4066336,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Lauri Markkanen",
+          "id": 4066336,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4684272,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ja'Kobe Walter",
+          "id": 4684272,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5160992,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Alex Sarr",
+          "id": 5160992,
+          "proTeamId": 27,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5081727,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Sidy Cissoko",
+          "id": 5081727,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4432810,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Isaiah Stewart",
+          "id": 4432810,
+          "proTeamId": 29,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 8
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 34.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 34.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 2,
+        "playerId": 5041939,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Cooper Flagg",
+          "id": 5041939,
+          "proTeamId": 6,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4396993,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Tyrese Haliburton",
+          "id": 4396993,
+          "proTeamId": 11,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 3136193,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Devin Booker",
+          "id": 3136193,
+          "proTeamId": 21,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4433621,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jalen Duren",
+          "id": 4433621,
+          "proTeamId": 8,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 4432573,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Paolo Banchero",
+          "id": 4432573,
+          "proTeamId": 19,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 4709138,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Brandin Podziemski",
+          "id": 4709138,
+          "proTeamId": 9,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 4222252,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Isaiah Hartenstein",
+          "id": 4222252,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 0,
+        "playerId": 4395712,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Andrew Nembhard",
+          "id": 4395712,
+          "proTeamId": 11,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4433247,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jonathan Kuminga",
+          "id": 4433247,
+          "proTeamId": 16,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 4278594,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Naji Marshall",
+          "id": 4278594,
+          "proTeamId": 6,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 3064290,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Aaron Gordon",
+          "id": 3064290,
+          "proTeamId": 7,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4702382,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Tristan da Silva",
+          "id": 4702382,
+          "proTeamId": 19,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4431679,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Precious Achiuwa",
+          "id": 4431679,
+          "proTeamId": 23,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 3155526,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Dillon Brooks",
+          "id": 3155526,
+          "proTeamId": 21,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3995,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jrue Holiday",
+          "id": 3995,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4066211,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Robert Williams III",
+          "id": 4066211,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 15
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 31.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 31.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 13,
+        "playerId": 4594268,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Anthony Edwards",
+          "id": 4594268,
+          "proTeamId": 16,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4066457,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Austin Reaves",
+          "id": 4066457,
+          "proTeamId": 13,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 6450,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kawhi Leonard",
+          "id": 6450,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 4869342,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Dyson Daniels",
+          "id": 4869342,
+          "proTeamId": 1,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4278039,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Nickeil Alexander-Walker",
+          "id": 4278039,
+          "proTeamId": 1,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4600663,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Zach Edey",
+          "id": 4600663,
+          "proTeamId": 29,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5105623,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kel'el Ware",
+          "id": 5105623,
+          "proTeamId": 15,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4591725,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ryan Rollins",
+          "id": 4591725,
+          "proTeamId": 15,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4684742,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ausar Thompson",
+          "id": 4684742,
+          "proTeamId": 8,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4900671,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ajay Mitchell",
+          "id": 4900671,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5203685,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Khaman Maluach",
+          "id": 5203685,
+          "proTeamId": 21,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 4278562,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Paul Reed",
+          "id": 4278562,
+          "proTeamId": 8,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 4433192,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Tari Eason",
+          "id": 4433192,
+          "proTeamId": 10,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5101761,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Mikel Brown Jr.",
+          "id": 5101761,
+          "proTeamId": 17,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5082206,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Brayden Burries",
+          "id": 5082206,
+          "proTeamId": 15,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 4066436,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "De'Anthony Melton",
+          "id": 4066436,
+          "proTeamId": 9,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 1
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 31.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 31.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 0,
+        "playerId": 4432166,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Cade Cunningham",
+          "id": 4432166,
+          "proTeamId": 8,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 4433255,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Chet Holmgren",
+          "id": 4433255,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4277961,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jaren Jackson Jr.",
+          "id": 4277961,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4432165,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jalen Suggs",
+          "id": 4432165,
+          "proTeamId": 19,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4397136,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Saddiq Bey",
+          "id": 4397136,
+          "proTeamId": 3,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4601025,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Pelle Larsson",
+          "id": 4601025,
+          "proTeamId": 14,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 5142620,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Darius Acuff Jr.",
+          "id": 5142620,
+          "proTeamId": 23,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 5174983,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Aday Mara",
+          "id": 5174983,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4251,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Paul George",
+          "id": 4251,
+          "proTeamId": 2,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4592479,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Julian Champagnie",
+          "id": 4592479,
+          "proTeamId": 24,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 2991139,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kris Dunn",
+          "id": 2991139,
+          "proTeamId": 12,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 5107173,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Danny Wolf",
+          "id": 5107173,
+          "proTeamId": 17,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4683778,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jared McCain",
+          "id": 4683778,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 4432848,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jaime Jaquez Jr.",
+          "id": 4432848,
+          "proTeamId": 15,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4066354,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Payton Pritchard",
+          "id": 4066354,
+          "proTeamId": 2,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 4397424,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Neemias Queta",
+          "id": 4397424,
+          "proTeamId": 2,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 5
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 32.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 32.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 11,
+        "playerId": 4431678,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Tyrese Maxey",
+          "id": 4431678,
+          "proTeamId": 20,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 3202,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kevin Durant",
+          "id": 3202,
+          "proTeamId": 10,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 4066261,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bam Adebayo",
+          "id": 4066261,
+          "proTeamId": 14,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 4066320,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Desmond Bane",
+          "id": 4066320,
+          "proTeamId": 19,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 5105565,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Donovan Clingan",
+          "id": 5105565,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 3934719,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "OG Anunoby",
+          "id": 3934719,
+          "proTeamId": 18,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 0,
+        "playerId": 4066259,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "De'Aaron Fox",
+          "id": 4066259,
+          "proTeamId": 24,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 5124612,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "VJ Edgecombe",
+          "id": 5124612,
+          "proTeamId": 20,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4869780,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Derik Queen",
+          "id": 4869780,
+          "proTeamId": 3,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4432639,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jabari Smith Jr.",
+          "id": 4432639,
+          "proTeamId": 10,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4397002,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ayo Dosunmu",
+          "id": 4397002,
+          "proTeamId": 16,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4278078,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "P.J. Washington",
+          "id": 4278078,
+          "proTeamId": 6,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4592691,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jake LaRavia",
+          "id": 4592691,
+          "proTeamId": 13,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4395626,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Tre Jones",
+          "id": 4395626,
+          "proTeamId": 4,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5279130,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Nolan Traore",
+          "id": 5279130,
+          "proTeamId": 17,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 9
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 39.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 39.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 0,
+        "playerId": 4278073,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Shai Gilgeous-Alexander",
+          "id": 4278073,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 3155942,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Domantas Sabonis",
+          "id": 3155942,
+          "proTeamId": 23,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 4683021,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Deni Avdija",
+          "id": 4683021,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4433287,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Brandon Miller",
+          "id": 4433287,
+          "proTeamId": 30,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4845367,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Stephon Castle",
+          "id": 4845367,
+          "proTeamId": 24,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4278104,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Michael Porter Jr.",
+          "id": 4278104,
+          "proTeamId": 17,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3147657,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Mikal Bridges",
+          "id": 3147657,
+          "proTeamId": 18,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 3133628,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Myles Turner",
+          "id": 3133628,
+          "proTeamId": 15,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3978,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "DeMar DeRozan",
+          "id": 3978,
+          "proTeamId": 7,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4712849,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Anthony Black",
+          "id": 4712849,
+          "proTeamId": 19,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 5144091,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jeremiah Fears",
+          "id": 5144091,
+          "proTeamId": 3,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3135045,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Grayson Allen",
+          "id": 3135045,
+          "proTeamId": 30,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 6589,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Draymond Green",
+          "id": 6589,
+          "proTeamId": 9,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4277919,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Mo Bamba",
+          "id": 4277919,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 3032979,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Dennis Schroder",
+          "id": 3032979,
+          "proTeamId": 30,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4431736,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Toumani Camara",
+          "id": 4431736,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 10
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 32.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 32.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 0,
+        "playerId": 3908809,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Donovan Mitchell",
+          "id": 3908809,
+          "proTeamId": 5,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 3136195,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Karl-Anthony Towns",
+          "id": 3136195,
+          "proTeamId": 18,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 6442,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kyrie Irving",
+          "id": 6442,
+          "proTeamId": 6,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 3917376,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jaylen Brown",
+          "id": 3917376,
+          "proTeamId": 20,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 4396971,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Naz Reid",
+          "id": 4396971,
+          "proTeamId": 30,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 4279888,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ja Morant",
+          "id": 4279888,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4594327,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Keegan Murray",
+          "id": 4594327,
+          "proTeamId": 23,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4437244,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jalen Green",
+          "id": 4437244,
+          "proTeamId": 21,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3913176,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Brandon Ingram",
+          "id": 3913176,
+          "proTeamId": 12,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5254165,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Keaton Wagler",
+          "id": 5254165,
+          "proTeamId": 12,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4397077,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jaxson Hayes",
+          "id": 4397077,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3059319,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Andrew Wiggins",
+          "id": 3059319,
+          "proTeamId": 14,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4871145,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Josh Giddey",
+          "id": 4871145,
+          "proTeamId": 4,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4432241,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jamal Shead",
+          "id": 4432241,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 4432158,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Evan Mobley",
+          "id": 4432158,
+          "proTeamId": 5,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 5175643,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Egor Demin",
+          "id": 5175643,
+          "proTeamId": 17,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 11
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 9.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 34.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 15.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 9.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 34.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 15.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 12,
+        "playerId": 4065648,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jayson Tatum",
+          "id": 4065648,
+          "proTeamId": 2,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 3936299,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jamal Murray",
+          "id": 3936299,
+          "proTeamId": 7,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 6583,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Anthony Davis",
+          "id": 6583,
+          "proTeamId": 27,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4396907,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Darius Garland",
+          "id": 4396907,
+          "proTeamId": 12,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 3907497,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Dejounte Murray",
+          "id": 3907497,
+          "proTeamId": 3,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 5041935,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Cameron Boozer",
+          "id": 5041935,
+          "proTeamId": 29,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4066328,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jarrett Allen",
+          "id": 4066328,
+          "proTeamId": 5,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4431671,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jaden McDaniels",
+          "id": 4431671,
+          "proTeamId": 16,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5093267,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Collin Murray-Boyles",
+          "id": 5093267,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 4903027,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Cedric Coward",
+          "id": 4903027,
+          "proTeamId": 29,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4873138,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Ace Bailey",
+          "id": 4873138,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 3102530,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jusuf Nurkic",
+          "id": 3102530,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 4397189,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jalen Smith",
+          "id": 4397189,
+          "proTeamId": 4,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 4277847,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Wendell Carter Jr.",
+          "id": 4277847,
+          "proTeamId": 19,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4683766,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Isaiah Collier",
+          "id": 4683766,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4397140,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Kevin Porter Jr.",
+          "id": 4397140,
+          "proTeamId": 0,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 12
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 16.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 17.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 19.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 15.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 16.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 9.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 16.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 17.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 19.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 14.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 11.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 15.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 16.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 9.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 12,
+        "playerId": 3032977,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Giannis Antetokounmpo",
+          "id": 3032977,
+          "proTeamId": 14,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 4,
+        "playerId": 4871144,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Alperen Sengun",
+          "id": 4871144,
+          "proTeamId": 10,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 0,
+        "playerId": 4277905,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Trae Young",
+          "id": 4277905,
+          "proTeamId": 27,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 3992,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "James Harden",
+          "id": 3992,
+          "proTeamId": 5,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 6606,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Damian Lillard",
+          "id": 6606,
+          "proTeamId": 22,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 5095151,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Caleb Wilson",
+          "id": 5095151,
+          "proTeamId": 4,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 3032976,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Rudy Gobert",
+          "id": 3032976,
+          "proTeamId": 16,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3064440,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Zach LaVine",
+          "id": 3064440,
+          "proTeamId": 23,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 2991230,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Fred VanVleet",
+          "id": 2991230,
+          "proTeamId": 10,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3064482,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Bobby Portis",
+          "id": 3064482,
+          "proTeamId": 14,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4433083,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Cam Spencer",
+          "id": 4433083,
+          "proTeamId": 29,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4397688,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Trey Murphy III",
+          "id": 4397688,
+          "proTeamId": 3,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 4576087,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Peyton Watson",
+          "id": 4576087,
+          "proTeamId": 5,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 4278585,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Collin Gillespie",
+          "id": 4278585,
+          "proTeamId": 21,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 5107199,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Daniss Jenkins",
+          "id": 5107199,
+          "proTeamId": 8,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 13
+    },
+    {
+     "cumulativeScore": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 38.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       }
+      }
+     },
+     "cumulativeScoreLive": {
+      "statBySlot": {
+       "0": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "1": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "11": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 38.0
+       },
+       "2": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       },
+       "3": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "4": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 10.0
+       },
+       "5": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 13.0
+       },
+       "6": {
+        "exceededOnScoringPeriod": 0,
+        "limitExceeded": false,
+        "statId": 42,
+        "value": 12.0
+       }
+      }
+     },
+     "rosterForCurrentScoringPeriod": {
+      "entries": [
+       {
+        "lineupSlotId": 4,
+        "playerId": 3112335,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Nikola Jokic",
+          "id": 3112335,
+          "proTeamId": 7,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 2,
+        "playerId": 4684740,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Amen Thompson",
+          "id": 4684740,
+          "proTeamId": 10,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 1,
+        "playerId": 3078576,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Derrick White",
+          "id": 3078576,
+          "proTeamId": 2,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 13,
+        "playerId": 4593803,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jalen Williams",
+          "id": 4593803,
+          "proTeamId": 25,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 6,
+        "playerId": 3149673,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Pascal Siakam",
+          "id": 3149673,
+          "proTeamId": 11,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 0,
+        "playerId": 5037871,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Dylan Harper",
+          "id": 5037871,
+          "proTeamId": 24,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3908845,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "John Collins",
+          "id": 3908845,
+          "proTeamId": 8,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 5,
+        "playerId": 5041955,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Darryn Peterson",
+          "id": 5041955,
+          "proTeamId": 26,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 2490149,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "CJ McCollum",
+          "id": 2490149,
+          "proTeamId": 1,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 3,
+        "playerId": 4066383,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Miles Bridges",
+          "id": 4066383,
+          "proTeamId": 21,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 3448,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Brook Lopez",
+          "id": 3448,
+          "proTeamId": 12,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4278049,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Daniel Gafford",
+          "id": 4278049,
+          "proTeamId": 6,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 5061589,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Yves Missi",
+          "id": 5061589,
+          "proTeamId": 3,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 12,
+        "playerId": 4711272,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Reed Sheppard",
+          "id": 4711272,
+          "proTeamId": 10,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 3062679,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Josh Hart",
+          "id": 3062679,
+          "proTeamId": 18,
+          "stats": []
+         }
+        }
+       },
+       {
+        "lineupSlotId": 11,
+        "playerId": 3134908,
+        "playerPoolEntry": {
+         "player": {
+          "fullName": "Jakob Poeltl",
+          "id": 3134908,
+          "proTeamId": 28,
+          "stats": []
+         }
+        }
+       }
+      ]
+     },
+     "teamId": 3
+    }
+   ]
+  }
+ ],
+ "scoringPeriodId": 25,
+ "seasonId": 2027,
+ "settings": {
+  "rosterSettings": {
+   "lineupSlotStatLimits": {
+    "0": {
+     "limitValue": 82.0,
+     "statId": 42
+    },
+    "1": {
+     "limitValue": 82.0,
+     "statId": 42
+    },
+    "11": {
+     "limitValue": 246.0,
+     "statId": 42
+    },
+    "2": {
+     "limitValue": 82.0,
+     "statId": 42
+    },
+    "3": {
+     "limitValue": 82.0,
+     "statId": 42
+    },
+    "4": {
+     "limitValue": 82.0,
+     "statId": 42
+    },
+    "5": {
+     "limitValue": 82.0,
+     "statId": 42
+    },
+    "6": {
+     "limitValue": 82.0,
+     "statId": 42
+    }
+   }
+  },
+  "scoringSettings": {
+   "scoringItems": [
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 0
+    },
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 1
+    },
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 2
+    },
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 3
+    },
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 6
+    },
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 17
+    },
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 19
+    },
+    {
+     "isReverseItem": false,
+     "leagueRanking": 0.0,
+     "leagueTotal": 0.0,
+     "points": 1.0,
+     "pointsOverrides": {},
+     "statId": 20
+    }
+   ]
+  }
+ },
+ "status": {
+  "finalScoringPeriod": 174,
+  "firstScoringPeriod": 1,
+  "latestScoringPeriod": 25,
+  "standingsUpdateDate": 1794556800277
+ },
+ "teams": [
+  {
+   "abbrev": "ASAF",
+   "id": 1,
+   "name": "Asaf's Astounding Team",
+   "points": 30.5,
+   "pointsLive": 30.5,
+   "valuesByStat": {
+    "0": 1541.0,
+    "1": 64.0,
+    "13": 569.0,
+    "14": 1229.0,
+    "15": 263.0,
+    "16": 331.0,
+    "17": 140.0,
+    "19": 0.46297803,
+    "2": 132.0,
+    "20": 0.79456193,
+    "3": 346.0,
+    "42": 104.0,
+    "6": 591.0
+   }
+  },
+  {
+   "abbrev": "OOT",
+   "id": 3,
+   "name": "Oriel's Otherworldly Team",
+   "points": 52.0,
+   "pointsLive": 52.0,
+   "valuesByStat": {
+    "0": 1883.0,
+    "1": 79.0,
+    "13": 711.0,
+    "14": 1494.0,
+    "15": 307.0,
+    "16": 381.0,
+    "17": 154.0,
+    "19": 0.47590361,
+    "2": 128.0,
+    "20": 0.80577428,
+    "3": 475.0,
+    "42": 123.0,
+    "6": 689.0
+   }
+  },
+  {
+   "abbrev": "LA",
+   "id": 4,
+   "name": "DORELIT",
+   "points": 59.5,
+   "pointsLive": 59.5,
+   "valuesByStat": {
+    "0": 2045.0,
+    "1": 82.0,
+    "13": 722.0,
+    "14": 1475.0,
+    "15": 380.0,
+    "16": 476.0,
+    "17": 221.0,
+    "19": 0.48949153,
+    "2": 121.0,
+    "20": 0.79831933,
+    "3": 473.0,
+    "42": 113.0,
+    "6": 674.0
+   }
+  },
+  {
+   "abbrev": "GPT",
+   "id": 5,
+   "name": "Chat GPT",
+   "points": 30.0,
+   "pointsLive": 30.0,
+   "valuesByStat": {
+    "0": 1599.0,
+    "1": 63.0,
+    "13": 562.0,
+    "14": 1196.0,
+    "15": 286.0,
+    "16": 351.0,
+    "17": 189.0,
+    "19": 0.46989967,
+    "2": 112.0,
+    "20": 0.81481481,
+    "3": 364.0,
+    "42": 113.0,
+    "6": 542.0
+   }
+  },
+  {
+   "abbrev": "RRT",
+   "id": 6,
+   "name": "Roy's Rowdy Team",
+   "points": 76.0,
+   "pointsLive": 76.0,
+   "valuesByStat": {
+    "0": 2475.0,
+    "1": 111.0,
+    "13": 854.0,
+    "14": 1790.0,
+    "15": 529.0,
+    "16": 671.0,
+    "17": 238.0,
+    "19": 0.47709497,
+    "2": 138.0,
+    "20": 0.78837556,
+    "3": 432.0,
+    "42": 131.0,
+    "6": 707.0
+   }
+  },
+  {
+   "abbrev": "DOR",
+   "id": 8,
+   "name": "Dor's Injured Team",
+   "points": 45.0,
+   "pointsLive": 45.0,
+   "valuesByStat": {
+    "0": 1985.0,
+    "1": 53.0,
+    "13": 700.0,
+    "14": 1578.0,
+    "15": 374.0,
+    "16": 465.0,
+    "17": 211.0,
+    "19": 0.44359949,
+    "2": 122.0,
+    "20": 0.80430108,
+    "3": 504.0,
+    "42": 111.0,
+    "6": 669.0
+   }
+  },
+  {
+   "abbrev": "KHT",
+   "id": 9,
+   "name": "Khachapuri\u2019s Team",
+   "points": 68.0,
+   "pointsLive": 68.0,
+   "valuesByStat": {
+    "0": 2008.0,
+    "1": 96.0,
+    "13": 689.0,
+    "14": 1436.0,
+    "15": 422.0,
+    "16": 506.0,
+    "17": 208.0,
+    "19": 0.47980501,
+    "2": 135.0,
+    "20": 0.83399209,
+    "3": 394.0,
+    "42": 116.0,
+    "6": 696.0
+   }
+  },
+  {
+   "abbrev": "AMI",
+   "id": 10,
+   "name": "Amihai's Awesome Team \ud83c\udfc6",
+   "points": 61.5,
+   "pointsLive": 61.5,
+   "valuesByStat": {
+    "0": 2083.0,
+    "1": 82.0,
+    "13": 728.0,
+    "14": 1664.0,
+    "15": 394.0,
+    "16": 502.0,
+    "17": 233.0,
+    "19": 0.4375,
+    "2": 124.0,
+    "20": 0.78486056,
+    "3": 493.0,
+    "42": 130.0,
+    "6": 711.0
+   }
+  },
+  {
+   "abbrev": "HHT",
+   "id": 11,
+   "name": "Trust the process",
+   "points": 43.5,
+   "pointsLive": 43.5,
+   "valuesByStat": {
+    "0": 1987.0,
+    "1": 60.0,
+    "13": 720.0,
+    "14": 1537.0,
+    "15": 335.0,
+    "16": 445.0,
+    "17": 212.0,
+    "19": 0.46844502,
+    "2": 113.0,
+    "20": 0.75280899,
+    "3": 484.0,
+    "42": 115.0,
+    "6": 698.0
+   }
+  },
+  {
+   "abbrev": "BBT",
+   "id": 12,
+   "name": "Hapoel Yifat\ud83c\udfc0",
+   "points": 69.0,
+   "pointsLive": 69.0,
+   "valuesByStat": {
+    "0": 2190.0,
+    "1": 99.0,
+    "13": 782.0,
+    "14": 1664.0,
+    "15": 422.0,
+    "16": 509.0,
+    "17": 204.0,
+    "19": 0.46995192,
+    "2": 117.0,
+    "20": 0.82907662,
+    "3": 479.0,
+    "42": 126.0,
+    "6": 837.0
+   }
+  },
+  {
+   "abbrev": "MH7",
+   "id": 13,
+   "name": "Maccabi Haifa NBA 777",
+   "points": 52.0,
+   "pointsLive": 52.0,
+   "valuesByStat": {
+    "0": 2144.0,
+    "1": 60.0,
+    "13": 719.0,
+    "14": 1574.0,
+    "15": 474.0,
+    "16": 613.0,
+    "17": 232.0,
+    "19": 0.45679797,
+    "2": 120.0,
+    "20": 0.77324633,
+    "3": 563.0,
+    "42": 117.0,
+    "6": 689.0
+   }
+  },
+  {
+   "abbrev": "MT",
+   "id": 15,
+   "name": "Machlins team ",
+   "points": 37.0,
+   "pointsLive": 37.0,
+   "valuesByStat": {
+    "0": 1853.0,
+    "1": 51.0,
+    "13": 656.0,
+    "14": 1382.0,
+    "15": 342.0,
+    "16": 422.0,
+    "17": 199.0,
+    "19": 0.47467438,
+    "2": 115.0,
+    "20": 0.81042654,
+    "3": 475.0,
+    "42": 116.0,
+    "6": 591.0
+   }
+  }
+ ]
+}

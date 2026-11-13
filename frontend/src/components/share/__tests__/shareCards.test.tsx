@@ -199,3 +199,25 @@ describe('TradeShareCard', () => {
     expect(screen.queryByText('#rank · Z-score, per game')).toBeNull();
   });
 });
+
+describe('live stamp on share cards', () => {
+  const live = { active: true, period: 24, as_of: '2026-11-13T01:42:00Z', games_total: 4, games_live: 2, games_final: 1, official_updated_at: null };
+
+  it('stamps the rankings card LIVE and says what is still in progress', () => {
+    render(<RankingsShareCard dark={false} rows={rows} categories={['FG%', 'PTS']} view="rankings" mode="averages" asOf="Nov 12, 2026" highlightTeamId={null} live={live} />);
+    expect(screen.getByText(/^LIVE · /)).toBeInTheDocument();
+    expect(screen.getByText(/Live standings · 2 of 4 games still in progress/)).toBeInTheDocument();
+    expect(screen.getByText(/^Live as of /)).toBeInTheDocument();
+  });
+
+  it('stamps it FINAL · NOT YET OFFICIAL once every game is final', () => {
+    render(<RankingsShareCard dark={false} rows={rows} categories={['FG%', 'PTS']} view="rankings" mode="averages" asOf="Nov 12, 2026" highlightTeamId={null} live={{ ...live, games_live: 0, games_final: 4 }} />);
+    expect(screen.getByText('FINAL · NOT YET OFFICIAL')).toBeInTheDocument();
+  });
+
+  it('is unchanged without a live block', () => {
+    render(<RankingsShareCard dark={false} rows={rows} categories={['FG%', 'PTS']} view="rankings" mode="averages" asOf="Nov 12, 2026" highlightTeamId={null} />);
+    expect(screen.queryByText(/LIVE|FINAL/)).toBeNull();
+    expect(screen.getByText('2-cat roto')).toBeInTheDocument();
+  });
+});

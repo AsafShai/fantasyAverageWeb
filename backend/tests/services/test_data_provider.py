@@ -349,6 +349,8 @@ async def test_get_averages_df_passes_resolved_categories(provider):
     mock_resp.json.return_value = _api_teams_payload()
     provider._client.get = AsyncMock(return_value=mock_resp)
 
+    # An equal frame left cached by an earlier test would be kept by identity.
+    provider.cache_manager.totals_cache = {"etag": None, "data": None, "fetched_at": None}
     totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
     provider.data_transformer.raw_standings_to_totals_df.return_value = totals
     provider.data_transformer.resolve_ranking_categories.return_value = ["PTS", "TO"]
@@ -806,7 +808,8 @@ async def test_sync_db_now_304_still_syncs_a_behind_snapshot(ttl_provider):
 
     ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
     assert await ttl_provider.sync_db_now() is True
-    ttl_provider._sync_db_if_needed.assert_awaited_once_with(5, first)
+    # The payload carries no standingsUpdateDate, so the G1 guard gets None.
+    ttl_provider._sync_db_if_needed.assert_awaited_once_with(5, first, None)
 
 
 @pytest.mark.asyncio

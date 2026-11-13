@@ -1,10 +1,11 @@
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import ClassVar, List, Optional, Dict
 from datetime import datetime, date
 from .base import Team
 from .stats import RankingStats, AverageStats, TeamShotStats
+from .live import LiveAware
 
-class LeagueRankings(BaseModel):
+class LeagueRankings(LiveAware):
     averages_rankings: List[RankingStats]
     totals_rankings: List[RankingStats]
     categories: List[str]
@@ -15,7 +16,7 @@ class LeagueRankings(BaseModel):
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
 
-class LeagueSummary(BaseModel):
+class LeagueSummary(LiveAware):
     total_teams: int
     total_games_played: int
     nba_avg_pace: Optional[float] = None
@@ -29,13 +30,17 @@ class LeagueSummary(BaseModel):
     trade_deadline: Optional[datetime] = None
     # ESPN's own stat-update time (status.standingsUpdateDate), not our fetch time.
     espn_updated_at: Optional[datetime] = None
+    # While tonight is live: this morning's official league averages, so the
+    # Today page can mark the tiles tonight moved. Absent otherwise.
+    league_averages_official: Optional[AverageStats] = None
+    omit_when_none: ClassVar[tuple[str, ...]] = ('live', 'league_averages_official')
 
 class LeagueShotsData(BaseModel):
     shots: List[TeamShotStats]
     last_updated: datetime
     data_date: Optional[date] = None
 
-class HeatmapData(BaseModel):
+class HeatmapData(LiveAware):
     teams: List[Team]
     categories: List[str]
     data: List[List[float]]
@@ -46,6 +51,10 @@ class HeatmapData(BaseModel):
     date_range_end: Optional[date] = None
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
+    # While tonight is live: games counted tonight per team, in ``teams``
+    # order (the GP column's "+N"). Absent otherwise.
+    gp_tonight: Optional[List[int]] = None
+    omit_when_none: ClassVar[tuple[str, ...]] = ('live', 'gp_tonight')
 
 class TeamTimeSeriesPoint(BaseModel):
     date: date
@@ -77,12 +86,16 @@ class TeamTimeSeriesPoint(BaseModel):
     # every stored category including ones with no column of their own.
     values: Optional[Dict[str, float]] = None
 
-class RankingsOverTimeResponse(BaseModel):
+class RankingsOverTimeResponse(LiveAware):
     data: List[TeamTimeSeriesPoint]
     # Stat sources only: the league's scored categories, in the league's order,
     # and those where a lower value is better (e.g. TO). Empty when unknown.
     categories: List[str] = []
     reverse_categories: List[str] = []
+    # While tonight is live: one point per team for tonight, drawn dashed and
+    # never stored; ESPN's update replaces it with a stored point. Absent otherwise.
+    live_points: Optional[List[TeamTimeSeriesPoint]] = None
+    omit_when_none: ClassVar[tuple[str, ...]] = ('live', 'live_points')
 
 class DraftPick(BaseModel):
     pick: int
@@ -114,7 +127,10 @@ class TeamRankChange(BaseModel):
     categories: Dict[str, float] = {}
 
 
-class RankChanges(BaseModel):
+class RankChanges(LiveAware):
+    """While tonight is live (``live.active``) the moves are tonight's,
+    against this morning's official standings; otherwise between the two
+    latest stored periods."""
     previous_period: Optional[int] = None
     latest_period: Optional[int] = None
     teams: List[TeamRankChange] = []
@@ -138,9 +154,13 @@ class NightlyRun(BaseModel):
     rows: int
 
 
-class TodayHub(BaseModel):
+class TodayHub(LiveAware):
     slate_date: Optional[date] = None
     games_count: int = 0
     movers: List[RankMover] = []
     roster_health: List[TeamRosterHealth] = []
     last_nightly: Optional[NightlyRun] = None
+    # While tonight is live: movers against this morning's official standings
+    # (the Rank movers "Tonight" view). ``movers`` stays day over day. Absent otherwise.
+    tonight_movers: Optional[List[RankMover]] = None
+    omit_when_none: ClassVar[tuple[str, ...]] = ('live', 'tonight_movers')

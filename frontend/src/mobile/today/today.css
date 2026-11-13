@@ -76,6 +76,9 @@
 .mr-today-c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mr-today-tile { background: var(--mr-sunken); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mr-today-tile dd { margin: 0; }
+.mr-today-tile.mr-today-moved { background: #ecfdf5; outline: 1px solid #a7f3d0; }
+.dark .mr-today-tile.mr-today-moved { background: rgba(6, 78, 59, 0.35); outline-color: #065f46; }
+.mr-today-msub { margin: -2px 0 6px; }
 .mr-today-edge { border-left: 3px solid var(--mr-primary-2); }
 .mr-today-edge.mr-today-warn { border-left-color: #F59E0B; }
 .mr-today-tl { font-size: 10px; font-weight: 700; color: var(--mr-muted); letter-spacing: .04em; text-transform: uppercase; }
@@ -105,3 +108,4 @@
 .mr-today-add { color: var(--mr-up); }
 .mr-today-drop { color: var(--mr-muted); }
 .mr-today-plink { color: inherit; text-decoration: none; }
+.mr-today-mswitch { margin-bottom: 8px; }

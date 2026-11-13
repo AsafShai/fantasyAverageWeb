@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Query
-from app.models import HeatmapData, RankingsOverTimeResponse, TeamTimeSeriesPoint
+from app.models import HeatmapData, RankingsOverTimeResponse, TeamTimeSeriesPoint, with_live
+from app.services import tonight_changes
 from app.services.league_service import LeagueService
 from app.services.db_service import DBService
 from app.services.data_provider import DataProvider
@@ -66,6 +67,25 @@ async def _league_categories() -> tuple[list[str], list[str]]:
         return [], []
 
 
+async def _with_live_point(response: RankingsOverTimeResponse, source: str,
+                           team_ids: Optional[list[int]]) -> RankingsOverTimeResponse:
+    """Tonight's dashed point and the ``live`` block while LIVE_STANDINGS_ENABLED
+    is on; the stored days are untouched. With the flag off the response is
+    exactly as before. Read at call time: the route module's provider is
+    created at import."""
+    provider = DataProvider()
+    try:
+        state = await provider.get_live_state(include_finals=source in ("rankings_avg", "averages"))
+    except Exception as e:
+        logger.warning(f"Over-time live state failed, serving stored days: {type(e).__name__}: {e}")
+        return response
+    if state is not None and state.active:
+        live_points = await tonight_changes.race_points(provider, source, state.period, team_ids)
+        if live_points:
+            response = response.model_copy(update={'live_points': [TeamTimeSeriesPoint(**p) for p in live_points]})
+    return with_live(response, state)
+
+
 @router.get("/over-time", response_model=RankingsOverTimeResponse)
 async def get_over_time(
     db_service: DBServiceDep,
@@ -92,8 +112,10 @@ async def get_over_time(
         points = [TeamTimeSeriesPoint(**{k: (v.isoformat() if isinstance(v, date_type) else v) for k, v in row.items()}) for row in rows]
         if source in ("snapshot", "averages"):
             categories, reverse = await _league_categories()
-            return RankingsOverTimeResponse(data=points, categories=categories, reverse_categories=reverse)
-        return RankingsOverTimeResponse(data=points)
+            response = RankingsOverTimeResponse(data=points, categories=categories, reverse_categories=reverse)
+        else:
+            response = RankingsOverTimeResponse(data=points)
+        return await _with_live_point(response, source, parsed_team_ids)
     except HTTPException:
         raise
     except Exception as e:

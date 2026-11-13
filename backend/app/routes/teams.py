@@ -23,8 +23,17 @@ TeamServiceDep = Annotated[TeamService, Depends(TeamService)]
 # caller-supplied and would let the dict grow without bound. _MAX_ENTRIES is a
 # backstop, not the real bound.
 _RESPONSE_CACHE_TTL_S = 60
+# While tonight's games are being counted the header changes minute by minute
+# and the frontend polls every 60 s, so a 60 s entry would show numbers up to
+# two minutes old. A shorter entry still absorbs a burst of requests.
+_LIVE_RESPONSE_CACHE_TTL_S = 20
 _MAX_ENTRIES = 64
 _response_cache: dict[tuple[int, str], tuple[float, TeamDetail]] = {}
+
+
+def _cache_ttl(detail: TeamDetail) -> int:
+    live = detail.live
+    return _LIVE_RESPONSE_CACHE_TTL_S if live is not None and live.active else _RESPONSE_CACHE_TTL_S
 
 
 def clear_team_detail_cache() -> None:
@@ -80,7 +89,7 @@ async def get_team_detail(
 
         key = (team_id, time_period.value)
         hit = _response_cache.get(key)
-        if hit is not None and time.monotonic() - hit[0] < _RESPONSE_CACHE_TTL_S:
+        if hit is not None and time.monotonic() - hit[0] < _cache_ttl(hit[1]):
             return hit[1]
 
         detail = await team_service.get_team_detail(team_id, time_period, start, end)

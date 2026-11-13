@@ -206,6 +206,7 @@ async def test_get_roster_day_builds_the_day_and_caches_without_db():
     with patch.object(svc, "get_data_provider", return_value=provider), \
          patch.object(svc.schedule_service, "get_season_start_date", AsyncMock(return_value=season_start)), \
          patch.object(svc, "eastern_today", return_value=date(2026, 11, 5)), \
+         patch.object(svc.box_score_service, "scoreboard_for", AsyncMock(return_value={"games": []})), \
          patch.object(service, "_get", side_effect=fake_get):
         day = await service.get_roster_day(1, date(2026, 11, 4))
         assert day.scoring_period_id == 16 and day.is_today is False and day.has_games is True

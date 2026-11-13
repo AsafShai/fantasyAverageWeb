@@ -11,7 +11,9 @@ import { getErrorMessage } from '../utils/errorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import DataDateBadge from '../components/DataDateBadge'
-import EspnUpdatedNote from '../components/EspnUpdatedNote'
+import LiveBadge from '../components/live/LiveBadge'
+import { useLiveQuery } from '../hooks/useLiveQuery'
+import { liveSectionNote, slotTonightNote, startersNote, tonightGp, tonightPoints } from '../utils/live'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 import InjuryBadge from '../components/InjuryBadge'
 import SlotUsageTable from '../components/SlotUsageTable'
@@ -25,8 +27,9 @@ import { formatAsOf } from '../components/share/shareCardFormat'
 import { orderCategories } from '../utils/statOrder'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { RosterDayContent, RosterDayOnlyPlayedToggle, RosterDayStepper, SlotPill } from '../components/RosterDayView'
+import NoSpoilersSwitch from '../components/boxScores/NoSpoilersSwitch'
 import { CollapsibleSection } from '../components/CollapsibleSection'
-import { lineupSlotOrder, lockNote } from '../utils/rosterDay'
+import { lineupSlotOrder, rosterDayNote } from '../utils/rosterDay'
 import { easternToday, formatSlateDate, isBackToBackGameDay, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 import { rosterScheduleCellClass, rosterScheduleMiniCellClass } from '../utils/rosterScheduleTone'
 import BackToBackMark from '../components/BackToBackMark'
@@ -76,7 +79,7 @@ const TeamDetail = () => {
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(() =>
     urlState.from && urlState.to ? { start: urlState.from, end: urlState.to } : null
   )
-  const { data: team_detail, error, isLoading } = useGetTeamDetailQuery({
+  const { data: team_detail, error, isLoading } = useLiveQuery(useGetTeamDetailQuery, {
     teamId: teamIdNumber,
     time_period: timePeriod,
     ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
@@ -128,10 +131,13 @@ const TeamDetail = () => {
     currentData: rosterDay,
     isFetching: rosterDayFetching,
     error: rosterDayError,
-  } = useGetTeamRosterDayQuery(
+  } = useLiveQuery(
+    useGetTeamRosterDayQuery,
     { teamId: teamIdNumber, ...(rosterDate ? { date: rosterDate } : {}) },
     { skip: !showDaily || !teamIdNumber },
   )
+  // Shared with Box Scores: hides results, scores and live lines in Daily.
+  const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
   const changeRosterDate = (date: string) => setRosterDate(date >= (rosterDay?.last_date ?? today) ? '' : date)
   const { data: schedule } = useGetScheduleQuery()
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
@@ -439,11 +445,12 @@ const TeamDetail = () => {
     return formatStat(v, player.stats.gp, isPct)
   }
 
-  const teamStatsSubtitle = `#${team_detail.ranking_stats.rank ?? '—'} · ${team_detail.ranking_stats.total_points} pts · GP ${team_detail.raw_averages.gp}`
+  const statsLive = liveSectionNote(team_detail.live, 'stats')
+  const teamStatsSubtitle = `#${team_detail.ranking_stats.rank ?? '—'} · ${team_detail.ranking_stats.total_points} pts · GP ${team_detail.raw_averages.gp}${statsLive ? ` · ${statsLive}` : ''}`
   const rosterSubtitle =
     tableMode === 'daily'
       ? rosterDay
-        ? lockNote(rosterDay)
+        ? rosterDayNote(rosterDay, undefined, noSpoilers)
         : rosterDayFetching
           ? 'Loading day…'
           : 'Daily roster'
@@ -468,14 +475,28 @@ const TeamDetail = () => {
         }))}
         gp={team_detail.raw_averages.gp}
         asOf={formatAsOf(team_detail.data_date)}
+        live={team_detail.live}
       />
     )
   }
 
-  const slotUsageSubtitle =
+  const slotsLive = liveSectionNote(team_detail.live, 'slots')
+  const gpTonight = tonightGp(team_detail.live, team_detail.tonight)
+  const pointsTonight = tonightPoints(team_detail.live, team_detail.tonight)
+  const playingNote = startersNote(team_detail.live, team_detail.tonight)
+  const slotTonight = (slot: string) => slotTonightNote(team_detail.live, team_detail.tonight, slot)
+  const tonightTag = (text: string | null, tone: 'up' | 'down' = 'up') =>
+    text ? (
+      <span className={`ml-1.5 text-xs font-semibold ${tone === 'down' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} data-testid="tonight-delta">
+        {text}
+      </span>
+    ) : null
+  const pointsTone = (team_detail.tonight?.points ?? 0) < 0 ? 'down' : 'up'
+  const slotUsageBase =
     typeof leagueSummary?.nba_game_days_left === 'number'
       ? `${leagueSummary.nba_game_days_left} game days left${typeof leagueSummary?.nba_avg_pace === 'number' ? ` · NBA pace ${leagueSummary.nba_avg_pace.toFixed(1)}` : ''}`
       : undefined
+  const slotUsageSubtitle = slotsLive ? [slotUsageBase, slotsLive].filter(Boolean).join(' · ') : slotUsageBase
 
   if (mobileRedesign) {
     const awaitingCoverageMatchup = !!coverageSlate && !datedMatchupReady
@@ -499,6 +520,8 @@ const TeamDetail = () => {
         onRosterDate={changeRosterDate}
         rosterDayOnlyPlayed={rosterDayOnlyPlayed}
         onRosterDayOnlyPlayed={setRosterDayOnlyPlayed}
+        noSpoilers={noSpoilers}
+        onNoSpoilers={setNoSpoilers}
         matchups={matchupMap}
         matchupsPending={awaitingCoverageMatchup}
         timePeriod={timePeriod}
@@ -541,6 +564,7 @@ const TeamDetail = () => {
             avgPace={leagueSummary?.nba_avg_pace}
             gameDaysLeft={leagueSummary?.nba_game_days_left}
             gameDaysElapsed={leagueSummary?.nba_game_days_elapsed}
+            tonightNote={slotTonight}
           />
         }
         coverageDate={showSchedule ? scheduleSpotlightDate : coverageDate}
@@ -578,7 +602,7 @@ const TeamDetail = () => {
             <div className="mt-1">
               {team_detail.data_date
                 ? <DataDateBadge dataDate={team_detail.data_date} />
-                : <EspnUpdatedNote updatedAt={leagueSummary?.espn_updated_at} />}
+                : <LiveBadge live={team_detail.live} espnUpdatedAt={leagueSummary?.espn_updated_at} align="left" />}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -616,7 +640,7 @@ const TeamDetail = () => {
             </h1>
             {team_detail.data_date
               ? <DataDateBadge dataDate={team_detail.data_date} />
-              : <EspnUpdatedNote updatedAt={leagueSummary?.espn_updated_at} />}
+              : <LiveBadge live={team_detail.live} espnUpdatedAt={leagueSummary?.espn_updated_at} align="left" />}
           </div>
           <div className="flex items-center gap-2">
             <ShareCardButton title={`${team_detail.team.team_name} Report`} renderCard={shareCardRender} />
@@ -654,9 +678,12 @@ const TeamDetail = () => {
             </div>
             <div className="mt-1 flex justify-between text-sm">
               <span className="text-gray-700 dark:text-gray-300">Total points</span>
-              <span className="font-bold text-blue-600 dark:text-blue-400">{team_detail.ranking_stats.total_points}</span>
+              <span className="font-bold text-blue-600 dark:text-blue-400">{tonightTag(pointsTonight, pointsTone)} {team_detail.ranking_stats.total_points}</span>
             </div>
           </div>
+          {playingNote && (
+            <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">{playingNote}</p>
+          )}
           <div className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between text-gray-800 dark:text-gray-200">
               <span>Field goals</span>
@@ -684,8 +711,13 @@ const TeamDetail = () => {
         <div className="hidden sm:block">
           <div className="flex items-center space-x-4 mb-6 text-gray-600 dark:text-gray-300">
             <span>Total Games Played:</span>
-            <span className="font-semibold text-gray-900 dark:text-gray-100">{team_detail.raw_averages.gp}</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{team_detail.raw_averages.gp}{tonightTag(gpTonight)}</span>
           </div>
+          {playingNote && (
+            <p className="mb-6 inline-block rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" data-testid="starters-playing-note">
+              {playingNote}
+            </p>
+          )}
 
           <div className="mb-6">
             <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Ranking summary</h3>
@@ -696,7 +728,7 @@ const TeamDetail = () => {
               </div>
               <div className="flex justify-between items-center mt-2">
                 <span className="text-lg font-medium text-gray-800 dark:text-gray-200">Total points</span>
-                <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{team_detail.ranking_stats.total_points}</span>
+                <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{tonightTag(pointsTonight, pointsTone)} {team_detail.ranking_stats.total_points}</span>
               </div>
             </div>
           </div>
@@ -745,6 +777,7 @@ const TeamDetail = () => {
             avgPace={leagueSummary?.nba_avg_pace}
             gameDaysLeft={leagueSummary?.nba_game_days_left}
             gameDaysElapsed={leagueSummary?.nba_game_days_elapsed}
+            tonightNote={slotTonight}
           />
         </CollapsibleSection>
       )}
@@ -808,6 +841,7 @@ const TeamDetail = () => {
             )}
             {showDaily && (
               <div className="flex w-full flex-col gap-2">
+                <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />
                 {rosterDay && !rosterDay.is_today && (
                   <RosterDayOnlyPlayedToggle compact checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
                 )}
@@ -816,7 +850,7 @@ const TeamDetail = () => {
                   date={rosterDate || rosterDay?.date || today}
                   firstDate={rosterDay?.first_date}
                   lastDate={rosterDay?.last_date ?? today}
-                  note={rosterDay && !rosterDayFetching ? lockNote(rosterDay) : rosterDayFetching ? 'Loading this day…' : undefined}
+                  note={rosterDay && !rosterDayFetching ? rosterDayNote(rosterDay, undefined, noSpoilers) : rosterDayFetching ? 'Loading this day…' : undefined}
                   onChange={changeRosterDate}
                 />
               </div>
@@ -902,6 +936,7 @@ const TeamDetail = () => {
             </div>
             {showDaily ? (
               <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />
                 {rosterDay && !rosterDay.is_today && (
                   <RosterDayOnlyPlayedToggle checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
                 )}
@@ -909,7 +944,7 @@ const TeamDetail = () => {
                   date={rosterDate || rosterDay?.date || today}
                   firstDate={rosterDay?.first_date}
                   lastDate={rosterDay?.last_date ?? today}
-                  note={rosterDay && !rosterDayFetching ? lockNote(rosterDay) : rosterDayFetching ? 'Loading this day…' : undefined}
+                  note={rosterDay && !rosterDayFetching ? rosterDayNote(rosterDay, undefined, noSpoilers) : rosterDayFetching ? 'Loading this day…' : undefined}
                   onChange={changeRosterDate}
                 />
               </div>
@@ -1000,6 +1035,7 @@ const TeamDetail = () => {
               loading={rosterDayFetching && !rosterDay}
               matchups={matchupMap}
               onlyPlayed={Boolean(rosterDay && !rosterDay.is_today && rosterDayOnlyPlayed)}
+              noSpoilers={noSpoilers}
             />
           )
         ) : !team_detail.players ? (

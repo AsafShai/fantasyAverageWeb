@@ -89,6 +89,53 @@ describe('RosterDayContent', () => {
     expect(screen.queryByTestId('roster-day-totals')).toBeNull()
     expect(screen.queryByTestId('roster-day-mobile-totals')).toBeNull()
   })
+
+  const LIVE = { active: true, period: 16, as_of: '2026-11-06T01:42:00Z', games_total: 4, games_live: 2, games_final: 1, official_updated_at: null }
+  const liveToday = (live = LIVE): RosterDay => ({
+    ...DAY, is_today: true, date: '2026-11-05', last_date: '2026-11-05', live,
+    players: [
+      { ...DAY.players[1], status: 'live', added: false, dropped: false,
+        game: { status: 'live', detail: 'Q3 4:12', start_time: '2026-11-06T00:00:00Z', team_score: 78, opp_score: 71, won: null } },
+      { player_id: 4, player_name: 'Ausar Thompson', positions: ['SF'], pro_team: 'DET', lineup_slot: 'SF', opponent: 'WAS', status: 'played',
+        stats: { ...line, pts: 12 }, added: false, dropped: false,
+        game: { status: 'final', detail: 'Final', start_time: '2026-11-06T00:00:00Z', team_score: 112, opp_score: 104, won: true } },
+      { ...DAY.players[0] },
+    ],
+  })
+
+  it('shows tonight live: lines so far, the game score and clock, and starters so far', () => {
+    renderDay(liveToday())
+    expect(screen.getByRole('columnheader', { name: 'Min' })).toBeInTheDocument()
+    const row = (name: string) => screen.getAllByTestId('roster-day-row').find(r => within(r).queryByText(name))!
+    expect(row('Jarace Walker')).toHaveAttribute('data-on-court', 'true')
+    expect(row('Ausar Thompson')).not.toHaveAttribute('data-on-court')
+    expect(within(row('Jarace Walker')).getByText('78–71 · Q3 4:12')).toBeInTheDocument()
+    expect(within(row('Ausar Thompson')).getByText('W 112–104')).toBeInTheDocument()
+    const totals = screen.getByTestId('roster-day-totals')
+    expect(within(totals).getByText(/Today, so far/)).toBeInTheDocument()
+    expect(within(totals).getByText('27')).toBeInTheDocument()     // 15 so far + 12 final
+  })
+
+  it('says Today once every game is final', () => {
+    renderDay(liveToday({ ...LIVE, games_live: 0, games_final: 4 }))
+    expect(within(screen.getByTestId('roster-day-totals')).getByText(/\(Today\)/)).toBeInTheDocument()
+  })
+
+  it('shows the final result on past days too', () => {
+    const past: RosterDay = { ...DAY, players: [{ ...DAY.players[1], game: { status: 'final', detail: 'Final/OT', start_time: null, team_score: 99, opp_score: 101, won: false } }] }
+    renderDay(past)
+    expect(within(screen.getByTestId('roster-day-row')).getByText('L 99–101 OT')).toBeInTheDocument()
+  })
+
+  it('no spoilers: today shows opponents only, as before live data', () => {
+    render(<MemoryRouter><RosterDayContent day={liveToday()} loading={false} noSpoilers /></MemoryRouter>)
+    expect(screen.queryByTestId('roster-game-tag')).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Min' })).toBeNull()
+    expect(screen.queryByTestId('roster-day-totals')).toBeNull()
+    expect(screen.getAllByTestId('roster-day-row').some(r => r.hasAttribute('data-on-court'))).toBe(false)
+    expect(screen.getByText('vs ATL')).toBeInTheDocument()
+  })
+
 })
 
 describe('RosterDayStepper', () => {

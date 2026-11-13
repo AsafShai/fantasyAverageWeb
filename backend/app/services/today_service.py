@@ -5,10 +5,12 @@ from datetime import date
 from typing import Any, Optional
 
 from app.config import settings
-from app.models import NightlyRun, RankChanges, RankMover, TeamRankChange, TeamRosterHealth, TodayHub
+from app.models import NightlyRun, RankChanges, RankMover, TeamRosterHealth, TodayHub, with_live
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.nba_matchup_service import get_shared_matchup_service
+from app.services.rank_moves import changes_between, movers_between
+from app.services import tonight_changes
 from app.utils import category_storage
 from app.utils.category_storage import TOTAL_KEY
 from app.utils.name_matching import normalize_player_name
@@ -94,6 +96,24 @@ class TodayService:
         self.matchup_service = get_shared_matchup_service()
 
     async def get_today_hub(self) -> TodayHub:
+        """The hub, plus tonight's movers and the ``live`` block while
+        LIVE_STANDINGS_ENABLED is on. Tonight is added after the 5-minute hub
+        cache: it moves with every game that goes final."""
+        hub = await self._composed_hub()
+        provider = DataProvider()
+        try:
+            state = await provider.get_live_state(include_finals=True)
+        except Exception as e:
+            logger.warning(f'Today hub live state failed, serving official: {type(e).__name__}: {e}')
+            return hub
+        if state is not None and state.active:
+            movers = await tonight_changes.tonight_movers(provider)
+            if movers is None:
+                return hub
+            hub = hub.model_copy(update={'tonight_movers': movers})
+        return with_live(hub, state)
+
+    async def _composed_hub(self) -> TodayHub:
         cached_ts = _hub_cache.get('ts')
         if cached_ts is not None and time.monotonic() - cached_ts < _CACHE_TTL_S:
             return _hub_cache['value']
@@ -152,31 +172,25 @@ class TodayService:
             by_period[period][team_id] = TodayService._categories_of(row)
             names[team_id] = str(row['team_name'])
 
-        movers: list[RankMover] = []
-        for team_id, latest in by_period[latest_period].items():
-            previous = by_period[previous_period].get(team_id)
-            if previous is None:
-                continue
-            for category, value in latest.items():
-                before = previous.get(category)
-                if before is None or value is None:
-                    continue
-                delta = round(float(value) - float(before), 2)
-                if delta == 0:
-                    continue
-                movers.append(RankMover(
-                    team_id=team_id,
-                    team_name=names.get(team_id, str(team_id)),
-                    category=category,
-                    delta=delta,
-                ))
-
-        movers.sort(key=lambda m: (-abs(m.delta), m.team_name, m.category))
-        return movers
+        return movers_between(by_period[previous_period], by_period[latest_period], names)
 
     async def get_rank_changes(self, mode: str = 'averages') -> RankChanges:
-        """Each team's move in places, roto points and games played between the
-        two latest stored scoring periods, for the Rankings table."""
+        """Each team's move in places, roto points and games played, for the
+        Rankings table: between the two latest stored scoring periods, or,
+        while tonight is live, tonight against this morning's official
+        standings (plan decision 7). With LIVE_STANDINGS_ENABLED off the
+        response is exactly as before."""
+        provider = DataProvider()
+        state = await provider.get_live_state(include_finals=True)
+        if state is not None and state.active:
+            tonight = await tonight_changes.tonight_rank_changes(provider, mode, state.period)
+            if tonight is not None:
+                return with_live(tonight, state)
+            # Labelled "tonight" by the block, so no block on last night's moves.
+            return await self._stored_rank_changes(mode)
+        return with_live(await self._stored_rank_changes(mode), state)
+
+    async def _stored_rank_changes(self, mode: str) -> RankChanges:
         table = 'team_rankings_totals' if mode == 'totals' else 'team_rankings_averages'
         rows = await self.db_service.get_latest_two_periods_rankings(
             settings.league_id, settings.season_id, table
@@ -207,49 +221,18 @@ class TodayService:
             by_period[period][team_id] = TodayService._categories_of(row)
             names[team_id] = str(row['team_name'])
 
-        def places(period: int) -> dict[int, int]:
-            totals = {
-                team_id: cats[TOTAL_KEY]
-                for team_id, cats in by_period[period].items()
-                if cats.get(TOTAL_KEY) is not None
-            }
-            return {
-                team_id: 1 + sum(1 for other in totals.values() if other > total)
-                for team_id, total in totals.items()
-            }
-
-        place_before, place_now = places(previous_period), places(latest_period)
-        gp: dict[tuple[int, int], int] = {
-            (int(r['scoring_period_id']), int(r['team_id'])): int(r['gp'])
-            for r in gp_rows if r.get('gp') is not None
-        }
-
-        teams: list[TeamRankChange] = []
-        for team_id, latest in by_period[latest_period].items():
-            previous = by_period[previous_period].get(team_id)
-            if previous is None:
+        gp_before: dict[int, int] = {}
+        gp_now: dict[int, int] = {}
+        for r in gp_rows:
+            if r.get('gp') is None:
                 continue
-            deltas = {
-                category: round(float(value) - float(previous[category]), 2)
-                for category, value in latest.items()
-                if value is not None and previous.get(category) is not None
-            }
-            total_delta = deltas.pop(TOTAL_KEY, None)
-            rank_delta = (
-                place_before[team_id] - place_now[team_id]
-                if team_id in place_before and team_id in place_now else None
-            )
-            gp_before, gp_now = gp.get((previous_period, team_id)), gp.get((latest_period, team_id))
-            teams.append(TeamRankChange(
-                team_id=team_id,
-                team_name=names.get(team_id, str(team_id)),
-                rank_delta=rank_delta,
-                total_delta=total_delta,
-                gp_delta=None if gp_before is None or gp_now is None else gp_now - gp_before,
-                categories=deltas,
-            ))
+            period = int(r['scoring_period_id'])
+            if period == previous_period:
+                gp_before[int(r['team_id'])] = int(r['gp'])
+            elif period == latest_period:
+                gp_now[int(r['team_id'])] = int(r['gp'])
 
-        teams.sort(key=lambda t: t.team_id)
+        teams = changes_between(by_period[previous_period], by_period[latest_period], names, gp_before, gp_now)
         return RankChanges(previous_period=previous_period, latest_period=latest_period, teams=teams)
 
     @staticmethod
