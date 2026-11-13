@@ -145,6 +145,7 @@ const TeamDetail = () => {
     if (!showSchedule) return
     const dates = weekDays.map(d => d.date)
     if (dates.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing; syncs state to a changed input, refactor separately
     setScheduleFocusDate(prev => {
       if (prev && dates.includes(prev)) return prev
       if (coverageDate && dates.includes(coverageDate)) return coverageDate

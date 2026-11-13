@@ -211,6 +211,29 @@ def mock_data_provider_globally():
         yield mock_provider
 
 @pytest.fixture(autouse=True)
+def block_real_network(request):
+    """Unit tests must not reach ESPN/NBA: a real call is slow, flaky and only
+    "passes" because the code falls back when it fails. Refuse httpx's real
+    transports (mock and ASGI transports are separate classes and still work);
+    the code under test sees a ConnectError, as if the source were down.
+    Tests marked `live` are exempt."""
+    if request.node.get_closest_marker("live"):
+        yield
+        return
+    import httpx
+
+    def refuse(self, req, *args, **kwargs):
+        raise httpx.ConnectError(f"real network blocked in tests: {req.url.host}", request=req)
+
+    async def refuse_async(self, req, *args, **kwargs):
+        refuse(self, req)
+
+    with patch.object(httpx.HTTPTransport, "handle_request", refuse), \
+         patch.object(httpx.AsyncHTTPTransport, "handle_async_request", refuse_async):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def reset_season_anchor_cache():
     """The anchor-date cache is a module-level dict with a multi-hour TTL —
     reset it every test so state can't leak across tests/files."""
@@ -248,10 +271,32 @@ def reset_nba_stats_service_singleton():
     NBAStatsService._instance = None
     NBAStatsService._initialized = False
 
+async def _idle():
+    """Stand-in for a background scheduler/warm-up: never does any work."""
+
+
 @pytest.fixture
 def test_client():
-    """Create a test client for the FastAPI application."""
-    with TestClient(app) as client:
+    """Create a test client for the FastAPI application.
+
+    Entering the client runs the app's lifespan. Its startup work (season-date
+    lookups, injury PDF fetch, player-catalog warm, schedulers, projection
+    model warm) is stubbed here: unstubbed, every test made ~7 real requests to
+    ESPN/NBA and spent ~1.8 s starting up. The lifespan itself is tested in
+    tests/test_startup.py.
+    """
+    from app import main
+    with patch.object(main, "derive_season_start", AsyncMock(return_value=None)), \
+         patch.object(main.schedule_service, "get_season_end_date", AsyncMock(return_value=None)), \
+         patch.object(main.injury_service, "initialize", AsyncMock()), \
+         patch.object(main.nba_player_catalog, "warm_cache", AsyncMock(return_value=1)), \
+         patch.object(main.injury_service, "start_scheduler", _idle), \
+         patch.object(main.estimator_scheduler, "start_scheduler", _idle), \
+         patch.object(main.model_nightly_scheduler, "start_scheduler", _idle), \
+         patch.object(main.nba_players_scheduler, "start_scheduler", _idle), \
+         patch.object(main.adp_snapshot_scheduler, "start_scheduler", _idle), \
+         patch.object(main.LiveProjectionService, "warm", lambda self: _idle()), \
+         TestClient(app) as client:
         yield client
 
 @pytest_asyncio.fixture

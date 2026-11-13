@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- exports helpers next to components; only affects dev hot reload */
 import type { FantasyNightContext, SlatePlayerValue } from '../../types/boxScore'
 
 export type FantasyLineupState = 'started' | 'bench' | 'ir'
