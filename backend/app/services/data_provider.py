@@ -386,6 +386,26 @@ class DataProvider:
             self.logger.error(f"Live state failed, reporting inactive: {type(e).__name__}: {e}", exc_info=True)
             return inactive('error')
 
+    async def get_starters_live(self, team_id: int) -> int:
+        """Starters of ``team_id`` checked in to a game that is not final yet
+        (the team page's "N starters are playing now"). Uses the finals already
+        known, so it makes no scoreboard request. 0 whenever the overlay is not
+        applied (flag off, DB fallback, nothing started, G1)."""
+        try:
+            ctx = await self._live_context()
+            if ctx is None:
+                return 0
+            overlay = ctx[0]
+            raw = self.cache_manager.totals_cache.get('raw')
+            games = lo.pro_team_games(await self.get_pro_team_schedules(), overlay.period)
+            return lo.starters_playing(
+                lo.tonight_players(raw, team_id), games,
+                self.live.known_final(overlay.period), live_overlay_service._now_ms(),
+            )
+        except Exception as e:
+            self.logger.error(f"Live starters count failed: {type(e).__name__}: {e}", exc_info=True)
+            return 0
+
     def live_health(self) -> dict:
         return self.live.status(settings.live_standings_enabled)
 

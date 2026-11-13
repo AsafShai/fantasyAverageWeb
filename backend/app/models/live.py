@@ -1,7 +1,7 @@
 """The ``live`` block live-capable responses carry (plans/live_data_updates_design.md,
 "Response contract addition")."""
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel, model_serializer
 
@@ -16,20 +16,30 @@ class LiveBlock(BaseModel):
     official_updated_at: Optional[datetime] = None
 
 
-class LiveAware(BaseModel):
+class OmitWhenNone(BaseModel):
+    """Leaves the fields named in ``omit_when_none`` out of the serialized
+    response while they are None. Live-only fields use it, so with
+    LIVE_STANDINGS_ENABLED off the JSON is exactly what it was before the
+    fields existed."""
+    omit_when_none: ClassVar[tuple[str, ...]] = ()
+
+    @model_serializer(mode='wrap')
+    def _omit_absent(self, handler) -> Any:
+        data = handler(self)
+        if isinstance(data, dict):
+            for name in self.omit_when_none:
+                if data.get(name) is None:
+                    data.pop(name, None)
+        return data
+
+
+class LiveAware(OmitWhenNone):
     """Base of every response that can carry tonight's ``live`` block.
 
     ``live`` stays None while LIVE_STANDINGS_ENABLED is off, and is then left
-    out of the serialized response altogether, so with the flag off the JSON is
-    exactly what it was before the field existed."""
+    out of the serialized response altogether."""
+    omit_when_none: ClassVar[tuple[str, ...]] = ('live',)
     live: Optional[LiveBlock] = None
-
-    @model_serializer(mode='wrap')
-    def _omit_absent_live(self, handler) -> Any:
-        data = handler(self)
-        if isinstance(data, dict) and data.get('live') is None:
-            data.pop('live', None)
-        return data
 
 
 def with_live(response: LiveAware, state) -> LiveAware:

@@ -173,6 +173,10 @@ class MockDataProvider:
         self.live_calls.append(('slots', live))
         return {}
 
+    async def get_starters_live(self, team_id):
+        self.live_calls.append(('starters', True))
+        return 2
+
     async def get_lineup_slots(self):
         return {}
 

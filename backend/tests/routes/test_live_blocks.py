@@ -139,3 +139,22 @@ def test_team_detail_cache_is_short_while_live_so_a_60s_poll_sees_new_numbers(te
     provider.live_state = LiveState(True, 24, AS_OF, 4, 1, 2, UPDATED)
     body = test_client.get("/api/teams/1").json()
     assert body["live"]["games_live"] == 1
+
+
+# --- the team page's "tonight" deltas (PR 4) ---------------------------------
+
+def test_team_detail_has_no_tonight_with_the_flag_off(test_client, provider):
+    body = test_client.get("/api/teams/1").json()
+    assert "tonight" not in body and "live" not in body
+    assert ('starters', True) not in provider.live_calls
+
+
+def test_team_detail_has_no_tonight_before_tip_off(test_client, provider):
+    provider.live_state = IDLE
+    assert "tonight" not in test_client.get("/api/teams/1").json()
+
+
+def test_team_detail_carries_tonight_while_live(test_client, provider):
+    provider.live_state = LIVE
+    tonight = test_client.get("/api/teams/1").json()["tonight"]
+    assert tonight == {"gp": 0, "points": 0.0, "slots": {}, "starters_live": 2}

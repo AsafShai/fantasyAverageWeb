@@ -303,3 +303,109 @@ def reconcile(old: pd.DataFrame, new: pd.DataFrame, overlay: LiveOverlay) -> lis
 
 def _num(value: float):
     return int(value) if float(value).is_integer() else round(value, 6)
+
+
+# --- tonight per player (team page: Daily roster, "N starters playing now") --
+
+@dataclass(frozen=True)
+class TonightPlayer:
+    """One rostered player on ESPN's current period, as the polled league
+    payload has him: his slot now, whether that slot counts (active and not
+    capped), and tonight's raw ESPN line (stat id -> value), None before he
+    has one."""
+    player_id: int
+    name: str
+    slot_id: int
+    counts: bool
+    pro_team_id: Optional[int]
+    game_id: Optional[str]
+    line: Optional[Mapping[str, float]]
+
+    @property
+    def played(self) -> bool:
+        """He has checked in (GP is 1 as soon as he has minutes)."""
+        line = self.line or {}
+        return bool(line.get('42') or line.get('40'))
+
+
+def tonight_players(raw: Optional[dict], team_id: int) -> list[TonightPlayer]:
+    """``team_id``'s roster for the payload's own period, from
+    ``schedule[0].teams[].rosterForCurrentScoringPeriod`` (the same entries
+    the overlay sums)."""
+    raw = raw or {}
+    period = int(raw.get('scoringPeriodId') or 0)
+    schedule = raw.get('schedule') or []
+    teams = (schedule[0].get('teams') if schedule else None) or []
+    team = next((t for t in teams if t.get('teamId') == team_id), None)
+    if team is None:
+        return []
+    blocked = _blocked_slots(team, period)
+    out: list[TonightPlayer] = []
+    for entry in (team.get('rosterForCurrentScoringPeriod') or {}).get('entries') or []:
+        slot = entry.get('lineupSlotId')
+        player = (entry.get('playerPoolEntry') or {}).get('player') or {}
+        player_id = entry.get('playerId') or player.get('id')
+        if slot is None or player_id is None:
+            continue
+        line = _tonight_line(player, period)
+        stats = (line or {}).get('stats') or None
+        out.append(TonightPlayer(
+            player_id=int(player_id),
+            name=str(player.get('fullName') or ''),
+            slot_id=int(slot),
+            counts=slot not in INACTIVE_SLOT_IDS and slot not in blocked,
+            pro_team_id=int(player['proTeamId']) if player.get('proTeamId') is not None else None,
+            game_id=str(line.get('externalId')) if line and line.get('externalId') else None,
+            line=MappingProxyType({str(k): float(v) for k, v in stats.items() if v is not None}) if stats else None,
+        ))
+    return out
+
+
+def pro_team_games(schedule_payload: Optional[dict], period: int) -> dict[int, tuple[str, int]]:
+    """{pro_team_id: (game_id, tip ms)} for ``period``'s NBA games."""
+    out: dict[int, tuple[str, int]] = {}
+    for team in ((schedule_payload or {}).get('settings') or {}).get('proTeams') or []:
+        for game in (team.get('proGamesByScoringPeriod') or {}).get(str(period)) or []:
+            if game.get('id') is None or game.get('date') is None:
+                continue
+            for side in (game.get('homeProTeamId'), game.get('awayProTeamId')):
+                if side is not None:
+                    out[int(side)] = (str(game['id']), int(game['date']))
+    return out
+
+
+def game_phase(game_id: Optional[str], tip_ms: Optional[int], finals: Collection[str],
+               now_ms: int, has_line: bool = False) -> Optional[str]:
+    """'scheduled', 'live' or 'final' for one of tonight's games; None when
+    there is no game. A game counts as started at its tip or as soon as a
+    line exists, and as final only once the scoreboard said so."""
+    if game_id is None:
+        return None
+    if game_id in finals:
+        return 'final'
+    if has_line or (tip_ms is not None and tip_ms <= now_ms):
+        return 'live'
+    return 'scheduled'
+
+
+def player_game(player: TonightPlayer, games: Mapping[int, tuple[str, int]]) -> tuple[Optional[str], Optional[int]]:
+    """(game id, tip ms) of ``player``'s game tonight, from his line or his pro team."""
+    by_team = games.get(player.pro_team_id) if player.pro_team_id is not None else None
+    if player.game_id:
+        tip = next((t for g, t in games.values() if g == player.game_id), None)
+        return player.game_id, tip
+    return by_team if by_team else (None, None)
+
+
+def starters_playing(players: Collection[TonightPlayer], games: Mapping[int, tuple[str, int]],
+                     finals: Collection[str], now_ms: int) -> int:
+    """Counted-slot players who have checked in to a game not yet final: the
+    ones whose stats are in the totals but not yet in the averages."""
+    count = 0
+    for p in players:
+        if not p.counts or not p.played:
+            continue
+        game_id, tip = player_game(p, games)
+        if game_phase(game_id, tip, finals, now_ms, has_line=True) == 'live':
+            count += 1
+    return count
