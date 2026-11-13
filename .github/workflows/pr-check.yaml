@@ -4,6 +4,10 @@ on:
   pull_request:
 
 # A new push to the same PR cancels the run it replaces.
+# Read-only token for every job unless a job asks for more.
+permissions:
+  contents: read
+
 concurrency:
   group: pr-check-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -13,6 +17,7 @@ jobs:
   # skipped, which GitHub counts as passing for required checks.
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: read
     outputs:
@@ -35,6 +40,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       SEASON_ID: ${{ vars.SEASON_ID }}
       LEAGUE_ID: ${{ vars.LEAGUE_ID }}
@@ -63,6 +69,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -82,11 +89,17 @@ jobs:
         run: npm test
         working-directory: frontend
 
+  # Split across two machines: the suite is ~420 short tests, so halving it
+  # roughly halves the slowest job in the run.
   e2e-frontend:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     # Image ships Chromium + system deps, so no apt-get at run time.
     # Keep the tag in sync with @playwright/test in frontend/package.json.
     container:
@@ -101,13 +114,13 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - name: Run live UI tests (API mocked)
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/2
         working-directory: frontend
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             frontend/playwright-report
             frontend/test-results
@@ -118,6 +131,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
