@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import date, datetime
 from typing import List, Optional
-from app.models import TeamDetail, TeamPlayers, Team, TeamRosterPlayer, StatTimePeriod
+from app.models import TeamDetail, TeamPlayers, Team, TeamRosterPlayer, StatTimePeriod, with_live
 from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.services.data_provider import DataProvider
 from app.services.player_service import compute_windowed_agg, merge_windowed_players_df
@@ -38,7 +38,13 @@ class TeamService:
 
         stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
 
-        totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
+        # None while LIVE_STANDINGS_ENABLED is off: official frames, no ``live`` block.
+        live_state = await self.data_provider.get_live_state(include_finals=True)
+        live = live_state is not None
+        if live:
+            totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes(live=True)
+        else:
+            totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
 
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ResourceNotFoundError("Unable to process ESPN data")
@@ -67,7 +73,8 @@ class TeamService:
                 cached_raw = self.data_provider.cached_totals_raw()
                 players_df, slot_usage_map, lineup_slots = await asyncio.gather(
                     self.data_provider.get_players_df(stat_split_id),
-                    self.data_provider.get_slot_usage(raw=cached_raw),
+                    (self.data_provider.get_slot_usage(raw=cached_raw, live=True) if live
+                     else self.data_provider.get_slot_usage(raw=cached_raw)),
                     self.data_provider.get_lineup_slots(),
                 )
                 if players_df is not None:
@@ -91,11 +98,12 @@ class TeamService:
         espn_url = f"https://fantasy.espn.com/basketball/team?leagueId={settings.league_id}&teamId={team_id}"
         team_slot_usage = slot_usage_map.get(team_id, {})
 
-        return self.response_builder.build_team_detail_response(
+        response = self.response_builder.build_team_detail_response(
             team_id, totals_df, averages_df, rankings_df, players_list, espn_url,
             team_slot_usage, data_date=self.data_provider.get_data_date(),
             actual_start=actual_start, actual_end=actual_end, categories=categories,
         )
+        return with_live(response, live_state)
     
     async def get_teams_list(self) -> List[Team]:
         """Get list of all teams. Falls back to identity-only data (no stats

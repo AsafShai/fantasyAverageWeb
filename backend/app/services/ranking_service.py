@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 from datetime import date
 from typing import Optional
-from app.models import LeagueRankings
+from app.models import LeagueRankings, with_live
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
@@ -23,12 +23,24 @@ class RankingService:
         """Get league rankings. If dates provided, compute from DB snapshot deltas."""
         if start_date is not None and end_date is not None:
             return await self._get_rankings_for_range(start_date, end_date, sort_by, order)
-        return await self.data_provider.memo_response(
-            'rankings', (sort_by, order), lambda: self._get_season_rankings(sort_by, order)
+        # None while LIVE_STANDINGS_ENABLED is off: the response is then built
+        # exactly as before and carries no ``live`` block. The block is attached
+        # after the memo because it changes with the clock, not with the frames.
+        live_state = await self.data_provider.get_live_state(include_finals=True)
+        if live_state is None:
+            return await self.data_provider.memo_response(
+                'rankings', (sort_by, order), lambda: self._get_season_rankings(sort_by, order)
+            )
+        response = await self.data_provider.memo_response(
+            'rankings', (sort_by, order), lambda: self._get_season_rankings(sort_by, order, live=True), live=True
         )
+        return with_live(response, live_state)
 
-    async def _get_season_rankings(self, sort_by: Optional[str], order: str) -> LeagueRankings:
-        totals_df, averages_df, averages_rankings_df = await self.data_provider.get_all_dataframes()
+    async def _get_season_rankings(self, sort_by: Optional[str], order: str, live: bool = False) -> LeagueRankings:
+        if live:
+            totals_df, averages_df, averages_rankings_df = await self.data_provider.get_all_dataframes(live=True)
+        else:
+            totals_df, averages_df, averages_rankings_df = await self.data_provider.get_all_dataframes()
         if totals_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 

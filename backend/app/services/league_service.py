@@ -3,7 +3,7 @@ import logging
 import pandas as pd
 from datetime import date
 from typing import Dict, List, Optional
-from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats, RankingStats
+from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats, RankingStats, with_live
 from app.services.data_provider import DataProvider
 from app.services.stats_calculator import StatsCalculator
 from app.services.nba_stats_service import NBAStatsService
@@ -22,9 +22,13 @@ class LeagueService:
     
     async def get_league_summary(self) -> LeagueSummary:
         """Get league summary statistics"""
+        # None while LIVE_STANDINGS_ENABLED is off: official frames, no ``live`` block.
+        live_state = await self.data_provider.get_live_state(include_finals=True)
+        live = live_state is not None
 
         async def _fetch_league_averages():
-            averages_df = await self.data_provider.get_averages_df()
+            averages_df = await (self.data_provider.get_averages_df(live=True) if live
+                                 else self.data_provider.get_averages_df())
             if averages_df is None:
                 raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
 
@@ -54,7 +58,7 @@ class LeagueService:
         trade_deadline = await self.data_provider.get_trade_deadline()
         espn_updated_at = await self.data_provider.get_standings_updated_at()
 
-        return self.response_builder.build_league_summary_response(
+        response = self.response_builder.build_league_summary_response(
             total_teams=len(averages_df),
             total_games_played=int(averages_df['GP'].sum()),
             category_leaders=category_leaders,
@@ -66,19 +70,28 @@ class LeagueService:
             trade_deadline=trade_deadline,
             espn_updated_at=espn_updated_at,
         )
+        return with_live(response, live_state)
     
     async def get_heatmap_data(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> HeatmapData:
         """Get data for heatmap visualization"""
         if start_date is not None and end_date is not None:
             return await self._get_heatmap_for_range(start_date, end_date)
-        return await self.data_provider.memo_response('heatmap', (), self._get_season_heatmap)
+        live_state = await self.data_provider.get_live_state(include_finals=True)
+        if live_state is None:
+            return await self.data_provider.memo_response('heatmap', (), self._get_season_heatmap)
+        response = await self.data_provider.memo_response(
+            'heatmap', (), lambda: self._get_season_heatmap(live=True), live=True
+        )
+        return with_live(response, live_state)
 
-    async def _get_season_heatmap(self) -> HeatmapData:
-        averages_df = await self.data_provider.get_averages_df()
+    async def _get_season_heatmap(self, live: bool = False) -> HeatmapData:
+        averages_df = await (self.data_provider.get_averages_df(live=True) if live
+                             else self.data_provider.get_averages_df())
         if averages_df is None:
             raise ResourceNotFoundError("Unable to fetch averages data from ESPN API")
 
-        rankings_df = await self.data_provider.get_rankings_df()
+        rankings_df = await (self.data_provider.get_rankings_df(live=True) if live
+                             else self.data_provider.get_rankings_df())
         if rankings_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 

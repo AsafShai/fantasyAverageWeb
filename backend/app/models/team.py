@@ -4,8 +4,9 @@ from datetime import datetime, date
 from .base import Team
 from .stats import ShotChartStats, TeamAverageStats, RankingStats, SlotUsage
 from .player import Player, TeamRosterPlayer
+from .live import LiveAware
 
-class TeamDetail(BaseModel):
+class TeamDetail(LiveAware):
     team: Team
     espn_url: str
     players: Optional[List[TeamRosterPlayer]] = None

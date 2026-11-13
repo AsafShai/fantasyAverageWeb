@@ -3,8 +3,9 @@ from typing import List, Optional, Dict
 from datetime import datetime, date
 from .base import Team
 from .stats import RankingStats, AverageStats, TeamShotStats
+from .live import LiveAware
 
-class LeagueRankings(BaseModel):
+class LeagueRankings(LiveAware):
     averages_rankings: List[RankingStats]
     totals_rankings: List[RankingStats]
     categories: List[str]
@@ -15,7 +16,7 @@ class LeagueRankings(BaseModel):
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
 
-class LeagueSummary(BaseModel):
+class LeagueSummary(LiveAware):
     total_teams: int
     total_games_played: int
     nba_avg_pace: Optional[float] = None
@@ -35,7 +36,7 @@ class LeagueShotsData(BaseModel):
     last_updated: datetime
     data_date: Optional[date] = None
 
-class HeatmapData(BaseModel):
+class HeatmapData(LiveAware):
     teams: List[Team]
     categories: List[str]
     data: List[List[float]]
