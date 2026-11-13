@@ -601,7 +601,7 @@ export default function BoxScorePanel({
     && game.home.starters.length === 0
     && game.home.bench.length === 0
   const attendance = game.attendance ? `Attendance ${game.attendance.toLocaleString()}` : ''
-  const when = gameClockLabel(game.status, game.status_detail, game.start_time)
+  const when = gameClockLabel(game.status, game.status_detail, game.start_time, hide)
   const center = game.status === 'scheduled'
     ? (localClock(game.start_time) || 'Upcoming')
     : when
