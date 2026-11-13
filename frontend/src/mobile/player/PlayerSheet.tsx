@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useMyTeam } from '../../context/MyTeamContext'
 import { timePeriodLabel } from '../../hooks/usePlayerProfileData'
 import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetTeamPlayersQuery } from '../../store/api/fantasyApi'
 import type { CustomDateRange, Player, TimePeriod } from '../../types/api'
+import { DEFAULT_CATEGORIES, getPlayerRankSummary } from '../../utils/playerRankings'
+import { orderCategories } from '../../utils/statOrder'
 import { BottomSheet, PeriodChips } from '../ui'
 import { usePlayerSheet } from './usePlayerSheet'
 import { tradeLinkForPlayer } from './tradePreset'
@@ -13,7 +15,8 @@ import { tradeLinkForPlayer } from './tradePreset'
  * phone, over the page it was opened on. Only data the site already shows:
  * per-game stats from the Players list for the shared period chips (Season,
  * Last 7 / 15 / 30 days, Custom range),
- * the fantasy owner and lineup slot.
+ * the fantasy owner and lineup slot, and the player's overall / position rank and
+ * z-score for the selected period (ranked the same way as the full profile).
  * No projection here (kept on the full profile). Full profile and Trade
  * Analyzer lead to the full pages.
  */
@@ -28,6 +31,13 @@ function slotLabel(slot: string | null | undefined): string | null {
 }
 
 
+
+/** Same green / red band as the profile's Fantasy Value card. */
+function zTone(z: number): string {
+  if (z >= 0.25) return 'mr-ps-up'
+  if (z <= -0.25) return 'mr-ps-down'
+  return ''
+}
 
 const HEADINGS: Partial<Record<TimePeriod, string>> = {
   season: 'SEASON',
@@ -85,6 +95,15 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
     period === 'season'
       ? player
       : periodList?.players.find((p) => p.player_id != null && String(p.player_id) === playerId && p.has_data !== false) ?? null
+  // Rank for the selected period, computed exactly like the full profile's
+  // Fantasy Value card (per game, equal weights, league categories).
+  const apiCategories = all?.categories
+  const rankList = period === 'season' ? all : periodList
+  const rankSummary = useMemo(() => {
+    if (!rankList) return null
+    const categories = orderCategories(apiCategories?.length ? apiCategories : DEFAULT_CATEGORIES)
+    return getPlayerRankSummary(rankList.players, Number(playerId), categories, new Set(rankList.reverse_categories ?? []))
+  }, [rankList, apiCategories, playerId])
   const heading = isCustom
     ? timePeriodLabel('custom', customRange).toUpperCase()
     : HEADINGS[period] ?? 'SEASON'
@@ -121,6 +140,33 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
             {periodPlayer && period !== 'season' ? ` · ${periodPlayer.stats.gp} GP` : ''}
           </span>
           {periodPlayer ? (
+            <>
+            {rankSummary && (
+              <div className="mr-ps-value" aria-label="Fantasy value" data-testid="sheet-rank" aria-busy={periodFetching || undefined}>
+                <div className="mr-ps-tile">
+                  <span className="mr-ps-tl">Overall rank</span>
+                  {rankSummary.rank != null ? (
+                    <span className="mr-ps-tv">
+                      #{rankSummary.rank} <span className="mr-meta">of {rankSummary.poolSize}</span>
+                    </span>
+                  ) : (
+                    <span className="mr-ps-tv mr-ps-rank-out">Outside top {rankSummary.poolSize}</span>
+                  )}
+                  {rankSummary.positionRanks.length > 0 && (
+                    <span className="mr-meta mr-ps-pos">
+                      {rankSummary.positionRanks.map(({ position, rank }) => `#${rank} ${position}`).join(' · ')}
+                    </span>
+                  )}
+                </div>
+                <div className="mr-ps-tile">
+                  <span className="mr-ps-tl">Z-score</span>
+                  <span className={`mr-ps-tv ${zTone(rankSummary.totalZ)}`} data-testid="sheet-z">
+                    {rankSummary.totalZ >= 0 ? '+' : ''}
+                    {rankSummary.totalZ.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="mr-ps-grid" role="list" aria-label="Per game" aria-busy={periodFetching || undefined}>
               {statTiles(periodPlayer).map((t) => (
                 <div key={t.k} className="mr-ps-tile" role="listitem">
@@ -129,6 +175,7 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
                 </div>
               ))}
             </div>
+            </>
           ) : (
             <p className="mr-meta mr-ps-empty">{periodFetching || !periodList ? 'Loading…' : 'No games in this period.'}</p>
           )}
