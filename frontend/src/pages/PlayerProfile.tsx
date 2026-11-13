@@ -11,6 +11,7 @@ import PlayerNextGameCard from '../components/PlayerNextGameCard'
 import PlayerGameLog from '../components/PlayerGameLog'
 import PlayerFantasyValueCard from '../components/PlayerFantasyValueCard'
 import PlayerPastSeasonsCard from '../components/PlayerPastSeasonsCard'
+import PlayerLeagueHistoryCard from '../components/leagueHistory/PlayerLeagueHistoryCard'
 import { backLabel, usePlayerProfileData } from '../hooks/usePlayerProfileData'
 import { useMobileRedesign } from '../mobile/flag'
 import PlayerProfileMobile from '../mobile/profile/PlayerProfileMobile'
@@ -264,6 +265,8 @@ const PlayerProfileDesktop = () => {
           </div>
         )}
       </div>
+
+      <PlayerLeagueHistoryCard playerId={playerId} />
 
       <PlayerPastSeasonsCard playerId={playerId} />
 
