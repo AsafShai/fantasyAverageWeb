@@ -575,6 +575,35 @@ export interface NbaPlayerStatsResponse {
   actual_end?: string | null;
 }
 
+/** One completed regular season, per-game averages (ESPN). Null = not reported. */
+export interface PlayerSeasonLine {
+  season: number;
+  season_label: string;
+  teams: string[];
+  gp: number;
+  gs: number;
+  minutes: number | null;
+  fgm: number | null;
+  fga: number | null;
+  fg_percentage: number | null;
+  ftm: number | null;
+  fta: number | null;
+  ft_percentage: number | null;
+  three_pm: number | null;
+  three_pa: number | null;
+  reb: number | null;
+  ast: number | null;
+  stl: number | null;
+  blk: number | null;
+  to: number | null;
+  pts: number | null;
+}
+
+export interface PlayerSeasonHistoryResponse {
+  player_id: number;
+  seasons: PlayerSeasonLine[];
+}
+
 export interface PlayerGameLogGame {
   game_id: string;
   season: string;
