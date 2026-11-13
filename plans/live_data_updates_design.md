@@ -52,10 +52,26 @@ for the live standings.
 | Payload churn | 116 KB; the ETag changed about every 20–40 s during games, so each 30 s poll is a full download instead of a 304. Same request count as today |
 | `view=mRoster` for the current period | carries the same live lines (1.9 MB); not needed for standings |
 
-One thing the fantasy payload does **not** say is whether a game is final. The
-"finished games only" rule for averages therefore takes game status from the
-site scoreboard (one small request per minute, already cached for Box Scores),
-joined on the line's `externalId`.
+### Which source says a game is final (checked 2026-11-13 02:55 UTC)
+
+Checked with TOR @ PHI final, DET @ WSH in overtime and two games in play.
+
+| Source | Says "final"? | Size per request | Notes |
+|---|---|---|---|
+| League payload stat lines (already polled every 30 s) | **No.** A finished game's lines have exactly the same fields as a live one's (GP 1, minutes, no status) | 0 extra | |
+| Fantasy schedule `statsOfficial` (`proTeamSchedules_wl`) | **No.** Still `false` for the finished game; it only turns `true` with ESPN's nightly run | ~40 KB gzip | not usable |
+| Site scoreboard | **Yes:** `status.type.state = "post"`, `completed: true`; overtime correctly shows "End of OT", not final | ~8 KB gzip | already fetched and cached by Box Scores, Today and matchups |
+| Fantasy live-games feed (`apis/fantasy/v2/games/fba/games`) | **Yes**, same status fields | ~12 KB gzip | not used anywhere in the app today |
+
+So the "finished games only" rule needs one external signal, and only the
+scoreboard and the fantasy games feed give it. The scoreboard is smaller and
+already in the app's shared cache, so when another page has fetched it in the
+last minute the overlay costs no extra request at all. It is only needed while
+games are live; before the first tip and after the last final, no request is
+made.
+
+**Decision pending (user):** confirm the scoreboard as the "game is final"
+source.
 
 The overlay service still takes "today's lines per player" behind one
 function, so the box-score source remains available as a fallback and as a
