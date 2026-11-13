@@ -6,9 +6,19 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.config import settings
-from app.models.nba_player_models import NbaPlayerBio, NbaPlayerStatsResponse, PlayerGameLogResponse
+from app.models.nba_player_models import (
+    NbaPlayerBio,
+    NbaPlayerStatsResponse,
+    PlayerGameLogResponse,
+    PlayerSeasonHistoryResponse,
+)
 from app.models.player import StatTimePeriod
+from app.services.nba_player_catalog import get_player_bio, parse_espn_athlete_id
 from app.services.nba_player_service import NbaPlayerService
+from app.services.player_season_history_service import (
+    PlayerSeasonHistoryService,
+    SeasonHistoryFetchError,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -51,6 +61,24 @@ async def get_nba_player_games(player_id: str):
     except Exception as e:
         logger.exception("Error getting game log for %s: %s", player_id, e)
         raise HTTPException(status_code=500, detail="Failed to retrieve player game log")
+
+
+@router.get("/{player_id}/seasons", response_model=PlayerSeasonHistoryResponse)
+async def get_nba_player_seasons(
+    player_id: str,
+    limit: int = Query(4, ge=1, le=10, description="How many completed seasons to return"),
+):
+    """Per-game averages for the player's last `limit` completed regular seasons (ESPN)."""
+    try:
+        espn_id = parse_espn_athlete_id(player_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    if get_player_bio(espn_id) is None:
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+    try:
+        return await PlayerSeasonHistoryService().get_history(espn_id, settings.season_id, limit)
+    except SeasonHistoryFetchError:
+        raise HTTPException(status_code=502, detail="ESPN season stats unavailable")
 
 
 @router.get("/{player_id}/stats", response_model=NbaPlayerStatsResponse)

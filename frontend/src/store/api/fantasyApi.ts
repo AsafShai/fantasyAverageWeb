@@ -1,5 +1,5 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, CategoryResponse, RosterDay } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, PlayerSeasonHistoryResponse, CategoryResponse, RosterDay } from '../../types/api';
 import type { InjuryRecord } from '../../types/injury';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
@@ -139,6 +139,10 @@ export const fantasyApi = createApi({
     getNbaPlayerGames: builder.query<PlayerGameLogResponse, string>({
       query: (playerId) => `/nba-players/${playerId}/games`,
       keepUnusedDataFor: 300,
+    }),
+    getNbaPlayerSeasons: builder.query<PlayerSeasonHistoryResponse, string>({
+      query: (playerId) => `/nba-players/${playerId}/seasons`,
+      keepUnusedDataFor: 3600,
     }),
     getNbaPlayerStats: builder.query<
       NbaPlayerStatsResponse,
@@ -355,6 +359,7 @@ export const {
   useGetBoxSlateValuesQuery,
   useGetNbaPlayerQuery,
   useGetNbaPlayerGamesQuery,
+  useGetNbaPlayerSeasonsQuery,
   useGetNbaPlayerStatsQuery,
   useGetMatchupsTodayQuery,
   useGetInjuryRecordsQuery,
