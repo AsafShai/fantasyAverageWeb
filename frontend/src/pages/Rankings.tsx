@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
 import { useLiveQuery } from '../hooks/useLiveQuery'
 import { averagesNote } from '../utils/live'
+import { liveRangeNote, moversLegend } from '../utils/liveTonight'
+import LiveRangeNote from '../components/live/LiveRangeNote'
 import { useGetRankingsQuery, useGetLeagueSummaryQuery, useGetRankChangesQuery } from '../store/api/fantasyApi'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { Link } from 'react-router'
@@ -134,7 +136,8 @@ const Rankings = () => {
   const showCards = layout === 'cards'
   const showTable = layout === 'table'
   const isDateRangeActive = !!(appliedDates.startDate && appliedDates.endDate)
-  const { data: rankChanges } = useGetRankChangesQuery(mode, { skip: isDateRangeActive })
+  // While tonight is live these are tonight's moves (decision 7), so they poll with it.
+  const { data: rankChanges } = useLiveQuery(useGetRankChangesQuery, mode, { skip: isDateRangeActive })
 
   const handleStartDate = (val: string) => {
     setStartDate(val)
@@ -236,6 +239,9 @@ const Rankings = () => {
   const rangeLabel = isDateRangeActive ? `${formatDate(appliedDates.startDate!)} – ${formatDate(appliedDates.endDate!)}` : ''
 
   const liveNote = averagesNote(data?.live, mode)
+  // A range that ends today: its live note replaces the "closest available data" one.
+  const rangeNote = isDateRangeActive ? liveRangeNote(data?.live, data?.actual_start_date, data?.actual_end_date) : null
+  const legend = moversLegend(rankChanges?.live)
 
   const shareButton = (variant: 'onBlue' | 'neutral') => rankings.length > 0 && (
     <ShareCardButton
@@ -266,7 +272,7 @@ const Rankings = () => {
       : (showCards
         ? 'Each category shows the team\'s rank within that category. Use Sort below to reorder.'
         : 'Each category cell shows the team\'s rank within that category. Tap column headers to sort.')
-        + (hasMoves ? ' ▲/▼ = change since last night, GP + = games played last night.' : '')
+        + (hasMoves ? ` ${legend}` : '')
     return (
       <RankingsMobile
         title={`Team ${titleWord} (${modeLabel})`}
@@ -297,9 +303,9 @@ const Rankings = () => {
           setDateError('')
         }}
         appliedRangeLabel={rangeLabel}
-        mismatchNote={hasDateMismatch
+        mismatchNote={rangeNote ?? (hasDateMismatch
           ? `Note: closest available data used - showing ${formatDate(data!.actual_start_date!)} - ${formatDate(data!.actual_end_date!)}`
-          : undefined}
+          : undefined)}
         rangeError={error && isDateRangeActive ? getErrorMessage(error, 'Could not load rankings for this date range.') : undefined}
         hasMoves={hasMoves}
         showMoves={showMoves}
@@ -378,7 +384,7 @@ const Rankings = () => {
                     : showCards
                       ? 'Each category shows the team\'s rank within that category. Use Sort below to reorder.'
                       : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
-                  {hasMoves && ' ▲/▼ = change since last night, GP + = games played last night.'}
+                  {hasMoves && ` ${legend}`}
                 </p>
                 {liveNote && (
                   <p className="mt-2 inline-block rounded-md border border-blue-400 bg-blue-900 px-3 py-1.5 text-sm text-white">{liveNote}</p>
@@ -583,7 +589,8 @@ const Rankings = () => {
           </div>
         </div>
 
-        {hasDateMismatch && (
+        {rangeNote && <LiveRangeNote live={data?.live} text={rangeNote} />}
+        {!rangeNote && hasDateMismatch && (
           <div className="px-6 py-2 bg-amber-50 dark:bg-gray-700 border-b border-amber-200 dark:border-gray-600 text-sm text-amber-700 dark:text-amber-300">
             Note: closest available data used - showing {formatDate(data!.actual_start_date!)} - {formatDate(data!.actual_end_date!)}
           </div>

@@ -59,6 +59,8 @@ export interface AnalyticsMobileProps {
   /** "Nov 1 - Nov 6" when a range is applied, else empty. */
   appliedRangeLabel: string
   mismatchNote?: string
+  /** GP "+N" per team while tonight is live (games counted tonight). */
+  gpTonight?: Map<number, string>
   rangeError?: string
 
   /** Rankings Over Time and Shooting Stats (their phone layouts live in those components). */
@@ -118,7 +120,10 @@ export function AnalyticsMobile(p: AnalyticsMobileProps) {
             className="mr-an-cell"
             style={{ backgroundColor: getHeatmapColor(norm, p.isDark), color: getTextColor(norm, p.isDark) }}
           >
-            <span className="mr-an-val">{formatCell(cat, h!.data[r.i]?.[c])}</span>
+            <span className="mr-an-val">
+              {formatCell(cat, h!.data[r.i]?.[c])}
+              {cat === 'GP' && p.gpTonight?.has(r.team.team_id) && <span className="mr-an-plus"> {p.gpTonight.get(r.team.team_id)}</span>}
+            </span>
             {rank !== undefined && rank > 0 && <span className="mr-an-rank">({rank})</span>}
           </span>
         )

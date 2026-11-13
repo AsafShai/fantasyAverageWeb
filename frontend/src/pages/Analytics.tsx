@@ -6,6 +6,8 @@ import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import LiveBadge from '../components/live/LiveBadge'
 import { useLiveQuery } from '../hooks/useLiveQuery'
+import { liveRangeNote, tonightGpPlus } from '../utils/liveTonight'
+import LiveRangeNote from '../components/live/LiveRangeNote'
 import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
@@ -124,6 +126,14 @@ const Analytics = () => {
     (heatmapData.actual_start_date && heatmapData.actual_start_date !== heatmapData.date_range_start) ||
     (heatmapData.actual_end_date && heatmapData.actual_end_date !== heatmapData.date_range_end)
   )
+  // A range that ends today: its live note replaces the "closest available data" one.
+  const rangeNote = isDateRangeActive ? liveRangeNote(heatmapData?.live, heatmapData?.actual_start_date, heatmapData?.actual_end_date) : null
+  // GP "+N": games counted tonight (only values, ranks, colours and this change on the heatmap).
+  const gpTonight = new Map<number, string>()
+  heatmapData?.teams.forEach((t, i) => {
+    const plus = tonightGpPlus(heatmapData.live, heatmapData.gp_tonight?.[i])
+    if (plus) gpTonight.set(t.team_id, plus)
+  })
 
   const getSortedHeatmapData = (heatmapData: HeatmapData): SortedHeatmapData | null => {
     if (!heatmapData) return null
@@ -213,9 +223,10 @@ const Analytics = () => {
           setDateError('')
         }}
         appliedRangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} - ${formatDate(appliedDates.endDate!)}` : ''}
-        mismatchNote={hasDateMismatch
+        mismatchNote={rangeNote ?? (hasDateMismatch
           ? `Note: closest available data used - showing ${formatDate(heatmapData!.actual_start_date!)} - ${formatDate(heatmapData!.actual_end_date!)}`
-          : undefined}
+          : undefined)}
+        gpTonight={gpTonight}
         rangeError={error && isDateRangeActive ? getErrorMessage(error, 'Could not load analytics data for this date range.') : undefined}
         race={<StandingsRace />}
         shots={<ShootingStatsSection />}
@@ -305,7 +316,8 @@ const Analytics = () => {
           <p className="mb-3 text-sm text-red-600">{dateError}</p>
         )}
 
-        {hasDateMismatch && (
+        {rangeNote && <LiveRangeNote live={heatmapData?.live} text={rangeNote} className="mb-3 px-4 py-2 border rounded-md" />}
+        {!rangeNote && hasDateMismatch && (
           <div className="mb-3 px-4 py-2 bg-amber-50 dark:bg-gray-700 border border-amber-200 dark:border-gray-600 rounded-md text-sm text-amber-700 dark:text-amber-300">
             Note: closest available data used - showing {formatDate(heatmapData!.actual_start_date!)} - {formatDate(heatmapData!.actual_end_date!)}
           </div>
@@ -395,6 +407,9 @@ const Analytics = () => {
                           }}
                         >
                           <span>{displayValue}</span>
+                          {category === 'GP' && gpTonight.has(team.team_id) && (
+                            <span className="ml-1 text-[10px] font-semibold opacity-80">{gpTonight.get(team.team_id)}</span>
+                          )}
                           {rank !== undefined && rank > 0 && (
                             <span className="absolute bottom-0.5 right-0.5 text-[0.7rem] opacity-85 font-semibold">
                               ({rank})

@@ -127,6 +127,8 @@ export interface LeagueSummary {
   trade_deadline?: string;
   /** When ESPN last updated the league stats (its nightly run), not when we fetched. */
   espn_updated_at?: string | null;
+  /** While tonight is live: this morning's official league averages (marks the tiles tonight moved). */
+  league_averages_official?: AverageStats;
 }
 
 export interface HeatmapData {
@@ -141,6 +143,8 @@ export interface HeatmapData {
   date_range_end?: string;
   actual_start_date?: string;
   actual_end_date?: string;
+  /** While tonight is live: games counted tonight per team, in `teams` order (GP "+N"). */
+  gp_tonight?: number[];
 }
 
 export interface TeamShotStats {
@@ -292,7 +296,10 @@ export interface TeamTimeSeriesPoint {
 }
 
 export interface RankingsOverTimeResponse {
+  live?: LiveBlock;
   data: TeamTimeSeriesPoint[];
+  /** While tonight is live: one point per team for tonight, drawn dashed (never stored). */
+  live_points?: TeamTimeSeriesPoint[];
   /** Stat sources only: the league's scored categories, in its order. */
   categories?: string[];
   /** Stat sources only: categories where a lower value is better (e.g. TO). */
@@ -996,6 +1003,8 @@ export interface TeamRankChange {
 }
 
 export interface RankChanges {
+  /** Present with the backend flag on; while `active`, the moves are tonight's vs this morning's official standings. */
+  live?: LiveBlock;
   previous_period: number | null;
   latest_period: number | null;
   teams: TeamRankChange[];
@@ -1023,6 +1032,9 @@ export interface TodayHub {
   movers: RankMover[];
   roster_health: TeamRosterHealth[];
   last_nightly: NightlyRun | null;
+  live?: LiveBlock;
+  /** While tonight is live: movers vs this morning's official standings (the "Tonight" view). */
+  tonight_movers?: RankMover[];
 }
 
 // Roster by day (team page, Daily mode): GET /teams/{id}/roster-day?date=

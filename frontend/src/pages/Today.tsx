@@ -1,4 +1,6 @@
-import { useGetLeagueSummaryQuery, useGetRankingsQuery, useGetTodayHubQuery } from '../store/api/fantasyApi'
+import { useGetLeagueSummaryQuery, useGetRankChangesQuery, useGetRankingsQuery, useGetTodayHubQuery } from '../store/api/fantasyApi'
+import { liveMoment } from '../utils/live'
+import { topTeamsMeta } from '../utils/liveTonight'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DeadlineCountdown from '../components/DeadlineCountdown'
@@ -26,7 +28,10 @@ function formatSlate(slateDate: string | null): string {
 const DesktopToday = () => {
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useLiveQuery(useGetLeagueSummaryQuery, undefined)
   const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useLiveQuery(useGetRankingsQuery, {})
-  const { data: hub, isLoading: hubLoading, isError: hubError } = useGetTodayHubQuery()
+  const { data: hub, isLoading: hubLoading, isError: hubError } = useLiveQuery(useGetTodayHubQuery, undefined)
+  // Top 5's "change tonight": only fetched while tonight is live (the page showed no deltas before).
+  const tonight = !!liveMoment(rankings?.live)
+  const { data: changes } = useLiveQuery(useGetRankChangesQuery, 'averages' as const, { skip: !tonight })
 
   if (summaryLoading || rankingsLoading) {
     return <LoadingSpinner />
@@ -60,7 +65,7 @@ const DesktopToday = () => {
         <LoadingSpinner />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_3fr]">
-          <RankMovers movers={hub?.movers ?? []} />
+          <RankMovers movers={hub?.movers ?? []} tonightMovers={hub?.tonight_movers} live={hub?.live} />
           <div className="min-w-0">
             <RosterHealth
               slateDate={hub?.slate_date ?? null}
@@ -75,7 +80,11 @@ const DesktopToday = () => {
 
       {summary && <LeagueAverages summary={summary} />}
 
-      <TopTeams teams={topTeams} />
+      <TopTeams
+        teams={topTeams}
+        meta={tonight && changes?.live?.active ? topTeamsMeta(rankings?.live) : null}
+        deltas={new Map((changes?.teams ?? []).map(t => [t.team_id, t.total_delta ?? 0]))}
+      />
     </div>
   )
 }

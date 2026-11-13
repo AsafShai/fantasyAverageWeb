@@ -40,6 +40,7 @@
 }
 .mr-an-val { font-size: 12.5px; font-weight: 500; }
 .mr-an-rank { font-size: 10px; opacity: 0.75; font-weight: 600; }
+.mr-an-plus { font-size: 10px; font-weight: 600; opacity: 0.8; }
 .mr-an-teambtn {
   display: flex; align-items: center; gap: 2px; max-width: 132px; min-height: 30px;
   border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;

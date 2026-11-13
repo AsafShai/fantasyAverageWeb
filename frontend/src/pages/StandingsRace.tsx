@@ -27,6 +27,9 @@ import {
   type Basis,
 } from './standingsRaceMetrics'
 import { useMobileRedesign } from '../mobile/flag'
+import { useLiveQuery } from '../hooks/useLiveQuery'
+import { liveMoment } from '../utils/live'
+import { LIVE_KEY_SUFFIX, liveRaceNote, liveRaceSeries } from '../utils/liveTonight'
 import { Chip, Segmented, SelectSheet } from '../mobile/ui'
 
 const TEAM_COLORS = [
@@ -131,6 +134,7 @@ function EndLabels({
   hasHighlight,
   labelFor,
   valueText,
+  gap = 6,
 }: {
   row: Record<string, number | string> | undefined
   teams: Team[]
@@ -139,6 +143,8 @@ function EndLabels({
   hasHighlight: boolean
   labelFor: (teamName: string) => string
   valueText?: (value: number) => string
+  /** Space before the labels; wider while tonight's hollow point sits at the edge. */
+  gap?: number
 }) {
   const plot = usePlotArea()
   const yScale = useYAxisScale()
@@ -180,7 +186,7 @@ function EndLabels({
     }
   }
 
-  const x = plot.x + plot.width + 6
+  const x = plot.x + plot.width + gap
   return (
     <g>
       {labels.map((l, i) => (
@@ -225,7 +231,13 @@ const StandingsRace = () => {
   const isValueView = view === 'value'
   // currentData, not data: while a new source loads, data still holds the
   // previous source's payload, which would be charted under the new labels.
-  const { currentData: data, error, isFetching } = useGetRankingsOverTimeQuery({ source })
+  const { currentData: data, error, isFetching } = useLiveQuery(useGetRankingsOverTimeQuery, { source })
+  // Tonight's dashed point (plan: "a dashed live point for tonight"), only while
+  // tonight is live or final-but-unofficial; ESPN's update replaces it with a stored point.
+  const moment = liveMoment(data?.live)
+  const livePoints = useMemo(() => (moment && data?.live_points?.length ? data.live_points : []), [moment, data])
+  const liveDate = livePoints[0]?.date ?? null
+  const raceNote = liveDate ? liveRaceNote(data?.live) : null
 
   const teams = useMemo(() => {
     if (!data) return []
@@ -262,13 +274,14 @@ const StandingsRace = () => {
   const gpByDateTeam = useMemo(() => {
     const m = new Map<string, number | undefined>()
     data?.data.forEach(p => m.set(`${p.date}|${p.team_id}`, p.gp))
+    livePoints.forEach(p => m.set(`${p.date}|${p.team_id}`, p.gp))
     return m
-  }, [data])
+  }, [data, livePoints])
 
   const chartData = useMemo(() => {
     if (!data) return []
     const byDate = new Map<string, Record<string, number | string>>()
-    data.data.forEach((p: TeamTimeSeriesPoint) => {
+    data.data.concat(livePoints).forEach((p: TeamTimeSeriesPoint) => {
       if (!byDate.has(p.date)) byDate.set(p.date, { date: p.date })
       const entry = byDate.get(p.date)!
       entry[p.team_name] = isValueView ? statValue(p, activeMetric) : rankValue(p, activeMetric)
@@ -289,8 +302,20 @@ const StandingsRace = () => {
         return out
       })
     }
-    return rows
-  }, [data, activeMetric, view, isValueView, teams])
+    return liveRaceSeries(rows, liveDate, teams.map(t => t.team_name))
+  }, [data, livePoints, liveDate, activeMetric, view, isValueView, teams])
+
+  // A row's value for a team, stored or tonight's (the live row keeps it under the dashed key).
+  const valueOf = (row: Record<string, number | string> | undefined, name: string) =>
+    row === undefined ? undefined : (row[name] ?? row[name + LIVE_KEY_SUFFIX])
+  const withLiveValues = (row: Record<string, number | string> | undefined) => {
+    if (!row || row.date !== liveDate) return row
+    const out: Record<string, number | string> = { date: row.date }
+    teams.forEach(t => { const v = valueOf(row, t.team_name); if (v !== undefined) out[t.team_name] = v })
+    return out
+  }
+  const liveTick = moment === 'final' ? 'Tonight' : 'Live'
+  const tickText = (d: string) => (d === liveDate ? liveTick : formatDate(d))
 
   const handleBasisChange = (next: Basis) => setBasis(next)
 
@@ -328,7 +353,7 @@ const StandingsRace = () => {
   const startIdx = range ? clampIdx(range.start) : 0
   const endIdx = range ? clampIdx(range.end) : lastIdx
   const startRow = chartData[startIdx] as Record<string, number | string> | undefined
-  const endRow = chartData[endIdx] as Record<string, number | string> | undefined
+  const endRow = withLiveValues(chartData[endIdx] as Record<string, number | string> | undefined)
 
   // Reserve enough gutter to show full team names, but keep the plot dominant —
   // especially on phones, where the graph matters more than fitting every full name.
@@ -337,7 +362,7 @@ const StandingsRace = () => {
   // In Stat Value the label also carries the team's number, which gets room first.
   const { labelGutter, fittedNames } = useMemo(() => {
     const width = wrapWidth || 360
-    const lastRow = chartData[chartData.length - 1]
+    const lastRow = withLiveValues(chartData[chartData.length - 1])
     const valueWidth = isValueView && lastRow
       ? teams.reduce((max, t) => {
           const v = Number(lastRow[t.team_name])
@@ -351,7 +376,8 @@ const StandingsRace = () => {
     const maxTextWidth = Math.max(gutter - 12 - valueWidth, 24)
     const fitted = new Map(teams.map(t => [t.team_name, fitLabel(t.team_name, maxTextWidth)]))
     return { labelGutter: gutter, fittedNames: fitted }
-  }, [teams, wrapWidth, chartData, isValueView, activeMetric, basis])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teams, wrapWidth, chartData, isValueView, activeMetric, basis, liveDate])
   const labelFor = (teamName: string) => fittedNames.get(teamName) ?? teamName
 
   const basisWord = basis === 'avg' ? 'per-game averages' : 'season totals'
@@ -391,8 +417,19 @@ const StandingsRace = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-10" />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={formatDate}
-                  tick={{ fontSize: 10 }}
+                  tickFormatter={tickText}
+                  tick={liveDate ? (props: { x?: number | string; y?: number | string; payload?: { value?: unknown } }) => (
+                    <text
+                      x={Number(props.x)}
+                      y={Number(props.y) + 12}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fontWeight={props.payload?.value === liveDate ? 700 : 400}
+                      className={props.payload?.value === liveDate ? 'fill-emerald-700 dark:fill-emerald-400' : 'fill-gray-500 dark:fill-gray-400'}
+                    >
+                      {tickText(String(props.payload?.value ?? ''))}
+                    </text>
+                  ) : { fontSize: 10 }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
@@ -410,6 +447,9 @@ const StandingsRace = () => {
                   content={({ active, payload, label }) => {
                     if (!active || !payload || payload.length === 0) return null
                     const dateLabel = String(label)
+                    // Both the solid and the dashed line report the last stored day: one row per team.
+                    const seenNames = new Set<string>()
+                    payload = payload.filter(e => (seenNames.has(String(e.name)) ? false : (seenNames.add(String(e.name)), true)))
                     const startDate = startRow ? String(startRow.date) : undefined
                     const withDeltas = showDeltas && startDate !== undefined && startDate < dateLabel
                     const sorted = [...payload]
@@ -419,7 +459,7 @@ const StandingsRace = () => {
                       <div style={{ fontSize: 11, background: 'var(--tooltip-bg, #fff)', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px', maxHeight: 240, overflowY: 'auto', minWidth: 190 }}
                            className="bg-white dark:bg-gray-800 dark:border-gray-600 text-gray-800 dark:text-gray-100">
                         <p style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                          <span style={{ fontWeight: 600 }}>{formatDate(dateLabel)}</span>
+                          <span style={{ fontWeight: 600 }}>{dateLabel === liveDate ? `${formatDate(dateLabel)} · ${moment === 'final' ? 'tonight' : 'live'}` : formatDate(dateLabel)}</span>
                           {withDeltas && <span className="text-gray-500 dark:text-gray-400">vs {formatDate(startDate!)}</span>}
                         </p>
                         {sorted.map(e => {
@@ -462,7 +502,7 @@ const StandingsRace = () => {
                   key={source}
                   dataKey="date"
                   height={28}
-                  tickFormatter={formatDate}
+                  tickFormatter={tickText}
                   travellerWidth={10}
                   stroke="#d1d5db"
                   fill="#f9fafb"
@@ -489,6 +529,30 @@ const StandingsRace = () => {
                     />
                   )
                 })}
+                {liveDate && teams.map((team, idx) => {
+                  const color = TEAM_COLORS[idx % TEAM_COLORS.length]
+                  const on = isOn(team.team_id)
+                  const stroke = on ? color : DIM_COLOR
+                  return (
+                    <Line
+                      key={`${team.team_id}-tonight`}
+                      type="linear"
+                      name={team.team_name}
+                      dataKey={team.team_name + LIVE_KEY_SUFFIX}
+                      stroke={stroke}
+                      strokeWidth={hasHighlight && on ? 3 : 2}
+                      strokeOpacity={on ? 0.95 : 0.4}
+                      strokeDasharray="5 4"
+                      legendType="none"
+                      isAnimationActive={false}
+                      activeDot={false}
+                      dot={(props: { cx?: number; cy?: number; index?: number; payload?: Record<string, unknown> }) =>
+                        props.payload?.date === liveDate && props.cx != null && props.cy != null
+                          ? <circle key={`live-dot-${team.team_id}`} data-testid="race-live-point" cx={props.cx} cy={props.cy} r={4.5} fill="#ffffff" stroke={stroke} strokeWidth={2} />
+                          : <g key={`no-dot-${team.team_id}-${props.index}`} />}
+                    />
+                  )
+                })}
                 <EndLabels
                   row={endRow}
                   teams={teams}
@@ -497,9 +561,13 @@ const StandingsRace = () => {
                   hasHighlight={hasHighlight}
                   labelFor={labelFor}
                   valueText={isValueView ? v => formatStatValue(v, activeMetric, basis) : undefined}
+                  gap={liveDate ? 10 : 6}
                 />
               </LineChart>
             </ResponsiveContainer>
+            {raceNote && (
+              <p data-testid="race-live-note" className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">{raceNote}</p>
+            )}
             {showDeltas && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 ▲/▼ in the tooltip: how much each team improved or slipped since the first day of the selected range.
