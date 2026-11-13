@@ -324,3 +324,39 @@ def test_real_payload_overlay_covers_tonights_four_games(real_period_24):
     gp = sum(t["GP"] for t in overlay.per_team().values())
     assert gp == sum(sum(slots.values()) for slots in overlay.slot_gp.values())
     assert gp == 33
+
+
+@pytest.fixture(scope="module")
+def real_period_25():
+    """The same league right after ESPN's run of 2026-11-13 (08:00 UTC): period
+    25, valuesByStat now including period 24."""
+    return json.loads((FIXTURES / "live_league_period25_after_run_2027_trimmed.json").read_text())
+
+
+def test_real_hand_over_reconciles_exactly(real_period_24, real_period_25):
+    transformer = DataTransformer()
+    categories = transformer.resolve_ranking_categories(real_period_24)
+    before = transformer.raw_standings_to_totals_df(real_period_24, categories)
+    after = transformer.raw_standings_to_totals_df(real_period_25, categories)
+    overlay = lo.build_overlay(real_period_24)
+
+    # G2: ESPN's official move equals last night's overlay, every team and stat.
+    assert lo.reconcile(before, after, overlay) == []
+
+    # Live at 07:00 was already this morning's official standings.
+    live = lo.apply_overlay(before, overlay.per_team()).set_index("team_id")
+    official = after.set_index("team_id")
+    for col in [c for c in official.columns if c != "team_name"]:
+        # ESPN rounds FG%/FT% to 8 decimals; everything else is exact.
+        assert live[col].to_numpy() == pytest.approx(official[col].to_numpy(), abs=1e-7), col
+
+    # After the run: the new period has nothing yet (no double count), G1
+    # passes, and day 24 may be written to the DB.
+    assert real_period_25["scoringPeriodId"] == 25
+    assert lo.build_overlay(real_period_25).is_empty
+    updated = real_period_25["status"]["standingsUpdateDate"]
+    schedule = lo.games_by_period(json.loads((FIXTURES / "pro_team_schedules_2027_periods_22_25.json").read_text()))
+    assert lo.check_g1(updated, 25, schedule).ok
+    assert lo.snapshot_is_safe(updated, 24, schedule).ok
+    # Before the run, the same guard held day 24 back.
+    assert not lo.snapshot_is_safe(real_period_24["status"]["standingsUpdateDate"], 24, schedule).ok
