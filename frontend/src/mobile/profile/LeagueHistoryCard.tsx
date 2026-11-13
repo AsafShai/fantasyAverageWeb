@@ -4,10 +4,9 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import LeagueHistoryView from '../../components/leagueHistory/LeagueHistoryView'
 import { Card } from '../ui'
 
-/** Phone version of "League history". Folded by default; the moves load the
- *  first time it is opened. */
+/** Phone version of "League history"; folding it skips loading the moves. */
 export default function LeagueHistoryCard({ playerId }: { playerId: string }) {
-  const [open, toggle] = useSectionOpen('league-history', false)
+  const [open, toggle] = useSectionOpen('league-history')
   const { data, isLoading, isError } = useGetPlayerLeagueHistoryQuery(playerId, { skip: !playerId || !open })
   return (
     <Card title="League history · this season" aria-label="League history" fold={{ open, onToggle: toggle }}>

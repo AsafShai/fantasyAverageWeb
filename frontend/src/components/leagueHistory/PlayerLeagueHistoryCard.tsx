@@ -4,10 +4,9 @@ import { FoldTitle } from '../FoldTitle'
 import LoadingSpinner from '../LoadingSpinner'
 import LeagueHistoryView from './LeagueHistoryView'
 
-/** Desktop player page: who drafted, added, dropped and traded him this season.
- *  Folded by default; the moves load the first time it is opened. */
+/** Desktop player page: who drafted, added, dropped and traded him this season. */
 const PlayerLeagueHistoryCard = ({ playerId }: { playerId: string }) => {
-  const [open, toggle] = useSectionOpen('league-history', false)
+  const [open, toggle] = useSectionOpen('league-history')
   const { data, isLoading, isError } = useGetPlayerLeagueHistoryQuery(playerId, { skip: !playerId || !open })
   return (
     <section

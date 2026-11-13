@@ -14,11 +14,12 @@ test('desktop: the profile keeps its desktop layout with the flag on', async ({ 
   await expect(page.getByRole('group', { name: 'Time frame' })).toHaveCount(0)
   // the time frame button (section titles like 'Stats · Full Season' are buttons too)
   await expect(page.getByRole('button', { name: /^\W*Full Season$/ })).toBeVisible()
-  // sections fold; League History starts folded under Previous Seasons
+  // sections fold; League History starts open, under Previous Seasons
   const history = page.getByRole('button', { name: /^League History/ })
-  await expect(history).toHaveAttribute('aria-expanded', 'false')
-  await history.click()
+  await expect(history).toHaveAttribute('aria-expanded', 'true')
   await expect(page.getByText('Drafted #26')).toBeVisible()
+  await history.click()
+  await expect(page.getByText('Drafted #26')).toHaveCount(0)
   await page.getByRole('button', { name: /^Game log/ }).click()
   await expect(page.getByRole('button', { name: /^Game log/ })).toHaveAttribute('aria-expanded', 'false')
 })
@@ -90,18 +91,15 @@ test.describe('phone player profile', () => {
     await expectNoHorizontalScroll(page)
   })
 
-  test('league history: folded, then moves newest first, trade sides, tap a stint for its dates', async ({ page }) => {
+  test('league history: open under Previous seasons, moves newest first, trade sides, tap a stint for its dates', async ({ page }) => {
     await mockProfileApis(page)
     await page.goto(`${URL}?ff=mobile`)
-    // folded under Previous seasons until opened
+    // open by default, under Previous seasons
     const card = page.getByRole('region', { name: 'League history' })
     const seasons = page.getByRole('region', { name: 'Previous seasons' })
     await expect(seasons).toBeVisible()
     expect((await seasons.boundingBox())!.y).toBeLessThan((await card.boundingBox())!.y)
-    const toggle = card.getByRole('button', { name: /League history/ })
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    await expect(card.getByText('Drafted #26')).toHaveCount(0)
-    await toggle.tap()
+    await expect(card.getByRole('button', { name: /League history/ })).toHaveAttribute('aria-expanded', 'true')
     await expect(card.getByText('Drafted #26')).toBeVisible()
     const moves = card.getByRole('listitem')
     await expect(moves).toHaveCount(6)
@@ -126,7 +124,7 @@ test.describe('phone player profile', () => {
     await page.goto(`${URL}?ff=mobile`)
     const stats = page.getByRole('region', { name: 'Stats' })
     await expect(stats.getByRole('rowheader')).toBeVisible()
-    for (const name of [/^Fantasy Value/, /^Stats/, /^Previous seasons/, /^Trends/, /^Next game/, /^Game log/])
+    for (const name of [/^Fantasy Value/, /^Stats/, /^Previous seasons/, /^League history/, /^Trends/, /^Next game/, /^Game log/])
       await expect(page.getByRole('button', { name, expanded: true })).toBeVisible()
     await stats.getByRole('button', { name: /^Stats/ }).tap()
     await expect(stats.getByRole('rowheader')).toHaveCount(0)
