@@ -117,7 +117,7 @@ Rules:
 - DB-fallback mode (`data_date` set, ESPN down) ⇒ live disabled.
 - Any overlay failure ⇒ serve official with `live.active = false`. Live can
   never turn a 200 into a 5xx.
-- Kill switch: `LIVE_STANDINGS_ENABLED` (default off until Phase 1 ships).
+- Kill switch: `LIVE_STANDINGS_ENABLED` (default off in production until the rollout checks are clean).
 
 ### 3.3 The morning hand-over (the risky moment)
 
@@ -160,16 +160,16 @@ warning.)
 
 | Page / consumer | Source today | Change |
 |---|---|---|
-| Rankings (season view) | `memo_response('rankings')` | live=True; response gets `live` block; LIVE pill; optional per-team "tonight" delta vs official |
-| Rankings with date range | DB snapshot deltas | Phase 3 (optional): when the range ends today, add the overlay to the end snapshot |
+| Rankings (season view) | `memo_response('rankings')` | live=True; response gets `live` block; LIVE badge; existing movers show "tonight" vs this morning's official |
+| Rankings with date range | DB snapshot deltas | when the range ends today, add the overlay to the end snapshot |
 | Today: league summary, top teams, league averages | `get_averages_df` / `get_rankings_df` | live=True |
-| Today: rank movers, `rank-changes` | DB, two latest periods | unchanged (official day-over-day). Phase 3: "live movers vs this morning" |
-| Analytics heatmap (season) | `memo_response('heatmap')` | live=True |
+| Today: rank movers, `rank-changes` | DB, two latest periods | official day-over-day stays; adds a Tonight view: live movers vs this morning |
+| Analytics heatmap (season) | `memo_response('heatmap')` | live=True; no extra markers, only the badge |
 | Team detail header (totals, averages, ranks) | `get_all_dataframes` | live=True |
 | Team detail slot usage | `statBySlot` | + overlay `per_slot_gp` |
-| Team detail Daily (roster-day, today) | `mRoster`, 5 min TTL, status `scheduled/played` | Phase 2: in-game lines, `live`/`final` status, 60 s; use ESPN period instead of `eastern_today()` |
+| Team detail Daily (roster-day, today) | `mRoster`, 5 min TTL, status `scheduled/played` | in-game lines, `live`/`final` status, 60 s; use ESPN period instead of `eastern_today()` |
 | Team roster season/last-N stats, Players, Player Rankings, Trade, FA report, Trends | `kona_player_info` / `fs_player_games` | unchanged (player-level; ESPN and the nightly model update these overnight) |
-| Standings race / over-time charts | DB | unchanged. Phase 3: optional dashed "live" point |
+| Standings race / over-time charts | DB | stored points unchanged; adds a dashed live point for tonight |
 | Estimator | DB snapshot, daily | unchanged, by design |
 | Box Scores, My Players | site API, already live | unchanged; shares its cache with Source B |
 | Share cards (rankings, team) | page data | stamp "Live" when the data is live |
@@ -214,7 +214,7 @@ progress" / "Final · ESPN official pending"). Desktop and `src/mobile` both.
 | ESPN throttling (it already returns bad payloads when polled every few seconds) | no polling faster than existing 30 s / 60 s TTLs; single-flight; negative cache |
 | Screenshots of live standings mistaken for official | LIVE pill, stamped share cards |
 | Existing latent issue found on the way: `_sync_db_if_needed` writes day P's snapshot the first time it sees period P+1, assuming `valuesByStat` already includes P | apply guard G1 there too (write only when `standingsUpdateDate` is after P's games) |
-| Existing: `roster_day_service` / `fantasy_roster_for` derive "today" from the Eastern date, so between 00:00 ET and ESPN's roll the Daily view shows tomorrow while games are live | Phase 2 switches them to ESPN's period |
+| Existing: `roster_day_service` / `fantasy_roster_for` derive "today" from the Eastern date, so between 00:00 ET and ESPN's roll the Daily view shows tomorrow while games are live | step 3 of the plan switches them to ESPN's period |
 
 Verdict: for standings, heatmap, Today and team header this is a pure
 improvement **provided** the two-layer rule holds; the only places with real
@@ -223,35 +223,49 @@ are covered by defaults plus guards.
 
 ## 7. Plan
 
-**Phase 0 — verify, shadow, no user-visible change**
-- Live probe tonight (open question, §2); record a live fixture.
-- `LiveOverlayService` + parsing, behind the flag, not wired to any response.
-- Log G1/G2 every morning for ~a week; add overlay status to `/health`.
+Everything below is in scope and built as **one delivery** behind
+`LIVE_STANDINGS_ENABLED`. Nothing here is optional. The numbering is build
+order, not separate releases.
+
+**1. Live overlay and safety net**
+- Live probe result (§2) picks the data source; record a live fixture.
+- `LiveOverlayService` + parsing; guards G1 and G2; overlay status in `/health`.
+- With the flag off the overlay still runs in shadow and logs the morning
+  reconciliation, so production hand-overs are checked before anything shows.
 - Tests: the season-rebuild check from §2 as a fixture test; empty overlay ⇒
   identity; ratio rebuild; cap; hand-over simulation; DB sync receives
   official only; per-mode memo does not thrash.
 
-**Phase 1 — live standings**
+**2. Live standings**
 - `live=` plumbing in `DataProvider`, per-mode memos, stable official identity.
-- Rankings (season), Today summary, heatmap, team header + slot usage.
-- `live` block in responses, `LiveBadge`, conditional polling, share-card stamp.
-- Ship with `LIVE_STANDINGS_ENABLED` on staging first.
+- Rankings (season), Today (league averages, Top 5), heatmap (values only, no
+  extra markers), team header + slot usage.
+- `live` block in responses; tappable `LiveBadge` on every affected page;
+  movers and "GP +N" switch to "tonight" while live; conditional polling;
+  share-card stamp. Desktop and mobile components.
 
-**Phase 2 — live team roster day**
-- Roster-day "today" on ESPN's period; in-game lines and `live` status; 60 s.
+**3. Live team roster day**
+- Roster-day "today" on ESPN's period instead of the Eastern date; in-game
+  lines and `live` / `final` status; "Starters (Today, so far)" row; 60 s.
 
-**Phase 3 — optional**
-- Date ranges ending today; live movers vs this morning; live point on the
-  standings race; G1 hardening of `_sync_db_if_needed`.
+**4. Ranges, movers, race**
+- Rankings and heatmap date ranges that end today include tonight.
+- Today's Rank movers: Tonight / vs yesterday switch.
+- Rankings Over Time: dashed live point until ESPN confirms it.
+- G1 hardening of `_sync_db_if_needed`.
+
+**Rollout:** staging with the flag on through a few live slates and morning
+hand-overs; production with the flag off (shadow logs only); flag on in
+production once both are clean.
 
 ## 8. Decisions (approved 2026-11-12)
 
 1. Averages during games count finished games only; totals include games in progress.
 2. Live is the default view, marked with a badge. No Live/Official toggle.
-3. Phase 3 items are in scope.
-4. Phases 1, 2 and 3 are built together as one delivery, after Phase 0. Phase 0
-   stays separate: it is the safety net (live probe + a few mornings of
-   reconciliation logs) and nothing user-visible ships before it is clean.
+3. All items are in scope; none are optional.
+4. Everything is built together as one delivery (see §7). The shadow check
+   runs alongside it rather than before it: nothing user-visible is turned on
+   in production until the reconciliation logs are clean (see decision 9).
 5. Updates reach the browser by polling (see §9), not manual refresh only.
 
 Mockups of every affected screen: https://claude.ai/artifact/APmBcZdJicKURzHzHHEDwi
@@ -271,8 +285,7 @@ Mockups of every affected screen: https://claude.ai/artifact/APmBcZdJicKURzHzHHE
    header, and each section subtitle (Team statistics, Slot usage, Roster)
    carries its own short live status.
 
-9. No separate waiting period before implementation (supersedes the "Phase 0
-   first" part of decision 4). Everything is built in one go behind
+9. No separate waiting period before implementation (the shadow check no longer comes first). Everything is built in one go behind
    `LIVE_STANDINGS_ENABLED` and verified after it is merged:
    - staging/dev: flag on, real league, watched through a few live slates and
      morning hand-overs;
