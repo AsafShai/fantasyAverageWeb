@@ -19,7 +19,7 @@ class TestRefreshesTodayHub:
 
         monkeypatch.setattr(inj, "injury_store", old)
         monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
-        monkeypatch.setattr(inj, "parse_injury_pdf", lambda _: new)
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport(new))
         monkeypatch.setattr(inj, "get_db_service", lambda: MagicMock(
             upsert_injury_status=AsyncMock(), delete_injury_status=AsyncMock(),
             get_injury_statuses_for_teams=AsyncMock(return_value=[]),

@@ -54,6 +54,74 @@ class TestComputeDiff:
         notes = inj.compute_diff(old, new, "t1")
         assert not any(n.type == "removed" for n in notes)
 
+    def test_removed_when_team_plays_with_nobody_listed(self):
+        # The NBA leaves a team with no injuries out of the Team column, so
+        # its stale statuses must clear via the report's matchups.
+        old = {"Milwaukee Bucks|Myles Turner": _rec(team="Milwaukee Bucks", player="Myles Turner")}
+        new = [_rec(team="Orlando Magic", player="Paolo Banchero")]
+        notes = inj.compute_diff(old, new, "t1", {"Orlando Magic", "Milwaukee Bucks"})
+        removed = [n for n in notes if n.type == "removed"]
+        assert [n.player for n in removed] == ["Myles Turner"]
+
+
+class TestParseInjuryReport:
+    """Real report (2026-11-13 10:45 AM ET): MIL@ORL lists only Orlando, and the
+    next day's games are all NOT YET SUBMITTED."""
+
+    @pytest.fixture(scope="class")
+    def report(self):
+        from pathlib import Path
+        pdf = Path(__file__).parents[1] / "fixtures" / "injury_report_2026-11-13_10_45AM.pdf"
+        return inj.parse_injury_report(pdf.read_bytes())
+
+    def test_team_with_nobody_listed_is_reported(self, report):
+        assert "Milwaukee Bucks" in report.reported_teams
+        assert "New York Knicks" in report.reported_teams
+        assert not any(r.team == "Milwaukee Bucks" for r in report.records)
+
+    def test_not_yet_submitted_teams_are_not_reported(self, report):
+        # Denver only appears for tomorrow's game, not yet submitted.
+        assert "Denver Nuggets" not in report.reported_teams
+        assert "Brooklyn Nets" not in report.reported_teams
+
+    def test_team_submitted_today_but_pending_tomorrow_is_reported(self, report):
+        assert "Cleveland Cavaliers" in report.reported_teams
+
+    def test_listed_teams_are_reported(self, report):
+        assert {r.team for r in report.records} <= report.reported_teams
+        assert any(r.team == "Orlando Magic" and r.player == "Paolo Banchero" for r in report.records)
+
+
+class TestClearsTeamWithNobodyListed:
+    @pytest.mark.asyncio
+    async def test_stale_db_status_is_deleted(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        # Fresh process: the stale "Out" lives only in the DB, not in memory.
+        monkeypatch.setattr(inj, "injury_store", {
+            "Orlando Magic|Paolo Banchero": _rec(team="Orlando Magic", player="Paolo Banchero"),
+        })
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport(
+            [_rec(team="Orlando Magic", player="Paolo Banchero")],
+            {"Orlando Magic", "Milwaukee Bucks"},
+        ))
+        db = MagicMock(
+            upsert_injury_status=AsyncMock(), delete_injury_status=AsyncMock(),
+            get_injury_statuses_for_teams=AsyncMock(return_value=[
+                {"team": "Milwaukee Bucks", "player": "Myles Turner", "status": "Out"},
+            ]),
+        )
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        monkeypatch.setattr(inj, "broadcast_notifications", AsyncMock())
+        monkeypatch.setattr(inj, "broadcast_fetch_update", AsyncMock())
+        monkeypatch.setattr("app.routes.matchups.apply_injury_changes", MagicMock())
+
+        assert await inj._try_update_injury_data() is True
+
+        db.get_injury_statuses_for_teams.assert_awaited_once_with(["Milwaukee Bucks"])
+        db.delete_injury_status.assert_awaited_once_with("Milwaukee Bucks", "Myles Turner")
+
 
 class TestBuildUpdatedStore:
     def test_preserves_last_update_when_unchanged(self):
@@ -113,7 +181,7 @@ class TestPatchesCachedMatchups:
             _rec(player="Back Soon", status="Available"),
         ]
         monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
-        monkeypatch.setattr(inj, "parse_injury_pdf", lambda _: new)
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport(new))
         db = MagicMock(
             upsert_injury_status=AsyncMock(), delete_injury_status=AsyncMock(),
             get_injury_statuses_for_teams=AsyncMock(return_value=[]),
@@ -139,7 +207,7 @@ class TestPatchesCachedMatchups:
 
         monkeypatch.setattr(inj, "injury_store", {"LAL|LeBron James": _rec(player="LeBron James")})
         monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
-        monkeypatch.setattr(inj, "parse_injury_pdf", lambda _: [_rec(player="LeBron James")])
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport([_rec(player="LeBron James")]))
         monkeypatch.setattr(inj, "get_db_service", lambda: MagicMock(get_injury_statuses_for_teams=AsyncMock(return_value=[])))
         monkeypatch.setattr(inj, "broadcast_fetch_update", AsyncMock())
         apply = MagicMock()
@@ -194,7 +262,7 @@ class TestLegacyTeamRename:
         monkeypatch.setattr(inj, "get_db_service", lambda: db)
         monkeypatch.setattr(inj, "injury_store", {})
         monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
-        monkeypatch.setattr(inj, "parse_injury_pdf", lambda _: [_rec(team="Philadelphia 76ers", player="Joel Embiid")])
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport([_rec(team="Philadelphia 76ers", player="Joel Embiid")]))
 
         await inj.initialize()
 
