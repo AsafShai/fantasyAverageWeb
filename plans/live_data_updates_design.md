@@ -70,8 +70,36 @@ last minute the overlay costs no extra request at all. It is only needed while
 games are live; before the first tip and after the last final, no request is
 made.
 
-**Decision pending (user):** confirm the scoreboard as the "game is final"
+**Decision (user, 2026-11-13):** the site scoreboard is the "game is final"
 source.
+
+#### When the scoreboard is called
+
+Every check below runs in memory on data the app already holds (the pro-team
+schedule, cached for 24 h, has every game's tip time; final states are kept in
+memory). No check costs a request.
+
+1. **Only when a page needs it.** The status is fetched on demand by a request
+   for a live-capable page, cached 60 s and shared with Box Scores, Today and
+   matchups. No background polling: if nobody opens the site, no calls.
+2. **Only for the Averages view.** Totals and the roster show games in
+   progress anyway and never need it.
+3. **Not before a game could have ended.** A game is not checked until
+   1 h 45 min after its tip. NBA games take about 2 h 15 min, so this costs no
+   delay. This covers the whole day from ESPN's morning update until well
+   after the first tip.
+4. **A final game is never asked about again.** Final does not go back to
+   live, so once a game is seen final it is remembered for the rest of the
+   period.
+5. **Done when every game is final.** After the last final there are no more
+   calls until ESPN moves to the next day (which happens the next morning
+   anyway).
+
+In practice that is at most one ~8 KB request a minute, for roughly the two to
+three hours between the first possible final and the last final, and only
+while someone is on the site. If a game is postponed or suspended, its status
+never turns final, so it simply never counts toward averages that night;
+ESPN's official update the next morning settles it.
 
 The overlay service still takes "today's lines per player" behind one
 function, so the box-score source remains available as a fallback and as a
