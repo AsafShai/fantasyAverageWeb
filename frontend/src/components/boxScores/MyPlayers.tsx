@@ -21,7 +21,7 @@ function groupSummary(groups: MyGroups): string {
 }
 
 function GameHeading({ game, hideScore = false }: { game: BoxScoreGame; hideScore?: boolean }) {
-  const clock = gameClockLabel(game.status, game.status_detail, game.start_time)
+  const clock = gameClockLabel(game.status, game.status_detail, game.start_time, hideScore)
   const scored = !hideScore && game.away.score != null && game.home.score != null
   return (
     <>

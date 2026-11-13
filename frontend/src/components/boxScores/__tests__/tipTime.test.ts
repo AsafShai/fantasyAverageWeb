@@ -21,6 +21,10 @@ describe('formatLocalTip', () => {
 
   it('keeps final labels and falls back when the tip is missing', () => {
     expect(gameClockLabel('final', 'Final', '2026-10-26T23:00Z')).toBe('Final')
+    expect(gameClockLabel('live', '3:08 - 4th', '', true)).toBe('Live')
+    expect(gameClockLabel('live', '11.4 - 2OT', '', true)).toBe('Live')
+    expect(gameClockLabel('final', 'Final/2OT', '', true)).toBe('Final')
+    expect(gameClockLabel('live', '3:08 - 4th', '')).toBe('3:08 - 4th')
     expect(gameClockLabel('scheduled', '10/26 - 7:00 PM EDT', '')).toBe('10/26 - 7:00 PM EDT')
   })
 })
