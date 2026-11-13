@@ -299,6 +299,7 @@ function SlateTotalBar({
   view,
   onViewChange,
   activeOnly,
+  live,
 }: {
   totals: MySlateTotals
   categoryTotals: MySlateCategoryTotals | null
@@ -306,6 +307,8 @@ function SlateTotalBar({
   view: SlateTotalView
   onViewChange: (view: SlateTotalView) => void
   activeOnly: boolean
+  /** Games are still in progress, so the totals are running and will keep changing. */
+  live: boolean
 }) {
   const canShowCategories = categoryTotals != null && leagueCategories.length > 0
   const items = view === 'categories' && canShowCategories
@@ -316,7 +319,7 @@ function SlateTotalBar({
     <footer className="border-t border-blue-200 bg-blue-50/60 px-4 py-3 dark:border-blue-500/30 dark:bg-blue-950/40">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-200">
-          Slate total
+          {live ? 'Slate total so far' : 'Slate total'}
           <span className="font-normal normal-case text-gray-600 dark:text-gray-400">
             {' · '}
             {totals.players} played
@@ -392,7 +395,7 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPla
   playerValues?: Map<string, SlatePlayerValue>
   /** League scoring categories from the slate values response (for the category total view). */
   leagueCategories?: string[]
-  /** Every game on the slate is final — past days and complete nights. */
+  /** Every game on the slate is final. While false, the slate total is shown as a live running total. */
   slateComplete?: boolean
 }) {
   const hasResults = groups.live.length + groups.done.length > 0
@@ -415,18 +418,18 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPla
   const empty = rosteredOnSlate === 0
   const filteredEmpty = !empty && activeOnly && !label
   const finishedAppearances = useMemo(
-    () => (slateComplete ? [...visibleGroups.done, ...visibleGroups.live] : []),
-    [slateComplete, visibleGroups.done, visibleGroups.live],
+    () => [...visibleGroups.done, ...visibleGroups.live],
+    [visibleGroups.done, visibleGroups.live],
   )
   const slateTotals = useMemo(
-    () => (slateComplete ? mySlateTotals(finishedAppearances, playerValues) : null),
-    [slateComplete, finishedAppearances, playerValues],
+    () => mySlateTotals(finishedAppearances, playerValues),
+    [finishedAppearances, playerValues],
   )
   const slateCategoryTotals = useMemo(
-    () => (slateComplete && leagueCategories?.length
+    () => (leagueCategories?.length
       ? mySlateCategoryTotals(finishedAppearances, playerValues, leagueCategories)
       : null),
-    [slateComplete, finishedAppearances, playerValues, leagueCategories],
+    [finishedAppearances, playerValues, leagueCategories],
   )
 
   return (
@@ -527,7 +530,7 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPla
           ))}
         </Group>
       )}
-      {open && slateComplete && slateTotals && !hide && (
+      {open && slateTotals && !hide && (
         <SlateTotalBar
           totals={slateTotals}
           categoryTotals={slateCategoryTotals}
@@ -535,9 +538,10 @@ export default function MyPlayers({ groups, spoilerGuard, onOpenGame, fantasyPla
           view={slateTotalView}
           onViewChange={setSlateTotalView}
           activeOnly={activeOnly && canFilterLineup}
+          live={!slateComplete}
         />
       )}
-      {open && slateComplete && slateTotals && hide && (
+      {open && slateTotals && hide && (
         <p className="border-t border-blue-100 px-4 py-3 text-[11px] text-gray-400 dark:border-gray-800">
           Show results to see the slate total for my players.
         </p>
