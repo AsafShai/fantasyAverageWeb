@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- exports helpers next to components; only affects dev hot reload */
 import { useEffect, useState } from 'react'
 import InjuryBadge from '../InjuryBadge'
 import PlayerNameLink from '../PlayerNameLink'

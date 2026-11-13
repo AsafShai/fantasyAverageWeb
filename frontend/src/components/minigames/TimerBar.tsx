@@ -23,6 +23,7 @@ export default function TimerBar({
   })
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing; syncs state to a changed input, refactor separately
     setRemainingMs(totalMs)
   }, [resetKey, totalMs])
 

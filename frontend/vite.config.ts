@@ -31,7 +31,5 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     // Playwright specs live in e2e/ and run with `npm run test:e2e`.
     exclude: [...configDefaults.exclude, 'e2e/**'],
-    maxWorkers: 1,
-    fileParallelism: false,
   },
 })

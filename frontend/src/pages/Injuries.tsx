@@ -149,6 +149,7 @@ export default function Injuries() {
 
   useEffect(() => {
     const allowed = new Set(teamOptions);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing; syncs state to a changed input, refactor separately
     setFilters(prev => {
       const teams = prev.teams.filter(t => allowed.has(t));
       if (teams.length === prev.teams.length) return prev;
