@@ -25,7 +25,19 @@ export interface RankingStats {
   stats?: Record<string, number>;
 }
 
+/** Tonight's live overlay state. Absent when the backend flag is off. */
+export interface LiveBlock {
+  active: boolean;
+  period: number | null;
+  as_of: string | null;
+  games_total: number;
+  games_live: number;
+  games_final: number;
+  official_updated_at: string | null;
+}
+
 export interface LeagueRankings {
+  live?: LiveBlock;
   averages_rankings: RankingStats[];
   totals_rankings: RankingStats[];
   categories: string[];
@@ -73,6 +85,7 @@ export interface SlotUsage {
 }
 
 export interface TeamDetail {
+  live?: LiveBlock;
   team: Team;
   espn_url: string;
   players?: Player[];
@@ -87,6 +100,7 @@ export interface TeamDetail {
 }
 
 export interface LeagueSummary {
+  live?: LiveBlock;
   total_teams: number;
   total_games_played: number;
   nba_avg_pace?: number;
@@ -103,6 +117,7 @@ export interface LeagueSummary {
 }
 
 export interface HeatmapData {
+  live?: LiveBlock;
   teams: Team[];
   categories: string[];
   data: number[][];

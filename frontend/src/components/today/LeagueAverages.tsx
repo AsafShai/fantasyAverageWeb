@@ -30,7 +30,7 @@ export default function LeagueAverages({ summary }: LeagueAveragesProps) {
     <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
       <div className="flex items-baseline justify-between gap-2 pb-2">
         <h2 className="text-base font-bold text-gray-900 sm:text-lg dark:text-gray-50">League averages</h2>
-        <span className="text-[11px] text-gray-400 dark:text-gray-500">per team, season to date</span>
+        <span className="text-[11px] text-gray-400 dark:text-gray-500">{summary.live?.active ? 'per team, season to date · incl. tonight’s finished games' : 'per team, season to date'}</span>
       </div>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
         {AVERAGE_TILES.map(tile => (

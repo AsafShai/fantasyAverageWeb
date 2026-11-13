@@ -4,7 +4,8 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
-import EspnUpdatedNote from '../components/EspnUpdatedNote'
+import LiveBadge from '../components/live/LiveBadge'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
@@ -71,7 +72,7 @@ const Analytics = () => {
 
   const today = todayIso()
 
-  const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery(appliedDates)
+  const { data: heatmapData, error, isLoading } = useLiveQuery(useGetHeatmapDataQuery, appliedDates)
   const { data: summary } = useGetLeagueSummaryQuery()
 
   const handleTeamClick = (teamId: number) => {
@@ -189,6 +190,7 @@ const Analytics = () => {
         onTab={(tab) => setUrlState({ tab })}
         dataDate={heatmapData?.data_date}
         espnUpdatedAt={summary?.espn_updated_at}
+        live={heatmapData?.live}
         heatmap={sorted}
         sort={sortBy ? { key: sortBy, dir: sortOrder } : null}
         onSort={(s) => { setSortBy(s.key); setSortOrder(s.dir) }}
@@ -418,7 +420,7 @@ const Analytics = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">League Analytics</h1>
           {heatmapData?.data_date
             ? <DataDateBadge dataDate={heatmapData.data_date} />
-            : <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />}
+            : <LiveBadge live={heatmapData?.live} espnUpdatedAt={summary?.espn_updated_at} />}
         </div>
         {/* mobile: the three tabs split the width (a long label wraps) instead of
             scrolling the last one off screen */}

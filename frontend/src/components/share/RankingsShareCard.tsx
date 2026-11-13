@@ -1,5 +1,7 @@
 import type { RankingStats, TeamRankChange } from '../../types/api'
 import { ShareCard, type ShareCardTheme } from './ShareCard'
+import type { LiveBlock } from '../../types/api'
+import { liveShare } from '../../utils/live'
 import { formatCardValue, formatPoints } from './shareCardFormat'
 
 interface RankingsShareCardProps extends ShareCardTheme {
@@ -14,6 +16,8 @@ interface RankingsShareCardProps extends ShareCardTheme {
   highlightTeamId: number | null
   /** Last night's moves by team id; omitted when the page hides them. */
   moves?: Map<number, TeamRankChange>
+  /** Tonight's live block; stamps the card while the data is live or unofficial. */
+  live?: LiveBlock | null
 }
 
 /** ▲/▼ change since the previous night; nothing for no change unless `showSame`. */
@@ -27,11 +31,12 @@ const CardDelta = ({ value, showSame = false }: { value: number | null | undefin
 
 /** Roto table mirroring the Rankings page: per-category roto points in the
  * Rankings view, compact values in the Standings view. */
-export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, asOf, highlightTeamId, moves, dark }: RankingsShareCardProps) => {
+export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, asOf, highlightTeamId, moves, dark, live }: RankingsShareCardProps) => {
   const isStandings = view === 'standings'
   const teamCount = rows.length
   const modeLabel = mode === 'averages' ? 'averages' : 'totals'
   const period = rangeLabel ?? 'Season'
+  const stamp = liveShare(live)
 
   return (
     <ShareCard
@@ -40,7 +45,8 @@ export const RankingsShareCard = ({ rows, categories, view, mode, rangeLabel, as
       extraWide={!!moves}
       kicker={`${categories.length}-cat roto`}
       title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
-      subtitle={`${period} ${modeLabel} · as of ${asOf}`}
+      stamp={stamp ? { label: stamp.stamp, tone: stamp.tone } : undefined}
+      subtitle={stamp ? stamp.subtitle : `${period} ${modeLabel} · as of ${asOf}`}
       footer={<><span>{moves ? '▲▼ = change since last night' : ''}</span><span>{teamCount} teams</span></>}
     >
       <div className="share-card__body">

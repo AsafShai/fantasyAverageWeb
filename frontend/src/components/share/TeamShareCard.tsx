@@ -1,3 +1,5 @@
+import type { LiveBlock } from '../../types/api'
+import { liveShare } from '../../utils/live'
 import { ShareCard, type ShareCardTheme } from './ShareCard'
 import { formatCardValue, formatPoints, rotoPlace, rotoTone } from './shareCardFormat'
 
@@ -16,16 +18,21 @@ interface TeamShareCardProps extends ShareCardTheme {
   categories: TeamShareCategory[]
   gp: number
   asOf: string
+  /** Tonight's live block; stamps the card while the data is live or unofficial. */
+  live?: LiveBlock | null
 }
 
 /** One team's roto report: overall rank, roto points, and a bar per
  * category showing how close the team is to first. */
-export const TeamShareCard = ({ teamName, rank, totalPoints, teamCount, categories, gp, asOf, dark }: TeamShareCardProps) => (
+export const TeamShareCard = ({ teamName, rank, totalPoints, teamCount, categories, gp, asOf, dark, live }: TeamShareCardProps) => {
+  const stamp = liveShare(live)
+  return (
   <ShareCard
     dark={dark}
     kicker="Team report"
     title={teamName}
-    subtitle={`Season averages · as of ${asOf}`}
+    stamp={stamp ? { label: stamp.stamp, tone: stamp.tone } : undefined}
+    subtitle={stamp ? stamp.subtitle : `Season averages · as of ${asOf}`}
     footer={<><span>Bar = how close to 1st in the league</span><span>GP {gp}</span></>}
   >
     <div className="share-card__tiles">
@@ -59,4 +66,5 @@ export const TeamShareCard = ({ teamName, rank, totalPoints, teamCount, categori
       })}
     </div>
   </ShareCard>
-)
+  )
+}

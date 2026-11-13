@@ -2,9 +2,10 @@ import { useNavigate } from 'react-router'
 import { useGetRankChangesQuery } from '../../store/api/fantasyApi'
 import { MyTeamMark } from '../../components/MyTeamMark'
 import DataDateBadge from '../../components/DataDateBadge'
-import EspnUpdatedNote from '../../components/EspnUpdatedNote'
 import { ShareCardButton } from '../../components/share/ShareCardButton'
 import { orderCategories } from '../../utils/statOrder'
+import { averagesNote, liveSectionNote } from '../../utils/live'
+import { LiveBadgeMobile } from '../ui/LiveBadgeMobile'
 import { Card, Segmented } from '../ui'
 import MobileRoster from './MobileRoster'
 import MobileRosterCoverage from './MobileRosterCoverage'
@@ -81,7 +82,7 @@ export default function MobileTeamDetail(p: MobileTeamDetailProps) {
         </div>
         <div className="mr-tm-meta-row">
           <span className="mr-meta">Ranking summary (averages) · GP {t.raw_averages.gp}</span>
-          {t.data_date ? <DataDateBadge dataDate={t.data_date} /> : <EspnUpdatedNote updatedAt={p.espnUpdatedAt} />}
+          {t.data_date ? <DataDateBadge dataDate={t.data_date} /> : <LiveBadgeMobile live={t.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(t.live, 'averages')} />}
         </div>
         <div className="mr-tm-actions">
           <a className="mr-tm-espn" href={t.espn_url} target="_blank" rel="noopener noreferrer">
@@ -102,6 +103,7 @@ export default function MobileTeamDetail(p: MobileTeamDetailProps) {
       {p.tab === 'stats' && (
         <>
           <Card title="Team statistics">
+            {liveSectionNote(t.live, 'stats') && <span className="mr-meta">{liveSectionNote(t.live, 'stats')}</span>}
             <div>
               <div className="mr-kv"><span>Overall rank</span><b>#{t.ranking_stats.rank}</b></div>
               <div className="mr-kv"><span>Total points</span><b>{t.ranking_stats.total_points}</b></div>
@@ -152,6 +154,7 @@ export default function MobileTeamDetail(p: MobileTeamDetailProps) {
         <>
           {t.slot_usage && Object.keys(t.slot_usage).length > 0 && (
             <Card title="Slot usage">
+              {liveSectionNote(t.live, 'slots') && <span className="mr-meta">{liveSectionNote(t.live, 'slots')}</span>}
               {p.slotMeta}
               <div className="mr-tm-slots">{p.slotUsageNode}</div>
             </Card>

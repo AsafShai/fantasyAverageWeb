@@ -9,7 +9,8 @@ import TopTeams from '../components/today/TopTeams'
 import { getErrorMessage } from '../utils/errorMessage'
 import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
 import LatestMovesCard from '../components/activity/LatestMovesCard'
-import EspnUpdatedNote from '../components/EspnUpdatedNote'
+import LiveBadge from '../components/live/LiveBadge'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileToday from '../mobile/today/MobileToday'
 
@@ -23,8 +24,8 @@ function formatSlate(slateDate: string | null): string {
 }
 
 const DesktopToday = () => {
-  const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
-  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
+  const { data: summary, error: summaryError, isLoading: summaryLoading } = useLiveQuery(useGetLeagueSummaryQuery, undefined)
+  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useLiveQuery(useGetRankingsQuery, {})
   const { data: hub, isLoading: hubLoading, isError: hubError } = useGetTodayHubQuery()
 
   if (summaryLoading || rankingsLoading) {
@@ -44,7 +45,7 @@ const DesktopToday = () => {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex flex-col">
           <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
-          <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />
+          <LiveBadge live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} align="left" />
         </div>
         <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">
           {hub

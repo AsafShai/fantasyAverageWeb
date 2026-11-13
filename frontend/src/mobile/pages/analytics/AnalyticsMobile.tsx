@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import DataDateBadge from '../../../components/DataDateBadge'
-import EspnUpdatedNote from '../../../components/EspnUpdatedNote'
 import { MyTeamMark } from '../../../components/MyTeamMark'
-import type { Team } from '../../../types/api'
+import type { LiveBlock, Team } from '../../../types/api'
+import { averagesNote } from '../../../utils/live'
+import { LiveBadgeMobile } from '../../ui/LiveBadgeMobile'
 import { getHeatmapColor, getTextColor } from '../../../utils/colorUtils'
 import { Button, Card, Chip, ChipRow, DataTable, Segmented, type Column, type SortState } from '../../ui'
 import './analytics.css'
@@ -35,6 +36,7 @@ export interface AnalyticsMobileProps {
   onTab: (tab: AnalyticsUrlTab) => void
   dataDate?: string
   espnUpdatedAt?: string | null
+  live?: LiveBlock | null
 
   heatmap: HeatmapRows | null
   sort: SortState | null
@@ -128,7 +130,7 @@ export function AnalyticsMobile(p: AnalyticsMobileProps) {
     <div className="mr-root mr-an">
       <div className="mr-an-title">
         <h1 className="mr-h1">League Analytics</h1>
-        {p.dataDate ? <DataDateBadge dataDate={p.dataDate} /> : <EspnUpdatedNote updatedAt={p.espnUpdatedAt} />}
+        {p.dataDate ? <DataDateBadge dataDate={p.dataDate} /> : <LiveBadgeMobile live={p.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(p.live, 'averages')} />}
       </div>
 
       <Segmented label="League Analytics section" className="mr-an-tabs" options={ANALYTICS_TAB_OPTIONS} value={p.tab} onChange={p.onTab} />

@@ -11,7 +11,9 @@ import { getErrorMessage } from '../utils/errorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
 import DataDateBadge from '../components/DataDateBadge'
-import EspnUpdatedNote from '../components/EspnUpdatedNote'
+import LiveBadge from '../components/live/LiveBadge'
+import { useLiveQuery } from '../hooks/useLiveQuery'
+import { liveSectionNote } from '../utils/live'
 import { aggregatePlayerAverages } from '../utils/statsUtils'
 import InjuryBadge from '../components/InjuryBadge'
 import SlotUsageTable from '../components/SlotUsageTable'
@@ -76,7 +78,7 @@ const TeamDetail = () => {
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(() =>
     urlState.from && urlState.to ? { start: urlState.from, end: urlState.to } : null
   )
-  const { data: team_detail, error, isLoading } = useGetTeamDetailQuery({
+  const { data: team_detail, error, isLoading } = useLiveQuery(useGetTeamDetailQuery, {
     teamId: teamIdNumber,
     time_period: timePeriod,
     ...(timePeriod === 'custom' && customRange ? { start: customRange.start, end: customRange.end } : {}),
@@ -439,7 +441,8 @@ const TeamDetail = () => {
     return formatStat(v, player.stats.gp, isPct)
   }
 
-  const teamStatsSubtitle = `#${team_detail.ranking_stats.rank ?? '—'} · ${team_detail.ranking_stats.total_points} pts · GP ${team_detail.raw_averages.gp}`
+  const statsLive = liveSectionNote(team_detail.live, 'stats')
+  const teamStatsSubtitle = `#${team_detail.ranking_stats.rank ?? '—'} · ${team_detail.ranking_stats.total_points} pts · GP ${team_detail.raw_averages.gp}${statsLive ? ` · ${statsLive}` : ''}`
   const rosterSubtitle =
     tableMode === 'daily'
       ? rosterDay
@@ -468,14 +471,17 @@ const TeamDetail = () => {
         }))}
         gp={team_detail.raw_averages.gp}
         asOf={formatAsOf(team_detail.data_date)}
+        live={team_detail.live}
       />
     )
   }
 
-  const slotUsageSubtitle =
+  const slotsLive = liveSectionNote(team_detail.live, 'slots')
+  const slotUsageBase =
     typeof leagueSummary?.nba_game_days_left === 'number'
       ? `${leagueSummary.nba_game_days_left} game days left${typeof leagueSummary?.nba_avg_pace === 'number' ? ` · NBA pace ${leagueSummary.nba_avg_pace.toFixed(1)}` : ''}`
       : undefined
+  const slotUsageSubtitle = slotsLive ? [slotUsageBase, slotsLive].filter(Boolean).join(' · ') : slotUsageBase
 
   if (mobileRedesign) {
     const awaitingCoverageMatchup = !!coverageSlate && !datedMatchupReady
@@ -578,7 +584,7 @@ const TeamDetail = () => {
             <div className="mt-1">
               {team_detail.data_date
                 ? <DataDateBadge dataDate={team_detail.data_date} />
-                : <EspnUpdatedNote updatedAt={leagueSummary?.espn_updated_at} />}
+                : <LiveBadge live={team_detail.live} espnUpdatedAt={leagueSummary?.espn_updated_at} align="left" />}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -616,7 +622,7 @@ const TeamDetail = () => {
             </h1>
             {team_detail.data_date
               ? <DataDateBadge dataDate={team_detail.data_date} />
-              : <EspnUpdatedNote updatedAt={leagueSummary?.espn_updated_at} />}
+              : <LiveBadge live={team_detail.live} espnUpdatedAt={leagueSummary?.espn_updated_at} align="left" />}
           </div>
           <div className="flex items-center gap-2">
             <ShareCardButton title={`${team_detail.team.team_name} Report`} renderCard={shareCardRender} />

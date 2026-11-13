@@ -9,7 +9,9 @@ import {
 import type { AverageStats, LeagueSummary, RankingStats } from '../../types/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
-import EspnUpdatedNote from '../../components/EspnUpdatedNote'
+import { useLiveQuery } from '../../hooks/useLiveQuery'
+import { averagesNote } from '../../utils/live'
+import { LiveBadgeMobile } from '../ui/LiveBadgeMobile'
 import { MyTeamMark } from '../../components/MyTeamMark'
 import { useMyTeam } from '../../context/MyTeamContext'
 import { getErrorMessage } from '../../utils/errorMessage'
@@ -152,7 +154,7 @@ function LeagueAveragesCard({ summary }: { summary: LeagueSummary }) {
         </Link>
       }
     >
-      <span className="mr-meta mr-today-sub">per team, season to date</span>
+      <span className="mr-meta mr-today-sub">{summary.live?.active ? 'per team, season to date · incl. tonight’s finished games' : 'per team, season to date'}</span>
       <dl className="mr-today-tiles mr-today-c3">
         {tiles.map((t) => (
           <div key={t.label} className="mr-today-tile">
@@ -170,8 +172,8 @@ function LeagueAveragesCard({ summary }: { summary: LeagueSummary }) {
 
 /** Phone Today page (Home tab): same information as the desktop page, reorganized per the redesign. */
 export default function MobileToday() {
-  const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
-  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
+  const { data: summary, error: summaryError, isLoading: summaryLoading } = useLiveQuery(useGetLeagueSummaryQuery, undefined)
+  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useLiveQuery(useGetRankingsQuery, {})
   const { data: hub, isLoading: hubLoading, isError: hubError } = useGetTodayHubQuery()
 
   if (summaryLoading || rankingsLoading) return <LoadingSpinner />
@@ -193,7 +195,7 @@ export default function MobileToday() {
       <div className="mr-today-pt">
         <div className="mr-today-ptl">
           <h1 className="mr-h1">Today</h1>
-          <EspnUpdatedNote updatedAt={summary?.espn_updated_at} className="mr-today-espn" />
+          <LiveBadgeMobile live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} note={averagesNote(summary?.live, 'averages')} noteClassName="mr-today-espn" />
         </div>
         {hub ? (
           <Link to="/box-scores" className="mr-link mr-today-slate">
