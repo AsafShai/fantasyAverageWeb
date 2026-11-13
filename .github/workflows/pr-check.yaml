@@ -3,8 +3,37 @@ name: PR Check
 on:
   pull_request:
 
+# A new push to the same PR cancels the run it replaces.
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
+  # Decides which side of the repo a PR touches. Jobs for the untouched side are
+  # skipped, which GitHub counts as passing for required checks.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/pr-check.yaml'
+            frontend:
+              - 'frontend/**'
+              - '.nvmrc'
+              - '.github/workflows/pr-check.yaml'
+
   test-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     env:
       SEASON_ID: ${{ vars.SEASON_ID }}
@@ -29,7 +58,10 @@ jobs:
         working-directory: backend
         run: PYTHONPATH=. uv run pytest
 
-  test-frontend:
+  # Lint, type check + build, and unit tests share one install.
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -40,10 +72,19 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - run: npm test
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Type check and build
+        run: npm run build
+        working-directory: frontend
+      - name: Unit tests
+        run: npm test
         working-directory: frontend
 
   e2e-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Image ships Chromium + system deps, so no apt-get at run time.
@@ -72,36 +113,40 @@ jobs:
             frontend/test-results
           retention-days: 7
 
+  # Runs alongside the tests rather than after them; a test failure still fails the PR.
   build-backend:
-    needs: test-backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build backend
-        working-directory: backend
-        run: docker build -t fantasy-backend:latest .
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Smoke test image (import app)
-        run: docker run --rm -e SEASON_ID="${{ vars.SEASON_ID }}" -e LEAGUE_ID="${{ vars.LEAGUE_ID }}" fantasy-backend:latest uv run python -c "import app.main; print('app imports OK')"
-
-  build-frontend:
-    needs: [test-backend, test-frontend]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+      # Layers are cached between runs, so the dependency install (pandas,
+      # scikit-learn, pyarrow, ...) is only redone when uv.lock changes.
+      - name: Build backend image
+        uses: docker/build-push-action@v6
         with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          context: backend
+          load: true
+          tags: fantasy-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
 
-      - name: Install and build frontend
-        working-directory: frontend
+      - name: Smoke test image (start app, call /health)
         run: |
-          npm ci
-          npm run build
+          docker run -d --name backend -p 8000:8000 \
+            -e SEASON_ID="${{ vars.SEASON_ID }}" -e LEAGUE_ID="${{ vars.LEAGUE_ID }}" \
+            fantasy-backend:ci
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:8000/health; then
+              echo; echo "healthy after ${i}s"; exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' backend)" != "true" ]; then
+              echo "container exited"; break
+            fi
+            sleep 1
+          done
+          echo "backend did not become healthy"; docker logs backend; exit 1
