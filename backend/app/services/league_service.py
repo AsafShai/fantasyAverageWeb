@@ -7,6 +7,7 @@ from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats
 from app.services.data_provider import DataProvider
 from app.services.stats_calculator import StatsCalculator
 from app.services.nba_stats_service import NBAStatsService
+from app.services import tonight_changes
 from app.builders.response_builder import ResponseBuilder
 from app.exceptions import ResourceNotFoundError
 from app.config import settings
@@ -70,7 +71,19 @@ class LeagueService:
             trade_deadline=trade_deadline,
             espn_updated_at=espn_updated_at,
         )
+        if live_state is not None and live_state.active:
+            response.league_averages_official = await self._official_league_averages()
         return with_live(response, live_state)
+
+    async def _official_league_averages(self) -> Optional[AverageStats]:
+        """This morning's official league averages, for marking the Today
+        tiles tonight moved. None on failure: the tiles then show no marks."""
+        try:
+            official_df = await self.data_provider.get_averages_df()
+            return self._calculate_league_averages(official_df, await self.data_provider.get_ranking_categories())
+        except Exception as e:
+            self.logger.warning(f"Official league averages unavailable: {type(e).__name__}: {e}")
+            return None
     
     async def get_heatmap_data(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> HeatmapData:
         """Get data for heatmap visualization"""
@@ -82,7 +95,7 @@ class LeagueService:
         response = await self.data_provider.memo_response(
             'heatmap', (), lambda: self._get_season_heatmap(live=True), live=True
         )
-        return with_live(response, live_state)
+        return await self._with_tonight_gp(response, live_state)
 
     async def _get_season_heatmap(self, live: bool = False) -> HeatmapData:
         averages_df = await (self.data_provider.get_averages_df(live=True) if live
@@ -125,18 +138,9 @@ class LeagueService:
     async def _get_heatmap_for_range(self, start_date: date, end_date: date) -> HeatmapData:
         from app.services.ranking_service import RankingService
 
-        actual_end_date, actual_start_date, rows_end, rows_start = \
-            await self.data_provider.db_service.get_snapshots_for_date_range(
-                start_date, end_date, settings.league_id, settings.season_id
-            )
-
-        if actual_end_date is None or not rows_end:
-            raise ResourceNotFoundError("No data available for the requested date range")
-
         ranking_service = RankingService()
-        end_df = pd.DataFrame(rows_end)
-        start_df = pd.DataFrame(rows_start) if rows_start else None
-        delta_df = ranking_service._compute_delta(end_df, start_df)
+        actual_start_date, actual_end_date, delta_df, _, live_state = \
+            await ranking_service.range_deltas(start_date, end_date)
 
         categories = await self.data_provider.get_ranking_categories()
         reverse_categories = await self.data_provider.get_reverse_categories()
@@ -161,7 +165,7 @@ class LeagueService:
         )
         ranks_data = self._extract_ranks_data(rankings_df, sorted_averages_df, categories)
 
-        return self.response_builder.build_heatmap_response(
+        response = self.response_builder.build_heatmap_response(
             teams=teams_data,
             categories=categories_data,
             normalized_data=normalized_data,
@@ -172,6 +176,20 @@ class LeagueService:
             actual_end_date=actual_end_date,
             category_labels=categories + ['GP'],
         )
+        return await self._with_tonight_gp(response, live_state)
+
+    async def _with_tonight_gp(self, response: HeatmapData, live_state) -> HeatmapData:
+        """The ``live`` block, plus the GP column's "+N" (games counted
+        tonight, finished games only) while tonight is live."""
+        if live_state is not None and live_state.active:
+            try:
+                official = await self.data_provider.get_averages_df()
+                live = await self.data_provider.get_averages_df(live=True)
+                gp = tonight_changes.gp_tonight(official, live, [t.team_id for t in response.teams])
+                response = response.model_copy(update={'gp_tonight': gp})
+            except Exception as e:
+                self.logger.warning(f"Heatmap GP tonight unavailable: {type(e).__name__}: {e}")
+        return with_live(response, live_state)
     
     async def get_league_shots_data(self) -> LeagueShotsData:
         """Get league-wide shooting statistics"""

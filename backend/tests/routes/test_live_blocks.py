@@ -80,7 +80,7 @@ def test_flag_on_asks_for_live_frames(test_client, provider, url):
 
 
 def test_date_range_rankings_stay_official_without_a_live_block(test_client, provider, monkeypatch):
-    """Ranges that end today are a later step: until then they carry no block."""
+    """A range that ends before tonight is stored days only and carries no block."""
     from app.services.ranking_service import RankingService
 
     async def ranged(self, *a, **k):
@@ -158,3 +158,140 @@ def test_team_detail_carries_tonight_while_live(test_client, provider):
     provider.live_state = LIVE
     tonight = test_client.get("/api/teams/1").json()["tonight"]
     assert tonight == {"gp": 0, "points": 0.0, "slots": {}, "starters_live": 2}
+
+
+# --- PR 5: tonight movers, ranges that end today, the race point --------------
+
+from app.services import tonight_changes as tc  # noqa: E402
+
+SNAP = [
+    {'team_id': i, 'team_name': n, 'GP': 70, 'FGM': 3000, 'FGA': 6500, 'FG%': 0.46,
+     'FTM': 1200, 'FTA': 1600, 'FT%': 0.75, '3PM': 1000, 'REB': 3000, 'AST': 2000,
+     'STL': 600, 'BLK': 400, 'PTS': 8000}
+    for i, n in [(1, 'Team Alpha'), (2, 'Team Beta'), (3, 'Team Gamma')]
+]
+
+
+@pytest.fixture
+def snapshots(provider, monkeypatch):
+    calls = []
+
+    async def ranged(start, end, league_id, season_id):
+        calls.append((start, end))
+        return tc.slate_date(23), tc.slate_date(20), SNAP, SNAP
+    monkeypatch.setattr(provider.db_service, "get_snapshots_for_date_range", ranged, raising=False)
+    return calls
+
+
+def _range(url, end):
+    return f"{url}?start_date={tc.slate_date(20).isoformat()}&end_date={end.isoformat()}"
+
+
+@pytest.mark.parametrize("url", ["/api/rankings", "/api/analytics/heatmap"])
+def test_range_ending_today_flag_off_is_unchanged(test_client, provider, snapshots, url):
+    body = test_client.get(_range(url, tc.slate_date(24))).json()
+    assert "live" not in body and "gp_tonight" not in body
+    assert body["actual_end_date"] == tc.slate_date(23).isoformat()
+    assert ('totals', True) not in provider.live_calls
+
+
+@pytest.mark.parametrize("url", ["/api/rankings", "/api/analytics/heatmap"])
+def test_range_ending_today_takes_the_live_end_while_live(test_client, provider, snapshots, url):
+    provider.live_state = LIVE
+    body = test_client.get(_range(url, tc.slate_date(24))).json()
+    assert body["live"]["active"] is True
+    assert body["actual_end_date"] == tc.slate_date(24).isoformat()
+    assert ('totals', True) in provider.live_calls
+
+
+def test_range_ending_today_before_tip_off_is_stored_days_with_a_block(test_client, provider, snapshots):
+    provider.live_state = IDLE
+    body = test_client.get(_range("/api/rankings", tc.slate_date(24))).json()
+    assert body["live"]["active"] is False
+    assert body["actual_end_date"] == tc.slate_date(23).isoformat()
+    assert ('totals', True) not in provider.live_calls
+
+
+def test_range_ending_before_tonight_stays_stored_while_live(test_client, provider, snapshots):
+    provider.live_state = LIVE
+    body = test_client.get(_range("/api/rankings", tc.slate_date(23))).json()
+    assert "live" not in body
+    assert ('totals', True) not in provider.live_calls
+
+
+def test_rank_changes_flag_off_has_no_live_key(test_client, provider):
+    body = test_client.get("/api/league/rank-changes").json()
+    assert "live" not in body
+    assert ('rankings', True) not in provider.live_calls
+
+
+@pytest.mark.parametrize("mode,call", [("averages", ('rankings', True)), ("totals", ('totals', True))])
+def test_rank_changes_are_tonight_while_live(test_client, provider, mode, call):
+    provider.live_state = LIVE
+    body = test_client.get(f"/api/league/rank-changes?mode={mode}").json()
+    assert body["live"]["active"] is True
+    assert body["previous_period"] == 23 and body["latest_period"] == 24
+    assert {t["team_id"] for t in body["teams"]} == {1, 2, 3}
+    assert call in provider.live_calls
+
+
+def test_rank_changes_before_tip_off_are_last_nights_with_a_block(test_client, provider):
+    provider.live_state = IDLE
+    body = test_client.get("/api/league/rank-changes").json()
+    assert body["live"]["active"] is False
+    assert ('rankings', True) not in provider.live_calls
+
+
+def test_today_hub_flag_off_is_unchanged(test_client, provider):
+    body = test_client.get("/api/league/today").json()
+    assert "live" not in body and "tonight_movers" not in body
+
+
+def test_today_hub_carries_tonight_movers_while_live(test_client, provider):
+    provider.live_state = LIVE
+    body = test_client.get("/api/league/today").json()
+    assert body["live"]["active"] is True
+    assert body["tonight_movers"] == []   # the mock's live frames equal the official ones
+
+
+def test_today_hub_before_tip_off_has_no_tonight_movers(test_client, provider):
+    provider.live_state = IDLE
+    body = test_client.get("/api/league/today").json()
+    assert body["live"]["active"] is False and "tonight_movers" not in body
+
+
+def test_summary_carries_official_averages_only_while_live(test_client, provider):
+    assert "league_averages_official" not in test_client.get("/api/league/summary").json()
+    provider.live_state = IDLE
+    assert "league_averages_official" not in test_client.get("/api/league/summary").json()
+    provider.live_state = LIVE
+    body = test_client.get("/api/league/summary").json()
+    assert body["league_averages_official"] == body["league_averages"]
+
+
+def test_heatmap_gp_tonight_only_while_live(test_client, provider):
+    assert "gp_tonight" not in test_client.get("/api/analytics/heatmap").json()
+    provider.live_state = LIVE
+    body = test_client.get("/api/analytics/heatmap").json()
+    assert body["gp_tonight"] == [0] * len(body["teams"])
+
+
+@pytest.mark.parametrize("source", ["rankings_avg", "rankings_totals", "snapshot", "averages"])
+def test_over_time_flag_off_is_unchanged(test_client, provider, source):
+    body = test_client.get(f"/api/analytics/over-time?source={source}").json()
+    assert "live" not in body and "live_points" not in body
+
+
+@pytest.mark.parametrize("source", ["rankings_avg", "rankings_totals", "snapshot", "averages"])
+def test_over_time_carries_tonights_point_while_live(test_client, provider, source):
+    provider.live_state = LIVE
+    body = test_client.get(f"/api/analytics/over-time?source={source}&team_ids=1,2").json()
+    assert body["live"]["active"] is True
+    assert [p["team_id"] for p in body["live_points"]] == [1, 2]
+    assert {p["date"] for p in body["live_points"]} == {tc.slate_date(24).isoformat()}
+
+
+def test_over_time_before_tip_off_has_no_point(test_client, provider):
+    provider.live_state = IDLE
+    body = test_client.get("/api/analytics/over-time").json()
+    assert body["live"]["active"] is False and "live_points" not in body

@@ -121,7 +121,7 @@ class DataProvider:
             raise DataSourceError("Error fetching pro team schedules from ESPN API")
 
 
-    async def get_totals_df(self, live: bool = False) -> pd.DataFrame:
+    async def get_totals_df(self, live: bool = False, settled: bool = False) -> pd.DataFrame:
         """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure.
 
         ``live=True`` adds tonight's games in progress (the totals flavour,
@@ -129,9 +129,12 @@ class DataProvider:
         otherwise, and whenever there is nothing to add, it returns the
         official frame object itself. The live frame is never cached as the
         official one, so the DB sync, estimator and nightly jobs (which never
-        pass ``live``) only ever see ESPN's official totals."""
+        pass ``live``) only ever see ESPN's official totals.
+
+        ``settled=True`` (with ``live``) counts finished games only, the
+        frame averages are built from: a date range's live end uses it."""
         if live:
-            return await self._live_totals(settled=False)
+            return await self._live_totals(settled=settled)
         return await self._official_totals_df()
 
     async def _official_totals_df(self) -> pd.DataFrame:

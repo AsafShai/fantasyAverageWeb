@@ -126,7 +126,7 @@ class MockDataProvider:
             'MIN': [28.5, 27.4, 30.1, 26.8, 29.6, 27.8]
         })
     
-    async def get_totals_df(self, live=False):
+    async def get_totals_df(self, live=False, settled=False):
         self.live_calls.append(('totals', live))
         return self.sample_totals_df
 

@@ -6,6 +6,7 @@ from app.models import LeagueRankings, with_live
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
 from app.services.data_provider import DataProvider
 from app.builders.response_builder import ResponseBuilder
+from app.services import tonight_changes
 from app.utils.constants import RANKING_CATEGORIES, PER_GAME_CATEGORIES, DERIVED_CATEGORIES, RATIO_CATEGORIES
 from app.config import settings
 
@@ -64,8 +65,16 @@ class RankingService:
             categories=categories,
         )
 
-    async def _get_rankings_for_range(self, start_date: date, end_date: date,
-                                       sort_by: Optional[str], order: str) -> LeagueRankings:
+    async def range_deltas(self, start_date: date, end_date: date):
+        """What a date range covers: (actual_start, actual_end, settled delta,
+        in-progress delta, live state).
+
+        A range that ends today (plan section 7 step 4) takes the live frames
+        as its end instead of the latest stored snapshot: ESPN's season totals
+        through last night plus tonight, finished games only for averages and
+        every started game for totals. The state is None unless the range
+        reaches tonight with LIVE_STANDINGS_ENABLED on; otherwise the range is
+        exactly as before."""
         actual_end_date, actual_start_date, rows_end, rows_start = \
             await self.data_provider.db_service.get_snapshots_for_date_range(
                 start_date, end_date, settings.league_id, settings.season_id
@@ -74,19 +83,35 @@ class RankingService:
         if actual_end_date is None or not rows_end:
             raise ResourceNotFoundError("No data available for the requested date range")
 
-        end_df = pd.DataFrame(rows_end)
         start_df = pd.DataFrame(rows_start) if rows_start else None
+        state = await self.data_provider.get_live_state(include_finals=True)
+        if not tonight_changes.range_reaches_tonight(state, end_date):
+            state = None
+        if state is not None and state.active:
+            try:
+                settled = tonight_changes.as_snapshot(await self.data_provider.get_totals_df(live=True, settled=True))
+                progress = tonight_changes.as_snapshot(await self.data_provider.get_totals_df(live=True))
+                return (actual_start_date, tonight_changes.slate_date(state.period),
+                        self._compute_delta(settled, start_df), self._compute_delta(progress, start_df), state)
+            except Exception as e:
+                self.logger.error(f"Live range end failed, serving stored days: {type(e).__name__}: {e}", exc_info=True)
+                state = None
+        delta_df = self._compute_delta(pd.DataFrame(rows_end), start_df)
+        return actual_start_date, actual_end_date, delta_df, delta_df, state
+
+    async def _get_rankings_for_range(self, start_date: date, end_date: date,
+                                       sort_by: Optional[str], order: str) -> LeagueRankings:
+        actual_start_date, actual_end_date, settled_delta, progress_delta, live_state = \
+            await self.range_deltas(start_date, end_date)
 
         categories = await self.data_provider.get_ranking_categories()
         reverse_categories = await self.data_provider.get_reverse_categories()
 
-        delta_df = self._compute_delta(end_df, start_df)
-
         averages_df, averages_rankings_df = self._build_averages_rankings_df(
-            delta_df, categories, reverse_categories
+            settled_delta, categories, reverse_categories
         )
         totals_raw_df, totals_rankings_df = self._build_totals_rankings_df_from_delta(
-            delta_df, categories, reverse_categories
+            progress_delta, categories, reverse_categories
         )
 
         if sort_by is not None and not self._is_valid_sort_column(sort_by, averages_rankings_df):
@@ -94,7 +119,7 @@ class RankingService:
         if order not in ["asc", "desc"]:
             raise InvalidParameterError("Order must be 'asc' or 'desc'")
 
-        return self.response_builder.build_rankings_response(
+        response = self.response_builder.build_rankings_response(
             averages_df=averages_df,
             totals_df=totals_raw_df,
             averages_rankings_df=averages_rankings_df,
@@ -107,6 +132,7 @@ class RankingService:
             actual_end_date=actual_end_date,
             categories=categories,
         )
+        return with_live(response, live_state)
 
     def _compute_delta(self, end_df: pd.DataFrame, start_df: Optional[pd.DataFrame]) -> pd.DataFrame:
         """Compute per-team delta between end and start snapshots.
