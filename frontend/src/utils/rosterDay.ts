@@ -1,4 +1,5 @@
-import type { RosterDay, RosterDayMove, RosterDayPlayer, RosterDayStats } from '../types/api'
+import type { RosterDay, RosterDayGame, RosterDayMove, RosterDayPlayer, RosterDayStats } from '../types/api'
+import { liveMoment, type LiveMoment } from './live'
 import { addDays, formatSlateDate } from './slateWindow'
 
 // ESPN lineup order: starters, flex, UTIL, then bench and IR.
@@ -66,11 +67,11 @@ export interface StarterTotals extends RosterDayStats {
   games: number
 }
 
-/** Totals of the starters who played (bench and IR do not count). */
+/** Totals of the starters who played, tonight's games in progress included (bench and IR do not count). */
 export function starterTotals(players: RosterDayPlayer[]): StarterTotals {
   const totals: StarterTotals = { games: 0, minutes: 0, fgm: 0, fga: 0, ftm: 0, fta: 0, three_pm: 0, reb: 0, ast: 0, stl: 0, blk: 0, pts: 0, to: 0 }
   for (const player of players) {
-    if (isBench(player.lineup_slot) || player.status !== 'played' || !player.stats) continue
+    if (isBench(player.lineup_slot) || (player.status !== 'played' && player.status !== 'live') || !player.stats) continue
     totals.games += 1
     for (const key of Object.keys(player.stats) as (keyof RosterDayStats)[]) {
       totals[key] += player.stats[key] ?? 0
@@ -79,3 +80,55 @@ export function starterTotals(players: RosterDayPlayer[]): StarterTotals {
   return totals
 }
 
+
+/**
+ * 'live' while today's games are in progress, 'final' once all are final and
+ * ESPN is not yet official; null for past days, before tip-off and whenever
+ * the response has no live block (backend flag off).
+ */
+export function liveRosterMoment(day: RosterDay, noSpoilers = false): LiveMoment | null {
+  // No spoilers: today stays as it was before live data (opponents only).
+  return day.is_today && !noSpoilers ? liveMoment(day.live) : null
+}
+
+/** Starters on court right now: in a game in progress and checked in. */
+export function startersPlayingNow(day: RosterDay): number {
+  return day.players.filter(p => !isBench(p.lineup_slot) && p.status === 'live' && (p.stats?.minutes ?? 0) > 0).length
+}
+
+/** The Roster subtitle and the note next to the stepper. */
+export function rosterDayNote(day: RosterDay, now: Date = new Date(), noSpoilers = false): string {
+  const moment = liveRosterMoment(day, noSpoilers)
+  if (moment === 'final') return 'Final · ESPN official pending'
+  if (moment === 'live') {
+    const n = startersPlayingNow(day)
+    return `Live · ${n} ${n === 1 ? 'starter' : 'starters'} playing now`
+  }
+  return lockNote(day, now)
+}
+
+/**
+ * The player's game in a few characters: "W 112–104" when it is over,
+ * "78–71 · Q3 4:12" while it is on (his team's score first), the tip time
+ * before. (No spoilers hides the whole tag, not just the score.)
+ */
+export function gameLabel(game: RosterDayGame, opts: { timeZone?: string } = {}): string {
+  const score = game.team_score != null && game.opp_score != null ? `${game.team_score}–${game.opp_score}` : ''
+  if (game.status === 'final') {
+    if (!score) return 'Final'
+    const result = game.won === true ? 'W ' : game.won === false ? 'L ' : ''
+    const extra = /OT/.test(game.detail) ? ` ${game.detail.replace(/^Final\/?/, '')}` : ''
+    return `${result}${score}${extra}`
+  }
+  if (game.status === 'live') {
+    return [score, game.detail].filter(Boolean).join(' · ') || 'Live'
+  }
+  if (!game.start_time) return ''
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: opts.timeZone }).format(new Date(game.start_time))
+}
+
+/** The day in the starters total: "Today, so far" while games are on. */
+export function startersDayLabel(day: RosterDay, noSpoilers = false): string {
+  if (!day.is_today) return dayLabel(day.date)
+  return liveRosterMoment(day, noSpoilers) === 'live' ? 'Today, so far' : 'Today'
+}

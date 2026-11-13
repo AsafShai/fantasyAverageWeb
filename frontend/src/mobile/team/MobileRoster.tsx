@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import type { PlayerMatchup, RosterDayPlayer, TimePeriod } from '../../types/api'
+import type { PlayerMatchup, RosterDayGame, RosterDayPlayer, TimePeriod } from '../../types/api'
 import PlayerNameLink from '../../components/PlayerNameLink'
 import { MatchupExpandPanel } from '../../components/MatchupDisplay'
 import DateRangePicker, { CoverageNotice } from '../../components/DateRangePicker'
@@ -8,7 +8,7 @@ import { SCHEDULE_HORIZONS, type ScheduleHorizon } from '../../components/Player
 import { getErrorMessage } from '../../utils/errorMessage'
 import { addDays } from '../../utils/slateWindow'
 import { RosterDayOnlyPlayedToggle } from '../../components/RosterDayView'
-import { dayLabel, isBench, lineupSlotOrder, lockNote, moveNote, moveTime, pct, rosterDayPlayerPlayed, starterTotals } from '../../utils/rosterDay'
+import { dayLabel, gameLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayNote, rosterDayPlayerPlayed, startersDayLabel, starterTotals } from '../../utils/rosterDay'
 import { BottomSheet, Button, Card, Chip, ChipRow, InjuryMark, Segmented, SlotPill, useSheetHistory } from '../ui'
 import type { MobileTeamDetailProps } from './types'
 
@@ -71,6 +71,21 @@ function Th({
 
 const slotOf = (slot?: string | null) => (slot ? <SlotPill slot={slot} /> : '—')
 
+/** The player's game beside his opponent: result, live score and clock, or tip time. */
+function GameNote({ game, noSpoilers }: { game?: RosterDayGame; noSpoilers: boolean }) {
+  // No spoilers: the line shows the opponent only, as before.
+  if (!game || noSpoilers) return null
+  const label = gameLabel(game)
+  if (!label) return null
+  return (
+    <span className={`mr-tm-game${game.status === 'live' ? ' mr-tm-game-live' : ''}`} data-testid="roster-game-tag">
+      {game.status === 'live' ? `LIVE ${label}` : label}
+    </span>
+  )
+}
+
+const hasLine = (pl: RosterDayPlayer) => (pl.status === 'played' || pl.status === 'live') && !!pl.stats
+
 /** The matchup projection panel from today's roster, in a bottom sheet. */
 function useMatchupSheet() {
   const sheet = useSheetHistory(MATCHUP_SHEET_ID)
@@ -103,14 +118,15 @@ function DailyRoster(p: MobileTeamDetailProps) {
   const benchPlayers = useMemo(() => players.filter((x) => isBench(x.lineup_slot)), [players])
   const totals = useMemo(() => starterTotals(players), [players])
   // Today nobody has played yet: count the starters who have a game instead.
-  const starterGames = day?.is_today ? players.filter((x) => !isBench(x.lineup_slot) && !!x.opponent).length : totals.games
+  const starterGames = day?.is_today && !liveRosterMoment(day, p.noSpoilers) ? players.filter((x) => !isBench(x.lineup_slot) && !!x.opponent).length : totals.games
   const date = p.rosterDayDate
   const first = day?.first_date
   const atStart = !!first && date <= first
   const atToday = date >= p.rosterDayLast
   const litId = day && lit?.date === day.date ? lit.id : null
   const pick = (id: number) => day && setLit((prev) => (prev?.id === id && prev.date === day.date ? null : { date: day.date, id }))
-  const note = day && !fetching ? lockNote(day) : fetching ? 'Loading this day…' : ''
+  const noSpoilers = p.noSpoilers
+  const note = day && !fetching ? rosterDayNote(day, undefined, noSpoilers) : fetching ? 'Loading this day…' : ''
 
   const stepper = (
     <div className="mr-row">
@@ -155,12 +171,14 @@ function DailyRoster(p: MobileTeamDetailProps) {
       </>
     )
 
-  const showStats = !day.is_today
+  // Today: stat columns once tonight's games are counted live.
+  const showStats = !day.is_today || liveRosterMoment(day, noSpoilers) !== null
 
   const renderDailyRow = (pl: (typeof players)[number]) => {
     const matchup = day.is_today ? p.matchups.get(pl.player_name) : undefined
-    const muted = showStats && (isBench(pl.lineup_slot) || pl.status !== 'played')
-    const cls = [litId === pl.player_id && 'mr-lit', muted && 'mr-muted'].filter(Boolean).join(' ')
+    const muted = showStats && (isBench(pl.lineup_slot) || !hasLine(pl))
+    const onCourt = !noSpoilers && pl.status === 'live' && !isBench(pl.lineup_slot) && (pl.stats?.minutes ?? 0) > 0
+    const cls = [litId === pl.player_id && 'mr-lit', muted && 'mr-muted', onCourt && 'mr-on-court'].filter(Boolean).join(' ')
     return (
       <tr key={pl.player_id} className={cls || undefined} data-testid="roster-day-row">
         <th scope="row" className="mr-pin">
@@ -189,6 +207,7 @@ function DailyRoster(p: MobileTeamDetailProps) {
           ) : (
             <span title={day.is_today ? 'No game today' : 'No game'}>—</span>
           )}
+          <GameNote game={pl.game} noSpoilers={noSpoilers} />
         </td>
         {showStats && statCells(pl).map((v, i) => <td key={i}>{v}</td>)}
       </tr>
@@ -211,7 +230,7 @@ function DailyRoster(p: MobileTeamDetailProps) {
 
   const statCells = (pl: RosterDayPlayer): ReactNode[] => {
     const s = pl.stats
-    if (pl.status === 'played' && s)
+    if (hasLine(pl) && s)
       return [
         s.minutes,
         <>{pct(s.fgm, s.fga)}<span className="mr-tm-sub">{s.fgm}/{s.fga}</span></>,
@@ -224,7 +243,13 @@ function DailyRoster(p: MobileTeamDetailProps) {
   return (
     <>
       {stepper}
-      {showStats && (
+      <Segmented
+        label="Spoiler visibility"
+        options={[{ value: 'full', label: 'Full box' }, { value: 'hide', label: '🚫 No spoilers' }]}
+        value={noSpoilers ? 'hide' : 'full'}
+        onChange={(v) => p.onNoSpoilers(v === 'hide')}
+      />
+      {!day.is_today && (
         <div className="mr-tm-daily-filter">
           <RosterDayOnlyPlayedToggle compact checked={p.rosterDayOnlyPlayed} onChange={p.onRosterDayOnlyPlayed} />
         </div>
@@ -255,7 +280,7 @@ function DailyRoster(p: MobileTeamDetailProps) {
       </Card>
       <Card
         title="Roster"
-        action={<span className="mr-meta">Starters ({day.is_today ? 'Today' : dayLabel(day.date)}) · {starterGames} {starterGames === 1 ? 'game' : 'games'}</span>}
+        action={<span className="mr-meta">Starters ({startersDayLabel(day, noSpoilers)}) · {starterGames} {starterGames === 1 ? 'game' : 'games'}</span>}
         className="mr-tm-table"
       >
         {players.length === 0 ? (
@@ -279,7 +304,7 @@ function DailyRoster(p: MobileTeamDetailProps) {
                 {starterPlayers.map(renderDailyRow)}
                 {showStats && (
                   <tr className="mr-sum" data-testid="roster-day-totals">
-                    <th scope="row" className="mr-pin">Starters ({dayLabel(day.date)})</th>
+                    <th scope="row" className="mr-pin">Starters ({startersDayLabel(day)})</th>
                     <td className="mr-l" colSpan={4}>
                       {totals.games} {totals.games === 1 ? 'game' : 'games'}
                     </td>

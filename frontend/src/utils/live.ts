@@ -1,4 +1,4 @@
-import type { LiveBlock } from '../types/api'
+import type { LiveBlock, TeamTonight } from '../types/api'
 
 export type { LiveBlock }
 export type LiveMoment = 'live' | 'final'
@@ -80,4 +80,38 @@ export function liveSectionNote(live: LiveBlock | undefined | null, section: 'st
   if (!live || !moment) return null
   if (moment === 'final') return 'includes tonight, ESPN official pending'
   return section === 'stats' ? 'live, finished games counted' : `includes ${games(live.games_live)} in progress`
+}
+
+// --- Team page: what tonight changed (TeamDetail.tonight) -------------------
+
+
+const fmtDelta = (n: number) => (Number.isInteger(n) ? String(Math.abs(n)) : String(Math.abs(Math.round(n * 100) / 100)))
+
+/** "+2 tonight" next to games played; null when nothing was added or the data is official. */
+export function tonightGp(live: LiveBlock | undefined | null, tonight: TeamTonight | undefined | null): string | null {
+  if (!liveMoment(live) || !tonight || tonight.gp <= 0) return null
+  return `+${tonight.gp} tonight`
+}
+
+/** "▼3 tonight" next to total points; null when unchanged or official. */
+export function tonightPoints(live: LiveBlock | undefined | null, tonight: TeamTonight | undefined | null): string | null {
+  if (!liveMoment(live) || !tonight || !tonight.points) return null
+  return `${tonight.points > 0 ? '▲' : '▼'}${fmtDelta(tonight.points)} tonight`
+}
+
+/** A slot-usage row's marker: "+1 live" while games are on, "+1 tonight" once all are final. */
+export function slotTonightNote(live: LiveBlock | undefined | null, tonight: TeamTonight | undefined | null, slot: string): string | null {
+  const moment = liveMoment(live)
+  const n = tonight?.slots?.[slot] ?? 0
+  if (!moment || n <= 0) return null
+  return `+${n} ${moment === 'live' ? 'live' : 'tonight'}`
+}
+
+/** The note in Team statistics while starters are on court. */
+export function startersNote(live: LiveBlock | undefined | null, tonight: TeamTonight | undefined | null): string | null {
+  if (liveMoment(live) !== 'live' || !tonight || tonight.starters_live <= 0) return null
+  const n = tonight.starters_live
+  return n === 1
+    ? '1 starter is playing now. Averages and ranks below update when his game goes final; tonight’s stats so far are in the roster table.'
+    : `${n} starters are playing now. Averages and ranks below update when their game goes final; tonight’s stats so far are in the roster table.`
 }

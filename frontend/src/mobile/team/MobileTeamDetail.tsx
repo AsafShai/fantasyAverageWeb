@@ -4,7 +4,7 @@ import { MyTeamMark } from '../../components/MyTeamMark'
 import DataDateBadge from '../../components/DataDateBadge'
 import { ShareCardButton } from '../../components/share/ShareCardButton'
 import { orderCategories } from '../../utils/statOrder'
-import { averagesNote, liveSectionNote } from '../../utils/live'
+import { averagesNote, liveSectionNote, startersNote, tonightGp, tonightPoints } from '../../utils/live'
 import { LiveBadgeMobile } from '../ui/LiveBadgeMobile'
 import { Card, Segmented } from '../ui'
 import MobileRoster from './MobileRoster'
@@ -104,9 +104,18 @@ export default function MobileTeamDetail(p: MobileTeamDetailProps) {
         <>
           <Card title="Team statistics">
             {liveSectionNote(t.live, 'stats') && <span className="mr-meta">{liveSectionNote(t.live, 'stats')}</span>}
+            {startersNote(t.live, t.tonight) && <p className="mr-live-note" data-testid="starters-playing-note">{startersNote(t.live, t.tonight)}</p>}
             <div>
               <div className="mr-kv"><span>Overall rank</span><b>#{t.ranking_stats.rank}</b></div>
-              <div className="mr-kv"><span>Total points</span><b>{t.ranking_stats.total_points}</b></div>
+              <div className="mr-kv">
+                <span>Total points</span>
+                <b>
+                  {tonightPoints(t.live, t.tonight) && (
+                    <span className={`mr-delta ${(t.tonight?.points ?? 0) < 0 ? 'mr-delta-down' : 'mr-delta-up'}`}>{tonightPoints(t.live, t.tonight)} </span>
+                  )}
+                  {t.ranking_stats.total_points}
+                </b>
+              </div>
               <div className="mr-kv">
                 <span>Field goals</span>
                 <b>{t.shot_chart.fgm}/{t.shot_chart.fga} ({pct3(t.shot_chart.fg_percentage)})</b>
@@ -115,7 +124,13 @@ export default function MobileTeamDetail(p: MobileTeamDetailProps) {
                 <span>Free throws</span>
                 <b>{t.shot_chart.ftm}/{t.shot_chart.fta} ({pct3(t.shot_chart.ft_percentage)})</b>
               </div>
-              <div className="mr-kv"><span>Total Games Played</span><b>{t.raw_averages.gp}</b></div>
+              <div className="mr-kv">
+                <span>Total Games Played</span>
+                <b>
+                  {t.raw_averages.gp}
+                  {tonightGp(t.live, t.tonight) && <span className="mr-delta mr-delta-up">{tonightGp(t.live, t.tonight)}</span>}
+                </b>
+              </div>
             </div>
           </Card>
           <Card title="Shot chart">

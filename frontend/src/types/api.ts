@@ -84,8 +84,21 @@ export interface SlotUsage {
   remaining: number;
 }
 
+/** What tonight changed for the team against this morning's official standings. Sent only while live. */
+export interface TeamTonight {
+  /** Games added to the averages tonight (finished games). */
+  gp: number;
+  /** Change in roto total points tonight. */
+  points: number;
+  /** Games added per slot tonight, games in progress included. */
+  slots: Record<string, number>;
+  /** Starters checked in to a game not final yet. */
+  starters_live: number;
+}
+
 export interface TeamDetail {
   live?: LiveBlock;
+  tonight?: TeamTonight;
   team: Team;
   espn_url: string;
   players?: Player[];
@@ -1013,7 +1026,20 @@ export interface TodayHub {
 }
 
 // Roster by day (team page, Daily mode): GET /teams/{id}/roster-day?date=
-export type RosterDayStatus = 'played' | 'dnp' | 'scheduled' | 'no_game'
+/** live: today, his game is in progress (only while the backend live flag is on; stats are the line so far). */
+export type RosterDayStatus = 'played' | 'dnp' | 'scheduled' | 'no_game' | 'live'
+
+/** The player's NBA game that day. Final games always; scheduled and live ones only with the backend live flag on. */
+export interface RosterDayGame {
+  status: 'scheduled' | 'live' | 'final'
+  /** The scoreboard's short text: "Q3 4:12", "Halftime", "Final/OT". */
+  detail: string
+  start_time: string | null
+  /** His team's score and the opponent's. */
+  team_score: number | null
+  opp_score: number | null
+  won: boolean | null
+}
 
 export interface RosterDayStats {
   minutes: number
@@ -1042,6 +1068,7 @@ export interface RosterDayPlayer {
   stats: RosterDayStats | null
   added: boolean
   dropped: boolean
+  game?: RosterDayGame
 }
 
 export interface RosterDayMovePlayer {
@@ -1060,6 +1087,8 @@ export interface RosterDayMove {
 }
 
 export interface RosterDay {
+  /** Today only, while the backend live flag is on. */
+  live?: LiveBlock
   team_id: number
   date: string
   scoring_period_id: number
