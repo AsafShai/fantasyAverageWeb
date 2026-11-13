@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -94,8 +95,41 @@ def parse_game_time_utc(game: str, game_date: date) -> str | None:
         return None
 
 
+# NBA tricodes as they appear in the report's Matchup column (e.g. "MIL@ORL"),
+# mapped to the team names the parser produces from the Team column.
+NBA_TRICODE_TEAM_NAMES: dict[str, str] = {
+    "ATL": "Atlanta Hawks", "BOS": "Boston Celtics", "BKN": "Brooklyn Nets",
+    "CHA": "Charlotte Hornets", "CHI": "Chicago Bulls", "CLE": "Cleveland Cavaliers",
+    "DAL": "Dallas Mavericks", "DEN": "Denver Nuggets", "DET": "Detroit Pistons",
+    "GSW": "Golden State Warriors", "HOU": "Houston Rockets", "IND": "Indiana Pacers",
+    "LAC": "LA Clippers", "LAL": "Los Angeles Lakers", "MEM": "Memphis Grizzlies",
+    "MIA": "Miami Heat", "MIL": "Milwaukee Bucks", "MIN": "Minnesota Timberwolves",
+    "NOP": "New Orleans Pelicans", "NYK": "New York Knicks", "OKC": "Oklahoma City Thunder",
+    "ORL": "Orlando Magic", "PHI": "Philadelphia 76ers", "PHX": "Phoenix Suns",
+    "POR": "Portland Trail Blazers", "SAC": "Sacramento Kings", "SAS": "San Antonio Spurs",
+    "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "WAS": "Washington Wizards",
+}
+
+_MATCHUP_RE = re.compile(r"([A-Z]{2,3})@([A-Z]{2,3})")
+
+
+@dataclass
+class InjuryReport:
+    records: list[InjuryRecord]
+    # Teams whose injury list this report is authoritative for: every team with
+    # a game in the report that has submitted, including teams with nobody
+    # listed (the NBA omits them from the Team column entirely). A player of
+    # one of these teams who is missing from the report is no longer injured.
+    reported_teams: set[str] = field(default_factory=set)
+
+
 def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
     """Extract injury records from NBA injury report PDF using word positions."""
+    return parse_injury_report(pdf_bytes).records
+
+
+def parse_injury_report(pdf_bytes: bytes) -> InjuryReport:
+    """Parse the NBA injury report PDF into records plus the teams it covers."""
     COL_GAME_DATE = (10, 110)
     COL_GAME_TIME = (110, 190)
     COL_MATCHUP   = (190, 255)
@@ -178,6 +212,7 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
                 all_words.append(word)
 
     rows: dict[float, dict[str, list[str]]] = {}
+    not_submitted_ys: set[float] = set()
     for word in all_words:
         text_lower = word["text"].lower().replace(" ", "")
         if text_lower in HEADER_WORDS or text_lower in TITLE_WORDS:
@@ -185,6 +220,9 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
         if PAGE_FOOTER_RE.match(text_lower):
             continue
         if text_lower == "notyetsubmitted":
+            y = round(word["top"])
+            not_submitted_ys.add(y)
+            rows.setdefault(y, {})
             continue
         col = col_of(word["x0"])
         if col is None:
@@ -204,6 +242,13 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
             except ValueError:
                 continue
         return None
+
+    def _game_key(game: str, game_date: date) -> tuple[date, str] | None:
+        m = _MATCHUP_RE.search(game)
+        return (game_date, m.group(0)) if m else None
+
+    games: set[tuple[date, str]] = set()
+    not_submitted: set[tuple[str, tuple[date, str]]] = set()
 
     row_data: list[dict] = []
     for y in sorted_ys:
@@ -231,6 +276,12 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
                 current_game = " ".join(p for p in [time_, matchup] if p)
         if team:
             current_team = split_camel(team)
+
+        game_key = _game_key(current_game, current_date)
+        if game_key:
+            games.add(game_key)
+            if y in not_submitted_ys and current_team:
+                not_submitted.add((current_team, game_key))
 
         row_data.append({
             "y": y, "player": player, "status": status, "reason": reason,
@@ -302,32 +353,45 @@ def parse_injury_pdf(pdf_bytes: bytes) -> list[InjuryRecord]:
 
     records = [rec for _, _, rec in raw_records]
 
-    return records
+    reported_teams = {rec.team for rec in records}
+    for game_key in games:
+        m = _MATCHUP_RE.fullmatch(game_key[1])
+        for code in m.groups():
+            name = NBA_TRICODE_TEAM_NAMES.get(code)
+            if name and (name, game_key) not in not_submitted:
+                reported_teams.add(name)
+
+    return InjuryReport(records=records, reported_teams=reported_teams)
 
 
-def _parse_and_trim(pdf_bytes: bytes) -> list[InjuryRecord]:
-    """parse_injury_pdf, then hand pdfminer's garbage back to the OS.
+def _parse_and_trim(pdf_bytes: bytes) -> InjuryReport:
+    """parse_injury_report, then hand pdfminer's garbage back to the OS.
 
     pdfminer leaves its page objects in reference cycles, so they linger until
     a full collection, and glibc keeps the freed arenas mapped afterwards. This
     runs every 15 minutes all day; without the trim each parse left ~18 MB
     resident (measured on a real report: +26 MB vs +8 MB).
     """
-    records = parse_injury_pdf(pdf_bytes)
+    report = parse_injury_report(pdf_bytes)
     trim_memory()
-    return records
+    return report
 
 
 def compute_diff(
     old_store: dict[str, InjuryRecord],
     new_records: list[InjuryRecord],
     now_il: str,
+    reported_teams: set[str] | None = None,
 ) -> list[InjuryNotification]:
-    """Detect status changes, additions, and removals between old store and new records."""
+    """Detect status changes, additions, and removals between old store and new records.
+
+    reported_teams: teams the report covers even with nobody listed (see
+    InjuryReport); their stored players missing from the report are removed.
+    """
     notifications: list[InjuryNotification] = []
 
     new_by_key: dict[str, InjuryRecord] = {}
-    teams_in_new: set[str] = set()
+    teams_in_new: set[str] = set(reported_teams or ())
     for record in new_records:
         key = f"{record.team}|{record.player}"
         new_by_key[key] = record
@@ -353,7 +417,7 @@ def compute_diff(
                 timestamp=now_il,
             ))
 
-    # Removed players — only if their team is still represented in the new report
+    # Removed players — only if their team is covered by the new report
     for key, old_rec in old_store.items():
         if key not in new_by_key and old_rec.team in teams_in_new:
             notifications.append(InjuryNotification(
@@ -451,8 +515,9 @@ async def _try_update_injury_data(attempt_note: str = "") -> bool:
         return False
 
     now_il = get_utc_now_str()
-    new_records = await asyncio.to_thread(_parse_and_trim, pdf_bytes)
-    notifications = compute_diff(injury_store, new_records, now_il)
+    report = await asyncio.to_thread(_parse_and_trim, pdf_bytes)
+    new_records = report.records
+    notifications = compute_diff(injury_store, new_records, now_il, report.reported_teams)
     new_store = build_updated_store(injury_store, new_records, notifications, now_il)
 
     old_store = dict(injury_store)
@@ -476,7 +541,7 @@ async def _try_update_injury_data(attempt_note: str = "") -> bool:
         elif notif.type == "removed":
             await db_service.delete_injury_status(notif.team, notif.player)
 
-    teams_in_new = {r.team for r in new_records}
+    teams_in_new = {r.team for r in new_records} | report.reported_teams
     teams_in_memory = {rec.team for rec in old_store.values()}
     teams_only_in_pdf = teams_in_new - teams_in_memory
 
@@ -549,7 +614,7 @@ async def initialize() -> None:
             db_timestamps[key] = str(ts)
 
     now_il = get_utc_now_str()
-    records = await asyncio.to_thread(_parse_and_trim, pdf_bytes)
+    records = (await asyncio.to_thread(_parse_and_trim, pdf_bytes)).records
     for record in records:
         key = f"{record.team}|{record.player}"
         last_update = db_timestamps.get(key, now_il)
