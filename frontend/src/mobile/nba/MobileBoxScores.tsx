@@ -86,7 +86,7 @@ export default function MobileBoxScores(props: MobileBoxScoresProps) {
                   onClick={() => onToggleGame(game.game_id)}
                 >
                   <span className={`mr-nba-gc-when ${game.status === 'live' ? 'mr-nba-live' : ''}`.trim()}>
-                    {gameClockLabel(game.status, game.status_detail, game.start_time)}
+                    {gameClockLabel(game.status, game.status_detail, game.start_time, hide)}
                   </span>
                   <SideRow team={game.away} hide={hide} />
                   <SideRow team={game.home} hide={hide} />

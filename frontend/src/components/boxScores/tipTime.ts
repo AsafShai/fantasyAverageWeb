@@ -1,5 +1,12 @@
-/** Tip time in the viewer's time zone. Final and live labels stay as reported. */
-export function gameClockLabel(status: string, statusDetail: string, startTime: string): string {
+/**
+ * Tip time in the viewer's time zone. Final and live labels stay as reported,
+ * unless `hideProgress` is set: then the game clock, period and overtime count
+ * (all hints about the score) are replaced by a plain "Live" / "Final".
+ */
+export function gameClockLabel(status: string, statusDetail: string, startTime: string, hideProgress = false): string {
+  if (hideProgress && status !== 'scheduled') {
+    return status === 'live' ? 'Live' : 'Final'
+  }
   if (status === 'scheduled') {
     return formatLocalTip(startTime) || statusDetail || 'Upcoming'
   }

@@ -90,7 +90,7 @@ function GameCard({
       }`}
     >
       <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${live ? 'text-rose-600' : 'text-gray-400'}`}>
-        {gameClockLabel(game.status, game.status_detail, game.start_time)}
+        {gameClockLabel(game.status, game.status_detail, game.start_time, hide)}
       </p>
       <SideRow team={game.away} hide={hide} />
       <SideRow team={game.home} hide={hide} />
