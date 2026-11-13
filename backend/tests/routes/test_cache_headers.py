@@ -41,3 +41,28 @@ def test_schedule_gzip_still_applies_to_200(_mock, test_client):
     r = test_client.get("/api/nba/schedule", headers={"Accept-Encoding": "gzip"})
     assert r.headers.get("content-encoding") == "gzip"
     assert r.json() == big
+
+
+def test_live_pages_revalidate_with_an_etag_and_never_serve_stale():
+    from app.utils.http_cache import cache_control_for
+    for path in ("/api/rankings", "/api/analytics/heatmap", "/api/teams/7"):
+        assert cache_control_for(path) == "no-cache", path
+    assert cache_control_for("/api/teams/7/players") is None
+    assert cache_control_for("/api/teams/") is None
+
+
+def test_unchanged_team_detail_revalidates_to_304(test_client):
+    from app.routes.teams import clear_team_detail_cache
+    clear_team_detail_cache()
+    first = test_client.get("/api/teams/1")
+    assert first.status_code == 200
+    assert first.headers["cache-control"] == "no-cache"
+    again = test_client.get("/api/teams/1", headers={"If-None-Match": first.headers["etag"]})
+    assert again.status_code == 304 and again.content == b""
+    clear_team_detail_cache()
+
+
+def test_rankings_body_is_unchanged_by_the_middleware(test_client):
+    first = test_client.get("/api/rankings")
+    assert first.status_code == 200 and "etag" in first.headers
+    assert "live" not in first.json()

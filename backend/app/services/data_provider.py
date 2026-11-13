@@ -774,6 +774,10 @@ class DataProvider:
         slot = (name, params, live) if live else (name, params)
         hit = self._response_memo.get(slot)
         if hit is not None and len(hit[0]) == len(frames) and all(a is b for a, b in zip(hit[0], frames)) and hit[1] == key:
+            if live:
+                # Same frames, same bytes: keep the stored ``last_updated`` so a
+                # polling client's If-None-Match can match (HttpCacheMiddleware).
+                return hit[2]
             return hit[2].model_copy(update={'last_updated': datetime.now()})
         result = await build()
         self._response_memo[slot] = (frames, key, result)

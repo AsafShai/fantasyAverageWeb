@@ -428,3 +428,26 @@ async def test_reconciliation_reports_diffs(provider, flag_off):
     reconcile = provider.live_health()["last_reconcile"]
     assert reconcile["status"] == "diffs"
     assert reconcile["diffs"] == [{"team_id": 1, "stat": "PTS", "official": 32, "overlay": 30}]
+
+
+@pytest.mark.asyncio
+async def test_live_memo_hit_keeps_the_stored_last_updated_so_etags_can_match(provider, flag_on):
+    """A live response is the same bytes until the live frames change; the
+    official one keeps its fresh stamp per request, as before."""
+    class Resp:
+        def __init__(self, n, last_updated=None):
+            self.n, self.last_updated = n, last_updated
+
+        def model_copy(self, update):
+            return Resp(self.n, update['last_updated'])
+
+    async def build():
+        return Resp(1, "built")
+
+    live_first = await provider.memo_response("rankings", (), build, live=True)
+    live_again = await provider.memo_response("rankings", (), build, live=True)
+    assert live_again is live_first and live_again.last_updated == "built"
+
+    await provider.memo_response("rankings", (), build)
+    official_again = await provider.memo_response("rankings", (), build)
+    assert official_again.last_updated != "built"
