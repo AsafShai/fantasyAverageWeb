@@ -13,6 +13,7 @@ import TrendsCard from './TrendsCard'
 import NextGameCard from './NextGameCard'
 import GameLogCard from './GameLogCard'
 import PastSeasonsCard from './PastSeasonsCard'
+import LeagueHistoryCard from './LeagueHistoryCard'
 import './profile.css'
 
 /*
@@ -180,6 +181,8 @@ export default function PlayerProfileMobile() {
           <DataTable caption={`Stats, ${perGame === 'pg' ? 'per game' : 'totals'}`} columns={statColumns} rows={[stats]} rowKey={() => 'line'} />
         )}
       </Card>
+
+      <LeagueHistoryCard playerId={playerId} />
 
       <PastSeasonsCard playerId={playerId} />
 

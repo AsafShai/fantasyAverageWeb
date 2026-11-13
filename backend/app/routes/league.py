@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from app.models import LeagueSummary, LeagueShotsData, DraftReport, RankChanges, TodayHub
-from app.models.activity_models import LeagueActivity, LatestMoves
+from app.models.activity_models import LeagueActivity, LatestMoves, PlayerLeagueHistory
 from app.services.league_service import LeagueService
 from app.services.draft_report_service import DraftReportService
 from app.services.today_service import TodayService
@@ -119,3 +119,16 @@ async def get_latest_moves(limit: int = Query(8, ge=1, le=50)) -> LatestMoves:
     except Exception as e:
         logger.exception(f"Error getting latest moves: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve latest moves") from e
+
+
+@router.get("/players/{player_id}/history", response_model=PlayerLeagueHistory)
+async def get_player_league_history(player_id: int) -> PlayerLeagueHistory:
+    """One player's drafts, adds, waiver claims, drops and trades in this league
+    this season, plus which team had him when. Lineup moves are left out."""
+    try:
+        return await get_league_activity_service().get_player_history(player_id)
+    except DataSourceError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error getting league history for player {player_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve player league history") from e

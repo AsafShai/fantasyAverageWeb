@@ -120,3 +120,44 @@ export interface LatestMoves {
   teams: ActivityTeam[]
   moves: ActivityMove[]
 }
+
+// GET /api/league/players/{id}/history
+
+export type PlayerMoveKind = 'draft' | 'add' | 'waiver' | 'drop' | 'trade'
+
+export interface TeamPlayers {
+  team_id: number
+  players: ActivityPlayer[]
+}
+
+export interface PlayerHistoryMove {
+  id: string
+  kind: PlayerMoveKind
+  at: string
+  /** Team that got him (draft, add, waiver, trade) or released him (drop). */
+  team_id: number
+  /** Trade: the team that sent him. */
+  from_team_id: number | null
+  pick: number | null
+  round: number | null
+  /** add/waiver: dropped for him. drop: added in his place. */
+  swapped: ActivityPlayer[]
+  in_trade: boolean
+  trade_sides: TeamPlayers[]
+  trade_drops: TeamPlayers[]
+}
+
+export interface PlayerHistoryStint {
+  team_id: number
+  start: string
+  end: string | null
+}
+
+export interface PlayerLeagueHistory {
+  season_id: number
+  player_id: number
+  teams: ActivityTeam[]
+  moves: PlayerHistoryMove[]
+  stints: PlayerHistoryStint[]
+  last_updated: string
+}

@@ -82,6 +82,29 @@ test.describe('phone player profile', () => {
     await expectNoHorizontalScroll(page)
   })
 
+  test('league history: moves newest first, trade sides, tap a stint for its dates', async ({ page }) => {
+    await mockProfileApis(page)
+    await page.goto(`${URL}?ff=mobile`)
+    const card = page.getByRole('region', { name: 'League history' })
+    await expect(card.getByText('Drafted #26')).toBeVisible()
+    const moves = card.getByRole('listitem')
+    await expect(moves).toHaveCount(6)
+    await expect(moves.first()).toContainText('Traded from DORELIT to Trust the process')
+    await expect(moves.first()).toContainText('Trust the process gotDonovan Mitchell, Peyton Watson')
+    await expect(moves.first()).toContainText('DORELIT gotAndrew Wiggins, Josh Giddey')
+    await expect(moves.first()).toContainText('Trust the process dropped Keon Ellis to make room')
+    await expect(moves.nth(3)).toContainText('Claimed off waivers by Dor\'s Injured Team')
+    await expect(moves.last()).toContainText('Pick #26 (round 3)')
+    await expect(moves.nth(4)).toContainText('Released, no pickup in the same move')
+
+    // a 3-hour stint still gets a tappable slice, and tapping shows its time frame
+    await card.getByRole('button', { name: /^Dor's Injured Team,/ }).tap()
+    await expect(card.getByRole('status')).toContainText(/Dor's Injured Team.*3 hours/)
+    await page.getByRole('heading', { level: 1 }).tap()
+    await expect(card.getByRole('status')).toHaveCount(0)
+    await expectNoHorizontalScroll(page)
+  })
+
   test('minutes stepper re-runs the projection and resets', async ({ page }) => {
     const { predicted } = await mockProfileApis(page)
     await page.goto(`${URL}?ff=mobile`)

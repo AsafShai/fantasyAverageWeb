@@ -3,7 +3,7 @@ import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShot
 import type { InjuryRecord } from '../../types/injury';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
-import type { LeagueActivity, LatestMoves } from '../../types/activity';
+import type { LeagueActivity, LatestMoves, PlayerLeagueHistory } from '../../types/activity';
 import type { BoxScoreboard, GameBoxScore, NbaSeasonWindow, SlateValues } from '../../types/boxScore';
 
 type AllPlayersArgs = { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string };
@@ -196,6 +196,10 @@ export const fantasyApi = createApi({
       query: () => '/league/activity',
       keepUnusedDataFor: 300,
     }),
+    getPlayerLeagueHistory: builder.query<PlayerLeagueHistory, string>({
+      query: (playerId) => `/league/players/${playerId}/history`,
+      keepUnusedDataFor: 300,
+    }),
     getLatestMoves: builder.query<LatestMoves, number | void>({
       query: (limit) => ({ url: '/league/activity/latest', params: { limit: limit ?? 8 } }),
       keepUnusedDataFor: 300,
@@ -335,6 +339,7 @@ export const fantasyApi = createApi({
 export const {
   useGetLeagueActivityQuery,
   useGetLatestMovesQuery,
+  useGetPlayerLeagueHistoryQuery,
   useGetRankingsQuery,
   useGetTeamDetailQuery,
   useGetTeamRosterDayQuery,
