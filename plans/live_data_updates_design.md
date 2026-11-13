@@ -221,7 +221,7 @@ warning.)
 | Team detail header (totals, averages, ranks) | `get_all_dataframes` | live=True |
 | Team detail slot usage | `statBySlot` | + overlay `per_slot_gp` |
 | Team detail Daily (roster-day, today) | `mRoster`, 5 min TTL, status `scheduled/played` | in-game lines, `live`/`final` status, 60 s; use ESPN period instead of `eastern_today()` |
-| Team roster season/last-N stats, Players, Player Rankings, Trade, FA report, Trends | `kona_player_info` / `fs_player_games` | unchanged (player-level; ESPN and the nightly model update these overnight) |
+| Team roster season/last-N stats, Players, Player Rankings, Trade, FA report, Trends | `kona_player_info` / `fs_player_games` | unchanged by this plan. Note (checked 2026-11-13 during games): ESPN's player season stats from `kona_player_info` **already include games in progress** (Cunningham and Brown had tonight's game in season GP/PTS mid-game), so pages built on them are already live today, with the mid-game per-game dip. Only the `fs_player_games` parts (custom date windows, Trends, game log) wait for the nightly job. Left as is for now. |
 | Standings race / over-time charts | DB | stored points unchanged; adds a dashed live point for tonight |
 | Estimator | DB snapshot, daily | unchanged, by design |
 | Box Scores, My Players | site API, already live | unchanged; shares its cache with Source B |
