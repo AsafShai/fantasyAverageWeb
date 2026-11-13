@@ -136,7 +136,12 @@ for (const m of MOMENTS) {
       await expect(page.getByTestId('race-live-point')).toHaveCount(12)
       await expect(page.getByTestId('race-live-note')).toHaveText('The dashed segment is tonight. It is not stored; the solid point replaces it after ESPN’s update.')
       await expect(page.locator('text').filter({ hasText: m === 'games live' ? /^Live$/ : /^Tonight$/ }).first()).toBeVisible()
+      // End labels carry "<value> (tonight)" on desktop (canvas); phones keep the short names only.
+      const tonightLabels = page.locator('svg text').filter({ hasText: /\(tonight\)$/ })
+      if (isMobile(page)) await expect(tonightLabels).toHaveCount(0)
+      else await expect(tonightLabels.filter({ hasText: /^Khachapuri's Team \d+ \(tonight\)$/ })).toHaveCount(1)
     } else {
+      await expect(page.locator('svg text').filter({ hasText: /\(tonight\)$/ })).toHaveCount(0)
       await expect(page.getByTestId('race-live-point')).toHaveCount(0)
       await expect(page.getByTestId('race-live-note')).toHaveCount(0)
     }

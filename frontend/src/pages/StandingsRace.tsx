@@ -316,6 +316,11 @@ const StandingsRace = () => {
   }
   const liveTick = moment === 'final' ? 'Tonight' : 'Live'
   const tickText = (d: string) => (d === liveDate ? liveTick : formatDate(d))
+  // End labels: the value in Stat Value; while tonight is drawn, "<value> (tonight)"
+  // on desktop as on the canvas (phones keep the short names, they already truncate).
+  const endValueText: ((v: number) => string) | undefined = liveDate && !mobile
+    ? v => `${isValueView ? formatStatValue(v, activeMetric, basis) : v.toLocaleString(undefined, { maximumFractionDigits: 1 })} (tonight)`
+    : isValueView ? v => formatStatValue(v, activeMetric, basis) : undefined
 
   const handleBasisChange = (next: Basis) => setBasis(next)
 
@@ -363,10 +368,10 @@ const StandingsRace = () => {
   const { labelGutter, fittedNames } = useMemo(() => {
     const width = wrapWidth || 360
     const lastRow = withLiveValues(chartData[chartData.length - 1])
-    const valueWidth = isValueView && lastRow
+    const valueWidth = endValueText && lastRow
       ? teams.reduce((max, t) => {
           const v = Number(lastRow[t.team_name])
-          return Number.isNaN(v) ? max : Math.max(max, measureText(` ${formatStatValue(v, activeMetric, basis)}`))
+          return Number.isNaN(v) ? max : Math.max(max, measureText(` ${endValueText(v)}`))
         }, 0)
       : 0
     const longest = teams.reduce((max, t) => Math.max(max, measureText(t.team_name)), 0)
@@ -377,7 +382,7 @@ const StandingsRace = () => {
     const fitted = new Map(teams.map(t => [t.team_name, fitLabel(t.team_name, maxTextWidth)]))
     return { labelGutter: gutter, fittedNames: fitted }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teams, wrapWidth, chartData, isValueView, activeMetric, basis, liveDate])
+  }, [teams, wrapWidth, chartData, isValueView, activeMetric, basis, liveDate, mobile])
   const labelFor = (teamName: string) => fittedNames.get(teamName) ?? teamName
 
   const basisWord = basis === 'avg' ? 'per-game averages' : 'season totals'
@@ -560,7 +565,7 @@ const StandingsRace = () => {
                   isOn={isOn}
                   hasHighlight={hasHighlight}
                   labelFor={labelFor}
-                  valueText={isValueView ? v => formatStatValue(v, activeMetric, basis) : undefined}
+                  valueText={endValueText}
                   gap={liveDate ? 10 : 6}
                 />
               </LineChart>
