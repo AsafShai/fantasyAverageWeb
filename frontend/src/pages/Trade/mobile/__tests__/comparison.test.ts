@@ -37,6 +37,7 @@ describe('trade comparison (phone)', () => {
     })
     expect(rows.map((r) => r.players[0].player_name)).toEqual(['Mine', 'FA'])
     expect(rows[1].fixed.pts).toBe(5)
+    expect(rows[0].categoryZs).toBeNull()
   })
 
   it('is not ready until both sides have players; Avg Z needs a value lookup', () => {

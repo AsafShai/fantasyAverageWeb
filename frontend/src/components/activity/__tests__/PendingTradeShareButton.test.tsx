@@ -59,14 +59,14 @@ describe('PendingTradeShareButton', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Share' }))
 
     const card = () => baseElement.querySelector('.share-card') as HTMLElement
-    await waitFor(() => expect(card().querySelector('table')).not.toBeNull())
+    await waitFor(() => expect(card().querySelector('.tc-z-slider')).not.toBeNull())
     expect(within(card()).getByText('Trade Accepted')).toBeInTheDocument()
     expect(within(card()).getByText('Processes Tue 11:01 AM · season per game')).toBeInTheDocument()
-    // Each column is what that team receives.
-    const tiles = [...card().querySelectorAll('.share-card__tile')]
-    expect(tiles.map(t => t.textContent)).toEqual(['DORELIT getsPayton Pritchard', 'Machlins team getsAaron Gordon'])
-    const pts = within(card()).getByText('PTS').closest('tr') as HTMLElement
-    expect(pts).toHaveTextContent('PTS10.513.5 ▲')
+    expect(within(card()).getByText('Payton Pritchard')).toBeInTheDocument()
+    expect(within(card()).getByText('Aaron Gordon')).toBeInTheDocument()
+    const pts = within(card()).getByText('PTS').closest('.tc-stat-row') as HTMLElement
+    expect(pts).toHaveTextContent('10.5')
+    expect(pts).toHaveTextContent('13.5')
     // Image only: no message to send along.
     expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Send on WhatsApp' })).toBeNull()

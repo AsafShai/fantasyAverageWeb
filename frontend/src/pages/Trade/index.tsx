@@ -4,7 +4,6 @@ import { useMyTeam } from '../../context/MyTeamContext';
 import { useFollowMyTeamValue } from '../../hooks/useFollowMyTeam';
 import type { TimePeriod, CustomDateRange } from '../../types/api';
 import { TeamTradeSection } from './components/TeamTradeSection';
-import { TradeStatsToggle } from './components/TradeStatsToggle';
 import { TradeModeToggle } from './components/TradeModeToggle';
 import { FreeAgentSection } from './components/FreeAgentSection';
 import { TradeSummaryPanel } from './components/TradeSummaryPanel';
@@ -64,6 +63,7 @@ export const Trade: React.FC = () => {
     isFetchingFreeAgents,
     freeAgentsError,
     playerValue,
+    tradeRanking,
   } = useTradeData(teamA, teamB, tradeMode, timePeriod, customRange);
 
   const { myTeamId } = useMyTeam();
@@ -159,6 +159,7 @@ export const Trade: React.FC = () => {
         isFetchingFreeAgents={isFetchingFreeAgents}
         freeAgentsError={freeAgentsError}
         playerValue={playerValue}
+        tradeRanking={tradeRanking}
       />
     );
   }
@@ -183,7 +184,6 @@ export const Trade: React.FC = () => {
       {/* Time Period & Stats Toggles */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap justify-center items-start gap-4 mb-4">
         <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
-        <TradeStatsToggle viewMode={viewMode} onToggle={setViewMode} />
       </div>
 
       {/* Trade Sections */}
@@ -241,18 +241,18 @@ export const Trade: React.FC = () => {
       </div>
 
       {/* Trade Summary Panel */}
-      <div className="card p-3">
-        <TradeSummaryPanel
-          teamA={teamA}
-          teamB={tradeMode === 'team' ? teamB : null}
-          playersA={currentSelectedPlayersA}
-          playersB={tradeMode === 'team' ? currentSelectedPlayersB : currentSelectedFreeAgents}
-          viewMode={viewMode}
-          tradeMode={tradeMode}
-          playerValue={playerValue}
-          periodLabel={periodLabel}
-        />
-      </div>
+      <TradeSummaryPanel
+        teamA={teamA}
+        teamB={tradeMode === 'team' ? teamB : null}
+        playersA={currentSelectedPlayersA}
+        playersB={tradeMode === 'team' ? currentSelectedPlayersB : currentSelectedFreeAgents}
+        viewMode={viewMode}
+        tradeMode={tradeMode}
+        playerValue={playerValue}
+        tradeRanking={tradeRanking}
+        periodLabel={periodLabel}
+        onViewModeChange={setViewMode}
+      />
     </div>
   );
 };

@@ -3,7 +3,12 @@ import { useGetTeamsListQuery, useGetTeamDetailQuery, useGetAllPlayersQuery } fr
 import type { Team, TeamDetail, Player, TimePeriod, CustomDateRange } from '../types/api';
 import type { TradeMode } from './useTradeState';
 import { DEFAULT_CATEGORIES } from '../utils/playerRankings';
-import { computePlayerValues, playerValueLookup, type PlayerValueLookup } from '../pages/Trade/utils/playerValues';
+import {
+  buildTradeRankingContext,
+  playerValueLookup,
+  type PlayerValueLookup,
+  type TradeRankingContext,
+} from '../pages/Trade/utils/playerValues';
 
 interface UseTradeDataReturn {
   teams: Team[];
@@ -24,6 +29,9 @@ interface UseTradeDataReturn {
 
   /** Rank and z-score of a player among every player in the same period. */
   playerValue: PlayerValueLookup;
+
+  /** Reference pool and categories for bundle per-category Z scores. */
+  tradeRanking: TradeRankingContext;
 }
 
 function withoutNoDataPlayers(team: TeamDetail | undefined): TeamDetail | undefined {
@@ -74,13 +82,22 @@ export const useTradeData = (
 
   // Every player in the period, also behind the rank and z-score shown for
   // each player in the trade (team mode included).
-  const playerValue = useMemo(() => {
+  const tradeRankingBundle = useMemo(() => {
     const categories = allPlayersData?.categories?.length ? allPlayersData.categories : DEFAULT_CATEGORIES;
-    const values = computePlayerValues(
-      allPlayersData?.players ?? [], categories, new Set(allPlayersData?.reverse_categories ?? []),
-    );
-    return playerValueLookup(values);
+    const reverseCategories = new Set(allPlayersData?.reverse_categories ?? []);
+    return buildTradeRankingContext(allPlayersData?.players ?? [], categories, reverseCategories);
   }, [allPlayersData]);
+
+  const playerValue = useMemo(
+    () => playerValueLookup(tradeRankingBundle.values),
+    [tradeRankingBundle.values],
+  );
+
+  const tradeRanking: TradeRankingContext = useMemo(() => ({
+    referencePool: tradeRankingBundle.referencePool,
+    categories: tradeRankingBundle.categories,
+    reverseCategories: tradeRankingBundle.reverseCategories,
+  }), [tradeRankingBundle]);
 
   return {
     teams,
@@ -96,5 +113,6 @@ export const useTradeData = (
     isFetchingFreeAgents: isFetchingAllPlayers,
     freeAgentsError: allPlayersError,
     playerValue,
+    tradeRanking,
   };
 };

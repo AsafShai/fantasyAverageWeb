@@ -20,24 +20,42 @@ export type PlayerValueLookup = (player: Player) => PlayerValue | undefined;
 const keyOf = (player: Pick<Player, 'player_id' | 'player_name'>) =>
   player.player_id != null ? `id:${player.player_id}` : `name:${player.player_name}`;
 
-/**
- * Rank and z-score every player with data in `players`. The top 300 (the
- * ranking's reference pool) get the same z-score and rank Player Rankings
- * shows; everyone else is scored against that pool and ranked below them.
- */
-export function computePlayerValues(
+export interface TradeRankingContext {
+  referencePool: Player[];
+  categories: RankingCategory[];
+  reverseCategories: Set<RankingCategory>;
+}
+
+function rankingPool(players: Player[]) {
+  return players.filter(p => p.has_data !== false && p.stats.gp > 0);
+}
+
+/** Reference pool and per-player values for Trade Analyzer (Player Rankings baseline). */
+export function buildTradeRankingContext(
   players: Player[],
   categories: RankingCategory[] = DEFAULT_CATEGORIES,
   reverseCategories: Set<RankingCategory> = new Set(),
-): Map<string, PlayerValue> {
-  const pool = players.filter(p => p.has_data !== false && p.stats.gp > 0);
+): TradeRankingContext & { values: Map<string, PlayerValue> } {
+  const pool = rankingPool(players);
   const weights = Object.fromEntries(categories.map(c => [c, 1]));
   const ranked = computePlayerRankings(
     pool, { calcMode: 'per_game', minGp: 0, minMin: 0, position: null, weights }, categories, reverseCategories,
   );
-  if (ranked.length === 0) return new Map();
-
   const referencePool = ranked.map(r => r.player);
+  const values = ranked.length === 0
+    ? new Map<string, PlayerValue>()
+    : computePlayerValuesFromRanked(pool, ranked, referencePool, weights, categories, reverseCategories);
+  return { referencePool, categories, reverseCategories, values };
+}
+
+function computePlayerValuesFromRanked(
+  pool: Player[],
+  ranked: ReturnType<typeof computePlayerRankings>,
+  referencePool: Player[],
+  weights: Record<RankingCategory, number>,
+  categories: RankingCategory[],
+  reverseCategories: Set<RankingCategory>,
+): Map<string, PlayerValue> {
   const inPool = new Set(referencePool.map(keyOf));
   const scored = [
     ...ranked.map(r => ({ player: r.player, z: r.totalZ })),
@@ -55,6 +73,15 @@ export function computePlayerValues(
     if (!values.has(byName)) values.set(byName, value);
   });
   return values;
+}
+
+/** Rank/z lookup map for all players in the period (Player Rankings baseline). */
+export function computePlayerValues(
+  players: Player[],
+  categories: RankingCategory[] = DEFAULT_CATEGORIES,
+  reverseCategories: Set<RankingCategory> = new Set(),
+): Map<string, PlayerValue> {
+  return buildTradeRankingContext(players, categories, reverseCategories).values;
 }
 
 /** Look a player up by ESPN id, falling back to the name. */

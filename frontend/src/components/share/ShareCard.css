@@ -92,6 +92,34 @@
 .share-card td.sc-heat { font-weight: 600; font-size: 10px; border-bottom: 2px solid var(--sc-bg); border-left: 2px solid var(--sc-bg); }
 .share-card .sc-win { color: var(--sc-good-fg); font-weight: 800; }
 .share-card .sc-lose { color: var(--sc-muted); }
+.share-card--dark .tc-share-versus-wrap,
+.share-card--dark .tc-share-versus-wrap .tc-team-card {
+  --tc-card: rgba(23, 33, 49, 0.95);
+  --tc-card-border: rgba(255, 255, 255, 0.08);
+  --tc-text: var(--sc-fg);
+  --tc-muted: var(--sc-muted);
+  --tc-good: var(--sc-good-fg);
+  --tc-bad: var(--sc-bad-fg);
+  --tc-accent: #a78bfa;
+  --tc-bar-track: rgba(255, 255, 255, 0.1);
+}
+
+.share-card:not(.share-card--dark) .tc-share-versus-wrap {
+  --tc-card: var(--sc-raised);
+  --tc-text: var(--sc-fg);
+  --tc-muted: var(--sc-muted);
+}
+
+.share-card td.sc-multiline { white-space: normal; line-height: 1.25; font-size: 10.5px; vertical-align: top; color: var(--sc-fg); }
+.share-card .sc-share-main { font-weight: 800; }
+.share-card td.sc-multiline .sc-share-main { display: block; }
+.share-card .sc-share-sub {
+  display: block;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--sc-muted);
+}
 
 /* tiles + side boxes */
 .share-card__tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 12px 4px; }

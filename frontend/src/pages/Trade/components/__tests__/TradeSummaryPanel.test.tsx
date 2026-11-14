@@ -19,8 +19,15 @@ const player = (name: string, extra: Record<string, number>, gp = 2): Player => 
   },
 });
 
-const headers = () =>
-  screen.getByText('Team').parentElement!.querySelectorAll(':scope > div.font-semibold');
+const detailGrid = () => document.querySelector('.tc-detail-grid');
+const detailHeaders = () => {
+  const grid = detailGrid()?.querySelector('.tc-detail-grid__grid');
+  if (!grid) return [];
+  return [...grid.querySelectorAll('.tc-detail-grid__head:not(.tc-detail-grid__head--left)')].map(h =>
+    h.querySelector('div')?.textContent?.trim() ?? h.textContent?.trim() ?? '',
+  );
+};
+const catPills = () => [...document.querySelectorAll('.tc-cat-pill')].map(el => el.textContent);
 
 const renderPanel = (a: Player[], b: Player[]) =>
   render(
@@ -35,76 +42,63 @@ const renderPanel = (a: Player[], b: Player[]) =>
   );
 
 describe('TradeSummaryPanel categories', () => {
-  it('shows only the fixed columns for a league on the standard 8 categories', () => {
+  it('opens on the 8 scoring categories, with minutes and games one tap away', async () => {
+    const user = userEvent.setup();
     renderPanel([player('a', {})], [player('b', {})]);
-    const labels = [...headers()].map(h => h.textContent).slice(1);
-    expect(labels).toEqual([
-      '⏰MIN', '🎯FGM', '🏹FGA', '📈FG%', '🆓FTM', '🎯FTA', '📊FT%',
-      '🎯3PM', '🏀REB', '🤝AST', '🥷STL', '🛡️BLK', '🏀PTS', '📅GP',
-    ]);
+    expect(catPills()).toEqual(['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS']);
+    expect(screen.getByRole('button', { name: /cats only/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(detailGrid()).toBeNull();
+    expect(document.querySelector('.tc-z-slider')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Show minutes and games' }));
+    expect(detailHeaders()).toEqual(['MIN', 'GP']);
+    // The scoring rows stay as they were.
+    expect(catPills()).toContain('FG%');
+    await user.click(screen.getByRole('button', { name: 'Hide minutes and games' }));
+    expect(detailGrid()).toBeNull();
   });
 
-  it('adds a counting category the league scores, before GP, with fewer TO as better', () => {
-    renderPanel([player('a', { TO: 3 }), player('a2', { TO: 4 })], [player('b', { TO: 9, 'A/TO': 2 })]);
-    const labels = [...headers()].map(h => h.textContent);
-    expect(labels.slice(-2)).toEqual(['➕TO', '📅GP']);
-    expect(labels.some(l => l?.includes('A/TO'))).toBe(false);
+  it('labels the columns over the category rows', () => {
+    renderPanel([player('a', {})], [player('b', {})]);
+    const head = document.querySelector('.tc-stat-row__bar--head');
+    expect(head?.textContent).toContain('Total');
+    expect(head?.textContent).toContain('Z edge');
+  });
 
-    const sevenCell = screen.getByText('7').parentElement!;
-    const nineCell = screen.getByText('9').parentElement!;
-    expect(sevenCell.className).toContain('bg-green-100');
-    expect(nineCell.className).toContain('bg-red-100');
+  it('opens the players in a category when that stat is clicked', async () => {
+    const user = userEvent.setup();
+    renderPanel([player('a', {})], [player('b', {})]);
+    // FT% starts open: the row that most needs explaining.
+    expect(document.querySelectorAll('.tc-cat-break')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: /^FT%/ }));
+    expect(document.querySelector('.tc-cat-break')).toBeNull();
+    await user.click(screen.getByRole('button', { name: /^FG%/ }));
+    expect(document.querySelector('.tc-cat-break')).not.toBeNull();
+    expect(screen.getAllByText(/Z in this cat/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('a').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('b').length).toBeGreaterThan(0);
+  });
+
+  it('adds a counting category the league scores in versus rows', () => {
+    renderPanel([player('a', { TO: 3 }), player('a2', { TO: 4 })], [player('b', { TO: 9, 'A/TO': 2 })]);
+    expect(catPills()).toContain('TO');
+    expect(catPills().some(l => l?.includes('A/TO'))).toBe(false);
   });
 });
 
 describe('TradeSummaryPanel categories-only shortcut', () => {
-  const labels = () => [...headers()].map(h => h.textContent).slice(1);
-  const EIGHT = ['📈FG%', '📊FT%', '🎯3PM', '🏀REB', '🤝AST', '🥷STL', '🛡️BLK', '🏀PTS'];
+  const EIGHT = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS'];
 
-  it('shows just the 8 scoring categories, then brings the columns back', async () => {
+  it('toggles between every column and just the 8 scoring categories', async () => {
     const user = userEvent.setup();
     renderPanel([player('a', {})], [player('b', {})]);
-    const toggle = screen.getByRole('button', { name: '8 cats only' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    expect(labels()).toEqual(EIGHT);
-
+    const toggle = screen.getByRole('button', { name: /cats only/ });
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    expect(labels()).toHaveLength(14);
-  });
-
-  it('restores a custom column choice and leaves the manual checkboxes working', async () => {
-    const user = userEvent.setup();
-    renderPanel([player('a', {})], [player('b', {})]);
-    await user.click(screen.getByRole('button', { name: /Show\/Hide Columns/ }));
-    await user.click(screen.getByRole('checkbox', { name: /MIN/ }));
-    await user.click(screen.getByRole('checkbox', { name: /GP/ }));
-    const custom = labels();
-    expect(custom).not.toContain('⏰MIN');
-
-    const toggle = screen.getByRole('button', { name: '8 cats only' });
+    expect(detailHeaders()).toEqual(['MIN', 'FGM', 'FGA', 'FTM', 'FTA', 'GP']);
     await user.click(toggle);
-    expect(labels()).toEqual(EIGHT);
-    expect(screen.getByRole('checkbox', { name: /FGM/ })).not.toBeChecked();
-
-    // A manual tweak while on just turns the shortcut off.
-    await user.click(screen.getByRole('checkbox', { name: /FGM/ }));
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    expect(labels()).toEqual(['🎯FGM', ...EIGHT].sort((a, b) => custom.indexOf(a) - custom.indexOf(b)));
-
-    await user.click(toggle);
-    await user.click(toggle);
-    expect(labels()).toEqual(['🎯FGM', ...EIGHT].sort((a, b) => custom.indexOf(a) - custom.indexOf(b)));
-  });
-
-  it('counts an extra league category such as TO', async () => {
-    const user = userEvent.setup();
-    renderPanel([player('a', { TO: 3 })], [player('b', { TO: 2 })]);
-    await user.click(screen.getByRole('button', { name: '9 cats only' }));
-    expect(labels()).toEqual([...EIGHT, '➕TO']);
+    expect(catPills()).toEqual(EIGHT);
+    expect(detailGrid()).toBeNull();
   });
 });
 
@@ -112,7 +106,7 @@ describe('TradeSummaryPanel average z-score', () => {
   const Z: Record<string, number> = { a1: 1, a2: -0.5, b: 0.4 };
   const playerValue = (p: Player) => (p.player_name in Z ? { rank: 1, of: 3, z: Z[p.player_name] } : undefined);
 
-  it('averages the z-scores of each side and marks the higher one', () => {
+  it('shows average Z in the versus header when player values are available', () => {
     render(
       <TradeSummaryPanel
         teamA={{ team_id: 1, team_name: 'A' }}
@@ -124,13 +118,7 @@ describe('TradeSummaryPanel average z-score', () => {
         playerValue={playerValue}
       />,
     );
-    expect([...headers()].map(h => h.textContent)[1]).toBe('⚖️Avg Z');
-    expect(screen.getByText('+0.25').parentElement!.className).toContain('bg-red-100');
-    expect(screen.getByText('+0.40').parentElement!.className).toContain('bg-green-100');
-  });
-
-  it('omits the column without a z-score lookup', () => {
-    renderPanel([player('a1', {})], [player('b', {})]);
-    expect(screen.queryByText('Avg Z')).toBeNull();
+    expect(screen.getByText(/Avg Z \+0\.40/)).toBeInTheDocument();
+    expect(screen.getByText(/Avg Z \+0\.25/)).toBeInTheDocument();
   });
 });

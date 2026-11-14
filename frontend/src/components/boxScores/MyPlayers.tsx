@@ -251,9 +251,9 @@ function slateItemsAll(totals: MySlateTotals): { label: string; main: string; su
   return [
     { label: 'MIN', main: String(Math.round(totals.min)) },
     { label: 'PTS', main: String(totals.pts) },
-    { label: 'FG', main: `${totals.fgm}-${totals.fga}`, sub: shootingPct(totals.fgm, totals.fga) },
+    { label: 'FG', main: shootingPct(totals.fgm, totals.fga) ?? '—', sub: `${totals.fgm}-${totals.fga}` },
     { label: '3PT', main: `${totals.threePm}-${totals.fg3a}`, sub: shootingPct(totals.threePm, totals.fg3a) },
-    { label: 'FT', main: `${totals.ftm}-${totals.fta}`, sub: shootingPct(totals.ftm, totals.fta) },
+    { label: 'FT', main: shootingPct(totals.ftm, totals.fta) ?? '—', sub: `${totals.ftm}-${totals.fta}` },
     { label: 'REB', main: String(totals.reb) },
     { label: 'AST', main: String(totals.ast) },
     { label: 'TO', main: String(totals.tov) },
@@ -278,10 +278,13 @@ function slateItemsCategories(totals: MySlateCategoryTotals, leagueCategories: s
     ...ordered.map(cat => {
       const shot = totals.shooting[cat as keyof typeof totals.shooting]
       if (shot) {
+        const madeAtt = `${shot.made}-${shot.att}`;
+        const pct = shootingPct(shot.made, shot.att);
+        const pctFirst = cat === 'FG%' || cat === 'FT%';
         return {
           label: CATEGORY_SHOOTING_LABEL[cat] ?? (CATEGORY_LABELS[cat] ?? cat),
-          main: `${shot.made}-${shot.att}`,
-          sub: shootingPct(shot.made, shot.att),
+          main: pctFirst ? (pct ?? '—') : madeAtt,
+          sub: pctFirst ? madeAtt : pct,
         }
       }
       return {
