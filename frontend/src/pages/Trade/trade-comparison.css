@@ -906,13 +906,22 @@
 .tc-share-teams > .tc-team-card {
   grid-template-columns: minmax(0, 1fr);
 }
-/* In the side-by-side cards a long name wraps (two lines at most) rather
-   than being cut. */
+/* In the side-by-side cards a long name wraps rather than being cut:
+   "Nickeil / Alexander- / Walker" needs three lines on a 360px phone. */
 .tc-versus__teams--duo .tc-player-chip__name,
 .tc-share-teams .tc-player-chip__name {
   white-space: normal;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-height: 1.2;
+}
+
+/* Expanded category list: names wrap instead of "Nickeil Ale…". */
+.tc-cat-player__name {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   line-height: 1.2;
 }
