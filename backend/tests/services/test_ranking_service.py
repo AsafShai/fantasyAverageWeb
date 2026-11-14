@@ -18,6 +18,7 @@ def ranking_service(sample_rankings_df, sample_totals_df):
             patch('app.services.ranking_service.ResponseBuilder') as mock_response_builder:
         service = RankingService()
         service.data_provider = AsyncMock()
+        service.data_provider.get_live_state = AsyncMock(return_value=None)  # flag off
         service.data_provider.memo_response = _no_memo
         service.data_provider.get_data_date = MagicMock(return_value=None)
         service.data_provider.get_all_dataframes.return_value = (sample_totals_df, None, sample_rankings_df)
@@ -121,6 +122,7 @@ class TestRankingServiceResponseBuilding:
         with patch('app.services.ranking_service.DataProvider') as mock_data_provider:
             service = RankingService()
             service.data_provider = AsyncMock()
+            service.data_provider.get_live_state = AsyncMock(return_value=None)  # flag off
             service.data_provider.memo_response = _no_memo
             service.data_provider.get_all_dataframes.return_value = (sample_totals_df, sample_averages_df, sample_rankings_df)
             service.data_provider.get_data_date = MagicMock(return_value=None)

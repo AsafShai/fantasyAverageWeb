@@ -3,9 +3,44 @@ name: PR Check
 on:
   pull_request:
 
+# A new push to the same PR cancels the run it replaces.
+# Read-only token for every job unless a job asks for more.
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  test-backend:
+  # Decides which side of the repo a PR touches. Jobs for the untouched side are
+  # skipped, which GitHub counts as passing for required checks.
+  changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/pr-check.yaml'
+            frontend:
+              - 'frontend/**'
+              - '.nvmrc'
+              - '.github/workflows/pr-check.yaml'
+
+  test-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       SEASON_ID: ${{ vars.SEASON_ID }}
       LEAGUE_ID: ${{ vars.LEAGUE_ID }}
@@ -29,8 +64,12 @@ jobs:
         working-directory: backend
         run: PYTHONPATH=. uv run pytest
 
-  test-frontend:
+  # Lint, type check + build, and unit tests share one install.
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -40,14 +79,27 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - run: npm run lint
+      - name: Lint
+        run: npm run lint
         working-directory: frontend
-      - run: npm test
+      - name: Type check and build
+        run: npm run build
+        working-directory: frontend
+      - name: Unit tests
+        run: npm test
         working-directory: frontend
 
+  # Split across three machines: the suite is ~420 short tests (~1.2 s each),
+  # so the slowest job in the run shrinks with each shard.
   e2e-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     # Image ships Chromium + system deps, so no apt-get at run time.
     # Keep the tag in sync with @playwright/test in frontend/package.json.
     container:
@@ -62,48 +114,45 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - name: Run live UI tests (API mocked)
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
         working-directory: frontend
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             frontend/playwright-report
             frontend/test-results
           retention-days: 7
 
+  # Runs alongside the tests rather than after them; a test failure still fails the PR.
   build-backend:
-    needs: test-backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build backend
+      # Plain build: a GitHub Actions layer cache measured slower here (82 s vs 21 s).
+      - name: Build backend image
         working-directory: backend
-        run: docker build -t fantasy-backend:latest .
+        run: docker build -t fantasy-backend:ci .
 
-      - name: Smoke test image (import app)
-        run: docker run --rm -e SEASON_ID="${{ vars.SEASON_ID }}" -e LEAGUE_ID="${{ vars.LEAGUE_ID }}" fantasy-backend:latest uv run python -c "import app.main; print('app imports OK')"
-
-  build-frontend:
-    needs: [test-backend, test-frontend]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install and build frontend
-        working-directory: frontend
+      - name: Smoke test image (start app, call /health)
         run: |
-          npm ci
-          npm run build
+          docker run -d --name backend -p 8000:8000 \
+            -e SEASON_ID="${{ vars.SEASON_ID }}" -e LEAGUE_ID="${{ vars.LEAGUE_ID }}" \
+            fantasy-backend:ci
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:8000/health; then
+              echo; echo "healthy after ${i}s"; exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' backend)" != "true" ]; then
+              echo "container exited"; break
+            fi
+            sleep 1
+          done
+          echo "backend did not become healthy"; docker logs backend; exit 1

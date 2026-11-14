@@ -10,8 +10,14 @@ import PlayerTrendsCard from '../components/PlayerTrendsCard'
 import PlayerNextGameCard from '../components/PlayerNextGameCard'
 import PlayerGameLog from '../components/PlayerGameLog'
 import PlayerFantasyValueCard from '../components/PlayerFantasyValueCard'
+import PlayerPastSeasonsCard from '../components/PlayerPastSeasonsCard'
+import PlayerLeagueHistoryCard from '../components/leagueHistory/PlayerLeagueHistoryCard'
 import { backLabel, usePlayerProfileData } from '../hooks/usePlayerProfileData'
+import { useSectionOpen } from '../hooks/useSectionOpen'
+import { FoldTitle } from '../components/FoldTitle'
 import { useMobileRedesign } from '../mobile/flag'
+import { useMyTeam } from '../context/useMyTeam'
+import { tradeLinkForPlayer } from '../mobile/player/tradePreset'
 import PlayerProfileMobile from '../mobile/profile/PlayerProfileMobile'
 
 const STAT_ROWS: { key: PlayerStatKey; label: string; isPct?: boolean }[] = [
@@ -51,6 +57,8 @@ const PlayerProfileDesktop = () => {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const [showAverages, setShowAverages] = useState(true)
+  const [statsOpen, toggleStats] = useSectionOpen('stats')
+  const { teams, myTeamId } = useMyTeam()
 
   const handleBack = () => {
     if (from) {
@@ -118,7 +126,7 @@ const PlayerProfileDesktop = () => {
             {bio.team} ({bio.team_abbr}) · {bio.position}
           </p>
           {fantasyEntry && (
-            <p className="mb-3">
+            <p className="mb-3 flex flex-wrap items-center gap-2">
               {fantasyEntry.status === 'ONTEAM' && fantasyEntry.fantasy_team_name ? (
                 <Link
                   to={`/team/${fantasyEntry.team_id}`}
@@ -131,6 +139,16 @@ const PlayerProfileDesktop = () => {
                   {fantasyEntry.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  const link = tradeLinkForPlayer(fantasyEntry, teams, myTeamId)
+                  navigate(link.path, { state: link.state })
+                }}
+                className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-blue-600 text-white border border-blue-600 hover:bg-blue-700"
+              >
+                Trade Analyzer
+              </button>
             </p>
           )}
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
@@ -181,11 +199,13 @@ const PlayerProfileDesktop = () => {
       )}
 
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">
+        <div className={`flex flex-col sm:flex-row justify-between items-start gap-3 ${statsOpen ? 'mb-4' : ''}`}>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Stats <span className="text-base font-normal text-gray-500 dark:text-gray-400">· {periodLabel}</span>
+            <FoldTitle open={statsOpen} onToggle={toggleStats}>
+              Stats <span className="text-base font-normal text-gray-500 dark:text-gray-400">· {periodLabel}</span>
+            </FoldTitle>
           </h2>
-          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start gap-3">
+          {statsOpen && <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start gap-3">
             <div className="flex self-start border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
               <button
                 type="button"
@@ -210,8 +230,10 @@ const PlayerProfileDesktop = () => {
                 Totals
               </button>
             </div>
-          </div>
+          </div>}
         </div>
+
+        {statsOpen && (<>
 
         {timePeriod === 'custom' && customRange && (
           <CoverageNotice
@@ -262,7 +284,12 @@ const PlayerProfileDesktop = () => {
             </table>
           </div>
         )}
+        </>)}
       </div>
+
+      <PlayerPastSeasonsCard playerId={playerId} />
+
+      <PlayerLeagueHistoryCard playerId={playerId} />
 
       <PlayerTrendsCard
         playerId={Number(playerId)}

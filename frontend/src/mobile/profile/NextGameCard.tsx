@@ -1,3 +1,4 @@
+import { useSectionOpen } from '../../hooks/useSectionOpen'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import type { ProjectionStats } from '../../types/api'
 import { coherentInts } from '../../utils/coherentRound'
@@ -12,13 +13,14 @@ import { Card, MinutesStepper } from '../ui'
  * re-predict call when minutes change (shared with the player sheet).
  */
 export default function NextGameCard({ playerId, playerName }: { playerId: string; playerName: string }) {
+  const [open, toggle] = useSectionOpen('next-game')
   const { loading, projection } = useSheetProjection(playerId)
   // same remembered setting as the desktop card
   const [integerMode, setIntegerMode] = usePersistedState('playerProjection.integerMode', true)
 
   if (loading) {
     return (
-      <Card aria-label="Next game projection">
+      <Card title="Next game" aria-label="Next game projection" fold={{ open, onToggle: toggle }}>
         <div className="mr-pp-skel" aria-hidden="true" />
       </Card>
     )
@@ -53,7 +55,7 @@ export default function NextGameCard({ playerId, playerName }: { playerId: strin
   ]
 
   return (
-    <Card aria-label="Next game projection">
+    <Card title="Next game" aria-label="Next game projection" fold={{ open, onToggle: toggle }}>
       <div className="mr-pp-row">
         <span className="mr-pp-proj-badge">Projected</span>
         <span className={`mr-pp-dot ${dot}`} title={data.reason || undefined} aria-label={data.reason || `Status ${data.status}`} role="img" />

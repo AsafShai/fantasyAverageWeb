@@ -60,3 +60,32 @@ class PlayerGameLogResponse(BaseModel):
     player_id: int
     current_season: str
     games: list[PlayerGameLogGame]
+
+
+class PlayerSeasonLine(BaseModel):
+    """One completed regular season, per-game averages (from ESPN)."""
+    season: int
+    season_label: str
+    teams: list[str] = []
+    gp: int = 0
+    gs: int = 0
+    minutes: Optional[float] = None
+    fgm: Optional[float] = None
+    fga: Optional[float] = None
+    fg_percentage: Optional[float] = None
+    ftm: Optional[float] = None
+    fta: Optional[float] = None
+    ft_percentage: Optional[float] = None
+    three_pm: Optional[float] = None
+    three_pa: Optional[float] = None
+    reb: Optional[float] = None
+    ast: Optional[float] = None
+    stl: Optional[float] = None
+    blk: Optional[float] = None
+    to: Optional[float] = None
+    pts: Optional[float] = None
+
+
+class PlayerSeasonHistoryResponse(BaseModel):
+    player_id: int
+    seasons: list[PlayerSeasonLine]

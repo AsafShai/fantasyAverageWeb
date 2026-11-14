@@ -1,4 +1,6 @@
-import { useGetLeagueSummaryQuery, useGetRankingsQuery, useGetTodayHubQuery } from '../store/api/fantasyApi'
+import { useGetLeagueSummaryQuery, useGetRankChangesQuery, useGetRankingsQuery, useGetTodayHubQuery } from '../store/api/fantasyApi'
+import { liveMoment } from '../utils/live'
+import { topTeamsMeta } from '../utils/liveTonight'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import DeadlineCountdown from '../components/DeadlineCountdown'
@@ -9,7 +11,8 @@ import TopTeams from '../components/today/TopTeams'
 import { getErrorMessage } from '../utils/errorMessage'
 import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
 import LatestMovesCard from '../components/activity/LatestMovesCard'
-import EspnUpdatedNote from '../components/EspnUpdatedNote'
+import LiveBadge from '../components/live/LiveBadge'
+import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileToday from '../mobile/today/MobileToday'
 
@@ -23,9 +26,12 @@ function formatSlate(slateDate: string | null): string {
 }
 
 const DesktopToday = () => {
-  const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
-  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
-  const { data: hub, isLoading: hubLoading, isError: hubError } = useGetTodayHubQuery()
+  const { data: summary, error: summaryError, isLoading: summaryLoading } = useLiveQuery(useGetLeagueSummaryQuery, undefined)
+  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useLiveQuery(useGetRankingsQuery, {})
+  const { data: hub, isLoading: hubLoading, isError: hubError } = useLiveQuery(useGetTodayHubQuery, undefined)
+  // Top 5's "change tonight": only fetched while tonight is live (the page showed no deltas before).
+  const tonight = !!liveMoment(rankings?.live)
+  const { data: changes } = useLiveQuery(useGetRankChangesQuery, 'averages' as const, { skip: !tonight })
 
   if (summaryLoading || rankingsLoading) {
     return <LoadingSpinner />
@@ -44,7 +50,7 @@ const DesktopToday = () => {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex flex-col">
           <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
-          <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />
+          <LiveBadge live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} align="left" />
         </div>
         <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">
           {hub
@@ -59,7 +65,7 @@ const DesktopToday = () => {
         <LoadingSpinner />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_3fr]">
-          <RankMovers movers={hub?.movers ?? []} />
+          <RankMovers movers={hub?.movers ?? []} tonightMovers={hub?.tonight_movers} live={hub?.live} />
           <div className="min-w-0">
             <RosterHealth
               slateDate={hub?.slate_date ?? null}
@@ -74,7 +80,11 @@ const DesktopToday = () => {
 
       {summary && <LeagueAverages summary={summary} />}
 
-      <TopTeams teams={topTeams} />
+      <TopTeams
+        teams={topTeams}
+        meta={tonight && changes?.live?.active ? topTeamsMeta(rankings?.live) : null}
+        deltas={new Map((changes?.teams ?? []).map(t => [t.team_id, t.total_delta ?? 0]))}
+      />
     </div>
   )
 }

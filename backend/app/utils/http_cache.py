@@ -1,4 +1,5 @@
 import hashlib
+import re
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -24,6 +25,23 @@ CACHE_RULES: dict[str, str] = {
 }
 
 
+# Pages that can carry tonight's live numbers. They change minute by minute
+# while games are live, so the browser must always revalidate: no-cache plus the
+# body ETag makes an unchanged poll an empty 304 and never serves stale data.
+LIVE_PAGE_CACHE_CONTROL = "no-cache"
+LIVE_PAGE_PATHS = frozenset({"/api/rankings", "/api/analytics/heatmap"})
+_TEAM_DETAIL_PATH = re.compile(r"^/api/teams/\d+$")
+
+
+def cache_control_for(path: str, rules: dict[str, str] | None = None) -> str | None:
+    rules = CACHE_RULES if rules is None else rules
+    if path in rules:
+        return rules[path]
+    if rules is CACHE_RULES and (path in LIVE_PAGE_PATHS or _TEAM_DETAIL_PATH.match(path)):
+        return LIVE_PAGE_CACHE_CONTROL
+    return None
+
+
 def weak_etag(body: bytes) -> str:
     return f'W/"{hashlib.sha1(body).hexdigest()[:16]}"'
 
@@ -43,11 +61,14 @@ class HttpCacheMiddleware:
         self.rules = CACHE_RULES if rules is None else rules
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["method"] != "GET" or scope["path"] not in self.rules:
+        cache_control = (
+            cache_control_for(scope["path"], self.rules)
+            if scope["type"] == "http" and scope["method"] == "GET" else None
+        )
+        if cache_control is None:
             await self.app(scope, receive, send)
             return
 
-        cache_control = self.rules[scope["path"]]
         if_none_match = Headers(scope=scope).get("if-none-match")
         start: Message | None = None
         chunks: list[bytes] = []

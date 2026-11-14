@@ -12,7 +12,16 @@ test('desktop: the profile keeps its desktop layout with the flag on', async ({ 
   await expect(page.getByRole('heading', { name: /Donovan Mitchell/ })).toBeVisible()
   // desktop time frame selector and plain stats table, no phone chips
   await expect(page.getByRole('group', { name: 'Time frame' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Full Season/ })).toBeVisible()
+  // the time frame button (section titles like 'Stats · Full Season' are buttons too)
+  await expect(page.getByRole('button', { name: /^\W*Full Season$/ })).toBeVisible()
+  // sections fold; League History starts open, under Previous Seasons
+  const history = page.getByRole('button', { name: /^League History/ })
+  await expect(history).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByText('Drafted #26')).toBeVisible()
+  await history.click()
+  await expect(page.getByText('Drafted #26')).toHaveCount(0)
+  await page.getByRole('button', { name: /^Game log/ }).click()
+  await expect(page.getByRole('button', { name: /^Game log/ })).toHaveAttribute('aria-expanded', 'false')
 })
 
 test.describe('phone player profile', () => {
@@ -80,6 +89,51 @@ test.describe('phone player profile', () => {
     await expect(log.getByRole('link', { name: /@ OKC/ }).first()).toHaveAttribute('href', /\/box-scores\?date=2026-11-04&game=400/)
 
     await expectNoHorizontalScroll(page)
+  })
+
+  test('league history: open under Previous seasons, moves newest first, trade sides, tap a stint for its dates', async ({ page }) => {
+    await mockProfileApis(page)
+    await page.goto(`${URL}?ff=mobile`)
+    // open by default, under Previous seasons
+    const card = page.getByRole('region', { name: 'League history' })
+    const seasons = page.getByRole('region', { name: 'Previous seasons' })
+    await expect(seasons).toBeVisible()
+    expect((await seasons.boundingBox())!.y).toBeLessThan((await card.boundingBox())!.y)
+    await expect(card.getByRole('button', { name: /League history/ })).toHaveAttribute('aria-expanded', 'true')
+    await expect(card.getByText('Drafted #26')).toBeVisible()
+    const moves = card.getByRole('listitem')
+    await expect(moves).toHaveCount(6)
+    await expect(moves.first()).toContainText('Traded from DORELIT to Trust the process')
+    await expect(moves.first()).toContainText('Trust the process gotDonovan Mitchell, Peyton Watson')
+    await expect(moves.first()).toContainText('DORELIT gotAndrew Wiggins, Josh Giddey')
+    await expect(moves.first()).toContainText('Trust the process dropped Keon Ellis to make room')
+    await expect(moves.nth(3)).toContainText('Claimed off waivers by Dor\'s Injured Team')
+    await expect(moves.last()).toContainText('Pick #26 (round 3)')
+    await expect(moves.nth(4)).toContainText('Released, no pickup in the same move')
+
+    // a 3-hour stint still gets a tappable slice, and tapping shows its time frame
+    await card.getByRole('button', { name: /^Dor's Injured Team,/ }).tap()
+    await expect(card.getByRole('status')).toContainText(/Dor's Injured Team.*3 hours/)
+    await page.getByRole('heading', { level: 1 }).tap()
+    await expect(card.getByRole('status')).toHaveCount(0)
+    await expectNoHorizontalScroll(page)
+  })
+
+  test('every section folds, and stays folded after a reload', async ({ page }) => {
+    await mockProfileApis(page)
+    await page.goto(`${URL}?ff=mobile`)
+    const stats = page.getByRole('region', { name: 'Stats' })
+    await expect(stats.getByRole('rowheader')).toBeVisible()
+    for (const name of [/^Fantasy Value/, /^Stats/, /^Previous seasons/, /^League history/, /^Trends/, /^Next game/, /^Game log/])
+      await expect(page.getByRole('button', { name, expanded: true })).toBeVisible()
+    await stats.getByRole('button', { name: /^Stats/ }).tap()
+    await expect(stats.getByRole('rowheader')).toHaveCount(0)
+    await expect(stats.getByRole('radiogroup')).toHaveCount(0)
+    await page.reload()
+    await expect(page.getByRole('button', { name: /^Stats/, expanded: false })).toBeVisible()
+    await expect(stats.getByRole('rowheader')).toHaveCount(0)
+    await stats.getByRole('button', { name: /^Stats/ }).tap()
+    await expect(stats.getByRole('rowheader')).toBeVisible()
   })
 
   test('minutes stepper re-runs the projection and resets', async ({ page }) => {

@@ -3,13 +3,37 @@ import { useNavigate } from 'react-router'
 import { useSort } from '../../hooks/useSort'
 import SortableHeaderCell from './SortableHeaderCell'
 import MultiSelectFilter from './MultiSelectFilter'
-import type { RankMover } from '../../types/api'
+import type { LiveBlock, RankMover } from '../../types/api'
+import { liveMoment } from '../../utils/live'
+import { moversSubtitle, type MoversView } from '../../utils/liveTonight'
 import { MyTeamMark } from '../MyTeamMark'
 import { leadWithMyTeam, myTeamRowClass } from '../../myTeam/display'
 import { useMyTeam } from '../../context/useMyTeam'
 
 interface RankMoversProps {
+  /** Day over day (the latest official day vs the day before). */
   movers: RankMover[]
+  /** While tonight is live: movers vs this morning's official standings. */
+  tonightMovers?: RankMover[]
+  live?: LiveBlock
+}
+
+const SEG = 'min-h-7 rounded px-2.5 py-0.5 text-[11px] font-semibold transition-colors'
+const SEG_ON = 'bg-white text-blue-700 shadow-sm dark:bg-gray-600 dark:text-blue-200'
+const SEG_OFF = 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'
+
+/** Tonight / vs yesterday, shown only while tonight is live or final (design canvas, Today). */
+export function MoversSwitch({ view, onView }: { view: MoversView; onView: (v: MoversView) => void }) {
+  return (
+    <div className="flex gap-0.5 rounded-md bg-gray-100 p-0.5 dark:bg-gray-700" role="group" aria-label="Rank movers period">
+      <button type="button" aria-pressed={view === 'tonight'} onClick={() => onView('tonight')} className={`${SEG} ${view === 'tonight' ? SEG_ON : SEG_OFF}`}>
+        Tonight
+      </button>
+      <button type="button" aria-pressed={view === 'yesterday'} onClick={() => onView('yesterday')} className={`${SEG} ${view === 'yesterday' ? SEG_ON : SEG_OFF}`}>
+        vs yesterday
+      </button>
+    </div>
+  )
 }
 
 type SortKey = 'team' | 'category' | 'delta'
@@ -25,7 +49,11 @@ function formatDelta(delta: number): string {
   return `${delta > 0 ? '▲' : '▼'} ${rounded}`
 }
 
-export default function RankMovers({ movers }: RankMoversProps) {
+export default function RankMovers({ movers: lastNight, tonightMovers, live }: RankMoversProps) {
+  const [view, setView] = useState<MoversView>('tonight')
+  const switchable = !!liveMoment(live) && tonightMovers !== undefined
+  const movers = switchable && view === 'tonight' ? tonightMovers : lastNight
+  const subtitle = switchable ? moversSubtitle(live, view) : null
   const navigate = useNavigate()
   const { myTeamId, isMyTeam } = useMyTeam()
   const [selectedTeams, setSelectedTeams] = useState<string[]>([])
@@ -59,7 +87,9 @@ export default function RankMovers({ movers }: RankMoversProps) {
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
         <h2 className="text-base font-bold text-gray-900 sm:text-lg dark:text-gray-50">Rank movers</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-gray-400 dark:text-gray-500">vs yesterday</span>
+          {switchable
+            ? <MoversSwitch view={view} onView={setView} />
+            : <span className="text-[11px] text-gray-400 dark:text-gray-500">vs yesterday</span>}
           {movers.length > 0 && (
             <>
               <MultiSelectFilter label="teams" options={teamOptions} selected={selectedTeams} onChange={setSelectedTeams} />
@@ -74,9 +104,11 @@ export default function RankMovers({ movers }: RankMoversProps) {
         </div>
       </div>
 
+      {subtitle && <p className="pb-1 text-[11px] text-gray-500 dark:text-gray-400">{subtitle}</p>}
+
       {movers.length === 0 ? (
         <p className="py-3 text-xs text-gray-500 dark:text-gray-400">
-          Movers appear after the second scoring period.
+          {switchable && view === 'tonight' ? 'No rank changes yet tonight.' : 'Movers appear after the second scoring period.'}
         </p>
       ) : sorted.length === 0 ? (
         <p className="py-3 text-xs text-gray-500 dark:text-gray-400">No movers match the selected filters.</p>

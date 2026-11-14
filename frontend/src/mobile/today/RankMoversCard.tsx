@@ -1,14 +1,29 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import type { RankMover } from '../../types/api'
+import type { LiveBlock, RankMover } from '../../types/api'
+import { liveMoment } from '../../utils/live'
+import { moversSubtitle, type MoversView } from '../../utils/liveTonight'
+import { Segmented } from '../ui'
 import { useMyTeam } from '../../context/useMyTeam'
 import { MyTeamMark } from '../../components/MyTeamMark'
 import { Card } from '../ui/Card'
 import { MultiSelectSheet } from './MultiSelectSheet'
 import { arrowDelta, groupMovers, partLabel } from './groupMovers'
 
-/** Rank movers vs yesterday, one line per team ("▼6 Khachapuri's · STL −3 · 3PM −2"). */
-export function RankMoversCard({ movers }: { movers: RankMover[] }) {
+const VIEWS: { value: MoversView; label: string }[] = [
+  { value: 'tonight', label: 'Tonight' },
+  { value: 'yesterday', label: 'vs yesterday' },
+]
+
+/**
+ * Rank movers vs yesterday, one line per team ("▼6 Khachapuri's · STL −3 · 3PM −2").
+ * While tonight is live a Tonight / vs yesterday switch picks `tonightMovers`.
+ */
+export function RankMoversCard({ movers: lastNight, tonightMovers, live }: { movers: RankMover[]; tonightMovers?: RankMover[]; live?: LiveBlock }) {
+  const [view, setView] = useState<MoversView>('tonight')
+  const switchable = !!liveMoment(live) && tonightMovers !== undefined
+  const movers = switchable && view === 'tonight' ? tonightMovers : lastNight
+  const subtitle = switchable ? moversSubtitle(live, view) : null
   const navigate = useNavigate()
   const { myTeamId, isMyTeam } = useMyTeam()
   const [teams, setTeams] = useState<string[]>([])
@@ -44,8 +59,9 @@ export function RankMoversCard({ movers }: { movers: RankMover[] }) {
         </Link>
       }
     >
+      {switchable && <Segmented label="Rank movers period" size="sm" options={VIEWS} value={view} onChange={setView} className="mr-today-mswitch" />}
       <div className="mr-today-frow">
-        <span className="mr-meta">vs yesterday</span>
+        {!switchable && <span className="mr-meta">vs yesterday</span>}
         {movers.length > 0 && (
           <>
             <MultiSelectSheet id="today-mover-teams" label="teams" title="Teams" options={teamOptions} selected={teams} onChange={setTeams} />
@@ -61,8 +77,10 @@ export function RankMoversCard({ movers }: { movers: RankMover[] }) {
         )}
       </div>
 
+      {subtitle && <p className="mr-meta mr-today-msub">{subtitle}</p>}
+
       {movers.length === 0 ? (
-        <p className="mr-meta">Movers appear after the second scoring period.</p>
+        <p className="mr-meta">{switchable && view === 'tonight' ? 'No rank changes yet tonight.' : 'Movers appear after the second scoring period.'}</p>
       ) : groups.length === 0 ? (
         <p className="mr-meta">No movers match the selected filters.</p>
       ) : (

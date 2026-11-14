@@ -1,9 +1,9 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, CategoryResponse, RosterDay } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, PlayerSeasonHistoryResponse, CategoryResponse, RosterDay } from '../../types/api';
 import type { InjuryRecord } from '../../types/injury';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
-import type { LeagueActivity, LatestMoves } from '../../types/activity';
+import type { LeagueActivity, LatestMoves, PlayerLeagueHistory } from '../../types/activity';
 import type { BoxScoreboard, GameBoxScore, NbaSeasonWindow, SlateValues } from '../../types/boxScore';
 
 type AllPlayersArgs = { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string };
@@ -140,6 +140,10 @@ export const fantasyApi = createApi({
       query: (playerId) => `/nba-players/${playerId}/games`,
       keepUnusedDataFor: 300,
     }),
+    getNbaPlayerSeasons: builder.query<PlayerSeasonHistoryResponse, string>({
+      query: (playerId) => `/nba-players/${playerId}/seasons`,
+      keepUnusedDataFor: 3600,
+    }),
     getNbaPlayerStats: builder.query<
       NbaPlayerStatsResponse,
       { playerId: string; time_period?: TimePeriod; start?: string; end?: string }
@@ -190,6 +194,10 @@ export const fantasyApi = createApi({
     }),
     getLeagueActivity: builder.query<LeagueActivity, void>({
       query: () => '/league/activity',
+      keepUnusedDataFor: 300,
+    }),
+    getPlayerLeagueHistory: builder.query<PlayerLeagueHistory, string>({
+      query: (playerId) => `/league/players/${playerId}/history`,
       keepUnusedDataFor: 300,
     }),
     getLatestMoves: builder.query<LatestMoves, number | void>({
@@ -331,6 +339,7 @@ export const fantasyApi = createApi({
 export const {
   useGetLeagueActivityQuery,
   useGetLatestMovesQuery,
+  useGetPlayerLeagueHistoryQuery,
   useGetRankingsQuery,
   useGetTeamDetailQuery,
   useGetTeamRosterDayQuery,
@@ -355,6 +364,7 @@ export const {
   useGetBoxSlateValuesQuery,
   useGetNbaPlayerQuery,
   useGetNbaPlayerGamesQuery,
+  useGetNbaPlayerSeasonsQuery,
   useGetNbaPlayerStatsQuery,
   useGetMatchupsTodayQuery,
   useGetInjuryRecordsQuery,

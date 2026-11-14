@@ -26,6 +26,7 @@ def team_service():
             patch('app.services.team_service.ResponseBuilder') as mock_response_builder:
         service = TeamService()
         service.data_provider = AsyncMock()
+        service.data_provider.get_live_state = AsyncMock(return_value=None)  # flag off
         service.data_provider.get_data_date = MagicMock(return_value=None)
         service.data_provider.db_service.aggregate_player_games = AsyncMock(
             return_value=(pd.DataFrame(), None, None)
@@ -263,6 +264,7 @@ class TestTeamServiceResponseBuilding:
             service = TeamService()
             # Mock only the data provider to avoid API calls
             service.data_provider = AsyncMock()
+            service.data_provider.get_live_state = AsyncMock(return_value=None)  # flag off
             service.data_provider.get_totals_df.return_value = sample_totals_df
             service.data_provider.get_all_dataframes.return_value = (
                 sample_totals_df, sample_averages_df, sample_rankings_df

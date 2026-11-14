@@ -1,3 +1,4 @@
+import { useSectionOpen } from '../../hooks/useSectionOpen'
 import { Link } from 'react-router'
 import InfoTip from '../../components/InfoTip'
 import { CATEGORY_LABELS, type PlayerRankSummary, type RankingCategory } from '../../utils/playerRankings'
@@ -29,6 +30,7 @@ interface Props {
  * eligibility and the green/red category z-bars, with Full rankings.
  */
 export default function FantasyValueCard({ positions, summary, categories, loading, periodLabel }: Props) {
+  const [open, toggle] = useSectionOpen('fantasy-value')
   const head = (
     <Link to="/player-rankings" className="mr-link">
       Full rankings →
@@ -36,7 +38,7 @@ export default function FantasyValueCard({ positions, summary, categories, loadi
   )
   if (loading) {
     return (
-      <Card title={`Fantasy Value · ${periodLabel}`} action={head}>
+      <Card title={`Fantasy Value · ${periodLabel}`} action={head} fold={{ open, onToggle: toggle }}>
         <div className="mr-pp-skel" data-testid="fantasy-value-skeleton" aria-hidden="true" />
       </Card>
     )
@@ -45,7 +47,7 @@ export default function FantasyValueCard({ positions, summary, categories, loadi
   const realPositions = positions.filter((p) => p && p !== 'Unknown')
 
   return (
-    <Card title={`Fantasy Value · ${periodLabel}`} action={head} aria-label="Fantasy Value">
+    <Card title={`Fantasy Value · ${periodLabel}`} action={head} aria-label="Fantasy Value" fold={{ open, onToggle: toggle }}>
       <div className="mr-pp-tiles mr-c2">
         <div className="mr-pp-tile">
           <span className="mr-pp-tl">Overall rank</span>

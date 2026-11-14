@@ -9,7 +9,10 @@ import {
 import type { AverageStats, LeagueSummary, RankingStats } from '../../types/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
-import EspnUpdatedNote from '../../components/EspnUpdatedNote'
+import { useLiveQuery } from '../../hooks/useLiveQuery'
+import { averagesNote } from '../../utils/live'
+import { changedTile, leagueAveragesSubtitle, topTeamsMeta } from '../../utils/liveTonight'
+import { LiveBadgeMobile } from '../ui/LiveBadgeMobile'
 import { MyTeamMark } from '../../components/MyTeamMark'
 import { useMyTeam } from '../../context/useMyTeam'
 import { getErrorMessage } from '../../utils/errorMessage'
@@ -81,14 +84,15 @@ function DeadlineCard({ deadline }: { deadline: string | null }) {
 function TopTeamsCard({ teams }: { teams: RankingStats[] }) {
   const navigate = useNavigate()
   const { isMyTeam } = useMyTeam()
-  const { data: changes } = useGetRankChangesQuery('averages')
+  // Tonight's changes while tonight is live (decision 7), so they poll with it.
+  const { data: changes } = useLiveQuery(useGetRankChangesQuery, 'averages' as const)
   const delta = (id: number) => changes?.teams.find((t) => t.team_id === id)?.total_delta ?? null
 
   return (
     <section className="mr-today-race" aria-labelledby="mr-today-top5">
       <div className="mr-card-head">
         <h2 id="mr-today-top5" className="mr-h2">Top 5 Teams (average)</h2>
-        <span className="mr-today-race-meta">pts · since yesterday</span>
+        <span className="mr-today-race-meta">{topTeamsMeta(changes?.live) ?? 'pts · since yesterday'}</span>
       </div>
       <ol>
         {teams.map((t, i) => {
@@ -138,7 +142,11 @@ const AVERAGE_TILES: { label: string; value: (a: AverageStats) => string }[] = [
 
 function LeagueAveragesCard({ summary }: { summary: LeagueSummary }) {
   const tiles = [
-    ...AVERAGE_TILES.map((t) => ({ label: t.label, value: t.value(summary.league_averages) })),
+    ...AVERAGE_TILES.map((t) => {
+      const value = t.value(summary.league_averages)
+      const official = summary.league_averages_official && t.value(summary.league_averages_official)
+      return { label: t.label, value, moved: changedTile(summary.live, value, official) }
+    }),
     { label: 'NBA pace', value: summary.nba_avg_pace == null ? '—' : summary.nba_avg_pace.toFixed(1) },
     { label: 'Days left', value: String(summary.nba_game_days_left ?? 0) },
     { label: 'Teams', value: String(summary.total_teams) },
@@ -152,10 +160,10 @@ function LeagueAveragesCard({ summary }: { summary: LeagueSummary }) {
         </Link>
       }
     >
-      <span className="mr-meta mr-today-sub">per team, season to date</span>
+      <span className="mr-meta mr-today-sub">{leagueAveragesSubtitle(summary.live)}</span>
       <dl className="mr-today-tiles mr-today-c3">
         {tiles.map((t) => (
-          <div key={t.label} className="mr-today-tile">
+          <div key={t.label} className={`mr-today-tile ${'moved' in t && t.moved ? 'mr-today-moved' : ''}`.trim()} data-moved={('moved' in t && t.moved) || undefined}>
             <dt className="mr-today-tl">{t.label}</dt>
             <dd className="mr-today-tv mr-num">{t.value}</dd>
           </div>
@@ -170,9 +178,9 @@ function LeagueAveragesCard({ summary }: { summary: LeagueSummary }) {
 
 /** Phone Today page (Home tab): same information as the desktop page, reorganized per the redesign. */
 export default function MobileToday() {
-  const { data: summary, error: summaryError, isLoading: summaryLoading } = useGetLeagueSummaryQuery()
-  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useGetRankingsQuery({})
-  const { data: hub, isLoading: hubLoading, isError: hubError } = useGetTodayHubQuery()
+  const { data: summary, error: summaryError, isLoading: summaryLoading } = useLiveQuery(useGetLeagueSummaryQuery, undefined)
+  const { data: rankings, error: rankingsError, isLoading: rankingsLoading } = useLiveQuery(useGetRankingsQuery, {})
+  const { data: hub, isLoading: hubLoading, isError: hubError } = useLiveQuery(useGetTodayHubQuery, undefined)
 
   if (summaryLoading || rankingsLoading) return <LoadingSpinner />
   if (summaryError || rankingsError) {
@@ -193,7 +201,7 @@ export default function MobileToday() {
       <div className="mr-today-pt">
         <div className="mr-today-ptl">
           <h1 className="mr-h1">Today</h1>
-          <EspnUpdatedNote updatedAt={summary?.espn_updated_at} className="mr-today-espn" />
+          <LiveBadgeMobile live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} note={averagesNote(summary?.live, 'averages', true)} noteClassName="mr-today-espn" />
         </div>
         {hub ? (
           <Link to="/box-scores" className="mr-link mr-today-slate">
@@ -212,7 +220,7 @@ export default function MobileToday() {
         </Card>
       ) : (
         <>
-          <RankMoversCard movers={hub?.movers ?? []} />
+          <RankMoversCard movers={hub?.movers ?? []} tonightMovers={hub?.tonight_movers} live={hub?.live} />
           <RosterHealthCard
             slateDate={hub?.slate_date ?? null}
             gamesCount={hub?.games_count ?? 0}

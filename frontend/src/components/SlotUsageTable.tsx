@@ -17,6 +17,8 @@ interface SlotUsageTableProps {
   gameDaysElapsed?: number | null
   /** Inside a collapsible — skip card chrome and duplicate heading. */
   embedded?: boolean
+  /** Per slot, tonight's marker beside the Used number ("+1 live" / "+1 tonight"). */
+  tonightNote?: (slot: string) => string | null
 }
 
 type GapTone = 'neutral' | 'short' | 'lost'
@@ -44,6 +46,8 @@ interface ValueCellProps {
   cap: number
   tone: GapTone
   note: string | null
+  /** Small green marker before the number (tonight's games). */
+  delta?: string | null
 }
 
 /**
@@ -51,7 +55,7 @@ interface ValueCellProps {
  * the gap — tinted by what kind of gap it is. The number sits at the end of the track
  * rather than beside it, which is what keeps the two reading as one object.
  */
-function ValueCell({ value, cap, tone, note }: ValueCellProps) {
+function ValueCell({ value, cap, tone, note, delta }: ValueCellProps) {
   const width = value === null ? 0 : Math.max(0, Math.min(100, (value / cap) * 100))
   return (
     <td className="relative px-1.5 py-1.5 text-right align-middle sm:px-2 sm:py-2">
@@ -59,6 +63,9 @@ function ValueCell({ value, cap, tone, note }: ValueCellProps) {
         <span className="absolute inset-y-0 left-0 rounded-l bg-blue-200 dark:bg-blue-800" style={{ width: `${width}%` }} />
       </span>
       <span className={`relative block text-[13px] font-extrabold tabular-nums sm:text-[14.5px] ${VALUE_TONE[tone]}`}>
+        {delta && (
+          <span className="mr-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400" data-testid="slot-tonight">{delta}</span>
+        )}
         {formatSlotNumber(value)}
       </span>
       <span className={`relative block text-[9px] font-semibold leading-tight sm:text-[9.5px] ${note ? NOTE_TONE[tone] : 'text-transparent'}`}>
@@ -85,6 +92,7 @@ export default function SlotUsageTable({
   gameDaysLeft,
   gameDaysElapsed,
   embedded = false,
+  tonightNote,
 }: SlotUsageTableProps) {
   const pace: PaceContext = { avgPace, gameDaysLeft, gameDaysElapsed }
   const rows = SLOT_NAMES.map(slot => {
@@ -151,6 +159,7 @@ export default function SlotUsageTable({
                   cap={cap}
                   tone="neutral"
                   note={behind === null ? null : `${formatSlotNumber(behind)} behind pace`}
+                  delta={tonightNote?.(slot) ?? null}
                 />
                 <ValueCell
                   value={projection?.estimatedRounded ?? null}

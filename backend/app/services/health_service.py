@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from app.services import estimator_scheduler, injury_service, model_nightly_scheduler
 from app.services.cache_manager import CacheManager
+from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.estimator_service import EstimatorService
 from app.services.model_nightly_service import ModelNightlyService
@@ -85,6 +86,13 @@ async def _collect_estimator() -> dict:
     return {"ok": True, "as_of_date": str(cache_date) if cache_date else None}
 
 
+async def _collect_live() -> dict:
+    """Live overlay: flag, current overlay, guard G1 and the last morning
+    reconciliation (guard G2). Reported with the flag off too: that is how
+    the shadow run is checked in production."""
+    return DataProvider().live_health()
+
+
 async def _collect_schedulers() -> dict:
     return {
         "ok": True,
@@ -110,5 +118,6 @@ async def collect(verbose: bool) -> dict:
     base["nightly"] = await _safe("nightly", _collect_nightly)
     base["estimator"] = await _safe("estimator", _collect_estimator)
     base["schedulers"] = await _safe("schedulers", _collect_schedulers)
+    base["live"] = await _safe("live", _collect_live)
     base["slow_requests_1h"] = slow_requests_last_hour()
     return base

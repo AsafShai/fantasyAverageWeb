@@ -84,13 +84,13 @@ function requestUrl(input: RequestInfo | URL): string {
   return (input as Request).url;
 }
 
-function stubApi(hub: TodayHub) {
+function stubApi(hub: TodayHub, liveBlock?: object) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input);
       if (url.includes('/league/today')) return jsonResponse(hub);
-      if (url.includes('/league/summary')) return jsonResponse(summary);
+      if (url.includes('/league/summary')) return jsonResponse(liveBlock ? { ...summary, live: liveBlock } : summary);
       if (url.includes('/rankings')) return jsonResponse(rankings);
       return new Response('not found', { status: 404 });
     }),
@@ -290,5 +290,20 @@ describe('index route', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument());
     expect(screen.getByText('Rank movers')).toBeInTheDocument();
+  });
+
+  it('shows the LIVE badge from the summary in place of the ESPN note, and says league averages count finished games', async () => {
+    stubApi(fullHub, { active: true, period: 24, as_of: '2026-11-13T01:42:00Z', games_total: 4, games_live: 2, games_final: 1, official_updated_at: null });
+    renderWithProviders(<Today />);
+    expect(await screen.findByRole('button', { name: /LIVE/ })).toHaveTextContent('2 of 4 games in progress');
+    expect(screen.getByText(/incl\. tonight’s finished games/)).toBeInTheDocument();
+  });
+
+  it('has no badge and the old league averages subtitle without a live block', async () => {
+    stubApi(fullHub);
+    renderWithProviders(<Today />);
+    await waitFor(() => expect(screen.getByText('League averages')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /LIVE|FINAL/ })).toBeNull();
+    expect(screen.getByText('per team, season to date')).toBeInTheDocument();
   });
 });
