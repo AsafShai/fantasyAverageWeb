@@ -1,6 +1,6 @@
 """The ``live`` block live-capable responses carry (plans/live_data_updates_design.md,
 "Response contract addition")."""
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel, model_serializer
@@ -9,6 +9,7 @@ from pydantic import BaseModel, model_serializer
 class LiveBlock(BaseModel):
     active: bool
     period: Optional[int] = None
+    slate_date: Optional[date] = None
     as_of: Optional[datetime] = None
     games_total: int = 0
     games_live: int = 0

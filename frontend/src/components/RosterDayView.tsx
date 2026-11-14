@@ -129,7 +129,7 @@ function rosterFilterBtnClass(active: boolean) {
   ].join(' ')
 }
 
-/** Past days only — All vs Played only (same pill pattern as Per Game / Totals). */
+/** Past days, and today once games are counted live — All vs Played only (same pill pattern as Per Game / Totals). */
 export function RosterDayOnlyPlayedToggle({
   checked,
   onChange,
@@ -572,7 +572,7 @@ export function RosterDayContent({
   loading: boolean
   /** Today's matchups by player name, for the injury badge (today only). */
   matchups?: Map<string, PlayerMatchup>
-  /** Past days: hide players who did not play (status !== played). */
+  /** Hide players who did not play: past days, and today once games are counted live. */
   onlyPlayed?: boolean
   /** Box Scores' No spoilers: no results, scores or live lines; today shows opponents only. */
   noSpoilers?: boolean
@@ -584,7 +584,7 @@ export function RosterDayContent({
   const players = useMemo(() => {
     if (!day) return []
     const sorted = [...day.players].sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot))
-    if (!onlyPlayed || day.is_today) return sorted
+    if (!onlyPlayed) return sorted
     return sorted.filter(rosterDayPlayerPlayed)
   }, [day, onlyPlayed])
   const totals = useMemo(() => starterTotals(players), [players])

@@ -12,15 +12,18 @@ const AS_OF = '2026-10-19T08:42:00Z'
 
 const MOMENTS: Record<string, Live> = {
   'before tip-off': { active: false, period: 24, as_of: null, games_total: 4, games_live: 0, games_final: 0, official_updated_at: OFFICIAL_AT },
-  'games live': { active: true, period: 24, as_of: AS_OF, games_total: 4, games_live: 2, games_final: 1, official_updated_at: OFFICIAL_AT },
-  'all final, ESPN pending': { active: true, period: 24, as_of: AS_OF, games_total: 4, games_live: 0, games_final: 4, official_updated_at: OFFICIAL_AT },
+  'games live': { active: true, period: 24, slate_date: '2026-10-18', as_of: AS_OF, games_total: 4, games_live: 2, games_final: 1, official_updated_at: OFFICIAL_AT },
+  'all final, ESPN pending': { active: true, period: 24, slate_date: '2026-10-18', as_of: AS_OF, games_total: 4, games_live: 0, games_final: 4, official_updated_at: OFFICIAL_AT },
   'ESPN official': { active: false, period: 25, as_of: null, games_total: 0, games_live: 0, games_final: 0, official_updated_at: '2026-10-19T14:15:00Z' },
 }
 const NO_LIVE_BLOCK = 'flag off (no live block)'
 
-const side = (a: string) => ({ team_id: a, name: a, short_name: a, abbreviation: a, logo: '', color: '', record: '', score: null, winner: false })
-const game = (id: string, away: string, home: string, status: string, detail: string) =>
-  ({ game_id: id, status, status_detail: detail, start_time: '2026-10-19T07:00:00Z', broadcast: '', venue: '', away: side(away), home: side(home) })
+const side = (a: string, score: number | null) => ({ team_id: a, name: a, short_name: a, abbreviation: a, logo: '', color: '', record: '', score, winner: false })
+const game = (id: string, away: string, home: string, status: string, detail: string) => {
+  const scored = status !== 'scheduled'
+  return { game_id: id, status, status_detail: detail, start_time: '2026-10-19T07:00:00Z', broadcast: '', venue: '',
+    away: side(away, scored ? 98 + Number(id) : null), home: side(home, scored ? 104 + Number(id) : null) }
+}
 const SCOREBOARD = (live: Live) => ({
   date: '2026-10-21',
   games: live?.games_live === 0
@@ -88,6 +91,30 @@ for (const pg of PAGES) {
     })
   }
 }
+
+test('the games sheet: the night being counted, scores, box score links and a remembered No spoilers', async ({ page }) => {
+  await withLive(page, MOMENTS['all final, ESPN pending'])
+  const boards: string[] = []
+  page.on('request', (r) => { if (r.url().includes('/nba/scoreboard')) boards.push(r.url()) })
+  await page.goto(`/rankings${isMobile(page) ? '?ff=mobile' : ''}`)
+  await page.getByRole('button', { name: /^FINAL/ }).click()
+  // The morning after: the night ESPN has not made official yet, not the next slate.
+  const tor = page.getByRole('link', { name: /TOR @ PHI/ })
+  await expect(tor).toBeVisible()
+  expect(boards.some((u) => u.includes('date=2026-10-18'))).toBe(true)
+  await expect(tor).toContainText('98–104')
+  await expect(tor).toHaveAttribute('href', '/box-scores?date=2026-10-18&game=0')
+  await shot(page, 'games-sheet-scores')
+
+  await page.getByRole(isMobile(page) ? 'radio' : 'button', { name: /No spoilers/ }).locator('visible=true').first().click()
+  await expect(tor).not.toContainText('98–104')
+  await expect(tor).toContainText('Final')
+  await shot(page, 'games-sheet-no-spoilers')
+  expect(await page.evaluate(() => localStorage.getItem('fw:boxScores.noSpoilers'))).toBe('true')
+
+  await tor.click()
+  await expect(page).toHaveURL(/\/box-scores\?date=2026-10-18&game=0/)
+})
 
 test('Rankings explains what averages and totals count while live (desktop header, phone sheet)', async ({ page }) => {
   await withLive(page, MOMENTS['games live'])

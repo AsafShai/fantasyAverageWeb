@@ -8,7 +8,7 @@ import { SCHEDULE_HORIZONS, type ScheduleHorizon } from '../../components/Player
 import { getErrorMessage } from '../../utils/errorMessage'
 import { addDays } from '../../utils/slateWindow'
 import { RosterDayOnlyPlayedToggle } from '../../components/RosterDayView'
-import { dayLabel, gameLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayNote, rosterDayPlayerPlayed, startersDayLabel, starterTotals } from '../../utils/rosterDay'
+import { dayLabel, gameLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayCanFilterPlayed, rosterDayNote, rosterDayPlayerPlayed, startersDayLabel, starterTotals } from '../../utils/rosterDay'
 import { BottomSheet, Button, Card, Chip, ChipRow, InjuryMark, Segmented, SlotPill, useSheetHistory } from '../ui'
 import type { MobileTeamDetailProps } from './types'
 
@@ -108,7 +108,10 @@ function DailyRoster(p: MobileTeamDetailProps) {
   const { rosterDay: day, rosterDayFetching: fetching, rosterDayError: error } = p
   const [lit, setLit] = useState<{ date: string; id: number } | null>(null)
   const matchupSheet = useMatchupSheet()
-  const onlyPlayed = Boolean(day && !day.is_today && p.rosterDayOnlyPlayed)
+  // No spoilers only matters for today: a past day always shows its results.
+  const noSpoilers = p.noSpoilers && (day ? day.is_today : p.rosterDayDate >= p.rosterDayLast)
+  const canFilterPlayed = Boolean(day && rosterDayCanFilterPlayed(day, noSpoilers))
+  const onlyPlayed = canFilterPlayed && p.rosterDayOnlyPlayed
   const players = useMemo(() => {
     if (!day) return []
     const sorted = [...day.players].sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot))
@@ -118,14 +121,13 @@ function DailyRoster(p: MobileTeamDetailProps) {
   const benchPlayers = useMemo(() => players.filter((x) => isBench(x.lineup_slot)), [players])
   const totals = useMemo(() => starterTotals(players), [players])
   // Today nobody has played yet: count the starters who have a game instead.
-  const starterGames = day?.is_today && !liveRosterMoment(day, p.noSpoilers) ? players.filter((x) => !isBench(x.lineup_slot) && !!x.opponent).length : totals.games
+  const starterGames = day?.is_today && !liveRosterMoment(day, noSpoilers) ? players.filter((x) => !isBench(x.lineup_slot) && !!x.opponent).length : totals.games
   const date = p.rosterDayDate
   const first = day?.first_date
   const atStart = !!first && date <= first
   const atToday = date >= p.rosterDayLast
   const litId = day && lit?.date === day.date ? lit.id : null
   const pick = (id: number) => day && setLit((prev) => (prev?.id === id && prev.date === day.date ? null : { date: day.date, id }))
-  const noSpoilers = p.noSpoilers
   const note = day && !fetching ? rosterDayNote(day, undefined, noSpoilers) : fetching ? 'Loading this day…' : ''
 
   const stepper = (
@@ -243,13 +245,15 @@ function DailyRoster(p: MobileTeamDetailProps) {
   return (
     <>
       {stepper}
-      <Segmented
-        label="Spoiler visibility"
-        options={[{ value: 'full', label: 'Full box' }, { value: 'hide', label: '🚫 No spoilers' }]}
-        value={noSpoilers ? 'hide' : 'full'}
-        onChange={(v) => p.onNoSpoilers(v === 'hide')}
-      />
-      {!day.is_today && (
+      {day.is_today && (
+        <Segmented
+          label="Spoiler visibility"
+          options={[{ value: 'full', label: 'Full box' }, { value: 'hide', label: '🚫 No spoilers' }]}
+          value={noSpoilers ? 'hide' : 'full'}
+          onChange={(v) => p.onNoSpoilers(v === 'hide')}
+        />
+      )}
+      {canFilterPlayed && (
         <div className="mr-tm-daily-filter">
           <RosterDayOnlyPlayedToggle compact checked={p.rosterDayOnlyPlayed} onChange={p.onRosterDayOnlyPlayed} />
         </div>

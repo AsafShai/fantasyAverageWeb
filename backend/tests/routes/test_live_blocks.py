@@ -3,10 +3,11 @@
 DataProvider is the conftest mock; ``live_state`` stands in for what the real
 ``get_live_state`` returns: None while LIVE_STANDINGS_ENABLED is off, a
 LiveState once it is on."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app.config import settings
 from app.services.live_overlay_service import LiveState
 
 AS_OF = datetime(2026, 11, 13, 1, 30, tzinfo=timezone.utc)
@@ -54,6 +55,7 @@ def test_live_block_matches_the_contract(test_client, provider, url):
     assert response.json()["live"] == {
         "active": True,
         "period": 24,
+        "slate_date": (settings.season_start + timedelta(days=23)).isoformat(),
         "as_of": AS_OF.isoformat().replace("+00:00", "Z"),
         "games_total": 4,
         "games_live": 2,

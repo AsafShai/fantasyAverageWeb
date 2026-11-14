@@ -1,5 +1,7 @@
 import { useId, useState } from 'react'
+import { Link } from 'react-router'
 import EspnUpdatedNote from '../EspnUpdatedNote'
+import NoSpoilersSwitch from '../boxScores/NoSpoilersSwitch'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useTonightGames } from '../../hooks/useTonightGames'
 import { formatEspnUpdated } from '../../utils/espnUpdated'
@@ -25,9 +27,10 @@ interface LiveBadgeProps {
 const LiveBadge = ({ live, espnUpdatedAt, align = 'right', liveDetail, className = '' }: LiveBadgeProps) => {
   const moment = liveMoment(live)
   const [open, setOpen] = useState(false)
-  const [noSpoilers] = usePersistedState('boxScores.noSpoilers', false)
+  // Shared with Box Scores and the Daily roster, so the choice is remembered.
+  const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
   const panelId = useId()
-  const { games, isLoading } = useTonightGames(open && moment !== null, noSpoilers)
+  const { games, isLoading } = useTonightGames(open && moment !== null, noSpoilers, live?.slate_date)
 
   if (!live || !moment) return <EspnUpdatedNote updatedAt={espnUpdatedAt} className={className} />
 
@@ -62,12 +65,22 @@ const LiveBadge = ({ live, espnUpdatedAt, align = 'right', liveDetail, className
           className={`absolute top-8 z-20 flex w-72 flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3.5 text-left text-gray-900 shadow-xl dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tonight's games</div>
+          <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />
           {isLoading && <div className="text-xs text-gray-500 dark:text-gray-400">Loading…</div>}
           {games.map(g => (
-            <div key={g.id} className="flex justify-between text-sm">
+            <Link
+              key={g.id}
+              to={g.href}
+              onClick={() => setOpen(false)}
+              className="-mx-1.5 flex items-center justify-between gap-2 rounded px-1.5 py-0.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
               <span className="font-medium">{g.name}</span>
-              <span className={g.status === 'live' ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}>{g.label}</span>
-            </div>
+              <span className="flex items-center gap-1.5">
+                {g.score && <span className="font-semibold tabular-nums">{g.score}</span>}
+                <span className={g.status === 'live' ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}>{g.label}</span>
+                <span aria-hidden="true" className="text-gray-400">›</span>
+              </span>
+            </Link>
           ))}
           <div className="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
             {official ? `ESPN official standings: ${official}. ` : ''}Tonight is added on top until ESPN updates.

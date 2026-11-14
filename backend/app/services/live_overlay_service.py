@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Mapping, Optional
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from app.config import settings
 from app.services import live_overlay as lo
 from app.services.live_overlay import GuardResult, LiveOverlay
 
@@ -54,10 +55,20 @@ class LiveState:
     official_updated_at: Optional[datetime]
     reason: str = ""
 
+    @property
+    def slate_date(self) -> Optional[date]:
+        """The US (Eastern) day of ``period``'s games: the day the live badge's
+        games sheet shows, kept until ESPN makes the night official."""
+        if self.period is None or settings.season_start is None:
+            return None
+        return settings.season_start + timedelta(days=self.period - 1)
+
     def to_dict(self) -> dict:
+        slate = self.slate_date
         return {
             'active': self.active,
             'period': self.period,
+            'slate_date': slate.isoformat() if slate else None,
             'as_of': self.as_of.isoformat() if self.as_of else None,
             'games_total': self.games_total,
             'games_live': self.games_live,

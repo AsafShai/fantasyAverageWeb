@@ -226,6 +226,33 @@ test('the Daily spoiler toggle: same setting as Box Scores, opponents only when 
   await expectNoHorizontalScroll(page)
 })
 
+test('the morning after: Played only on tonight\'s roster once its games are counted', async ({ page }) => {
+  await atMoment(page, 'all final, ESPN pending')
+  const mobile = isMobile(page)
+  await page.goto(`/team/1?mode=daily${mobile ? '&ff=mobile&tab=roster' : ''}`)
+  await expect(row(page, 'Ausar Thompson')).toContainText('W 112–104')
+  await expect(row(page, 'Kawhi Leonard')).toBeVisible()
+  await page.getByRole('button', { name: 'Played only' }).locator('visible=true').first().click()
+  await expect(row(page, 'Ausar Thompson')).toBeVisible()
+  await expect(page.getByTestId('roster-day-row').filter({ hasText: 'Kawhi Leonard' }).locator('visible=true')).toHaveCount(0)
+  await expect(page.getByTestId('roster-day-row').filter({ hasText: 'Ryan Rollins' }).locator('visible=true')).toHaveCount(0)
+  await toTop(page, 'roster-day-note')
+  await shot(page, 'team-roster-played-only-tonight')
+  await expectNoHorizontalScroll(page)
+})
+
+test('a past day has no spoiler toggle and always shows its results', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('fw:boxScores.noSpoilers', 'true'))
+  await atMoment(page, 'ESPN official')
+  const mobile = isMobile(page)
+  await page.goto(`/team/1?mode=daily&day=2026-10-19${mobile ? '&ff=mobile&tab=roster' : ''}`)
+  await expect(row(page, 'Ausar Thompson')).toContainText('W 112–104')
+  await expect(page.getByRole(mobile ? 'radio' : 'button', { name: /No spoilers/ }).locator('visible=true')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Played only' }).locator('visible=true').first()).toBeVisible()
+  await toTop(page, 'roster-day-note')
+  await shot(page, 'team-roster-past-day')
+})
+
 test('the Daily roster polls every 60 s while games are live', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-19T22:00:00-04:00') })
   let hits = 0

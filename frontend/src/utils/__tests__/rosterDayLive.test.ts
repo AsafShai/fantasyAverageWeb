@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveBlock, RosterDay, RosterDayGame, RosterDayPlayer } from '../../types/api'
-import { gameLabel, liveRosterMoment, rosterDayNote, startersPlayingNow, starterTotals } from '../rosterDay'
+import { gameLabel, liveRosterMoment, rosterDayCanFilterPlayed, rosterDayNote, rosterDayPlayerPlayed, startersPlayingNow, starterTotals } from '../rosterDay'
 
 const stats = (pts: number, minutes = 20) => ({
   minutes, fgm: 3, fga: 8, ftm: 1, fta: 2, three_pm: 0, reb: 5, ast: 3, stl: 2, blk: 1, pts, to: 1,
@@ -26,6 +26,22 @@ describe('live roster day', () => {
     expect(liveRosterMoment(day({}))).toBeNull()
     expect(liveRosterMoment(day({ live: { ...LIVE, active: false } }))).toBeNull()
     expect(liveRosterMoment(day({ live: LIVE, is_today: false }))).toBeNull()
+  })
+
+  it('offers Played only on past days and on today once its games are counted', () => {
+    expect(rosterDayCanFilterPlayed(day({ is_today: false }))).toBe(true)
+    expect(rosterDayCanFilterPlayed(day({}))).toBe(false)
+    expect(rosterDayCanFilterPlayed(day({ live: LIVE }))).toBe(true)
+    expect(rosterDayCanFilterPlayed(day({ live: FINAL }))).toBe(true)
+    expect(rosterDayCanFilterPlayed(day({ live: LIVE }), true)).toBe(false)
+  })
+
+  it('counts a player in a game still on as played once he checked in', () => {
+    expect(rosterDayPlayerPlayed(player({ status: 'played' }))).toBe(true)
+    expect(rosterDayPlayerPlayed(player({ status: 'live' }))).toBe(true)
+    expect(rosterDayPlayerPlayed(player({ status: 'live', stats: stats(0, 0) }))).toBe(false)
+    expect(rosterDayPlayerPlayed(player({ status: 'dnp', stats: null }))).toBe(false)
+    expect(rosterDayPlayerPlayed(player({ status: 'scheduled', stats: null }))).toBe(false)
   })
 
   it('counts starters on court, not bench or players yet to check in', () => {

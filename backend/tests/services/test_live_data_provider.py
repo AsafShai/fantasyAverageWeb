@@ -2,6 +2,7 @@
 hand-over and the two-layer rule (live numbers never reach the DB)."""
 import copy
 import json
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -271,8 +272,10 @@ async def test_live_state_counts_games(provider, flag_on):
     state = await provider.get_live_state(include_finals=True)
     assert (state.games_total, state.games_live, state.games_final) == (4, 3, 1)
     body = state.to_dict()
-    assert set(body) == {"active", "period", "as_of", "games_total", "games_live", "games_final",
+    assert set(body) == {"active", "period", "slate_date", "as_of", "games_total", "games_live", "games_final",
                          "official_updated_at"}
+    # The badge's games sheet shows this day's games until ESPN goes official.
+    assert body["slate_date"] == (settings.season_start + timedelta(days=23)).isoformat()
     assert body["official_updated_at"].startswith("2026-11-12T08:15:58")
 
 
