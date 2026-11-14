@@ -206,7 +206,7 @@ export const TradeVersusComparison = ({
       <div className={`tc-versus__teams${proLayout ? ' tc-versus__teams--duo' : ''}`}>
         <TeamGetsCard
           teamName={nameA}
-          getsLabel="gets"
+          getsLabel={isTeam ? 'gets' : 'drops'}
           players={getsA}
           playerValue={playerValue}
           pro={proLayout}
@@ -217,9 +217,10 @@ export const TradeVersusComparison = ({
             <MatchScore left={getsA.length} right={getsB.length} />
           </div>
         )}
+        {/* Free-agent mode: both cards are your team's move (drop / add). */}
         <TeamGetsCard
-          teamName={nameB}
-          getsLabel="gets"
+          teamName={isTeam ? nameB : nameA}
+          getsLabel={isTeam ? 'gets' : 'adds'}
           players={getsB}
           playerValue={playerValue}
           pro={proLayout}

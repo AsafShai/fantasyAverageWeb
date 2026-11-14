@@ -306,7 +306,8 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   const scoringColumns = visibleColumns.filter(c => scoringCategoryForColumn(c));
   const neutralColumns = visibleColumns.filter(c => isNeutralColumn(c.key));
 
-  if (playersA.length === 0 && playersB.length === 0) {
+  // Nothing to compare until both sides have someone.
+  if (playersA.length === 0 || playersB.length === 0) {
     const emptyMessage = tradeMode === 'freeAgent'
       ? 'Select players from your team and free agents to see comparison'
       : 'Select players from both teams to see trade analysis';
@@ -458,8 +459,8 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
       { heading: `${teamBName} gets`, players: sharePlayers(playersA) },
     ]
     : [
-      { heading: 'Drop', players: sharePlayers(playersA) },
-      { heading: 'Add', players: sharePlayers(playersB) },
+      { heading: `${teamAName} drops`, players: sharePlayers(playersA) },
+      { heading: `${teamAName} adds`, players: sharePlayers(playersB) },
     ];
   const mySide = !isTeamTrade || myTeamId === null ? null
     : teamA?.team_id === myTeamId ? 0 : teamB?.team_id === myTeamId ? 1 : null;

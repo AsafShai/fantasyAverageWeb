@@ -13,9 +13,15 @@ export interface TradeSharePlayer {
 }
 
 export interface TradeShareSide {
-  /** Column/box heading, e.g. "Brick City gets" or "Add". */
+  /** Card heading: team name then its move, e.g. "Brick City gets" or "Brick City drops". */
   heading: string
   players: TradeSharePlayer[]
+}
+
+/** "Brick City gets" → name "Brick City", move "gets" (also drops / adds). */
+const splitHeading = (heading: string) => {
+  const m = heading.match(/^(.*) (gets|drops|adds)$/i)
+  return m ? { name: m[1], move: m[2] } : { name: heading, move: '' }
 }
 
 const signedZ = (z: number) => `${z >= 0 ? '+' : ''}${z.toFixed(2)}`
@@ -59,8 +65,10 @@ export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sid
             >
               <div className="tc-team-card__head">
                 <div>
-                  <div className="tc-team-card__name">{side.heading.replace(/ gets$/i, '')}</div>
-                  <div className="tc-team-card__gets">gets</div>
+                  <div className="tc-team-card__name">{splitHeading(side.heading).name}</div>
+                  {splitHeading(side.heading).move && (
+                    <div className="tc-team-card__gets">{splitHeading(side.heading).move}</div>
+                  )}
                 </div>
               </div>
               <ul className="tc-player-list">
