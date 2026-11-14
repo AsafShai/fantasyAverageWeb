@@ -4,19 +4,24 @@ import type { TradeMode } from '../../../hooks/useTradeState';
 import {
   aggregatePlayerStats,
   aggregatePlayerAverages,
-  aggregateExtraAverages,
-  aggregateExtraTotals,
   extraCountingCategories,
-  formatStatValue,
-  KNOWN_REVERSE_CATEGORIES,
 } from '../utils/tradeCalculations';
-import { STAT_KEYS } from '../constants';
 import { useMyTeam } from '../../../context/MyTeamContext';
+import { useIsDarkTheme } from '../../../hooks/useIsDarkTheme';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
 import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
 import { formatAsOf } from '../../../components/share/shareCardFormat';
-import { averageZ, type PlayerValueLookup } from '../utils/playerValues';
-import { SHARE_CATEGORIES, tradeShareRows } from '../utils/tradeShare';
+import type { PlayerValueLookup, TradeRankingContext } from '../utils/playerValues';
+import { tradeShareRows } from '../utils/tradeShare';
+import { CATEGORY_Z_NOTE, EVEN_Z_GAP } from '../utils/tradeCategoryZ';
+import type { AggregatedStats } from '../utils/tradeCalculations';
+import {
+  categoryOnlyColumns,
+  columnFromKey,
+  type DisplayColumn,
+} from './tradeComparisonColumns';
+import { TradeVersusComparison } from './TradeVersusComparison';
+import '../trade-comparison.css';
 
 interface TradeSummaryPanelProps {
   teamA: Team | null;
@@ -29,93 +34,48 @@ interface TradeSummaryPanelProps {
   periodLabel?: string;
   /** Rank and z-score of each player, shown on the share card and averaged per side in the table. */
   playerValue?: PlayerValueLookup;
+  tradeRanking?: TradeRankingContext;
+  /** When set, totals / per-game pills render in the comparison toolbar. */
+  onViewModeChange?: (mode: 'totals' | 'averages') => void;
 }
 
-interface StatValueProps {
-  value: number;
-  comparedTo: number;
-  isPercentage?: boolean;
-  viewMode: 'totals' | 'averages';
-  field: string;
-  /** Reverse-scored category (e.g. TO): the lower side is the better one. */
-  lowerIsBetter?: boolean;
-}
+const NeutralStat: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span className="tc-detail-stat">{children}</span>
+);
 
-interface Column {
-  key: string;
-  label: string;
-  icon: string;
-  /** Set for a league category beyond the fixed stat fields. */
-  extraCategory?: string;
-}
-
-const EXTRA_COLUMN_PREFIX = 'extra:';
-
-const STAT_HEADERS = [
-  { label: 'MIN', icon: '⏰' },
-  { label: 'FGM', icon: '🎯' },
-  { label: 'FGA', icon: '🏹' },
-  { label: 'FG%', icon: '📈' },
-  { label: 'FTM', icon: '🆓' },
-  { label: 'FTA', icon: '🎯' },
-  { label: 'FT%', icon: '📊' },
-  { label: '3PM', icon: '🎯' },
-  { label: 'REB', icon: '🏀' },
-  { label: 'AST', icon: '🤝' },
-  { label: 'STL', icon: '🥷' },
-  { label: 'BLK', icon: '🛡️' },
-  { label: 'PTS', icon: '🏀' },
-  { label: 'GP', icon: '📅' }
-] as const;
-
-
-
-const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage = false, viewMode, field, lowerIsBetter = false }) => {
-  const getValueStyles = () => {
-    if (value === comparedTo) {
-      return { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' };
-    }
-
-    return (lowerIsBetter ? value < comparedTo : value > comparedTo)
-      ? { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' }
-      : { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
-  };
-
-  const styles = getValueStyles();
-  const displayValue = (field === 'gp' || field === 'minutes')
-    ? (viewMode === 'averages' && field === 'minutes' ? value.toFixed(1) : Math.round(value).toString())
-    : formatStatValue(value, isPercentage, viewMode, false);
-
-  return (
-    <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px]`}>
-      <span className={`font-bold ${styles.text} text-xs leading-tight`}>
-        {displayValue}
-      </span>
-      <span className={`${styles.text} text-[10px]`}>{styles.indicator}</span>
+const TradeDetailGrid: React.FC<{
+  neutralColumns: DisplayColumn[];
+  teamAName: string;
+  teamBName: string;
+  rowA: React.ReactNode[];
+  rowB: React.ReactNode[];
+}> = ({ neutralColumns, teamAName, teamBName, rowA, rowB }) => (
+  <div className="tc-detail-grid">
+    <div
+      className="tc-detail-grid__grid"
+      style={{ gridTemplateColumns: `minmax(6.5rem, 1.15fr) repeat(${neutralColumns.length}, minmax(3.25rem, 1fr))` }}
+    >
+      <div className="tc-detail-grid__head tc-detail-grid__head--left">Team</div>
+      {neutralColumns.map(({ key, label, icon }) => (
+        <div key={key} className="tc-detail-grid__head">
+          <span aria-hidden>{icon}</span>
+          <div>{label}</div>
+        </div>
+      ))}
+      <div className="tc-detail-grid__cell tc-detail-grid__team" title={teamAName}>{teamAName}</div>
+      {rowA.map((cell, i) => (
+        <div key={neutralColumns[i]?.key ?? i} className="tc-detail-grid__cell">{cell}</div>
+      ))}
+      <div className="tc-detail-grid__cell tc-detail-grid__team" title={teamBName}>{teamBName}</div>
+      {rowB.map((cell, i) => (
+        <div key={neutralColumns[i]?.key ?? `b-${i}`} className="tc-detail-grid__cell">{cell}</div>
+      ))}
     </div>
-  );
-};
-
-const ZValue: React.FC<{ value: number | null; comparedTo: number | null }> = ({ value, comparedTo }) => {
-  if (value === null) {
-    return <div className="bg-gray-100 rounded p-1 text-center flex items-center justify-center min-h-[44px] text-xs text-gray-500">—</div>;
-  }
-  const styles = comparedTo === null || value === comparedTo
-    ? { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' }
-    : value > comparedTo
-      ? { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' }
-      : { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
-  return (
-    <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px] ring-1 ring-inset ring-indigo-200`}>
-      <span className={`font-bold ${styles.text} text-xs leading-tight`}>
-        {value > 0 ? '+' : ''}{value.toFixed(2)}
-      </span>
-      <span className={`${styles.text} text-[10px]`}>{styles.indicator}</span>
-    </div>
-  );
-};
+  </div>
+);
 
 export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
+  onViewModeChange,
   teamA,
   teamB,
   playersA,
@@ -124,70 +84,24 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   tradeMode,
   periodLabel = 'Season',
   playerValue,
+  tradeRanking,
 }) => {
   const { myTeamId } = useMyTeam();
-  const [shownColumns, setShownColumns] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    STAT_KEYS.forEach(key => {
-      initial[key] = true;
-    });
-    return initial;
-  });
+  const dark = useIsDarkTheme();
+  // The comparison is the scoring categories (FG%/FT% with made-attempted).
+  // Minutes and games aren't scored; they're one tap away for context.
+  const [contextShown, setContextShown] = useState(false);
 
-  const [isColumnControlsOpen, setIsColumnControlsOpen] = useState(false);
-
-  // League categories beyond the fixed fields (e.g. TO) get their own columns,
-  // placed before GP. None for a league on the standard 8 categories.
+  // League categories beyond the fixed fields (e.g. TO) get their own rows.
+  // None for a league on the standard 8 categories.
   const extraCategories = extraCountingCategories([...playersA, ...playersB]);
-  const fixedColumns: Column[] = STAT_KEYS.map((key, index) => ({ key, ...STAT_HEADERS[index] }));
-  const extraColumns: Column[] = extraCategories.map(category => ({
-    key: `${EXTRA_COLUMN_PREFIX}${category}`, label: category, icon: '➕', extraCategory: category,
-  }));
-  const columns = [...fixedColumns.slice(0, -1), ...extraColumns, fixedColumns[fixedColumns.length - 1]];
-  const isShown = (key: string) => shownColumns[key] ?? true;
+  const scoringColumns = categoryOnlyColumns(extraCategories);
+  const neutralColumns = contextShown
+    ? ['minutes', 'gp'].map(columnFromKey).filter((c): c is DisplayColumn => c != null)
+    : [];
 
-  const toggleColumn = (key: string) => {
-    setShownColumns(prev => ({
-      ...prev,
-      [key]: !(prev[key] ?? true)
-    }));
-  };
-
-  const showAllColumns = () => {
-    const allShown: Record<string, boolean> = {};
-    columns.forEach(({ key }) => {
-      allShown[key] = true;
-    });
-    setShownColumns(allShown);
-  };
-
-  const hideAllColumns = () => {
-    const allHidden: Record<string, boolean> = {};
-    columns.forEach(({ key }) => {
-      allHidden[key] = false;
-    });
-    setShownColumns(allHidden);
-  };
-
-  // Shortcut to just the scoring categories (the fixed 8 plus any extra
-  // league category); clicking again brings back the columns shown before.
-  const categoryKeys = new Set<string>([...SHARE_CATEGORIES.map(c => c.field), ...extraColumns.map(c => c.key)]);
-  const categoriesOnly = columns.every(({ key }) => isShown(key) === categoryKeys.has(key));
-  const [beforeCategoriesOnly, setBeforeCategoriesOnly] = useState<Record<string, boolean> | null>(null);
-  const toggleCategoriesOnly = () => {
-    if (categoriesOnly) {
-      if (beforeCategoriesOnly) setShownColumns(beforeCategoriesOnly);
-      else showAllColumns();
-      setBeforeCategoriesOnly(null);
-      return;
-    }
-    setBeforeCategoriesOnly(shownColumns);
-    setShownColumns(Object.fromEntries(columns.map(({ key }) => [key, categoryKeys.has(key)])));
-  };
-
-  const visibleColumns = columns.filter(({ key }) => isShown(key));
-
-  if (playersA.length === 0 && playersB.length === 0) {
+  // Nothing to compare until both sides have someone.
+  if (playersA.length === 0 || playersB.length === 0) {
     const emptyMessage = tradeMode === 'freeAgent'
       ? 'Select players from your team and free agents to see comparison'
       : 'Select players from both teams to see trade analysis';
@@ -203,196 +117,146 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
     );
   }
 
-  const displayStatsA = viewMode === 'averages'
-    ? aggregatePlayerAverages(playersA)
-    : aggregatePlayerStats(playersA);
-  const displayStatsB = viewMode === 'averages'
-    ? aggregatePlayerAverages(playersB)
-    : aggregatePlayerStats(playersB);
-  const aggregateExtras = viewMode === 'averages' ? aggregateExtraAverages : aggregateExtraTotals;
-  const extraStatsA = aggregateExtras(playersA, extraCategories);
-  const extraStatsB = aggregateExtras(playersB, extraCategories);
+  const isTeamTrade = tradeMode === 'team';
+  const getsA = isTeamTrade ? playersB : playersA;
+  const getsB = isTeamTrade ? playersA : playersB;
+  const aggDisplay = viewMode === 'averages' ? aggregatePlayerAverages : aggregatePlayerStats;
+  const displayGetsA = aggDisplay(getsA);
+  const displayGetsB = aggDisplay(getsB);
 
-  const showZ = playerValue !== undefined;
-  const zA = averageZ(playersA, playerValue);
-  const zB = averageZ(playersB, playerValue);
-
-  const valueOf = (column: Column, fixed: typeof displayStatsA, extras: Record<string, number>) =>
-    column.extraCategory !== undefined
-      ? extras[column.extraCategory]
-      : fixed[column.key as keyof typeof fixed];
-
-  const renderRow = (
-    fixed: typeof displayStatsA, extras: Record<string, number>,
-    otherFixed: typeof displayStatsA, otherExtras: Record<string, number>,
-  ) => visibleColumns.map((column) => {
-    const isPercentage = column.key === 'fg_percentage' || column.key === 'ft_percentage';
-    return (
-      <StatValue
-        key={column.key}
-        value={valueOf(column, fixed, extras)}
-        comparedTo={valueOf(column, otherFixed, otherExtras)}
-        viewMode={viewMode}
-        isPercentage={isPercentage}
-        field={column.key}
-        lowerIsBetter={column.extraCategory !== undefined && KNOWN_REVERSE_CATEGORIES.has(column.extraCategory)}
-      />
-    );
-  });
+  // Minutes / games cells: context only, no winner.
+  const contextCell = (column: DisplayColumn, fixed: AggregatedStats) => {
+    const value = fixed[column.key as keyof AggregatedStats];
+    const text = viewMode === 'averages' && column.key === 'minutes' ? value.toFixed(1) : Math.round(value).toString();
+    return <NeutralStat key={column.key}><span className="font-bold">{text}</span></NeutralStat>;
+  };
+  const contextRow = (fixed: AggregatedStats) => neutralColumns.map(column => contextCell(column, fixed));
 
   // Share card: each column is what that team receives, so team A's column
   // holds the stats of the players team B sends, and vice versa.
-  const isTeamTrade = tradeMode === 'team';
   const teamAName = teamA?.team_name ?? 'Your team';
   const teamBName = teamB?.team_name ?? 'Team B';
   const shareRows = isTeamTrade
-    ? tradeShareRows(playersB, playersA, viewMode)
-    : tradeShareRows(playersA, playersB, viewMode);
-  const sharePlayers = (players: Player[]) => players.map(p => ({ name: p.player_name, value: playerValue?.(p) }));
+    ? tradeShareRows(playersB, playersA, viewMode, tradeRanking)
+    : tradeShareRows(playersA, playersB, viewMode, tradeRanking);
+  const sharePlayers = (players: Player[]) => players.map(p => ({
+    name: p.player_name,
+    playerId: p.player_id,
+    value: playerValue?.(p),
+  }));
   const shareSides: [TradeShareSide, TradeShareSide] = isTeamTrade
     ? [
       { heading: `${teamAName} gets`, players: sharePlayers(playersB) },
       { heading: `${teamBName} gets`, players: sharePlayers(playersA) },
     ]
     : [
-      { heading: 'Drop', players: sharePlayers(playersA) },
-      { heading: 'Add', players: sharePlayers(playersB) },
+      { heading: `${teamAName} drops`, players: sharePlayers(playersA) },
+      { heading: `${teamAName} adds`, players: sharePlayers(playersB) },
     ];
   const mySide = !isTeamTrade || myTeamId === null ? null
     : teamA?.team_id === myTeamId ? 0 : teamB?.team_id === myTeamId ? 1 : null;
   const shareTitle = isTeamTrade ? `${teamAName} ⇄ ${teamBName}` : `${teamAName} pickup check`;
 
-  const comparisonTitle = tradeMode === 'freeAgent'
-    ? '📊 Player Comparison: Your Team vs Free Agents'
-    : '📊 Trade Comparison';
+  const viewModeLabel = viewMode === 'averages' ? 'per game, averaged per player' : 'totals';
+  const hasValues = playerValue !== undefined;
+  const hasCategoryZ = Boolean(tradeRanking?.referencePool.length);
 
   return (
     <div className="space-y-6">
       {playersA.length > 0 && playersB.length > 0 && (
-        <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-          <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
-            <h2 className="text-2xl font-bold text-gray-900 text-center">
-              {comparisonTitle}
-            </h2>
-            <ShareCardButton
-              title={isTeamTrade ? 'Trade Analysis' : 'Pickup Check'}
-              highlightOption={mySide !== null}
-              renderCard={({ dark, highlightMyTeam }) => (
-                <TradeShareCard
-                  dark={dark}
-                  title={shareTitle}
-                  subtitle={`${periodLabel} · ${viewMode} · as of ${formatAsOf()}`}
-                  sides={shareSides}
-                  rows={shareRows}
-                  mode={viewMode}
-                  highlightSide={highlightMyTeam ? mySide : null}
-                />
-              )}
-            />
-          </div>
-
-          {/* Show/Hide Columns Control */}
-          <div className="mb-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => setIsColumnControlsOpen(!isColumnControlsOpen)}
-                className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                <span>{isColumnControlsOpen ? '▼' : '▶'}</span>
-                <span>Show/Hide Columns</span>
-              </button>
-              <button
-                type="button"
-                onClick={toggleCategoriesOnly}
-                aria-pressed={categoriesOnly}
-                title="Show only the scoring categories; click again for the columns you had before"
-                className={`px-3 py-1 text-xs font-semibold rounded-full border transition-colors ${
-                  categoriesOnly
-                    ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {categoryKeys.size} cats only
-              </button>
+        <div className={`tc-shell tc-shell--pro${dark ? '' : ' tc-shell--light'}`}>
+          <div className="tc-shell__head">
+            <div className="tc-shell__brand">
+              <span>🏀 Fantasy League</span>
+              <span>Trade Analyzer</span>
             </div>
-
-            {isColumnControlsOpen && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex gap-3 mb-3">
-                  <button
-                    onClick={showAllColumns}
-                    className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded transition-colors"
-                  >
-                    Show All
-                  </button>
-                  <button
-                    onClick={hideAllColumns}
-                    className="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded transition-colors"
-                  >
-                    Hide All
-                  </button>
+            <div className="tc-shell__head-row">
+              <div className="tc-shell__titles">
+                <div className="tc-shell__title">{shareTitle}</div>
+                <div className="tc-shell__subtitle">
+                  {periodLabel} · {viewModeLabel} · as of {formatAsOf()}
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {columns.map(({ key, label, icon }) => {
-                    return (
-                      <label
-                        key={key}
-                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isShown(key)}
-                          onChange={() => toggleColumn(key)}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span className="text-sm">
-                          {icon} {label}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+              </div>
+              <ShareCardButton
+                title={isTeamTrade ? 'Trade Analysis' : 'Pickup Check'}
+                highlightOption={mySide !== null}
+                renderCard={({ dark, highlightMyTeam }) => (
+                  <TradeShareCard
+                    dark={dark}
+                    title={shareTitle}
+                    subtitle={`${periodLabel} · ${viewModeLabel} · as of ${formatAsOf()}`}
+                    sides={shareSides}
+                    rows={shareRows}
+                    mode={viewMode}
+                    highlightSide={highlightMyTeam ? mySide : null}
+                  />
+                )}
+              />
+            </div>
+          </div>
+          <div className="tc-shell__body">
+          <div className="tc-toolbar">
+            {onViewModeChange && (
+              <div className="tc-toolbar__group" role="group" aria-label="Stat totals or per-game averages">
+                <button
+                  type="button"
+                  className="tc-pill-toggle"
+                  aria-pressed={viewMode === 'totals'}
+                  onClick={() => onViewModeChange('totals')}
+                >
+                  Totals
+                </button>
+                <button
+                  type="button"
+                  className="tc-pill-toggle"
+                  aria-pressed={viewMode === 'averages'}
+                  onClick={() => onViewModeChange('averages')}
+                >
+                  Per game
+                </button>
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => setContextShown(shown => !shown)}
+              aria-pressed={contextShown}
+              aria-label="Show minutes and games played"
+              className="tc-pill-toggle"
+              title="Show minutes and games played (not scored; for context)"
+            >
+              MIN &amp; GP
+            </button>
           </div>
-
-          <div className="w-full overflow-x-auto">
-            <div className="grid gap-1" style={{ gridTemplateColumns: `220px${showZ ? ' minmax(60px, 1fr)' : ''} repeat(${visibleColumns.length}, minmax(60px, 1fr))` }}>
-              {/* Header row */}
-              <div className="font-semibold text-gray-700 p-2 text-sm">Team</div>
-              {showZ && (
-                <div
-                  className="font-semibold text-indigo-700 p-2 text-center text-xs leading-tight"
-                  title="Average z-score of the players on this side (per game, all categories weighted equally, as in Player Rankings)"
-                >
-                  <div className="text-sm">⚖️</div>
-                  <div>Avg Z</div>
-                </div>
-              )}
-              {visibleColumns.map(({ key, label, icon }) => (
-                <div key={key} className="font-semibold text-gray-700 p-2 text-center text-xs leading-tight">
-                  <div className="text-sm">{icon}</div>
-                  <div>{label}</div>
-                </div>
-              ))}
-
-              <div className="bg-blue-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}>
-                  {teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
-                </span>
-              </div>
-              {showZ && <ZValue value={zA} comparedTo={zB} />}
-              {renderRow(displayStatsA, extraStatsA, displayStatsB, extraStatsB)}
-
-              <div className="bg-green-50 rounded p-2 font-medium text-gray-800 flex items-center text-sm">
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap" title={tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}>
-                  {tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
-                </span>
-              </div>
-              {showZ && <ZValue value={zB} comparedTo={zA} />}
-              {renderRow(displayStatsB, extraStatsB, displayStatsA, extraStatsA)}
-            </div>
+          {scoringColumns.length > 0 && (
+            <TradeVersusComparison
+              embedded
+              teamA={teamA}
+              teamB={teamB}
+              playersA={playersA}
+              playersB={playersB}
+              viewMode={viewMode}
+              tradeMode={tradeMode}
+              playerValue={playerValue}
+              tradeRanking={tradeRanking}
+              scoringColumns={scoringColumns}
+              compositeShooting
+              proLayout
+            />
+          )}
+          {neutralColumns.length > 0 && (
+            <TradeDetailGrid
+              neutralColumns={neutralColumns}
+              teamAName={teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
+              teamBName={tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
+              rowA={contextRow(displayGetsA)}
+              rowB={contextRow(displayGetsB)}
+            />
+          )}
+          </div>
+          <div className="tc-shell__foot">
+            {hasCategoryZ && <span>{CATEGORY_Z_NOTE}</span>}
+            {hasCategoryZ && <span>Bar = Z gap, toward the better side · within {EVEN_Z_GAP.toFixed(2)} = even</span>}
+            {hasValues && <span>#rank · Z = player's rank and Z among all players, per game</span>}
           </div>
         </div>
       )}

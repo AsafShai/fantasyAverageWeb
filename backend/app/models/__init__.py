@@ -1,6 +1,7 @@
 
 from .base import *
 from .league import *
+from .live import LiveBlock, LiveAware, with_live
 from .stats import *
 from .team import *
 from .requests import *
@@ -18,6 +19,9 @@ __all__ = [
     "PlayerStats",
     "SlotUsage",
 
+    "LiveBlock",
+    "LiveAware",
+    "with_live",
     "LeagueRankings",
     "LeagueSummary",
     "LeagueShotsData",

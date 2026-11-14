@@ -25,7 +25,7 @@ function onRoster(team: TeamDetail | undefined, wanted: TradePreset['playersA'])
  * Trade Analyzer's season per-game comparison once the rosters load. */
 const PendingTradeShareButton = ({ preset, processes }: PendingTradeShareButtonProps) => {
   const { myTeamId } = useMyTeam()
-  const { teamAData, teamBData, playerValue } = useTradeData(preset.teamA, preset.teamB, 'team', 'season')
+  const { teamAData, teamBData, playerValue, tradeRanking } = useTradeData(preset.teamA, preset.teamB, 'team', 'season')
   const givesA = useMemo(() => onRoster(teamAData, preset.playersA), [teamAData, preset.playersA])
   const givesB = useMemo(() => onRoster(teamBData, preset.playersB), [teamBData, preset.playersB])
   const complete = givesA !== null && givesB !== null
@@ -34,16 +34,16 @@ const PendingTradeShareButton = ({ preset, processes }: PendingTradeShareButtonP
   const sides: [TradeShareSide, TradeShareSide] = [
     {
       heading: `${preset.teamA.team_name} gets`,
-      players: givesB?.map(p => ({ name: p.player_name, value: playerValue(p) }))
-        ?? preset.playersB.map(p => ({ name: p.player_name })),
+      players: givesB?.map(p => ({ name: p.player_name, playerId: p.player_id, value: playerValue(p) }))
+        ?? preset.playersB.map(p => ({ name: p.player_name, playerId: p.player_id })),
     },
     {
       heading: `${preset.teamB.team_name} gets`,
-      players: givesA?.map(p => ({ name: p.player_name, value: playerValue(p) }))
-        ?? preset.playersA.map(p => ({ name: p.player_name })),
+      players: givesA?.map(p => ({ name: p.player_name, playerId: p.player_id, value: playerValue(p) }))
+        ?? preset.playersA.map(p => ({ name: p.player_name, playerId: p.player_id })),
     },
   ]
-  const rows = complete ? tradeShareRows(givesB, givesA, 'averages') : []
+  const rows = complete ? tradeShareRows(givesB, givesA, 'averages', tradeRanking) : []
   const mySide = preset.teamA.team_id === myTeamId ? 0 : preset.teamB.team_id === myTeamId ? 1 : null
 
   return (

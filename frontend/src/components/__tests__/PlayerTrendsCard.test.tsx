@@ -46,7 +46,10 @@ describe('PlayerTrendsCard', () => {
     render(<PlayerTrendsCard playerId={1} categories={LEAGUE} />)
     const labels = screen.getAllByRole('button', { expanded: false }).map(b => b.querySelector('span > span')?.textContent)
     expect(labels).toEqual(['Usage', 'FG%', 'FT%', '3P%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS'])
-    expect(screen.getByRole('button', { expanded: true })).toHaveTextContent('Minutes')
+    // the section's own fold toggle (titled Trends) is open too; only one stat is
+    const openStats = screen.getAllByRole('button', { expanded: true }).filter(b => b.textContent !== 'Trends')
+    expect(openStats).toHaveLength(1)
+    expect(openStats[0]).toHaveTextContent('Minutes')
     expect(screen.queryByText('TO')).not.toBeInTheDocument()
   })
 

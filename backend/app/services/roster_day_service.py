@@ -33,10 +33,13 @@ import httpx
 
 from app.config import settings
 from app.exceptions import DataSourceError, InvalidParameterError, ResourceNotFoundError
+from app.models.live import LiveBlock
 from app.models.roster_day_models import (
-    RosterDay, RosterDayMove, RosterDayMovePlayer, RosterDayPlayer, RosterDayStats,
+    RosterDay, RosterDayGame, RosterDayMove, RosterDayMovePlayer, RosterDayPlayer, RosterDayStats,
 )
-from app.services import schedule_service
+from app.services import box_score_service, schedule_service
+from app.services import live_overlay as lo
+from app.services import live_overlay_service
 from app.services.data_provider import get_data_provider
 from app.services.db_service import DBService
 from app.services.league_activity_service import parse_schedule
@@ -73,6 +76,9 @@ MOVE_TYPES = {"FREEAGENT": "free_agent", "WAIVER": "waiver", "TRADE_ACCEPT": "tr
 ITEM_TYPES = ("ADD", "DROP", "TRADE")
 
 LIVE_TTL_S = 5 * 60           # today's roster / moves
+LIVE_RESPONSE_TTL_S = 20      # today while games are counted (the page polls every 60 s)
+# A game is not asked about before it could have ended (as live_overlay).
+FINAL_CHECK_AFTER_TIP_MS = lo.FINAL_CHECK_AFTER_TIP_MS
 RESPONSE_TTL_PAST_S = 6 * 60 * 60
 RESPONSE_TTL_RECENT_S = 60    # yesterday's tags still depend on today's moves
 MEMORY_PERIODS = 120          # no-DB fallback: trimmed team-days (~16 rows each) kept in process
@@ -223,6 +229,50 @@ def player_status(stats: Optional[dict], opponent: Optional[str], is_today: bool
     return "scheduled" if is_today else "dnp"
 
 
+def live_player_status(stats: Optional[dict], phase: Optional[str]) -> str:
+    """Today's status with the live overlay on: ``phase`` is his game's
+    ('scheduled' / 'live' / 'final', None without a game)."""
+    if phase is None:
+        return "no_game"
+    if phase == "scheduled":
+        return "scheduled"
+    if phase == "live":
+        return "live"
+    return "played" if (stats or {}).get("minutes", 0) > 0 else "dnp"
+
+
+def games_for_period(schedule_payload: dict, period: int) -> dict[int, tuple[str, int, bool]]:
+    """{pro_team_id: (game_id, tip ms, is_home)} for ``period``'s NBA games."""
+    out: dict[int, tuple[str, int, bool]] = {}
+    for team in (schedule_payload or {}).get("settings", {}).get("proTeams") or []:
+        for game in (team.get("proGamesByScoringPeriod") or {}).get(str(period)) or []:
+            home, away = game.get("homeProTeamId"), game.get("awayProTeamId")
+            if game.get("id") is None or game.get("date") is None or home is None or away is None:
+                continue
+            out[int(home)] = (str(game["id"]), int(game["date"]), True)
+            out[int(away)] = (str(game["id"]), int(game["date"]), False)
+    return out
+
+
+def game_from_scoreboard(card: dict, is_home: bool) -> RosterDayGame:
+    """One scoreboard game card as seen from one side."""
+    mine, theirs = (card.get("home"), card.get("away")) if is_home else (card.get("away"), card.get("home"))
+    mine, theirs = mine or {}, theirs or {}
+    status = card.get("status") if card.get("status") in ("scheduled", "live", "final") else "scheduled"
+    start = None
+    try:
+        start = datetime.fromisoformat(str(card.get("start_time") or "").replace("Z", "+00:00")) or None
+    except ValueError:
+        start = None
+    won = None
+    if status == "final" and (mine.get("winner") or theirs.get("winner")):
+        won = bool(mine.get("winner"))
+    return RosterDayGame(
+        status=status, detail=str(card.get("status_detail") or ""), start_time=start,
+        team_score=mine.get("score"), opp_score=theirs.get("score"), won=won,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -261,6 +311,8 @@ class RosterDayService:
         self._moves = _TTLCache(MEMORY_PERIODS)
         self._responses = _TTLCache(RESPONSE_CACHE_SIZE)
         self._locks: dict[tuple, asyncio.Lock] = {}
+        # Final games already read off the scoreboard: never asked about again.
+        self._final_games: dict[str, dict] = {}
 
     @property
     def league_url(self) -> str:
@@ -270,6 +322,7 @@ class RosterDayService:
         )
 
     def clear_cache(self) -> None:
+        self._final_games.clear()
         self._rosters.clear()
         self._moves.clear()
         self._responses.clear()
@@ -359,17 +412,57 @@ class RosterDayService:
 
     # -- the day ------------------------------------------------------------
 
+    # -- games (scoreboard) ------------------------------------------------
+
+    async def _scoreboard_games(
+        self, day: date, wanted: dict[str, int], live_on: bool, now_ms: int,
+    ) -> dict[str, dict]:
+        """{game_id: scoreboard card} for the games in ``wanted`` ({game_id:
+        tip ms}) worth asking about: with the flag off only games that could
+        have ended (1 h 45 min past tip, the same rule as the live overlay),
+        with it on every game that has tipped. A game seen final is kept and
+        never asked about again. One shared, cached scoreboard request at most
+        (box_score_service, 60 s while live, 6 h for a finished past day);
+        a failure just leaves the games without a result."""
+        out = {g: self._final_games[g] for g in wanted if g in self._final_games}
+        wait = 0 if live_on else FINAL_CHECK_AFTER_TIP_MS
+        due = [g for g, tip in wanted.items() if g not in out and now_ms >= tip + wait]
+        if not due:
+            return out
+        try:
+            board = await box_score_service.scoreboard_for(day)
+        except Exception as e:
+            logger.warning(f"Roster day: scoreboard for {day} unavailable: {type(e).__name__}: {e}")
+            return out
+        for card in board.get("games") or []:
+            game_id = str(card.get("game_id") or "")
+            if game_id not in wanted:
+                continue
+            out[game_id] = card
+            if card.get("status") == "final":
+                self._final_games[game_id] = card
+        return out
+
+    # -- the day ------------------------------------------------------------
+
     async def get_roster_day(self, team_id: int, day: Optional[date] = None) -> RosterDay:
         provider = get_data_provider()
-        today = eastern_today()
-        day = day or today
         season_start = await schedule_service.get_season_start_date() or settings.season_start
+        # With the live overlay on, "today" is ESPN's current scoring period,
+        # not the Eastern date: late games run past midnight ET while ESPN is
+        # still on the same period (plan section 6). Flag off: as before.
+        live_on = settings.live_standings_enabled
+        live_state = await provider.get_live_state() if live_on else None
+        espn_period = live_state.period if live_state is not None else None
+        today = season_start + timedelta(days=espn_period - 1) if espn_period else eastern_today()
+        day = day or today
         last_day = min(today, settings.season_end) if settings.season_end and settings.season_end >= season_start else today
         if day < season_start or day > max(last_day, season_start):
             raise InvalidParameterError(f"date must be between {season_start} and {last_day}")
         period = (day - season_start).days + 1
         today_period = (today - season_start).days + 1
         is_today = day == today
+        live_today = live_on and is_today and espn_period is not None
 
         teams = {int(t["team_id"]) for t in await provider.get_team_names()}
         if team_id not in teams:
@@ -383,11 +476,15 @@ class RosterDayService:
         schedule_payload = await provider.get_pro_team_schedules()
         locks = parse_schedule(schedule_payload, max(1, period - 1), max(period, today_period)).period_lock
         opponents = opponents_for_period(schedule_payload, period)
+        pro_games = games_for_period(schedule_payload, period)
 
         roster, txs = await asyncio.gather(
             self._team_roster(period, team_id, live=is_today),
             self._moves_around(period, today_period),
         )
+        tonight: dict[int, lo.TonightPlayer] = {}
+        if live_today:
+            roster, tonight = self._with_tonight(roster, provider.cached_totals_raw(), team_id, period)
         roster_ids = {r[0] for r in roster}
         names = {r[0]: r[1] for r in roster}
         try:
@@ -396,10 +493,42 @@ class RosterDayService:
             directory = {}
         moves, added, dropped = build_moves(txs, team_id, period, locks, roster_ids, {**directory, **names})
 
+        now_ms = live_overlay_service._now_ms()
+        player_games = {}
+        for pid, _name, _positions, pro_team_id, _slot, _stats in roster:
+            line = tonight.get(pid)
+            game = pro_games.get(pro_team_id)
+            if line is not None and line.game_id and (game is None or game[0] != line.game_id):
+                game = next(((g, t, h) for g, t, h in pro_games.values() if g == line.game_id), game)
+            if game is not None:
+                player_games[pid] = game
+        cards = await self._scoreboard_games(
+            day, {g: t for g, t, _ in player_games.values()}, live_today, now_ms,
+        ) if player_games else {}
+        finals = provider.live.known_final(period) if live_today else frozenset()
+
         players = []
         for pid, name, positions, pro_team_id, slot, stats in roster:
             opponent = opponents.get(pro_team_id)
-            status = player_status(stats, opponent, is_today)
+            game = player_games.get(pid)
+            card = cards.get(game[0]) if game else None
+            if live_today:
+                phase = None
+                if game is not None:
+                    line = tonight.get(pid)
+                    phase = lo.game_phase(game[0], game[1], finals, now_ms, has_line=bool(line and line.line))
+                    if card is not None and card.get("status") in ("live", "final"):
+                        phase = card["status"]
+                status = live_player_status(stats, phase)
+            else:
+                status = player_status(stats, opponent, is_today)
+            game_info = None
+            if card is not None and game is not None and (live_today or card.get("status") == "final"):
+                game_info = game_from_scoreboard(card, game[2])
+            elif live_today and game is not None and status == "scheduled":
+                # Before his tip: the time from the cached schedule, no request.
+                game_info = RosterDayGame(
+                    status="scheduled", start_time=datetime.fromtimestamp(game[1] / 1000, tz=timezone.utc))
             players.append(RosterDayPlayer(
                 player_id=pid,
                 player_name=name or directory.get(pid, f"Player {pid}"),
@@ -408,9 +537,10 @@ class RosterDayService:
                 lineup_slot=slot,
                 opponent=opponent,
                 status=status,
-                stats=RosterDayStats(**stats) if stats and status == "played" else None,
+                stats=RosterDayStats(**stats) if stats and status in ("played", "live") else None,
                 added=pid in added,
                 dropped=pid in dropped,
+                game=game_info,
             ))
 
         has_games = bool(opponents)
@@ -426,8 +556,11 @@ class RosterDayService:
             last_date=max(last_day, season_start),
             players=players,
             moves=moves,
+            live=LiveBlock(**live_state.to_dict()) if live_today and live_state is not None else None,
         )
-        if is_today:
+        if live_today and live_state is not None and live_state.active:
+            ttl = LIVE_RESPONSE_TTL_S
+        elif is_today:
             ttl = 60
         elif period + 1 >= today_period:
             ttl = RESPONSE_TTL_RECENT_S
@@ -435,6 +568,42 @@ class RosterDayService:
             ttl = RESPONSE_TTL_PAST_S
         self._responses.set(key, result, ttl)
         return result
+
+    @staticmethod
+    def _with_tonight(roster: list[tuple], raw: Optional[dict], team_id: int, period: int):
+        """Today's rows with the slots and stat lines from the league payload
+        the app already polls every 30 s (ESPN's current period only), so the
+        Daily view follows games in progress without a faster mRoster poll.
+        The payload decides who is on the roster; mRoster (5 min) supplies
+        positions and, for a player it does not have yet, nothing else is
+        needed. Falls back to ``roster`` unchanged when the payload is for
+        another period or lists nobody for the team."""
+        if not raw or int(raw.get("scoringPeriodId") or 0) != period:
+            return roster, {}
+        players = lo.tonight_players(raw, team_id)
+        if not players:
+            return roster, {}
+        known = {r[0]: r for r in roster}
+        rows = []
+        for p in players:
+            slot = LINEUP_SLOT_MAP.get(p.slot_id)
+            if slot is None:
+                continue
+            base = known.get(p.player_id)
+            stats = None
+            if p.line is not None:
+                stats = {field: float(p.line[sid]) for sid, field in STAT_FIELDS.items() if sid in p.line}
+            elif base is not None:
+                stats = base[5]
+            rows.append((
+                p.player_id,
+                p.name or (base[1] if base else ""),
+                base[2] if base else "",
+                p.pro_team_id if p.pro_team_id is not None else (base[3] if base else 0),
+                slot,
+                stats,
+            ))
+        return rows, {p.player_id: p for p in players}
 
     async def close(self) -> None:
         if self._client is not None:

@@ -1,14 +1,51 @@
 import asyncio
 import logging
 from datetime import date, datetime
-from typing import List, Optional
-from app.models import TeamDetail, TeamPlayers, Team, TeamRosterPlayer, StatTimePeriod
+from typing import List, Mapping, Optional
+
+import pandas as pd
+
+from app.models import TeamTonight, TeamDetail, TeamPlayers, Team, TeamRosterPlayer, StatTimePeriod, with_live
 from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
 from app.services.data_provider import DataProvider
 from app.services.player_service import compute_windowed_agg, merge_windowed_players_df
 from app.builders.response_builder import ResponseBuilder
 from app.utils.utils import is_team_exists
 from app.config import settings
+
+def _team_value(df: Optional[pd.DataFrame], team_id: int, column: str) -> Optional[float]:
+    if df is None or column not in df.columns or 'team_id' not in df.columns:
+        return None
+    rows = df.loc[df['team_id'] == team_id, column]
+    return float(rows.iloc[0]) if not rows.empty else None
+
+
+def team_tonight(
+    team_id: int,
+    official: tuple[pd.DataFrame, pd.DataFrame],
+    live: tuple[pd.DataFrame, pd.DataFrame],
+    official_slots: Mapping[str, int],
+    live_slots: Mapping[str, int],
+    starters_live: int,
+) -> TeamTonight:
+    """What tonight added for ``team_id``: ``official`` and ``live`` are
+    (averages, rankings) frames, the live ones the settled flavour (finished
+    games only), so GP and points move as games go final. Slots come from
+    the in-progress flavour, so a starter in a live game shows "+1 live"."""
+    def delta(column: str, frames: int) -> float:
+        before = _team_value(official[frames], team_id, column)
+        after = _team_value(live[frames], team_id, column)
+        return 0.0 if before is None or after is None else after - before
+
+    slots = {slot: int(n - official_slots.get(slot, 0)) for slot, n in live_slots.items()
+             if n - official_slots.get(slot, 0) > 0}
+    return TeamTonight(
+        gp=int(round(delta('GP', 0))),
+        points=round(delta('TOTAL_POINTS', 1), 2),
+        slots=slots,
+        starters_live=starters_live,
+    )
+
 
 class TeamService:
     """Service for team-related operations"""
@@ -38,7 +75,13 @@ class TeamService:
 
         stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
 
-        totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
+        # None while LIVE_STANDINGS_ENABLED is off: official frames, no ``live`` block.
+        live_state = await self.data_provider.get_live_state(include_finals=True)
+        live = live_state is not None
+        if live:
+            totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes(live=True)
+        else:
+            totals_df, averages_df, rankings_df = await self.data_provider.get_all_dataframes()
 
         if totals_df is None or averages_df is None or rankings_df is None:
             raise ResourceNotFoundError("Unable to process ESPN data")
@@ -67,7 +110,8 @@ class TeamService:
                 cached_raw = self.data_provider.cached_totals_raw()
                 players_df, slot_usage_map, lineup_slots = await asyncio.gather(
                     self.data_provider.get_players_df(stat_split_id),
-                    self.data_provider.get_slot_usage(raw=cached_raw),
+                    (self.data_provider.get_slot_usage(raw=cached_raw, live=True) if live
+                     else self.data_provider.get_slot_usage(raw=cached_raw)),
                     self.data_provider.get_lineup_slots(),
                 )
                 if players_df is not None:
@@ -91,11 +135,27 @@ class TeamService:
         espn_url = f"https://fantasy.espn.com/basketball/team?leagueId={settings.league_id}&teamId={team_id}"
         team_slot_usage = slot_usage_map.get(team_id, {})
 
-        return self.response_builder.build_team_detail_response(
+        response = self.response_builder.build_team_detail_response(
             team_id, totals_df, averages_df, rankings_df, players_list, espn_url,
             team_slot_usage, data_date=self.data_provider.get_data_date(),
             actual_start=actual_start, actual_end=actual_end, categories=categories,
         )
+        if live_state is not None and live_state.active:
+            response.tonight = await self._tonight(team_id, averages_df, rankings_df, team_slot_usage)
+        return with_live(response, live_state)
+
+    async def _tonight(self, team_id: int, averages_df, rankings_df, live_slots) -> Optional[TeamTonight]:
+        """None on any failure: the team page then shows no "+N" markers."""
+        try:
+            _, official_avg, official_rank = await self.data_provider.get_all_dataframes()
+            official_slots = (await self.data_provider.get_slot_usage(
+                raw=self.data_provider.cached_totals_raw())).get(team_id, {})
+            starters = await self.data_provider.get_starters_live(team_id)
+            return team_tonight(team_id, (official_avg, official_rank), (averages_df, rankings_df),
+                                official_slots, live_slots, starters)
+        except Exception as e:
+            self.logger.warning(f"Tonight deltas unavailable for team {team_id}: {type(e).__name__}: {e}")
+            return None
     
     async def get_teams_list(self) -> List[Team]:
         """Get list of all teams. Falls back to identity-only data (no stats

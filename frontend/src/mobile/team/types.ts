@@ -47,6 +47,9 @@ export interface MobileTeamDetailProps {
   onRosterDate: (date: string) => void
   rosterDayOnlyPlayed: boolean
   onRosterDayOnlyPlayed: (value: boolean) => void
+  /** Box Scores' No spoilers (shared setting): Daily shows opponents only. */
+  noSpoilers: boolean
+  onNoSpoilers: (next: boolean) => void
   /** Matchups by player name (today's, or the coverage day's in Stats mode). */
   matchups: Map<string, PlayerMatchup>
   /** True while the coverage day's matchups are still loading (Stats mode). */

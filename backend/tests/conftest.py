@@ -50,6 +50,10 @@ class MockDataProvider:
     def __init__(self):
         import pandas as pd
         self.db_service = MockDBService()
+        # What get_live_state returns: None is the flag-off behaviour (no live
+        # block); a test sets a LiveState to simulate the flag on.
+        self.live_state = None
+        self.live_calls = []
 
         # Sample DataFrames that match the expected structure
         self.sample_totals_df = pd.DataFrame({
@@ -122,22 +126,31 @@ class MockDataProvider:
             'MIN': [28.5, 27.4, 30.1, 26.8, 29.6, 27.8]
         })
     
-    async def get_totals_df(self):
+    async def get_totals_df(self, live=False, settled=False):
+        self.live_calls.append(('totals', live))
         return self.sample_totals_df
 
-    async def memo_response(self, name, params, build):
+    async def memo_response(self, name, params, build, live=False):
+        self.live_calls.append((name, live))
         return await build()
+
+    async def get_live_state(self, include_finals=False):
+        self.live_calls.append(('state', include_finals))
+        return self.live_state
     
-    async def get_averages_df(self):
+    async def get_averages_df(self, live=False):
+        self.live_calls.append(('averages', live))
         return self.sample_averages_df
     
-    async def get_rankings_df(self):
+    async def get_rankings_df(self, live=False):
+        self.live_calls.append(('rankings', live))
         return self.sample_rankings_df
 
     async def get_players_df(self, stat_split_type_id: int = 0):
         return self.sample_players_df
 
-    async def get_all_dataframes(self):
+    async def get_all_dataframes(self, live=False):
+        self.live_calls.append(('all', live))
         return (self.sample_totals_df, self.sample_averages_df, self.sample_rankings_df)
 
     async def get_ranking_categories(self):
@@ -156,8 +169,13 @@ class MockDataProvider:
     def cached_totals_raw(self):
         return None
 
-    async def get_slot_usage(self, raw=None):
+    async def get_slot_usage(self, raw=None, live=False):
+        self.live_calls.append(('slots', live))
         return {}
+
+    async def get_starters_live(self, team_id):
+        self.live_calls.append(('starters', True))
+        return 2
 
     async def get_lineup_slots(self):
         return {}
@@ -191,6 +209,29 @@ def mock_data_provider_globally():
          patch.object(DataProvider, '__init__', return_value=None), \
          patch('app.services.data_provider.get_data_provider', return_value=mock_provider):
         yield mock_provider
+
+@pytest.fixture(autouse=True)
+def block_real_network(request):
+    """Unit tests must not reach ESPN/NBA: a real call is slow, flaky and only
+    "passes" because the code falls back when it fails. Refuse httpx's real
+    transports (mock and ASGI transports are separate classes and still work);
+    the code under test sees a ConnectError, as if the source were down.
+    Tests marked `live` are exempt."""
+    if request.node.get_closest_marker("live"):
+        yield
+        return
+    import httpx
+
+    def refuse(self, req, *args, **kwargs):
+        raise httpx.ConnectError(f"real network blocked in tests: {req.url.host}", request=req)
+
+    async def refuse_async(self, req, *args, **kwargs):
+        refuse(self, req)
+
+    with patch.object(httpx.HTTPTransport, "handle_request", refuse), \
+         patch.object(httpx.AsyncHTTPTransport, "handle_async_request", refuse_async):
+        yield
+
 
 @pytest.fixture(autouse=True)
 def reset_season_anchor_cache():
@@ -230,10 +271,32 @@ def reset_nba_stats_service_singleton():
     NBAStatsService._instance = None
     NBAStatsService._initialized = False
 
+async def _idle():
+    """Stand-in for a background scheduler/warm-up: never does any work."""
+
+
 @pytest.fixture
 def test_client():
-    """Create a test client for the FastAPI application."""
-    with TestClient(app) as client:
+    """Create a test client for the FastAPI application.
+
+    Entering the client runs the app's lifespan. Its startup work (season-date
+    lookups, injury PDF fetch, player-catalog warm, schedulers, projection
+    model warm) is stubbed here: unstubbed, every test made ~7 real requests to
+    ESPN/NBA and spent ~1.8 s starting up. The lifespan itself is tested in
+    tests/test_startup.py.
+    """
+    from app import main
+    with patch.object(main, "derive_season_start", AsyncMock(return_value=None)), \
+         patch.object(main.schedule_service, "get_season_end_date", AsyncMock(return_value=None)), \
+         patch.object(main.injury_service, "initialize", AsyncMock()), \
+         patch.object(main.nba_player_catalog, "warm_cache", AsyncMock(return_value=1)), \
+         patch.object(main.injury_service, "start_scheduler", _idle), \
+         patch.object(main.estimator_scheduler, "start_scheduler", _idle), \
+         patch.object(main.model_nightly_scheduler, "start_scheduler", _idle), \
+         patch.object(main.nba_players_scheduler, "start_scheduler", _idle), \
+         patch.object(main.adp_snapshot_scheduler, "start_scheduler", _idle), \
+         patch.object(main.LiveProjectionService, "warm", lambda self: _idle()), \
+         TestClient(app) as client:
         yield client
 
 @pytest_asyncio.fixture

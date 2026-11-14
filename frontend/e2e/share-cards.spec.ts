@@ -215,7 +215,7 @@ test('Trade Analyzer: Share appears once both sides have players', async ({ page
   expect(download.suggestedFilename()).toBe('trade-analysis-2026-10-19.png')
 })
 
-test('Trade Analyzer: each traded player shows his rank and z-score, and the 8-cat shortcut trims the comparison', async ({ page }) => {
+test('Trade Analyzer: each traded player shows his rank and z-score, and the comparison opens on the 8 categories', async ({ page }) => {
   await page.goto('/trade')
   const teamSelects = page.locator('select:has(option:text-is("Choose a team..."))')
   await teamSelects.nth(0).selectOption('1')
@@ -232,17 +232,17 @@ test('Trade Analyzer: each traded player shows his rank and z-score, and the 8-c
   await expect(page.getByText('#1', { exact: true })).toBeVisible()
   await expect(page.getByTitle(/^Rank \d+ of 24 players/)).toHaveCount(2)
 
-  const comparison = page.getByText('Team', { exact: true }).locator('..')
-  const headerCount = () => comparison.locator(':scope > div.font-semibold').count()
-  expect(await headerCount()).toBe(16)
-  await expect(comparison.getByText('Avg Z', { exact: true })).toBeVisible()
-  const shortcut = page.getByRole('button', { name: '8 cats only' })
-  await shortcut.click()
-  await expect(shortcut).toHaveAttribute('aria-pressed', 'true')
-  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(10)
-  await expect(comparison.getByText('MIN', { exact: true })).toHaveCount(0)
-  await shortcut.click()
-  await expect(comparison.locator(':scope > div.font-semibold')).toHaveCount(16)
+  // The comparison shows the 8 scoring categories; minutes and games are
+  // the only extra stats, one tap away.
+  const rows = page.getByRole('table', { name: 'Category comparison' })
+  await expect(page.locator('.tc-team-card__avg-meta')).toHaveCount(2)
+  await expect(rows.locator('.tc-stat-row')).toHaveCount(8)
+  await expect(page.locator('.tc-detail-grid')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show minutes and games played' }).click()
+  await expect(page.locator('.tc-detail-grid')).toContainText('MIN')
+  await expect(page.locator('.tc-detail-grid')).not.toContainText('FGA')
+  await page.getByRole('button', { name: 'Show minutes and games played' }).click()
+  await expect(page.locator('.tc-detail-grid')).toHaveCount(0)
   await expectNoHorizontalScroll(page)
 })
 

@@ -1,3 +1,4 @@
+import { useSectionOpen } from '../../hooks/useSectionOpen'
 import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { useGetNbaPlayerGamesQuery } from '../../store/api/fantasyApi'
@@ -27,6 +28,7 @@ function Result({ game }: { game: PlayerGameLogGame }) {
  * column the desktop log has. Opponent opens the box score.
  */
 export default function GameLogCard({ playerId }: { playerId: string }) {
+  const [open, toggle] = useSectionOpen('game-log')
   const { data, error, isLoading } = useGetNbaPlayerGamesQuery(playerId, { skip: !playerId })
   const shown = useMemo(
     () => (data?.games ?? []).filter((game) => game.season === data?.current_season),
@@ -106,7 +108,7 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
   }, [shown, playerId])
 
   return (
-    <Card title="Game log" aria-label="Game log">
+    <Card title="Game log" aria-label="Game log" fold={{ open, onToggle: toggle }}>
       {data && (
         <span className="mr-meta">
           {data.current_season} · {shown.length} {shown.length === 1 ? 'game' : 'games'}

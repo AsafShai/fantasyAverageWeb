@@ -1,3 +1,5 @@
+import { FoldTitle } from './FoldTitle'
+import { useSectionOpen } from '../hooks/useSectionOpen'
 import { Link } from 'react-router'
 import InfoTip from './InfoTip'
 import { CATEGORY_LABELS, type PlayerRankSummary, type RankingCategory } from '../utils/playerRankings'
@@ -43,6 +45,7 @@ interface Props {
 }
 
 export default function PlayerFantasyValueCard({ positions, summary, categories, loading, periodLabel = 'Full Season' }: Props) {
+  const [open, toggle] = useSectionOpen('fantasy-value')
   if (loading) {
     return (
       <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 sm:p-6 animate-pulse" data-testid="fantasy-value-skeleton">
@@ -65,17 +68,21 @@ export default function PlayerFantasyValueCard({ positions, summary, categories,
       aria-labelledby="fantasy-value-heading"
       className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 sm:p-6"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+      <div className={`flex flex-wrap items-center justify-between gap-2 ${open ? 'mb-4' : ''}`}>
         <h2 id="fantasy-value-heading" className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Fantasy Value <span className="text-base font-normal text-gray-500 dark:text-gray-400">· {periodLabel}</span>
+          <FoldTitle open={open} onToggle={toggle}>
+            Fantasy Value <span className="text-base font-normal text-gray-500 dark:text-gray-400">· {periodLabel}</span>
+          </FoldTitle>
         </h2>
-        <Link
+        {open && <Link
           to="/player-rankings"
           className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
         >
           Full rankings →
-        </Link>
+        </Link>}
       </div>
+
+      {open && (<>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
         <div className="col-span-2 sm:col-span-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-3 py-2.5">
@@ -161,6 +168,7 @@ export default function PlayerFantasyValueCard({ positions, summary, categories,
           No stats in this time frame, so there's no rank or z-score for this player.
         </p>
       )}
+      </>)}
     </section>
   )
 }

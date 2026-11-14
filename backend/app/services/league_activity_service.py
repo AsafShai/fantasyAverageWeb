@@ -41,9 +41,13 @@ from app.models.activity_models import (
     PendingTrade,
     PendingTradeSide,
     PickedUpAfter,
+    PlayerHistoryMove,
+    PlayerHistoryStint,
+    PlayerLeagueHistory,
     PlayerStint,
     ReleasedPlayer,
     StintValue,
+    TeamPlayers,
     Trade,
     TradeSide,
 )
@@ -510,6 +514,77 @@ def build_league_activity(
 # Fetching + caching
 # ---------------------------------------------------------------------------
 
+def _team_players(items: list[dict], team_key: str, names: dict[int, str]) -> list[TeamPlayers]:
+    by_team: dict[int, list[ActivityPlayer]] = {}
+    for i in items:
+        team = i.get(team_key)
+        if team:
+            pid = i['playerId']
+            by_team.setdefault(team, []).append(ActivityPlayer(player_id=pid, name=names.get(pid, f'Player {pid}')))
+    return [TeamPlayers(team_id=t, players=ps) for t, ps in by_team.items()]
+
+
+def build_player_moves(
+    player_id: int, transactions: list[dict], names: dict[int, str], num_teams: int,
+) -> list[PlayerHistoryMove]:
+    """The player's executed drafts, adds, waiver claims, drops and trades,
+    oldest first. Lineup items riding along in a move are ignored."""
+    def player(pid: int) -> ActivityPlayer:
+        return ActivityPlayer(player_id=pid, name=names.get(pid, f'Player {pid}'))
+
+    moves = []
+    for tx in sorted(transactions, key=_ms):
+        if tx.get('status', 'EXECUTED') != 'EXECUTED' or 'id' not in tx:
+            continue
+        items = [i for i in tx.get('items') or [] if i.get('type') in ('DRAFT', 'ADD', 'DROP', 'TRADE')]
+        me = next((i for i in items if i.get('playerId') == player_id), None)
+        if me is None:
+            continue
+        others = [i for i in items if i is not me]
+        at, kind = _dt(_ms(tx)), me['type']
+        if kind == 'DRAFT':
+            pick = me.get('overallPickNumber') or None
+            moves.append(PlayerHistoryMove(
+                id=tx['id'], kind='draft', at=at, team_id=me['toTeamId'], pick=pick,
+                round=-(-pick // num_teams) if pick and num_teams else None,
+            ))
+        elif kind == 'TRADE':
+            traded = [i for i in items if i['type'] == 'TRADE']
+            moves.append(PlayerHistoryMove(
+                id=tx['id'], kind='trade', at=at, team_id=me['toTeamId'], from_team_id=me.get('fromTeamId'),
+                trade_sides=_team_players(traded, 'toTeamId', names),
+                trade_drops=_team_players([i for i in items if i['type'] == 'DROP'], 'fromTeamId', names),
+            ))
+        elif kind == 'ADD':
+            moves.append(PlayerHistoryMove(
+                id=tx['id'], kind='waiver' if tx.get('type') == 'WAIVER' else 'add', at=at, team_id=me['toTeamId'],
+                swapped=[player(i['playerId']) for i in others if i['type'] == 'DROP'],
+            ))
+        else:
+            moves.append(PlayerHistoryMove(
+                id=tx['id'], kind='drop', at=at, team_id=me['fromTeamId'],
+                swapped=[player(i['playerId']) for i in others if i['type'] == 'ADD'],
+                in_trade=tx.get('type') == 'TRADE_ACCEPT',
+            ))
+    return moves
+
+
+def player_stints(moves: list[PlayerHistoryMove]) -> list[PlayerHistoryStint]:
+    """Who had him and when, from his moves (oldest first)."""
+    stints: list[PlayerHistoryStint] = []
+    current: Optional[PlayerHistoryStint] = None
+    for m in moves:
+        if current is not None and m.kind in ('drop', 'trade'):
+            current.end = m.at
+            stints.append(current)
+            current = None
+        if m.kind != 'drop':
+            current = PlayerHistoryStint(team_id=m.team_id, start=m.at)
+    if current is not None:
+        stints.append(current)
+    return stints
+
+
 class _ActivityCache:
     """Process-wide. League settings and transactions refresh every
     CARDS_TTL_SECONDS, per-game stats every STATS_TTL_SECONDS, the schedule daily.
@@ -540,6 +615,9 @@ class _ActivityCache:
         self.cards_version = 0
         self.stats_version = 0
         self.schedule_version = 0
+        # merge_card_transactions(cards), kept until the cards change.
+        self.merged: Optional[tuple[list[dict], dict[int, str]]] = None
+        self.merged_version = -1
         self.lock = asyncio.Lock()
 
     def clear(self) -> None:
@@ -651,8 +729,8 @@ class LeagueActivityService:
         changed = [p for p in parts if p is not None]
         return [c for part in changed for c in part], bool(changed)
 
-    async def _refresh(self) -> None:
-        now = time.monotonic()
+    async def _refresh_cards(self, now: float) -> None:
+        """League settings, teams and every player card's transactions."""
         if _cache.cards is None or now - _cache.cards_at >= CARDS_TTL_SECONDS:
             if _cache.league is None:
                 _cache.etags.pop('league', None)
@@ -668,6 +746,10 @@ class LeagueActivityService:
                 _cache.cards, _cache.pool_ids, _cache.names = cards
                 _cache.cards_version += 1
             _cache.cards_at = now
+
+    async def _refresh(self) -> None:
+        now = time.monotonic()
+        await self._refresh_cards(now)
         if _cache.schedule is None or now - _cache.schedule_at >= SCHEDULE_TTL_SECONDS:
             if _cache.schedule is None:
                 _cache.etags.pop('schedule', None)
@@ -761,6 +843,33 @@ class LeagueActivityService:
                 f"{len(_cache.cards or [])} players"
             )
             return result
+
+
+    async def get_player_history(self, player_id: int) -> PlayerLeagueHistory:
+        """One player's drafts, adds, waiver claims, drops and trades this season.
+        Reads only the league and the player cards, not the per-game stats the
+        full activity feed needs, so it stays cheap on a cold cache."""
+        async with _cache.lock:
+            try:
+                await self._refresh_cards(time.monotonic())
+            except (httpx.HTTPError, ValueError) as e:
+                logger.error(f"Player history: ESPN fetch failed: {type(e).__name__}: {e}")
+                if _cache.cards is None:
+                    raise DataSourceError("Error fetching league transactions from ESPN API") from e
+            if _cache.merged is None or _cache.merged_version != _cache.cards_version:
+                _cache.merged = merge_card_transactions(_cache.cards or [])
+                _cache.merged_version = _cache.cards_version
+            transactions, names = _cache.merged
+            teams = parse_teams(_cache.league or {})
+        moves = build_player_moves(player_id, transactions, {**_cache.names, **names}, len(teams))
+        return PlayerLeagueHistory(
+            season_id=self.season_id,
+            player_id=player_id,
+            teams=teams,
+            moves=moves,
+            stints=player_stints(moves),
+            last_updated=datetime.now(timezone.utc),
+        )
 
 
 _service: Optional[LeagueActivityService] = None

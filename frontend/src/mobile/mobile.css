@@ -29,6 +29,14 @@
 .mr-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mr-h1 { margin: 0; font-family: var(--mr-font-num); font-size: 22px; font-weight: 700; line-height: 1.15; }
 .mr-h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.mr-fold {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0; border: none; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 6px;
+}
+.mr-fold:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 2px; }
+.mr-fold-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--mr-faint); transition: transform 0.15s; }
+.mr-fold-closed { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .mr-fold-chev { transition: none; } }
 .mr-meta { font-size: 12px; color: var(--mr-muted); }
 .mr-link {
   border: none; background: none; padding: 0; min-height: 32px; cursor: pointer;
@@ -334,6 +342,16 @@ button.mr-tab { border: none; background: none; padding: 0; cursor: pointer; fon
 }
 .mr-ps-tl { font-size: 10px; font-weight: 700; color: var(--mr-muted); letter-spacing: 0.04em; text-transform: uppercase; }
 .mr-ps-tv { font-family: var(--mr-font-num); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mr-ps-value {
+  background: var(--mr-sunken); border-radius: 10px; padding: 8px 10px;
+  display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 8px; row-gap: 2px; min-width: 0;
+}
+.mr-ps-zl { margin-left: 6px; }
+.mr-ps-value .mr-ps-tv .mr-meta { font-family: inherit; font-size: 12px; font-weight: 500; }
+.mr-ps-rank-out { font-size: 14px; }
+.mr-ps-up { color: var(--mr-up); }
+.mr-ps-down { color: var(--mr-down); }
+.mr-ps-pos { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .mr-ps-actions { display: flex; gap: 8px; }
 /* The sheet scrolls inside on short screens; the two buttons stay on screen. */
 .mr-sheet.mr-ps-sheet { padding-bottom: 0; }
@@ -347,6 +365,30 @@ button.mr-tab { border: none; background: none; padding: 0; cursor: pointer; fon
   .mr-ps-sheet .mr-h1 { font-size: 20px; }
   .mr-ps-grid { gap: 4px; }
   .mr-ps-tile { padding: 5px 8px; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 4px; }
+  .mr-ps-value { padding: 5px 8px; }
   .mr-ps-tv { font-size: 15px; }
   .mr-ps-sheet .mr-ps-actions { padding-top: 8px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* ── live badge (live standings) ── */
+.mr-live-badge {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 28px; padding: 2px 10px;
+  border-radius: 999px; border: 1px solid var(--mr-pill-avail-fg); font-size: 11px; font-weight: 600; cursor: pointer;
+  background: var(--mr-pill-avail-bg); color: var(--mr-pill-avail-fg);
+}
+.mr-live-badge.mr-final { border-color: var(--mr-pill-quest-fg); background: var(--mr-pill-quest-bg); color: var(--mr-pill-quest-fg); }
+.mr-live-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.mr-live-badge.mr-live .mr-live-dot { animation: mr-live-pulse 1.6s infinite; }
+@keyframes mr-live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .mr-live-badge.mr-live .mr-live-dot { animation: none; } }
+.mr-live-note { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; font-size: 12px; background: var(--mr-pill-quest-bg); color: var(--mr-pill-quest-fg); }
+.mr-live-games { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mr-live-games li { font-size: 13px; }
+.mr-live-games a { display: flex; justify-content: space-between; align-items: center; min-height: 32px; color: inherit; text-decoration: none; }
+.mr-live-game-right { display: inline-flex; align-items: center; gap: 8px; }
+.mr-live-score { font-weight: 600; font-variant-numeric: tabular-nums; }
+.mr-live-spoilers { margin: 0 0 10px; }
+.mr-live-status { color: var(--mr-up); font-weight: 600; }
+.mr-tm-game { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; white-space: normal; color: var(--mr-muted); }
+.mr-tm-game-live { color: var(--mr-up); font-weight: 700; }
+tr.mr-on-court > * { background: color-mix(in srgb, var(--mr-up) 9%, transparent); }

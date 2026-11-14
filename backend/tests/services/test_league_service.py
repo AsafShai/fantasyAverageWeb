@@ -19,6 +19,7 @@ def league_service():
          patch('app.services.league_service.ResponseBuilder') as mock_response_builder:
         service = LeagueService()
         service.data_provider = AsyncMock()
+        service.data_provider.get_live_state = AsyncMock(return_value=None)  # flag off
         service.data_provider.memo_response = _no_memo
         service.data_provider.get_data_date = MagicMock(return_value=None)
         service.stats_calculator = mock_stats_calculator.return_value
@@ -123,6 +124,7 @@ class TestLeagueServiceResponseBuilding:
              patch('app.services.league_service.StatsCalculator') as mock_stats_calculator:
             service = LeagueService()
             service.data_provider = AsyncMock()
+            service.data_provider.get_live_state = AsyncMock(return_value=None)  # flag off
             service.data_provider.memo_response = _no_memo
             service.stats_calculator = mock_stats_calculator.return_value
 

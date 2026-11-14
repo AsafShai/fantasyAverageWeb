@@ -133,9 +133,11 @@ test.describe('phone player sheet', () => {
     await page.goto('/players?player=100')
     const sheet = page.getByRole('dialog', { name: 'Alpha Star' })
     await expect(sheet.getByText('SEASON · PER GAME')).toBeVisible()
+    await expect(sheet.getByLabel('Fantasy value')).toContainText('#1 of 2')
 
     await sheet.getByRole('button', { name: /Last 15 Days/ }).click()
     await expect(sheet.getByText('LAST 15 DAYS · PER GAME · 2 GP')).toBeVisible()
+    await expect(sheet.getByLabel('Fantasy value')).toContainText('#1 PG · #1 SG')
     await expect(sheet.getByRole('list', { name: 'Per game' })).toContainText('PTS20.0')
     expect(periods).toContain('last_15')
 

@@ -141,3 +141,50 @@ class LeagueActivity(BaseModel):
 class LatestMoves(BaseModel):
     teams: list[ActivityTeam]
     moves: list[ActivityMove]
+
+
+# -- One player's moves in the league (player page) ---------------------------
+
+PlayerMoveKind = Literal['draft', 'add', 'waiver', 'drop', 'trade']
+
+
+class TeamPlayers(BaseModel):
+    team_id: int
+    players: list[ActivityPlayer]
+
+
+class PlayerHistoryMove(BaseModel):
+    """One executed move that involved the player. Lineup changes are left out.
+
+    team_id is the team that got him (draft, add, waiver, trade) or released
+    him (drop); from_team_id is the team that traded him away."""
+    id: str
+    kind: PlayerMoveKind
+    at: datetime
+    team_id: int
+    from_team_id: Optional[int] = None
+    pick: Optional[int] = None
+    round: Optional[int] = None
+    # add/waiver: who the team dropped for him; drop: who it added in his place.
+    swapped: list[ActivityPlayer] = []
+    # drop: released to make room in a trade.
+    in_trade: bool = False
+    # trade: every player each team received, and anyone dropped to make room.
+    trade_sides: list[TeamPlayers] = []
+    trade_drops: list[TeamPlayers] = []
+
+
+class PlayerHistoryStint(BaseModel):
+    """A stretch on one fantasy roster; end is None while he is still there."""
+    team_id: int
+    start: datetime
+    end: Optional[datetime] = None
+
+
+class PlayerLeagueHistory(BaseModel):
+    season_id: int
+    player_id: int
+    teams: list[ActivityTeam]
+    moves: list[PlayerHistoryMove]  # oldest first
+    stints: list[PlayerHistoryStint]
+    last_updated: datetime

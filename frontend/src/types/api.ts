@@ -25,7 +25,21 @@ export interface RankingStats {
   stats?: Record<string, number>;
 }
 
+/** Tonight's live overlay state. Absent when the backend flag is off. */
+export interface LiveBlock {
+  active: boolean;
+  period: number | null;
+  /** The US day of the games being counted (YYYY-MM-DD); kept until ESPN goes official. */
+  slate_date?: string | null;
+  as_of: string | null;
+  games_total: number;
+  games_live: number;
+  games_final: number;
+  official_updated_at: string | null;
+}
+
 export interface LeagueRankings {
+  live?: LiveBlock;
   averages_rankings: RankingStats[];
   totals_rankings: RankingStats[];
   categories: string[];
@@ -72,7 +86,21 @@ export interface SlotUsage {
   remaining: number;
 }
 
+/** What tonight changed for the team against this morning's official standings. Sent only while live. */
+export interface TeamTonight {
+  /** Games added to the averages tonight (finished games). */
+  gp: number;
+  /** Change in roto total points tonight. */
+  points: number;
+  /** Games added per slot tonight, games in progress included. */
+  slots: Record<string, number>;
+  /** Starters checked in to a game not final yet. */
+  starters_live: number;
+}
+
 export interface TeamDetail {
+  live?: LiveBlock;
+  tonight?: TeamTonight;
   team: Team;
   espn_url: string;
   players?: Player[];
@@ -87,6 +115,7 @@ export interface TeamDetail {
 }
 
 export interface LeagueSummary {
+  live?: LiveBlock;
   total_teams: number;
   total_games_played: number;
   nba_avg_pace?: number;
@@ -100,9 +129,12 @@ export interface LeagueSummary {
   trade_deadline?: string;
   /** When ESPN last updated the league stats (its nightly run), not when we fetched. */
   espn_updated_at?: string | null;
+  /** While tonight is live: this morning's official league averages (marks the tiles tonight moved). */
+  league_averages_official?: AverageStats;
 }
 
 export interface HeatmapData {
+  live?: LiveBlock;
   teams: Team[];
   categories: string[];
   data: number[][];
@@ -113,6 +145,8 @@ export interface HeatmapData {
   date_range_end?: string;
   actual_start_date?: string;
   actual_end_date?: string;
+  /** While tonight is live: games counted tonight per team, in `teams` order (GP "+N"). */
+  gp_tonight?: number[];
 }
 
 export interface TeamShotStats {
@@ -264,7 +298,10 @@ export interface TeamTimeSeriesPoint {
 }
 
 export interface RankingsOverTimeResponse {
+  live?: LiveBlock;
   data: TeamTimeSeriesPoint[];
+  /** While tonight is live: one point per team for tonight, drawn dashed (never stored). */
+  live_points?: TeamTimeSeriesPoint[];
   /** Stat sources only: the league's scored categories, in its order. */
   categories?: string[];
   /** Stat sources only: categories where a lower value is better (e.g. TO). */
@@ -538,6 +575,35 @@ export interface NbaPlayerStatsResponse {
   has_data: boolean;
   actual_start?: string | null;
   actual_end?: string | null;
+}
+
+/** One completed regular season, per-game averages (ESPN). Null = not reported. */
+export interface PlayerSeasonLine {
+  season: number;
+  season_label: string;
+  teams: string[];
+  gp: number;
+  gs: number;
+  minutes: number | null;
+  fgm: number | null;
+  fga: number | null;
+  fg_percentage: number | null;
+  ftm: number | null;
+  fta: number | null;
+  ft_percentage: number | null;
+  three_pm: number | null;
+  three_pa: number | null;
+  reb: number | null;
+  ast: number | null;
+  stl: number | null;
+  blk: number | null;
+  to: number | null;
+  pts: number | null;
+}
+
+export interface PlayerSeasonHistoryResponse {
+  player_id: number;
+  seasons: PlayerSeasonLine[];
 }
 
 export interface PlayerGameLogGame {
@@ -968,6 +1034,8 @@ export interface TeamRankChange {
 }
 
 export interface RankChanges {
+  /** Present with the backend flag on; while `active`, the moves are tonight's vs this morning's official standings. */
+  live?: LiveBlock;
   previous_period: number | null;
   latest_period: number | null;
   teams: TeamRankChange[];
@@ -995,10 +1063,26 @@ export interface TodayHub {
   movers: RankMover[];
   roster_health: TeamRosterHealth[];
   last_nightly: NightlyRun | null;
+  live?: LiveBlock;
+  /** While tonight is live: movers vs this morning's official standings (the "Tonight" view). */
+  tonight_movers?: RankMover[];
 }
 
 // Roster by day (team page, Daily mode): GET /teams/{id}/roster-day?date=
-export type RosterDayStatus = 'played' | 'dnp' | 'scheduled' | 'no_game'
+/** live: today, his game is in progress (only while the backend live flag is on; stats are the line so far). */
+export type RosterDayStatus = 'played' | 'dnp' | 'scheduled' | 'no_game' | 'live'
+
+/** The player's NBA game that day. Final games always; scheduled and live ones only with the backend live flag on. */
+export interface RosterDayGame {
+  status: 'scheduled' | 'live' | 'final'
+  /** The scoreboard's short text: "Q3 4:12", "Halftime", "Final/OT". */
+  detail: string
+  start_time: string | null
+  /** His team's score and the opponent's. */
+  team_score: number | null
+  opp_score: number | null
+  won: boolean | null
+}
 
 export interface RosterDayStats {
   minutes: number
@@ -1027,6 +1111,7 @@ export interface RosterDayPlayer {
   stats: RosterDayStats | null
   added: boolean
   dropped: boolean
+  game?: RosterDayGame
 }
 
 export interface RosterDayMovePlayer {
@@ -1045,6 +1130,8 @@ export interface RosterDayMove {
 }
 
 export interface RosterDay {
+  /** Today only, while the backend live flag is on. */
+  live?: LiveBlock
   team_id: number
   date: string
   scoring_period_id: number

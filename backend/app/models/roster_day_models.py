@@ -1,12 +1,16 @@
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import ClassVar, Literal, Optional
 
 from pydantic import BaseModel
 
+from .live import LiveAware, OmitWhenNone
+
 # played: has minutes that day. dnp: his team played and he did not (or, for
 # today, his game is over and he did not). scheduled: today, game not started
-# or no line yet. no_game: his NBA team was off.
-RosterDayStatus = Literal['played', 'dnp', 'scheduled', 'no_game']
+# or no line yet. no_game: his NBA team was off. live: today, his game is in
+# progress (only with LIVE_STANDINGS_ENABLED on; stats are the line so far).
+RosterDayStatus = Literal['played', 'dnp', 'scheduled', 'no_game', 'live']
+RosterDayGameStatus = Literal['scheduled', 'live', 'final']
 RosterDayMoveKind = Literal['free_agent', 'waiver', 'trade']
 
 
@@ -25,7 +29,21 @@ class RosterDayStats(BaseModel):
     to: float = 0
 
 
-class RosterDayPlayer(BaseModel):
+class RosterDayGame(BaseModel):
+    """The player's NBA game that day, from the site scoreboard. Final games
+    are always sent; scheduled and live ones only with LIVE_STANDINGS_ENABLED
+    on. Scores are his team's and the opponent's."""
+    status: RosterDayGameStatus
+    # The scoreboard's own short text: "Q3 4:12", "Halftime", "Final/OT".
+    detail: str = ''
+    start_time: Optional[datetime] = None
+    team_score: Optional[int] = None
+    opp_score: Optional[int] = None
+    won: Optional[bool] = None
+
+
+class RosterDayPlayer(OmitWhenNone):
+    omit_when_none: ClassVar[tuple[str, ...]] = ('game',)
     player_id: int
     player_name: str
     positions: list[str]
@@ -38,6 +56,7 @@ class RosterDayPlayer(BaseModel):
     # First / last day on this roster (from that day's and the next day's moves).
     added: bool = False
     dropped: bool = False
+    game: Optional[RosterDayGame] = None
 
 
 class RosterDayMovePlayer(BaseModel):
@@ -57,7 +76,7 @@ class RosterDayMove(BaseModel):
     after_lock: bool = False
 
 
-class RosterDay(BaseModel):
+class RosterDay(LiveAware):
     team_id: int
     date: date
     scoring_period_id: int

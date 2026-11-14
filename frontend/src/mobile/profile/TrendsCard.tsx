@@ -1,3 +1,4 @@
+import { useSectionOpen } from '../../hooks/useSectionOpen'
 import { useState } from 'react'
 import TrendGameLogChart from '../../components/TrendGameLogChart'
 import type { CountingCategory, CustomDateRange, TimePeriod } from '../../types/api'
@@ -22,6 +23,7 @@ interface Props {
  * colored change), three across; tapping one opens its game-by-game chart.
  */
 export default function TrendsCard({ playerId, categories, reverseCategories, timePeriod, customRange }: Props) {
+  const [open, toggle] = useSectionOpen('trends')
   // which stat's chart is open; tapping the open one again closes it
   const [mode, setMode] = useState<CardMode | null>('minutes')
   const { log, error, is404, isLoading, refetch, windowDays, fallback, availableShootingStats, modes, reverse } =
@@ -102,7 +104,7 @@ export default function TrendsCard({ playerId, categories, reverseCategories, ti
   }
 
   return (
-    <Card title="Trends" aria-label="Trends">
+    <Card title="Trends" aria-label="Trends" fold={{ open, onToggle: toggle }}>
       {body}
     </Card>
   )

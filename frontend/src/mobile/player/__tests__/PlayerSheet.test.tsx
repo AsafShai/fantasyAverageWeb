@@ -35,7 +35,12 @@ const fetchMock = vi.fn(async (input: Request | string) => {
     if (period === 'last_7') {
       // Alpha played 2 games (60 pts); Free Guy none in the window.
       const alpha = { ...PLAYERS.players[0], stats: { ...PLAYERS.players[0].stats, pts: 60, minutes: 70, gp: 2 } }
-      return json({ ...PLAYERS, players: [alpha, { ...PLAYERS.players[1], has_data: false }] })
+      // Hot Hand (SG) out-plays everyone over the window, so Alpha drops to #2.
+      const hot = {
+        ...PLAYERS.players[1], player_name: 'Hot Hand', player_id: 11, positions: ['SG'],
+        stats: { pts: 120, reb: 100, ast: 60, stl: 14, blk: 8, fgm: 48, fga: 80, ftm: 18, fta: 20, fg_percentage: 0.6, ft_percentage: 0.9, three_pm: 40, minutes: 72, gp: 2 },
+      }
+      return json({ ...PLAYERS, players: [alpha, hot, { ...PLAYERS.players[1], has_data: false }] })
     }
     return json(PLAYERS)
   }
@@ -140,11 +145,19 @@ describe('player sheet', () => {
     expect(chips.map((c) => c.textContent)).toEqual(['📅 Full Season', '🔥 Last 7 Days', '📊 Last 15 Days', '📈 Last 30 Days', '📆 Custom'])
     expect(chips[0]).toHaveAttribute('aria-pressed', 'true')
     expect(within(sheet).getByText('SEASON · PER GAME')).toBeInTheDocument()
+    expect(within(sheet).getByTestId('sheet-rank')).toHaveTextContent('#1 of')
+    expect(within(sheet).getByText('#1 PG · #1 SG')).toBeInTheDocument()
+    const seasonZ = within(sheet).getByTestId('sheet-z').textContent
+    expect(seasonZ).toMatch(/^[+-]\d\.\d\d$/)
 
     await user.click(chips[1])
     await within(sheet).findByText('LAST 7 DAYS · PER GAME · 2 GP')
     const tiles = within(within(sheet).getByRole('list', { name: 'Per game' })).getAllByRole('listitem')
     expect(tiles.slice(0, 2).map((t) => t.textContent)).toEqual(['MPG35.0', 'PTS30.0'])
+    // rank follows the period too
+    await within(sheet).findByText('#1 PG · #2 SG')
+    expect(within(sheet).getByTestId('sheet-rank')).toHaveTextContent('#2 of')
+    expect(within(sheet).getByTestId('sheet-z').textContent).not.toBe(seasonZ)
     // the header line stays the season's
     expect(within(sheet).getByText('LAL · PG/SG · Bench · 10 GP')).toBeInTheDocument()
   })

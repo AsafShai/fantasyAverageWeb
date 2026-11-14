@@ -4,12 +4,15 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
-import EspnUpdatedNote from '../components/EspnUpdatedNote'
+import LiveBadge from '../components/live/LiveBadge'
+import { useLiveQuery } from '../hooks/useLiveQuery'
+import { liveRangeNote, tonightGpPlus } from '../utils/liveTonight'
+import LiveRangeNote from '../components/live/LiveRangeNote'
 import StandingsRace from './StandingsRace'
 import ShootingStatsSection from '../components/ShootingStatsSection'
 import type { HeatmapData, Team } from '../types/api'
 import { getHeatmapColor, getTextColor } from '../utils/colorUtils'
-import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
+import { todayIso, presetRangeStart, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { myTeamRowClass } from '../myTeam/display'
 import { useMyTeam } from '../context/MyTeamContext'
@@ -71,7 +74,7 @@ const Analytics = () => {
 
   const today = todayIso()
 
-  const { data: heatmapData, error, isLoading } = useGetHeatmapDataQuery(appliedDates)
+  const { data: heatmapData, error, isLoading } = useLiveQuery(useGetHeatmapDataQuery, appliedDates)
   const { data: summary } = useGetLeagueSummaryQuery()
 
   const handleTeamClick = (teamId: number) => {
@@ -123,6 +126,14 @@ const Analytics = () => {
     (heatmapData.actual_start_date && heatmapData.actual_start_date !== heatmapData.date_range_start) ||
     (heatmapData.actual_end_date && heatmapData.actual_end_date !== heatmapData.date_range_end)
   )
+  // A range that ends today: its live note replaces the "closest available data" one.
+  const rangeNote = isDateRangeActive ? liveRangeNote(heatmapData?.live, heatmapData?.actual_start_date, heatmapData?.actual_end_date) : null
+  // GP "+N": games counted tonight (only values, ranks, colours and this change on the heatmap).
+  const gpTonight = new Map<number, string>()
+  heatmapData?.teams.forEach((t, i) => {
+    const plus = tonightGpPlus(heatmapData.live, heatmapData.gp_tonight?.[i])
+    if (plus) gpTonight.set(t.team_id, plus)
+  })
 
   const getSortedHeatmapData = (heatmapData: HeatmapData): SortedHeatmapData | null => {
     if (!heatmapData) return null
@@ -189,6 +200,7 @@ const Analytics = () => {
         onTab={(tab) => setUrlState({ tab })}
         dataDate={heatmapData?.data_date}
         espnUpdatedAt={summary?.espn_updated_at}
+        live={heatmapData?.live}
         heatmap={sorted}
         sort={sortBy ? { key: sortBy, dir: sortOrder } : null}
         onSort={(s) => { setSortBy(s.key); setSortOrder(s.dir) }}
@@ -206,14 +218,16 @@ const Analytics = () => {
         onApply={applyDates}
         onClear={clearDates}
         onQuickRange={(days) => {
-          setStartDate(getDateNDaysAgo(days))
+          const start = presetRangeStart(days, summary?.season_start)
+          setStartDate(start)
           setEndDate(today)
-          setDateError('')
+          validateDates(start, today)
         }}
         appliedRangeLabel={isDateRangeActive ? `${formatDate(appliedDates.startDate!)} - ${formatDate(appliedDates.endDate!)}` : ''}
-        mismatchNote={hasDateMismatch
+        mismatchNote={rangeNote ?? (hasDateMismatch
           ? `Note: closest available data used - showing ${formatDate(heatmapData!.actual_start_date!)} - ${formatDate(heatmapData!.actual_end_date!)}`
-          : undefined}
+          : undefined)}
+        gpTonight={gpTonight}
         rangeError={error && isDateRangeActive ? getErrorMessage(error, 'Could not load analytics data for this date range.') : undefined}
         race={<StandingsRace />}
         shots={<ShootingStatsSection />}
@@ -287,10 +301,10 @@ const Analytics = () => {
             <button
               key={days}
               onClick={() => {
-                const start = getDateNDaysAgo(days);
+                const start = presetRangeStart(days, summary?.season_start);
                 setStartDate(start);
                 setEndDate(today);
-                setDateError('');
+                validateDates(start, today);
               }}
               className="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
             >
@@ -303,7 +317,8 @@ const Analytics = () => {
           <p className="mb-3 text-sm text-red-600">{dateError}</p>
         )}
 
-        {hasDateMismatch && (
+        {rangeNote && <LiveRangeNote live={heatmapData?.live} text={rangeNote} className="mb-3 px-4 py-2 border rounded-md" />}
+        {!rangeNote && hasDateMismatch && (
           <div className="mb-3 px-4 py-2 bg-amber-50 dark:bg-gray-700 border border-amber-200 dark:border-gray-600 rounded-md text-sm text-amber-700 dark:text-amber-300">
             Note: closest available data used - showing {formatDate(heatmapData!.actual_start_date!)} - {formatDate(heatmapData!.actual_end_date!)}
           </div>
@@ -393,6 +408,9 @@ const Analytics = () => {
                           }}
                         >
                           <span>{displayValue}</span>
+                          {category === 'GP' && gpTonight.has(team.team_id) && (
+                            <span className="ml-1 text-[10px] font-semibold opacity-80">{gpTonight.get(team.team_id)}</span>
+                          )}
                           {rank !== undefined && rank > 0 && (
                             <span className="absolute bottom-0.5 right-0.5 text-[0.7rem] opacity-85 font-semibold">
                               ({rank})
@@ -418,7 +436,7 @@ const Analytics = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">League Analytics</h1>
           {heatmapData?.data_date
             ? <DataDateBadge dataDate={heatmapData.data_date} />
-            : <EspnUpdatedNote updatedAt={summary?.espn_updated_at} />}
+            : <LiveBadge liveDetail="finished" live={heatmapData?.live} espnUpdatedAt={summary?.espn_updated_at} />}
         </div>
         {/* mobile: the three tabs split the width (a long label wraps) instead of
             scrolling the last one off screen */}

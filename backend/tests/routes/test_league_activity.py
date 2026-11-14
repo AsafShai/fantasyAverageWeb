@@ -58,3 +58,31 @@ def test_latest_moves_limit(test_client):
 def test_latest_moves_rejects_bad_limit(test_client):
     with mock_service(activity()):
         assert test_client.get('/api/league/activity/latest?limit=0').status_code == 422
+
+
+def test_player_history(test_client):
+    from app.models.activity_models import PlayerHistoryMove, PlayerHistoryStint, PlayerLeagueHistory
+    at = datetime(2026, 10, 15, tzinfo=timezone.utc)
+    history = PlayerLeagueHistory(
+        season_id=2027, player_id=7,
+        teams=[ActivityTeam(team_id=1, name='Team Alpha', abbrev='ALP')],
+        moves=[PlayerHistoryMove(id='d', kind='draft', at=at, team_id=1, pick=3, round=1)],
+        stints=[PlayerHistoryStint(team_id=1, start=at)],
+        last_updated=at,
+    )
+    service = AsyncMock()
+    service.get_player_history.return_value = history
+    with patch('app.routes.league.get_league_activity_service', return_value=service):
+        response = test_client.get('/api/league/players/7/history')
+    assert response.status_code == 200
+    service.get_player_history.assert_awaited_once_with(7)
+    data = response.json()
+    assert data['moves'][0]['kind'] == 'draft' and data['stints'][0]['end'] is None
+
+
+def test_player_history_espn_down(test_client):
+    service = AsyncMock()
+    service.get_player_history.side_effect = DataSourceError('ESPN down')
+    with patch('app.routes.league.get_league_activity_service', return_value=service):
+        response = test_client.get('/api/league/players/7/history')
+    assert response.status_code == 503

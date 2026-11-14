@@ -33,7 +33,7 @@ function line(div: number) {
 }
 
 /** Players list: the profile player on team 1, plus a deterministic pool. */
-function playersList() {
+export function playersList() {
   let seed = 7
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
   const pos = [['PG'], ['SG'], ['SF'], ['PF'], ['C'], ['PG', 'SG'], ['SF', 'PF'], ['PF', 'C']]
@@ -119,7 +119,45 @@ export async function mockProfileApis(page: Page, opts: { gameDate?: string } = 
       predicted.push(body.minutes)
       return route.fulfill({ json: { stats: { ...PROJ_LINE, pts: 25.4 } } })
     }
+    if (path === `/league/players/${PROFILE_ID}/history`) return route.fulfill({ json: leagueHistory() })
     return route.fallback()
   })
   return { predicted }
+}
+
+/** League history: drafted, dropped, claimed for 3 hours, then traded. */
+export function leagueHistory() {
+  const p = (player_id: number, name: string) => ({ player_id, name })
+  const base = { from_team_id: null, pick: null, round: null, swapped: [], in_trade: false, trade_sides: [], trade_drops: [] }
+  return {
+    season_id: 2027,
+    player_id: PROFILE_ID,
+    teams: [
+      { team_id: 1, name: 'Trust the process', abbrev: 'TTP' },
+      { team_id: 4, name: 'DORELIT', abbrev: 'DOR' },
+      { team_id: 8, name: "Dor's Injured Team", abbrev: 'DIT' },
+    ],
+    moves: [
+      { ...base, id: 'd', kind: 'draft', at: '2026-10-15T20:08:00Z', team_id: 4, pick: 26, round: 3 },
+      { ...base, id: 'r', kind: 'drop', at: '2026-10-20T04:20:00Z', team_id: 4 },
+      { ...base, id: 'w', kind: 'waiver', at: '2026-10-21T07:27:00Z', team_id: 8, swapped: [p(7001, 'Aday Mara')] },
+      { ...base, id: 'f', kind: 'drop', at: '2026-10-21T10:27:00Z', team_id: 8, swapped: [p(7002, 'Adem Bona')] },
+      { ...base, id: 'a', kind: 'add', at: '2026-10-22T09:00:00Z', team_id: 4 },
+      {
+        ...base, id: 't', kind: 'trade', at: '2026-10-28T13:12:00Z', team_id: 1, from_team_id: 4,
+        trade_sides: [
+          { team_id: 1, players: [p(PROFILE_ID, 'Donovan Mitchell'), p(7003, 'Peyton Watson')] },
+          { team_id: 4, players: [p(7004, 'Andrew Wiggins'), p(7005, 'Josh Giddey')] },
+        ],
+        trade_drops: [{ team_id: 1, players: [p(7006, 'Keon Ellis')] }],
+      },
+    ],
+    stints: [
+      { team_id: 4, start: '2026-10-15T20:08:00Z', end: '2026-10-20T04:20:00Z' },
+      { team_id: 8, start: '2026-10-21T07:27:00Z', end: '2026-10-21T10:27:00Z' },
+      { team_id: 4, start: '2026-10-22T09:00:00Z', end: '2026-10-28T13:12:00Z' },
+      { team_id: 1, start: '2026-10-28T13:12:00Z', end: null },
+    ],
+    last_updated: '2026-11-05T12:00:00Z',
+  }
 }

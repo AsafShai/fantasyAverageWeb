@@ -7,7 +7,8 @@ import {
   aggregateExtraTotals,
   extraCountingCategories,
 } from '../utils/tradeCalculations';
-import { averageZ, type PlayerValueLookup } from '../utils/playerValues';
+import { averageZ, type PlayerValueLookup, type TradeRankingContext } from '../utils/playerValues';
+import { tradeSideCategoryZs } from '../utils/tradeCategoryZ';
 import type { ViewMode } from './format';
 
 export interface SideRow {
@@ -17,6 +18,7 @@ export interface SideRow {
   fixed: Record<string, number>;
   extras: Record<string, number>;
   z: number | null;
+  categoryZs: Record<string, number> | null;
 }
 
 export interface TradeComparisonProps {
@@ -28,6 +30,7 @@ export interface TradeComparisonProps {
   tradeMode: TradeMode;
   periodLabel: string;
   playerValue?: PlayerValueLookup;
+  tradeRanking?: TradeRankingContext;
 }
 
 /** Labels of the two comparison rows, as in the design: what each side ends up with. */
@@ -44,7 +47,7 @@ export function sideLabels(tradeMode: TradeMode, teamA: Team | null, teamB: Team
  * trade, team A's row holds the players team B sends. Show/Hide Columns and
  * "8 cats only" work as on desktop; the phone opens on the categories.
  */
-export function buildTradeComparison({ teamA, teamB, playersA, playersB, viewMode, tradeMode, playerValue }: TradeComparisonProps) {
+export function buildTradeComparison({ teamA, teamB, playersA, playersB, viewMode, tradeMode, playerValue, tradeRanking }: TradeComparisonProps) {
   const isTeamTrade = tradeMode === 'team';
   const [labelA, labelB] = sideLabels(tradeMode, teamA, teamB);
   // Team trade: A gets B's players. Free agents: Drop = your players, Add = free agents.
@@ -58,6 +61,9 @@ export function buildTradeComparison({ teamA, teamB, playersA, playersB, viewMod
     fixed: agg(players) as unknown as Record<string, number>,
     extras: aggExtras(players, extraCategories),
     z: averageZ(players, playerValue),
+    categoryZs: tradeRanking?.referencePool.length
+      ? tradeSideCategoryZs(players, tradeRanking.referencePool, tradeRanking.categories, tradeRanking.reverseCategories, viewMode)
+      : null,
   });
   const rows = [build('A', labelA, getsA), build('B', labelB, getsB)];
   return { rows, extraCategories, ready: playersA.length > 0 && playersB.length > 0, showZ: playerValue !== undefined };

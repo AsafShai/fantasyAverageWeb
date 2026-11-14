@@ -6,12 +6,17 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import { getErrorMessage } from '../../utils/errorMessage'
 import { backLabel, usePlayerProfileData } from '../../hooks/usePlayerProfileData'
+import { useSectionOpen } from '../../hooks/useSectionOpen'
+import { useMyTeam } from '../../context/MyTeamContext'
+import { tradeLinkForPlayer } from '../player/tradePreset'
 import { Card, DataTable, Segmented, type Column } from '../ui'
 import TimeFrameChips from './TimeFrameChips'
 import FantasyValueCard from './FantasyValueCard'
 import TrendsCard from './TrendsCard'
 import NextGameCard from './NextGameCard'
 import GameLogCard from './GameLogCard'
+import PastSeasonsCard from './PastSeasonsCard'
+import LeagueHistoryCard from './LeagueHistoryCard'
 import './profile.css'
 
 /*
@@ -53,7 +58,9 @@ export default function PlayerProfileMobile() {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const [perGame, setPerGame] = useState<'pg' | 'tot'>('pg')
+  const [statsOpen, toggleStats] = useSectionOpen('stats')
 
+  const { teams, myTeamId } = useMyTeam()
   const d = usePlayerProfileData(playerId, timePeriod, customRange)
 
   const handleBack = () => {
@@ -116,6 +123,18 @@ export default function PlayerProfileMobile() {
             ) : (
               <span className="mr-pp-badge mr-pp-free">{fantasyEntry.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}</span>
             ))}
+          {fantasyEntry && (
+            <button
+              type="button"
+              className="mr-btn mr-pp-trade"
+              onClick={() => {
+                const link = tradeLinkForPlayer(fantasyEntry, teams, myTeamId)
+                navigate(link.path, { state: link.state })
+              }}
+            >
+              Trade Analyzer
+            </button>
+          )}
         </div>
       </Card>
 
@@ -148,7 +167,7 @@ export default function PlayerProfileMobile() {
         />
       )}
 
-      <Card title={`Stats · ${d.periodLabel}`} aria-label="Stats">
+      <Card title={`Stats · ${d.periodLabel}`} aria-label="Stats" fold={{ open: statsOpen, onToggle: toggleStats }}>
         <Segmented
           label="Stats"
           size="sm"
@@ -179,6 +198,10 @@ export default function PlayerProfileMobile() {
           <DataTable caption={`Stats, ${perGame === 'pg' ? 'per game' : 'totals'}`} columns={statColumns} rows={[stats]} rowKey={() => 'line'} />
         )}
       </Card>
+
+      <PastSeasonsCard playerId={playerId} />
+
+      <LeagueHistoryCard playerId={playerId} />
 
       <TrendsCard
         playerId={Number(playerId)}

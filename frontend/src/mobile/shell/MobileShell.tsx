@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- exports helpers next to components; only affects dev hot reload */
 import { useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import CommandPalette from '../../components/CommandPalette'
