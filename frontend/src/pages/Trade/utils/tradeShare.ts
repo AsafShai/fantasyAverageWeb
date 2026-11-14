@@ -33,13 +33,6 @@ type PlayerKey = Pick<Player, 'player_name' | 'player_id'>;
 export const samePlayer = (a: PlayerKey, b: PlayerKey) =>
   a.player_id != null && b.player_id != null ? a.player_id === b.player_id : a.player_name === b.player_name;
 
-/** Keys for the desktop / mobile "categories only" column set (composite FG/FT). */
-export const SHARE_CATEGORY_FIELDS = [
-  'composite:fg',
-  'composite:ft',
-  ...SHARE_CATEGORIES.slice(2).map(c => c.field),
-] as const;
-
 /** Share-card rows, one per scoring category (plus any extra league
  * category): the combined value of `first`, then of `second`. */
 export function tradeShareRows(

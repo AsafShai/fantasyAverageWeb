@@ -232,22 +232,16 @@ test('Trade Analyzer: each traded player shows his rank and z-score, and the com
   await expect(page.getByText('#1', { exact: true })).toBeVisible()
   await expect(page.getByTitle(/^Rank \d+ of 24 players/)).toHaveCount(2)
 
-  // The comparison opens on the 8 scoring categories; the shortcut toggles
-  // every column (made/attempted, minutes, games) on and off.
+  // The comparison shows the 8 scoring categories; minutes and games are
+  // the only extra stats, one tap away.
   const rows = page.getByRole('table', { name: 'Category comparison' })
   await expect(page.locator('.tc-team-card__avg-meta')).toHaveCount(2)
-  const categoryRows = rows.locator('.tc-stat-row')
-  await expect(categoryRows).toHaveCount(8)
-  const shortcut = page.getByRole('button', { name: '8 cats only' })
-  await expect(shortcut).toHaveAttribute('aria-pressed', 'true')
+  await expect(rows.locator('.tc-stat-row')).toHaveCount(8)
   await expect(page.locator('.tc-detail-grid')).toHaveCount(0)
-  await shortcut.click()
-  await expect(shortcut).toHaveAttribute('aria-pressed', 'false')
+  await page.getByRole('button', { name: 'Show minutes and games' }).click()
   await expect(page.locator('.tc-detail-grid')).toContainText('MIN')
-  await expect(page.locator('.tc-detail-grid')).toContainText('FGA')
-  await shortcut.click()
-  await expect(shortcut).toHaveAttribute('aria-pressed', 'true')
-  await expect(categoryRows).toHaveCount(8)
+  await expect(page.locator('.tc-detail-grid')).not.toContainText('FGA')
+  await page.getByRole('button', { name: 'Hide minutes and games' }).click()
   await expect(page.locator('.tc-detail-grid')).toHaveCount(0)
   await expectNoHorizontalScroll(page)
 })
