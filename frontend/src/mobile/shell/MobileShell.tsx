@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties, type Dispatch, type SetStateAc
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import CommandPalette from '../../components/CommandPalette'
 import { SocialLinks } from '../../components/Footer'
-import { getNavGroups, prefetchRoute, type NavGroupDef } from '../../components/navConfig'
+import { getNavGroups, prefetchRoute } from '../../components/navConfig'
 import { useMyTeam } from '../../context/MyTeamContext'
 import { ensureMobileFonts } from '../fonts'
 import PlayerSheet from '../player/PlayerSheet'
@@ -11,6 +11,7 @@ import { usePlayerSheet } from '../player/usePlayerSheet'
 import { useSheetHistory } from '../ui'
 import { useTabPrefs } from './tabPrefs'
 import { useBarTabs } from './useTabContext'
+import { menuGroups } from './menuGroups'
 
 /*
  * Phone shell of the redesign (step 2): logo header, page, site footer, the
@@ -192,21 +193,6 @@ function MobileTabBar({ onSearch, onMenu }: MobileTabBarProps) {
 }
 
 // ── ☰ menu dropdown ─────────────────────────────────────────────────────
-
-/*
- * Phone menu only (desktop nav unchanged): the groups are master's, with NBA
- * before Minigames and Today called Home like the tab.
- */
-export function menuGroups(groups: NavGroupDef[]): NavGroupDef[] {
-  const mapped = groups.map((g) =>
-    g.key === 'league' ? { ...g, items: g.items.map((i) => (i.path === '/' ? { ...i, label: 'Home', icon: '🏠' } : i)) } : g,
-  )
-  const nba = mapped.find((g) => g.key === 'nba')
-  if (!nba) return mapped
-  const rest = mapped.filter((g) => g.key !== 'nba')
-  const at = rest.findIndex((g) => g.key === 'minigames')
-  return at < 0 ? mapped : [...rest.slice(0, at), nba, ...rest.slice(at)]
-}
 
 /**
  * Floats over the page right under the header (not a sheet, does not push the

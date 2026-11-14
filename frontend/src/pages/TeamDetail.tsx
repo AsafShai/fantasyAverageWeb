@@ -139,6 +139,7 @@ const TeamDetail = () => {
     if (!showSchedule) return
     const dates = weekDays.map(d => d.date)
     if (dates.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- keep the focused day inside the visible week
     setScheduleFocusDate(prev => {
       if (prev && dates.includes(prev)) return prev
       if (coverageDate && dates.includes(coverageDate)) return coverageDate
@@ -182,7 +183,7 @@ const TeamDetail = () => {
     [team_detail]
   )
 
-  const rosterPlayers = team_detail?.players ?? []
+  const rosterPlayers = useMemo(() => team_detail?.players ?? [], [team_detail])
   const scheduleSpotlightRows = useMemo(() => {
     if (!showSchedule || !scheduleSpotlightDate || rosterPlayers.length === 0) return []
     return [...rosterPlayers]

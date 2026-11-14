@@ -1,4 +1,4 @@
-import { fantasyLineupState, resolveFantasyContext } from './fantasyLineupMark'
+import { fantasyLineupState, resolveFantasyContext } from './fantasyLineup'
 import { fantasyProTeam } from './proTeam'
 import type { RosterDayPlayer } from '../../types/api'
 import type { BoxPlayerLine, BoxScoreGame, FantasyNightContext, GameBoxScore, SlatePlayerValue, SlateValues } from '../../types/boxScore'

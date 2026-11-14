@@ -77,6 +77,7 @@ export default function RosterCoverage({
 
   useEffect(() => {
     if (!externalSelectedDate || !visibleDays.some(d => d.date === externalSelectedDate)) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- follow the parent's date when it changes
     setSelectedDate(externalSelectedDate)
   }, [externalSelectedDate, visibleDays])
 

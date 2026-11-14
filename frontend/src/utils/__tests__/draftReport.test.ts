@@ -106,11 +106,12 @@ describe('buildScoredPicks', () => {
   })
 })
 
-describe.skip('buildTeamGrades', () => {
+describe('buildTeamGrades', () => {
   it('grades absolutely on realized/expected value ratio', () => {
     // A team that beats its slots (valueRank < pick) clears 1.0 and earns an A;
-    // a team that busts every slot falls well under 0.82 and earns an F. Grades
-    // are absolute, so both can coexist without a forced distribution.
+    // a team that busts every slot falls well under 0.82 and gets the floor
+    // grade (D). Grades are absolute, so both can coexist without a forced
+    // distribution.
     const beat = [30, 40, 50].map((pick, i) => ({
       pick, round: 3, team_id: 1, team_name: 'Beat', player_name: `A${i}`,
       gp: 70, mpg: 30, totalZ: 1, valueRank: pick - 20, diff: 20, badge: 'Steal' as const,
@@ -126,7 +127,7 @@ describe.skip('buildTeamGrades', () => {
     expect(beatGrade.ratio).toBeGreaterThan(1)
     expect(beatGrade.grade).toBe('A')
     expect(missedGrade.ratio).toBeLessThan(0.82)
-    expect(missedGrade.grade).toBe('F')
+    expect(missedGrade.grade).toBe('D')
     expect(grades[0].team_name).toBe('Beat')
   })
 

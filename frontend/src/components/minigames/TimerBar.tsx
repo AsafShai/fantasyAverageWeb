@@ -23,6 +23,7 @@ export default function TimerBar({
   })
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the bar when a new round starts
     setRemainingMs(totalMs)
   }, [resetKey, totalMs])
 

@@ -1,4 +1,4 @@
-import { FANTASY_LINEUP_DOT_CLASS, FANTASY_LINEUP_LABEL, type FantasyLineupState } from './fantasyLineupMark'
+import { FANTASY_LINEUP_DOT_CLASS, FANTASY_LINEUP_LABEL, type FantasyLineupState } from './fantasyLineup'
 
 const ITEMS: FantasyLineupState[] = ['started', 'bench', 'ir']
 
