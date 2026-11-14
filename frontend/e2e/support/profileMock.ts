@@ -33,7 +33,7 @@ function line(div: number) {
 }
 
 /** Players list: the profile player on team 1, plus a deterministic pool. */
-function playersList() {
+export function playersList() {
   let seed = 7
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
   const pos = [['PG'], ['SG'], ['SF'], ['PF'], ['C'], ['PG', 'SG'], ['SF', 'PF'], ['PF', 'C']]
