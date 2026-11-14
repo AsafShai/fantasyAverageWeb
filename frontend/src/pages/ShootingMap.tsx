@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { useGetAllPlayersQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
 import { usePersistedState } from '../hooks/usePersistedState'
 import TimePeriodSelector from '../components/TimePeriodSelector'

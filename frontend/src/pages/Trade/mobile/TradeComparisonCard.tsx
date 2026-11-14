@@ -4,7 +4,7 @@ import { BottomSheet, Button, Card, Chip, DataTable, useSheetHistory, type Colum
 import { KNOWN_REVERSE_CATEGORIES } from '../utils/tradeCalculations';
 import { buildTradeComparison, type SideRow, type TradeComparisonProps } from './comparison';
 import { SHARE_CATEGORIES, tradeShareRows } from '../utils/tradeShare';
-import { useMyTeam } from '../../../context/MyTeamContext';
+import { useMyTeam } from '../../../context/useMyTeam';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
 import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
 import { formatAsOf } from '../../../components/share/shareCardFormat';

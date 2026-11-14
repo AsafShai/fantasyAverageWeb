@@ -8,7 +8,7 @@ import DataDateBadge from './DataDateBadge'
 import type { TeamShotStats } from '../types/api'
 import { MyTeamMark } from './MyTeamMark'
 import { myTeamRowClass } from '../myTeam/display'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { useMobileRedesign } from '../mobile/flag'
 import { ShootingStatsMobile } from '../mobile/pages/analytics/ShootingStatsMobile'
 

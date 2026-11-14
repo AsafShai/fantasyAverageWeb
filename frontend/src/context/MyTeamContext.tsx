@@ -1,25 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { usePersistedState } from '../hooks/usePersistedState'
-import type { Team } from '../types/api'
-
-interface MyTeamContextValue {
-  teams: Team[]
-  myTeam: Team | null
-  myTeamId: number | null
-  isMyTeam: (teamId: number | null | undefined) => boolean
-  setMyTeamId: (teamId: number | null) => void
-}
-
-const EMPTY: MyTeamContextValue = {
-  teams: [],
-  myTeam: null,
-  myTeamId: null,
-  isMyTeam: () => false,
-  setMyTeamId: () => {},
-}
-
-const MyTeamContext = createContext<MyTeamContextValue | null>(null)
+import { MyTeamContext, type MyTeamContextValue } from './myTeamContextValue'
 
 export function MyTeamProvider({ children }: { children: ReactNode }) {
   const { data: teams = [], isSuccess } = useGetTeamsListQuery()
@@ -46,11 +28,4 @@ export function MyTeamProvider({ children }: { children: ReactNode }) {
   }, [teams, myTeam, setStoredId])
 
   return <MyTeamContext.Provider value={value}>{children}</MyTeamContext.Provider>
-}
-
-// The hook lives beside its provider on purpose; Fast Refresh just reloads
-// this file in full when it changes.
-// eslint-disable-next-line react-refresh/only-export-components
-export function useMyTeam(): MyTeamContextValue {
-  return useContext(MyTeamContext) ?? EMPTY
 }

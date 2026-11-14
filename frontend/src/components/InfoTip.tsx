@@ -37,9 +37,6 @@ export default function InfoTip({ title, body, formula, className = '' }: InfoTi
 
   useEffect(() => {
     if (!open) return
-    // Positions the popover from the trigger's measured DOM rect.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    place()
     const handleOutside = (e: Event) => {
       if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
         setOpen(false)
@@ -69,16 +66,16 @@ export default function InfoTip({ title, body, formula, className = '' }: InfoTi
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setOpen(o => {
-      const next = !o
-      setPinned(next)
-      return next
-    })
+    const next = !open
+    if (next) place()
+    setOpen(next)
+    setPinned(next)
   }
 
   const handleMouseEnter = () => {
     if (isNarrow()) return
     if (closeTimer.current) clearTimeout(closeTimer.current)
+    if (!open) place()
     setOpen(true)
   }
 

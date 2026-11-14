@@ -14,7 +14,7 @@ vi.mock('../../hooks/useInjuryData', () => ({
   useInjuryData: () => mockUseInjuryData(),
 }));
 
-vi.mock('../../context/MyTeamContext', () => {
+vi.mock('../../context/useMyTeam', () => {
   const myTeam = { team_id: 1, team_name: 'Fantasy One' };
   return {
     useMyTeam: () => ({

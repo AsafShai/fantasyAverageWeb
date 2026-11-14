@@ -11,7 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import InjuryBadge from '../components/InjuryBadge';
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display';
-import { useMyTeam } from '../context/MyTeamContext';
+import { useMyTeam } from '../context/useMyTeam';
 import { useFollowMyTeamValue } from '../hooks/useFollowMyTeam';
 
 const STAT_COLS: [keyof ProjectionStats, string][] = [

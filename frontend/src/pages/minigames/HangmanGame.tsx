@@ -117,11 +117,17 @@ export default function HangmanGame() {
     startRound(player?.id)
   }, [player?.id, startRound])
 
+  // Auto mode: a win starts a 3-second countdown to the next round. The start
+  // value is set during render when the countdown begins; the effect ticks it.
+  const autoAdvancing = phase === 'won' && autoMode
+  const [wasAutoAdvancing, setWasAutoAdvancing] = useState(autoAdvancing)
+  if (autoAdvancing !== wasAutoAdvancing) {
+    setWasAutoAdvancing(autoAdvancing)
+    if (autoAdvancing) setCountdown(3)
+  }
+
   useEffect(() => {
-    if (phase !== 'won' || !autoMode) return
-    // Starts the visible countdown alongside the interval that drives it.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCountdown(3)
+    if (!autoAdvancing) return
     const t = setInterval(() => {
       setCountdown((c) => {
         if (c == null) return null
@@ -134,7 +140,7 @@ export default function HangmanGame() {
       })
     }, 1000)
     return () => clearInterval(t)
-  }, [phase, autoMode, goNext])
+  }, [autoAdvancing, goNext])
 
   const onLetter = (letter: string) => {
     if (phase !== 'playing' || !player || guessed.has(letter)) return

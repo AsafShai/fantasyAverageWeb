@@ -73,13 +73,17 @@ export default function RosterCoverage({
     [roster, schedule, visibleDays, opponents],
   )
 
-  const activeDate = visibleDays.some(day => day.date === selectedDate) ? selectedDate : visibleDays[0]?.date ?? ''
+  // Follow the parent's date whenever it (or the visible window) changes.
+  // Adjusted during render, not in an effect, so there is no stale frame.
+  const [syncedFrom, setSyncedFrom] = useState<{ date: typeof externalSelectedDate; days: typeof visibleDays } | null>(null)
+  if (syncedFrom?.date !== externalSelectedDate || syncedFrom?.days !== visibleDays) {
+    setSyncedFrom({ date: externalSelectedDate, days: visibleDays })
+    if (externalSelectedDate && visibleDays.some(d => d.date === externalSelectedDate)) {
+      setSelectedDate(externalSelectedDate)
+    }
+  }
 
-  useEffect(() => {
-    if (!externalSelectedDate || !visibleDays.some(d => d.date === externalSelectedDate)) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- follow the parent's date when it changes
-    setSelectedDate(externalSelectedDate)
-  }, [externalSelectedDate, visibleDays])
+  const activeDate = visibleDays.some(day => day.date === selectedDate) ? selectedDate : visibleDays[0]?.date ?? ''
 
   useEffect(() => {
     if (activeDate) onActiveDate?.(activeDate)

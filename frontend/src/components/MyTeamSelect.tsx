@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 
 export function MyTeamSelect({
   fullWidth = false,

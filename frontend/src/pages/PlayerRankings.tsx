@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useEffect, useTransition, useDeferredValue } from 'react'
+import { useState, useMemo, useRef, useEffect, useEffectEvent, useTransition, useDeferredValue } from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { useWeightDraft } from '../hooks/useWeightDraft'
 import { useGetAllPlayersQuery, useGetLatestMovesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { FantasyTeamFilterChips } from '../components/playerRankings/FantasyTeamFilterChips'
 import ErrorMessage from '../components/ErrorMessage'
@@ -182,19 +182,23 @@ export default function PlayerRankings() {
     })
   }
 
-  const handleCalculate = () => {
-    recompute()
-    setSortCol('totalZ')
-    setSortAsc(false)
+  // Newly loaded players go back to the default sort (adjusted during render).
+  const [sortResetFor, setSortResetFor] = useState(players)
+  if (sortResetFor !== players) {
+    setSortResetFor(players)
+    if (players.length > 0) {
+      setSortCol('totalZ')
+      setSortAsc(false)
+    }
   }
 
+  // Rank newly loaded players (the heavy part runs in a transition). Effect
+  // events read the current filters/weights without re-running on them.
+  const onPlayersLoaded = useEffectEvent(() => {
+    if (players.length > 0) recompute()
+  })
   useEffect(() => {
-    if (players.length > 0) {
-      // Ranks the newly loaded players (the heavy part runs in a transition).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      handleCalculate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    onPlayersLoaded()
   }, [players])
 
   // Live recompute as sliders/calc-mode change — no Calculate click needed.
@@ -202,9 +206,11 @@ export default function PlayerRankings() {
   // drag internally, so this fires once per settled change, not per tick —
   // the 500-row table only re-renders once the slider actually stops moving.
   // Doesn't reset sortCol/sortAsc so an active sort survives a slider drag.
-  useEffect(() => {
+  const onWeightsChanged = useEffectEvent(() => {
     if (players.length > 0 && hasCalculated) recompute()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+  useEffect(() => {
+    onWeightsChanged()
   }, [weights, calcMode])
 
   const sortedPlayers = useMemo(() => {

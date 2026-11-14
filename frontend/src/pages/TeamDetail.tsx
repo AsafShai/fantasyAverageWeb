@@ -135,17 +135,15 @@ const TeamDetail = () => {
   const changeRosterDate = (date: string) => setRosterDate(date >= (rosterDay?.last_date ?? today) ? '' : date)
   const { data: schedule } = useGetScheduleQuery()
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
-  useEffect(() => {
-    if (!showSchedule) return
+  // Keep the focused day inside the visible week (adjusted during render).
+  const [focusClampedFor, setFocusClampedFor] = useState<{ show: boolean; days: typeof weekDays; coverage: string | null } | null>(null)
+  if (focusClampedFor?.show !== showSchedule || focusClampedFor?.days !== weekDays || focusClampedFor?.coverage !== coverageDate) {
+    setFocusClampedFor({ show: showSchedule, days: weekDays, coverage: coverageDate })
     const dates = weekDays.map(d => d.date)
-    if (dates.length === 0) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- keep the focused day inside the visible week
-    setScheduleFocusDate(prev => {
-      if (prev && dates.includes(prev)) return prev
-      if (coverageDate && dates.includes(coverageDate)) return coverageDate
-      return dates[0]
-    })
-  }, [showSchedule, scheduleHorizon, weekDays, coverageDate])
+    if (showSchedule && dates.length > 0 && !(scheduleFocusDate && dates.includes(scheduleFocusDate))) {
+      setScheduleFocusDate(coverageDate && dates.includes(coverageDate) ? coverageDate : dates[0])
+    }
+  }
   const scheduleSpotlightDate = scheduleFocusDate ?? weekDays[0]?.date ?? null
   const opponents = useMemo(
     () => (schedule ? opponentsByTeamDate(schedule) : new Map<string, string>()),

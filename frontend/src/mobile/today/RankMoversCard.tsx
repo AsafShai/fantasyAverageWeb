@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import type { RankMover } from '../../types/api'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { MyTeamMark } from '../../components/MyTeamMark'
 import { Card } from '../ui/Card'
 import { MultiSelectSheet } from './MultiSelectSheet'

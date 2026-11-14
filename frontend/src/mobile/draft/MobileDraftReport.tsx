@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../../myTeam/display'
 import {
   HEAT_MIN_SEASON_MONTHS,

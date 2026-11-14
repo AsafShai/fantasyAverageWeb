@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { timePeriodLabel } from '../../hooks/usePlayerProfileData'
 import { useGetAllPlayersQuery, useGetNbaPlayerQuery, useGetTeamPlayersQuery } from '../../store/api/fantasyApi'
 import type { CustomDateRange, Player, TimePeriod } from '../../types/api'

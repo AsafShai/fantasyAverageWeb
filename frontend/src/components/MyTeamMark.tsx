@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 
 export function MyTeamMark({ teamId }: { teamId: number | null | undefined }) {
   const { isMyTeam } = useMyTeam()

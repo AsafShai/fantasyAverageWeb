@@ -20,7 +20,7 @@ import {
   type FaReportRow,
 } from '../utils/faReport'
 import { fantasyTeamOptionLabel } from '../myTeam/display'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileFaReport from '../mobile/draft/MobileFaReport'
 

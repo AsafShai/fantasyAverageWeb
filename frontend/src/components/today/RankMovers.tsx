@@ -6,7 +6,7 @@ import MultiSelectFilter from './MultiSelectFilter'
 import type { RankMover } from '../../types/api'
 import { MyTeamMark } from '../MyTeamMark'
 import { leadWithMyTeam, myTeamRowClass } from '../../myTeam/display'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 
 interface RankMoversProps {
   movers: RankMover[]

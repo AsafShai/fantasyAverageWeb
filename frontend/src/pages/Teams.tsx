@@ -5,7 +5,7 @@ import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { leadWithMyTeam, myTeamRowClass } from '../myTeam/display'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileTeams from '../mobile/team/MobileTeams'
 

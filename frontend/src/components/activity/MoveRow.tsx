@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import type { ActivityMove } from '../../types/activity'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { MyTeamMark } from '../MyTeamMark'
 import { myTeamRowClass } from '../../myTeam/display'
 import PlayerNameLink from '../PlayerNameLink'

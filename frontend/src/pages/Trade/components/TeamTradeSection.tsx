@@ -8,7 +8,7 @@ import LoadingSpinner from '../../../components/LoadingSpinner';
 import ErrorMessage from '../../../components/ErrorMessage';
 import { getErrorMessage } from '../../../utils/errorMessage';
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../../../myTeam/display';
-import { useMyTeam } from '../../../context/MyTeamContext';
+import { useMyTeam } from '../../../context/useMyTeam';
 
 interface TeamTradeSectionProps {
   title: string;

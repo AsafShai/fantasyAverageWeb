@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { LeagueActivity } from '../../types/activity'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import PlayerNameLink from '../PlayerNameLink'
 import InfoTip from '../InfoTip'
 import {

@@ -8,18 +8,22 @@ interface DeadlineCountdownProps {
 
 const DeadlineCountdown = ({ deadline }: DeadlineCountdownProps) => {
   const deadlineMs = deadline ? new Date(deadline).getTime() : null
-  const [timeLeft, setTimeLeft] = useState(() => (deadlineMs ? deadlineMs - Date.now() : 0))
+  // Tick the wall clock; the time left is derived from it, so a new deadline
+  // shows the right value on its first render.
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     if (!deadlineMs) return
-    // Syncing with the wall clock: a new deadline starts from the time left now.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTimeLeft(deadlineMs - Date.now())
-    const id = setInterval(() => {
-      setTimeLeft(deadlineMs - Date.now())
-    }, 1000)
-    return () => clearInterval(id)
+    const tick = () => setNow(Date.now())
+    const first = setTimeout(tick, 0) // `now` may be stale if the deadline just appeared
+    const id = setInterval(tick, 1000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(id)
+    }
   }, [deadlineMs])
+
+  const timeLeft = deadlineMs ? deadlineMs - now : 0
 
   if (!deadlineMs || timeLeft <= 0 || timeLeft > VISIBLE_WINDOW_MS) return null
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useGetAdpIndexQuery, useGetAdpQuery } from '../../store/api/fantasyApi'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { useBlendSites, type BlendSites } from '../../hooks/useBlendSites'
@@ -375,17 +375,15 @@ export default function MockDraftPage() {
   }
 
   // The clock restarts only when the pick, whose turn it is, or completion
-  // changes; reading `session`/`paused`/`carriedClock` here without depending
-  // on them is deliberate, since any other session edit must not restart it.
+  // changes; `session`/`paused`/`carriedClock` are read through effect events
+  // so any other session edit does not restart it.
   const picksMade = session?.picks.length
   const userOnClock = session && isUserOnTheClock(session)
   const mockComplete = session && isMockComplete(session)
-  useEffect(() => {
+  const setUpTurnClock = useEffectEvent(() => {
     if (!session || isMockComplete(session)) {
       remainingRef.current = null
       deadlineRef.current = null
-      // Syncing the pick clock with wall-clock time for the new turn.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClockDeadlineMs(null)
       setClockFrozenSec(null)
       return
@@ -412,10 +410,14 @@ export default function MockDraftPage() {
     const deadline = Date.now() + (remainingRef.current ?? duration) * 1000
     deadlineRef.current = deadline
     setClockDeadlineMs(deadline)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
+  })
+  useEffect(() => {
+    // Syncing the pick clock with wall-clock time for the new turn.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUpTurnClock()
   }, [picksMade, userOnClock, mockComplete])
 
-  useEffect(() => {
+  const runTurnClock = useEffectEvent(() => {
     if (paused || !session || isMockComplete(session)) return
     const user = isUserOnTheClock(session)
     const duration = user ? session.userClockSec : session.botDelaySec
@@ -443,7 +445,9 @@ export default function MockDraftPage() {
       window.clearTimeout(timer)
       remainingRef.current = Math.max(0, remaining - (Date.now() - started) / 1000)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the comment above picksMade
+  })
+  useEffect(() => {
+    return runTurnClock()
   }, [paused, picksMade, mockComplete, userOnClock])
 
   // Starting while a changed order is loading would draft from the previous one.

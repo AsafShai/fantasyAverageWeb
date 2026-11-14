@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import type { ActivityMove, LeagueActivity, MoveKind as ActivityKind } from '../../types/activity'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { fantasyTeamOptionLabel } from '../../myTeam/display'
 import { MyTeamMark } from '../../components/MyTeamMark'
 import PlayerNameLink from '../../components/PlayerNameLink'
