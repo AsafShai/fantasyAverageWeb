@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import type { LeagueActivity, PendingTrade } from '../../types/activity'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { myTeamRowClass } from '../../myTeam/display'
 import PlayerNameLink from '../PlayerNameLink'
 import { formatCountdown } from '../../utils/leagueActivity'

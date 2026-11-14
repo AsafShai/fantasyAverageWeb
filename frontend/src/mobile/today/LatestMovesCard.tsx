@@ -5,7 +5,7 @@ import { formatDay, localDay } from '../../utils/leagueActivity'
 import { teamAbbrev, teamLookup, type TeamLookup } from '../../components/activity/teams'
 import PlayerNameLink from '../../components/PlayerNameLink'
 import { MyTeamMark } from '../../components/MyTeamMark'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { Card } from '../ui/Card'
 import { MoveKindPill, type MoveKind } from '../ui/Pills'
 

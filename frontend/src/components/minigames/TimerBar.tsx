@@ -22,10 +22,12 @@ export default function TimerBar({
     onTimeoutRef.current = onTimeout
   })
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing; syncs state to a changed input, refactor separately
+  // Refill the bar when a new round starts (adjusted during render).
+  const [roundFor, setRoundFor] = useState({ resetKey, totalMs })
+  if (roundFor.resetKey !== resetKey || roundFor.totalMs !== totalMs) {
+    setRoundFor({ resetKey, totalMs })
     setRemainingMs(totalMs)
-  }, [resetKey, totalMs])
+  }
 
   useEffect(() => {
     if (!running) return

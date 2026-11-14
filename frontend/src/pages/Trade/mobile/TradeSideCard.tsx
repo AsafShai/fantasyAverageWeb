@@ -8,7 +8,7 @@ import { getErrorMessage } from '../../../utils/errorMessage';
 import { getHeatmapColor, getTextColor } from '../../../utils/colorUtils';
 import { orderCategories } from '../../../utils/statOrder';
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../../../myTeam/display';
-import { useMyTeam } from '../../../context/MyTeamContext';
+import { useMyTeam } from '../../../context/useMyTeam';
 import { rankTone, signedZ } from '../../../components/activity/stintValue';
 import type { PlayerValue, PlayerValueLookup } from '../utils/playerValues';
 import { displayStats, formatMobileStat, STAT_FIELDS, type ViewMode } from './format';

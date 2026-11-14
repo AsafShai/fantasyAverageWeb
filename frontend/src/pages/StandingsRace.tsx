@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LineChart,
   Line,
@@ -103,6 +103,11 @@ const fitLabel = (name: string, maxWidth: number): string => {
 const formatDate = (dateStr: string) => {
   const [, month, day] = dateStr.slice(0, 10).split('-').map(Number)
   return `${month}/${day}`
+}
+
+// A row's value for a team, stored or tonight's (the live row keeps it under the dashed key).
+function valueOf(row: Record<string, number | string> | undefined, name: string) {
+  return row === undefined ? undefined : (row[name] ?? row[name + LIVE_KEY_SUFFIX])
 }
 
 function computeBumpRanks(rows: { teamId: number; value: number }[]): Map<number, number> {
@@ -305,22 +310,20 @@ const StandingsRace = () => {
     return liveRaceSeries(rows, liveDate, teams.map(t => t.team_name))
   }, [data, livePoints, liveDate, activeMetric, view, isValueView, teams])
 
-  // A row's value for a team, stored or tonight's (the live row keeps it under the dashed key).
-  const valueOf = (row: Record<string, number | string> | undefined, name: string) =>
-    row === undefined ? undefined : (row[name] ?? row[name + LIVE_KEY_SUFFIX])
-  const withLiveValues = (row: Record<string, number | string> | undefined) => {
+  const withLiveValues = useCallback((row: Record<string, number | string> | undefined) => {
     if (!row || row.date !== liveDate) return row
     const out: Record<string, number | string> = { date: row.date }
     teams.forEach(t => { const v = valueOf(row, t.team_name); if (v !== undefined) out[t.team_name] = v })
     return out
-  }
+  }, [liveDate, teams])
   const liveTick = moment === 'final' ? 'Tonight' : 'Live'
   const tickText = (d: string) => (d === liveDate ? liveTick : formatDate(d))
   // End labels: the value in Stat Value; while tonight is drawn, "<value> (tonight)"
   // on desktop as on the canvas (phones keep the short names, they already truncate).
-  const endValueText: ((v: number) => string) | undefined = liveDate && !mobile
+  const endValueText = useMemo<((v: number) => string) | undefined>(() => (liveDate && !mobile
     ? v => `${isValueView ? formatStatValue(v, activeMetric, basis) : v.toLocaleString(undefined, { maximumFractionDigits: 1 })} (tonight)`
     : isValueView ? v => formatStatValue(v, activeMetric, basis) : undefined
+  ), [liveDate, mobile, isValueView, activeMetric, basis])
 
   const handleBasisChange = (next: Basis) => setBasis(next)
 
@@ -381,8 +384,7 @@ const StandingsRace = () => {
     const maxTextWidth = Math.max(gutter - 12 - valueWidth, 24)
     const fitted = new Map(teams.map(t => [t.team_name, fitLabel(t.team_name, maxTextWidth)]))
     return { labelGutter: gutter, fittedNames: fitted }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teams, wrapWidth, chartData, isValueView, activeMetric, basis, liveDate, mobile])
+  }, [teams, wrapWidth, chartData, withLiveValues, endValueText])
   const labelFor = (teamName: string) => fittedNames.get(teamName) ?? teamName
 
   const basisWord = basis === 'avg' ? 'per-game averages' : 'season totals'

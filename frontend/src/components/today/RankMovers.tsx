@@ -8,7 +8,7 @@ import { liveMoment } from '../../utils/live'
 import { moversSubtitle, type MoversView } from '../../utils/liveTonight'
 import { MyTeamMark } from '../MyTeamMark'
 import { leadWithMyTeam, myTeamRowClass } from '../../myTeam/display'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 
 interface RankMoversProps {
   /** Day over day (the latest official day vs the day before). */

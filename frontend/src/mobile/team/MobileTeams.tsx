@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import type { Team } from '../../types/api'
 import { MyTeamMark } from '../../components/MyTeamMark'
 import { leadWithMyTeam } from '../../myTeam/display'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import './team.css'
 
 /** Phone Teams list (step 4): same list as today, my team first. */

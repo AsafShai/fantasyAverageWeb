@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useInjuryData } from '../hooks/useInjuryData';
 import { useDebounce } from '../hooks/useDebounce';
 import InjuryFilters from '../components/injuries/InjuryFilters';
@@ -6,7 +6,7 @@ import InjuryTable from '../components/injuries/InjuryTable';
 import NotificationsPanel from '../components/injuries/NotificationsPanel';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { useMyTeam } from '../context/MyTeamContext';
+import { useMyTeam } from '../context/useMyTeam';
 import { useGetNbaTeamsListQuery, useGetTeamDetailQuery } from '../store/api/fantasyApi';
 import { normalizePlayerName } from '../utils/playerName';
 import { useMobileRedesign } from '../mobile/flag';
@@ -147,15 +147,14 @@ export default function Injuries() {
     [recordsInScope],
   );
 
-  useEffect(() => {
+  // Drop selected teams that left the scope (adjusted during render).
+  const [prunedFor, setPrunedFor] = useState(teamOptions);
+  if (prunedFor !== teamOptions) {
+    setPrunedFor(teamOptions);
     const allowed = new Set(teamOptions);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing; syncs state to a changed input, refactor separately
-    setFilters(prev => {
-      const teams = prev.teams.filter(t => allowed.has(t));
-      if (teams.length === prev.teams.length) return prev;
-      return { ...prev, teams };
-    });
-  }, [teamOptions]);
+    const teams = filters.teams.filter(t => allowed.has(t));
+    if (teams.length !== filters.teams.length) setFilters({ ...filters, teams });
+  }
 
   const filteredRecords = useMemo(() => {
     return records

@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components -- exports helpers next to components; only affects dev hot reload */
 import { useEffect, useState } from 'react'
 import InjuryBadge from '../InjuryBadge'
 import PlayerNameLink from '../PlayerNameLink'
@@ -8,27 +7,12 @@ import { PlayByPlay } from './PlayByPlay'
 import { countdownLabel, gameClockLabel, localClock } from './tipTime'
 import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName'
 import { signedZ } from './linesOfTheNightFormat'
-import type { BoxPlayerLine, BoxTeamBox, BoxTeamTotals, FantasyNightContext, GameBoxScore, SlatePlayerValue } from '../../types/boxScore'
-import { fantasyLineupState, FantasyLineupMark, ON_COURT_DOT_CLASS, ON_COURT_MARK_TEXT_CLASS, resolveFantasyContext } from './fantasyLineupMark'
+import type { BoxPlayerLine, BoxTeamBox, FantasyNightContext, GameBoxScore, SlatePlayerValue } from '../../types/boxScore'
+import { FantasyLineupMark } from './fantasyLineupMark'
+import { fantasyLineupState, ON_COURT_DOT_CLASS, ON_COURT_MARK_TEXT_CLASS, resolveFantasyContext } from './fantasyLineup'
+import { BOX_LINE_COLUMNS } from './boxLineColumns'
 
 export type PlayerValues = Map<string, SlatePlayerValue>
-
-export const BOX_LINE_COLUMNS: { key: keyof BoxTeamTotals; label: string }[] = [
-  { key: 'min', label: 'MIN' },
-  { key: 'pts', label: 'PTS' },
-  { key: 'fg', label: 'FG' },
-  { key: 'fg3', label: '3PT' },
-  { key: 'ft', label: 'FT' },
-  { key: 'reb', label: 'REB' },
-  { key: 'ast', label: 'AST' },
-  { key: 'tov', label: 'TO' },
-  { key: 'stl', label: 'STL' },
-  { key: 'blk', label: 'BLK' },
-  { key: 'oreb', label: 'OREB' },
-  { key: 'dreb', label: 'DREB' },
-  { key: 'pf', label: 'PF' },
-  { key: 'plus_minus', label: '+/−' },
-]
 
 function Hidden({ label = 'Score hidden' }: { label?: string }) {
   return (

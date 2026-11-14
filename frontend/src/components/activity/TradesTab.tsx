@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { LeagueActivity } from '../../types/activity'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { fantasyTeamOptionLabel, myTeamRowClass } from '../../myTeam/display'
 import { formatDay, type StatMode, type TradeOverrides } from '../../utils/leagueActivity'
 import TradeDetail from './TradeDetail'

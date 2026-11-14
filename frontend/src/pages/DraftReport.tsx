@@ -19,7 +19,7 @@ import {
   type DraftBadge,
 } from '../utils/draftReport'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { useFollowMyTeamId } from '../hooks/useFollowMyTeam'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileDraftReport from '../mobile/draft/MobileDraftReport'

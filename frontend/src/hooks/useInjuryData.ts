@@ -52,26 +52,32 @@ export function useInjuryData(): {
   const [lastReportTime, setLastReportTime] = useState<string | null>(null);
   const { notifications, loadHistory, addNotification } = useInjuryNotifications();
 
-  const fetchAll = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/injuries/`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: InjuryRecord[] = await res.json();
-      setRecords(data);
-      setError(null);
-    } catch {
-      setError('Failed to load injury data. Retrying on reconnect.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Loads the records; the caller decides whether to show the loading state
+  // (it already starts true, so the initial load doesn't need to set it).
+  const loadRecords = useCallback(
+    () =>
+      fetch(`${API_BASE}/injuries/`)
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json() as Promise<InjuryRecord[]>;
+        })
+        .then(data => {
+          setRecords(data);
+          setError(null);
+        })
+        .catch(() => setError('Failed to load injury data. Retrying on reconnect.'))
+        .finally(() => setLoading(false)),
+    [],
+  );
+
+  const fetchAll = useCallback(() => {
+    setLoading(true);
+    return loadRecords();
+  }, [loadRecords]);
 
   // Initial fetch — records + past notifications + last report time from backend
   useEffect(() => {
-    // Initial fetch; fetchAll flips the loading flag before the request goes out.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchAll();
+    loadRecords();
     fetch(`${API_BASE}/injuries/notifications`)
       .then(r => r.ok ? r.json() : [])
       .then((past: InjuryNotification[]) => loadHistory(past))
@@ -80,7 +86,7 @@ export function useInjuryData(): {
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.last_report_time) setLastReportTime(data.last_report_time); })
       .catch(() => {});
-  }, [fetchAll, loadHistory]);
+  }, [loadRecords, loadHistory]);
 
   // SSE subscription
   useEffect(() => {

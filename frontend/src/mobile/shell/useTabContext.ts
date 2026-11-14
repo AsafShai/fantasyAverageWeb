@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useLocation } from 'react-router'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { usePersistedState } from '../../hooks/usePersistedState'
 import { currentTabIndex, getTab, type TabContext, type TabDef } from './tabs'
 

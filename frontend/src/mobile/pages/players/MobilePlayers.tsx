@@ -14,7 +14,7 @@ import { CoverageNotice } from '../../../components/DateRangePicker'
 import { MatchupCell, MatchupExpandRow } from '../../../components/MatchupDisplay'
 import { WeekDayHeading, WeekOpponent, SCHEDULE_HORIZONS, type PlayerTableMode, type ScheduleHorizon } from '../../../components/PlayerWeekColumns'
 import PlayerNameLink from '../../../components/PlayerNameLink'
-import { useMyTeam } from '../../../context/MyTeamContext'
+import { useMyTeam } from '../../../context/useMyTeam'
 import { fantasyTeamOptionLabel, leadWithMyTeam } from '../../../myTeam/display'
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../../../utils/slateWindow'
 import { FF_PAST_SLATES } from '../../../config/featureFlags'
@@ -105,6 +105,17 @@ export interface MobilePlayersProps {
 
 const isPct = (k: string) => k === 'fg_percentage' || k === 'ft_percentage'
 
+function teamDisplayFor(pl: Player, teamMap: Map<number, string>): string {
+  if (pl.status === 'ONTEAM' && pl.team_id !== 0) return teamMap.get(pl.team_id) || 'Unknown Team'
+  if (pl.status === 'FREEAGENT') return 'Free Agent'
+  if (pl.status === 'WAIVERS') return 'Waivers'
+  return 'Unknown'
+}
+
+function perGameValue(pl: Player, k: PlayerStatKey, showAverages: boolean): number {
+  return showAverages && k !== 'gp' && !isPct(k) ? (pl.stats.gp > 0 ? pl.stats[k] / pl.stats.gp : 0) : pl.stats[k]
+}
+
 /**
  * Players on a phone (mobile redesign, step 4). Same data, filters and URL
  * state as the desktop page (Players.tsx owns them); this is only the layout:
@@ -125,17 +136,8 @@ export default function MobilePlayers(p: MobilePlayersProps) {
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), p.scheduleHorizon), [p.scheduleHorizon])
   const opponents = useMemo(() => (p.schedule ? opponentsByTeamDate(p.schedule) : new Map<string, string>()), [p.schedule])
 
-  const teamDisplay = (pl: Player) =>
-    pl.status === 'ONTEAM' && pl.team_id !== 0
-      ? p.teamMap.get(pl.team_id) || 'Unknown Team'
-      : pl.status === 'FREEAGENT'
-        ? 'Free Agent'
-        : pl.status === 'WAIVERS'
-          ? 'Waivers'
-          : 'Unknown'
-
-  const perGame = (pl: Player, k: PlayerStatKey) =>
-    showAverages && k !== 'gp' && !isPct(k) ? (pl.stats.gp > 0 ? pl.stats[k] / pl.stats.gp : 0) : pl.stats[k]
+  const teamMap = p.teamMap
+  const teamDisplay = (pl: Player) => teamDisplayFor(pl, teamMap)
 
   const fmt = (pl: Player, k: PlayerStatKey) => {
     const v = pl.stats[k]
@@ -149,9 +151,9 @@ export default function MobilePlayers(p: MobilePlayersProps) {
     const val = (pl: Player): string | number => {
       if (sort.key === 'player_name') return pl.player_name
       if (sort.key === 'pro_team') return pl.pro_team
-      if (sort.key === 'team_id') return teamDisplay(pl)
+      if (sort.key === 'team_id') return teamDisplayFor(pl, teamMap)
       if (sort.key === 'week_games') return weekGameCount(opponents, pl.pro_team, weekDays)
-      if (sort.key in pl.stats) return perGame(pl, sort.key as PlayerStatKey)
+      if (sort.key in pl.stats) return perGameValue(pl, sort.key as PlayerStatKey, showAverages)
       return 0
     }
     return [...p.players].sort((a, b) => {
@@ -159,8 +161,7 @@ export default function MobilePlayers(p: MobilePlayersProps) {
       const bv = val(b)
       return sort.dir === 'asc' ? (av > bv ? 1 : -1) : av < bv ? 1 : -1
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.players, sort, showAverages, opponents, weekDays, p.teamMap])
+  }, [p.players, sort, showAverages, opponents, weekDays, teamMap])
 
   // ── filters ──
   const set = (patch: Partial<PlayerFilters>) => setFilters((f) => ({ ...f, ...patch }))

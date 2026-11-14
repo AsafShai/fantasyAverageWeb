@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useEffectEvent } from 'react';
 import { useLocation } from 'react-router';
-import { useMyTeam } from '../../context/MyTeamContext';
+import { useMyTeam } from '../../context/useMyTeam';
 import { useFollowMyTeamValue } from '../../hooks/useFollowMyTeam';
 import type { TimePeriod, CustomDateRange } from '../../types/api';
 import { TeamTradeSection } from './components/TeamTradeSection';
@@ -100,7 +100,9 @@ export const Trade: React.FC = () => {
       .filter((p): p is NonNullable<typeof p> => p !== undefined);
   }, [selectedFreeAgents, freeAgents]);
 
-  useEffect(() => {
+  // Warns once per data load (not on every selection change), so the
+  // selections are read through an effect event instead of being dependencies.
+  const warnExcludedPlayers = useEffectEvent(() => {
     if (timePeriod !== 'custom' || !customRange) return
     const excludedA = teamA && teamAData?.players ? selectedPlayersA.filter(p => !teamAData.players!.some(tp => tp.player_name === p.player_name)) : []
     const excludedB = teamB && teamBData?.players ? selectedPlayersB.filter(p => !teamBData.players!.some(tp => tp.player_name === p.player_name)) : []
@@ -112,7 +114,9 @@ export const Trade: React.FC = () => {
         allExcluded.map(p => p.player_name)
       )
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+  useEffect(() => {
+    warnExcludedPlayers()
   }, [timePeriod, customRange, teamAData, teamBData, freeAgents])
 
   const periodLabel = timePeriod === 'custom'

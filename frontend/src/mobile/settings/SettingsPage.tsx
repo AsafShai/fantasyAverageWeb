@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Card, Chip, ChipRow } from '../ui'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { useTabPrefs } from '../shell/tabPrefs'
 import { CATALOG, GROUP_ORDER, MAX_TABS, MIN_TABS, PRESETS, getTab, type TabDef } from '../shell/tabs'
 import './settings.css'

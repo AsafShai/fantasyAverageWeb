@@ -16,7 +16,7 @@ import { backLabel, usePlayerProfileData } from '../hooks/usePlayerProfileData'
 import { useSectionOpen } from '../hooks/useSectionOpen'
 import { FoldTitle } from '../components/FoldTitle'
 import { useMobileRedesign } from '../mobile/flag'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { tradeLinkForPlayer } from '../mobile/player/tradePreset'
 import PlayerProfileMobile from '../mobile/profile/PlayerProfileMobile'
 

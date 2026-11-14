@@ -1,7 +1,8 @@
 import type { SlatePlayerValue } from '../../types/boxScore'
 import { toListHeadshotUrl } from '../../utils/adp'
 import { lineSummary, signedZ } from '../boxScores/linesOfTheNightFormat'
-import { fantasyLineupState, FantasyLineupMark, ON_COURT_DOT_CLASS, ON_COURT_MARK_TEXT_CLASS } from '../boxScores/fantasyLineupMark'
+import { FantasyLineupMark } from '../boxScores/fantasyLineupMark'
+import { fantasyLineupState, ON_COURT_DOT_CLASS, ON_COURT_MARK_TEXT_CLASS } from '../boxScores/fantasyLineup'
 import type { ShareCardTheme } from './ShareCard'
 
 interface LinesOfTheNightShareCardProps extends ShareCardTheme {

@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react'
 import type { LeagueActivity } from '../../types/activity'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { fantasyTeamOptionLabel } from '../../myTeam/display'
 import { MOVE_FILTERS, filterMoves, formatDay, localDay, moveMatchesKind, type MoveFilter } from '../../utils/leagueActivity'
 import MoveRow from './MoveRow'

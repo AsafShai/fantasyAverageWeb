@@ -1,4 +1,4 @@
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import PlayerNameLink from '../../components/PlayerNameLink'
 import { fantasyTeamOptionLabel } from '../../myTeam/display'
 import { REPORT_MIN_GP } from '../../utils/draftReport'

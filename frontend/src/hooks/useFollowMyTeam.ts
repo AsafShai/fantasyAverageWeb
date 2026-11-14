@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { resolveFollow, USER_PICK } from '../myTeam/follow'
 
 /**

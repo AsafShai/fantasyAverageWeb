@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FF_MANAGER_HINTS } from '../../config/featureFlags'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 import { useTeamHints, type UseTeamHintsOptions } from '../../hooks/useTeamHints'
 import type { TeamHint } from '../../utils/teamHints/types'
 import type { RosterDay, TeamDetail } from '../../types/api'

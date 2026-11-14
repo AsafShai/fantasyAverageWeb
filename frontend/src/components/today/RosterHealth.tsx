@@ -4,7 +4,7 @@ import SortableHeaderCell from './SortableHeaderCell'
 import type { TeamRosterHealth } from '../../types/api'
 import { MyTeamMark } from '../MyTeamMark'
 import { leadWithMyTeam, myTeamRowClass } from '../../myTeam/display'
-import { useMyTeam } from '../../context/MyTeamContext'
+import { useMyTeam } from '../../context/useMyTeam'
 
 interface RosterHealthProps {
   slateDate: string | null

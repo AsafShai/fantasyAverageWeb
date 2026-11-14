@@ -24,7 +24,7 @@ import {
   MIN_SORT_VAL, USG_SORT_VAL, CAT_SORT_VAL, MAKES_LABEL, normalizeDelta, passesShared, sortRegressionGroups,
   type TabKey, type Ownership, type Filters,
 } from '../utils/trendsShared'
-import { useMyTeam } from '../context/MyTeamContext'
+import { useMyTeam } from '../context/useMyTeam'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileTrends from '../mobile/trends/MobileTrends'
 

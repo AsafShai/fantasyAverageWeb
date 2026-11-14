@@ -11,7 +11,7 @@ import {
   KNOWN_REVERSE_CATEGORIES,
 } from '../utils/tradeCalculations';
 import { STAT_KEYS } from '../constants';
-import { useMyTeam } from '../../../context/MyTeamContext';
+import { useMyTeam } from '../../../context/useMyTeam';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
 import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
 import { formatAsOf } from '../../../components/share/shareCardFormat';
