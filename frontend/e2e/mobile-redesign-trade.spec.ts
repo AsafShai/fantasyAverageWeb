@@ -64,11 +64,15 @@ test.describe('phone Trade Analyzer', () => {
     }
     await expect(rows.getByRole('button', { name: /^FT%/ })).toHaveAttribute('aria-expanded', 'true')
     await expect(page.getByRole('button', { name: /Columns|cats only/ })).toHaveCount(0)
+    // Totals, Per game and MIN & GP share one row.
+    const toolbarTops = await page.locator('.tc-toolbar button').evaluateAll(els => els.map(el => Math.round(el.getBoundingClientRect().top)))
+    expect(toolbarTops).toHaveLength(3)
+    expect(new Set(toolbarTops).size, 'one toolbar row').toBe(1)
     await expect(page.locator('.tc-detail-grid')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Show minutes and games' }).click()
+    await page.getByRole('button', { name: 'Show minutes and games played' }).click()
     await expect(page.locator('.tc-detail-grid')).toContainText('MIN')
     await expect(page.locator('.tc-detail-grid')).toContainText('GP')
-    await page.getByRole('button', { name: 'Hide minutes and games' }).click()
+    await page.getByRole('button', { name: 'Show minutes and games played' }).click()
     await expect(page.locator('.tc-detail-grid')).toHaveCount(0)
 
     // Totals / Per game live in the comparison now.
