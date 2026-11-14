@@ -220,10 +220,11 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               type="button"
               onClick={() => setContextShown(shown => !shown)}
               aria-pressed={contextShown}
+              aria-label="Show minutes and games played"
               className="tc-pill-toggle"
-              title="Minutes and games played aren't scored; shown for context"
+              title="Show minutes and games played (not scored; for context)"
             >
-              {contextShown ? 'Hide' : 'Show'} minutes and games
+              MIN &amp; GP
             </button>
           </div>
           {scoringColumns.length > 0 && (

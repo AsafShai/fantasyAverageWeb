@@ -52,11 +52,15 @@ describe('TradeSummaryPanel categories', () => {
     expect(detailGrid()).toBeNull();
     expect(document.querySelector('.tc-z-slider')).toBeTruthy();
 
-    await user.click(screen.getByRole('button', { name: 'Show minutes and games' }));
+    const minutes = screen.getByRole('button', { name: 'Show minutes and games played' });
+    expect(minutes).toHaveTextContent('MIN & GP');
+    expect(minutes).toHaveAttribute('aria-pressed', 'false');
+    await user.click(minutes);
+    expect(minutes).toHaveAttribute('aria-pressed', 'true');
     expect(detailHeaders()).toEqual(['MIN', 'GP']);
     // The scoring rows stay as they were.
     expect(catPills()).toContain('FG%');
-    await user.click(screen.getByRole('button', { name: 'Hide minutes and games' }));
+    await user.click(screen.getByRole('button', { name: 'Show minutes and games played' }));
     expect(detailGrid()).toBeNull();
   });
 
