@@ -1,6 +1,7 @@
 import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 
 const PREFIX = 'fw:';
+const SYNC_EVENT = 'fw:persisted-state';
 
 function readStorage<T>(key: string, defaultValue: T): T {
   try {
@@ -36,7 +37,20 @@ export function usePersistedState<T>(
 
   useEffect(() => {
     writeStorage(key, value);
+    // Tell other components using the same key (e.g. the live badge's No
+    // spoilers toggle and the Daily roster on one page) so they follow at once.
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { key, raw: JSON.stringify(value) } }));
   }, [key, value]);
+
+  useEffect(() => {
+    const onSync = (e: Event) => {
+      const { key: changed, raw } = (e as CustomEvent<{ key: string; raw: string }>).detail;
+      if (changed !== key) return;
+      setValue(current => (JSON.stringify(current) === raw ? current : (JSON.parse(raw) as T)));
+    };
+    window.addEventListener(SYNC_EVENT, onSync);
+    return () => window.removeEventListener(SYNC_EVENT, onSync);
+  }, [key]);
 
   return [value, setValue];
 }
