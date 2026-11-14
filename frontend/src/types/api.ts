@@ -29,6 +29,8 @@ export interface RankingStats {
 export interface LiveBlock {
   active: boolean;
   period: number | null;
+  /** The US day of the games being counted (YYYY-MM-DD); kept until ESPN goes official. */
+  slate_date?: string | null;
   as_of: string | null;
   games_total: number;
   games_live: number;

@@ -383,7 +383,11 @@ button.mr-tab { border: none; background: none; padding: 0; cursor: pointer; fon
 @media (prefers-reduced-motion: reduce) { .mr-live-badge.mr-live .mr-live-dot { animation: none; } }
 .mr-live-note { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; font-size: 12px; background: var(--mr-pill-quest-bg); color: var(--mr-pill-quest-fg); }
 .mr-live-games { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.mr-live-games li { display: flex; justify-content: space-between; font-size: 13px; }
+.mr-live-games li { font-size: 13px; }
+.mr-live-games a { display: flex; justify-content: space-between; align-items: center; min-height: 32px; color: inherit; text-decoration: none; }
+.mr-live-game-right { display: inline-flex; align-items: center; gap: 8px; }
+.mr-live-score { font-weight: 600; font-variant-numeric: tabular-nums; }
+.mr-live-spoilers { margin: 0 0 10px; }
 .mr-live-status { color: var(--mr-up); font-weight: 600; }
 .mr-tm-game { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; white-space: normal; color: var(--mr-muted); }
 .mr-tm-game-live { color: var(--mr-up); font-weight: 700; }

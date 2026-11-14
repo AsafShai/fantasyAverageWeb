@@ -14,7 +14,8 @@ export const isBench = (slot: string) => slot === 'BE' || slot === 'IR'
 
 /** Box score landed for this roster day (starters or bench). */
 export function rosterDayPlayerPlayed(player: RosterDayPlayer): boolean {
-  return player.status === 'played'
+  // Tonight, a player in a game still on counts once he has checked in.
+  return player.status === 'played' || (player.status === 'live' && (player.stats?.minutes ?? 0) > 0)
 }
 
 const EASTERN = 'America/New_York'
@@ -89,6 +90,11 @@ export function starterTotals(players: RosterDayPlayer[]): StarterTotals {
 export function liveRosterMoment(day: RosterDay, noSpoilers = false): LiveMoment | null {
   // No spoilers: today stays as it was before live data (opponents only).
   return day.is_today && !noSpoilers ? liveMoment(day.live) : null
+}
+
+/** "Played only" fits past days, and today once its games are counted live (or final, ESPN pending). */
+export function rosterDayCanFilterPlayed(day: RosterDay, noSpoilers = false): boolean {
+  return !day.is_today || liveRosterMoment(day, noSpoilers) !== null
 }
 
 /** Starters on court right now: in a game in progress and checked in. */

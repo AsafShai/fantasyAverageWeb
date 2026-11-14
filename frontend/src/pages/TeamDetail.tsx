@@ -29,7 +29,7 @@ import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponen
 import { RosterDayContent, RosterDayOnlyPlayedToggle, RosterDayStepper, SlotPill } from '../components/RosterDayView'
 import NoSpoilersSwitch from '../components/boxScores/NoSpoilersSwitch'
 import { CollapsibleSection } from '../components/CollapsibleSection'
-import { lineupSlotOrder, rosterDayNote } from '../utils/rosterDay'
+import { lineupSlotOrder, rosterDayCanFilterPlayed, rosterDayNote } from '../utils/rosterDay'
 import { easternToday, formatSlateDate, isBackToBackGameDay, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
 import { rosterScheduleCellClass, rosterScheduleMiniCellClass } from '../utils/rosterScheduleTone'
 import BackToBackMark from '../components/BackToBackMark'
@@ -137,7 +137,11 @@ const TeamDetail = () => {
     { skip: !showDaily || !teamIdNumber },
   )
   // Shared with Box Scores: hides results, scores and live lines in Daily.
-  const [noSpoilers, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
+  const [spoilerSetting, setNoSpoilers] = usePersistedState('boxScores.noSpoilers', false)
+  // No spoilers only matters for today: a past day is already over, so it always shows results.
+  const rosterIsToday = rosterDay ? rosterDay.is_today : !rosterDate
+  const noSpoilers = spoilerSetting && rosterIsToday
+  const rosterPlayedFilter = Boolean(rosterDay && rosterDayCanFilterPlayed(rosterDay, noSpoilers))
   const changeRosterDate = (date: string) => setRosterDate(date >= (rosterDay?.last_date ?? today) ? '' : date)
   const { data: schedule } = useGetScheduleQuery()
   const weekDays = useMemo(() => weekScheduleDays(easternToday(), scheduleHorizon), [scheduleHorizon])
@@ -842,8 +846,8 @@ const TeamDetail = () => {
             )}
             {showDaily && (
               <div className="flex w-full flex-col gap-2">
-                <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />
-                {rosterDay && !rosterDay.is_today && (
+                {rosterIsToday && <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />}
+                {rosterPlayedFilter && (
                   <RosterDayOnlyPlayedToggle compact checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
                 )}
                 <RosterDayStepper
@@ -937,8 +941,8 @@ const TeamDetail = () => {
             </div>
             {showDaily ? (
               <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />
-                {rosterDay && !rosterDay.is_today && (
+                {rosterIsToday && <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />}
+                {rosterPlayedFilter && (
                   <RosterDayOnlyPlayedToggle checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
                 )}
                 <RosterDayStepper
@@ -1035,7 +1039,7 @@ const TeamDetail = () => {
               day={rosterDay}
               loading={rosterDayFetching && !rosterDay}
               matchups={matchupMap}
-              onlyPlayed={Boolean(rosterDay && !rosterDay.is_today && rosterDayOnlyPlayed)}
+              onlyPlayed={rosterPlayedFilter && rosterDayOnlyPlayed}
               noSpoilers={noSpoilers}
             />
           )
