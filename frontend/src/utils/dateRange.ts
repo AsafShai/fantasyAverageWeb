@@ -44,3 +44,10 @@ export function validateDateRange(
   }
   return null
 }
+
+/** Start of a "Last N days" preset, never earlier than the season start: early in
+ * the season a plain N-days-ago start is before opening night, which the API rejects. */
+export function presetRangeStart(days: number, seasonStart?: string): string {
+  const start = getDateNDaysAgo(days)
+  return seasonStart && start < seasonStart ? seasonStart : start
+}
