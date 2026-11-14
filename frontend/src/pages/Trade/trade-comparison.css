@@ -882,3 +882,37 @@
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Long names never widen a card: both columns stay half width and the text
+   inside shortens with an ellipsis. */
+.tc-versus__teams--duo,
+.tc-share-teams {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.tc-player-chip__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A value and its made/attempted line stay on one line each. */
+.tc-stat-block__main,
+.tc-stat-block__sub {
+  white-space: nowrap;
+}
+@media (max-width: 420px) {
+  .tc-stat-block__sub { font-size: 0.62rem; }
+}
+.tc-versus__teams--duo > .tc-team-card,
+.tc-share-teams > .tc-team-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* In the side-by-side cards a long name wraps (two lines at most) rather
+   than being cut. */
+.tc-versus__teams--duo .tc-player-chip__name,
+.tc-share-teams .tc-player-chip__name {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.2;
+}

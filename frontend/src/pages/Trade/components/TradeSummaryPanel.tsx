@@ -4,13 +4,8 @@ import type { TradeMode } from '../../../hooks/useTradeState';
 import {
   aggregatePlayerStats,
   aggregatePlayerAverages,
-  aggregateExtraAverages,
-  aggregateExtraTotals,
   extraCountingCategories,
-  formatStatValue,
-  KNOWN_REVERSE_CATEGORIES,
 } from '../utils/tradeCalculations';
-import { STAT_KEYS } from '../constants';
 import { useMyTeam } from '../../../context/MyTeamContext';
 import { useIsDarkTheme } from '../../../hooks/useIsDarkTheme';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
@@ -18,24 +13,11 @@ import { TradeShareCard, type TradeShareSide } from '../../../components/share/T
 import { formatAsOf } from '../../../components/share/shareCardFormat';
 import type { PlayerValueLookup, TradeRankingContext } from '../utils/playerValues';
 import { tradeShareRows } from '../utils/tradeShare';
-import {
-  COMPOSITE_FG,
-  COMPOSITE_FT,
-  CATEGORY_Z_NOTE,
-  EVEN_Z_GAP,
-  categoryTone,
-  formatBundlePct,
-  formatMadeAttempted,
-  signedCategoryZ,
-  tradeSideCategoryZs,
-} from '../utils/tradeCategoryZ';
+import { CATEGORY_Z_NOTE, EVEN_Z_GAP } from '../utils/tradeCategoryZ';
 import type { AggregatedStats } from '../utils/tradeCalculations';
 import {
-  categoryShortcutKeys,
+  categoryOnlyColumns,
   columnFromKey,
-  isCategoriesOnlyView,
-  isNeutralColumn,
-  scoringCategoryForColumn,
   type DisplayColumn,
 } from './tradeComparisonColumns';
 import { TradeVersusComparison } from './TradeVersusComparison';
@@ -57,127 +39,8 @@ interface TradeSummaryPanelProps {
   onViewModeChange?: (mode: 'totals' | 'averages') => void;
 }
 
-interface StatValueProps {
-  value: number;
-  comparedTo: number;
-  isPercentage?: boolean;
-  viewMode: 'totals' | 'averages';
-  field: string;
-  /** Reverse-scored category (e.g. TO): the lower side is the better one. */
-  lowerIsBetter?: boolean;
-}
-
-interface Column {
-  key: string;
-  label: string;
-  icon: string;
-  /** Set for a league category beyond the fixed stat fields. */
-  extraCategory?: string;
-}
-
-const EXTRA_COLUMN_PREFIX = 'extra:';
-
-/** Fixed columns hidden by the categories-only view. */
-const NON_CATEGORY_KEYS = new Set(['minutes', 'fgm', 'fga', 'fg_percentage', 'ftm', 'fta', 'ft_percentage', 'gp']);
-
-const STAT_HEADERS = [
-  { label: 'MIN', icon: '⏰' },
-  { label: 'FGM', icon: '🎯' },
-  { label: 'FGA', icon: '🏹' },
-  { label: 'FG%', icon: '📈' },
-  { label: 'FTM', icon: '🆓' },
-  { label: 'FTA', icon: '🎯' },
-  { label: 'FT%', icon: '📊' },
-  { label: '3PM', icon: '🎯' },
-  { label: 'REB', icon: '🏀' },
-  { label: 'AST', icon: '🤝' },
-  { label: 'STL', icon: '🥷' },
-  { label: 'BLK', icon: '🛡️' },
-  { label: 'PTS', icon: '🏀' },
-  { label: 'GP', icon: '📅' }
-] as const;
-
-
-
-const toneStyles = (tone: 'win' | 'lose' | 'tie') => {
-  if (tone === 'win') return { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' };
-  if (tone === 'lose') return { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
-  return { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' };
-};
-
 const NeutralStat: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className="tc-detail-stat">{children}</span>
-);
-
-const CategoryCell: React.FC<{
-  lines: React.ReactNode;
-  myZ: number | null | undefined;
-  otherZ: number | null | undefined;
-}> = ({ lines, myZ, otherZ }) => {
-  const styles = toneStyles(categoryTone(myZ, otherZ));
-  return (
-    <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px]`}>
-      <div className={`font-semibold ${styles.text} text-xs leading-tight`}>{lines}</div>
-      {myZ != null && (
-        <span className={`${styles.text} text-[10px] font-medium`}>Z {signedCategoryZ(myZ)}</span>
-      )}
-      <span className={`${styles.text} text-[10px]`}>{styles.indicator}</span>
-    </div>
-  );
-};
-
-const StatValue: React.FC<StatValueProps> = ({ value, comparedTo, isPercentage = false, viewMode, field, lowerIsBetter = false }) => {
-  const getValueStyles = () => {
-    if (value === comparedTo) {
-      return { bg: 'bg-gray-100', text: 'text-gray-700', indicator: '=' };
-    }
-
-    return (lowerIsBetter ? value < comparedTo : value > comparedTo)
-      ? { bg: 'bg-green-100', text: 'text-green-700', indicator: '↗' }
-      : { bg: 'bg-red-100', text: 'text-red-700', indicator: '↘' };
-  };
-
-  const styles = getValueStyles();
-  const displayValue = (field === 'gp' || field === 'minutes')
-    ? (viewMode === 'averages' && field === 'minutes' ? value.toFixed(1) : Math.round(value).toString())
-    : formatStatValue(value, isPercentage, viewMode, false);
-
-  return (
-    <div className={`${styles.bg} rounded p-1 text-center flex flex-col items-center justify-center min-h-[44px]`}>
-      <span className={`font-bold ${styles.text} text-xs leading-tight`}>
-        {displayValue}
-      </span>
-      <span className={`${styles.text} text-[10px]`}>{styles.indicator}</span>
-    </div>
-  );
-};
-
-const TradeColumnPicker: React.FC<{
-  columns: Column[];
-  isShown: (key: string) => boolean;
-  toggleColumn: (key: string) => void;
-  showAllColumns: () => void;
-  hideAllColumns: () => void;
-}> = ({ columns, isShown, toggleColumn, showAllColumns, hideAllColumns }) => (
-  <div className="mb-4 rounded-xl border border-[var(--tc-card-border)] bg-[var(--tc-card)] p-3">
-    <div className="mb-2 flex gap-2">
-      <button type="button" onClick={showAllColumns} className="tc-pill-toggle text-[10px]">Show all</button>
-      <button type="button" onClick={hideAllColumns} className="tc-pill-toggle text-[10px]">Hide all</button>
-    </div>
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-      {columns.map(({ key, label, icon }) => (
-        <label key={key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-[var(--tc-text)] hover:bg-white/5">
-          <input
-            type="checkbox"
-            checked={isShown(key)}
-            onChange={() => toggleColumn(key)}
-            className="rounded border-gray-500"
-          />
-          <span>{icon} {label}</span>
-        </label>
-      ))}
-    </div>
-  </div>
 );
 
 const TradeDetailGrid: React.FC<{
@@ -225,86 +88,17 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
 }) => {
   const { myTeamId } = useMyTeam();
   const dark = useIsDarkTheme();
-  // Opens on the scoring categories (FG/FT with made-attempted); minutes,
-  // games and the made/attempted columns are one tap away.
-  const [shownColumns, setShownColumns] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    STAT_KEYS.forEach(key => {
-      initial[key] = !NON_CATEGORY_KEYS.has(key);
-    });
-    initial[COMPOSITE_FG] = true;
-    initial[COMPOSITE_FT] = true;
-    return initial;
-  });
+  // The comparison is the scoring categories (FG%/FT% with made-attempted).
+  // Minutes and games aren't scored; they're one tap away for context.
+  const [contextShown, setContextShown] = useState(false);
 
-  const [isColumnControlsOpen, setIsColumnControlsOpen] = useState(false);
-
-  // League categories beyond the fixed fields (e.g. TO) get their own columns,
-  // placed before GP. None for a league on the standard 8 categories.
+  // League categories beyond the fixed fields (e.g. TO) get their own rows.
+  // None for a league on the standard 8 categories.
   const extraCategories = extraCountingCategories([...playersA, ...playersB]);
-  const fixedColumns: Column[] = STAT_KEYS.map((key, index) => ({ key, ...STAT_HEADERS[index] }));
-  const extraColumns: Column[] = extraCategories.map(category => ({
-    key: `${EXTRA_COLUMN_PREFIX}${category}`, label: category, icon: '➕', extraCategory: category,
-  }));
-  const columns = [...fixedColumns.slice(0, -1), ...extraColumns, fixedColumns[fixedColumns.length - 1]];
-  const isShown = (key: string) => shownColumns[key] ?? true;
-
-  const toggleColumn = (key: string) => {
-    setShownColumns(prev => ({
-      ...prev,
-      [key]: !(prev[key] ?? true)
-    }));
-  };
-
-  const showAllColumns = () => {
-    const allShown: Record<string, boolean> = {};
-    columns.forEach(({ key }) => {
-      allShown[key] = true;
-    });
-    setShownColumns(allShown);
-  };
-
-  const hideAllColumns = () => {
-    const allHidden: Record<string, boolean> = {};
-    columns.forEach(({ key }) => {
-      allHidden[key] = false;
-    });
-    setShownColumns(allHidden);
-  };
-
-  const categoryKeys = categoryShortcutKeys(extraCategories);
-  const categoriesOnly = isCategoriesOnlyView(isShown, extraCategories);
-  const [beforeCategoriesOnly, setBeforeCategoriesOnly] = useState<Record<string, boolean> | null>(null);
-  const toggleCategoriesOnly = () => {
-    if (categoriesOnly) {
-      if (beforeCategoriesOnly) setShownColumns(beforeCategoriesOnly);
-      else showAllColumns();
-      setBeforeCategoriesOnly(null);
-      return;
-    }
-    setBeforeCategoriesOnly(shownColumns);
-    const next: Record<string, boolean> = {};
-    for (const key of categoryKeys) next[key] = true;
-    for (const { key } of columns) next[key] = categoryKeys.has(key);
-    next[COMPOSITE_FG] = true;
-    next[COMPOSITE_FT] = true;
-    setShownColumns(next);
-  };
-
-  // FG/FT made-attempted rows lead, then the picker's columns in order.
-  const visibleColumns: DisplayColumn[] = [
-    ...[COMPOSITE_FG, COMPOSITE_FT]
-      .filter(key => shownColumns[key])
-      .map(columnFromKey)
-      .filter((c): c is DisplayColumn => c != null),
-    ...columns
-      .filter(({ key }) => isShown(key))
-      .map(({ key, label, icon, extraCategory }) => ({ key, label, icon, extraCategory })),
-  ];
-  const contextShown = isShown('minutes') && isShown('gp');
-  const toggleContext = () => setShownColumns(prev => ({ ...prev, minutes: !contextShown, gp: !contextShown }));
-  const scoringColumns = visibleColumns.filter(c => scoringCategoryForColumn(c));
-  const neutralColumns = visibleColumns.filter(c => isNeutralColumn(c.key));
+  const scoringColumns = categoryOnlyColumns(extraCategories);
+  const neutralColumns = contextShown
+    ? ['minutes', 'gp'].map(columnFromKey).filter((c): c is DisplayColumn => c != null)
+    : [];
 
   // Nothing to compare until both sides have someone.
   if (playersA.length === 0 || playersB.length === 0) {
@@ -329,117 +123,14 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   const aggDisplay = viewMode === 'averages' ? aggregatePlayerAverages : aggregatePlayerStats;
   const displayGetsA = aggDisplay(getsA);
   const displayGetsB = aggDisplay(getsB);
-  const aggregateExtras = viewMode === 'averages' ? aggregateExtraAverages : aggregateExtraTotals;
-  const extraStatsA = aggregateExtras(getsA, extraCategories);
-  const extraStatsB = aggregateExtras(getsB, extraCategories);
 
-  const catZsA = tradeRanking?.referencePool.length
-    ? tradeSideCategoryZs(getsA, tradeRanking.referencePool, tradeRanking.categories, tradeRanking.reverseCategories, viewMode)
-    : null;
-  const catZsB = tradeRanking?.referencePool.length
-    ? tradeSideCategoryZs(getsB, tradeRanking.referencePool, tradeRanking.categories, tradeRanking.reverseCategories, viewMode)
-    : null;
-
-  const valueOf = (column: DisplayColumn, fixed: AggregatedStats, extras: Record<string, number>) =>
-    column.extraCategory !== undefined
-      ? extras[column.extraCategory]
-      : fixed[column.key as keyof AggregatedStats];
-
-  const categoryZ = (column: DisplayColumn, side: 'a' | 'b') => {
-    const cat = scoringCategoryForColumn(column);
-    if (!cat) return null;
-    const map = side === 'a' ? catZsA : catZsB;
-    return map?.[cat as keyof typeof map] ?? null;
+  // Minutes / games cells: context only, no winner.
+  const contextCell = (column: DisplayColumn, fixed: AggregatedStats) => {
+    const value = fixed[column.key as keyof AggregatedStats];
+    const text = viewMode === 'averages' && column.key === 'minutes' ? value.toFixed(1) : Math.round(value).toString();
+    return <NeutralStat key={column.key}><span className="font-bold">{text}</span></NeutralStat>;
   };
-
-  const renderCell = (
-    side: 'a' | 'b',
-    column: DisplayColumn,
-    fixed: AggregatedStats,
-    extras: Record<string, number>,
-    otherFixed: AggregatedStats,
-    otherExtras: Record<string, number>,
-  ) => {
-    const myZ = categoryZ(column, side);
-    const otherZ = categoryZ(column, side === 'a' ? 'b' : 'a');
-    const cat = scoringCategoryForColumn(column);
-
-    if (column.composite === 'fg') {
-      return (
-        <CategoryCell
-          key={column.key}
-          myZ={myZ}
-          otherZ={otherZ}
-          lines={(
-            <>
-              <span className="block font-bold">{formatBundlePct(fixed.fgm, fixed.fga)}</span>
-              <span className="block text-[10px] font-normal">{formatMadeAttempted(fixed.fgm, fixed.fga, viewMode)}</span>
-            </>
-          )}
-        />
-      );
-    }
-    if (column.composite === 'ft') {
-      return (
-        <CategoryCell
-          key={column.key}
-          myZ={myZ}
-          otherZ={otherZ}
-          lines={(
-            <>
-              <span className="block font-bold">{formatBundlePct(fixed.ftm, fixed.fta)}</span>
-              <span className="block text-[10px] font-normal">{formatMadeAttempted(fixed.ftm, fixed.fta, viewMode)}</span>
-            </>
-          )}
-        />
-      );
-    }
-
-    if (isNeutralColumn(column.key)) {
-      const value = valueOf(column, fixed, extras);
-      const isPercentage = column.key === 'fg_percentage' || column.key === 'ft_percentage';
-      const displayValue = (column.key === 'gp' || column.key === 'minutes')
-        ? (viewMode === 'averages' && column.key === 'minutes' ? value.toFixed(1) : Math.round(value).toString())
-        : formatStatValue(value, isPercentage, viewMode, false);
-      return <NeutralStat key={column.key}><span className="font-bold">{displayValue}</span></NeutralStat>;
-    }
-
-    const value = valueOf(column, fixed, extras);
-    const otherVal = valueOf(column, otherFixed, otherExtras);
-    const isPercentage = column.key === 'fg_percentage' || column.key === 'ft_percentage';
-
-    if (cat && catZsA && catZsB) {
-      const lines = isPercentage ? (
-        <span className="block font-bold">{formatStatValue(value, true, viewMode, false)}</span>
-      ) : (
-        <span className="block font-bold">
-          {formatStatValue(value, false, viewMode, false)}
-        </span>
-      );
-      return <CategoryCell key={column.key} myZ={myZ} otherZ={otherZ} lines={lines} />;
-    }
-
-    return (
-      <StatValue
-        key={column.key}
-        value={value}
-        comparedTo={otherVal}
-        viewMode={viewMode}
-        isPercentage={isPercentage}
-        field={column.key}
-        lowerIsBetter={column.extraCategory !== undefined && KNOWN_REVERSE_CATEGORIES.has(column.extraCategory)}
-      />
-    );
-  };
-
-  const renderRow = (
-    side: 'a' | 'b',
-    fixed: AggregatedStats,
-    extras: Record<string, number>,
-    otherFixed: AggregatedStats,
-    otherExtras: Record<string, number>,
-    cols: DisplayColumn[] = visibleColumns,
-  ) => cols.map(column => renderCell(side, column, fixed, extras, otherFixed, otherExtras));
+  const contextRow = (fixed: AggregatedStats) => neutralColumns.map(column => contextCell(column, fixed));
 
   // Share card: each column is what that team receives, so team A's column
   // holds the stats of the players team B sends, and vice versa.
@@ -527,24 +218,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
             )}
             <button
               type="button"
-              onClick={() => setIsColumnControlsOpen(!isColumnControlsOpen)}
-              className="tc-pill-toggle"
-              aria-expanded={isColumnControlsOpen}
-            >
-              {isColumnControlsOpen ? '▼' : '▶'} Columns
-            </button>
-            <button
-              type="button"
-              onClick={toggleCategoriesOnly}
-              aria-pressed={categoriesOnly}
-              className="tc-pill-toggle"
-              title="Show only the scoring categories; click again for the columns you had before"
-            >
-              {categoryKeys.size} cats only
-            </button>
-            <button
-              type="button"
-              onClick={toggleContext}
+              onClick={() => setContextShown(shown => !shown)}
               aria-pressed={contextShown}
               className="tc-pill-toggle"
               title="Minutes and games played aren't scored; shown for context"
@@ -552,15 +226,6 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               {contextShown ? 'Hide' : 'Show'} minutes and games
             </button>
           </div>
-          {isColumnControlsOpen && (
-            <TradeColumnPicker
-              columns={columns}
-              isShown={isShown}
-              toggleColumn={toggleColumn}
-              showAllColumns={showAllColumns}
-              hideAllColumns={hideAllColumns}
-            />
-          )}
           {scoringColumns.length > 0 && (
             <TradeVersusComparison
               embedded
@@ -573,7 +238,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               playerValue={playerValue}
               tradeRanking={tradeRanking}
               scoringColumns={scoringColumns}
-              compositeShooting={categoriesOnly}
+              compositeShooting
               proLayout
             />
           )}
@@ -582,8 +247,8 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
               neutralColumns={neutralColumns}
               teamAName={teamA?.team_name || (tradeMode === 'freeAgent' ? 'Your Team' : 'Team A')}
               teamBName={tradeMode === 'freeAgent' ? 'Free Agents' : (teamB?.team_name || 'Team B')}
-              rowA={renderRow('a', displayGetsA, extraStatsA, displayGetsB, extraStatsB, neutralColumns)}
-              rowB={renderRow('b', displayGetsB, extraStatsB, displayGetsA, extraStatsA, neutralColumns)}
+              rowA={contextRow(displayGetsA)}
+              rowB={contextRow(displayGetsB)}
             />
           )}
           </div>

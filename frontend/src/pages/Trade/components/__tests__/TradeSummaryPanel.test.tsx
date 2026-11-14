@@ -46,7 +46,9 @@ describe('TradeSummaryPanel categories', () => {
     const user = userEvent.setup();
     renderPanel([player('a', {})], [player('b', {})]);
     expect(catPills()).toEqual(['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS']);
-    expect(screen.getByRole('button', { name: /cats only/ })).toHaveAttribute('aria-pressed', 'true');
+    // Only Totals / Per game and the minutes toggle: no column picker or shortcut.
+    expect(screen.queryByRole('button', { name: /Columns/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /cats only/ })).toBeNull();
     expect(detailGrid()).toBeNull();
     expect(document.querySelector('.tc-z-slider')).toBeTruthy();
 
@@ -83,22 +85,6 @@ describe('TradeSummaryPanel categories', () => {
     renderPanel([player('a', { TO: 3 }), player('a2', { TO: 4 })], [player('b', { TO: 9, 'A/TO': 2 })]);
     expect(catPills()).toContain('TO');
     expect(catPills().some(l => l?.includes('A/TO'))).toBe(false);
-  });
-});
-
-describe('TradeSummaryPanel categories-only shortcut', () => {
-  const EIGHT = ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS'];
-
-  it('toggles between every column and just the 8 scoring categories', async () => {
-    const user = userEvent.setup();
-    renderPanel([player('a', {})], [player('b', {})]);
-    const toggle = screen.getByRole('button', { name: /cats only/ });
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    expect(detailHeaders()).toEqual(['MIN', 'FGM', 'FGA', 'FTM', 'FTA', 'GP']);
-    await user.click(toggle);
-    expect(catPills()).toEqual(EIGHT);
-    expect(detailGrid()).toBeNull();
   });
 });
 

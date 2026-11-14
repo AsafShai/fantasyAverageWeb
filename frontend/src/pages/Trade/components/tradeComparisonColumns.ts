@@ -31,12 +31,6 @@ const STAT_HEADERS = [
   { label: 'GP', icon: '📅' },
 ] as const;
 
-const NEUTRAL_COLUMN_KEYS = new Set(['minutes', 'fgm', 'fga', 'ftm', 'fta', 'gp']);
-
-export function isNeutralColumn(key: string): boolean {
-  return NEUTRAL_COLUMN_KEYS.has(key);
-}
-
 export function scoringCategoryForColumn(column: DisplayColumn): string | undefined {
   if (column.composite === 'fg') return 'FG%';
   if (column.composite === 'ft') return 'FT%';
@@ -60,18 +54,4 @@ export function categoryOnlyColumns(extraCategories: string[]): DisplayColumn[] 
   return categoryOnlyColumnKeys(extraCategories)
     .map(columnFromKey)
     .filter((c): c is DisplayColumn => c != null);
-}
-
-export function categoryShortcutKeys(extraCategories: string[]): Set<string> {
-  return new Set(categoryOnlyColumnKeys(extraCategories));
-}
-
-export function isCategoriesOnlyView(
-  shown: (key: string) => boolean,
-  extraCategories: string[],
-): boolean {
-  const keys = categoryOnlyColumnKeys(extraCategories);
-  if (!keys.every(shown)) return false;
-  return ['minutes', 'fgm', 'fga', 'fg_percentage', 'ftm', 'fta', 'ft_percentage', 'gp']
-    .every(k => !shown(k));
 }

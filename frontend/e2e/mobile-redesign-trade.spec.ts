@@ -63,7 +63,7 @@ test.describe('phone Trade Analyzer', () => {
       await expect(rows.getByRole('button', { name: new RegExp(`^${cat}`) })).toBeVisible()
     }
     await expect(rows.getByRole('button', { name: /^FT%/ })).toHaveAttribute('aria-expanded', 'true')
-    await expect(page.getByRole('button', { name: '8 cats only' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /Columns|cats only/ })).toHaveCount(0)
     await expect(page.locator('.tc-detail-grid')).toHaveCount(0)
     await page.getByRole('button', { name: 'Show minutes and games' }).click()
     await expect(page.locator('.tc-detail-grid')).toContainText('MIN')
