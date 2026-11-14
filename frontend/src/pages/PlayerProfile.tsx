@@ -147,7 +147,7 @@ const PlayerProfileDesktop = () => {
                 }}
                 className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-blue-600 text-white border border-blue-600 hover:bg-blue-700"
               >
-                Preview trade
+                Preview in Trade Analyzer
               </button>
             </p>
           )}

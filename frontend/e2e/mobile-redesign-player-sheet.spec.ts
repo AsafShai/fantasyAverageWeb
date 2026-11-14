@@ -119,7 +119,7 @@ test.describe('phone player sheet', () => {
       await page.goto('/players?player=100')
       const sheet = page.getByRole('dialog', { name: 'Alpha Star' })
       await expect(sheet.getByRole('list', { name: 'Per game' })).toBeVisible()
-      for (const name of ['Full profile', 'Preview trade']) {
+      for (const name of ['Full profile', 'Preview in Trade Analyzer']) {
         const box = (await sheet.getByRole('button', { name }).boundingBox())!
         expect(box.y + box.height, `${name} at ${width}x${height}`).toBeLessThanOrEqual(height)
       }
@@ -155,11 +155,11 @@ test.describe('phone player sheet', () => {
     await expect(sheet).toHaveCount(0)
   })
 
-  test('Preview trade opens with the player already in the trade', async ({ page }) => {
+  test('Preview in Trade Analyzer opens with the player already in the trade', async ({ page }) => {
     await mockPlayerApis(page)
     await page.goto('/players?ff=mobile')
     await page.goto('/players?player=100')
-    await page.getByRole('dialog', { name: 'Alpha Star' }).getByRole('button', { name: 'Preview trade' }).click()
+    await page.getByRole('dialog', { name: 'Alpha Star' }).getByRole('button', { name: 'Preview in Trade Analyzer' }).click()
     await expect(page).toHaveURL(/\/trade$/)
     // Picked on his team's side (no My Team set). Visible text only, so a
     // closed <select> listing him does not count.
