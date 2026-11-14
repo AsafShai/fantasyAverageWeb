@@ -531,29 +531,20 @@
   font-size: 7.5px;
 }
 
-/* Share image: the category sits in the middle, over its Z-edge bar. */
+/* Share image: values sit at the card edges, everything a size smaller. */
 .tc-share-versus .tc-stat-row__bar {
   grid-template-columns: minmax(0, 1fr) 2.4rem 5.75rem 2.4rem minmax(0, 1fr);
-  grid-template-areas:
-    "lv lz cat rz rv"
-    "lv lz bar rz rv";
   column-gap: 6px;
   row-gap: 3px;
   padding: 6px 0;
   cursor: default;
 }
-.tc-share-versus .tc-stat-row__bar > :nth-child(1) { grid-area: cat; text-align: center; }
-.tc-share-versus .tc-stat-row__bar > :nth-child(2) { grid-area: lv; text-align: left; }
-.tc-share-versus .tc-stat-row__bar > :nth-child(3) { grid-area: lz; text-align: right; }
-.tc-share-versus .tc-stat-row__bar > :nth-child(4) { grid-area: bar; }
-.tc-share-versus .tc-stat-row__bar > :nth-child(5) { grid-area: rz; text-align: left; }
-.tc-share-versus .tc-stat-row__bar > :nth-child(6) { grid-area: rv; text-align: right; }
+.tc-share-versus .tc-stat-row__bar > :nth-child(2) { text-align: left; }
+.tc-share-versus .tc-stat-row__bar > :nth-child(6) { text-align: right; }
 .tc-share-versus .tc-stat-row__bar--head {
-  grid-template-areas: "lv lz bar rz rv";
   padding: 0 0 5px;
   font-size: 8px;
 }
-.tc-share-versus .tc-stat-row__bar--head > :nth-child(1) { display: none; }
 .tc-share-versus .tc-stat-row__bar--head .tc-head-narrow { display: none; }
 .tc-share-versus .tc-stat-row__bar--head .tc-head-wide { display: inline; }
 
@@ -576,10 +567,15 @@
   border-bottom: 0;
 }
 
+/* Each row: value · Z · [category over its Z-edge bar] · Z · value. */
 .tc-stat-row__bar {
   display: grid;
-  grid-template-columns: 4.5rem minmax(4.2rem, 1fr) 3.4rem minmax(8rem, 280px) 3.4rem minmax(4.2rem, 1fr);
-  gap: 0.45rem;
+  grid-template-columns: minmax(0, 1fr) 3.4rem minmax(8rem, 280px) 3.4rem minmax(0, 1fr);
+  grid-template-areas:
+    "lv lz cat rz rv"
+    "lv lz bar rz rv";
+  column-gap: 0.6rem;
+  row-gap: 4px;
   align-items: center;
   width: 100%;
   margin: 0;
@@ -610,6 +606,16 @@
   color: var(--tc-muted);
 }
 
+.tc-stat-row__bar > :nth-child(1) { grid-area: cat; align-self: end; }
+.tc-stat-row__bar > :nth-child(2) { grid-area: lv; }
+.tc-stat-row__bar > :nth-child(3) { grid-area: lz; }
+.tc-stat-row__bar > :nth-child(4) { grid-area: bar; align-self: start; }
+.tc-stat-row__bar > :nth-child(5) { grid-area: rz; }
+.tc-stat-row__bar > :nth-child(6) { grid-area: rv; }
+
+.tc-stat-row__bar--head { grid-template-areas: "lv lz bar rz rv"; }
+.tc-stat-row__bar--head > :nth-child(1) { display: none; }
+.tc-stat-row__bar--head > :nth-child(4) { align-self: center; }
 .tc-stat-row__bar--head .tc-z-head { text-align: center; }
 .tc-head-narrow { display: none; }
 
@@ -626,7 +632,7 @@
   border: 0;
   background: transparent;
   padding: 0;
-  text-align: left;
+  text-align: center;
   font-size: 0.82rem;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -812,8 +818,9 @@
 
 @media (max-width: 720px) {
   .tc-stat-row__bar {
-    grid-template-columns: 2.4rem minmax(3.2rem, 1fr) 2.6rem minmax(3rem, 4rem) 2.6rem minmax(3.2rem, 1fr);
-    gap: 0.25rem;
+    grid-template-columns: minmax(0, 1fr) 2.6rem minmax(4rem, 5.5rem) 2.6rem minmax(0, 1fr);
+    column-gap: 0.3rem;
+    row-gap: 3px;
     padding: 0.5rem 0;
   }
 
