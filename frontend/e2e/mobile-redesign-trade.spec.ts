@@ -57,12 +57,13 @@ test.describe('phone Trade Analyzer', () => {
     const [boxA, boxB] = [await cards.nth(0).boundingBox(), await cards.nth(1).boundingBox()]
     expect(Math.abs(boxA!.y - boxB!.y), 'cards side by side').toBeLessThan(2)
 
-    // Phone opens on the 8 categories, FT% expanded; minutes and games are a tap away.
+    // Phone opens on the 8 categories, the first (FG%) expanded; minutes and games are a tap away.
     const rows = page.getByRole('table', { name: 'Category comparison' })
     for (const cat of ['FG%', 'FT%', '3PM', 'REB', 'AST', 'STL', 'BLK', 'PTS']) {
       await expect(rows.getByRole('button', { name: new RegExp(`^${cat}`) })).toBeVisible()
     }
-    await expect(rows.getByRole('button', { name: /^FT%/ })).toHaveAttribute('aria-expanded', 'true')
+    await expect(rows.getByRole('button', { name: /^FG%/ })).toHaveAttribute('aria-expanded', 'true')
+    await expect(rows.getByRole('button', { name: /^FT%/ })).toHaveAttribute('aria-expanded', 'false')
     await expect(page.getByRole('button', { name: /Columns|cats only/ })).toHaveCount(0)
     // Totals, Per game and MIN & GP share one row.
     const toolbarTops = await page.locator('.tc-toolbar button').evaluateAll(els => els.map(el => Math.round(el.getBoundingClientRect().top)))

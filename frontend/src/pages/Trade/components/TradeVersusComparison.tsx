@@ -162,7 +162,8 @@ export const TradeVersusComparison = ({
   embedded = false,
   proLayout = false,
 }: TradeVersusComparisonProps) => {
-  // undefined = untouched: FT starts open (the row that most needs explaining).
+  // undefined = untouched: the first category row starts open, so the
+  // breakdown is visible and the table below it stays in one piece.
   const [openKey, setOpenKey] = useState<string | null | undefined>(undefined);
   const isTeam = tradeMode === 'team';
   const getsA = isTeam ? playersB : playersA;
@@ -197,7 +198,7 @@ export const TradeVersusComparison = ({
 
   const rows = scoringColumns.filter(c => scoringCategoryForColumn(c));
   const shownKey = openKey === undefined
-    ? rows.find(c => scoringCategoryForColumn(c) === 'FT%')?.key ?? null
+    ? rows[0]?.key ?? null
     : openKey;
   const zGapScale = maxZGap(rows.map(c => [categoryZ(c, true), categoryZ(c, false)]));
 

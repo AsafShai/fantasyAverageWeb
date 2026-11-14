@@ -74,11 +74,13 @@ describe('TradeSummaryPanel categories', () => {
   it('opens the players in a category when that stat is clicked', async () => {
     const user = userEvent.setup();
     renderPanel([player('a', {})], [player('b', {})]);
-    // FT% starts open: the row that most needs explaining.
+    // The first category (FG%) starts open; a tap closes it, another opens a row.
+    expect(screen.getByRole('button', { name: /^FG%/ })).toHaveAttribute('aria-expanded', 'true');
     expect(document.querySelectorAll('.tc-cat-break')).toHaveLength(1);
-    await user.click(screen.getByRole('button', { name: /^FT%/ }));
-    expect(document.querySelector('.tc-cat-break')).toBeNull();
     await user.click(screen.getByRole('button', { name: /^FG%/ }));
+    expect(document.querySelector('.tc-cat-break')).toBeNull();
+    await user.click(screen.getByRole('button', { name: /^FT%/ }));
+    expect(screen.getByRole('button', { name: /^FT%/ })).toHaveAttribute('aria-expanded', 'true');
     expect(document.querySelector('.tc-cat-break')).not.toBeNull();
     expect(screen.getAllByText(/Z in this cat/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('a').length).toBeGreaterThan(0);
