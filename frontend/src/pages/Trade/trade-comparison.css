@@ -873,3 +873,16 @@
   .tc-versus__teams--duo { column-gap: 0.5rem; }
   .tc-versus__teams--duo .tc-team-card__name { font-size: 0.82rem; }
 }
+
+/* Wide screens: one centred column, so each "gets" card sits over its side
+   of the category rows instead of stretching to the page edges. The footer
+   keeps its full-width rule but lines its text up with that column. */
+.tc-shell--pro .tc-shell__body {
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.tc-shell--pro .tc-shell__foot {
+  padding-left: max(14px, calc((100% - 960px) / 2 + 14px));
+  padding-right: max(14px, calc((100% - 960px) / 2 + 14px));
+}
