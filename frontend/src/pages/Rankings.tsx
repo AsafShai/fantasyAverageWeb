@@ -13,7 +13,7 @@ import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import LiveBadge from '../components/live/LiveBadge'
 import type { RankingStats, TeamRankChange } from '../types/api'
-import { todayIso, getDateNDaysAgo, validateDateRange } from '../utils/dateRange'
+import { todayIso, presetRangeStart, validateDateRange } from '../utils/dateRange'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { useMyTeam } from '../context/useMyTeam'
 import { TEAM_NAME_BOX_CLASS, TEAM_NAME_CELL_CLASS, wrapFriendlyName } from '../utils/wrapName'
@@ -76,7 +76,11 @@ function getRankingCellDisplay(
   if (typeof value !== 'number') return value
 
   if (isCategoryColumn && !isStandings) return value
-  if (isCategoryColumn && isStandings && mode === 'averages') return formatAverageValue(columnKey, value)
+  // A percentage is the same rate in totals mode, so it keeps the averages
+  // formatting instead of collapsing to "0.5".
+  if (isCategoryColumn && isStandings && (mode === 'averages' || PERCENTAGE_CATEGORIES.has(columnKey))) {
+    return formatAverageValue(columnKey, value)
+  }
   if (columnKey === 'gp') return value
   return value % 1 === 0 ? value.toString() : value.toFixed(1)
 }
@@ -298,9 +302,10 @@ const Rankings = () => {
         onApply={applyDates}
         onClear={clearDates}
         onQuickRange={(days) => {
-          setStartDate(getDateNDaysAgo(days))
+          const start = presetRangeStart(days, summary?.season_start)
+          setStartDate(start)
           setEndDate(today)
-          setDateError('')
+          validateDates(start, today)
         }}
         appliedRangeLabel={rangeLabel}
         mismatchNote={rangeNote ?? (hasDateMismatch
@@ -565,10 +570,10 @@ const Rankings = () => {
                       key={days}
                       type="button"
                       onClick={() => {
-                        const start = getDateNDaysAgo(days);
+                        const start = presetRangeStart(days, summary?.season_start);
                         setStartDate(start);
                         setEndDate(today);
-                        setDateError('');
+                        validateDates(start, today);
                       }}
                       title={`Last ${days} day${days === 1 ? '' : 's'} to today`}
                       aria-label={`Set date range to last ${days} days through today`}
