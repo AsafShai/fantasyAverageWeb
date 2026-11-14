@@ -191,7 +191,7 @@ function PlayerSheetBody({ playerId, sheet }: { playerId: string; sheet: ReturnT
             sheet.leaveTo(link.path, link.state)
           }}
         >
-          Trade Analyzer
+          Preview trade
         </button>
       </div>
     </BottomSheet>

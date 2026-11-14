@@ -32,6 +32,7 @@
 .mr-pp-owner { background: var(--mr-primary-soft); color: var(--mr-primary); }
 .mr-pp-owner:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
 .mr-pp-free { background: var(--mr-sunken); color: var(--mr-muted); }
+.mr-pp-trade { align-self: flex-start; min-height: 32px; padding: 4px 12px; font-size: 13px; }
 
 /* bio (folded) */
 .mr-pp-bio summary { cursor: pointer; min-height: 24px; display: list-item; }

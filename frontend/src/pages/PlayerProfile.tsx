@@ -16,6 +16,8 @@ import { backLabel, usePlayerProfileData } from '../hooks/usePlayerProfileData'
 import { useSectionOpen } from '../hooks/useSectionOpen'
 import { FoldTitle } from '../components/FoldTitle'
 import { useMobileRedesign } from '../mobile/flag'
+import { useMyTeam } from '../context/MyTeamContext'
+import { tradeLinkForPlayer } from '../mobile/player/tradePreset'
 import PlayerProfileMobile from '../mobile/profile/PlayerProfileMobile'
 
 const STAT_ROWS: { key: PlayerStatKey; label: string; isPct?: boolean }[] = [
@@ -56,6 +58,7 @@ const PlayerProfileDesktop = () => {
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const [showAverages, setShowAverages] = useState(true)
   const [statsOpen, toggleStats] = useSectionOpen('stats')
+  const { teams, myTeamId } = useMyTeam()
 
   const handleBack = () => {
     if (from) {
@@ -123,7 +126,7 @@ const PlayerProfileDesktop = () => {
             {bio.team} ({bio.team_abbr}) · {bio.position}
           </p>
           {fantasyEntry && (
-            <p className="mb-3">
+            <p className="mb-3 flex flex-wrap items-center gap-2">
               {fantasyEntry.status === 'ONTEAM' && fantasyEntry.fantasy_team_name ? (
                 <Link
                   to={`/team/${fantasyEntry.team_id}`}
@@ -136,6 +139,16 @@ const PlayerProfileDesktop = () => {
                   {fantasyEntry.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  const link = tradeLinkForPlayer(fantasyEntry, teams, myTeamId)
+                  navigate(link.path, { state: link.state })
+                }}
+                className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-blue-600 text-white border border-blue-600 hover:bg-blue-700"
+              >
+                Preview trade
+              </button>
             </p>
           )}
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">

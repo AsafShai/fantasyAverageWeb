@@ -7,6 +7,8 @@ import ErrorMessage from '../../components/ErrorMessage'
 import { getErrorMessage } from '../../utils/errorMessage'
 import { backLabel, usePlayerProfileData } from '../../hooks/usePlayerProfileData'
 import { useSectionOpen } from '../../hooks/useSectionOpen'
+import { useMyTeam } from '../../context/MyTeamContext'
+import { tradeLinkForPlayer } from '../player/tradePreset'
 import { Card, DataTable, Segmented, type Column } from '../ui'
 import TimeFrameChips from './TimeFrameChips'
 import FantasyValueCard from './FantasyValueCard'
@@ -58,6 +60,7 @@ export default function PlayerProfileMobile() {
   const [perGame, setPerGame] = useState<'pg' | 'tot'>('pg')
   const [statsOpen, toggleStats] = useSectionOpen('stats')
 
+  const { teams, myTeamId } = useMyTeam()
   const d = usePlayerProfileData(playerId, timePeriod, customRange)
 
   const handleBack = () => {
@@ -120,6 +123,18 @@ export default function PlayerProfileMobile() {
             ) : (
               <span className="mr-pp-badge mr-pp-free">{fantasyEntry.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}</span>
             ))}
+          {fantasyEntry && (
+            <button
+              type="button"
+              className="mr-btn mr-pp-trade"
+              onClick={() => {
+                const link = tradeLinkForPlayer(fantasyEntry, teams, myTeamId)
+                navigate(link.path, { state: link.state })
+              }}
+            >
+              Preview trade
+            </button>
+          )}
         </div>
       </Card>
 
