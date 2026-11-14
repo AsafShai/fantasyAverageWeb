@@ -3,7 +3,7 @@ import { test, expect, isMobile } from './support/test'
 import { API_BASE_URL, fixture } from './support/mockApi'
 import { PROFILE_ID, mockProfileApis, playersList } from './support/profileMock'
 
-// "Preview in Trade Analyzer" on the player page: opens the Trade Analyzer with the player
+// "Trade Analyzer" on the player page opens the Trade Analyzer with the player
 // already picked: on his team's side (against My Team when set), or in
 // "vs Free Agents" when he is a free agent.
 
@@ -44,7 +44,7 @@ async function mockTrade(page: Page, { freeAgent = false } = {}) {
 
 async function openPreview(page: Page) {
   await page.goto(`/player/${PROFILE_ID}?ff=mobile`)
-  await page.getByRole('button', { name: 'Preview in Trade Analyzer' }).click()
+  await page.getByRole('button', { name: 'Trade Analyzer' }).click()
   await expect(page).toHaveURL(/\/trade(\?side=B)?$/)
 }
 
@@ -59,9 +59,9 @@ test('rostered player: his team on his side, My Team on the other', async ({ pag
   await page.addInitScript(() => localStorage.setItem('fw:myTeam.id', '2'))
   await mockTrade(page)
   await page.goto(`/player/${PROFILE_ID}?ff=mobile`)
-  await expect(page.getByRole('button', { name: 'Preview in Trade Analyzer' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Trade Analyzer' })).toBeVisible()
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/profile-${isMobile(page) ? 'phone' : 'desktop'}.png` })
-  await page.getByRole('button', { name: 'Preview in Trade Analyzer' }).click()
+  await page.getByRole('button', { name: 'Trade Analyzer' }).click()
   await expect(page).toHaveURL(/\/trade\?side=B$/)
   await onTrade(page)
   await expect(picked(page, 'Donovan Mitchell')).toBeVisible()

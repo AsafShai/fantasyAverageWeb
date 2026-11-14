@@ -132,7 +132,7 @@ export default function PlayerProfileMobile() {
                 navigate(link.path, { state: link.state })
               }}
             >
-              Preview in Trade Analyzer
+              Trade Analyzer
             </button>
           )}
         </div>

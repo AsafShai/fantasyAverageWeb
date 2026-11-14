@@ -126,7 +126,7 @@ describe('player sheet', () => {
     expect(within(sheet).queryByRole('region', { name: 'Next game projection' })).toBeNull()
     expect(fetchMock.mock.calls.some(([r]) => typeof r !== 'string' && r.url.includes('/projections/'))).toBe(false)
     expect(within(sheet).getByRole('button', { name: 'Full profile' })).toBeInTheDocument()
-    expect(within(sheet).getByRole('button', { name: 'Preview in Trade Analyzer' })).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Trade Analyzer' })).toBeInTheDocument()
   })
 
   it('free agent: badge, dashes without games', async () => {
