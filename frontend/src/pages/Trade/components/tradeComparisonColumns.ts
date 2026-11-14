@@ -45,8 +45,8 @@ export function scoringCategoryForColumn(column: DisplayColumn): string | undefi
 }
 
 export function columnFromKey(key: string): DisplayColumn | null {
-  if (key === COMPOSITE_FG) return { key, label: 'FG', icon: '🎯', composite: 'fg' };
-  if (key === COMPOSITE_FT) return { key, label: 'FT', icon: '🆓', composite: 'ft' };
+  if (key === COMPOSITE_FG) return { key, label: 'FG%', icon: '🎯', composite: 'fg' };
+  if (key === COMPOSITE_FT) return { key, label: 'FT%', icon: '🆓', composite: 'ft' };
   if (key.startsWith('extra:')) {
     const category = key.slice('extra:'.length);
     return { key, label: category, icon: '➕', extraCategory: category };

@@ -135,7 +135,15 @@ export const signedCategoryZ = (z: number) => `${z >= 0 ? '+' : ''}${z.toFixed(2
 
 export type CategoryTone = 'win' | 'lose' | 'tie';
 
+/** How the category rows are decided, for the footer of the page and share card. */
+export const CATEGORY_Z_NOTE = 'Higher Z wins the category · FG% and FT% Z weighted by attempts';
+
+/** Category Zs this close (as shown, to 2 decimals) count as even. */
+export const EVEN_Z_GAP = 0.05;
+
 export function categoryTone(myZ: number | null | undefined, otherZ: number | null | undefined): CategoryTone {
-  if (myZ == null || otherZ == null || myZ === otherZ) return 'tie';
-  return myZ > otherZ ? 'win' : 'lose';
+  if (myZ == null || otherZ == null) return 'tie';
+  const gap = Math.round(myZ * 100) - Math.round(otherZ * 100);
+  if (Math.abs(gap) <= EVEN_Z_GAP * 100) return 'tie';
+  return gap > 0 ? 'win' : 'lose';
 }

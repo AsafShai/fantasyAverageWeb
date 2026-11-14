@@ -12,6 +12,7 @@ import {
 } from '../utils/tradeCalculations';
 import { STAT_KEYS } from '../constants';
 import { useMyTeam } from '../../../context/MyTeamContext';
+import { useIsDarkTheme } from '../../../hooks/useIsDarkTheme';
 import { ShareCardButton } from '../../../components/share/ShareCardButton';
 import { TradeShareCard, type TradeShareSide } from '../../../components/share/TradeShareCard';
 import { formatAsOf } from '../../../components/share/shareCardFormat';
@@ -20,6 +21,8 @@ import { tradeShareRows } from '../utils/tradeShare';
 import {
   COMPOSITE_FG,
   COMPOSITE_FT,
+  CATEGORY_Z_NOTE,
+  EVEN_Z_GAP,
   categoryTone,
   formatBundlePct,
   formatMadeAttempted,
@@ -28,8 +31,8 @@ import {
 } from '../utils/tradeCategoryZ';
 import type { AggregatedStats } from '../utils/tradeCalculations';
 import {
-  categoryOnlyColumns,
   categoryShortcutKeys,
+  columnFromKey,
   isCategoriesOnlyView,
   isNeutralColumn,
   scoringCategoryForColumn,
@@ -73,6 +76,9 @@ interface Column {
 }
 
 const EXTRA_COLUMN_PREFIX = 'extra:';
+
+/** Fixed columns hidden by the categories-only view. */
+const NON_CATEGORY_KEYS = new Set(['minutes', 'fgm', 'fga', 'fg_percentage', 'ftm', 'fta', 'ft_percentage', 'gp']);
 
 const STAT_HEADERS = [
   { label: 'MIN', icon: '⏰' },
@@ -218,13 +224,16 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
   tradeRanking,
 }) => {
   const { myTeamId } = useMyTeam();
+  const dark = useIsDarkTheme();
+  // Opens on the scoring categories (FG/FT with made-attempted); minutes,
+  // games and the made/attempted columns are one tap away.
   const [shownColumns, setShownColumns] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     STAT_KEYS.forEach(key => {
-      initial[key] = true;
+      initial[key] = !NON_CATEGORY_KEYS.has(key);
     });
-    initial[COMPOSITE_FG] = false;
-    initial[COMPOSITE_FT] = false;
+    initial[COMPOSITE_FG] = true;
+    initial[COMPOSITE_FT] = true;
     return initial;
   });
 
@@ -282,11 +291,18 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
     setShownColumns(next);
   };
 
-  const visibleColumns: DisplayColumn[] = categoriesOnly
-    ? categoryOnlyColumns(extraCategories)
-    : columns
+  // FG/FT made-attempted rows lead, then the picker's columns in order.
+  const visibleColumns: DisplayColumn[] = [
+    ...[COMPOSITE_FG, COMPOSITE_FT]
+      .filter(key => shownColumns[key])
+      .map(columnFromKey)
+      .filter((c): c is DisplayColumn => c != null),
+    ...columns
       .filter(({ key }) => isShown(key))
-      .map(({ key, label, icon, extraCategory }) => ({ key, label, icon, extraCategory }));
+      .map(({ key, label, icon, extraCategory }) => ({ key, label, icon, extraCategory })),
+  ];
+  const contextShown = isShown('minutes') && isShown('gp');
+  const toggleContext = () => setShownColumns(prev => ({ ...prev, minutes: !contextShown, gp: !contextShown }));
   const scoringColumns = visibleColumns.filter(c => scoringCategoryForColumn(c));
   const neutralColumns = visibleColumns.filter(c => isNeutralColumn(c.key));
 
@@ -449,14 +465,14 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
     : teamA?.team_id === myTeamId ? 0 : teamB?.team_id === myTeamId ? 1 : null;
   const shareTitle = isTeamTrade ? `${teamAName} ⇄ ${teamBName}` : `${teamAName} pickup check`;
 
-  const viewModeLabel = viewMode === 'averages' ? 'averages' : 'totals';
+  const viewModeLabel = viewMode === 'averages' ? 'per game, averaged per player' : 'totals';
   const hasValues = playerValue !== undefined;
   const hasCategoryZ = Boolean(tradeRanking?.referencePool.length);
 
   return (
     <div className="space-y-6">
       {playersA.length > 0 && playersB.length > 0 && (
-        <div className="tc-shell tc-shell--pro">
+        <div className={`tc-shell tc-shell--pro${dark ? '' : ' tc-shell--light'}`}>
           <div className="tc-shell__head">
             <div className="tc-shell__brand">
               <span>🏀 Fantasy League</span>
@@ -476,7 +492,7 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
                   <TradeShareCard
                     dark={dark}
                     title={shareTitle}
-                    subtitle={`${periodLabel} · ${viewMode} · as of ${formatAsOf()}`}
+                    subtitle={`${periodLabel} · ${viewModeLabel} · as of ${formatAsOf()}`}
                     sides={shareSides}
                     rows={shareRows}
                     mode={viewMode}
@@ -525,6 +541,15 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
             >
               {categoryKeys.size} cats only
             </button>
+            <button
+              type="button"
+              onClick={toggleContext}
+              aria-pressed={contextShown}
+              className="tc-pill-toggle"
+              title="Minutes and games played aren't scored; shown for context"
+            >
+              {contextShown ? 'Hide' : 'Show'} minutes and games
+            </button>
           </div>
           {isColumnControlsOpen && (
             <TradeColumnPicker
@@ -562,9 +587,9 @@ export const TradeSummaryPanel: React.FC<TradeSummaryPanelProps> = React.memo(({
           )}
           </div>
           <div className="tc-shell__foot">
-            <span>{viewMode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>
-            {hasValues && <span>#rank · Z-score, per game</span>}
-            {hasCategoryZ && <span>▲ = better category Z on main stat</span>}
+            {hasCategoryZ && <span>{CATEGORY_Z_NOTE}</span>}
+            {hasCategoryZ && <span>Bar = Z gap, toward the better side · within {EVEN_Z_GAP.toFixed(2)} = even</span>}
+            {hasValues && <span>#rank · Z = player's rank and Z among all players, per game</span>}
           </div>
         </div>
       )}

@@ -17,8 +17,8 @@ import type { TradeRankingContext } from './playerValues';
 
 // Scoring categories on the share card, mapped to the aggregate fields.
 export const SHARE_CATEGORIES = [
-  { category: 'FG%', field: 'fg_percentage', label: 'FG' },
-  { category: 'FT%', field: 'ft_percentage', label: 'FT' },
+  { category: 'FG%', field: 'fg_percentage', label: 'FG%' },
+  { category: 'FT%', field: 'ft_percentage', label: 'FT%' },
   { category: '3PM', field: 'three_pm', label: '3PM' },
   { category: 'REB', field: 'reb', label: 'REB' },
   { category: 'AST', field: 'ast', label: 'AST' },

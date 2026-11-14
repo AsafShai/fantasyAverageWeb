@@ -3,7 +3,7 @@ import type { Player } from '../../../../types/api';
 import { DEFAULT_CATEGORIES } from '../../../../utils/playerRankings';
 import { buildTradeRankingContext } from '../playerValues';
 import { tradeShareRows } from '../tradeShare';
-import { tradeSideCategoryZs } from '../tradeCategoryZ';
+import { categoryTone, tradeSideCategoryZs } from '../tradeCategoryZ';
 import { rowWinner } from '../../../../components/share/shareCardFormat';
 
 const player = (
@@ -57,7 +57,16 @@ describe('tradeSideCategoryZs', () => {
     expect(pctStar).toBeGreaterThan(pctRole);
     expect(zStar!['FG%']).toBeLessThan(zRole!['FG%']);
     const rows = tradeShareRows(star, role, 'averages', { referencePool, categories: DEFAULT_CATEGORIES, reverseCategories: new Set() });
-    const fg = rows.find(r => r.category === 'FG')!;
+    const fg = rows.find(r => r.category === 'FG%')!;
     expect(rowWinner(fg)).toBe(1);
+  });
+});
+describe('categoryTone', () => {
+  it('calls Zs within 0.05 of each other (as shown) even', () => {
+    expect(categoryTone(0.41, 0.36)).toBe('tie');
+    expect(categoryTone(0.36, 0.41)).toBe('tie');
+    expect(categoryTone(0.35, 0.22)).toBe('win');
+    expect(categoryTone(0.22, 0.35)).toBe('lose');
+    expect(categoryTone(null, 0.5)).toBe('tie');
   });
 });

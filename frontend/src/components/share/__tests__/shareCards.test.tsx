@@ -194,7 +194,7 @@ describe('TradeShareCard', () => {
     expect(screen.getByText('#12 · Z +1.23')).toBeInTheDocument();
     expect(screen.getByText('#140 · Z -0.50')).toBeInTheDocument();
     expect(screen.getByText('No Data Guy').closest('.tc-player-chip')).toHaveTextContent('No Data Guy');
-    expect(screen.getByText('#rank · Z-score, per game')).toBeInTheDocument();
+    expect(screen.getByText('#rank · Z among all players, per game')).toBeInTheDocument();
   });
 
   it('leaves out the rank legend when no player has a value', () => {
@@ -209,7 +209,7 @@ describe('TradeShareCard', () => {
         highlightSide={null}
       />,
     );
-    expect(screen.queryByText('#rank · Z-score, per game')).toBeNull();
+    expect(screen.queryByText('#rank · Z among all players, per game')).toBeNull();
   });
 });
 

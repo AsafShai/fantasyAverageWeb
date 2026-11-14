@@ -1,6 +1,8 @@
 // Formatting shared by the share-card layouts. Cards are 400px wide, so
 // values are shorter than the on-page tables (which show 4 decimals).
 
+import { categoryTone } from '../../pages/Trade/utils/tradeCategoryZ';
+
 const PERCENTAGE_CATEGORIES = new Set(['FG%', 'FT%', '3P%', 'AFG%']);
 
 export const isPercentageCategory = (category: string) => PERCENTAGE_CATEGORIES.has(category);
@@ -58,9 +60,8 @@ export interface TradeShareRow {
 /** Index of the better side for a row, or null on a tie. */
 export const rowWinner = (row: TradeShareRow): 0 | 1 | null => {
   if (row.zValues) {
-    const [a, b] = row.zValues;
-    if (a == null || b == null || a === b) return null;
-    return a > b ? 0 : 1;
+    const tone = categoryTone(row.zValues[0], row.zValues[1]);
+    return tone === 'win' ? 0 : tone === 'lose' ? 1 : null;
   }
   const { values: [a, b], lowerIsBetter } = row;
   if (a === b) return null;

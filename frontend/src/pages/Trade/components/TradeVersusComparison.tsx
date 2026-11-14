@@ -23,8 +23,9 @@ import {
   type DisplayColumn,
   scoringCategoryForColumn,
 } from './tradeComparisonColumns';
-import { PlayerFace, TradeVersusRow, pillClassForLabel, type CategoryPlayerLine, type VersusSideDisplay } from './TradeVersusRow';
+import { PlayerFace, TradeVersusRow, VersusHeaderRow, type CategoryPlayerLine, type VersusSideDisplay } from './TradeVersusRow';
 import type { AggregatedStats } from '../utils/tradeCalculations';
+import { maxZGap, pillClassForLabel } from './tradeVersusMath';
 import '../trade-comparison.css';
 
 interface TradeVersusComparisonProps {
@@ -161,7 +162,8 @@ export const TradeVersusComparison = ({
   embedded = false,
   proLayout = false,
 }: TradeVersusComparisonProps) => {
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  // undefined = untouched: FT starts open (the row that most needs explaining).
+  const [openKey, setOpenKey] = useState<string | null | undefined>(undefined);
   const isTeam = tradeMode === 'team';
   const getsA = isTeam ? playersB : playersA;
   const getsB = isTeam ? playersA : playersB;
@@ -194,6 +196,10 @@ export const TradeVersusComparison = ({
   };
 
   const rows = scoringColumns.filter(c => scoringCategoryForColumn(c));
+  const shownKey = openKey === undefined
+    ? rows.find(c => scoringCategoryForColumn(c) === 'FT%')?.key ?? null
+    : openKey;
+  const zGapScale = maxZGap(rows.map(c => [categoryZ(c, true), categoryZ(c, false)]));
 
   const body = (
     <>
@@ -221,6 +227,7 @@ export const TradeVersusComparison = ({
         />
       </div>
       <div className="tc-versus__rows" role="table" aria-label="Category comparison">
+        {proLayout && <VersusHeaderRow valueLabel={viewMode === 'averages' ? 'Avg' : 'Total'} />}
         {rows.map(column => {
           const zL = categoryZ(column, true);
           const zR = categoryZ(column, false);
@@ -233,8 +240,9 @@ export const TradeVersusComparison = ({
               vsStyle={proLayout ? 'slider' : 'chip'}
               mainWinner={proLayout ? undefined : mainWinnerFromZ(zL, zR)}
               muteZColor
-              expanded={openKey === column.key}
-              onToggle={proLayout ? () => setOpenKey(key => key === column.key ? null : column.key) : undefined}
+              maxZGap={zGapScale}
+              expanded={shownKey === column.key}
+              onToggle={proLayout ? () => setOpenKey(shownKey === column.key ? null : column.key) : undefined}
               breakdown={proLayout ? {
                 leftTitle: isTeam ? `${nameA} gets` : 'Drop',
                 rightTitle: isTeam ? `${nameB} gets` : 'Add',
@@ -285,10 +293,12 @@ function TeamGetsCard({
         {players.map(p => (
           <li key={p.player_name} className="tc-player-chip">
             <PlayerFace name={p.player_name} playerId={p.player_id} size="chip" />
-            <span className="tc-player-chip__name">{p.player_name}</span>
-            {formatPlayerBadge(p, playerValue) && (
-              <span className="tc-player-chip__value">{formatPlayerBadge(p, playerValue)}</span>
-            )}
+            <span className="tc-player-chip__text">
+              <span className="tc-player-chip__name">{p.player_name}</span>
+              {formatPlayerBadge(p, playerValue) && (
+                <span className="tc-player-chip__value">{formatPlayerBadge(p, playerValue)}</span>
+              )}
+            </span>
           </li>
         ))}
       </ul>

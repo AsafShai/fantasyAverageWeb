@@ -1,6 +1,8 @@
 import { ShareCard, type ShareCardTheme } from './ShareCard'
 import { rowWinner, tradeShareCellLines, type TradeShareRow } from './shareCardFormat'
-import { PlayerFace, TradeVersusRow, pillClassForLabel } from '../../pages/Trade/components/TradeVersusRow'
+import { PlayerFace, TradeVersusRow, VersusHeaderRow } from '../../pages/Trade/components/TradeVersusRow'
+import { maxZGap, pillClassForLabel } from '../../pages/Trade/components/tradeVersusMath'
+import { CATEGORY_Z_NOTE, EVEN_Z_GAP } from '../../pages/Trade/utils/tradeCategoryZ'
 import '../../pages/Trade/trade-comparison.css'
 
 export interface TradeSharePlayer {
@@ -33,6 +35,7 @@ interface TradeShareCardProps extends ShareCardTheme {
 export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sides, rows, mode, highlightSide, dark }: TradeShareCardProps) => {
   const hasValues = sides.some(side => side.players.some(p => p.value))
   const hasCategoryZ = rows.some(row => row.zValues)
+  const zGapScale = maxZGap(rows.map(row => [row.zValues?.[0], row.zValues?.[1]]))
 
   return (
     <ShareCard
@@ -42,9 +45,9 @@ export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sid
       subtitle={subtitle}
       wide
       footer={<>
-        {rows.length > 0 && <span>{mode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>}
-        {hasValues && <span>#rank · Z-score, per game</span>}
-        {hasCategoryZ && <span>▲ = better category Z on main stat</span>}
+        {hasCategoryZ && <span>{CATEGORY_Z_NOTE}</span>}
+        {hasCategoryZ && <span>Bar = Z gap, toward the better side · within {EVEN_Z_GAP.toFixed(2)} = even</span>}
+        {hasValues && <span>#rank · Z among all players, per game</span>}
       </>}
     >
       <div className="tc-share-versus-wrap">
@@ -64,10 +67,12 @@ export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sid
                 {side.players.map(({ name, playerId, value }) => (
                   <li key={name} className="tc-player-chip">
                     <PlayerFace name={name} playerId={playerId} size="chip" />
-                    <span className="tc-player-chip__name">{name}</span>
-                    {value && (
-                      <span className="tc-player-chip__value">#{value.rank} · Z {signedZ(value.z)}</span>
-                    )}
+                    <span className="tc-player-chip__text">
+                      <span className="tc-player-chip__name">{name}</span>
+                      {value && (
+                        <span className="tc-player-chip__value">#{value.rank} · Z {signedZ(value.z)}</span>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -75,6 +80,7 @@ export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sid
           ))}
         </div>
         <div className="tc-share-versus" role="table">
+          <VersusHeaderRow valueLabel={mode === 'averages' ? 'Avg / player' : 'Total'} />
           {rows.map(row => {
             const left = tradeShareCellLines(row, 0, mode)
             const right = tradeShareCellLines(row, 1, mode)
@@ -85,6 +91,7 @@ export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sid
                 pillClass={pillClassForLabel(row.category)}
                 vsStyle="slider"
                 mainWinner={rowWinner(row)}
+                maxZGap={zGapScale}
                 left={{
                   main: left.main,
                   sub: left.attempts,

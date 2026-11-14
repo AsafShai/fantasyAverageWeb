@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { categoryTone, signedCategoryZ } from '../utils/tradeCategoryZ';
-import { playerInitials, zSliderKnobPercent } from './tradeVersusMath';
+import { playerInitials, zEdgeBarPercent } from './tradeVersusMath';
 
 export interface VersusSideDisplay {
   main: string;
@@ -38,6 +38,8 @@ export interface TradeVersusRowProps {
   breakdown?: CategoryBreakdown;
   expanded?: boolean;
   onToggle?: () => void;
+  /** Largest Z gap among the rows shown together; bars are drawn to that scale. */
+  maxZGap?: number;
 }
 
 const sideTone = (mine: number | null, other: number | null) => {
@@ -113,6 +115,7 @@ export const TradeVersusRow = ({
   breakdown,
   expanded = false,
   onToggle,
+  maxZGap,
 }: TradeVersusRowProps) => {
   const leftTone = sideTone(left.z, right.z);
   const rightTone = sideTone(right.z, left.z);
@@ -132,8 +135,8 @@ export const TradeVersusRow = ({
     const winner = mainWinner === undefined
       ? zWinner
       : mainWinner === null ? 'tie' as const : mainWinner === 0 ? 'win' as const : 'lose' as const;
-    const knob = zSliderKnobPercent(left.z, right.z);
-    const knobSide = winner === 'win' ? 'left' : winner === 'lose' ? 'right' : 'tie';
+    const edge = winner === 'tie' ? 0 : zEdgeBarPercent(left.z, right.z, maxZGap);
+    const edgeSide = winner === 'win' ? 'left' : 'right';
     const interactive = Boolean(onToggle && breakdown);
     const bar = (
       <>
@@ -145,7 +148,13 @@ export const TradeVersusRow = ({
           <span className={`tc-z-inline${winner === 'win' ? ' tc-z-inline--left' : ''}`}>{formatZ(left.z) ?? '—'}</span>
           <span className="tc-z-slider" aria-hidden>
             <span className="tc-z-slider__track" />
-            <span className={`tc-z-slider__knob tc-z-slider__knob--${knobSide}`} style={{ left: `${knob}%` }} />
+            {edge > 0 && (
+              <span
+                className={`tc-z-slider__fill tc-z-slider__fill--${edgeSide}`}
+                style={{ width: `${edge}%` }}
+              />
+            )}
+            <span className="tc-z-slider__mid" />
           </span>
           <span className={`tc-z-inline${winner === 'lose' ? ' tc-z-inline--right' : ''}`}>{formatZ(right.z) ?? '—'}</span>
           <span className="tc-stat-block tc-stat-block--right">
@@ -200,8 +209,19 @@ export const TradeVersusRow = ({
   );
 };
 
-export function pillClassForLabel(label: string): string | undefined {
-  if (label === 'FG' || label === 'FG%') return 'tc-cat-pill--fg';
-  if (label === 'FT' || label === 'FT%') return 'tc-cat-pill--ft';
-  return undefined;
+/** Column labels over the category rows, on the same grid as each row. */
+export function VersusHeaderRow({ valueLabel }: { valueLabel: string }) {
+  return (
+    <div className="tc-stat-row__bar tc-stat-row__bar--head" aria-hidden>
+      <span>Cat</span>
+      <span className="tc-stat-block--left">{valueLabel}</span>
+      <span className="tc-z-head">Z</span>
+      <span className="tc-z-head">
+        <span className="tc-head-wide">Z edge</span>
+        <span className="tc-head-narrow">Edge</span>
+      </span>
+      <span className="tc-z-head">Z</span>
+      <span className="tc-stat-block--right">{valueLabel}</span>
+    </div>
+  );
 }
