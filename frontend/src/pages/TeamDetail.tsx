@@ -176,6 +176,14 @@ const TeamDetail = () => {
   const [sectionSlotUsageOpen, setSectionSlotUsageOpen] = usePersistedState('teamDetail.section.slotUsage', true)
   const [sectionCoverageOpen, setSectionCoverageOpen] = usePersistedState('teamDetail.section.coverage', false)
   const [sectionRosterOpen, setSectionRosterOpen] = usePersistedState('teamDetail.section.roster', true)
+  // The route keeps this page mounted when it moves to another team (the header's
+  // My team link, back/forward), so the roster selection resets with the team:
+  // a set of the previous roster's names would leave every new player unchecked.
+  const [rosterTeamId, setRosterTeamId] = useState(teamIdNumber)
+  if (rosterTeamId !== teamIdNumber) {
+    setRosterTeamId(teamIdNumber)
+    setIncludedPlayers(null)
+  }
   const handleSort = (column: string) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
