@@ -4,10 +4,10 @@ import type { TradeMode } from '../../../hooks/useTradeState';
 import { enumParam, useUrlState, type UrlSchema } from '../../../hooks/useUrlState';
 import { ensureMobileFonts } from '../../../mobile/fonts';
 import { Segmented } from '../../../mobile/ui';
-import type { PlayerValueLookup } from '../utils/playerValues';
+import type { PlayerValueLookup, TradeRankingContext } from '../utils/playerValues';
 import { PeriodChips } from './PeriodChips';
 import { FreeAgentSideCard, TeamSideCard } from './TradeSideCard';
-import { TradeAvgZBar, TradeComparisonCard } from './TradeComparisonCard';
+import { TradeComparisonCard } from './TradeComparisonCard';
 import type { ViewMode } from './format';
 import './trade-mobile.css';
 
@@ -52,6 +52,7 @@ export interface TradeMobileProps {
   isFetchingFreeAgents: boolean;
   freeAgentsError: unknown;
   playerValue?: PlayerValueLookup;
+  tradeRanking?: TradeRankingContext;
 }
 
 /**
@@ -61,7 +62,7 @@ export interface TradeMobileProps {
  * comparison and a sticky Avg Z summary.
  */
 export function TradeMobile(props: TradeMobileProps) {
-  const { tradeMode, viewMode, playerValue } = props;
+  const { tradeMode, viewMode, playerValue, tradeRanking } = props;
   const [{ side }, setUrl] = useUrlState(SIDE_SCHEMA);
   useEffect(() => { ensureMobileFonts(); }, []);
 
@@ -75,6 +76,7 @@ export function TradeMobile(props: TradeMobileProps) {
     tradeMode,
     periodLabel: props.periodLabel,
     playerValue,
+    tradeRanking,
   };
   const countA = props.selectedA.length;
   const countB = isTeam ? props.selectedB.length : props.selectedFreeAgents.length;
@@ -102,12 +104,6 @@ export function TradeMobile(props: TradeMobileProps) {
         onChange={props.setTimePeriod}
         customRange={props.customRange}
         onCustomRangeChange={props.setCustomRange}
-      />
-      <Segmented
-        label="Stats"
-        value={viewMode}
-        onChange={props.setViewMode}
-        options={[{ value: 'totals', label: '📊 Total Stats' }, { value: 'averages', label: '📈 Per Game Averages' }]}
       />
       <Segmented
         label="Side"
@@ -170,8 +166,7 @@ export function TradeMobile(props: TradeMobileProps) {
         />
       )}
 
-      <TradeComparisonCard {...comparison} />
-      <TradeAvgZBar {...comparison} />
+      <TradeComparisonCard {...comparison} setViewMode={props.setViewMode} />
     </div>
   );
 }

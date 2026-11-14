@@ -47,10 +47,52 @@ export interface TradeShareRow {
   category: string;
   values: [number, number];
   lowerIsBetter?: boolean;
+  /** When set, win coloring uses category Z instead of raw `values`. */
+  zValues?: [number | null, number | null];
+  /** FG / FT made–attempted line for each side. */
+  madeAtt?: [string, string];
+  /** FG / FT percentage line for each side. */
+  pctLine?: [string, string];
 }
 
 /** Index of the better side for a row, or null on a tie. */
-export const rowWinner = ({ values: [a, b], lowerIsBetter }: TradeShareRow): 0 | 1 | null => {
+export const rowWinner = (row: TradeShareRow): 0 | 1 | null => {
+  if (row.zValues) {
+    const [a, b] = row.zValues;
+    if (a == null || b == null || a === b) return null;
+    return a > b ? 0 : 1;
+  }
+  const { values: [a, b], lowerIsBetter } = row;
   if (a === b) return null;
   return (a > b) !== !!lowerIsBetter ? 0 : 1;
 };
+
+const signedZ = (z: number) => `${z >= 0 ? '+' : ''}${z.toFixed(2)}`;
+
+export interface TradeShareCellLines {
+  main: string;
+  attempts?: string;
+  z?: string;
+}
+
+/** Lines in a trade share cell (main stat vs neutral sublines). */
+export function tradeShareCellLines(row: TradeShareRow, side: 0 | 1, mode: 'averages' | 'totals'): TradeShareCellLines {
+  const z = row.zValues?.[side];
+  if (row.madeAtt) {
+    return {
+      main: row.pctLine?.[side] ?? '—',
+      attempts: row.madeAtt[side],
+      z: z != null ? `Z ${signedZ(z)}` : undefined,
+    };
+  }
+  return {
+    main: formatCardValue(row.category, row.values[side], mode),
+    z: z != null ? `Z ${signedZ(z)}` : undefined,
+  };
+}
+
+/** Text in a trade share cell: shooting lines or stat + optional Z. */
+export function formatTradeShareCell(row: TradeShareRow, side: 0 | 1, mode: 'averages' | 'totals'): string {
+  const { main, attempts, z } = tradeShareCellLines(row, side, mode);
+  return [main, attempts, z].filter(Boolean).join('\n');
+}

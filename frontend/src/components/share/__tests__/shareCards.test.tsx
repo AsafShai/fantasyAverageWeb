@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RankingStats } from '../../../types/api';
 import { RankingsShareCard } from '../RankingsShareCard';
 import { TradeShareCard } from '../TradeShareCard';
-import { formatAsOf, formatCardValue, rotoPlace, rotoTone, rowWinner } from '../shareCardFormat';
+import { formatAsOf, formatCardValue, formatTradeShareCell, rotoPlace, rotoTone, rowWinner } from '../shareCardFormat';
 
 const row = (id: number, name: string, rank: number, ranks: Record<string, number>, stats: Record<string, number>): RankingStats => ({
   team: { team_id: id, team_name: name },
@@ -48,6 +48,18 @@ describe('shareCardFormat', () => {
     expect(rowWinner({ category: 'PTS', values: [10, 8] })).toBe(0);
     expect(rowWinner({ category: 'TO', values: [10, 8], lowerIsBetter: true })).toBe(1);
     expect(rowWinner({ category: 'PTS', values: [5, 5] })).toBeNull();
+    expect(rowWinner({ category: 'FG', values: [0.55, 0.48], zValues: [0.2, 0.5] })).toBe(1);
+  });
+
+  it('formats FG share rows with made–attempted, pct, and Z', () => {
+    const row = {
+      category: 'FG',
+      values: [0.55, 0.48] as [number, number],
+      madeAtt: ['10-18', '22-44'] as [string, string],
+      pctLine: ['55.0%', '48.0%'] as [string, string],
+      zValues: [0.2, 0.5] as [number, number],
+    };
+    expect(formatTradeShareCell(row, 1, 'averages')).toBe('48.0%\n22-44\nZ +0.50');
   });
 });
 
@@ -158,7 +170,8 @@ describe('TradeShareCard', () => {
         highlightSide={null}
       />,
     );
-    expect(screen.getByText('2.1 ▲')).toHaveClass('sc-win');
+    expect(screen.getByText('2.1').className).toContain('is-win');
+    expect(container.querySelector('.tc-z-slider')).not.toBeNull();
     expect(screen.queryByText(/better side|categories|even split/i)).toBeNull();
     expect(container.querySelector('.share-card__verdict')).toBeNull();
   });
@@ -180,7 +193,7 @@ describe('TradeShareCard', () => {
     );
     expect(screen.getByText('#12 · Z +1.23')).toBeInTheDocument();
     expect(screen.getByText('#140 · Z -0.50')).toBeInTheDocument();
-    expect(screen.getByText('No Data Guy').parentElement).toHaveTextContent(/^No Data Guy$/);
+    expect(screen.getByText('No Data Guy').closest('.tc-player-chip')).toHaveTextContent('No Data Guy');
     expect(screen.getByText('#rank · Z-score, per game')).toBeInTheDocument();
   });
 

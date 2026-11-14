@@ -1,8 +1,11 @@
 import { ShareCard, type ShareCardTheme } from './ShareCard'
-import { formatCardValue, rowWinner, type TradeShareRow } from './shareCardFormat'
+import { rowWinner, tradeShareCellLines, type TradeShareRow } from './shareCardFormat'
+import { PlayerFace, TradeVersusRow, pillClassForLabel } from '../../pages/Trade/components/TradeVersusRow'
+import '../../pages/Trade/trade-comparison.css'
 
 export interface TradeSharePlayer {
   name: string
+  playerId?: number | null
   /** Rank and z-score among every player over the same dates, when known. */
   value?: { rank: number; z: number }
 }
@@ -29,6 +32,7 @@ interface TradeShareCardProps extends ShareCardTheme {
 
 export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sides, rows, mode, highlightSide, dark }: TradeShareCardProps) => {
   const hasValues = sides.some(side => side.players.some(p => p.value))
+  const hasCategoryZ = rows.some(row => row.zValues)
 
   return (
     <ShareCard
@@ -36,53 +40,66 @@ export const TradeShareCard = ({ kicker = 'Trade Analyzer', title, subtitle, sid
       kicker={kicker}
       title={title}
       subtitle={subtitle}
+      wide
       footer={<>
         {rows.length > 0 && <span>{mode === 'averages' ? 'Combined per-game stats of each side' : 'Combined totals of each side'}</span>}
         {hasValues && <span>#rank · Z-score, per game</span>}
+        {hasCategoryZ && <span>▲ = better category Z on main stat</span>}
       </>}
     >
-      <div className="share-card__tiles">
-        {sides.map((side, i) => (
-          <div key={side.heading} className={`share-card__tile${highlightSide === i ? ' share-card__tile--me' : ''}`}>
-            <div className="share-card__label">{side.heading}</div>
-            <ul className="share-card__list">
-              {side.players.map(({ name, value }) => (
-                <li key={name} className={value ? 'share-card__player' : undefined}>
-                  <span className="share-card__player-name">{name}</span>
-                  {value && <span className="share-card__player-value">#{value.rank} · Z {signedZ(value.z)}</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+      <div className="tc-share-versus-wrap">
+        <div className="tc-share-teams">
+          {sides.map((side, i) => (
+            <div
+              key={side.heading}
+              className={`tc-team-card${highlightSide === i ? ' share-card__tile--me' : ''}`}
+            >
+              <div className="tc-team-card__head">
+                <div>
+                  <div className="tc-team-card__name">{side.heading.replace(/ gets$/i, '')}</div>
+                  <div className="tc-team-card__gets">gets</div>
+                </div>
+              </div>
+              <ul className="tc-player-list">
+                {side.players.map(({ name, playerId, value }) => (
+                  <li key={name} className="tc-player-chip">
+                    <PlayerFace name={name} playerId={playerId} size="chip" />
+                    <span className="tc-player-chip__name">{name}</span>
+                    {value && (
+                      <span className="tc-player-chip__value">#{value.rank} · Z {signedZ(value.z)}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="tc-share-versus" role="table">
+          {rows.map(row => {
+            const left = tradeShareCellLines(row, 0, mode)
+            const right = tradeShareCellLines(row, 1, mode)
+            return (
+              <TradeVersusRow
+                key={row.category}
+                label={row.category}
+                pillClass={pillClassForLabel(row.category)}
+                vsStyle="slider"
+                mainWinner={rowWinner(row)}
+                left={{
+                  main: left.main,
+                  sub: left.attempts,
+                  z: row.zValues?.[0] ?? null,
+                }}
+                right={{
+                  main: right.main,
+                  sub: right.attempts,
+                  z: row.zValues?.[1] ?? null,
+                }}
+              />
+            );
+          })}
+        </div>
       </div>
-      {rows.length > 0 && <div className="share-card__body">
-        <table>
-          <colgroup><col style={{ width: 56 }} /><col /><col /></colgroup>
-          <thead>
-            <tr>
-              <th className="sc-left">Cat</th>
-              <th>{sides[0].heading}</th>
-              <th>{sides[1].heading}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(row => {
-              const winner = rowWinner(row)
-              return (
-                <tr key={row.category}>
-                  <td className="sc-left sc-strong">{row.category}</td>
-                  {row.values.map((value, i) => (
-                    <td key={i} className={winner === null ? undefined : winner === i ? 'sc-win' : 'sc-lose'}>
-                      {formatCardValue(row.category, value, mode)}{winner === i ? ' ▲' : ''}
-                    </td>
-                  ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>}
     </ShareCard>
   )
 }

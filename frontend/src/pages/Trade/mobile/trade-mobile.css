@@ -56,6 +56,22 @@
 .mr-trade-empty-line { margin: 0; text-align: center; padding: 8px 0; }
 
 /* comparison */
+.mr-trade-versus .tc-shell {
+  padding: 1rem 0.85rem 1.15rem;
+  border-radius: 14px;
+}
+
+.mr-trade-versus .space-y-6 {
+  margin: 0;
+}
+
+.mr-trade-versus .text-center.py-12 {
+  background: var(--mr-card);
+  border: 1px solid var(--mr-border);
+  border-radius: 14px;
+  padding: 1.25rem 1rem;
+}
+
 .mr-trade-sum { border: 1.5px solid var(--mr-primary-soft); }
 .mr-trade-sum .mr-card-head .mr-h2 { min-width: 0; }
 .mr-t .mr-trade-side { font-weight: 700; }
