@@ -32,6 +32,14 @@ class NbaPlayerStatsResponse(BaseModel):
     actual_end: Optional[date] = None
 
 
+class GameLogFantasy(BaseModel):
+    """Who owned him on the night of the game, same fields as the box score."""
+    fantasy_team: Optional[str] = None
+    fantasy_team_name: Optional[str] = None
+    lineup_slot: Optional[str] = None
+    started: Optional[bool] = None
+
+
 class PlayerGameLogGame(BaseModel):
     game_id: str
     season: str
@@ -54,12 +62,34 @@ class PlayerGameLogGame(BaseModel):
     ftm: float
     fta: float
     plus_minus: float
+    # None when that night's roster could not be read. A present object with
+    # fantasy_team None means he was a free agent.
+    fantasy: Optional[GameLogFantasy] = None
+
+
+class GameLogNightLine(BaseModel):
+    """One player who logged minutes that night, shaped for the box-score Z."""
+    player_id: str
+    game_id: str
+    name: str
+    position: str
+    stats: dict[str, float]
+
+
+class GameLogNight(BaseModel):
+    date: date
+    players: list[GameLogNightLine]
 
 
 class PlayerGameLogResponse(BaseModel):
     player_id: int
     current_season: str
     games: list[PlayerGameLogGame]
+    categories: list[str] = []
+    reverse_categories: list[str] = []
+    # Every minutes-played line on the nights in `games`, so the page can
+    # score the same Z the box score shows for that night.
+    nights: list[GameLogNight] = []
 
 
 class PlayerSeasonLine(BaseModel):

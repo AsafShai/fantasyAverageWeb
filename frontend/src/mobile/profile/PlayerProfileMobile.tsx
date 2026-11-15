@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { useUrlState } from '../../hooks/useUrlState'
+import { PLAYER_PROFILE_URL_SCHEMA, PLAYER_TAB_OPTIONS } from '../../pages/playerProfileTabs'
 import type { CustomDateRange, PlayerStatKey, TimePeriod } from '../../types/api'
 import { CoverageNotice } from '../../components/DateRangePicker'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -20,9 +22,8 @@ import LeagueHistoryCard from './LeagueHistoryCard'
 import './profile.css'
 
 /*
- * Player profile on a phone (step 4). Same sections and data as the desktop
- * page, top to bottom: header, Bio (folded), time frame, Fantasy Value,
- * Stats, Trends, next-game projection, game log.
+ * Player profile on a phone. Header and bio stay put. Stats, Games, and
+ * Fantasy match the desktop tabs.
  */
 
 const STAT_COLS: { key: PlayerStatKey; label: string; isPct?: boolean }[] = [
@@ -55,6 +56,7 @@ export default function PlayerProfileMobile() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from
+  const [{ tab }, setUrl] = useUrlState(PLAYER_PROFILE_URL_SCHEMA)
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const [perGame, setPerGame] = useState<'pg' | 'tot'>('pg')
@@ -150,6 +152,9 @@ export default function PlayerProfileMobile() {
         </dl>
       </details>
 
+      <Segmented label="Player page section" options={PLAYER_TAB_OPTIONS} value={tab} onChange={(next) => setUrl({ tab: next })} />
+
+      {tab === 'stats' && (<>
       <TimeFrameChips
         value={timePeriod}
         onChange={setTimePeriod}
@@ -201,8 +206,6 @@ export default function PlayerProfileMobile() {
 
       <PastSeasonsCard playerId={playerId} />
 
-      <LeagueHistoryCard playerId={playerId} />
-
       <TrendsCard
         playerId={Number(playerId)}
         categories={d.apiCategories}
@@ -210,11 +213,18 @@ export default function PlayerProfileMobile() {
         timePeriod={timePeriod}
         customRange={customRange}
       />
+      </>)}
 
+      {tab === 'games' && (<>
       <NextGameCard playerId={playerId} playerName={bio.display_name} />
 
       {/* the whole season game by game: the longest section, and not tied to the time frame */}
       <GameLogCard playerId={playerId} />
+      </>)}
+
+      {tab === 'history' && (
+      <LeagueHistoryCard playerId={playerId} />
+      )}
     </div>
   )
 }

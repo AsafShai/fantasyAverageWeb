@@ -32,7 +32,20 @@ function game(overrides: Partial<PlayerGameLogGame>): PlayerGameLogGame {
 }
 
 function log(games: PlayerGameLogGame[]): PlayerGameLogResponse {
-  return { player_id: 3975, current_season: '2026-27', games }
+  return {
+    player_id: 3975,
+    current_season: '2026-27',
+    games,
+    categories: ['PTS'],
+    reverse_categories: [],
+    nights: [{
+      date: '2026-10-28',
+      players: [
+        { player_id: '3975', game_id: '401', name: 'Test', position: 'G', stats: { MIN: 20, PTS: 10 } },
+        { player_id: '2', game_id: '999', name: 'Other', position: 'F', stats: { MIN: 30, PTS: 30 } },
+      ],
+    }],
+  }
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -84,5 +97,36 @@ describe('PlayerGameLog', () => {
     expect(screen.getByText(/2026-27 · 1 game/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '2025-26' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
+  })
+
+  it('shows the fantasy team and lineup from that night at the end of the row', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input)
+        if (url.includes('/nba-players/3975/games')) {
+          return new Response(
+            JSON.stringify(log([
+              game({
+                fantasy: { fantasy_team: 'TTP', fantasy_team_name: 'Trust the process', lineup_slot: 'SG', started: true },
+              }),
+              game({
+                game_id: '402',
+                game_date: '2026-11-01',
+                opponent: 'BOS',
+                fantasy: { fantasy_team: null, fantasy_team_name: null, lineup_slot: null, started: null },
+              }),
+            ])),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          )
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+    renderWithProviders(<PlayerGameLog playerId="3975" />)
+    expect(await screen.findByRole('button', { name: 'TTP: Trust the process' })).toBeInTheDocument()
+    expect(screen.getByLabelText('active lineup')).toBeInTheDocument()
+    expect(screen.getByText('FA')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Fantasy' })).toBeInTheDocument()
   })
 })

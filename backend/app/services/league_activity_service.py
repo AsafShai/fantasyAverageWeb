@@ -45,6 +45,8 @@ from app.models.activity_models import (
     PlayerHistoryStint,
     PlayerLeagueHistory,
     PlayerStint,
+    PlayerStintStats,
+    StintRoleLine,
     ReleasedPlayer,
     StintValue,
     TeamPlayers,
@@ -65,6 +67,9 @@ ESPN_LEAGUE_URL = ESPN_SEASON_URL + '/segments/0/leagues/{league}'
 # might score, plus the makes/attempts the percentage categories are built from.
 BOX_STAT_IDS = (0, 1, 2, 3, 4, 5, 6, 11, 13, 14, 15, 16, 17, 18)
 MINUTES_STAT_ID = '40'
+# What the player page shows for each fantasy-team stretch. Percentages are
+# rebuilt from the makes and attempts in the totals, not stored here.
+STINT_STAT_CATEGORIES = ['PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FG%', 'FT%']
 SINGLE_PERIOD_SPLIT = 5
 ACTUAL_STATS = 0
 
@@ -220,6 +225,17 @@ def parse_schedule(api_data: dict, first_period: int, last_period: int) -> Sched
 
 def _ms(tx: dict) -> int:
     return tx.get('processDate') or tx.get('proposedDate') or 0
+
+
+def _role(slot: Optional[str]) -> Optional[str]:
+    """started, bench, or ir. None when the slot is missing."""
+    if slot == 'IR':
+        return 'ir'
+    if slot == 'BE':
+        return 'bench'
+    if slot:
+        return 'started'
+    return None
 
 
 def _dt(ms: int) -> datetime:
@@ -378,6 +394,51 @@ class _Builder:
             picked_up_after=picked_up,
             value=self._value(s, played, totals) if valued else None,
         )
+
+    def stint_stats(self, player_id: int, slots: dict[tuple[int, int], Optional[str]]) -> list[PlayerStintStats]:
+        """One line per stretch, newest first. ``slots`` maps (team, scoring period)
+        to the locked lineup slot. A missing key, or None, is a game that stays
+        in the stretch total and is counted as unsplit."""
+        lines = []
+        owned = [s for s in self.stints if s.pid == player_id]
+        for s in reversed(owned):
+            roles: dict[str, StintRoleLine] = {
+                'started': StintRoleLine(), 'bench': StintRoleLine(), 'ir': StintRoleLine(),
+            }
+            totals: dict[str, float] = defaultdict(float)
+            played = unsplit = 0
+            for g in self.logs.get(player_id, []):
+                if not g.box or not self._owns_game(s, g):
+                    continue
+                played += 1
+                for k, v in g.box.items():
+                    totals[k] += v
+                slot = slots.get((s.team, g.period))
+                role = _role(slot) if (s.team, g.period) in slots and slot else None
+                if role is None:
+                    unsplit += 1
+                    continue
+                line = roles[role]
+                line.gp += 1
+                for k, v in g.box.items():
+                    line.totals[k] = line.totals.get(k, 0.0) + v
+            start = s.first_period
+            end = max(s.last_period, start - 1)
+            for line in roles.values():
+                line.totals = {k: round(v, 1) for k, v in line.totals.items()}
+            lines.append(PlayerStintStats(
+                team_id=s.team,
+                start=self.day(start),
+                end=self.day(max(end, start)),
+                current=s.left_at is None,
+                games_played=played,
+                totals={k: round(v, 1) for k, v in totals.items()},
+                started=roles['started'],
+                bench=roles['bench'],
+                ir=roles['ir'] if roles['ir'].gp else None,
+                unsplit_games=unsplit,
+            ))
+        return lines
 
     # -- trades -------------------------------------------------------------
     def trades(self) -> list[Trade]:
@@ -605,6 +666,9 @@ class _ActivityCache:
         self.cards_at = 0.0
         self.stats: dict[int, list[GameLine]] = {}
         self.stats_at = 0.0
+        # When a single player's log was fetched for his history page. Kept off
+        # stats_at so it does not make the activity feed skip its full refresh.
+        self.player_log_at: dict[int, float] = {}
         self.schedule: Optional[dict] = None
         self.schedule_at = 0.0
         self.result: Optional[LeagueActivity] = None
@@ -750,14 +814,7 @@ class LeagueActivityService:
     async def _refresh(self) -> None:
         now = time.monotonic()
         await self._refresh_cards(now)
-        if _cache.schedule is None or now - _cache.schedule_at >= SCHEDULE_TTL_SECONDS:
-            if _cache.schedule is None:
-                _cache.etags.pop('schedule', None)
-            schedule = await self._get([('view', 'proTeamSchedules_wl')], url=self.season_url, etag_key='schedule')
-            if schedule is not None:
-                _cache.schedule = schedule
-                _cache.schedule_version += 1
-            _cache.schedule_at = now
+        await self._ensure_schedule(now)
         ids = list(dict.fromkeys([c['id'] for c in _cache.cards] + _cache.pool_ids))
         missing = [i for i in ids if i not in _cache.stats]
         if now - _cache.stats_at >= STATS_TTL_SECONDS:
@@ -845,10 +902,92 @@ class LeagueActivityService:
             return result
 
 
+    async def _ensure_schedule(self, now: float) -> None:
+        if _cache.schedule is not None and now - _cache.schedule_at < SCHEDULE_TTL_SECONDS:
+            return
+        if _cache.schedule is None:
+            _cache.etags.pop('schedule', None)
+        schedule = await self._get([('view', 'proTeamSchedules_wl')], url=self.season_url, etag_key='schedule')
+        if schedule is not None:
+            _cache.schedule = schedule
+            _cache.schedule_version += 1
+        _cache.schedule_at = now
+
+    async def _ensure_player_log(self, player_id: int, now: float) -> bool:
+        """This player's per-game lines. A fresh activity-feed cache is reused;
+        otherwise only his card is fetched, not the whole pool. False when that
+        fetch fails and nothing is cached."""
+        cached = player_id in _cache.stats
+        if cached and (
+            now - _cache.stats_at < STATS_TTL_SECONDS
+            or now - _cache.player_log_at.get(player_id, 0.0) < STATS_TTL_SECONDS
+        ):
+            return True
+        cards, changed = await self._stat_cards([player_id])
+        if not changed:
+            return cached
+        parsed = parse_game_logs(cards, self.season_id)
+        _cache.stats[player_id] = parsed.get(player_id, [])
+        _cache.player_log_at[player_id] = now
+        return True
+
+    def _history_context(self, player_id: int, transactions: list[dict], names: dict[int, str]):
+        """Builder for this player's stretches, plus the team-days whose slot we need.
+        None when the schedule never arrived, so the moves can still be returned."""
+        if not _cache.schedule:
+            return None
+        league = _cache.league or {}
+        status = league.get('status', {})
+        first = status.get('firstScoringPeriod', 1) or 1
+        latest = status.get('latestScoringPeriod') or league.get('scoringPeriodId') or first
+        final = status.get('finalScoringPeriod') or latest
+        latest = min(latest, final)
+        season_over = (status.get('latestScoringPeriod') or latest) > final
+        roster_lock = ((league.get('settings') or {}).get('rosterSettings') or {}).get('rosterLocktimeType')
+        logs = list(_cache.stats.get(player_id, []))
+        builder = _Builder(
+            transactions, {player_id: logs},
+            parse_schedule(_cache.schedule, first, latest),
+            settings.season_start, names, season_over, latest,
+            roster_lock == 'INDIVIDUAL_GAME',
+        )
+        pairs = list(dict.fromkeys(
+            (s.team, g.period)
+            for s in builder.stints if s.pid == player_id
+            for g in logs if g.box and builder._owns_game(s, g)
+        ))
+        live_from = latest + 1 if season_over else latest
+        return builder, pairs, live_from
+
+    async def _lineup_slots(
+        self, player_id: int, pairs: list[tuple[int, int]], live_from: int,
+    ) -> dict[tuple[int, int], Optional[str]]:
+        """(team, period) -> locked slot. A failed day is left out, so its games stay unsplit."""
+        if not pairs:
+            return {}
+        # Imported here: roster_day_service already imports this module.
+        from app.services.roster_day_service import get_roster_day_service
+        roster = get_roster_day_service()
+        sem = asyncio.Semaphore(FETCH_CONCURRENCY)
+        found: dict[tuple[int, int], Optional[str]] = {}
+
+        async def one(team: int, period: int) -> None:
+            async with sem:
+                try:
+                    rows = await roster._team_roster(period, team, live=period >= live_from)
+                except Exception as exc:
+                    logger.warning(
+                        f"Stint slot team {team} period {period}: {type(exc).__name__}: {exc}"
+                    )
+                    return
+                found[(team, period)] = next((row[4] for row in rows if row[0] == player_id), None)
+
+        await asyncio.gather(*(one(team, period) for team, period in pairs))
+        return found
+
     async def get_player_history(self, player_id: int) -> PlayerLeagueHistory:
-        """One player's drafts, adds, waiver claims, drops and trades this season.
-        Reads only the league and the player cards, not the per-game stats the
-        full activity feed needs, so it stays cheap on a cold cache."""
+        """One player's drafts, adds, waiver claims, drops and trades this season,
+        plus his stat line on each fantasy team and the started / bench split."""
         async with _cache.lock:
             try:
                 await self._refresh_cards(time.monotonic())
@@ -860,14 +999,37 @@ class LeagueActivityService:
                 _cache.merged = merge_card_transactions(_cache.cards or [])
                 _cache.merged_version = _cache.cards_version
             transactions, names = _cache.merged
+            names = {**_cache.names, **names}
             teams = parse_teams(_cache.league or {})
-        moves = build_player_moves(player_id, transactions, {**_cache.names, **names}, len(teams))
+            moves = build_player_moves(player_id, transactions, names, len(teams))
+            prepared = None
+            try:
+                now = time.monotonic()
+                await self._ensure_schedule(now)
+                if await self._ensure_player_log(player_id, now):
+                    prepared = self._history_context(player_id, transactions, names)
+            except Exception as exc:
+                logger.warning(f"Player history stats for {player_id}: {type(exc).__name__}: {exc}")
+        stats: list[PlayerStintStats] = []
+        ready = prepared is not None
+        if prepared is not None:
+            builder, pairs, live_from = prepared
+            try:
+                slots = await self._lineup_slots(player_id, pairs, live_from)
+                stats = builder.stint_stats(player_id, slots)
+            except Exception as exc:
+                logger.warning(f"Player history slots for {player_id}: {type(exc).__name__}: {exc}")
+                ready = False
+                stats = []
         return PlayerLeagueHistory(
             season_id=self.season_id,
             player_id=player_id,
             teams=teams,
             moves=moves,
             stints=player_stints(moves),
+            categories=list(STINT_STAT_CATEGORIES) if ready else [],
+            stint_stats=stats,
+            stint_stats_ready=ready,
             last_updated=datetime.now(timezone.utc),
         )
 
