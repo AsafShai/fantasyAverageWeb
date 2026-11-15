@@ -63,9 +63,10 @@
 .mr-rk-dslot .mr-delta { margin-left: 3px; }
 /* headers line up with the numbers, not with the end of the ▲/▼ slot */
 .mr-rk-slots thead th:not(.mr-pin) .mr-th-btn { padding-right: 34px; }
-/* Totals standings: "+118" needs more room than "▲1.5" */
-.mr-rk-stat-slots .mr-rk-dslot:not(.mr-rk-rank-slot) { width: 36px; }
-.mr-rk-stat-slots thead th:not(.mr-pin) .mr-th-btn { padding-right: 44px; }
+/* Totals standings: "+118▲1" needs more room than "▲1.5" */
+.mr-rk-stat-slots .mr-rk-dslot:not(.mr-rk-rank-slot) { width: 54px; }
+.mr-rk-stat-slots .mr-rk-dslot .mr-delta + .mr-delta { margin-left: 2px; }
+.mr-rk-stat-slots thead th:not(.mr-pin) .mr-th-btn { padding-right: 62px; }
 .mr-rk-rank-slot { width: 24px; margin-right: 2px; }
 .mr-rk-rank-slot .mr-delta { margin-left: 0; }
 .mr-rk-name {
@@ -87,6 +88,9 @@
 /* a delta line under Total and GP even when one is empty, so the two stay level */
 .mr-rk-tot-d { display: block; min-height: 15px; line-height: 15px; }
 .mr-rk-cgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.mr-rk-stack { display: inline-flex; flex-direction: column; align-items: flex-end; min-width: 0; }
+.mr-rk-stack-d { min-height: 15px; line-height: 15px; white-space: nowrap; }
+.mr-rk-stack-d .mr-delta + .mr-delta { margin-left: 3px; }
 .mr-rk-cg {
   display: flex; justify-content: space-between; align-items: baseline; gap: 6px; min-width: 0;
   border-top: 1px solid var(--mr-divider); padding-top: 5px; font-size: 13px; font-variant-numeric: tabular-nums;

@@ -16,12 +16,18 @@ export function moversLegend(live?: LiveBlock | null): string {
   return '▲/▼ = change since last night, GP + = games played last night.'
 }
 
-/** Totals standings: the grey "+n" beside a category's season total. */
-export function statAddedLegend(live?: LiveBlock | null): string {
+/**
+ * What the moves mean in the Standings view, where cells are raw stats: a
+ * category's ▲/▼ is places moved in it (one roto point = one place), Total's
+ * is roto points, and in Totals a grey "+n" is the stat added.
+ */
+export function standingsMoversLegend(live: LiveBlock | null | undefined, totals: boolean): string {
   const moment = liveMoment(live)
-  if (moment === 'live') return 'Grey +n = added to the stat tonight so far.'
-  if (moment === 'final') return 'Grey +n = added to the stat tonight.'
-  return 'Grey +n = added to the stat last night.'
+  const when = moment === 'live' ? 'tonight so far' : moment === 'final' ? 'tonight' : 'since last night'
+  const gp = moment === 'live' ? 'games counted tonight' : moment === 'final' ? 'games played tonight' : 'games played last night'
+  const added = moment === 'live' ? 'tonight so far' : moment === 'final' ? 'tonight' : 'last night'
+  return `▲/▼ = places moved ${when} (Total: roto points), GP + = ${gp}.`
+    + (totals ? ` Grey +n = stat added ${added}.` : '')
 }
 
 export type MoversView = 'tonight' | 'yesterday'

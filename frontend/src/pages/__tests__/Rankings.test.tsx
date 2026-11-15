@@ -190,7 +190,7 @@ describe('Rankings page', () => {
     expect(within(alphaRow).queryByText('0.5')).not.toBeInTheDocument();
   });
 
-  it('Standings x Totals puts the grey stat added beside counting stats, and rank, Total and GP moves', async () => {
+  it('Standings x Totals puts the grey stat added and the places moved beside counting stats', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());
@@ -199,25 +199,26 @@ describe('Rankings page', () => {
 
     await waitFor(() => {
       const alpha = within(screen.getByRole('table')).getByText('Alpha Squad').closest('tr')!
-      expect(within(alpha).getAllByRole('cell')[9].textContent).toBe('4000+118') // PTS
+      expect(within(alpha).getAllByRole('cell')[9].textContent).toBe('4000+118▼1') // PTS: added 118, down a place
     })
     const cells = within(within(screen.getByRole('table')).getByText('Alpha Squad').closest('tr')!).getAllByRole('cell')
     expect(cells[0].textContent).toBe('#2▼1')
     expect(cells[4].textContent).toBe('100') // 3PM added 0: nothing
     expect(cells.at(-2)!.textContent).toBe('4▼4')
     expect(cells.at(-1)!.textContent).toBe('50+3')
-    expect(screen.getByText(/Grey \+n = added to the stat last night\./)).toBeInTheDocument()
+    expect(screen.getByText(/places moved since last night \(Total: roto points\).*Grey \+n = stat added last night\./)).toBeInTheDocument()
   });
 
-  it('Standings x Averages keeps category cells plain (no roto ▲/▼ beside a raw average)', async () => {
+  it('Standings x Averages shows the places moved per category, with no grey stat added', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     const table = await screen.findByRole('table');
     await waitFor(() => expect(within(table).getByText('Alpha Squad').closest('tr')!.textContent).toContain('▲'));
     await user.click(screen.getByRole('button', { name: /^standings$/i }));
     const cells = within(within(screen.getByRole('table')).getByText('Alpha Squad').closest('tr')!).getAllByRole('cell')
-    expect(cells[2].textContent).toBe('46.7000%')
+    expect(cells[2].textContent).toBe('46.7000%▲2') // FG%: up two places
     expect(cells.at(-2)!.textContent).toBe('8▲2')
+    expect(screen.getByText(/places moved since last night/)).toBeInTheDocument()
     expect(screen.queryByText(/Grey \+n/)).not.toBeInTheDocument()
   });
 

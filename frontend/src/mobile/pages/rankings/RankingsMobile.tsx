@@ -19,10 +19,9 @@ type SortDir = 'asc' | 'desc'
  * same controls and numbers out for a phone: Layout / Show / Values toggles,
  * a collapsible date range (From/To, Apply, Clear, Quick range), the movers
  * toggle, the two summary tiles, and either a table with "#rank team" pinned
- * or one card per team. Both views show last night's rank, Total and GP moves;
- * category cells show roto ▲/▼ in Rankings, the grey stat added in Totals
- * standings, and nothing in Averages standings (raw averages vs roto points
- * would read as the same unit).
+ * or one card per team. Both views show last night's rank, Total and GP moves
+ * and each category's ▲/▼ (places moved in it in Standings, where cells are
+ * raw stats); Totals standings add the grey stat added ("+118").
  */
 export interface RankingsMobileProps {
   title: string
@@ -82,13 +81,19 @@ export function RankingsMobile(p: RankingsMobileProps) {
   const [rangeOpen, setRangeOpen] = useState(false)
   const isStandings = p.view === 'standings'
   const moveOf = (teamId: number) => p.movesByTeam.get(teamId)
-  // Totals standings: a category's move is the raw stat added (PTS +118).
+  // Totals standings also show the raw stat added (PTS +118) before the ▲/▼.
   const statAdded = isStandings && p.mode === 'totals'
   const categoryDelta = (teamId: number, k: string) => {
     const m = moveOf(teamId)
     if (!m) return null
-    if (!isStandings) return <Delta value={m.categories[k]} digits={1} />
-    return statAdded ? <Delta value={m.stat_deltas?.[k]} kind="stat" /> : null
+    const places = <Delta value={m.categories[k]} digits={1} />
+    if (!statAdded) return places
+    return (
+      <>
+        <Delta value={m.stat_deltas?.[k]} kind="stat" />
+        {places}
+      </>
+    )
   }
   const openTeam = (t: RankingStats) => navigate(`/team/${t.team.team_id}`)
   // When moves are on screen every number gets a fixed-width slot for its
@@ -372,7 +377,15 @@ withDelta(p.cellDisplay(t, 'gp'), <Delta value={moveOf(t.team.team_id)?.gp_delta
                     {p.categoryKeys.map((k) => (
                       <div key={k} className="mr-rk-cg">
                         <span className="mr-rk-tl">{k}</span>
-                        {withDelta(<b>{p.cellDisplay(t, k)}</b>, categoryDelta(t.team.team_id, k))}
+                        {isStandings && slots
+                          // Raw stats are wide ("46.7000%", "4837 +125▼1"): moves go under the value.
+                          ? (
+                            <span className="mr-rk-stack">
+                              <b>{p.cellDisplay(t, k)}</b>
+                              <span className="mr-rk-stack-d">{categoryDelta(t.team.team_id, k)}</span>
+                            </span>
+                          )
+                          : withDelta(<b>{p.cellDisplay(t, k)}</b>, categoryDelta(t.team.team_id, k))}
                       </div>
                     ))}
                   </div>

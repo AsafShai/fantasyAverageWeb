@@ -159,7 +159,7 @@ function requestUrl(input: RequestInfo | URL): string {
     expect(cells.at(-1)!.textContent).toBe('50+3'); // games last night
   });
 
-  it('Standings view shows rank, Total and GP moves but keeps averages category cells plain', async () => {
+  it('Standings view shows rank, Total and GP moves and the places moved per category', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     await screen.findByRole('table');
@@ -169,14 +169,14 @@ function requestUrl(input: RequestInfo | URL): string {
     const alpha = rowOf('Alpha Squad');
     expect(within(alpha).getByRole('rowheader').textContent).toBe('#1▲1Alpha Squad');
     const cells = within(alpha).getAllByRole('cell');
-    expect(cells[0].textContent).toBe('46.7000%'); // raw FG%, no roto ▲2 beside it
+    expect(cells[0].textContent).toBe('46.7000%▲2'); // raw FG%, up two places
     expect(within(alpha).getByText('115.3000')).toBeInTheDocument();
     expect(cells.at(-2)!.textContent).toBe('8▲2'); // total
     expect(cells.at(-1)!.textContent).toBe('50+3'); // games last night
     expect(screen.getByRole('button', { name: /Hide movers/ })).toBeInTheDocument();
   });
 
-  it('Totals standings show the grey stat added beside a counting stat', async () => {
+  it('Totals standings show the grey stat added and the places moved beside a counting stat', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     await screen.findByRole('table');
@@ -185,9 +185,9 @@ function requestUrl(input: RequestInfo | URL): string {
     expect(screen.getByRole('heading', { name: 'Team Standings (Totals)' })).toBeInTheDocument();
     await waitFor(() => expect(rowOf('Alpha Squad').textContent).toContain('+118'));
     const cells = within(rowOf('Alpha Squad')).getAllByRole('cell');
-    expect(cells[7].textContent).toMatch(/\+118$/); // PTS
+    expect(cells[7].textContent).toMatch(/\+118▼1$/); // PTS: added 118, down a place
     expect(cells[2].textContent).not.toMatch(/\+|▲|▼/); // 3PM added 0: nothing
-    expect(screen.getByText(/Grey \+n = added to the stat last night\./)).toBeInTheDocument();
+    expect(screen.getByText(/Grey \+n = stat added last night\./)).toBeInTheDocument();
   });
 
   it('Hide movers removes the deltas; Show movers brings them back', async () => {
