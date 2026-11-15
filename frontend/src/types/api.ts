@@ -606,6 +606,14 @@ export interface PlayerSeasonHistoryResponse {
   seasons: PlayerSeasonLine[];
 }
 
+/** Who owned him on the night of the game. Same shape as the box score. */
+export interface GameLogFantasy {
+  fantasy_team: string | null;
+  fantasy_team_name: string | null;
+  lineup_slot: string | null;
+  started: boolean | null;
+}
+
 export interface PlayerGameLogGame {
   game_id: string;
   season: string;
@@ -628,6 +636,8 @@ export interface PlayerGameLogGame {
   ftm: number;
   fta: number;
   plus_minus: number;
+  /** Missing when that night's roster could not be read. */
+  fantasy?: GameLogFantasy | null;
 }
 
 /** One minutes-played line on a night, in the shape the box-score Z is scored from. */

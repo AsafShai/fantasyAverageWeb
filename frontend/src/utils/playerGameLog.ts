@@ -117,7 +117,7 @@ export function averageZ(games: { game_id: string }[], zs: Map<string, number>):
   return known.reduce((sum, z) => sum + z, 0) / known.length
 }
 
-export type GameLogSortKey = 'date' | 'opp' | 'z' | (typeof COUNT_COLS)[number]['key'] | (typeof SHOT_COLS)[number]['label']
+export type GameLogSortKey = 'date' | 'opp' | 'z' | 'team' | (typeof COUNT_COLS)[number]['key'] | (typeof SHOT_COLS)[number]['label']
 
 export interface GameLogSort {
   key: GameLogSortKey
@@ -126,10 +126,10 @@ export interface GameLogSort {
 
 export const GAME_LOG_SORT_DEFAULT: GameLogSort = { key: 'date', dir: 'desc' }
 
-/** First click on a stat is high → low. Opponent starts A → Z. Date starts newest first. */
+/** First click on a stat is high → low. Opponent and fantasy team start A → Z. Date starts newest first. */
 export function toggleGameLogSort(current: GameLogSort, key: GameLogSortKey): GameLogSort {
   if (current.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
-  return { key, dir: key === 'opp' ? 'asc' : 'desc' }
+  return { key, dir: key === 'opp' || key === 'team' ? 'asc' : 'desc' }
 }
 
 function shotRate(game: PlayerGameLogGame, label: (typeof SHOT_COLS)[number]['label']): number | null {
@@ -145,6 +145,7 @@ function countKey(key: GameLogSortKey): key is (typeof COUNT_COLS)[number]['key'
 function sortValue(game: PlayerGameLogGame, key: GameLogSortKey, zs: Map<string, number>): number | string | null {
   if (key === 'date') return game.game_date
   if (key === 'opp') return game.opponent
+  if (key === 'team') return game.fantasy?.fantasy_team_name || game.fantasy?.fantasy_team || null
   if (key === 'z') return zs.get(game.game_id) ?? null
   if (key === 'FG' || key === '3P' || key === 'FT') return shotRate(game, key)
   if (countKey(key)) return game[key]

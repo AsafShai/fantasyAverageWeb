@@ -59,6 +59,21 @@ describe('sortGameLog', () => {
     expect(ids([newer, older, noFt], { key: 'z', dir: 'desc' }, zs)).toEqual(['1', '2', '3'])
   })
 
+  it('sorts by fantasy team name and leaves a night with no team at the bottom', () => {
+    const owned = game({
+      game_id: '9',
+      game_date: '2026-11-08',
+      fantasy: { fantasy_team: 'DOR', fantasy_team_name: 'DORELIT', lineup_slot: 'BE', started: false },
+    })
+    const later = game({
+      game_id: '8',
+      game_date: '2026-11-10',
+      fantasy: { fantasy_team: 'TTP', fantasy_team_name: 'Trust the process', lineup_slot: 'PG', started: true },
+    })
+    expect(toggleGameLogSort({ key: 'date', dir: 'desc' }, 'team')).toEqual({ key: 'team', dir: 'asc' })
+    expect(ids([later, owned, noFt], { key: 'team', dir: 'asc' })).toEqual(['9', '8', '3'])
+  })
+
   it('sorts the opponent A to Z on the first click', () => {
     expect(toggleGameLogSort({ key: 'date', dir: 'desc' }, 'opp')).toEqual({ key: 'opp', dir: 'asc' })
     expect(ids([older, newer], { key: 'opp', dir: 'asc' })).toEqual(['2', '1'])

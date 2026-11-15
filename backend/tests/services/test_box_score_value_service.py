@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services import box_score_value_service as svc
-from app.services.box_score_value_service import category_stats, slate_values, stat_line
+from app.services.box_score_value_service import category_stats, fantasy_nights_for, slate_values, stat_line
 
 
 def _player(pid, name, minutes="30", pts="10", fg="4-8", fg3="1-3", ft="1-2", reb="5", ast="3",
@@ -133,3 +133,27 @@ async def test_slate_values_marks_a_live_player_on_the_court():
     by_name = {row["name"]: row for row in result["players"]}
     assert by_name["On Floor"]["game_status"] == "live" and by_name["On Floor"]["on_court"] is True
     assert by_name["On Bench"]["on_court"] is False
+
+
+@pytest.mark.asyncio
+async def test_fantasy_nights_match_the_box_score_roster():
+    night = date(2026, 11, 2)
+    missed = date(2026, 11, 4)
+
+    async def roster(day):
+        if day == missed:
+            return {}
+        return {5160992: {"team_id": 7, "slot": "IR"}, 99: {"team_id": 8, "slot": "PG"}}
+
+    with patch.object(svc, "_roster_on", side_effect=roster), \
+         patch.object(svc, "_fantasy_teams", AsyncMock(return_value=({7: "DOR", 8: "TTP"}, {7: "DORELIT", 8: "Trust the process"}))):
+        found = await fantasy_nights_for(5160992, [night, missed, night])
+        free = await fantasy_nights_for(123, [night])
+    assert found[night] == {
+        "fantasy_team": "DOR",
+        "fantasy_team_name": "DORELIT",
+        "lineup_slot": "IR",
+        "started": False,
+    }
+    assert found[missed] is None
+    assert free[night]["fantasy_team"] is None and free[night]["started"] is None

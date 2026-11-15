@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetNbaPlayerGamesQuery } from '../store/api/fantasyApi'
 import type { PlayerGameLogGame } from '../types/api'
-import { ZValue } from './boxScores/BoxScorePanel'
+import { ZValue, FantasyTeamTag } from './boxScores/BoxScorePanel'
 import {
   COUNT_COLS,
   GAME_LOG_SORT_DEFAULT,
@@ -153,6 +153,7 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
                 {statHeads.map((col) => (
                   <SortHead key={col.label} label={col.label} column={col.key} sort={sort} onSort={onSort} className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
                 ))}
+                <SortHead label="Fantasy" column="team" sort={sort} onSort={onSort} title="Fantasy team that rostered him on the night of the game" className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
               </tr>
               <tr>
                 <th className={`${head} ${stickyAvg} left-0 top-[33px] text-left normal-case tracking-normal text-gray-700 dark:text-gray-200`}>Avg</th>
@@ -180,6 +181,7 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
                     {mean(shown, col.key)}
                   </th>
                 ))}
+                <th className={`${head} sticky top-[33px] z-20 bg-gray-100 dark:bg-gray-800/95 normal-case tracking-normal text-gray-400`}>—</th>
               </tr>
             </thead>
             <tbody>
@@ -236,6 +238,9 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
                         {col.signed ? signed(game[col.key]) : whole(game[col.key])}
                       </td>
                     ))}
+                    <td className={`${cell} border-t border-gray-100 dark:border-gray-800 text-left`}>
+                      <FantasyTeamTag value={game.fantasy ?? undefined} />
+                    </td>
                   </tr>
                 )
               })}

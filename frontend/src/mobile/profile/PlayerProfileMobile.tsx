@@ -204,6 +204,8 @@ export default function PlayerProfileMobile() {
         )}
       </Card>
 
+      <PastSeasonsCard playerId={playerId} />
+
       <TrendsCard
         playerId={Number(playerId)}
         categories={d.apiCategories}
@@ -211,8 +213,6 @@ export default function PlayerProfileMobile() {
         timePeriod={timePeriod}
         customRange={customRange}
       />
-
-      <PastSeasonsCard playerId={playerId} />
       </>)}
 
       {tab === 'games' && (<>

@@ -313,6 +313,8 @@ const PlayerProfileDesktop = () => {
         </>)}
       </div>
 
+      <PlayerPastSeasonsCard playerId={playerId} />
+
       <PlayerTrendsCard
         playerId={Number(playerId)}
         categories={apiCategories}
@@ -320,8 +322,6 @@ const PlayerProfileDesktop = () => {
         timePeriod={timePeriod}
         customRange={customRange}
       />
-
-      <PlayerPastSeasonsCard playerId={playerId} />
       </>)}
 
       {tab === 'games' && (<>
