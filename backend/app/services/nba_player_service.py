@@ -9,11 +9,14 @@ from typing import Optional
 
 from app.config import settings
 from app.models.nba_player_models import (
+    GameLogNight,
+    GameLogNightLine,
     NbaPlayerBio,
     NbaPlayerStatsResponse,
     PlayerGameLogGame,
     PlayerGameLogResponse,
 )
+from app.services.box_score_value_service import category_stats
 from app.models.player import PlayerStats, StatTimePeriod
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
@@ -30,6 +33,42 @@ def _score(value) -> Optional[int]:
     if value is None:
         return None
     return int(round(float(value)))
+
+
+def night_line(row: dict) -> GameLogNightLine:
+    """A stored game row as the stat dict the box-score Z is scored from."""
+    line = {
+        "MIN": float(row.get("min") or 0),
+        "PTS": float(row.get("pts") or 0),
+        "REB": float(row.get("reb") or 0),
+        "AST": float(row.get("ast") or 0),
+        "STL": float(row.get("stl") or 0),
+        "BLK": float(row.get("blk") or 0),
+        "TO": float(row.get("tov") or 0),
+        "3PM": float(row.get("fg3m") or 0),
+        "3PA": float(row.get("fg3a") or 0),
+        "FGM": float(row.get("fgm") or 0),
+        "FGA": float(row.get("fga") or 0),
+        "FTM": float(row.get("ftm") or 0),
+        "FTA": float(row.get("fta") or 0),
+        "OREB": float(row.get("oreb") or 0),
+        "DREB": float(row.get("dreb") or 0),
+        "PF": float(row.get("pf") or 0),
+    }
+    return GameLogNightLine(
+        player_id=str(row["player_id"]),
+        game_id=str(row["game_id"]),
+        name=str(row.get("player_name") or ""),
+        position=str(row.get("position") or ""),
+        stats=category_stats(line),
+    )
+
+
+def nights_from_rows(rows: list[dict]) -> list[GameLogNight]:
+    by_date: dict[date, list[GameLogNightLine]] = {}
+    for row in rows:
+        by_date.setdefault(row["game_date"], []).append(night_line(row))
+    return [GameLogNight(date=day, players=players) for day, players in sorted(by_date.items())]
 
 
 def game_from_row(row: dict) -> PlayerGameLogGame:
@@ -241,8 +280,20 @@ class NbaPlayerService:
             raise KeyError(f"Player {player_id} not found")
         season = espn_season_string(settings.season_id)
         rows = await self.db_service.get_player_box_logs(espn_id, season)
+        games = [game_from_row(row) for row in rows]
+        dates = sorted({game.game_date for game in games})
+        night_rows = await self.db_service.get_night_lines(season, dates)
+        try:
+            categories = await self.data_provider.get_ranking_categories()
+            reverse = await self.data_provider.get_reverse_categories()
+        except Exception as exc:
+            logger.warning(f"Game log Z categories unavailable: {type(exc).__name__}: {exc}")
+            categories, reverse = [], set()
         return PlayerGameLogResponse(
             player_id=espn_id,
             current_season=season,
-            games=[game_from_row(row) for row in rows],
+            games=games,
+            categories=list(categories),
+            reverse_categories=[c for c in categories if c in reverse],
+            nights=nights_from_rows(night_rows),
         )

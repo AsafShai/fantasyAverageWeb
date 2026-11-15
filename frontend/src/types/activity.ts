@@ -153,11 +153,32 @@ export interface PlayerHistoryStint {
   end: string | null
 }
 
+export interface StintRoleLine {
+  gp: number
+  totals: Record<string, number>
+}
+
+export interface PlayerStintStats {
+  team_id: number
+  start: string
+  end: string
+  current: boolean
+  games_played: number
+  totals: Record<string, number>
+  started: StintRoleLine
+  bench: StintRoleLine
+  ir?: StintRoleLine | null
+  unsplit_games: number
+}
+
 export interface PlayerLeagueHistory {
   season_id: number
   player_id: number
   teams: ActivityTeam[]
   moves: PlayerHistoryMove[]
   stints: PlayerHistoryStint[]
+  categories?: string[]
+  stint_stats?: PlayerStintStats[]
+  stint_stats_ready?: boolean
   last_updated: string
 }

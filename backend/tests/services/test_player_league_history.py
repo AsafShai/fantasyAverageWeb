@@ -102,12 +102,14 @@ async def test_service_reads_cards_only(fresh_cache):
     responses = {'league': FIXTURE['league'], 'cards': {'players': FIXTURE['cards']}}
 
     async def fake_get(params, fantasy_filter=None, url=None, etag_key=None):
-        return responses[etag_key]
+        return responses.get(etag_key)
 
     with patch.object(service, '_get', side_effect=fake_get) as get:
         history = await service.get_player_history(4432158)
         again = await service.get_player_history(4432158)
-    assert get.call_count == 2  # league + cards once; the second call is served from cache
+    keys = [call.kwargs.get('etag_key') for call in get.call_args_list]
+    assert keys[:2] == ['league', 'cards']
+    assert keys.count('league') == 1 and keys.count('cards') == 1
     assert [m.kind for m in history.moves] == ['draft', 'trade', 'drop']
     assert [s.team_id for s in history.stints] == [1, 8]
     assert history.stints[-1].end is not None
