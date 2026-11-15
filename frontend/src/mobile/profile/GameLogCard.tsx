@@ -1,13 +1,29 @@
 import { useSectionOpen } from '../../hooks/useSectionOpen'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetNbaPlayerGamesQuery } from '../../store/api/fantasyApi'
 import type { PlayerGameLogGame } from '../../types/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import { getErrorMessage } from '../../utils/errorMessage'
-import { COUNT_COLS, SHOT_COLS, logDate, mean, record, shotLine, shotPct, signed, whole } from '../../utils/playerGameLog'
-import { Card, DataTable, type Column } from '../ui'
+import { ZValue, FantasyTeamTag } from '../../components/boxScores/BoxScorePanel'
+import {
+  COUNT_COLS,
+  GAME_LOG_SORT_DEFAULT,
+  SHOT_COLS,
+  averageZ,
+  logDate,
+  mean,
+  record,
+  shotLine,
+  shotPct,
+  signed,
+  sortGameLog,
+  whole,
+  zByGame,
+  type GameLogSortKey,
+} from '../../utils/playerGameLog'
+import { Card, DataTable, type Column, type SortState } from '../ui'
 
 type Row = { kind: 'avg' } | { kind: 'game'; game: PlayerGameLogGame }
 
@@ -23,9 +39,9 @@ function Result({ game }: { game: PlayerGameLogGame }) {
 }
 
 /**
- * Game log on a phone: this season newest first, an AVG row on top (W–L
- * record, averages, shooting %), date pinned while the columns scroll, every
- * column the desktop log has. Opponent opens the box score.
+ * Game log on a phone: this season, an AVG row pinned on top, date pinned
+ * while the columns scroll. Every column sorts; date starts newest first.
+ * Opponent opens the box score.
  */
 export default function GameLogCard({ playerId }: { playerId: string }) {
   const [open, toggle] = useSectionOpen('game-log')
@@ -34,13 +50,21 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
     () => (data?.games ?? []).filter((game) => game.season === data?.current_season),
     [data],
   )
-  const rows = useMemo<Row[]>(() => [{ kind: 'avg' }, ...shown.map((game) => ({ kind: 'game' as const, game }))], [shown])
+  const zs = useMemo(() => zByGame(data), [data])
+  const avgZ = averageZ(shown, zs)
+  const [sort, setSort] = useState<SortState>(GAME_LOG_SORT_DEFAULT)
+  const ordered = useMemo(
+    () => sortGameLog(shown, zs, { key: sort.key as GameLogSortKey, dir: sort.dir }),
+    [shown, zs, sort],
+  )
+  const rows = useMemo<Row[]>(() => [{ kind: 'avg' }, ...ordered.map((game) => ({ kind: 'game' as const, game }))], [ordered])
 
   const columns = useMemo<Column<Row>[]>(() => {
     const count = (col: (typeof COUNT_COLS)[number]): Column<Row> => ({
       key: col.key,
       header: col.label,
       align: 'center',
+      sortable: true,
       cell: (r) => {
         if (r.kind === 'avg') return <b>{mean(shown, col.key)}</b>
         const v = r.game[col.key]
@@ -52,6 +76,7 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
       key: col.label,
       header: col.label,
       align: 'center',
+      sortable: true,
       cell: (r) =>
         r.kind === 'avg' ? (
           <b>
@@ -69,6 +94,8 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
         key: 'date',
         header: 'DATE',
         pinned: true,
+        sortable: true,
+        firstDir: 'desc',
         cell: (r) => {
           if (r.kind === 'avg') return <b>AVG</b>
           const d = logDate(r.game.game_date)
@@ -84,6 +111,8 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
         key: 'opp',
         header: 'OPP',
         align: 'left',
+        sortable: true,
+        firstDir: 'asc',
         cell: (r) =>
           r.kind === 'avg' ? (
             <b title="Wins–losses">{record(shown)}</b>
@@ -101,11 +130,32 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
             </Link>
           ),
       },
+      {
+        key: 'z',
+        header: 'Z',
+        align: 'center',
+        sortable: true,
+        headerLabel: 'Z-score for this night, same as the box score',
+        cell: (r) => {
+          const z = r.kind === 'avg' ? avgZ : zs.get(r.game.game_id)
+          if (z == null) return '—'
+          return r.kind === 'avg' ? <b><ZValue z={z} /></b> : <ZValue z={z} />
+        },
+      },
       ...COUNT_COLS.slice(0, 6).map(count),
       ...SHOT_COLS.map(shot),
       ...COUNT_COLS.slice(6).map(count),
+      {
+        key: 'team',
+        header: 'FANTASY',
+        align: 'left',
+        sortable: true,
+        firstDir: 'asc',
+        headerLabel: 'Fantasy team that rostered him on the night of the game',
+        cell: (r) => (r.kind === 'avg' ? '—' : <FantasyTeamTag value={r.game.fantasy ?? undefined} />),
+      },
     ]
-  }, [shown, playerId])
+  }, [shown, playerId, zs, avgZ])
 
   return (
     <Card title="Game log" aria-label="Game log" fold={{ open, onToggle: toggle }}>
@@ -124,9 +174,11 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
         <p className="mr-meta mr-pp-empty">No games in the log yet.</p>
       ) : (
         <DataTable
-          caption="Game log, newest first. Opponent opens the box score."
+          caption="Game log. Column headers sort the games. Opponent opens the box score."
           columns={columns}
           rows={rows}
+          sort={sort}
+          onSortChange={setSort}
           rowKey={(r) => (r.kind === 'avg' ? 'avg' : String(r.game.game_id))}
           isHighlighted={(r) => r.kind === 'avg'}
           maxHeight={520}

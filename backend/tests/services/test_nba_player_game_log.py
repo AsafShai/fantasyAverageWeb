@@ -1,6 +1,8 @@
 from datetime import date
 
-from app.services.nba_player_service import game_from_row
+import pytest
+
+from app.services.nba_player_service import apply_fantasy, game_from_row, night_line, nights_from_rows
 
 
 def _row(**overrides):
@@ -43,6 +45,26 @@ def test_away_matchup():
     game = game_from_row(_row(matchup="LAL @ LAC"))
     assert game.opponent == "LAC"
     assert game.is_home is False
+
+
+def test_apply_fantasy_keeps_a_night_blank_when_its_roster_was_not_read():
+    home = game_from_row(_row())
+    away = game_from_row(_row(game_id="2", game_date=date(2026, 11, 2), matchup="LAL @ BOS"))
+    attached = apply_fantasy([home, away], {
+        home.game_date: {
+            "fantasy_team": "TTP",
+            "fantasy_team_name": "Trust the process",
+            "lineup_slot": "BE",
+            "started": False,
+        },
+        away.game_date: None,
+    })
+    assert attached[0].fantasy is not None
+    assert attached[0].fantasy.fantasy_team == "TTP"
+    assert attached[0].fantasy.fantasy_team_name == "Trust the process"
+    assert attached[0].fantasy.lineup_slot == "BE"
+    assert attached[0].fantasy.started is False
+    assert attached[1].fantasy is None
 
 
 def test_missing_scores_stay_empty():

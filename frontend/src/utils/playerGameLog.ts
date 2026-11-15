@@ -1,4 +1,6 @@
-import type { PlayerGameLogGame } from '../types/api'
+import type { GameLogNightLine, PlayerGameLogGame, PlayerGameLogResponse } from '../types/api'
+import type { SlateLine, SlateValues } from '../types/boxScore'
+import { slatePlayerValues } from '../components/boxScores/slateValues'
 
 // Columns and formatting for a player's game log (profile, phone and desktop).
 
@@ -53,6 +55,120 @@ export function record(games: PlayerGameLogGame[]): string {
   }
   if (wins + losses === 0) return '—'
   return `${wins}–${losses}`
+}
+
+function slateLine(line: GameLogNightLine): SlateLine {
+  return {
+    player_id: line.player_id,
+    name: line.name,
+    position: line.position,
+    team_abbr: '',
+    team_logo: '',
+    opponent_abbr: '',
+    is_home: false,
+    game_id: line.game_id,
+    game_status: 'final',
+    min: '',
+    pts: '',
+    reb: '',
+    ast: '',
+    stl: '',
+    blk: '',
+    tov: '',
+    fg: '',
+    fg3: '',
+    ft: '',
+    stats: line.stats,
+    fantasy_team: null,
+    fantasy_team_name: null,
+    lineup_slot: null,
+    started: null,
+  }
+}
+
+/**
+ * This player's box-score Z for each of his games: the Player Rankings value
+ * of everyone who logged minutes that night, the same number the box score shows.
+ */
+export function zByGame(data: PlayerGameLogResponse | undefined): Map<string, number> {
+  const map = new Map<string, number>()
+  if (!data?.nights?.length || !data.categories?.length) return map
+  const playerId = String(data.player_id)
+  for (const night of data.nights) {
+    const values: SlateValues = {
+      date: night.date,
+      complete: true,
+      games_counted: night.players.length,
+      categories: data.categories,
+      reverse_categories: data.reverse_categories ?? [],
+      players: night.players.map(slateLine),
+    }
+    for (const line of slatePlayerValues(values)) {
+      if (line.player_id === playerId) map.set(line.game_id, line.z)
+    }
+  }
+  return map
+}
+
+/** Mean of the Zs this player has for these games, or null when none were scored. */
+export function averageZ(games: { game_id: string }[], zs: Map<string, number>): number | null {
+  const known = games.map((game) => zs.get(game.game_id)).filter((z): z is number => z != null)
+  if (known.length === 0) return null
+  return known.reduce((sum, z) => sum + z, 0) / known.length
+}
+
+export type GameLogSortKey = 'date' | 'opp' | 'z' | 'team' | (typeof COUNT_COLS)[number]['key'] | (typeof SHOT_COLS)[number]['label']
+
+export interface GameLogSort {
+  key: GameLogSortKey
+  dir: 'asc' | 'desc'
+}
+
+export const GAME_LOG_SORT_DEFAULT: GameLogSort = { key: 'date', dir: 'desc' }
+
+/** First click on a stat is high → low. Opponent and fantasy team start A → Z. Date starts newest first. */
+export function toggleGameLogSort(current: GameLogSort, key: GameLogSortKey): GameLogSort {
+  if (current.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+  return { key, dir: key === 'opp' || key === 'team' ? 'asc' : 'desc' }
+}
+
+function shotRate(game: PlayerGameLogGame, label: (typeof SHOT_COLS)[number]['label']): number | null {
+  const col = SHOT_COLS.find((shot) => shot.label === label)
+  if (!col || game[col.att] <= 0) return null
+  return game[col.made] / game[col.att]
+}
+
+function countKey(key: GameLogSortKey): key is (typeof COUNT_COLS)[number]['key'] {
+  return COUNT_COLS.some((col) => col.key === key)
+}
+
+function sortValue(game: PlayerGameLogGame, key: GameLogSortKey, zs: Map<string, number>): number | string | null {
+  if (key === 'date') return game.game_date
+  if (key === 'opp') return game.opponent
+  if (key === 'team') return game.fantasy?.fantasy_team_name || game.fantasy?.fantasy_team || null
+  if (key === 'z') return zs.get(game.game_id) ?? null
+  if (key === 'FG' || key === '3P' || key === 'FT') return shotRate(game, key)
+  if (countKey(key)) return game[key]
+  return null
+}
+
+/**
+ * Sort a season's games. A missing Z, or a shooting line with no attempts,
+ * stays at the bottom either way. Equal values keep the newer game first.
+ */
+export function sortGameLog(games: PlayerGameLogGame[], zs: Map<string, number>, sort: GameLogSort): PlayerGameLogGame[] {
+  const sign = sort.dir === 'asc' ? 1 : -1
+  return [...games].sort((a, b) => {
+    const av = sortValue(a, sort.key, zs)
+    const bv = sortValue(b, sort.key, zs)
+    if (av == null || bv == null) {
+      if (av == null && bv == null) return b.game_date.localeCompare(a.game_date) || b.game_id.localeCompare(a.game_id)
+      return av == null ? 1 : -1
+    }
+    const cmp = typeof av === 'string' && typeof bv === 'string' ? av.localeCompare(bv) : Number(av) - Number(bv)
+    if (cmp !== 0) return cmp * sign
+    return b.game_date.localeCompare(a.game_date) || b.game_id.localeCompare(a.game_id)
+  })
 }
 
 export function logDate(iso: string): { weekday: string; day: string } {

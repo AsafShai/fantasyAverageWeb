@@ -14,12 +14,14 @@ test('desktop: the profile keeps its desktop layout with the flag on', async ({ 
   await expect(page.getByRole('group', { name: 'Time frame' })).toHaveCount(0)
   // the time frame button (section titles like 'Stats · Full Season' are buttons too)
   await expect(page.getByRole('button', { name: /^\W*Full Season$/ })).toBeVisible()
-  // sections fold; League History starts open, under Previous Seasons
+  // sections fold; League History lives on Fantasy and starts open
+  await page.getByRole('tab', { name: 'Fantasy' }).click()
   const history = page.getByRole('button', { name: /^League History/ })
   await expect(history).toHaveAttribute('aria-expanded', 'true')
   await expect(page.getByText('Drafted #26')).toBeVisible()
   await history.click()
   await expect(page.getByText('Drafted #26')).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Games' }).click()
   await page.getByRole('button', { name: /^Game log/ }).click()
   await expect(page.getByRole('button', { name: /^Game log/ })).toHaveAttribute('aria-expanded', 'false')
 })
@@ -72,7 +74,9 @@ test.describe('phone player profile', () => {
     await trends.getByRole('button', { name: /^PTS:/ }).click()
     await expect(trends.getByRole('button', { name: /^PTS:/ })).toHaveAttribute('aria-expanded', 'true')
     await expect(minutes).toHaveAttribute('aria-expanded', 'false')
+    await expectNoHorizontalScroll(page)
 
+    await page.getByRole('radio', { name: 'Games' }).click()
     // projection
     const proj = page.getByRole('region', { name: 'Next game projection' })
     await expect(proj).toContainText('Next game: vs PHI')
@@ -91,14 +95,13 @@ test.describe('phone player profile', () => {
     await expectNoHorizontalScroll(page)
   })
 
-  test('league history: open under Previous seasons, moves newest first, trade sides, tap a stint for its dates', async ({ page }) => {
+  test('league history: Fantasy tab, moves newest first, trade sides, tap a stint for its dates', async ({ page }) => {
     await mockProfileApis(page)
     await page.goto(`${URL}?ff=mobile`)
-    // open by default, under Previous seasons
+    await page.getByRole('radio', { name: 'Fantasy' }).click()
     const card = page.getByRole('region', { name: 'League history' })
-    const seasons = page.getByRole('region', { name: 'Previous seasons' })
-    await expect(seasons).toBeVisible()
-    expect((await seasons.boundingBox())!.y).toBeLessThan((await card.boundingBox())!.y)
+    await expect(card).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Previous seasons' })).toHaveCount(0)
     await expect(card.getByRole('button', { name: /League history/ })).toHaveAttribute('aria-expanded', 'true')
     await expect(card.getByText('Drafted #26')).toBeVisible()
     const moves = card.getByRole('listitem')
@@ -124,8 +127,14 @@ test.describe('phone player profile', () => {
     await page.goto(`${URL}?ff=mobile`)
     const stats = page.getByRole('region', { name: 'Stats' })
     await expect(stats.getByRole('rowheader')).toBeVisible()
-    for (const name of [/^Fantasy Value/, /^Stats/, /^Previous seasons/, /^League history/, /^Trends/, /^Next game/, /^Game log/])
+    for (const name of [/^Fantasy Value/, /^Stats/, /^Previous seasons/, /^Trends/])
       await expect(page.getByRole('button', { name, expanded: true })).toBeVisible()
+    await page.getByRole('radio', { name: 'Games' }).click()
+    for (const name of [/^Next game/, /^Game log/])
+      await expect(page.getByRole('button', { name, expanded: true })).toBeVisible()
+    await page.getByRole('radio', { name: 'Fantasy' }).click()
+    await expect(page.getByRole('button', { name: /^League history/, expanded: true })).toBeVisible()
+    await page.getByRole('radio', { name: 'Stats' }).click()
     await stats.getByRole('button', { name: /^Stats/ }).tap()
     await expect(stats.getByRole('rowheader')).toHaveCount(0)
     await expect(stats.getByRole('radiogroup')).toHaveCount(0)
@@ -139,6 +148,7 @@ test.describe('phone player profile', () => {
   test('minutes stepper re-runs the projection and resets', async ({ page }) => {
     const { predicted } = await mockProfileApis(page)
     await page.goto(`${URL}?ff=mobile`)
+    await page.getByRole('radio', { name: 'Games' }).click()
     const proj = page.getByRole('region', { name: 'Next game projection' })
     await proj.getByLabel('Integer projections').uncheck()
     await expect(proj).toContainText('22.6')

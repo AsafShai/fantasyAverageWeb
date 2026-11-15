@@ -181,10 +181,36 @@ class PlayerHistoryStint(BaseModel):
     end: Optional[datetime] = None
 
 
+class StintRoleLine(BaseModel):
+    """Games in one role (started, bench, IR) during a stretch, raw totals."""
+    gp: int = 0
+    totals: dict[str, float] = {}
+
+
+class PlayerStintStats(BaseModel):
+    """One fantasy-team stretch and how his games split by the locked lineup slot."""
+    team_id: int
+    start: date
+    end: date
+    current: bool
+    games_played: int
+    totals: dict[str, float]
+    started: StintRoleLine
+    bench: StintRoleLine
+    # Present only when he spent games on IR, so those zeros stay out of the bench line.
+    ir: Optional[StintRoleLine] = None
+    # Played games whose lineup slot could not be loaded. Counted in the stretch, not in a role.
+    unsplit_games: int = 0
+
+
 class PlayerLeagueHistory(BaseModel):
     season_id: int
     player_id: int
     teams: list[ActivityTeam]
     moves: list[PlayerHistoryMove]  # oldest first
     stints: list[PlayerHistoryStint]
+    # Columns for stint_stats, in display order. Empty when the lines could not be loaded.
+    categories: list[str] = []
+    stint_stats: list[PlayerStintStats] = []  # newest stretch first
+    stint_stats_ready: bool = True
     last_updated: datetime

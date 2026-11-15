@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ActivityPlayer, PlayerHistoryMove, PlayerLeagueHistory } from '../../types/activity'
 import PlayerNameLink from '../PlayerNameLink'
+import StintStats from './StintStats'
 import {
   formatSpan,
   historySummary,
@@ -224,6 +225,7 @@ export default function LeagueHistoryView({ history }: { history: PlayerLeagueHi
         ))}
       </p>
       <Timeline segments={segments} colors={colors} team={team} />
+      <StintStats history={history} />
       <div>
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Moves, newest first</div>
         <ol className="max-h-[420px] overflow-y-auto border-t border-gray-200 dark:border-gray-700">

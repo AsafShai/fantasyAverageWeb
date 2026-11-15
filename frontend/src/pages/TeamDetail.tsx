@@ -201,13 +201,13 @@ const TeamDetail = () => {
     [team_detail]
   )
 
-  const rosterPlayers = team_detail?.players ?? []
   const scheduleSpotlightRows = useMemo(() => {
+    const rosterPlayers = team_detail?.players ?? []
     if (!showSchedule || !scheduleSpotlightDate || rosterPlayers.length === 0) return []
     return [...rosterPlayers]
       .filter(p => !!weekOpponent(opponents, p.pro_team, scheduleSpotlightDate))
       .sort((a, b) => lineupSlotOrder(a.lineup_slot) - lineupSlotOrder(b.lineup_slot))
-  }, [showSchedule, scheduleSpotlightDate, rosterPlayers, opponents])
+  }, [showSchedule, scheduleSpotlightDate, team_detail, opponents])
 
   const scheduleSummaryHeading = scheduleSpotlightDate
     ? `${formatSlateDate(scheduleSpotlightDate, { weekday: 'long', month: 'short', day: 'numeric' })}`
