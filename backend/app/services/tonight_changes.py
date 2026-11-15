@@ -67,14 +67,29 @@ def _points(frame: pd.DataFrame, categories: Sequence[str]):
     return points, names, gp
 
 
+def _raw_stats(frame: Optional[pd.DataFrame], categories: Sequence[str]):
+    """{team_id: {category: raw total}} of a totals frame; None without one."""
+    if frame is None:
+        return None
+    cats = [c for c in categories if c in frame.columns]
+    return {
+        int(row['team_id']): {c: float(row[c]) for c in cats if not pd.isna(row[c])}
+        for _, row in frame.iterrows()
+    }
+
+
 def rank_changes_between(official: pd.DataFrame, live: pd.DataFrame, categories: Sequence[str],
-                         period: int) -> RankChanges:
+                         period: int, official_totals: Optional[pd.DataFrame] = None,
+                         live_totals: Optional[pd.DataFrame] = None) -> RankChanges:
     """Each team's move tonight: ``official`` and ``live`` are rankings frames
-    (roto points per category, TOTAL_POINTS, GP)."""
+    (roto points per category, TOTAL_POINTS, GP). With the raw totals frames
+    (totals mode) it also says how much of each counting stat a team added."""
     before, _, gp_before = _points(official, categories)
     after, names, gp_after = _points(live, categories)
     return RankChanges(previous_period=period - 1, latest_period=period,
-                       teams=rank_moves.changes_between(before, after, names, gp_before, gp_after))
+                       teams=rank_moves.changes_between(
+                           before, after, names, gp_before, gp_after,
+                           _raw_stats(official_totals, categories), _raw_stats(live_totals, categories)))
 
 
 def movers_between(official: pd.DataFrame, live: pd.DataFrame, categories: Sequence[str]) -> list[RankMover]:
@@ -150,26 +165,36 @@ def stat_points(totals: pd.DataFrame, period: int, per_game: bool) -> list[dict]
 
 # --- reading the frames ------------------------------------------------------
 
+async def _totals_frames(provider):
+    """(official raw, official rankings, live raw, live rankings) for totals mode."""
+    from app.services.ranking_service import RankingService
+    categories = await provider.get_ranking_categories()
+    reverse = await provider.get_reverse_categories()
+    builder = RankingService()
+    official_raw, official = builder._build_totals_rankings_df(await provider.get_totals_df(), categories, reverse)
+    live_raw, live = builder._build_totals_rankings_df(await provider.get_totals_df(live=True), categories, reverse)
+    return official_raw, official, live_raw, live
+
+
 async def rankings_frames(provider, mode: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(official, live) rankings frames for ``mode``: averages rank the
     settled flavour (finished games only), totals the in-progress one. Built
     exactly as the Rankings page builds its two tables."""
     if mode != 'totals':
         return await provider.get_rankings_df(), await provider.get_rankings_df(live=True)
-    from app.services.ranking_service import RankingService
-    categories = await provider.get_ranking_categories()
-    reverse = await provider.get_reverse_categories()
-    builder = RankingService()
-    official = builder._build_totals_rankings_df(await provider.get_totals_df(), categories, reverse)[1]
-    live = builder._build_totals_rankings_df(await provider.get_totals_df(live=True), categories, reverse)[1]
+    _, official, _, live = await _totals_frames(provider)
     return official, live
 
 
 async def tonight_rank_changes(provider, mode: str, period: int) -> Optional[RankChanges]:
     """None when it cannot be built: the caller then serves last night's moves."""
     try:
+        categories = await provider.get_ranking_categories()
+        if mode == 'totals':
+            official_raw, official, live_raw, live = await _totals_frames(provider)
+            return rank_changes_between(official, live, categories, period, official_raw, live_raw)
         official, live = await rankings_frames(provider, mode)
-        return rank_changes_between(official, live, await provider.get_ranking_categories(), period)
+        return rank_changes_between(official, live, categories, period)
     except Exception as e:
         logger.warning(f"Tonight rank changes unavailable: {type(e).__name__}: {e}", exc_info=True)
         return None

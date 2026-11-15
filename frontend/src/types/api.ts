@@ -1031,6 +1031,8 @@ export interface TeamRankChange {
   gp_delta: number | null;
   /** Roto points gained or lost per category; unchanged categories may be 0. */
   categories: Record<string, number>;
+  /** Totals mode only: how much of each counting stat the team added, in the stat's units (PTS +118). No FG%/FT%. */
+  stat_deltas?: Record<string, number>;
 }
 
 export interface RankChanges {

@@ -479,19 +479,24 @@ class DBService:
             logger.error(f"Failed to fetch latest two periods of rankings: {type(e).__name__}: {e}")
             return []
 
-    async def get_games_played_for_periods(
+    async def get_team_snapshots_for_periods(
         self, periods: list[int], league_id: int, season_id: int
     ) -> list[dict]:
-        """Season-to-date games played per team at each of `periods`, from
-        team_daily_snapshot: [{scoring_period_id, team_id, gp}]."""
+        """Season-to-date games played and counting stats per team at each of
+        `periods`, from team_daily_snapshot: [{scoring_period_id, team_id, gp,
+        three_pm, reb, ast, stl, blk, pts, stats?}] (`stats` holds the extra
+        categories, e.g. TO, where the column exists)."""
         pool = await self._get_pool()
         if pool is None or not periods:
             return []
         try:
             async with pool.acquire() as conn:
+                dynamic = await self._supports_dynamic_categories(conn)
                 rows = await conn.fetch(
-                    """
-                    SELECT scoring_period_id, team_id, gp
+                    f"""
+                    SELECT scoring_period_id, team_id, gp,
+                           three_pm, reb, ast, stl, blk, pts
+                           {', stats' if dynamic else ''}
                     FROM team_daily_snapshot
                     WHERE league_id = $1 AND season_id = $2 AND scoring_period_id = ANY($3::int[])
                     """,
@@ -499,7 +504,7 @@ class DBService:
                 )
                 return [dict(r) for r in rows]
         except Exception as e:
-            logger.error(f"Failed to fetch games played for periods {periods}: {type(e).__name__}: {e}")
+            logger.error(f"Failed to fetch team snapshots for periods {periods}: {type(e).__name__}: {e}")
             return []
 
     @staticmethod

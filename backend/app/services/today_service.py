@@ -28,6 +28,16 @@ _RANK_COLUMNS = {
     'PTS': 'rk_pts',
 }
 
+# team_daily_snapshot columns of the counting stats (the percentages are ratios).
+_STAT_COLUMNS = {
+    '3PM': 'three_pm',
+    'REB': 'reb',
+    'AST': 'ast',
+    'STL': 'stl',
+    'BLK': 'blk',
+    'PTS': 'pts',
+}
+
 AVAILABLE = 'available'
 PROBABLE = 'probable'
 QUESTIONABLE = 'questionable'
@@ -196,16 +206,19 @@ class TodayService:
             settings.league_id, settings.season_id, table
         )
         periods = sorted({int(r['scoring_period_id']) for r in rows})
-        gp_rows = await self.db_service.get_games_played_for_periods(
+        snapshot_rows = await self.db_service.get_team_snapshots_for_periods(
             periods, settings.league_id, settings.season_id
         )
-        return self.build_rank_changes(rows, gp_rows)
+        return self.build_rank_changes(rows, snapshot_rows, with_stats=mode == 'totals')
 
     @staticmethod
-    def build_rank_changes(rows: list[dict], gp_rows: list[dict]) -> RankChanges:
-        """rows: rankings rows of the two latest periods (rk_* are roto points).
-        Places are standard competition ranks by total points, so a tie shares
-        the higher place."""
+    def build_rank_changes(rows: list[dict], snapshot_rows: list[dict],
+                           with_stats: bool = False) -> RankChanges:
+        """rows: rankings rows of the two latest periods (rk_* are roto points);
+        snapshot_rows: team_daily_snapshot rows of the same periods (games
+        played, and with ``with_stats`` the raw totals the counting stats
+        added are diffed from). Places are standard competition ranks by
+        total points, so a tie shares the higher place."""
         periods = sorted({int(r['scoring_period_id']) for r in rows})
         if len(periods) < 2:
             return RankChanges()
@@ -221,18 +234,27 @@ class TodayService:
             by_period[period][team_id] = TodayService._categories_of(row)
             names[team_id] = str(row['team_name'])
 
-        gp_before: dict[int, int] = {}
-        gp_now: dict[int, int] = {}
-        for r in gp_rows:
-            if r.get('gp') is None:
-                continue
+        gp: dict[int, dict[int, int]] = {previous_period: {}, latest_period: {}}
+        stats: dict[int, dict[int, dict[str, float]]] = {previous_period: {}, latest_period: {}}
+        for r in snapshot_rows:
             period = int(r['scoring_period_id'])
-            if period == previous_period:
-                gp_before[int(r['team_id'])] = int(r['gp'])
-            elif period == latest_period:
-                gp_now[int(r['team_id'])] = int(r['gp'])
+            if period not in gp:
+                continue
+            team_id = int(r['team_id'])
+            if r.get('gp') is not None:
+                gp[period][team_id] = int(r['gp'])
+            if with_stats:
+                scored = by_period[period].get(team_id, {})
+                stats[period][team_id] = {
+                    cat: value for cat, value in TodayService._stats_of(r).items() if cat in scored
+                }
 
-        teams = changes_between(by_period[previous_period], by_period[latest_period], names, gp_before, gp_now)
+        teams = changes_between(
+            by_period[previous_period], by_period[latest_period], names,
+            gp[previous_period], gp[latest_period],
+            stats[previous_period] if with_stats else None,
+            stats[latest_period] if with_stats else None,
+        )
         return RankChanges(previous_period=previous_period, latest_period=latest_period, teams=teams)
 
     @staticmethod
@@ -248,6 +270,13 @@ class TodayService:
         }
         merged[TOTAL_KEY] = None if total is None else float(total)
         return merged
+
+    @staticmethod
+    def _stats_of(row: dict) -> dict[str, float]:
+        """Raw season totals of a team_daily_snapshot row, by category."""
+        fixed = {cat: row.get(col) for cat, col in _STAT_COLUMNS.items()}
+        merged = category_storage.merge_categories(fixed, row.get('stats'))
+        return {cat: float(value) for cat, value in merged.items() if value is not None}
 
     async def _get_tonight(self) -> tuple[Optional[date], int, list[TeamRosterHealth]]:
         games, players_df = await asyncio.gather(
