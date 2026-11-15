@@ -39,11 +39,16 @@ test.describe('phone Standings & Rankings', () => {
     await expectNoHorizontalScroll(page)
   })
 
-  test('Standings view drops deltas and the movers toggle; state is in the URL', async ({ page }) => {
+  test('Standings view keeps the movers (rank, Total, GP) and the toggle; state is in the URL', async ({ page }) => {
     await page.getByRole('radio', { name: 'Standings' }).click()
     await expect(page).toHaveURL(/view=standings/)
-    await expect(page.getByRole('button', { name: /movers/ })).toHaveCount(0)
-    await expect(page.getByRole('table').locator('tbody')).not.toContainText('▲')
+    await expect(page.getByRole('button', { name: /Hide movers/ })).toBeVisible()
+    await expect(page.getByText(/▲\/▼ = places moved since last night/)).toBeVisible()
+    const first = page.getByRole('table').getByRole('row').filter({ hasText: 'Fantasy One' })
+    await expect(first.getByRole('rowheader')).toContainText('▲1')
+    await expect(first.getByRole('cell').first()).toContainText('▲2') // Total
+    await expect(first.getByRole('cell').last()).toContainText('+3') // GP
+    await expectNoHorizontalScroll(page)
   })
 
   test('date range opens inline; a quick range then Apply puts it in the URL', async ({ page }) => {
