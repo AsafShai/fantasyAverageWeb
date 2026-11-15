@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { useUrlState } from '../hooks/useUrlState'
+import { PLAYER_PROFILE_URL_SCHEMA, PLAYER_TAB_OPTIONS } from './playerProfileTabs'
 import type { CustomDateRange, PlayerStatKey, TimePeriod } from '../types/api'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import { CoverageNotice } from '../components/DateRangePicker'
@@ -54,6 +56,7 @@ const PlayerProfileDesktop = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from
+  const [{ tab }, setUrl] = useUrlState(PLAYER_PROFILE_URL_SCHEMA)
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('season')
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null)
   const [showAverages, setShowAverages] = useState(true)
@@ -176,6 +179,29 @@ const PlayerProfileDesktop = () => {
         </div>
       </div>
 
+      <div role="tablist" aria-label="Player page section" className="mb-6 grid grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+        {PLAYER_TAB_OPTIONS.map((option) => {
+          const selected = tab === option.value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setUrl({ tab: option.value })}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                selected
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100'
+              }`}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'stats' && (<>
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
         <span className="text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">
           Time frame <span className="font-normal text-gray-400 dark:text-gray-500">· Fantasy Value, Stats and Trends</span>
@@ -287,10 +313,6 @@ const PlayerProfileDesktop = () => {
         </>)}
       </div>
 
-      <PlayerPastSeasonsCard playerId={playerId} />
-
-      <PlayerLeagueHistoryCard playerId={playerId} />
-
       <PlayerTrendsCard
         playerId={Number(playerId)}
         categories={apiCategories}
@@ -299,10 +321,19 @@ const PlayerProfileDesktop = () => {
         customRange={customRange}
       />
 
+      <PlayerPastSeasonsCard playerId={playerId} />
+      </>)}
+
+      {tab === 'games' && (<>
       <PlayerNextGameCard playerId={playerId} />
 
       {/* the whole season game by game: the longest section, and not tied to the time frame */}
       <PlayerGameLog playerId={playerId} />
+      </>)}
+
+      {tab === 'history' && (
+      <PlayerLeagueHistoryCard playerId={playerId} />
+      )}
     </div>
   )
 }

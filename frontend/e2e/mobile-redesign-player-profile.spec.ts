@@ -14,12 +14,14 @@ test('desktop: the profile keeps its desktop layout with the flag on', async ({ 
   await expect(page.getByRole('group', { name: 'Time frame' })).toHaveCount(0)
   // the time frame button (section titles like 'Stats · Full Season' are buttons too)
   await expect(page.getByRole('button', { name: /^\W*Full Season$/ })).toBeVisible()
-  // sections fold; League History starts open, under Previous Seasons
+  // sections fold; League History lives on Fantasy and starts open
+  await page.getByRole('tab', { name: 'Fantasy' }).click()
   const history = page.getByRole('button', { name: /^League History/ })
   await expect(history).toHaveAttribute('aria-expanded', 'true')
   await expect(page.getByText('Drafted #26')).toBeVisible()
   await history.click()
   await expect(page.getByText('Drafted #26')).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Games' }).click()
   await page.getByRole('button', { name: /^Game log/ }).click()
   await expect(page.getByRole('button', { name: /^Game log/ })).toHaveAttribute('aria-expanded', 'false')
 })

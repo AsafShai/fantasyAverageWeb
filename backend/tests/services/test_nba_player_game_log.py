@@ -1,6 +1,8 @@
 from datetime import date
 
-from app.services.nba_player_service import game_from_row
+import pytest
+
+from app.services.nba_player_service import game_from_row, night_line, nights_from_rows
 
 
 def _row(**overrides):

@@ -512,6 +512,38 @@ class TestConditionalRefresh:
         assert [k for k in las._cache.etags if isinstance(k, tuple)] == [('stats', (10, 11))]
 
 
+class TestStintRoleSplit:
+    def test_lock_bench_ir_and_a_missing_slot(self):
+        # Traded after period 3's lock, so that game stays with the old team.
+        txs = [
+            tx('draft', 'DRAFT', lock(1) - 3_600_000, [('DRAFT', 10, None, 1)]),
+            tx('trade', 'TRADE_ACCEPT', lock(3) + 3_600_000, [('TRADE', 10, 1, 2)]),
+        ]
+        logs = {10: [
+            GameLine(2, 'g2', {'PTS': 10.0}),
+            GameLine(3, 'g3', {'PTS': 20.0}),
+            GameLine(4, 'g4', {'PTS': 8.0}),
+            GameLine(5, 'g5', {'PTS': 40.0}),
+            GameLine(6, 'g6', {}),  # did not play
+        ]}
+        builder = las._Builder(txs, logs, schedule(), date(2025, 10, 21), {}, False, 10, False)
+        slots = {(1, 2): 'PG', (1, 3): 'BE', (2, 4): 'IR'}  # period 5 has no slot
+        lines = builder.stint_stats(10, slots)
+
+        assert [line.team_id for line in lines] == [2, 1]
+        current, earlier = lines
+        assert current.current is True and earlier.current is False
+        assert current.games_played == 2 and current.totals['PTS'] == 48
+        assert current.ir is not None and current.ir.gp == 1 and current.ir.totals['PTS'] == 8
+        assert current.started.gp == 0 and current.bench.gp == 0
+        assert current.unsplit_games == 1
+        # The period-3 game locked before the trade, and its bench points stay off Started.
+        assert earlier.games_played == 2 and earlier.totals['PTS'] == 30
+        assert earlier.started.gp == 1 and earlier.started.totals['PTS'] == 10
+        assert earlier.bench.gp == 1 and earlier.bench.totals['PTS'] == 20
+        assert earlier.ir is None and earlier.unsplit_games == 0
+
+
 class TestFetchRetry:
     @pytest.mark.asyncio
     async def test_transport_error_is_retried(self):

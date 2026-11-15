@@ -1,4 +1,5 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/helpers'
 import type { PlayerGameLogGame, PlayerGameLogResponse } from '../../types/api'
@@ -32,7 +33,20 @@ function game(overrides: Partial<PlayerGameLogGame>): PlayerGameLogGame {
 }
 
 function log(games: PlayerGameLogGame[]): PlayerGameLogResponse {
-  return { player_id: 3975, current_season: '2026-27', games }
+  return {
+    player_id: 3975,
+    current_season: '2026-27',
+    games,
+    categories: ['PTS'],
+    reverse_categories: [],
+    nights: [{
+      date: '2026-10-28',
+      players: [
+        { player_id: '3975', game_id: '401', name: 'Test', position: 'G', stats: { MIN: 20, PTS: 10 } },
+        { player_id: '2', game_id: '999', name: 'Other', position: 'F', stats: { MIN: 30, PTS: 30 } },
+      ],
+    }],
+  }
 }
 
 function requestUrl(input: RequestInfo | URL): string {

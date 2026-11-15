@@ -1334,6 +1334,32 @@ class DBService:
             logger.error(f"Failed to fetch box log for player {player_id}: {type(e).__name__}: {e}")
             return []
 
+    async def get_night_lines(self, season: str, dates: list[date]) -> list[dict]:
+        """Every minutes-played line on those nights. The game log uses them to
+        score the same per-night Z the box score shows."""
+        if not dates:
+            return []
+        pool = await self._get_pool()
+        if pool is None:
+            return []
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT player_id, game_id, game_date, player_name, position,
+                           min, pts, reb, oreb, dreb, ast, stl, blk, tov, fg3m, fg3a,
+                           fgm, fga, ftm, fta, pf
+                    FROM fs_player_games
+                    WHERE season = $1 AND game_date = ANY($2::date[]) AND min > 0
+                    """,
+                    season,
+                    dates,
+                )
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch night lines for {season}: {type(e).__name__}: {e}")
+            return []
+
     async def get_latest_game_date(self, season: str) -> Optional[date]:
         """Most recent game_date with real box scores this season, or None if
         none exist yet. Used as the anchor for last_7/15/30 instead of real

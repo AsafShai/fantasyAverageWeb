@@ -630,10 +630,28 @@ export interface PlayerGameLogGame {
   plus_minus: number;
 }
 
+/** One minutes-played line on a night, in the shape the box-score Z is scored from. */
+export interface GameLogNightLine {
+  player_id: string;
+  game_id: string;
+  name: string;
+  position: string;
+  stats: Record<string, number>;
+}
+
+export interface GameLogNight {
+  date: string;
+  players: GameLogNightLine[];
+}
+
 export interface PlayerGameLogResponse {
   player_id: number;
   current_season: string;
   games: PlayerGameLogGame[];
+  categories?: string[];
+  reverse_categories?: string[];
+  /** Every minutes-played line on the nights in `games`. */
+  nights?: GameLogNight[];
 }
 
 export interface DepthChartPosition {

@@ -1,13 +1,36 @@
 import { FoldTitle } from './FoldTitle'
 import { useSectionOpen } from '../hooks/useSectionOpen'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useGetNbaPlayerGamesQuery } from '../store/api/fantasyApi'
 import type { PlayerGameLogGame } from '../types/api'
-import { COUNT_COLS, SHOT_COLS, logDate, mean, record, shotLine, shotPct, signed, whole } from '../utils/playerGameLog'
+import { ZValue } from './boxScores/BoxScorePanel'
+import {
+  COUNT_COLS,
+  GAME_LOG_SORT_DEFAULT,
+  SHOT_COLS,
+  averageZ,
+  logDate,
+  mean,
+  record,
+  shotLine,
+  shotPct,
+  signed,
+  sortGameLog,
+  toggleGameLogSort,
+  whole,
+  zByGame,
+  type GameLogSort,
+  type GameLogSortKey,
+} from '../utils/playerGameLog'
 import LoadingSpinner from './LoadingSpinner'
 import ErrorMessage from './ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
+
+function GameZ({ z }: { z: number | undefined }) {
+  if (z == null) return <span className="text-gray-400">—</span>
+  return <ZValue z={z} />
+}
 
 function Result({ game }: { game: PlayerGameLogGame }) {
   if (game.team_pts == null || game.opp_pts == null) {
@@ -38,6 +61,45 @@ const stickyHead = 'sticky z-40 bg-gray-50 dark:bg-gray-800'
 const stickyAvg = 'sticky z-30 bg-gray-100 dark:bg-gray-800'
 const pinnedEdge = 'shadow-[4px_0_6px_-4px_rgba(0,0,0,0.45)]'
 
+function SortHead({
+  label,
+  column,
+  sort,
+  onSort,
+  className,
+  title,
+  align = 'center',
+}: {
+  label: string
+  column: GameLogSortKey
+  sort: GameLogSort
+  onSort: (column: GameLogSortKey) => void
+  className: string
+  title?: string
+  align?: 'left' | 'center'
+}) {
+  const active = sort.key === column
+  return (
+    <th
+      scope="col"
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={className}
+      title={title}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`inline-flex items-center gap-0.5 bg-transparent p-0 font-semibold uppercase tracking-wider text-inherit hover:text-gray-800 dark:hover:text-gray-100 ${
+          align === 'left' ? '' : 'w-full justify-center'
+        }`}
+      >
+        {label}
+        {active ? <span aria-hidden="true">{sort.dir === 'asc' ? '▲' : '▼'}</span> : null}
+      </button>
+    </th>
+  )
+}
+
 export default function PlayerGameLog({ playerId }: { playerId: string }) {
   const [open, toggle] = useSectionOpen('game-log')
   const { data, error, isLoading } = useGetNbaPlayerGamesQuery(playerId, { skip: !playerId })
@@ -45,6 +107,16 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
     () => (data?.games ?? []).filter((game) => game.season === data?.current_season),
     [data],
   )
+  const zs = useMemo(() => zByGame(data), [data])
+  const avgZ = averageZ(shown, zs)
+  const [sort, setSort] = useState<GameLogSort>(GAME_LOG_SORT_DEFAULT)
+  const ordered = useMemo(() => sortGameLog(shown, zs, sort), [shown, zs, sort])
+  const onSort = (column: GameLogSortKey) => setSort((current) => toggleGameLogSort(current, column))
+  const statHeads: { key: GameLogSortKey; label: string }[] = [
+    ...COUNT_COLS.slice(0, 6).map((col) => ({ key: col.key, label: col.label })),
+    ...SHOT_COLS.map((col) => ({ key: col.label, label: col.label })),
+    ...COUNT_COLS.slice(6).map((col) => ({ key: col.key, label: col.label })),
+  ]
 
   return (
     <section className="mt-6 bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
@@ -72,25 +144,23 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
       ) : (
         <div className="overflow-auto max-h-[32rem] rounded-md border border-gray-200 dark:border-gray-700">
           <table className="min-w-full text-sm border-separate border-spacing-0">
-            <caption className="sr-only">Game log, newest first. Opponent opens the box score.</caption>
+            <caption className="sr-only">Game log. Column headers sort the games. Opponent opens the box score.</caption>
             <thead>
               <tr>
-                <th className={`${head} ${stickyHead} left-0 top-0 text-left min-w-[4.75rem]`}>Date</th>
-                <th className={`${head} ${stickyHead} ${pinnedEdge} left-[4.75rem] top-0 text-left min-w-[7.25rem]`}>Opp</th>
-                {COUNT_COLS.slice(0, 6).map((col) => (
-                  <th key={col.label} className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`}>{col.label}</th>
-                ))}
-                {SHOT_COLS.map((col) => (
-                  <th key={col.label} className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`}>{col.label}</th>
-                ))}
-                {COUNT_COLS.slice(6).map((col) => (
-                  <th key={col.label} className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`}>{col.label}</th>
+                <SortHead label="Date" column="date" sort={sort} onSort={onSort} align="left" className={`${head} ${stickyHead} left-0 top-0 text-left min-w-[4.75rem]`} />
+                <SortHead label="Opp" column="opp" sort={sort} onSort={onSort} align="left" className={`${head} ${stickyHead} ${pinnedEdge} left-[4.75rem] top-0 text-left min-w-[7.25rem]`} />
+                <SortHead label="Z" column="z" sort={sort} onSort={onSort} title="Z-score for this night, same as the box score" className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
+                {statHeads.map((col) => (
+                  <SortHead key={col.label} label={col.label} column={col.key} sort={sort} onSort={onSort} className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
                 ))}
               </tr>
               <tr>
                 <th className={`${head} ${stickyAvg} left-0 top-[33px] text-left normal-case tracking-normal text-gray-700 dark:text-gray-200`}>Avg</th>
                 <th className={`${head} ${stickyAvg} ${pinnedEdge} left-[4.75rem] top-[33px] text-left normal-case tracking-normal tabular-nums text-gray-700 dark:text-gray-200 min-w-[7.25rem]`} title="Wins–losses">
                   {record(shown)}
+                </th>
+                <th className={`${head} sticky top-[33px] z-20 bg-gray-100 dark:bg-gray-800/95 normal-case tracking-normal`}>
+                  {avgZ == null ? '—' : <ZValue z={avgZ} />}
                 </th>
                 {COUNT_COLS.slice(0, 6).map((col) => (
                   <th key={col.label} className={`${head} sticky top-[33px] z-20 bg-gray-100 dark:bg-gray-800/95 normal-case tracking-normal text-gray-700 dark:text-gray-200`}>
@@ -113,7 +183,7 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
               </tr>
             </thead>
             <tbody>
-              {shown.map((game) => {
+              {ordered.map((game) => {
                 const date = logDate(game.game_date)
                 return (
                   <tr key={game.game_id} className="group">
@@ -136,6 +206,9 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
                         </span>
                         <Result game={game} />
                       </Link>
+                    </td>
+                    <td className={`${cell} border-t border-gray-100 dark:border-gray-800`}>
+                      <GameZ z={zs.get(game.game_id)} />
                     </td>
                     {COUNT_COLS.slice(0, 6).map((col) => (
                       <td key={col.label} className={`${cell} border-t border-gray-100 dark:border-gray-800 ${col.strong ? 'font-semibold text-gray-900 dark:text-white' : ''}`}>
