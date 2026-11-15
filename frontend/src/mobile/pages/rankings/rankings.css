@@ -63,6 +63,9 @@
 .mr-rk-dslot .mr-delta { margin-left: 3px; }
 /* headers line up with the numbers, not with the end of the ▲/▼ slot */
 .mr-rk-slots thead th:not(.mr-pin) .mr-th-btn { padding-right: 34px; }
+/* Totals standings: "+118" needs more room than "▲1.5" */
+.mr-rk-stat-slots .mr-rk-dslot:not(.mr-rk-rank-slot) { width: 36px; }
+.mr-rk-stat-slots thead th:not(.mr-pin) .mr-th-btn { padding-right: 44px; }
 .mr-rk-rank-slot { width: 24px; margin-right: 2px; }
 .mr-rk-rank-slot .mr-delta { margin-left: 0; }
 .mr-rk-name {

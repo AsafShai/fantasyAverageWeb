@@ -118,13 +118,16 @@ class TeamRankChange(BaseModel):
     """One team's move between the two latest stored scoring periods.
     rank_delta > 0 means it climbed that many places; the category and total
     deltas are roto points (higher is better); gp_delta is the games its
-    players played in the latest period."""
+    players played in the latest period. stat_deltas (totals mode only) is
+    how much of each counting stat the team added, in the stat's own units
+    (e.g. PTS +118); ratio categories such as FG% are left out."""
     team_id: int
     team_name: str
     rank_delta: Optional[int] = None
     total_delta: Optional[float] = None
     gp_delta: Optional[int] = None
     categories: Dict[str, float] = {}
+    stat_deltas: Dict[str, float] = {}
 
 
 class RankChanges(LiveAware):

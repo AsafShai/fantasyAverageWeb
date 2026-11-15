@@ -16,6 +16,14 @@ export function moversLegend(live?: LiveBlock | null): string {
   return '▲/▼ = change since last night, GP + = games played last night.'
 }
 
+/** Totals standings: the grey "+n" beside a category's season total. */
+export function statAddedLegend(live?: LiveBlock | null): string {
+  const moment = liveMoment(live)
+  if (moment === 'live') return 'Grey +n = added to the stat tonight so far.'
+  if (moment === 'final') return 'Grey +n = added to the stat tonight.'
+  return 'Grey +n = added to the stat last night.'
+}
+
 export type MoversView = 'tonight' | 'yesterday'
 
 /** The line under Today's Rank movers title; null when official (no switch shown). */

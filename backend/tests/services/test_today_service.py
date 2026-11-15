@@ -155,6 +155,32 @@ class TestRankChanges:
         (alpha,) = TodayService.build_rank_changes(rows, [gp_row(11, 1, 64)]).teams
         assert alpha.gp_delta is None
 
+    def test_totals_mode_says_how_much_of_each_counting_stat_was_added(self):
+        rows = [rankings_row(10, 1, 'Alpha'), rankings_row(11, 1, 'Alpha')]
+        snaps = [
+            {**gp_row(10, 1, 60), 'three_pm': 300, 'reb': 1200, 'ast': 700, 'stl': 200, 'blk': 100, 'pts': 4700},
+            {**gp_row(11, 1, 64), 'three_pm': 312, 'reb': 1241, 'ast': 722, 'stl': 207, 'blk': 100, 'pts': 4818},
+        ]
+        (alpha,) = TodayService.build_rank_changes(rows, snaps, with_stats=True).teams
+        assert alpha.stat_deltas == {'3PM': 12.0, 'REB': 41.0, 'AST': 22.0, 'STL': 7.0, 'BLK': 0.0, 'PTS': 118.0}
+        assert 'FG%' not in alpha.stat_deltas
+
+    def test_scored_extras_come_from_the_stats_document_and_unscored_ones_stay_out(self):
+        extras = '{"TO": 1.0, "FG%": 0.5}'
+        rows = [rankings_row(10, 1, 'Alpha', ranks=extras), rankings_row(11, 1, 'Alpha', ranks=extras)]
+        snaps = [
+            {**gp_row(10, 1, 60), 'pts': 4700, 'stats': '{"TO": 300, "FGA": 4000}'},
+            {**gp_row(11, 1, 64), 'pts': 4818, 'stats': '{"TO": 309, "FGA": 4090}'},
+        ]
+        (alpha,) = TodayService.build_rank_changes(rows, snaps, with_stats=True).teams
+        assert alpha.stat_deltas == {'PTS': 118.0, 'TO': 9.0}
+
+    def test_averages_mode_has_no_stat_deltas(self):
+        rows = [rankings_row(10, 1, 'Alpha'), rankings_row(11, 1, 'Alpha')]
+        snaps = [{**gp_row(10, 1, 60), 'pts': 4700}, {**gp_row(11, 1, 64), 'pts': 4818}]
+        (alpha,) = TodayService.build_rank_changes(rows, snaps).teams
+        assert alpha.stat_deltas == {}
+
     def test_one_period_has_nothing_to_compare(self):
         changes = TodayService.build_rank_changes([rankings_row(11, 1, 'Alpha')], [])
         assert changes.teams == [] and changes.latest_period is None
@@ -170,7 +196,7 @@ class TestRankChanges:
         service = TodayService()
         service.db_service = MagicMock(
             get_latest_two_periods_rankings=AsyncMock(return_value=[]),
-            get_games_played_for_periods=AsyncMock(return_value=[]),
+            get_team_snapshots_for_periods=AsyncMock(return_value=[]),
         )
         await service.get_rank_changes(mode)
         assert service.db_service.get_latest_two_periods_rankings.await_args.args[2] == table

@@ -106,7 +106,7 @@ function requestUrl(input: RequestInfo | URL): string {
             previous_period: 11,
             latest_period: 12,
             teams: [
-              { team_id: 1, team_name: 'Alpha Squad', rank_delta: -1, total_delta: -4, gp_delta: 3, categories: { PTS: -1 } },
+              { team_id: 1, team_name: 'Alpha Squad', rank_delta: -1, total_delta: -4, gp_delta: 3, categories: { PTS: -1 }, stat_deltas: { PTS: 118, '3PM': 0 } },
               { team_id: 2, team_name: 'Beta Ballers', rank_delta: 1, total_delta: 4, gp_delta: 4, categories: {} },
             ],
           });
@@ -159,16 +159,35 @@ function requestUrl(input: RequestInfo | URL): string {
     expect(cells.at(-1)!.textContent).toBe('50+3'); // games last night
   });
 
-  it('Standings view shows values with no deltas and no movers toggle', async () => {
+  it('Standings view shows rank, Total and GP moves but keeps averages category cells plain', async () => {
     const user = userEvent.setup();
     renderWithProviders(<Rankings />);
     await screen.findByRole('table');
     await waitFor(() => expect(rowOf('Alpha Squad').textContent).toContain('▲'));
     await user.click(screen.getByRole('radio', { name: 'Standings' }));
     expect(screen.getByRole('heading', { name: 'Team Standings (Averages)' })).toBeInTheDocument();
-    expect(bodyText()).not.toMatch(/▲|▼|–|\+3/);
-    expect(within(rowOf('Alpha Squad')).getByText('115.3000')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /movers/i })).not.toBeInTheDocument();
+    const alpha = rowOf('Alpha Squad');
+    expect(within(alpha).getByRole('rowheader').textContent).toBe('#1▲1Alpha Squad');
+    const cells = within(alpha).getAllByRole('cell');
+    expect(cells[0].textContent).toBe('46.7000%'); // raw FG%, no roto ▲2 beside it
+    expect(within(alpha).getByText('115.3000')).toBeInTheDocument();
+    expect(cells.at(-2)!.textContent).toBe('8▲2'); // total
+    expect(cells.at(-1)!.textContent).toBe('50+3'); // games last night
+    expect(screen.getByRole('button', { name: /Hide movers/ })).toBeInTheDocument();
+  });
+
+  it('Totals standings show the grey stat added beside a counting stat', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Rankings />);
+    await screen.findByRole('table');
+    await user.click(screen.getByRole('radio', { name: 'Standings' }));
+    await user.click(screen.getByRole('radio', { name: 'Totals' }));
+    expect(screen.getByRole('heading', { name: 'Team Standings (Totals)' })).toBeInTheDocument();
+    await waitFor(() => expect(rowOf('Alpha Squad').textContent).toContain('+118'));
+    const cells = within(rowOf('Alpha Squad')).getAllByRole('cell');
+    expect(cells[7].textContent).toMatch(/\+118$/); // PTS
+    expect(cells[2].textContent).not.toMatch(/\+|▲|▼/); // 3PM added 0: nothing
+    expect(screen.getByText(/Grey \+n = added to the stat last night\./)).toBeInTheDocument();
   });
 
   it('Hide movers removes the deltas; Show movers brings them back', async () => {
