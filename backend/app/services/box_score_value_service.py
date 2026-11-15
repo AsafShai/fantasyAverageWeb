@@ -225,3 +225,35 @@ async def slate_values(day: date) -> dict:
     }
     _cache[key] = (time.monotonic() + _ttl(games, day, complete), payload)
     return payload
+
+
+async def fantasy_nights_for(player_id: int, days: list[date]) -> dict[date, dict | None]:
+    """The box score's fantasy context for one player on each night.
+
+    A missing night (None) means that roster could not be read. A context with
+    fantasy_team None means he was a free agent that night.
+    """
+    unique = list(dict.fromkeys(days))
+    if not unique:
+        return {}
+    abbrevs, names = await _fantasy_teams()
+    sem = asyncio.Semaphore(6)
+
+    async def one(day: date) -> tuple[date, dict | None]:
+        async with sem:
+            try:
+                roster = await _roster_on(day)
+            except Exception as exc:
+                logger.warning(f"Game log fantasy roster for {day}: {type(exc).__name__}: {exc}")
+                return day, None
+        if not roster:
+            return day, None
+        owner = roster.get(player_id)
+        return day, _fantasy_player_context(
+            owner.get("team_id") if owner else None,
+            owner.get("slot") if owner else None,
+            abbrevs,
+            names,
+        )
+
+    return dict(await asyncio.gather(*(one(day) for day in unique)))

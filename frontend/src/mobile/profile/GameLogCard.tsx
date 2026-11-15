@@ -6,7 +6,7 @@ import type { PlayerGameLogGame } from '../../types/api'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import { getErrorMessage } from '../../utils/errorMessage'
-import { ZValue } from '../../components/boxScores/BoxScorePanel'
+import { ZValue, FantasyTeamTag } from '../../components/boxScores/BoxScorePanel'
 import {
   COUNT_COLS,
   GAME_LOG_SORT_DEFAULT,
@@ -145,6 +145,15 @@ export default function GameLogCard({ playerId }: { playerId: string }) {
       ...COUNT_COLS.slice(0, 6).map(count),
       ...SHOT_COLS.map(shot),
       ...COUNT_COLS.slice(6).map(count),
+      {
+        key: 'team',
+        header: 'FANTASY',
+        align: 'left',
+        sortable: true,
+        firstDir: 'asc',
+        headerLabel: 'Fantasy team that rostered him on the night of the game',
+        cell: (r) => (r.kind === 'avg' ? '—' : <FantasyTeamTag value={r.game.fantasy ?? undefined} />),
+      },
     ]
   }, [shown, playerId, zs, avgZ])
 

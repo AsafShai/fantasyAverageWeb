@@ -98,4 +98,35 @@ describe('PlayerGameLog', () => {
     expect(screen.queryByRole('button', { name: '2025-26' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
   })
+
+  it('shows the fantasy team and lineup from that night at the end of the row', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input)
+        if (url.includes('/nba-players/3975/games')) {
+          return new Response(
+            JSON.stringify(log([
+              game({
+                fantasy: { fantasy_team: 'TTP', fantasy_team_name: 'Trust the process', lineup_slot: 'SG', started: true },
+              }),
+              game({
+                game_id: '402',
+                game_date: '2026-11-01',
+                opponent: 'BOS',
+                fantasy: { fantasy_team: null, fantasy_team_name: null, lineup_slot: null, started: null },
+              }),
+            ])),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          )
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+    renderWithProviders(<PlayerGameLog playerId="3975" />)
+    expect(await screen.findByRole('button', { name: 'TTP: Trust the process' })).toBeInTheDocument()
+    expect(screen.getByLabelText('active lineup')).toBeInTheDocument()
+    expect(screen.getByText('FA')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Fantasy' })).toBeInTheDocument()
+  })
 })

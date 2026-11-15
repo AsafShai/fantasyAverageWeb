@@ -9,6 +9,7 @@ from typing import Optional
 
 from app.config import settings
 from app.models.nba_player_models import (
+    GameLogFantasy,
     GameLogNight,
     GameLogNightLine,
     NbaPlayerBio,
@@ -16,7 +17,7 @@ from app.models.nba_player_models import (
     PlayerGameLogGame,
     PlayerGameLogResponse,
 )
-from app.services.box_score_value_service import category_stats
+from app.services.box_score_value_service import category_stats, fantasy_nights_for
 from app.models.player import PlayerStats, StatTimePeriod
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
@@ -69,6 +70,15 @@ def nights_from_rows(rows: list[dict]) -> list[GameLogNight]:
     for row in rows:
         by_date.setdefault(row["game_date"], []).append(night_line(row))
     return [GameLogNight(date=day, players=players) for day, players in sorted(by_date.items())]
+
+
+def apply_fantasy(games: list[PlayerGameLogGame], contexts: dict[date, dict | None]) -> list[PlayerGameLogGame]:
+    """Attach each night's fantasy team and lineup. A night with no context stays blank."""
+    attached = []
+    for game in games:
+        ctx = contexts.get(game.game_date)
+        attached.append(game.model_copy(update={"fantasy": GameLogFantasy.model_validate(ctx) if ctx else None}))
+    return attached
 
 
 def game_from_row(row: dict) -> PlayerGameLogGame:
@@ -281,6 +291,10 @@ class NbaPlayerService:
         season = espn_season_string(settings.season_id)
         rows = await self.db_service.get_player_box_logs(espn_id, season)
         games = [game_from_row(row) for row in rows]
+        try:
+            games = apply_fantasy(games, await fantasy_nights_for(espn_id, [game.game_date for game in games]))
+        except Exception as exc:
+            logger.warning(f"Game log fantasy context for {espn_id}: {type(exc).__name__}: {exc}")
         dates = sorted({game.game_date for game in games})
         night_rows = await self.db_service.get_night_lines(season, dates)
         try:
