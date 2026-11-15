@@ -9,8 +9,11 @@ from typing import Mapping, Optional
 
 from app.models import RankMover, TeamRankChange
 from app.utils.category_storage import TOTAL_KEY
+from app.utils.constants import DERIVED_CATEGORIES
 
 Points = Mapping[int, Mapping[str, Optional[float]]]
+# {team_id: {category: season-to-date raw total}}, e.g. {1: {'PTS': 4812.0}}.
+Stats = Mapping[int, Mapping[str, Optional[float]]]
 
 
 def places(points: Points) -> dict[int, int]:
@@ -39,9 +42,26 @@ def movers_between(before: Points, after: Points, names: Mapping[int, str]) -> l
     return movers
 
 
+def stat_deltas(before: Optional[Mapping[str, Optional[float]]],
+                after: Optional[Mapping[str, Optional[float]]]) -> dict[str, float]:
+    """How much of each counting stat a team added between two raw totals.
+    Ratio categories (FG%, FT%, ...) are left out: a shift of 0.002 is not
+    something a "+n" can say."""
+    if not before or not after:
+        return {}
+    return {
+        category: round(float(value) - float(before[category]), 2)
+        for category, value in after.items()
+        if category not in DERIVED_CATEGORIES and value is not None and before.get(category) is not None
+    }
+
+
 def changes_between(before: Points, after: Points, names: Mapping[int, str],
-                    gp_before: Mapping[int, int], gp_after: Mapping[int, int]) -> list[TeamRankChange]:
-    """Each team's move in places, points per category and in total, and games played."""
+                    gp_before: Mapping[int, int], gp_after: Mapping[int, int],
+                    stats_before: Optional[Stats] = None,
+                    stats_after: Optional[Stats] = None) -> list[TeamRankChange]:
+    """Each team's move in places, points per category and in total, and games
+    played; with raw totals given (totals mode), the counting stats it added."""
     place_before, place_now = places(before), places(after)
     teams: list[TeamRankChange] = []
     for team_id, latest in after.items():
@@ -64,6 +84,7 @@ def changes_between(before: Points, after: Points, names: Mapping[int, str],
             total_delta=total_delta,
             gp_delta=None if gp_was is None or gp_now is None else gp_now - gp_was,
             categories=deltas,
+            stat_deltas=stat_deltas((stats_before or {}).get(team_id), (stats_after or {}).get(team_id)),
         ))
     teams.sort(key=lambda t: t.team_id)
     return teams

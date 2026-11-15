@@ -50,6 +50,17 @@ class TestRankChanges:
         changes = tc.rank_changes_between(OFFICIAL, OFFICIAL, CATS, period=24)
         assert all(t.total_delta == 0 and t.gp_delta == 0 and t.rank_delta == 0 for t in changes.teams)
 
+    def test_raw_totals_give_the_counting_stats_added_tonight(self):
+        official = pd.DataFrame([{'team_id': 1, 'team_name': 'Alpha', 'GP': 100, 'PTS': 4700.0, 'REB': 1200.0, 'FG%': 0.47}])
+        live = pd.DataFrame([{'team_id': 1, 'team_name': 'Alpha', 'GP': 102, 'PTS': 4761.0, 'REB': 1222.0, 'FG%': 0.48}])
+        changes = tc.rank_changes_between(OFFICIAL, LIVE, CATS + ['FG%'], 24, official, live)
+        alpha = next(t for t in changes.teams if t.team_id == 1)
+        assert alpha.stat_deltas == {'PTS': 61.0, 'REB': 22.0}
+
+    def test_no_raw_totals_no_stat_deltas(self):
+        changes = tc.rank_changes_between(OFFICIAL, LIVE, CATS, period=24)
+        assert all(t.stat_deltas == {} for t in changes.teams)
+
     def test_a_category_missing_from_one_frame_is_skipped(self):
         changes = tc.rank_changes_between(OFFICIAL, LIVE.drop(columns=['REB']), CATS, period=24)
         assert all('REB' not in t.categories for t in changes.teams)

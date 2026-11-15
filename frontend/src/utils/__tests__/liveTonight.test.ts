@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveBlock } from '../live'
 import {
-  changedTile, liveRaceNote, liveRangeNote, moversLegend, moversSubtitle, tonightGpPlus, topTeamsMeta,
+  changedTile, liveRaceNote, liveRangeNote, moversLegend, moversSubtitle, standingsMoversLegend, tonightGpPlus, topTeamsMeta,
   liveRaceSeries, LIVE_KEY_SUFFIX,
 } from '../liveTonight'
 
@@ -11,6 +11,21 @@ const block = (over: Partial<LiveBlock> = {}): LiveBlock => ({
 })
 const FINAL = block({ games_live: 0, games_final: 4 })
 const IDLE = block({ active: false, as_of: null, games_live: 0, games_final: 0 })
+
+describe('standingsMoversLegend (Standings: ▲/▼ are places, grey +n is the stat added)', () => {
+  it('says places, Total in roto points, and adds the grey +n only for Totals', () => {
+    expect(standingsMoversLegend(undefined, false)).toBe(
+      '▲/▼ = places moved since last night (Total: roto points), GP + = games played last night.')
+    expect(standingsMoversLegend(IDLE, true)).toBe(
+      '▲/▼ = places moved since last night (Total: roto points), GP + = games played last night. Grey +n = stat added last night.')
+  })
+  it('speaks of tonight while live and once final', () => {
+    expect(standingsMoversLegend(block(), true)).toBe(
+      '▲/▼ = places moved tonight so far (Total: roto points), GP + = games counted tonight. Grey +n = stat added tonight so far.')
+    expect(standingsMoversLegend(FINAL, false)).toBe(
+      '▲/▼ = places moved tonight (Total: roto points), GP + = games played tonight.')
+  })
+})
 
 describe('moversLegend (Rankings ▲/▼ meaning)', () => {
   it('is last night with the flag off, before tip-off and once official', () => {

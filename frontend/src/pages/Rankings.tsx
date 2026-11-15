@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
 import { useLiveQuery } from '../hooks/useLiveQuery'
 import { averagesNote } from '../utils/live'
-import { liveRangeNote, moversLegend } from '../utils/liveTonight'
+import { liveRangeNote, moversLegend, standingsMoversLegend } from '../utils/liveTonight'
 import LiveRangeNote from '../components/live/LiveRangeNote'
 import { useGetRankingsQuery, useGetLeagueSummaryQuery, useGetRankChangesQuery } from '../store/api/fantasyApi'
 import { usePersistedState } from '../hooks/usePersistedState'
@@ -46,6 +46,14 @@ const Delta = ({ value, showSame = false }: { value: number | null | undefined; 
   if (value > 0) return <span className={`${DELTA_CLASS} font-bold text-emerald-600 dark:text-emerald-400`}>▲{formatDelta(value)}</span>
   if (value < 0) return <span className={`${DELTA_CLASS} font-bold text-red-600 dark:text-red-400`}>▼{formatDelta(value)}</span>
   return showSame ? <span className={`${DELTA_CLASS} text-gray-400`}>–</span> : null
+}
+
+/** Raw stat added (Totals standings), grey like GP's "+n" so it never reads as a ▲/▼ move. Zero shows nothing. */
+const formatStatAdded = (n: number) => `${n > 0 ? '+' : '−'}${formatDelta(n)}`
+
+const StatAdded = ({ value }: { value: number | undefined }) => {
+  if (value == null || value === 0) return null
+  return <span className="ml-0.5 text-[10px] text-gray-500 dark:text-gray-400">{formatStatAdded(value)}</span>
 }
 
 /** Inline mover deltas for card layout (avoids overflow from absolute positioning). */
@@ -231,6 +239,12 @@ const Rankings = () => {
   ]
 
   const cellCtx: RankingsCellContext = { categoryKeys, isStandings, mode }
+  // Standings cells are raw stats: the ▲/▼ beside one is places moved in that
+  // category (a roto point is a place), and in Totals a grey "+n" is the stat
+  // added (PTS +118). Averages barely move, so no "+n" there.
+  const showStatAdded = isStandings && mode === 'totals'
+  // "4837 +125▼1" flows inline, so those columns take less padding to keep GP on screen.
+  const compactCategoryCells = showStatAdded && movesShown
 
   const titleWord = isStandings ? 'Standings' : 'Rankings'
   const modeLabel = mode === 'averages' ? 'Averages' : 'Totals'
@@ -245,7 +259,9 @@ const Rankings = () => {
   const liveNote = averagesNote(data?.live, mode)
   // A range that ends today: its live note replaces the "closest available data" one.
   const rangeNote = isDateRangeActive ? liveRangeNote(data?.live, data?.actual_start_date, data?.actual_end_date) : null
-  const legend = moversLegend(rankChanges?.live)
+  const legend = isStandings
+    ? standingsMoversLegend(rankChanges?.live, mode === 'totals')
+    : moversLegend(rankChanges?.live)
 
   const shareButton = (variant: 'onBlue' | 'neutral') => rankings.length > 0 && (
     <ShareCardButton
@@ -271,11 +287,11 @@ const Rankings = () => {
 
   if (mobile) {
     // Phone view: same state, data and controls, laid out for a phone.
-    const explainer = isStandings
+    const explainer = (isStandings
       ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
       : (showCards
         ? 'Each category shows the team\'s rank within that category. Use Sort below to reorder.'
-        : 'Each category cell shows the team\'s rank within that category. Tap column headers to sort.')
+        : 'Each category cell shows the team\'s rank within that category. Tap column headers to sort.'))
         + (hasMoves ? ` ${legend}` : '')
     return (
       <RankingsMobile
@@ -696,7 +712,8 @@ const Rankings = () => {
                     <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2">
                       {categoryKeys.map(catKey => {
                         const display = getRankingCellDisplay(teamRow, catKey, cellCtx)
-                        const catDelta = move && !isStandings ? move.categories[catKey] : undefined
+                        const catDelta = move ? move.categories[catKey] : undefined
+                        const statAdded = showStatAdded ? move?.stat_deltas?.[catKey] : undefined
                         return (
                           <div
                             key={catKey}
@@ -705,6 +722,7 @@ const Rankings = () => {
                             <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{catKey}</div>
                             <div className="inline-flex flex-wrap items-baseline text-xs font-medium text-gray-900 dark:text-gray-100">
                               {display}
+                              <StatAdded value={statAdded} />
                               {catDelta !== undefined && <InlineDelta value={catDelta} />}
                             </div>
                           </div>
@@ -727,6 +745,8 @@ const Rankings = () => {
                     className={`table-header ${
                       column.sortable ? 'cursor-pointer hover:bg-gray-100 transition-colors duration-150' : ''
                     } ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''} ${column.key === 'rank' ? 'px-3 sm:px-6' : ''} ${
+                      compactCategoryCells && categoryKeys.includes(column.key) ? 'sm:px-3' : ''
+                    } ${
                       column.key === 'team' ? 'px-3 sm:px-6 sticky left-0 z-20 bg-gray-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]' : ''
                     }`}
                     onClick={() => column.sortable && handleSort(column.key)}
@@ -769,10 +789,16 @@ const Rankings = () => {
                     const display = getRankingCellDisplay(team, column.key, cellCtx)
 
                     return (
-                      <td key={column.key} className={`table-cell font-medium ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''}`}>
+                      <td key={column.key} className={`table-cell font-medium ${column.key === 'gp' ? 'border-l-2 border-gray-300' : ''} ${compactCategoryCells && isCategoryColumn ? 'sm:px-3' : ''}`}>
                         <span className="relative">
                           {display}
-                          {move && isCategoryColumn && !isStandings && <Delta value={move.categories[column.key]} />}
+                          {move && isCategoryColumn && (
+                            // Totals standings: "+118▲1" is too wide to hang off the edge, so it flows inline.
+                            <span className={showStatAdded ? 'ml-0.5 whitespace-nowrap' : `${DELTA_CLASS} whitespace-nowrap`}>
+                              {showStatAdded && <StatAdded value={move.stat_deltas?.[column.key]} />}
+                              <InlineDelta value={move.categories[column.key]} />
+                            </span>
+                          )}
                           {move && column.key === 'total_points' && <Delta value={move.total_delta} showSame />}
                           {move && column.key === 'gp' && move.gp_delta != null && (
                             <span className={`${DELTA_CLASS} text-gray-500 dark:text-gray-400`}>+{move.gp_delta}</span>

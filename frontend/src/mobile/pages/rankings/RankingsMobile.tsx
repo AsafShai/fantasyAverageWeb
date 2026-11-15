@@ -18,9 +18,10 @@ type SortDir = 'asc' | 'desc'
  * `pages/Rankings.tsx` owns all state, URL sync and data; this only lays the
  * same controls and numbers out for a phone: Layout / Show / Values toggles,
  * a collapsible date range (From/To, Apply, Clear, Quick range), the movers
- * toggle (Rankings view only), the two summary tiles, and either a table with
- * "#rank team" pinned or one card per team. Standings view has no colored
- * deltas at all; Rankings view shows last night's ▲/▼.
+ * toggle, the two summary tiles, and either a table with "#rank team" pinned
+ * or one card per team. Both views show last night's rank, Total and GP moves
+ * and each category's ▲/▼ (places moved in it in Standings, where cells are
+ * raw stats); Totals standings add the grey stat added ("+118").
  */
 export interface RankingsMobileProps {
   title: string
@@ -79,12 +80,25 @@ export function RankingsMobile(p: RankingsMobileProps) {
   const navigate = useNavigate()
   const [rangeOpen, setRangeOpen] = useState(false)
   const isStandings = p.view === 'standings'
-  // Standings view stays plain: no ▲/▼, no "–", no "+n".
-  const moveOf = (teamId: number) => (isStandings ? undefined : p.movesByTeam.get(teamId))
+  const moveOf = (teamId: number) => p.movesByTeam.get(teamId)
+  // Totals standings also show the raw stat added (PTS +118) before the ▲/▼.
+  const statAdded = isStandings && p.mode === 'totals'
+  const categoryDelta = (teamId: number, k: string) => {
+    const m = moveOf(teamId)
+    if (!m) return null
+    const places = <Delta value={m.categories[k]} digits={1} />
+    if (!statAdded) return places
+    return (
+      <>
+        <Delta value={m.stat_deltas?.[k]} kind="stat" />
+        {places}
+      </>
+    )
+  }
   const openTeam = (t: RankingStats) => navigate(`/team/${t.team.team_id}`)
   // When moves are on screen every number gets a fixed-width slot for its
   // ▲/▼, so values (and ranks) stay in a straight column with or without one.
-  const slots = !isStandings && p.movesByTeam.size > 0
+  const slots = p.movesByTeam.size > 0
   const withDelta = (value: ReactNode, delta: ReactNode) =>
     slots ? (
       <span className="mr-rk-num">
@@ -153,7 +167,7 @@ export function RankingsMobile(p: RankingsMobileProps) {
       header: k,
       sortable: true,
       cell: (t) => (
-withDelta(p.cellDisplay(t, k), <Delta value={moveOf(t.team.team_id)?.categories[k]} digits={1} />)
+withDelta(p.cellDisplay(t, k), categoryDelta(t.team.team_id, k))
       ),
     })),
     {
@@ -238,7 +252,7 @@ withDelta(p.cellDisplay(t, 'gp'), <Delta value={moveOf(t.team.team_id)?.gp_delta
           </span>
           <span className="mr-caret" aria-hidden="true">{rangeOpen ? '▴' : '▾'}</span>
         </button>
-        {p.hasMoves && !isStandings && (
+        {p.hasMoves && (
           <Chip selected={p.showMoves} onClick={p.onToggleMoves}>
             <span aria-hidden="true">▲▼</span>
             {p.showMoves ? 'Hide movers' : 'Show movers'}
@@ -319,7 +333,7 @@ withDelta(p.cellDisplay(t, 'gp'), <Delta value={moveOf(t.team.team_id)?.gp_delta
           onSortChange={(s) => p.onSort(s.key)}
           isHighlighted={(t) => p.isMyTeam(t.team.team_id)}
           onRowClick={openTeam}
-          className={`mr-rk-table ${slots ? 'mr-rk-slots' : ''}`.trim()}
+          className={`mr-rk-table ${slots ? 'mr-rk-slots' : ''} ${slots && statAdded ? 'mr-rk-stat-slots' : ''}`.trim()}
         />
       ) : (
         <>
@@ -363,7 +377,15 @@ withDelta(p.cellDisplay(t, 'gp'), <Delta value={moveOf(t.team.team_id)?.gp_delta
                     {p.categoryKeys.map((k) => (
                       <div key={k} className="mr-rk-cg">
                         <span className="mr-rk-tl">{k}</span>
-                        {withDelta(<b>{p.cellDisplay(t, k)}</b>, <Delta value={m?.categories[k]} digits={1} />)}
+                        {isStandings && slots
+                          // Raw stats are wide ("46.7000%", "4837 +125▼1"): moves go under the value.
+                          ? (
+                            <span className="mr-rk-stack">
+                              <b>{p.cellDisplay(t, k)}</b>
+                              <span className="mr-rk-stack-d">{categoryDelta(t.team.team_id, k)}</span>
+                            </span>
+                          )
+                          : withDelta(<b>{p.cellDisplay(t, k)}</b>, categoryDelta(t.team.team_id, k))}
                       </div>
                     ))}
                   </div>
