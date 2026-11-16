@@ -384,3 +384,13 @@ def sample_stats_calculator_averages_df():
         'PTS': [118.0, 122.0, 115.0],
         'GP': [82, 82, 82]
     })
+
+
+@pytest.fixture(autouse=True)
+def _no_roster_stints_network():
+    """The nightly catch-up and startup rebuild roster stints, which downloads
+    the NBA movement feed and ESPN rosters. Tests of those flows don't need it."""
+    from app.services.roster_stints.service import RosterStintsService
+    with patch.object(RosterStintsService, "rebuild", AsyncMock()), \
+         patch.object(RosterStintsService, "rebuild_if_empty", AsyncMock()):
+        yield

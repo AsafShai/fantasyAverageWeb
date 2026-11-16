@@ -4,7 +4,7 @@ import {
   FF_DRAFT_REPORT,
   FF_DRAFT_PAGES,
 } from '../config/featureFlags'
-import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
+import { FF_LEAGUE_ACTIVITY, FF_WITH_WITHOUT } from '../config/featureFlags'
 
 export interface SearchablePage {
   label: string
@@ -57,4 +57,5 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Box Scores', path: '/box-scores', icon: '📋', group: 'NBA' },
   { label: 'Season Schedule', path: '/schedule', icon: '🗓️', group: 'NBA' },
   { label: 'Injuries', path: '/injuries', icon: '🩺', group: 'NBA' },
+  ...(FF_WITH_WITHOUT ? [{ label: 'With / Without', path: '/with-without', icon: '🔀', group: 'NBA' }] : []),
 ]
