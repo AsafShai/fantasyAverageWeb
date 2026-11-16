@@ -1,4 +1,6 @@
 /* Player Rankings · phone redesign (page-local; shared filter styles in ../../ui/filters.css) */
+.mr-pr-teams { max-height: 220px; overflow-y: auto; border: 1px solid var(--mr-border); border-radius: 10px; }
+.mr-pr-teams .mr-opt { display: flex; align-items: center; gap: 8px; }
 .mr-pr-tight { margin: -6px 0 0; }
 .mr-link.mr-pr-inline { min-height: 0; font-size: 12px; display: inline; }
 

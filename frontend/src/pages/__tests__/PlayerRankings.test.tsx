@@ -5,10 +5,10 @@ import type { Player } from '../../types/api';
 import { renderWithProviders } from '../../test/helpers';
 import PlayerRankings from '../PlayerRankings';
 
-function player(name: string, minutes: number, gp: number, pts: number): Player {
+function player(name: string, minutes: number, gp: number, pts: number, proTeam = 'LAL'): Player {
   return {
     player_name: name,
-    pro_team: 'LAL',
+    pro_team: proTeam,
     positions: ['PG'],
     stats: {
       pts, reb: 5 * gp, ast: 5 * gp, stl: gp, blk: gp, three_pm: 2 * gp,
@@ -40,7 +40,7 @@ describe('PlayerRankings page', () => {
         const url = requestUrl(input);
         if (url.includes('/players/')) {
           return jsonResponse({
-            players: [player('Alpha Guard', 700, 20, 600), player('Beta Wing', 300, 10, 150)],
+            players: [player('Alpha Guard', 700, 20, 600), player('Beta Wing', 300, 10, 150, 'BOS')],
             total_count: 2, page: 1, limit: 1200, has_more: false,
           });
         }
@@ -115,5 +115,20 @@ describe('PlayerRankings page', () => {
     await waitFor(() => expect(screen.getByText(/No players match “zzz”/)).toBeInTheDocument());
     await user.click(screen.getByText('Clear search', { selector: 'button' }));
     await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument());
+  });
+
+  it('filters to the NBA teams you search for, and keeps overall rank', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlayerRankings />);
+    await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'All teams' }));
+    await user.type(screen.getByRole('searchbox', { name: 'Search NBA teams' }), 'celtics');
+    await user.click(screen.getByRole('option', { name: /Boston Celtics/ }));
+
+    await waitFor(() => expect(screen.queryByText('Alpha Guard')).not.toBeInTheDocument());
+    const row = screen.getByText('Beta Wing').closest('tr')!;
+    expect(within(row).getAllByRole('cell')[0]).toHaveTextContent('2');
+    expect(screen.getByRole('button', { name: /BOS · Boston Celtics/ })).toBeInTheDocument();
   });
 });

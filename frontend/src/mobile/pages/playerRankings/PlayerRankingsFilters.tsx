@@ -1,5 +1,6 @@
 import type { Team } from '../../../types/api'
 import { FantasyTeamFilterChips } from '../../../components/playerRankings/FantasyTeamFilterChips'
+import { NbaTeamFilter } from '../../../components/playerRankings/NbaTeamFilter'
 import { LIMITS, POSITIONS, type RankingsFilters } from './filters'
 import { Chip, ChipRow, FilterGroup, FiltersSheet, PositionFilter } from '../../ui'
 
@@ -13,13 +14,14 @@ interface Props {
 }
 
 /**
- * Filters sheet: exactly today's Player Rankings filters (Position, Fantasy
- * team, Show, Min GP, Min MPG). Filters apply as they change; "Show results"
- * closes the sheet.
+ * Filters sheet: today's Player Rankings filters, plus an NBA-team search
+ * (30 teams, so they are not chips). Filters apply as they change; "Show
+ * results" closes the sheet.
  */
 export function PlayerRankingsFilters({ open, onClose, filters: f, teams, myTeamId, isMyTeam }: Props) {
   const reset = () => {
     f.setPositions([])
+    f.setNbaTeams([])
     f.setFantasyTeam(null)
     f.setDisplayLimit(null)
     f.setMinGp(0)
@@ -28,6 +30,9 @@ export function PlayerRankingsFilters({ open, onClose, filters: f, teams, myTeam
   return (
     <FiltersSheet open={open} onClose={onClose} onReset={reset}>
       <PositionFilter options={POSITIONS} selected={f.positions} onChange={f.setPositions} />
+      <FilterGroup label="NBA team">
+        <NbaTeamFilter variant="inline" selected={f.nbaTeams} onChange={f.setNbaTeams} />
+      </FilterGroup>
       <FilterGroup label="Fantasy team">
         <FantasyTeamFilterChips
           wrap
