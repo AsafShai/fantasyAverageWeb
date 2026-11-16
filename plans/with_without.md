@@ -23,7 +23,7 @@ Current season only. Nothing about past seasons is stored or shown.
 | Z Δ | The per-game line of each group, scored with `scoreAgainstPool` against the default Player Rankings pool, equal weights over the 8 categories. Z Δ = without total − with total. |
 | Small samples | Tag "small" under 3 "without" games. No hiding, no re-sorting. |
 | Noise check | Not in v1. Every value shows the same way. |
-| Trade Analyzer | Opens with both players pre-filled (new URL params on the Trade page). |
+| Trade Analyzer | Opens with the player pre-filled, reusing the existing player-page preset (`tradeLinkForPlayer`): your team vs. his owner, or vs. free agents. |
 | Route / flag | `/with-without` behind `VITE_FF_WITH_WITHOUT`, like League Activity. |
 | Injury-report PDFs | Not a roster source. Only the existing "OUT today" pill and filter use them. |
 
@@ -212,8 +212,9 @@ Mobile follows the mobile artboard, reusing the existing mobile kit.
 
 ### 3.3 Trade page pre-fill
 
-Add `?get=<playerId>&give=<playerId>` support to `pages/Trade`. It fills
-both sides and selects the owning teams. Unknown IDs are ignored.
+Reuses `tradeLinkForPlayer` (the player page's "Trade Analyzer" button): your
+team on one side, his owner (or "vs Free Agents") on the other, him already
+picked. No new URL params.
 
 ### 3.4 Wiring
 

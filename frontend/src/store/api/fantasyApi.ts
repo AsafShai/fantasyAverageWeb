@@ -5,6 +5,7 @@ import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minig
 import type { EstimatorResults } from '../../types/estimator';
 import type { LeagueActivity, LatestMoves, PlayerLeagueHistory } from '../../types/activity';
 import type { BoxScoreboard, GameBoxScore, NbaSeasonWindow, SlateValues } from '../../types/boxScore';
+import type { WithWithoutTeams, WithWithoutTeamSeason } from '../../types/withWithout';
 
 type AllPlayersArgs = { page?: number; limit?: number; time_period?: TimePeriod; start?: string; end?: string };
 
@@ -127,6 +128,14 @@ export const fantasyApi = createApi({
     getBoxSlateValues: builder.query<SlateValues, string>({
       query: (date) => ({ url: '/nba/scoreboard/values', params: { date } }),
       keepUnusedDataFor: 120,
+    }),
+    getWithWithoutTeams: builder.query<WithWithoutTeams, void>({
+      query: () => '/nba/with-without/teams',
+      keepUnusedDataFor: 600,
+    }),
+    getWithWithoutTeam: builder.query<WithWithoutTeamSeason, number>({
+      query: (teamId) => `/nba/with-without/${teamId}`,
+      keepUnusedDataFor: 600,
     }),
     getGameBoxScore: builder.query<GameBoxScore, string>({
       query: (gameId) => `/nba/games/${gameId}/boxscore`,
@@ -337,6 +346,8 @@ export const fantasyApi = createApi({
 });
 
 export const {
+  useGetWithWithoutTeamsQuery,
+  useGetWithWithoutTeamQuery,
   useGetLeagueActivityQuery,
   useGetLatestMovesQuery,
   useGetPlayerLeagueHistoryQuery,
