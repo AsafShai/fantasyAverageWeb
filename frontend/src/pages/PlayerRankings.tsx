@@ -5,6 +5,8 @@ import { useGetAllPlayersQuery, useGetLatestMovesQuery, useGetTeamsListQuery } f
 import { useMyTeam } from '../context/MyTeamContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { FantasyTeamFilterChips } from '../components/playerRankings/FantasyTeamFilterChips'
+import { NbaTeamFilter } from '../components/playerRankings/NbaTeamFilter'
+import { matchesNbaTeam, parseNbaTeams } from '../components/playerRankings/nbaTeams'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import TimePeriodSelector from '../components/TimePeriodSelector'
@@ -115,6 +117,11 @@ export default function PlayerRankings() {
   const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
   // Phone picks several positions; desktop keeps its single select (separate state so each stays as it was).
   const [positionsPicked, setPositionsPicked] = usePersistedState<string[]>('playerRankings.positions', [])
+  const [nbaTeamsRaw, setNbaTeams] = usePersistedState<string[]>('playerRankings.nbaTeams', [])
+  const nbaTeams = useMemo(() => parseNbaTeams(nbaTeamsRaw), [nbaTeamsRaw])
+  useEffect(() => {
+    if (nbaTeams.length !== nbaTeamsRaw.length) setNbaTeams(nbaTeams)
+  }, [nbaTeams, nbaTeamsRaw, setNbaTeams])
   const [fantasyTeamRaw, setFantasyTeam] = usePersistedState<FantasyTeamFilter>('playerRankings.fantasyTeam', null)
   const fantasyTeam = useMemo(() => parseFantasyTeamFilter(fantasyTeamRaw), [fantasyTeamRaw])
   useEffect(() => {
@@ -162,6 +169,7 @@ export default function PlayerRankings() {
     setMinMin(0)
     setPosition(null)
     setPositionsPicked([])
+    setNbaTeams([])
     setFantasyTeam(null)
     setWeights({ ...DEFAULT_WEIGHTS })
     setDisplayLimit(null)
@@ -217,13 +225,14 @@ export default function PlayerRankings() {
     // rankedPlayers is already sorted by totalZ descending, so this keeps
     // "top N by rank" regardless of which column is currently sorted below.
     // The row number is the totalZ rank, so it stays with the player whichever
-    // column the table is sorted by. It's taken before the fantasy-team filter
-    // so a team's players keep their rank among the whole pool.
+    // column the table is sorted by. It's taken before the fantasy-team and
+    // NBA-team filters so a filtered player keeps his rank among the whole pool.
     // Search also runs after ranking, so a match keeps its overall rank, and it
     // ignores the Top-N limit — searching should find anyone in the pool.
     const withRank = filtered
       .map((ranked, idx) => ({ ranked, rank: idx + 1 }))
       .filter(r => matchesFantasyTeam(r.ranked.player.team_id, fantasyTeam))
+      .filter(r => matchesNbaTeam(r.ranked.player.pro_team, nbaTeams))
       .filter(r => !searchQuery || normalizePlayerName(r.ranked.player.player_name).includes(searchQuery))
     const limited = displayLimit === null || searchQuery ? withRank : withRank.slice(0, displayLimit)
     return limited.sort((a, b) => {
@@ -232,7 +241,7 @@ export default function PlayerRankings() {
       const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, positionsPicked, mobile, fantasyTeam, displayMode, displayLimit, searchQuery])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, positionsPicked, mobile, fantasyTeam, nbaTeams, displayMode, displayLimit, searchQuery])
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -272,7 +281,7 @@ export default function PlayerRankings() {
         onCustomRange={setCustomRange}
         actualStart={playersData?.actual_start}
         actualEnd={playersData?.actual_end}
-        filters={{ positions: positionsPicked, setPositions: setPositionsPicked, fantasyTeam, setFantasyTeam, displayLimit, setDisplayLimit, minGp, setMinGp, minMin, setMinMin }}
+        filters={{ positions: positionsPicked, setPositions: setPositionsPicked, nbaTeams, setNbaTeams, fantasyTeam, setFantasyTeam, displayLimit, setDisplayLimit, minGp, setMinGp, minMin, setMinMin }}
         teams={teams ?? []}
         myTeamId={myTeamId}
         isMyTeam={isMyTeam}
@@ -373,6 +382,11 @@ export default function PlayerRankings() {
                 onChange={e => setMinMin(Math.max(0, Number(e.target.value)))}
                 className="w-24 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">NBA team</label>
+              <NbaTeamFilter selected={nbaTeams} onChange={setNbaTeams} />
             </div>
 
             <div>

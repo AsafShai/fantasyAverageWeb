@@ -7,11 +7,11 @@ import PlayerRankings from '../../../../pages/PlayerRankings'
 
 vi.mock('../../../flag', () => ({ useMobileRedesign: () => true }))
 
-function player(name: string, positions: string[], teamId: number, minutes: number, gp: number, pts: number, id: number): Player {
+function player(name: string, positions: string[], teamId: number, minutes: number, gp: number, pts: number, id: number, proTeam = 'LAL'): Player {
   return {
     player_name: name,
     player_id: id,
-    pro_team: 'LAL',
+    pro_team: proTeam,
     positions,
     stats: {
       pts, reb: 5 * gp, ast: 5 * gp, stl: gp, blk: gp, three_pm: 2 * gp,
@@ -66,7 +66,7 @@ describe('Player Rankings · phone redesign', () => {
 
     await user.click(screen.getByRole('button', { name: /Filters/ }))
     const sheet = screen.getByRole('dialog', { name: 'Filters' })
-    for (const group of ['Position', 'Fantasy team', 'Show', 'Min GP', 'Min MPG']) expect(within(sheet).getAllByRole('group', { name: group }).length).toBeGreaterThan(0)
+    for (const group of ['Position', 'NBA team', 'Fantasy team', 'Show', 'Min GP', 'Min MPG']) expect(within(sheet).getAllByRole('group', { name: group }).length).toBeGreaterThan(0)
     expect(within(sheet).getByRole('spinbutton', { name: 'Min GP' })).toBeInTheDocument()
     expect(within(sheet).getByRole('spinbutton', { name: 'Min MPG' })).toBeInTheDocument()
 
@@ -80,6 +80,40 @@ describe('Player Rankings · phone redesign', () => {
 
     await user.click(screen.getByRole('button', { name: 'Remove filter Free Agents / Waivers' }))
     await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument())
+  })
+
+  it('NBA team search keeps one club and its chip clears just that club', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = urlOf(input)
+      if (url.includes('/players/')) {
+        return json({
+          players: [
+            player('Alpha Guard', ['PG'], 1, 700, 20, 600, 11, 'LAL'),
+            player('Beta Wing', ['SF'], 0, 300, 10, 150, 12, 'BOS'),
+          ],
+          total_count: 2, page: 1, limit: 1200, has_more: false,
+        })
+      }
+      if (url.includes('/teams/')) return json([])
+      if (url.includes('/league/summary')) return json({ season_start: '2025-10-21' })
+      return new Response('not found', { status: 404 })
+    }))
+    renderWithProviders(<PlayerRankings />, { route: '/player-rankings' })
+    await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Filters/ }))
+    const sheet = screen.getByRole('dialog', { name: 'Filters' })
+    await user.type(within(sheet).getByRole('searchbox', { name: 'Search NBA teams' }), 'sixers')
+    expect(within(sheet).getByRole('option', { name: /Philadelphia 76ers/ })).toBeInTheDocument()
+    expect(within(sheet).getAllByRole('option')).toHaveLength(1)
+    await user.clear(within(sheet).getByRole('searchbox', { name: 'Search NBA teams' }))
+    await user.type(within(sheet).getByRole('searchbox', { name: 'Search NBA teams' }), 'lakers')
+    await user.click(within(sheet).getByRole('option', { name: /Los Angeles Lakers/ }))
+    await user.click(within(sheet).getByRole('button', { name: 'Show results' }))
+    await waitFor(() => expect(screen.queryByText('Beta Wing')).not.toBeInTheDocument())
+    expect(screen.getByText('Alpha Guard')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove filter LAL' }))
+    await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument())
   })
 
   it('punting a category greys its columns and Display mode switches MPG to MIN', async () => {

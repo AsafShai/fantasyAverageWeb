@@ -13,6 +13,8 @@ export type FantasyTeamFilter = null | 'rostered' | 0 | number[]
 export interface RankingsFilters {
   positions: string[]
   setPositions: (v: string[]) => void
+  nbaTeams: string[]
+  setNbaTeams: (v: string[]) => void
   fantasyTeam: FantasyTeamFilter
   setFantasyTeam: (v: FantasyTeamFilter) => void
   displayLimit: number | null
@@ -90,6 +92,13 @@ export function activeFilterChips(f: RankingsFilters, teams: Team[]) {
   const out: { key: string; label: string; clear: () => void }[] = []
   for (const pos of f.positions) {
     out.push({ key: `pos-${pos}`, label: pos, clear: () => f.setPositions(f.positions.filter((p) => p !== pos)) })
+  }
+  for (const abbr of f.nbaTeams) {
+    out.push({
+      key: `nba-${abbr}`,
+      label: abbr,
+      clear: () => f.setNbaTeams(f.nbaTeams.filter((team) => team !== abbr)),
+    })
   }
   if (isFantasyTeamMulti(f.fantasyTeam)) {
     for (const id of f.fantasyTeam) {
