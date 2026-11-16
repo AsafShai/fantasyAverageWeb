@@ -256,7 +256,9 @@ async def root(request: Request):
 
 @app.get("/health")
 @limiter.limit("60/minute")
-async def health_check(request: Request, verbose: int = 0):
+async def health_check(request: Request, verbose: int = 0, probe: str = ""):
+    if probe == "nba_movement":
+        return await health_service.probe_nba_movement()
     return await health_service.collect(verbose=bool(verbose))
 
 load_dotenv()
