@@ -105,6 +105,7 @@ export function getNavGroups(): NavGroupDef[] {
       items: [
         { path: '/players', label: 'Players', icon: '⛹️' },
         { path: '/player-rankings', label: 'Player Rankings', icon: '📋' },
+        ...(FF_WITH_WITHOUT ? [{ path: '/with-without', label: 'With / Without', icon: '🔀' }] : []),
       ],
     },
     ...(FF_DRAFT_PAGES ? [DRAFT_NAV_GROUP] : []),
@@ -149,7 +150,6 @@ export function getNavGroups(): NavGroupDef[] {
         { path: '/box-scores', label: 'Box Scores', icon: '📋' },
         { path: '/schedule', label: 'Season Schedule', icon: '🗓️' },
         { path: '/injuries', label: 'Injuries', icon: '🩺' },
-        ...(FF_WITH_WITHOUT ? [{ path: '/with-without', label: 'With / Without', icon: '🔀' }] : []),
       ],
     },
   ]
