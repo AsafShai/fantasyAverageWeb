@@ -151,7 +151,7 @@ function TeamMenu({ s }: { s: WithWithoutState }) {
         <span aria-hidden="true" className="text-gray-400">▾</span>
       </button>
       {open && (
-        <div className="absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800">
+        <div className="absolute top-full z-20 mt-1 w-96 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800">
           <input
             autoFocus
             aria-label="Search NBA teams"
