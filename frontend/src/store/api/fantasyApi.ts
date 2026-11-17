@@ -16,10 +16,25 @@ function allPlayersParams({ page = 1, limit = 500, time_period = 'season', start
   return { page, limit, time_period, ...(start ? { start } : {}), ...(end ? { end } : {}) };
 }
 
+function readMyTeamId(): number | null {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem('fw:myTeam.id') ?? 'null');
+    return Number.isInteger(value) ? (value as number) : null;
+  } catch {
+    return null;
+  }
+}
+
 export const fantasyApi = createApi({
   reducerPath: 'fantasyApi',
   baseQuery: fetchBaseQuery({
     baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+    prepareHeaders: (headers) => {
+      // Lets the backend logs attribute usage to a fantasy team (see timing_middleware).
+      const myTeamId = readMyTeamId();
+      if (myTeamId != null) headers.set('X-My-Team', String(myTeamId));
+      return headers;
+    },
   }),
   tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'MinigameLeaderboard'],
   endpoints: (builder) => ({

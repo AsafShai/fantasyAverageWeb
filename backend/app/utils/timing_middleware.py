@@ -18,6 +18,8 @@ from app.utils.request_context import (
 logger = logging.getLogger(__name__)
 
 SLOW_REQUEST_MS = 1000.0
+# Sent by the frontend with the user's chosen "My Team"; logged for usage stats.
+MY_TEAM_HEADER = "X-My-Team"
 _WINDOW_S = 3600.0
 
 # Polled by the Docker healthcheck / uptime probes every few seconds; logging
@@ -51,6 +53,9 @@ def _describe(status: int | str, elapsed_ms: float, request: Request, calls: Ups
     upstream = calls.summary()
     if upstream:
         parts.append(upstream)
+    team = request.headers.get(MY_TEAM_HEADER, "")
+    if team.isdigit() and len(team) <= 4:
+        parts.append(f"team={team}")
     parts.append(f"ip={get_remote_address(request)}")
     return " ".join(parts)
 

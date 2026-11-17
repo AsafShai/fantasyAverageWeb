@@ -158,3 +158,14 @@ def test_unhandled_exception_is_logged_once_with_traceback(caplog):
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR and r.name.startswith("app.")]
     assert len(errors) == 1
     assert errors[0].exc_info is not None
+
+
+def test_my_team_header_is_logged_only_when_numeric(caplog):
+    client = TestClient(_app_with_delay(0))
+    with caplog.at_level(logging.INFO, logger="app.utils.timing_middleware"):
+        client.get("/slow", headers={"X-My-Team": "7"})
+        client.get("/slow", headers={"X-My-Team": "7 ip=1.2.3.4"})
+        client.get("/slow")
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("-> 200")]
+    assert sum("team=7 ip=" in line for line in lines) == 1
+    assert not any("team=7 ip=1.2.3.4" in line for line in lines)
