@@ -17,11 +17,25 @@ interface ShareCardProps extends ShareCardTheme {
   wide?: boolean
   /** Wider still, for tables that carry a change next to each number. */
   extraWide?: boolean
+  /** Round headshot shown beside the title. */
+  photo?: string | null
+  /** Short label on the right of the title, e.g. a fantasy team or "FA". */
+  badge?: string | null
   children: ReactNode
 }
 
 /** Frame every share card uses: branded header, body, optional footer. */
-export const ShareCard = ({ dark, kicker, title, subtitle, stamp, footer, wide = false, extraWide = false, children }: ShareCardProps) => (
+export const ShareCard = ({ dark, kicker, title, subtitle, stamp, footer, wide = false, extraWide = false, photo, badge, children }: ShareCardProps) => {
+  const heading = (
+    <>
+      <div className="share-card__nameline">
+        <div className="share-card__title">{title}</div>
+        {badge && <span className="share-card__badge">{badge}</span>}
+      </div>
+      <div className="share-card__subtitle">{subtitle}</div>
+    </>
+  )
+  return (
   <div className={`share-card${wide ? ' share-card--wide' : ''}${extraWide ? ' share-card--xwide' : ''}${dark ? ' share-card--dark' : ''}`}>
     <div className="share-card__head">
       <div className="share-card__brand">
@@ -30,10 +44,15 @@ export const ShareCard = ({ dark, kicker, title, subtitle, stamp, footer, wide =
           ? <span className={`share-card__stamp share-card__stamp--${stamp.tone}`}>{stamp.label}</span>
           : <span>{kicker}</span>}
       </div>
-      <div className="share-card__title">{title}</div>
-      <div className="share-card__subtitle">{subtitle}</div>
+      {photo ? (
+        <div className="share-card__who">
+          <img className="share-card__avatar" src={photo} alt="" />
+          <div className="share-card__id">{heading}</div>
+        </div>
+      ) : heading}
     </div>
     {children}
     {footer && <div className="share-card__foot">{footer}</div>}
   </div>
-)
+  )
+}

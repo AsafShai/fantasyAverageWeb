@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
+import { WithWithoutShareButton, withoutModeLabel } from '../../components/share/WithWithoutShareCard'
 import { Segmented } from '../ui'
 import { formatDelta, formatStat, formatZ, gameLogLabel, type GameKind, type TeammateRow } from '../../utils/withWithout'
 import { Z_SORTS, type TeamOption, type WithWithoutState } from '../../pages/withWithout/useWithWithout'
@@ -276,10 +277,22 @@ function Row({ s, r }: { s: WithWithoutState; r: TeammateRow }) {
 
       {open && <OpenPanel s={s} r={r} />}
 
-      <button type="button" className="mr-ww-more" aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} details for ${r.player.name}`} onClick={() => s.toggleRow(id)}>
-        {open ? 'Hide' : 'Details'}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d={open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} /></svg>
-      </button>
+      <div className="mr-ww-end">
+        {s.split && s.season && (
+          <WithWithoutShareButton
+            row={r}
+            columns={s.columns}
+            reverse={s.reverse}
+            names={s.split.names}
+            modeLabel={withoutModeLabel(s.picked.length, s.mode)}
+            teamAbbr={s.season.abbr}
+          />
+        )}
+        <button type="button" className="mr-ww-more" aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} details for ${r.player.name}`} onClick={() => s.toggleRow(id)}>
+          {open ? 'Hide' : 'Details'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d={open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} /></svg>
+        </button>
+      </div>
     </li>
   )
 }
@@ -332,9 +345,22 @@ function PhoneTable({ s }: { s: WithWithoutState }) {
                   <td className={s.sort === 'zd' ? 'on' : ''}><ZPill z={r.zDelta} /></td>
                   {s.columns.map(c => <td key={c} className={s.sort === c ? 'on' : ''}>{cellNode(s, r, c)}</td>)}
                   <td>
-                    <button type="button" className="mr-ww-link" aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} details for ${r.player.name}`} onClick={() => s.toggleRow(id)}>
-                      {open ? 'Hide' : 'Details'}
-                    </button>
+                    <div className="mr-ww-end">
+                      {s.split && s.season && (
+                        <WithWithoutShareButton
+                          sheet
+                          row={r}
+                          columns={s.columns}
+                          reverse={s.reverse}
+                          names={s.split.names}
+                          modeLabel={withoutModeLabel(s.picked.length, s.mode)}
+                          teamAbbr={s.season.abbr}
+                        />
+                      )}
+                      <button type="button" className="mr-ww-link" aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} details for ${r.player.name}`} onClick={() => s.toggleRow(id)}>
+                        {open ? 'Hide' : 'Details'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 {open && (
