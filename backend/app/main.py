@@ -27,6 +27,7 @@ from app.routes.feature_store import router as feature_store_router
 from app.routes.trends import router as trends_router
 from app.routes.schedule import router as schedule_router
 from app.routes.box_scores import router as box_scores_router
+from app.routes.with_without import router as with_without_router
 from app.routes.adp import router as adp_router
 from app.routes.surprises import router as surprises_router
 from dotenv import load_dotenv
@@ -46,6 +47,7 @@ from app.services import model_nightly_scheduler
 from app.services import nba_players_scheduler
 from app.services import adp_snapshot_scheduler
 from app.services import health_service
+from app.services.roster_stints.service import RosterStintsService
 from app.utils.timing_middleware import add_timing_middleware
 from app.utils.request_context import ContextFilter, DropDuplicateAsgiTraceback, HttpxTallyFilter, log_format
 from app.utils.http_cache import HttpCacheMiddleware
@@ -137,6 +139,8 @@ async def lifespan(app: FastAPI):
     background_tasks.spawn(estimator_scheduler.start_scheduler(), name="estimator-scheduler")
     if settings.model_nightly_enabled:
         background_tasks.spawn(model_nightly_scheduler.start_scheduler(), name="model-nightly-scheduler")
+        # First deploy, or a new season: build stints now rather than tomorrow morning.
+        background_tasks.spawn(RosterStintsService().rebuild_if_empty(), name="roster-stints-initial")
     else:
         logger.info("Model nightly scheduler disabled via MODEL_NIGHTLY_ENABLED=false")
     if settings.nba_players_refresh_enabled:
@@ -244,6 +248,7 @@ app.include_router(feature_store_router, prefix='/api/feature-store', tags=['Fea
 app.include_router(trends_router, prefix='/api/trends', tags=['Trends'])
 app.include_router(schedule_router, prefix='/api/nba', tags=['NBA Schedule'])
 app.include_router(box_scores_router, prefix='/api/nba', tags=['NBA Box Scores'])
+app.include_router(with_without_router, prefix='/api/nba/with-without', tags=['With / Without'])
 app.include_router(adp_router, prefix='/api/adp', tags=['ADP'])
 app.include_router(surprises_router, prefix='/api/surprises', tags=['Surprises'])
 
@@ -256,9 +261,7 @@ async def root(request: Request):
 
 @app.get("/health")
 @limiter.limit("60/minute")
-async def health_check(request: Request, verbose: int = 0, probe: str = ""):
-    if probe == "nba_movement":
-        return await health_service.probe_nba_movement()
+async def health_check(request: Request, verbose: int = 0):
     return await health_service.collect(verbose=bool(verbose))
 
 load_dotenv()

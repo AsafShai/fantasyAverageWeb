@@ -32,7 +32,7 @@ def test_health_verbose_has_all_sections(test_client):
         response = test_client.get("/health?verbose=1")
     assert response.status_code == 200
     body = response.json()
-    for key in ("uptime_s", "db", "espn", "injury", "nightly", "estimator", "schedulers", "slow_requests_1h", "live"):
+    for key in ("uptime_s", "db", "espn", "injury", "nightly", "estimator", "schedulers", "slow_requests_1h", "live", "roster_stints"):
         assert key in body
     assert body["injury"]["ok"] is True
     assert body["schedulers"]["injury_next"]
@@ -83,27 +83,3 @@ def test_health_verbose_reports_the_live_shadow_run(test_client):
 def test_health_default_response_has_no_live_section(test_client):
     assert "live" not in test_client.get("/health").json()
 
-
-def test_health_probe_reports_a_blocked_fetch(test_client):
-    import httpx
-
-    blocked = httpx.Response(403, text="Access Denied", headers={"server": "AkamaiGHost"})
-    with patch.object(health_service.httpx.AsyncClient, "get", AsyncMock(return_value=blocked)):
-        body = test_client.get("/health?probe=nba_movement").json()
-    assert body["ok"] is False
-    assert body["status_code"] == 403
-    assert body["body_head"] == "Access Denied"
-
-
-def test_health_probe_reports_a_successful_fetch(test_client):
-    import httpx
-
-    payload = {"NBA_Player_Movement": {"rows": [
-        {"TRANSACTION_DATE": "2026-11-08T00:00:00"},
-        {"TRANSACTION_DATE": "2026-11-13T00:00:00"},
-    ]}}
-    with patch.object(health_service.httpx.AsyncClient, "get", AsyncMock(return_value=httpx.Response(200, json=payload))):
-        body = test_client.get("/health?probe=nba_movement").json()
-    assert body["ok"] is True
-    assert body["rows"] == 2
-    assert body["latest_transaction"] == "2026-11-13"

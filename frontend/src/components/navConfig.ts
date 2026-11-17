@@ -1,4 +1,4 @@
-import { FF_LEAGUE_ACTIVITY } from '../config/featureFlags'
+import { FF_LEAGUE_ACTIVITY, FF_WITH_WITHOUT } from '../config/featureFlags'
 import { FF_FEATURE_STORE, FF_DRAFT_REPORT, FF_DRAFT_PAGES, FF_BOOM_OR_BUST } from '../config/featureFlags'
 import { store } from '../store/store'
 import { fantasyApi } from '../store/api/fantasyApi'
@@ -25,6 +25,7 @@ export interface NavGroupDef {
 
 const prefetchMap: Record<string, () => Promise<unknown>> = {
   '/trends': () => import('../pages/Trends'),
+  '/with-without': () => import('../pages/WithWithout'),
   '/projections': () => import('../pages/Projections'),
   '/boom-or-bust': () => import('../pages/BoomOrBust'),
   '/feature-store': () => import('../pages/FeatureStore'),
@@ -104,6 +105,7 @@ export function getNavGroups(): NavGroupDef[] {
       items: [
         { path: '/players', label: 'Players', icon: '⛹️' },
         { path: '/player-rankings', label: 'Player Rankings', icon: '📋' },
+        ...(FF_WITH_WITHOUT ? [{ path: '/with-without', label: 'With / Without', icon: '🔀' }] : []),
       ],
     },
     ...(FF_DRAFT_PAGES ? [DRAFT_NAV_GROUP] : []),
