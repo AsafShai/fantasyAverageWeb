@@ -69,7 +69,7 @@ export function useWithWithout() {
   const [savedTeam, setSavedTeam] = usePersistedState<number | null>('withWithout.team', null)
   /** Picked a team on this visit (until then the page may open on its own choice). */
   const [userTeam, setUserTeam] = useState(false)
-  /** Who sat, as you set it; null = not touched yet (the opening picks apply). */
+  /** Who sat, as you set it; null = not touched yet. */
   const [userPicks, setUserPicks] = useState<number[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [mode, setMode] = useState<MatchMode>('all')
@@ -103,8 +103,8 @@ export function useWithWithout() {
       .sort((a, b) => Number(b.mine > 0) - Number(a.mine > 0) || Number(b.has_out_today) - Number(a.has_out_today) || a.name.localeCompare(b.name))
   }, [teamsQuery.data, playersQuery.data, myTeamId])
 
-  // Opening the page: a team with one of your players and someone out today,
-  // with whoever is out picked; else the team you used last; else none.
+  // Opening the page: a team with one of your players and someone out today;
+  // else the team you used last; else none. Nobody is picked for you.
   const autoReady = (playersQuery.isSuccess || playersQuery.isError) && (fantasyTeamsQuery.isSuccess || fantasyTeamsQuery.isError)
   const autoTeam = useMemo(
     () => [...nbaTeams].filter(t => t.mine > 0 && t.has_out_today).sort((a, b) => b.mine - a.mine)[0] ?? null,
@@ -123,13 +123,10 @@ export function useWithWithout() {
     return buildZContext(players, season.categories, season.reverse_categories)
   }, [playersQuery.data, season])
 
-  const autoPicks = useMemo(() => {
-    if (userTeam || !autoTeam || !season || season.team_id !== autoTeam.team_id) return []
-    return season.players.filter(p => p.out_today && missedGames(p).missed > 0).slice(0, MAX_PICKS)
-  }, [userTeam, autoTeam, season])
-  const pickedIds = useMemo(() => userPicks ?? autoPicks.map(p => p.player_id), [userPicks, autoPicks])
-  const autoNote = userPicks === null && autoPicks.length > 0 && season
-    ? `Opened on ${season.name}: you have players here and ${joinNames(autoPicks.map(p => p.name), '&')} ${autoPicks.length > 1 ? 'are' : 'is'} out today.`
+  const pickedIds = useMemo(() => userPicks ?? [], [userPicks])
+  // Says why the page opened on this team; gone once you pick a team or a player.
+  const autoNote = !userTeam && userPicks === null && autoTeam && season && season.team_id === autoTeam.team_id
+    ? `Opened on ${season.name}: you have players here and someone is out today.`
     : null
 
   const columns = useMemo(() => (season ? ['MIN', ...orderCategories(season.categories)] : []), [season])
