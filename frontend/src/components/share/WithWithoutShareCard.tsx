@@ -3,7 +3,6 @@ import { ShareCard, type ShareCardTheme } from './ShareCard'
 import { buildWithWithoutMessage, withWithoutShareUrl } from './withWithoutMessage'
 import { toListHeadshotUrl } from '../../utils/adp'
 import { formatDelta, formatStat, formatZ, type TeammateRow } from '../../utils/withWithout'
-import type { MatchMode } from '../../utils/withWithout'
 
 interface WithWithoutShareCardProps extends ShareCardTheme {
   row: TeammateRow
@@ -17,13 +16,6 @@ interface WithWithoutShareCardProps extends ShareCardTheme {
 }
 
 const zText = (z: number | null) => (z === null ? '—' : `${z < -0.004 ? '−' : ''}${Math.abs(z).toFixed(2)}`)
-
-/** "both sat" / "all sat" only when more than one player is sitting. */
-export function withoutModeLabel(count: number, mode: MatchMode): string | null {
-  if (count < 2) return null
-  if (count > 2) return mode === 'all' ? 'all sat' : 'any sat'
-  return mode === 'all' ? 'both sat' : 'either sat'
-}
 
 function tone(cat: string, d: number, reverse: Set<string>): 'good' | 'bad' | null {
   const { dir } = formatDelta(cat, d)

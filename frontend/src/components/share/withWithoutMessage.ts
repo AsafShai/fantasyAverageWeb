@@ -1,4 +1,11 @@
-import { formatZ } from '../../utils/withWithout'
+import { formatZ, type MatchMode } from '../../utils/withWithout'
+
+/** "both sat" / "all sat" only when more than one player is sitting. */
+export function withoutModeLabel(count: number, mode: MatchMode): string | null {
+  if (count < 2) return null
+  if (count > 2) return mode === 'all' ? 'all sat' : 'any sat'
+  return mode === 'all' ? 'both sat' : 'either sat'
+}
 
 /** Caption that rides with the image. The page link does not restore the picks,
  * so the image is what carries the comparison. */

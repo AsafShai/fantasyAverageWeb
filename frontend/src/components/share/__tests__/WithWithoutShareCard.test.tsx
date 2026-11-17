@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { WithWithoutShareCard, withoutModeLabel } from '../WithWithoutShareCard'
-import { buildWithWithoutMessage } from '../withWithoutMessage'
+import { WithWithoutShareCard } from '../WithWithoutShareCard'
+import { buildWithWithoutMessage, withoutModeLabel } from '../withWithoutMessage'
 import type { TeammateRow } from '../../../utils/withWithout'
 
 const row: TeammateRow = {
