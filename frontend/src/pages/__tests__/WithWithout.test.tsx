@@ -101,15 +101,16 @@ describe('With / Without page', () => {
     expect(screen.getByTestId('trade-state')).toHaveTextContent('Andrew Nembhard')
   })
 
-  it('opens on a team with your player and someone out today, with him picked', async () => {
+  it('opens on a team with your player and someone out today, without picking anyone', async () => {
     localStorage.setItem('fw:myTeam.id', '9')
     stubApi([{
       player_id: 50, player_name: 'Pascal Siakam', pro_team: 'IND', positions: ['PF'], team_id: 9, status: 'ONTEAM',
       stats: { pts: 200, reb: 70, ast: 35, stl: 9, blk: 5, three_pm: 12, fgm: 80, fga: 160, ftm: 30, fta: 40, fg_percentage: 0.5, ft_percentage: 0.75, minutes: 330, gp: 10 },
     }])
     renderPage()
-    expect(await screen.findByRole('button', { name: 'Remove Tyrese Haliburton' })).toBeInTheDocument()
+    expect(await screen.findByText('Who’s sitting out?')).toBeInTheDocument()
     expect(screen.getByLabelText('Team', { selector: 'select' })).toHaveValue('11')
-    expect(screen.getByText(/Opened on Indiana Pacers: you have players here and Haliburton is out today/)).toBeInTheDocument()
+    expect(screen.getByText('Opened on Indiana Pacers: you have players here and someone is out today.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument()
   })
 })
