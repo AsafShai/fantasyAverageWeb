@@ -221,3 +221,29 @@ export function joinNames(names: string[], conj: '&' | 'or'): string {
   if (last.length <= 1) return last[0] ?? ''
   return `${last.slice(0, -1).join(', ')} ${conj} ${last[last.length - 1]}`
 }
+
+/** A played game's cell in the game log: makes/attempts for a percentage
+ * category (e.g. "7/15"), a whole number otherwise. */
+export function gameLogCell(entry: number[], fields: string[], cat: string): string {
+  const pct = PCT[cat]
+  if (pct) {
+    const m = entry[fields.indexOf(pct[0])] ?? 0
+    const a = entry[fields.indexOf(pct[1])] ?? 0
+    return `${Math.round(m)}/${Math.round(a)}`
+  }
+  return formatGameStat(cat, entryValue(entry, fields, cat))
+}
+
+/** Game-log column header: "FG" for FG% (the cells are makes/attempts). */
+export function gameLogLabel(cat: string): string {
+  return isPct(cat) ? cat.replace('%', '') : cat
+}
+
+// ESPN's short team codes that differ from the NBA's.
+const ESPN_ABBR: Record<string, string> = { GS: 'GSW', NO: 'NOP', NY: 'NYK', SA: 'SAS', UTAH: 'UTA', WSH: 'WAS', PHO: 'PHX' }
+
+/** An ESPN pro-team code as the NBA writes it (GS → GSW). */
+export function nbaAbbr(code: string): string {
+  const up = code.toUpperCase()
+  return ESPN_ABBR[up] ?? up
+}
