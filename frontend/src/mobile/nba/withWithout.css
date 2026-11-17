@@ -48,10 +48,26 @@
 .mr-ww-sq .without { background: var(--mr-pill-quest-fg); }
 .mr-ww-link { border: 0; background: none; padding: 0; color: var(--mr-primary-2); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
 .mr-ww-games { list-style: none; margin: 0; padding: 0; }
-.mr-ww-games li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 0; border-top: 1px solid var(--mr-divider); font-size: 13px; }
-.mr-ww-gd { width: 48px; }
-.mr-ww-go { min-width: 52px; }
-.mr-ww-gw { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-ww-games li { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-top: 1px solid var(--mr-divider); font-size: 13px; }
+.mr-ww-gd { width: 46px; flex-shrink: 0; }
+.mr-ww-go { min-width: 48px; flex-shrink: 0; }
+.mr-ww-score { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-ww-who-btn {
+  flex-shrink: 0; border: 0; border-radius: 999px; padding: 2px 8px; cursor: pointer;
+  background: var(--mr-sunken); color: var(--mr-primary-2); font: inherit; font-size: 12px; font-weight: 700;
+}
+.mr-ww-pop-layer { position: fixed; inset: 0; z-index: 70; background: transparent; }
+.mr-ww-pop {
+  position: fixed; z-index: 71; width: 216px; box-sizing: border-box;
+  background: var(--mr-card); color: var(--mr-text); border: 1px solid var(--mr-border);
+  border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.mr-ww-pop-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; }
+.mr-ww-pop-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-ww-pop-row b { font-weight: 700; flex-shrink: 0; }
+.mr-ww-sat { color: var(--mr-down); font-weight: 700; }
+.mr-ww-off { color: var(--mr-muted); }
 .mr-ww-win { color: var(--mr-up); font-weight: 600; }
 .mr-ww-loss { color: var(--mr-down); font-weight: 600; }
 

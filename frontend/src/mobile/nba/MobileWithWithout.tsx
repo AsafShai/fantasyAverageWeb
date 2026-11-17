@@ -1,22 +1,32 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
 import { Segmented } from '../ui'
 import { formatDelta, formatStat, formatZ, gameLogLabel, type GameKind, type TeammateRow } from '../../utils/withWithout'
 import { Z_SORTS, type TeamOption, type WithWithoutState } from '../../pages/withWithout/useWithWithout'
-import type { WithWithoutEntry } from '../../types/withWithout'
+import type { WithWithoutEntry, WithWithoutTeamSeason } from '../../types/withWithout'
 import './nba.css'
 import './withWithout.css'
 
 const KIND_LABEL: Record<GameKind, string> = { with: 'With', without: 'W/o', unused: 'Not used' }
 const zText = (z: number | null) => (z === null ? '—' : `${z < -0.004 ? '−' : ''}${Math.abs(z).toFixed(2)}`)
 const shortDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-const lastName = (name: string) => {
-  const parts = name.split(' ')
-  return parts.length > 1 ? parts.slice(1).join(' ') : name
+const playedMark = (entry: WithWithoutEntry) => (entry === null ? 'Not on the team' : entry === 0 ? 'Sat' : 'Played')
+
+/** One short word for the row. The full names open in a small note. */
+function attendanceShort(lines: WithWithoutEntry[]): string {
+  const sat = lines.filter(e => e === 0).length
+  const played = lines.filter(e => Array.isArray(e)).length
+  const off = lines.filter(e => e === null).length
+  const n = lines.length
+  if (sat === n) return n === 1 ? 'Sat' : 'All sat'
+  if (played === n) return n === 1 ? 'Played' : 'All played'
+  if (off === n) return 'Off team'
+  if (sat > 0) return `${sat} sat`
+  return `${off} off`
 }
-const playedMark = (entry: WithWithoutEntry) => (entry === null ? '—' : entry === 0 ? 'Sat' : 'Played')
 
 function DeltaText({ cat, d, reverse }: { cat: string; d: number; reverse: Set<string> }) {
   const { text, dir } = formatDelta(cat, d)
@@ -341,6 +351,90 @@ function PhoneTable({ s }: { s: WithWithoutState }) {
   )
 }
 
+function GameWho({ s, index, anchor, onClose }: {
+  s: WithWithoutState
+  index: number
+  anchor: { top: number; bottom: number; right: number }
+  onClose: () => void
+}) {
+  const g = s.season!.games[index]
+  const title = `${shortDate(g.date)} ${g.home ? 'vs' : '@'} ${g.opp}`
+  const width = 216
+  const left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8))
+  const below = anchor.bottom + 6
+  const placeAbove = window.innerHeight - below < 140
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const close = () => onClose()
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [onClose])
+  return createPortal(
+    <>
+      <div className="mr-ww-pop-layer" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-label={title}
+        className="mr-root mr-ww-pop"
+        style={placeAbove
+          ? { left, bottom: window.innerHeight - anchor.top + 6 }
+          : { left, top: below }}
+      >
+        <span className="mr-meta">{title}</span>
+        {s.picked.map(p => {
+          const mark = playedMark(p.lines[index])
+          return (
+            <div key={p.player_id} className="mr-ww-pop-row">
+              <span>{p.name}</span>
+              <b className={mark === 'Sat' ? 'mr-ww-sat' : mark === 'Played' ? '' : 'mr-ww-off'}>{mark}</b>
+            </div>
+          )
+        })}
+      </div>
+    </>,
+    document.body,
+  )
+}
+
+function PhoneGames({ s, season }: { s: WithWithoutState; season: WithWithoutTeamSeason }) {
+  const [open, setOpen] = useState<{ index: number; top: number; bottom: number; right: number } | null>(null)
+  return (
+    <>
+      <ul className="mr-ww-games">
+        {season.games.map((g, i) => {
+          const k = s.split!.kinds[i]
+          const detail = s.picked.map(p => `${p.name} ${playedMark(p.lines[i])}`).join(', ')
+          return (
+            <li key={g.game_id}>
+              <span className="mr-num mr-ww-gd">{shortDate(g.date)}</span>
+              <span className="mr-ww-go">{g.home ? 'vs' : '@'} {g.opp}</span>
+              <span className={`mr-ww-score ${g.result.startsWith('W') ? 'mr-ww-win' : 'mr-ww-loss'}`}>{g.result}</span>
+              <button
+                type="button"
+                className="mr-ww-who-btn"
+                aria-expanded={open?.index === i}
+                aria-label={`${shortDate(g.date)} ${g.home ? 'vs' : 'at'} ${g.opp}: ${detail}`}
+                onClick={e => {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  setOpen(open?.index === i ? null : { index: i, top: r.top, bottom: r.bottom, right: r.right })
+                }}
+              >
+                {attendanceShort(s.picked.map(p => p.lines[i]))}
+              </button>
+              <span className={`mr-ww-tok ${k}`}>{KIND_LABEL[k]}</span>
+            </li>
+          )
+        })}
+      </ul>
+      {open && <GameWho s={s} index={open.index} anchor={open} onClose={() => setOpen(null)} />}
+    </>
+  )
+}
+
 /** With / Without on a phone: the same state as the desktop page. */
 export default function MobileWithWithout({ s }: { s: WithWithoutState }) {
   const season = s.season
@@ -424,24 +518,7 @@ export default function MobileWithWithout({ s }: { s: WithWithoutState }) {
               <span className="mr-meta">{s.split.names} · {s.split.counts.unused ? `${s.split.counts.unused} not used` : 'every game used'}</span>
             </div>
             <button type="button" className="mr-ww-link" aria-expanded={s.showGames} onClick={() => s.setShowGames(!s.showGames)}>{s.showGames ? 'Hide the games ▴' : 'See the games ›'}</button>
-            {s.showGames && (
-              <ul className="mr-ww-games">
-                {season.games.map((g, i) => {
-                  const k = s.split!.kinds[i]
-                  return (
-                    <li key={g.game_id}>
-                      <span className="mr-num mr-ww-gd">{shortDate(g.date)}</span>
-                      <span className="mr-ww-go">{g.home ? 'vs' : '@'} {g.opp}</span>
-                      <span className={g.result.startsWith('W') ? 'mr-ww-win' : 'mr-ww-loss'}>{g.result}</span>
-                      <span className="mr-meta mr-ww-gw">
-                        {s.picked.map(p => `${lastName(p.name)} ${playedMark(p.lines[i])}`).join(' · ')}
-                      </span>
-                      <span className={`mr-ww-tok ${k}`}>{KIND_LABEL[k]}</span>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+            {s.showGames && <PhoneGames s={s} season={season} />}
           </section>
 
           <section className="mr-ww-controls">
