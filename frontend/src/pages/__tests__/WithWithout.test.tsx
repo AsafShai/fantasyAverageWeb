@@ -57,9 +57,10 @@ describe('With / Without page', () => {
     const user = userEvent.setup()
     renderPage()
     expect(await screen.findByText('Pick an NBA team to start')).toBeInTheDocument()
-    await user.selectOptions(screen.getByLabelText('Team'), '11')
+    await user.click(screen.getByRole('button', { name: /Pick an NBA team/ }))
+    await user.click(screen.getByRole('option', { name: /Indiana Pacers/ }))
 
-    // Only players who missed games can be picked; out today first.
+    // Only players who missed games can be picked; out today first, earlier absences still listed.
     expect(await screen.findByText('Who’s sitting out?')).toBeInTheDocument()
     const options = screen.getAllByRole('button', { name: /missed/ })
     expect(options.map(b => b.textContent)).toEqual([
@@ -68,6 +69,8 @@ describe('With / Without page', () => {
     ])
     expect(options[0]).toHaveTextContent('missed 2')
     expect(options[0]).toHaveTextContent('OUT')
+    expect(options[0]).toHaveTextContent('Left Hamstring Strain')
+    expect(options[1]).toHaveTextContent('missed 3')
     expect(screen.queryByRole('button', { name: /Andrew Nembhard/ })).not.toBeInTheDocument() // never missed
 
     await user.click(options[0])
@@ -109,7 +112,7 @@ describe('With / Without page', () => {
     }])
     renderPage()
     expect(await screen.findByText('Who’s sitting out?')).toBeInTheDocument()
-    expect(screen.getByLabelText('Team', { selector: 'select' })).toHaveValue('11')
+    expect(screen.getByRole('button', { name: /Indiana Pacers/ })).toBeInTheDocument()
     expect(screen.getByText('Opened on Indiana Pacers: you have players here and someone is out today.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument()
   })
