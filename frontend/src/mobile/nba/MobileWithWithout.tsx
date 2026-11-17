@@ -178,7 +178,7 @@ export default function MobileWithWithout({ s }: { s: WithWithoutState }) {
         <section className="mr-card mr-ww-setup">
           <label htmlFor="mww-team" className="mr-ww-lbl">Team</label>
           <select id="mww-team" className="mr-ww-select" value={s.teamId ?? ''} onChange={e => s.pickTeam(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Pick an NBA team…</option>
+            <option value="" disabled hidden>Pick an NBA team…</option>
             {mine.length > 0 && <optgroup label="Your players’ teams">{mine.map(opt)}</optgroup>}
             {out.length > 0 && <optgroup label="A player out today">{out.map(opt)}</optgroup>}
             <optgroup label={mine.length || out.length ? 'Other teams' : 'All teams'}>{rest.map(opt)}</optgroup>

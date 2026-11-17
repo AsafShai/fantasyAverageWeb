@@ -112,7 +112,7 @@ function Setup({ s }: { s: WithWithoutState }) {
             onChange={e => s.pickTeam(e.target.value ? Number(e.target.value) : null)}
             className="min-h-[44px] rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           >
-            <option value="">Pick an NBA team…</option>
+            <option value="" disabled hidden>Pick an NBA team…</option>
             {mine.length > 0 && <optgroup label="Your players’ teams">{mine.map(opt)}</optgroup>}
             {out.length > 0 && <optgroup label="A player out today">{out.map(opt)}</optgroup>}
             <optgroup label={mine.length || out.length ? 'Other teams' : 'All teams'}>{rest.map(opt)}</optgroup>
