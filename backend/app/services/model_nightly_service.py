@@ -32,6 +32,7 @@ import pandas as pd
 
 from app.config import settings
 from app.services.db_service import DBService
+from app.services.roster_stints.service import RosterStintsService
 from app.utils.memory import log_memory, release_memory
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
@@ -217,6 +218,8 @@ class ModelNightlyService:
         if missing == "vectors_refreshed" or _INVALIDATING_STATUSES.intersection(statuses.values()):
             await self._prewarm_inference_store()
             release_memory("nightly catch-up: inference store prewarmed", logger)
+        # Every morning, games or not: transactions happen on off days too.
+        await RosterStintsService().rebuild()
         return statuses
 
     async def _retry_unscored_surprises(self, statuses: dict[str, str], oldest: date) -> None:

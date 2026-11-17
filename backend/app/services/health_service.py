@@ -4,7 +4,6 @@ import time
 from datetime import datetime
 from typing import Any, Callable
 
-import httpx
 
 from app.services import estimator_scheduler, injury_service, model_nightly_scheduler
 from app.services.cache_manager import CacheManager
@@ -12,7 +11,7 @@ from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.estimator_service import EstimatorService
 from app.services.model_nightly_service import ModelNightlyService
-from app.utils.ssl_context import shared_ssl_context
+from app.services.roster_stints import service as roster_stints_service
 from app.utils.timing_middleware import slow_requests_last_hour
 
 logger = logging.getLogger(__name__)
@@ -20,9 +19,6 @@ logger = logging.getLogger(__name__)
 _STARTED_AT = time.monotonic()
 _PLAYERS_CACHE_RE = re.compile(r"players_(\d+)")
 
-# Temporary reachability probe (GET /health?probe=nba_movement): can this host
-# download the NBA's player-movement feed, or does the CDN 403 datacenter IPs?
-NBA_MOVEMENT_URL = "https://stats.nba.com/js/data/playermovement/NBA_Player_Movement.json"
 
 
 def _age_seconds(stamp: datetime | None) -> int | None:
@@ -109,32 +105,6 @@ async def _collect_schedulers() -> dict:
     }
 
 
-async def probe_nba_movement() -> dict:
-    """Fetch the feed exactly as an ingestion job would (httpx, default
-    headers) and report what came back. Never raises."""
-    started = time.monotonic()
-    out: dict[str, Any] = {"url": NBA_MOVEMENT_URL}
-    try:
-        async with httpx.AsyncClient(timeout=30.0, verify=shared_ssl_context()) as client:
-            response = await client.get(NBA_MOVEMENT_URL, follow_redirects=True)
-        out["status_code"] = response.status_code
-        out["bytes"] = len(response.content)
-        out["server"] = response.headers.get("server")
-        out["last_modified"] = response.headers.get("last-modified")
-        if response.status_code == 200:
-            rows = response.json()["NBA_Player_Movement"]["rows"]
-            out["rows"] = len(rows)
-            out["latest_transaction"] = max(r["TRANSACTION_DATE"] for r in rows)[:10]
-        else:
-            out["body_head"] = response.text[:200]
-        out["ok"] = response.status_code == 200 and out.get("rows", 0) > 0
-    except Exception as e:
-        out["ok"] = False
-        out["error"] = f"{type(e).__name__}: {e}"
-    out["elapsed_ms"] = int((time.monotonic() - started) * 1000)
-    return out
-
-
 async def collect(verbose: bool) -> dict:
     base = {
         "status": "healthy",
@@ -152,5 +122,6 @@ async def collect(verbose: bool) -> dict:
     base["estimator"] = await _safe("estimator", _collect_estimator)
     base["schedulers"] = await _safe("schedulers", _collect_schedulers)
     base["live"] = await _safe("live", _collect_live)
+    base["roster_stints"] = roster_stints_service.health()
     base["slow_requests_1h"] = slow_requests_last_hour()
     return base
