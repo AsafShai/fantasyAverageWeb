@@ -2,27 +2,33 @@ import { Fragment } from 'react'
 import { Link } from 'react-router'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
-import { myTeamRowClass } from '../myTeam/display'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileWithWithout from '../mobile/nba/MobileWithWithout'
 import type { WithWithoutTeamSeason } from '../types/withWithout'
 import {
-  entryValue, formatDelta, formatGameStat, formatStat, formatZ, type GameKind, type TeammateRow,
+  formatDelta, formatStat, formatZ, gameLogLabel, type GameKind, type TeammateRow,
 } from '../utils/withWithout'
-import { useWithWithout, type WithWithoutState } from './withWithout/useWithWithout'
+import { Z_SORTS, useWithWithout, type WithWithoutState } from './withWithout/useWithWithout'
 
-const card = 'bg-white dark:bg-gray-800 rounded-lg shadow'
+const card = 'bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700'
 const label = 'text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400'
+const chip = 'inline-flex min-h-[34px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-sm font-medium'
+const chipOff = 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+const chipOn = 'border-blue-600 bg-blue-600 text-white'
+const chipToggled = 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+/** The sorted column's tint. */
+const hi = 'bg-blue-50 dark:bg-blue-900/20'
 
-const KIND_STYLE: Record<GameKind, string> = {
+const KIND_TOK: Record<GameKind, string> = {
   with: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
   without: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
-  unused: 'text-gray-400 dark:text-gray-500',
+  unused: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
 }
-const KIND_LABEL: Record<GameKind, string> = { with: 'With', without: 'Without', unused: '—' }
+const KIND_SQ: Record<GameKind, string> = { with: 'bg-blue-500', without: 'bg-amber-500', unused: 'bg-gray-300 dark:bg-gray-600' }
+const KIND_LABEL: Record<GameKind, string> = { with: 'With', without: 'Without', unused: 'Not used' }
 
-function Tok({ kind, children }: { kind: 'with' | 'without'; children: React.ReactNode }) {
-  return <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold ${KIND_STYLE[kind]}`}>{children}</span>
+function Tok({ kind, children }: { kind: GameKind; children: React.ReactNode }) {
+  return <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${KIND_TOK[kind]}`}>{children}</span>
 }
 
 function Seg<T extends string>({ value, options, onChange, ariaLabel }: {
@@ -36,7 +42,7 @@ function Seg<T extends string>({ value, options, onChange, ariaLabel }: {
           type="button"
           aria-pressed={value === k}
           onClick={() => onChange(k)}
-          className={`px-3 py-1.5 text-sm whitespace-nowrap ${value === k ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'}`}
+          className={`min-h-[34px] px-3 text-sm whitespace-nowrap ${value === k ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'}`}
         >
           {text}
         </button>
@@ -45,21 +51,19 @@ function Seg<T extends string>({ value, options, onChange, ariaLabel }: {
   )
 }
 
-function Check({ on }: { on: boolean }) {
+function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <span aria-hidden="true" className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[10px] ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-400 dark:border-gray-500'}`}>
-      {on ? '✓' : ''}
-    </span>
+    <button type="button" aria-pressed={on} onClick={onClick} className={`${chip} ${on ? chipToggled : chipOff}`}>
+      {on && <span aria-hidden="true">✓</span>}{children}
+    </button>
   )
 }
 
-function DeltaCell({ cat, d, reverse }: { cat: string; d: number; reverse: Set<string> }) {
+function DeltaText({ cat, d, reverse }: { cat: string; d: number; reverse: Set<string> }) {
   const { text, dir } = formatDelta(cat, d)
   const good = reverse.has(cat) ? dir === 'down' : dir === 'up'
-  const cls = dir === 'flat'
-    ? 'text-gray-400 dark:text-gray-500'
-    : good ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-  return <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${cls}`}>{text}</span>
+  const cls = dir === 'flat' ? 'text-gray-400 dark:text-gray-500' : good ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+  return <span className={`font-semibold tabular-nums ${cls}`}>{text}</span>
 }
 
 function ZPill({ z }: { z: number | null }) {
@@ -69,296 +73,369 @@ function ZPill({ z }: { z: number | null }) {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${cls}`}>{formatZ(z)}</span>
 }
 
-function Owner({ row, myTeamId }: { row: TeammateRow; myTeamId: number | null }) {
-  const owner = row.player.owner
-  if (!owner) return <span className="inline-block rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">FA</span>
-  const mine = owner.team_id === myTeamId
+const zText = (z: number | null) => (z === null ? '—' : `${z < -0.004 ? '−' : ''}${Math.abs(z).toFixed(2)}`)
+
+function OutBadge() {
+  return <span className="rounded bg-red-600 px-1.5 text-[10px] font-bold text-white">OUT</span>
+}
+
+function Picker({ s }: { s: WithWithoutState }) {
   return (
-    <span className={`block truncate text-sm ${mine ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}`} title={owner.name}>
-      {owner.name}{mine ? ' · You' : ''}
-    </span>
+    <div className="flex flex-wrap items-center gap-2">
+      {s.pickOptions.map(o => (
+        <button key={o.player.player_id} type="button" onClick={() => s.addPick(o.player.player_id)} className={`${chip} ${chipOff}`}>
+          {o.player.name}
+          <span className="text-xs font-normal text-gray-500 dark:text-gray-400">missed {o.missed}</span>
+          {o.player.out_today && <OutBadge />}
+          {o.player.two_way && <span className="rounded bg-gray-100 px-1 text-[10px] font-semibold text-gray-600 dark:bg-gray-600 dark:text-gray-200">Two-way</span>}
+        </button>
+      ))}
+    </div>
   )
 }
 
-function GameStrip({ s, season }: { s: WithWithoutState; season: WithWithoutTeamSeason }) {
+function Setup({ s }: { s: WithWithoutState }) {
+  const mine = s.nbaTeams.filter(t => t.mine > 0)
+  const out = s.nbaTeams.filter(t => t.mine === 0 && t.has_out_today)
+  const rest = s.nbaTeams.filter(t => t.mine === 0 && !t.has_out_today)
+  const opt = (t: (typeof s.nbaTeams)[number]) => (
+    <option key={t.team_id} value={t.team_id}>{t.name}{t.mine ? ` · ${t.mine} of yours` : ''}{t.has_out_today ? ' · out today' : ''}</option>
+  )
+  return (
+    <section className={`${card} flex flex-col gap-4 p-5`}>
+      <div className="flex flex-wrap items-end gap-6">
+        <div className="flex w-80 flex-col gap-2">
+          <label htmlFor="ww-team" className={label}>Team</label>
+          <select
+            id="ww-team"
+            value={s.teamId ?? ''}
+            onChange={e => s.pickTeam(e.target.value ? Number(e.target.value) : null)}
+            className="min-h-[44px] rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+          >
+            <option value="" disabled hidden>Pick an NBA team…</option>
+            {mine.length > 0 && <optgroup label="Your players’ teams">{mine.map(opt)}</optgroup>}
+            {out.length > 0 && <optgroup label="A player out today">{out.map(opt)}</optgroup>}
+            <optgroup label={mine.length || out.length ? 'Other teams' : 'All teams'}>{rest.map(opt)}</optgroup>
+          </select>
+        </div>
+
+        {s.season && (
+          <div className="flex min-w-[320px] flex-1 flex-col gap-2">
+            <span className={label}>Sitting out · up to 3</span>
+            <div className="flex min-h-[44px] flex-wrap items-center gap-2">
+              {s.picked.map(p => (
+                <span key={p.player_id} className={`${chip} ${chipOn}`}>
+                  {p.name}
+                  {p.out_today && <OutBadge />}
+                  <button type="button" aria-label={`Remove ${p.name}`} onClick={() => s.removePick(p.player_id)} className="ml-0.5 text-base leading-none text-white/80 hover:text-white">×</button>
+                </span>
+              ))}
+              {s.picked.length > 0 && s.canAdd && (
+                <button type="button" aria-expanded={s.pickerOpen} onClick={() => s.setPickerOpen(!s.pickerOpen)} className={`${chip} ${chipOff} border-dashed`}>
+                  {s.pickerOpen ? 'Close' : '+ Add player'}
+                </button>
+              )}
+              {s.picked.length === 0 && <span className="text-sm text-gray-500 dark:text-gray-400">Pick someone below.</span>}
+            </div>
+          </div>
+        )}
+
+        {s.picked.length > 1 && (
+          <div className="flex flex-col gap-2">
+            <span className={label}>Without = when</span>
+            <Seg ariaLabel="Which games count as without" value={s.mode} onChange={s.setMode} options={[['all', s.picked.length > 2 ? 'All sat' : 'Both sat'], ['any', s.picked.length > 2 ? 'Any sat' : 'Either sat']]} />
+          </div>
+        )}
+      </div>
+
+      {s.autoNote && <p className="text-sm text-gray-600 dark:text-gray-300">{s.autoNote}</p>}
+
+      {s.season && s.picked.length > 0 && s.pickerOpen && (
+        <div className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+          <span className="text-xs text-gray-500 dark:text-gray-400">{s.season.abbr} players who missed games, most first</span>
+          <Picker s={s} />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function GameGrid({ s, season }: { s: WithWithoutState; season: WithWithoutTeamSeason }) {
   const split = s.split!
   return (
     <div className="overflow-x-auto">
-      <table className="border-separate border-spacing-x-1 text-center text-xs" aria-label={`${season.abbr} games: ${split.counts.without} without, ${split.counts.with} with, ${split.counts.unused} not used`}>
+      <table className="border-separate border-spacing-x-1 text-center text-xs" aria-label={`${season.abbr} games`}>
         <tbody>
           <tr>
-            <th scope="row" className="pr-2 text-left font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">{season.abbr} game</th>
+            <th scope="row" className="pr-2 text-left font-semibold whitespace-nowrap text-gray-500 dark:text-gray-400">{season.abbr} game</th>
             {season.games.map(g => (
               <td key={g.game_id} className="min-w-[58px] align-top">
-                <div className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">{new Date(`${g.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                <div className="text-gray-500 dark:text-gray-400 whitespace-nowrap">{g.home ? 'vs' : '@'} {g.opp}</div>
+                <div className="font-semibold whitespace-nowrap text-gray-700 dark:text-gray-200">{new Date(`${g.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                <div className="whitespace-nowrap text-gray-500 dark:text-gray-400">{g.home ? 'vs' : '@'} {g.opp}</div>
                 <div className={`whitespace-nowrap ${g.result.startsWith('W') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{g.result}</div>
               </td>
             ))}
           </tr>
           {s.picked.map(p => (
             <tr key={p.player_id}>
-              <th scope="row" className="pr-2 text-left font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{p.name}</th>
+              <th scope="row" className="pr-2 text-left font-medium whitespace-nowrap text-gray-700 dark:text-gray-200">{p.name}</th>
               {p.lines.map((e, i) => (
-                <td key={i} className={`py-1 ${e === 0 ? 'font-bold text-red-600 dark:text-red-400' : 'text-gray-400'}`}>
-                  {e === null ? '' : e === 0 ? 'Sat' : '✓'}
-                </td>
+                <td key={i} className={`py-1 ${e === 0 ? 'font-bold text-red-600 dark:text-red-400' : 'text-gray-400'}`}>{e === null ? '' : e === 0 ? 'Sat' : '✓'}</td>
               ))}
             </tr>
           ))}
           <tr>
-            <th scope="row" className="pr-2 text-left font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">Counts as</th>
-            {split.kinds.map((k, i) => (
-              <td key={i} className="pt-1">
-                <span className={`inline-block w-full rounded px-1 py-0.5 font-bold ${KIND_STYLE[k]}`}>{KIND_LABEL[k]}</span>
-              </td>
-            ))}
+            <th scope="row" className="pr-2 text-left font-semibold whitespace-nowrap text-gray-500 dark:text-gray-400">Counts as</th>
+            {split.kinds.map((k, i) => <td key={i} className="pt-1"><Tok kind={k}>{KIND_LABEL[k]}</Tok></td>)}
           </tr>
         </tbody>
       </table>
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Blank = he wasn’t on the team yet. “Not used” = only some of them sat, so the game is neither with nor without.</p>
     </div>
   )
 }
 
-function Expanded({ s, row, season }: { s: WithWithoutState; row: TeammateRow; season: WithWithoutTeamSeason }) {
-  const cols = s.columns
-  const vsNames = s.split!.withoutDesc.replace(/ (both|all)? ?sat.*$/, '')
-  const views: [Exclude<typeof s.rowView, 'none'>, string][] = [['log', 'Game-by-game log'], ['profile', 'View player profile'], ['trade', 'Open in Trade Analyzer']]
+function Summary({ s, season }: { s: WithWithoutState; season: WithWithoutTeamSeason }) {
+  const split = s.split!
   return (
-    <div className="border-t border-gray-100 bg-gray-50 px-4 py-4 dark:border-gray-700 dark:bg-gray-900/40">
-      <div className="mb-2 text-sm text-gray-600 dark:text-gray-300">
-        <b className="text-gray-900 dark:text-white">{row.player.name}</b> per game, with vs. without {vsNames}
+    <section className={`${card} flex flex-col gap-3 px-5 py-4`}>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+          <Tok kind="without">{split.counts.without} without</Tok> vs <Tok kind="with">{split.counts.with} with</Tok>
+          <span className="font-normal text-gray-500 dark:text-gray-400"> · {split.counts.unused ? `${split.counts.unused} not used` : 'every game used'}</span>
+        </span>
+        <div className="flex flex-wrap gap-1" aria-hidden="true">
+          {season.games.map((g, i) => <span key={g.game_id} title={`${g.date} ${g.home ? 'vs' : '@'} ${g.opp}: ${KIND_LABEL[split.kinds[i]]}`} className={`h-[18px] w-[18px] rounded ${KIND_SQ[split.kinds[i]]}`} />)}
+        </div>
+        <button type="button" aria-expanded={s.showGames} onClick={() => s.setShowGames(!s.showGames)} className="ml-auto text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400">
+          {s.showGames ? 'Hide the games ▴' : 'See the games ›'}
+        </button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm tabular-nums">
-          <thead>
-            <tr>
-              <th />
-              {cols.map(c => <th key={c} className="px-2 py-1 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">{c}</th>)}
-              <th className="px-2 py-1 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Z</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="py-1 pr-3 whitespace-nowrap"><Tok kind="with">With</Tok> <span className="text-xs text-gray-500">{row.withGroup.games} games</span></td>
-              {cols.map(c => <td key={c} className="px-2 py-1 text-right">{formatStat(c, row.withVals[c])}</td>)}
-              <td className="px-2 py-1 text-right">{formatZ(row.zWith)}</td>
-            </tr>
-            <tr>
-              <td className="py-1 pr-3 whitespace-nowrap"><Tok kind="without">Without</Tok> <span className="text-xs text-gray-500">{row.withoutGroup.games} games</span></td>
-              {cols.map(c => <td key={c} className="px-2 py-1 text-right">{formatStat(c, row.withoutVals[c])}</td>)}
-              <td className="px-2 py-1 text-right">{formatZ(row.zWithout)}</td>
-            </tr>
-            <tr className="border-t border-gray-200 dark:border-gray-700">
-              <td className="py-1 pr-3 font-semibold">Change</td>
-              {cols.map(c => <td key={c} className="px-2 py-1 text-right"><DeltaCell cat={c} d={row.deltas[c]} reverse={s.reverse} /></td>)}
-              <td className="px-2 py-1 text-right"><ZPill z={row.zDelta} /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      {s.showGames && <GameGrid s={s} season={season} />}
+    </section>
+  )
+}
 
-      <div role="group" aria-label="More for this player" className="mt-3 flex flex-wrap gap-2">
-        {views.map(([k, text]) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={s.rowView === k}
-            onClick={() => (k === 'trade' ? s.openTrade(row.player) : s.setRowView(s.rowView === k ? 'none' : k))}
-            className={`rounded-md border px-3 py-1.5 text-sm font-medium ${s.rowView === k ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200'}`}
-          >
-            {text}
+function GameLogTable({ s, row }: { s: WithWithoutState; row: TeammateRow }) {
+  const log = s.gameLog(row)
+  const id = row.player.player_id
+  const filter = s.logFilter(id)
+  const grid = { gridTemplateColumns: `200px repeat(${s.columns.length}, minmax(52px, 1fr))` }
+  const avg = (vals: Record<string, number>) => s.columns.map(c => formatStat(c, vals[c]))
+  return (
+    <div className="flex flex-col gap-2">
+      <div role="group" aria-label="Which games" className="flex flex-wrap gap-2">
+        {log.tabs.map(t => (
+          <button key={t.key} type="button" aria-pressed={filter === t.key} onClick={() => s.setLogFilter(id, t.key)} className={`${chip} ${filter === t.key ? chipOn : chipOff}`}>
+            {t.label} · {t.count}
           </button>
         ))}
       </div>
-
-      {s.rowView === 'profile' && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-800">
-          <span className="text-gray-600 dark:text-gray-300">
-            {row.player.pos} · {row.player.owner ? `Owned by ${row.player.owner.name}` : 'Free agent'} · played {row.player.lines.filter(Array.isArray).length} of {row.player.lines.filter(e => e !== null).length} {season.abbr} games
-          </span>
-          <Link to={`/player/${row.player.player_id}`} className="rounded-md bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700">Open full profile</Link>
+      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="min-w-[720px] text-sm tabular-nums">
+          <div className="grid items-center bg-gray-50 dark:bg-gray-900/40" style={grid}>
+            <span className={`px-3 py-2 ${label}`}>Game</span>
+            {s.columns.map(c => <span key={c} className={`py-2 pr-3 text-right ${label}`}>{gameLogLabel(c)}</span>)}
+          </div>
+          {log.games.map(g => (
+            <div key={g.game.game_id} className={`grid items-center border-t border-gray-100 dark:border-gray-700 ${g.dnp || g.kind === 'unused' ? 'opacity-50' : ''}`} style={grid}>
+              <span className="flex flex-col gap-0.5 px-3 py-1.5">
+                <span className="flex items-center gap-2">
+                  <b className="text-gray-900 dark:text-white">{new Date(`${g.game.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</b>
+                  {g.dnp ? <span className="text-[11px] font-semibold text-gray-500">Didn’t play</span> : <Tok kind={g.kind}>{KIND_LABEL[g.kind]}</Tok>}
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{g.game.home ? 'vs' : '@'} {g.game.opp} · <span className={g.game.result.startsWith('W') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{g.game.result}</span></span>
+              </span>
+              {g.cells.map((v, i) => <span key={i} className="pr-3 text-right text-gray-800 dark:text-gray-100">{v}</span>)}
+            </div>
+          ))}
+          {([['with', row.withVals], ['without', row.withoutVals]] as const).map(([k, vals]) => (
+            <div key={k} className="grid items-center border-t border-gray-200 bg-gray-50 font-semibold dark:border-gray-700 dark:bg-gray-900/40" style={grid}>
+              <span className="px-3 py-2"><Tok kind={k}>Avg {k === 'with' ? 'with' : 'w/o'}</Tok></span>
+              {avg(vals).map((v, i) => <span key={i} className="pr-3 text-right text-gray-900 dark:text-white">{v}</span>)}
+            </div>
+          ))}
         </div>
-      )}
-
-      {s.rowView === 'log' && (
-        <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-          <table className="min-w-full text-sm tabular-nums">
-            <thead className="bg-gray-50 dark:bg-gray-900/40">
-              <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Game</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Counts as</th>
-                {cols.map(c => <th key={c} className="px-2 py-2 text-right text-xs font-semibold text-gray-500">{c}</th>)}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {season.games.map((g, i) => {
-                const e = row.player.lines[i]
-                if (e === null) return null
-                const kind = s.split!.kinds[i]
-                const out = s.picked.filter(p => p.lines[i] === 0).map(p => p.name.split(' ').slice(1).join(' '))
-                return (
-                  <tr key={g.game_id} className={e === 0 ? 'opacity-60' : ''}>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{g.date.slice(5).replace('-', '/')} · {g.home ? 'vs' : '@'} {g.opp} <span className="text-xs text-gray-500">{g.result}</span></td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">
-                      {e === 0 ? <span className="text-xs text-gray-500">Didn’t play · not used for him</span>
-                        : kind === 'unused' ? <span className="text-xs text-gray-500">Not used</span>
-                        : <Tok kind={kind}>{KIND_LABEL[kind]}</Tok>}
-                      {e !== 0 && <span className="ml-1 text-xs text-gray-500">· {out.length ? `out: ${out.join(', ')}` : 'all played'}</span>}
-                    </td>
-                    {cols.map(c => <td key={c} className="px-2 py-1.5 text-right">{Array.isArray(e) ? formatGameStat(c, entryValue(e, season.line_fields, c)) : '—'}</td>)}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </div>
     </div>
+  )
+}
+
+function Expanded({ s, row }: { s: WithWithoutState; row: TeammateRow }) {
+  const cols = s.columns
+  const id = row.player.player_id
+  const logOpen = s.isLogOpen(id)
+  const grid = { gridTemplateColumns: `150px repeat(${cols.length}, minmax(0, 1fr)) 80px` }
+  return (
+    <div className="mx-4 mb-4 flex flex-col gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+      <div className="grid gap-y-2 text-sm tabular-nums" style={grid}>
+        <span />
+        {cols.map(c => <span key={c} className={`text-right ${label}`}>{c}</span>)}
+        <span className={`text-right ${label}`}>Z</span>
+
+        <span><Tok kind="with">With</Tok> <span className="text-xs text-gray-500">{row.withGroup.games} games</span></span>
+        {cols.map(c => <span key={c} className="text-right text-gray-800 dark:text-gray-100">{formatStat(c, row.withVals[c])}</span>)}
+        <span className="text-right text-gray-800 dark:text-gray-100">{zText(row.zWith)}</span>
+
+        <span><Tok kind="without">Without</Tok> <span className="text-xs text-gray-500">{row.withoutGroup.games} games</span></span>
+        {cols.map(c => <span key={c} className="text-right text-gray-800 dark:text-gray-100">{formatStat(c, row.withoutVals[c])}</span>)}
+        <span className="text-right font-bold text-gray-900 dark:text-white">{zText(row.zWithout)}</span>
+
+        <span className="font-semibold text-gray-600 dark:text-gray-300">Change</span>
+        {cols.map(c => <span key={c} className="text-right"><DeltaText cat={c} d={row.deltas[c]} reverse={s.reverse} /></span>)}
+        <span className="text-right"><ZPill z={row.zDelta} /></span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button type="button" aria-pressed={logOpen} onClick={() => s.toggleLog(id)} className={`${chip} ${logOpen ? chipOn : chipOff}`}>Game-by-game log</button>
+        <Link to={`/player/${id}`} className={`${chip} ${chipOff}`}>Player profile</Link>
+        <button type="button" onClick={() => s.openTrade(row.player)} className={`${chip} ${chipOff}`}>Open in Trade Analyzer</button>
+      </div>
+
+      {logOpen && <GameLogTable s={s} row={row} />}
+    </div>
+  )
+}
+
+function Table({ s, season }: { s: WithWithoutState; season: WithWithoutTeamSeason }) {
+  const cols = s.columns
+  const grid = { gridTemplateColumns: `minmax(220px, 2fr) 84px 72px 92px 86px repeat(${cols.length}, minmax(56px, 1fr)) 100px` }
+  const minW = 760 + cols.length * 60
+  const groupLabel = s.cellMode === 'delta' ? 'Per game, without − with' : s.cellMode === 'with' ? 'Per game, with them' : 'Per game, without them'
+  const sortBtn = (key: string, text: string, tip: string) => {
+    const on = s.sort === key
+    return (
+      <button key={key} type="button" title={tip} aria-sort={on ? 'descending' : 'none'} onClick={() => s.setSort(key)}
+        className={`self-stretch px-2 py-2.5 text-right text-xs font-semibold uppercase tracking-wide ${on ? `${hi} text-blue-700 dark:text-blue-300` : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'}`}>
+        {text}{on ? ' ▼' : ''}
+      </button>
+    )
+  }
+  const cellVal = (r: TeammateRow, c: string) => {
+    if (s.cellMode === 'delta') return <DeltaText cat={c} d={r.deltas[c]} reverse={s.reverse} />
+    return <span className="text-gray-800 dark:text-gray-100">{formatStat(c, s.cellMode === 'with' ? r.withVals[c] : r.withoutVals[c])}</span>
+  }
+
+  return (
+    <section className={`${card} overflow-hidden`}>
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+        <Toggle on={s.faOnly} onClick={() => s.setFaOnly(!s.faOnly)}>Free agents</Toggle>
+        {s.myTeamId != null && <Toggle on={s.mineOnly} onClick={() => s.setMineOnly(!s.mineOnly)}>My team</Toggle>}
+        <Toggle on={s.minGames} onClick={() => s.setMinGames(!s.minGames)}>{s.smallSample}+ games without</Toggle>
+        <span className="flex-1" />
+        {!s.zReady && <span className="text-xs text-gray-500">Loading Player Rankings for Z…</span>}
+        <span className={label}>Stat cells</span>
+        <Seg ariaLabel="Stat cells" value={s.cellMode} onChange={s.setCellMode} options={[['delta', 'Change'], ['with', 'With'], ['without', 'Without']]} />
+      </div>
+
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: minW }}>
+          <div className="grid items-end" style={grid}>
+            <span /><span />
+            <span className="col-span-3 border-b border-gray-300 py-2 text-center text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:border-gray-600 dark:text-blue-300">Fantasy value (Z)</span>
+            <span className="border-b border-gray-300 py-2 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:border-gray-600 dark:text-gray-400" style={{ gridColumn: `span ${cols.length}` }}>{groupLabel}</span>
+            <span />
+          </div>
+          <div className="grid items-stretch border-b border-gray-200 dark:border-gray-700" style={grid}>
+            <span className={`px-4 py-2.5 ${label}`}>Player</span>
+            <span className={`py-2.5 pr-2 text-right ${label}`}>Games w / w/o</span>
+            {Z_SORTS.map(z => sortBtn(z.key, z.label, z.tip))}
+            {cols.map(c => sortBtn(c, c, `Sort by ${c}`))}
+            <span />
+          </div>
+
+          {s.picked.length > 0 && s.rows.length === 0 && (
+            <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+              {s.split?.counts.without === 0 ? `No ${season.abbr} games where ${s.split.names} sat${s.picked.length > 1 ? '. Try “Either sat” or remove a player' : ''}.` : 'No teammates match these filters.'}
+            </div>
+          )}
+
+          {s.rows.map(r => {
+            const id = r.player.player_id
+            const open = s.isOpen(id)
+            const mine = s.myTeamId != null && r.player.owner?.team_id === s.myTeamId
+            const bg = open ? 'bg-gray-50/70 dark:bg-gray-900/30' : mine ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''
+            return (
+              <Fragment key={id}>
+                <div className={`border-b border-gray-100 dark:border-gray-700 ${bg}`}>
+                  <div className="grid items-stretch" style={grid}>
+                    <div className="flex min-w-0 flex-col justify-center gap-0.5 py-2.5 pr-2 pl-4">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => s.toggleRow(id)} className="truncate text-left font-semibold text-gray-900 hover:underline dark:text-white">{r.player.name}</button>
+                        <span className="text-xs text-gray-500">{r.player.pos}</span>
+                        {mine && <span className="rounded bg-blue-100 px-1.5 text-[11px] font-bold text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">You</span>}
+                        {!r.player.owner && <span className="rounded bg-emerald-100 px-1.5 text-[11px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">FA</span>}
+                        {r.small && <span className="rounded bg-amber-100 px-1.5 text-[11px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Small sample</span>}
+                      </span>
+                      <span className="truncate text-xs text-gray-500 dark:text-gray-400">{r.player.owner ? r.player.owner.name : 'Free agent'}</span>
+                    </div>
+                    <span className="flex items-center justify-end pr-2 text-sm tabular-nums text-gray-500 dark:text-gray-400">{r.withGroup.games} / {r.withoutGroup.games}</span>
+                    <span className={`flex items-center justify-end px-2 text-sm tabular-nums text-gray-800 dark:text-gray-100 ${s.sort === 'zw' ? hi : ''}`}>{zText(r.zWith)}</span>
+                    <span className={`flex items-center justify-end px-2 text-sm font-bold tabular-nums text-gray-900 dark:text-white ${s.sort === 'zwo' ? hi : ''}`}>{zText(r.zWithout)}</span>
+                    <span className={`flex items-center justify-end px-2 ${s.sort === 'zd' ? hi : ''}`}><ZPill z={r.zDelta} /></span>
+                    {cols.map(c => <span key={c} className={`flex items-center justify-end px-2 text-sm tabular-nums ${s.sort === c ? hi : ''}`}>{cellVal(r, c)}</span>)}
+                    <span className="flex items-center justify-end pr-3 pl-1">
+                      <button type="button" aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} details for ${r.player.name}`} onClick={() => s.toggleRow(id)}
+                        className={`inline-flex min-h-[34px] items-center gap-1 rounded-lg border px-2.5 text-sm font-semibold text-blue-600 dark:text-blue-300 ${open ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30' : 'border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'}`}>
+                        {open ? 'Hide' : 'Details'}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><path d={open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} /></svg>
+                      </button>
+                    </span>
+                  </div>
+                  {open && <Expanded s={s} row={r} />}
+                </div>
+              </Fragment>
+            )
+          })}
+        </div>
+      </div>
+      <p className="border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+        {s.hiddenSmall > 0 && (
+          <>
+            {s.hiddenSmall} player{s.hiddenSmall > 1 ? 's' : ''} hidden: fewer than {s.smallSample} games without.{' '}
+            <button type="button" onClick={() => s.setMinGames(false)} className="font-semibold text-blue-600 hover:underline dark:text-blue-400">Show them</button>{' · '}
+          </>
+        )}
+        Click a column to sort. Z is the Player Rankings score of each line (per game, equal weights). FG% and FT% are makes over attempts. This compares games; it doesn’t prove one player caused the change.
+      </p>
+    </section>
   )
 }
 
 function Desktop({ s }: { s: WithWithoutState }) {
   const season = s.season
-  const cols = s.columns
-  const grid = { gridTemplateColumns: `minmax(180px,1.6fr) minmax(150px,1.3fr) 90px repeat(${cols.length}, minmax(58px,1fr)) 80px` }
-  const minW = 520 + cols.length * 64
-
   return (
-    <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900 dark:text-white">🩺 With / Without</h1>
-      <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">Pick one or more teammates. See how everyone else plays in games they all sat vs. games they all played.</p>
+    <div className="mx-auto flex max-w-screen-2xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+      <header>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">With / Without</h1>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">How teammates play when someone sits. Pick a team and who’s out.</p>
+      </header>
 
       {s.error && <ErrorMessage message={s.error} />}
+      {s.teamsLoading ? <LoadingSpinner /> : <Setup s={s} />}
 
-      <div className={`${card} mb-6 space-y-5 p-4`}>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100"><span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs text-white">1</span>Pick an NBA team</span>
-          <label htmlFor="ww-team" className="sr-only">NBA team</label>
-          <select
-            id="ww-team"
-            value={s.teamId ?? ''}
-            onChange={e => s.pickTeam(Number(e.target.value))}
-            className="min-h-[36px] min-w-[240px] rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-          >
-            {s.nbaTeams.map(t => <option key={t.team_id} value={t.team_id}>{t.name}{t.has_out_today ? ' · player out today' : ''}</option>)}
-          </select>
-          <button type="button" aria-pressed={s.injOnly} onClick={() => s.setInjOnly(!s.injOnly)} className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-            <Check on={s.injOnly} />Only teams with a player out today
-          </button>
-        </div>
-
-        {season && (
-          <div>
-            <div className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
-              <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs text-white">2</span>
-              Compare without <span className="font-normal text-gray-500 dark:text-gray-400">pick up to 3 {season.abbr} players · {s.picked.length ? `${s.picked.length} picked` : 'none picked yet'}</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {s.pickOptions.map(o => (
-                <button
-                  key={o.player.player_id}
-                  type="button"
-                  aria-pressed={o.picked}
-                  disabled={o.disabled}
-                  onClick={() => s.togglePick(o.player.player_id)}
-                  className={`inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45 ${o.picked ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-300 bg-white hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600'}`}
-                >
-                  <Check on={o.picked} />
-                  <span className="font-medium text-gray-900 dark:text-white">{o.player.name}</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{o.missed ? `missed ${o.missed} of ${o.onTeam}` : 'never missed'}</span>
-                  {o.player.two_way && <span className="rounded bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-600 dark:bg-gray-600 dark:text-gray-200">Two-way</span>}
-                  {o.player.approx && <span className="rounded bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-600 dark:bg-gray-600 dark:text-gray-200" title="Roster dates from box scores only">approx</span>}
-                  {o.player.out_today && <span className="rounded-full bg-red-100 px-2 text-[10px] font-bold text-red-700 dark:bg-red-900/40 dark:text-red-300">OUT · {o.player.out_today.note}</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {s.picked.length > 1 && (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-semibold text-gray-800 dark:text-gray-100"><span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs text-white">3</span>Count a game as “without” when</span>
-            <Seg ariaLabel="Which games count as without" value={s.mode} onChange={s.setMode} options={[['all', 'All of them sat'], ['any', 'Any of them sat']]} />
-          </div>
-        )}
-      </div>
+      {!s.teamsLoading && s.teamId == null && (
+        <section className={`${card} p-10 text-center`}>
+          <b className="text-gray-900 dark:text-white">Pick an NBA team to start</b>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Teams with your players are listed first, then teams with someone out today.</p>
+        </section>
+      )}
 
       {s.loading && <LoadingSpinner />}
 
-      {season && s.split && (
-        <div className={`${card} mb-6 p-4`}>
-          <div className="mb-3">
-            <div className={label}>Which games are compared</div>
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-200">{s.split.sentence}</p>
-          </div>
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-center gap-2"><b className="text-xl tabular-nums">{s.split.counts.with}</b><Tok kind="with">With</Tok></div><div className="text-xs text-gray-500 dark:text-gray-400">games where {s.split.withDesc}</div></div>
-            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-center gap-2"><b className="text-xl tabular-nums">{s.split.counts.without}</b><Tok kind="without">Without</Tok></div><div className="text-xs text-gray-500 dark:text-gray-400">games where {s.split.withoutDesc}</div></div>
-            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-center gap-2"><b className="text-xl tabular-nums">{s.split.counts.unused}</b><span className="text-xs font-bold text-gray-500">Not used</span></div><div className="text-xs text-gray-500 dark:text-gray-400">{s.split.unusedDesc}</div></div>
-          </div>
-          <GameStrip s={s} season={season} />
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Each column is one {season.abbr} game this season. The rows show whether each picked player played (✓) or sat; blank means he wasn’t on the team yet. The last row shows how that game is used in the table below.</p>
-        </div>
+      {season && s.picked.length === 0 && (
+        <section className={`${card} flex flex-col items-center gap-3 p-8 text-center`}>
+          <b className="text-gray-900 dark:text-white">Who’s sitting out?</b>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Pick up to 3 {season.abbr} players. {s.pickOptions.length ? 'These missed games, most first:' : 'Nobody has missed a game yet.'}</p>
+          <Picker s={s} />
+        </section>
       )}
 
-      {season && (
-        <div className={`${card} overflow-hidden`}>
-          <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 p-3 dark:border-gray-700">
-            <button type="button" aria-pressed={s.faOnly} onClick={() => s.setFaOnly(!s.faOnly)} className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200"><Check on={s.faOnly} />Free agents only</button>
-            <span className={`${label} ml-2`}>Cells</span>
-            <Seg ariaLabel="Cell values" value={s.cellMode} onChange={s.setCellMode} options={[['delta', 'Change'], ['with', 'With'], ['without', 'Without']]} />
-            {!s.zReady && <span className="text-xs text-gray-500">Loading Player Rankings for Z…</span>}
-          </div>
-          <div className="overflow-x-auto">
-            <div style={{ minWidth: minW }}>
-              <div className="grid items-center border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40" style={grid}>
-                {['Player', 'Owner', 'GP w/ · w/o'].map(h => <span key={h} className={`px-3 py-2 ${label}`}>{h}</span>)}
-                {[...cols, 'z'].map(c => (
-                  <button key={c} type="button" onClick={() => s.setSort(c)} title={c === 'z' ? 'Sort by change in fantasy value' : `Sort by change in ${c}`} className={`px-2 py-2 text-right text-xs font-semibold uppercase ${s.sort === c ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}>
-                    {c === 'z' ? 'Z Δ' : c}{s.sort === c ? ' ▼' : ''}
-                  </button>
-                ))}
-              </div>
-              {s.picked.length === 0 && <div className="p-6 text-center text-sm text-gray-500">Tick at least one {season.abbr} player in step 2.</div>}
-              {s.picked.length > 0 && s.rows.length === 0 && (
-                <div className="p-6 text-center text-sm text-gray-500">
-                  {s.split?.counts.without === 0 ? `No ${season.abbr} games where ${s.split.withoutDesc}. Try “Any of them sat” or remove a player.` : 'No teammates match these filters.'}
-                </div>
-              )}
-              {s.rows.map(r => {
-                const open = s.openId === r.player.player_id
-                const mine = r.player.owner?.team_id === s.myTeamId
-                return (
-                  <Fragment key={r.player.player_id}>
-                    <button type="button" aria-expanded={open} onClick={() => s.toggleRow(r.player.player_id)} className={`grid w-full items-center border-b border-gray-100 text-left hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/40 ${mine ? 'bg-blue-50/60 dark:bg-blue-900/20' : ''} ${myTeamRowClass(mine)}`} style={grid}>
-                      <span className="flex min-w-0 items-center gap-1.5 px-3 py-2 text-sm">
-                        <span className="text-gray-400" aria-hidden="true">{open ? '▾' : '▸'}</span>
-                        <span className="truncate font-medium text-gray-900 dark:text-white">{r.player.name}</span>
-                        <span className="text-xs text-gray-500">{r.player.pos}</span>
-                      </span>
-                      <span className="min-w-0 px-3 py-2"><Owner row={r} myTeamId={s.myTeamId} /></span>
-                      <span className="px-3 py-2 text-sm tabular-nums text-gray-700 dark:text-gray-200">
-                        {r.withGroup.games} · {r.withoutGroup.games}
-                        {r.small && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">small</span>}
-                      </span>
-                      {cols.map(c => (
-                        <span key={c} className="px-2 py-2 text-right text-sm tabular-nums text-gray-700 dark:text-gray-200">
-                          {s.cellMode === 'delta' ? <DeltaCell cat={c} d={r.deltas[c]} reverse={s.reverse} /> : formatStat(c, s.cellMode === 'with' ? r.withVals[c] : r.withoutVals[c])}
-                        </span>
-                      ))}
-                      <span className="px-2 py-2 text-right"><ZPill z={r.zDelta} /></span>
-                    </button>
-                    {open && <Expanded s={s} row={r} season={season} />}
-                  </Fragment>
-                )
-              })}
-            </div>
-          </div>
-          <p className="border-t border-gray-200 px-3 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-            Z Δ = change in fantasy value of his per-game line, scored like Player Rankings (per game, equal weights). FG% and FT% are total makes over total attempts. Click a row for the raw with/without lines. “small” = fewer than 3 games without. This compares games; it doesn’t prove one player caused the change.
-          </p>
-        </div>
+      {season && s.split && (
+        <>
+          <Summary s={s} season={season} />
+          <Table s={s} season={season} />
+        </>
       )}
     </div>
   )
@@ -370,4 +447,3 @@ export default function WithWithout() {
   if (mobile) return <MobileWithWithout s={s} />
   return <Desktop s={s} />
 }
-

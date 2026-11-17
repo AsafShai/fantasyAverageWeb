@@ -40,6 +40,7 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
       ]
     : []),
   { label: 'Player Rankings', path: '/player-rankings', icon: '📋', group: 'Players' },
+  ...(FF_WITH_WITHOUT ? [{ label: 'With / Without', path: '/with-without', icon: '🔀', group: 'Players' }] : []),
   { label: 'League Analytics', path: '/analytics', icon: '📈', group: 'Insights' },
   { label: 'Player Trends', path: '/trends', icon: '📉', group: 'Insights' },
   { label: 'Projections', path: '/projections', icon: '🔭', group: 'Insights' },
@@ -57,5 +58,4 @@ export const SEARCHABLE_PAGES: SearchablePage[] = [
   { label: 'Box Scores', path: '/box-scores', icon: '📋', group: 'NBA' },
   { label: 'Season Schedule', path: '/schedule', icon: '🗓️', group: 'NBA' },
   { label: 'Injuries', path: '/injuries', icon: '🩺', group: 'NBA' },
-  ...(FF_WITH_WITHOUT ? [{ label: 'With / Without', path: '/with-without', icon: '🔀', group: 'NBA' }] : []),
 ]
