@@ -21,13 +21,13 @@ const season: WithWithoutTeamSeason = {
   ],
 }
 
-function stubApi() {
+function stubApi(myPlayers: unknown[] = []) {
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
     if (url.includes('/nba/with-without/teams')) return Response.json({ teams: [{ team_id: 11, abbr: 'IND', name: 'Indiana Pacers', has_out_today: true }] })
     if (url.includes('/nba/with-without/11')) return Response.json(season)
     if (url.includes('/teams/')) return Response.json([{ team_id: 9, team_name: 'Khachapuri' }])
-    if (url.includes('/players')) return Response.json({ players: [], total_count: 0, page: 1, limit: 1200, has_more: false })
+    if (url.includes('/players')) return Response.json({ players: myPlayers, total_count: myPlayers.length, page: 1, limit: 1200, has_more: false })
     return new Response('not found', { status: 404 })
   }))
 }
@@ -99,5 +99,17 @@ describe('With / Without page', () => {
     await waitFor(() => expect(screen.getByTestId('trade-state')).toHaveTextContent('/trade?side=B'))
     expect(screen.getByTestId('trade-state')).toHaveTextContent('"mode":"freeAgent"')
     expect(screen.getByTestId('trade-state')).toHaveTextContent('Andrew Nembhard')
+  })
+
+  it('opens on a team with your player and someone out today, with him picked', async () => {
+    localStorage.setItem('fw:myTeam.id', '9')
+    stubApi([{
+      player_id: 50, player_name: 'Pascal Siakam', pro_team: 'IND', positions: ['PF'], team_id: 9, status: 'ONTEAM',
+      stats: { pts: 200, reb: 70, ast: 35, stl: 9, blk: 5, three_pm: 12, fgm: 80, fga: 160, ftm: 30, fta: 40, fg_percentage: 0.5, ft_percentage: 0.75, minutes: 330, gp: 10 },
+    }])
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Remove Tyrese Haliburton' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Team', { selector: 'select' })).toHaveValue('11')
+    expect(screen.getByText(/Opened on Indiana Pacers: you have players here and Haliburton is out today/)).toBeInTheDocument()
   })
 })

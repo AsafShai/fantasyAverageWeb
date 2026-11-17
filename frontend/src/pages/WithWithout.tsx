@@ -148,6 +148,8 @@ function Setup({ s }: { s: WithWithoutState }) {
         )}
       </div>
 
+      {s.autoNote && <p className="text-sm text-gray-600 dark:text-gray-300">{s.autoNote}</p>}
+
       {s.season && s.picked.length > 0 && s.pickerOpen && (
         <div className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
           <span className="text-xs text-gray-500 dark:text-gray-400">{s.season.abbr} players who missed games, most first</span>

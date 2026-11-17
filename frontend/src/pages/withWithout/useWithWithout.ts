@@ -67,7 +67,10 @@ export function useWithWithout() {
   const { myTeamId } = useMyTeam()
   const teamsQuery = useGetWithWithoutTeamsQuery()
   const [savedTeam, setSavedTeam] = usePersistedState<number | null>('withWithout.team', null)
-  const [pickedIds, setPickedIds] = useState<number[]>([])
+  /** Picked a team on this visit (until then the page may open on its own choice). */
+  const [userTeam, setUserTeam] = useState(false)
+  /** Who sat, as you set it; null = not touched yet (the opening picks apply). */
+  const [userPicks, setUserPicks] = useState<number[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [mode, setMode] = useState<MatchMode>('all')
   const [faOnly, setFaOnlyState] = useState(false)
@@ -84,7 +87,8 @@ export function useWithWithout() {
   // as that page, so the cache is shared). The same list says which NBA teams
   // your fantasy players are on.
   const playersQuery = useGetAllPlayersQuery({ limit: 1200, time_period: 'season' })
-  const { data: fantasyTeams = [] } = useGetTeamsListQuery()
+  const fantasyTeamsQuery = useGetTeamsListQuery()
+  const fantasyTeams = useMemo(() => fantasyTeamsQuery.data ?? [], [fantasyTeamsQuery.data])
 
   const nbaTeams: TeamOption[] = useMemo(() => {
     const mine = new Map<string, number>()
@@ -99,8 +103,15 @@ export function useWithWithout() {
       .sort((a, b) => Number(b.mine > 0) - Number(a.mine > 0) || Number(b.has_out_today) - Number(a.has_out_today) || a.name.localeCompare(b.name))
   }, [teamsQuery.data, playersQuery.data, myTeamId])
 
-  // No team until one is picked: a remembered team only if it still exists.
-  const teamId = savedTeam != null && (teamsQuery.data?.teams ?? []).some(t => t.team_id === savedTeam) ? savedTeam : null
+  // Opening the page: a team with one of your players and someone out today,
+  // with whoever is out picked; else the team you used last; else none.
+  const autoReady = (playersQuery.isSuccess || playersQuery.isError) && (fantasyTeamsQuery.isSuccess || fantasyTeamsQuery.isError)
+  const autoTeam = useMemo(
+    () => [...nbaTeams].filter(t => t.mine > 0 && t.has_out_today).sort((a, b) => b.mine - a.mine)[0] ?? null,
+    [nbaTeams],
+  )
+  const savedValid = savedTeam != null && (teamsQuery.data?.teams ?? []).some(t => t.team_id === savedTeam) ? savedTeam : null
+  const teamId = userTeam ? savedValid : !autoReady ? null : autoTeam?.team_id ?? savedValid
   const team = nbaTeams.find(t => t.team_id === teamId) ?? null
 
   const seasonQuery = useGetWithWithoutTeamQuery(teamId ?? 0, { skip: teamId == null })
@@ -111,6 +122,15 @@ export function useWithWithout() {
     if (!players || !season) return null
     return buildZContext(players, season.categories, season.reverse_categories)
   }, [playersQuery.data, season])
+
+  const autoPicks = useMemo(() => {
+    if (userTeam || !autoTeam || !season || season.team_id !== autoTeam.team_id) return []
+    return season.players.filter(p => p.out_today && missedGames(p).missed > 0).slice(0, MAX_PICKS)
+  }, [userTeam, autoTeam, season])
+  const pickedIds = useMemo(() => userPicks ?? autoPicks.map(p => p.player_id), [userPicks, autoPicks])
+  const autoNote = userPicks === null && autoPicks.length > 0 && season
+    ? `Opened on ${season.name}: you have players here and ${joinNames(autoPicks.map(p => p.name), '&')} ${autoPicks.length > 1 ? 'are' : 'is'} out today.`
+    : null
 
   const columns = useMemo(() => (season ? ['MIN', ...orderCategories(season.categories)] : []), [season])
   const reverse = useMemo(() => new Set(season?.reverse_categories ?? []), [season])
@@ -171,18 +191,19 @@ export function useWithWithout() {
   const resetRows = () => { setOpenIds([]); setLogIds([]) }
 
   const addPick = (id: number) => {
-    setPickedIds(prev => (prev.includes(id) || prev.length >= MAX_PICKS ? prev : [...prev, id]))
+    setUserPicks(pickedIds.includes(id) || pickedIds.length >= MAX_PICKS ? pickedIds : [...pickedIds, id])
     setPickerOpen(false)
     resetRows()
   }
   const removePick = (id: number) => {
-    setPickedIds(prev => prev.filter(x => x !== id))
+    setUserPicks(pickedIds.filter(x => x !== id))
     resetRows()
   }
 
   const pickTeam = (id: number | null) => {
+    setUserTeam(true)
     setSavedTeam(id)
-    setPickedIds([])
+    setUserPicks([])
     setPickerOpen(false)
     resetRows()
   }
@@ -239,7 +260,7 @@ export function useWithWithout() {
     : seasonQuery.error ? getErrorMessage(seasonQuery.error, 'Could not load this team’s games.') : null
 
   return {
-    teamsLoading: teamsQuery.isLoading,
+    teamsLoading: teamsQuery.isLoading || (!userTeam && !autoReady),
     loading: teamId != null && seasonQuery.isFetching && !season,
     error,
     myTeamId,
@@ -247,6 +268,7 @@ export function useWithWithout() {
     team,
     teamId,
     pickTeam,
+    autoNote,
     season,
     columns,
     reverse,

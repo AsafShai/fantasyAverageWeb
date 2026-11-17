@@ -203,6 +203,8 @@ export default function MobileWithWithout({ s }: { s: WithWithoutState }) {
             </>
           )}
 
+          {s.autoNote && <span className="mr-meta">{s.autoNote}</span>}
+
           {s.picked.length > 1 && (
             <>
               <span className="mr-ww-lbl">A game counts as “without” when</span>
