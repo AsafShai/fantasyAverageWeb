@@ -17,6 +17,8 @@ import {
 
 /** What the category cells show (desktop). */
 export type CellMode = 'delta' | 'with' | 'without'
+/** Cards are the default. Table hides the sort chips and sorts from the headers. */
+export type ResultLayout = 'cards' | 'table'
 /** 'zw' / 'zwo' / 'zd' (Z with, without, change) or a column (MIN / a category). */
 export type SortKey = string
 export type LogFilter = 'all' | 'with' | 'without'
@@ -77,7 +79,8 @@ export function useWithWithout() {
   const [mineOnly, setMineOnlyState] = useState(false)
   const [minGames, setMinGames] = useState(true)
   const [cellMode, setCellMode] = useState<CellMode>('delta')
-  const [sort, setSort] = useState<SortKey>('zwo')
+  const [layout, setLayout] = useState<ResultLayout>('cards')
+  const [sort, setSort] = useState<SortKey>('zd')
   const [showGames, setShowGames] = useState(false)
   const [openIds, setOpenIds] = useState<number[]>([])
   const [logIds, setLogIds] = useState<number[]>([])
@@ -173,14 +176,22 @@ export function useWithWithout() {
     if (mineOnly) out = out.filter(r => myTeamId != null && r.player.owner?.team_id === myTeamId)
     const small = out.filter(r => r.small).length
     if (minGames) out = out.filter(r => !r.small)
-    const key = (r: TeammateRow): number => {
-      const z = sort === 'zw' ? r.zWith : sort === 'zwo' ? r.zWithout : sort === 'zd' ? r.zDelta : undefined
-      if (z !== undefined) return z ?? -Infinity
-      const v = cellMode === 'with' ? r.withVals[sort] : cellMode === 'without' ? r.withoutVals[sort] : r.deltas[sort]
-      if (v === undefined || Number.isNaN(v)) return -Infinity
-      return reverse.has(sort) ? -v : v
+    const sorted = [...out]
+    if (sort === 'name') sorted.sort((a, b) => a.player.name.localeCompare(b.player.name))
+    else if (sort === 'gpw' || sort === 'gpwo') {
+      const games = (r: TeammateRow) => sort === 'gpw' ? r.withGroup.games : r.withoutGroup.games
+      sorted.sort((a, b) => games(b) - games(a))
+    } else {
+      const key = (r: TeammateRow): number => {
+        const z = sort === 'zw' ? r.zWith : sort === 'zwo' ? r.zWithout : sort === 'zd' ? r.zDelta : undefined
+        if (z !== undefined) return z ?? -Infinity
+        const v = cellMode === 'with' ? r.withVals[sort] : cellMode === 'without' ? r.withoutVals[sort] : r.deltas[sort]
+        if (v === undefined || Number.isNaN(v)) return -Infinity
+        return reverse.has(sort) ? -v : v
+      }
+      sorted.sort((a, b) => key(b) - key(a))
     }
-    return { rows: [...out].sort((a, b) => key(b) - key(a)), hiddenSmall: minGames ? small : 0 }
+    return { rows: sorted, hiddenSmall: minGames ? small : 0 }
   }, [allRows, faOnly, mineOnly, minGames, sort, cellMode, reverse, myTeamId])
 
   const toggleIn = (list: number[], id: number) => (list.includes(id) ? list.filter(x => x !== id) : [...list, id])
@@ -293,6 +304,8 @@ export function useWithWithout() {
     setMinGames,
     cellMode,
     setCellMode,
+    layout,
+    setLayout,
     sort,
     setSort,
     isOpen: (id: number) => openIds.includes(id),
