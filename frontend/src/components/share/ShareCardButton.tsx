@@ -26,6 +26,9 @@ interface ShareCardButtonProps {
   /** Changes when the card's data changes after the menu opened (e.g. stats
    * that were still loading), so the image is made again. */
   contentKey?: string
+  /** Keep the menu as the fixed sheet used on a phone. A dropdown is cut off
+   * inside a horizontal scroller, such as the With / Without table. */
+  sheet?: boolean
 }
 
 const BUTTON_STYLES = {
@@ -59,7 +62,7 @@ const ShareIcon = () => (
 export const ShareCardButton = (props: ShareCardButtonProps) =>
   FF_SHARE_CARDS ? <ShareCardMenu {...props} /> : null
 
-export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral', shareText, contentKey }: ShareCardButtonProps) => {
+export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral', shareText, contentKey, sheet = false }: ShareCardButtonProps) => {
   const [open, setOpen] = useState(false)
   const [dark, setDark] = useState(false)
   const [highlightMyTeam, setHighlightMyTeam] = usePersistedState('share.highlightMyTeam', false)
@@ -181,7 +184,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
         <div
           role="dialog"
           aria-label="Share as image"
-          className="fixed inset-x-3 bottom-3 z-50 sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 shadow-xl text-left text-gray-900 dark:text-gray-100"
+          className={`fixed inset-x-3 bottom-3 z-50 ${sheet ? '' : 'sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72'} rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 shadow-xl text-left text-gray-900 dark:text-gray-100`}
         >
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold">Share as image</span>

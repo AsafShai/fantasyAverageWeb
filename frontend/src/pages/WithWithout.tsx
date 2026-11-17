@@ -2,6 +2,8 @@ import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import { WithWithoutShareButton } from '../components/share/WithWithoutShareCard'
+import { withoutModeLabel } from '../components/share/withWithoutMessage'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileWithWithout from '../mobile/nba/MobileWithWithout'
 import type { WithWithoutEntry, WithWithoutTeamSeason } from '../types/withWithout'
@@ -518,7 +520,17 @@ function Teammate({ s, row }: { s: WithWithoutState; row: TeammateRow }) {
         ))}
       </div>
 
-      <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex items-center justify-end gap-2">
+        {s.split && s.season && (
+          <WithWithoutShareButton
+            row={row}
+            columns={s.columns}
+            reverse={s.reverse}
+            names={s.split.names}
+            modeLabel={withoutModeLabel(s.picked.length, s.mode)}
+            teamAbbr={s.season.abbr}
+          />
+        )}
         <button
           type="button"
           aria-expanded={open}
@@ -592,16 +604,29 @@ function TeammateTable({ s }: { s: WithWithoutState }) {
                   <td className={`px-2 text-right font-semibold tabular-nums ${tint('zwo')}`}>{zText(row.zWithout)}</td>
                   <td className={`px-2 text-right ${tint('zd')}`}><ZPill z={row.zDelta} /></td>
                   {s.columns.map(c => <td key={c} className={`px-2 text-right ${tint(c)}`}>{cellNode(s, row, c)}</td>)}
-                  <td className="px-2 py-1.5 text-right">
-                    <button
-                      type="button"
-                      aria-expanded={open}
-                      aria-label={`${open ? 'Hide' : 'Show'} details for ${row.player.name}`}
-                      onClick={() => s.toggleRow(id)}
-                      className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-300"
-                    >
-                      {open ? 'Hide' : 'Details'}
-                    </button>
+                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                    <div className="inline-flex items-center gap-2">
+                      {s.split && s.season && (
+                        <WithWithoutShareButton
+                          sheet
+                          row={row}
+                          columns={s.columns}
+                          reverse={s.reverse}
+                          names={s.split.names}
+                          modeLabel={withoutModeLabel(s.picked.length, s.mode)}
+                          teamAbbr={s.season.abbr}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        aria-label={`${open ? 'Hide' : 'Show'} details for ${row.player.name}`}
+                        onClick={() => s.toggleRow(id)}
+                        className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-300"
+                      >
+                        {open ? 'Hide' : 'Details'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 {open && (
