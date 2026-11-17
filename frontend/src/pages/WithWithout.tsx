@@ -42,8 +42,8 @@ function Tok({ kind, children }: { kind: GameKind; children: React.ReactNode }) 
   return <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold whitespace-nowrap ${KIND_TOK[kind]}`}>{children}</span>
 }
 
-function Seg<T extends string>({ value, options, onChange, ariaLabel }: {
-  value: T; options: [T, string][]; onChange: (v: T) => void; ariaLabel: string
+function Seg<T extends string>({ value, options, onChange, ariaLabel, tall = false }: {
+  value: T; options: [T, string][]; onChange: (v: T) => void; ariaLabel: string; tall?: boolean
 }) {
   return (
     <div role="group" aria-label={ariaLabel} className="inline-flex overflow-hidden rounded-lg border border-gray-300 dark:border-gray-600">
@@ -53,7 +53,7 @@ function Seg<T extends string>({ value, options, onChange, ariaLabel }: {
           type="button"
           aria-pressed={value === k}
           onClick={() => onChange(k)}
-          className={`min-h-[34px] px-3 text-sm whitespace-nowrap ${value === k ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'}`}
+          className={`${tall ? 'min-h-[44px]' : 'min-h-[34px]'} px-3 text-sm whitespace-nowrap ${value === k ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'}`}
         >
           {text}
         </button>
@@ -135,7 +135,7 @@ function TeamMenu({ s }: { s: WithWithoutState }) {
   const summary = s.team ? `${s.team.abbr} · ${s.team.name}` : 'Pick an NBA team…'
 
   return (
-    <div ref={rootRef} className="relative flex w-full max-w-sm flex-col gap-2">
+    <div ref={rootRef} className="relative flex w-56 shrink-0 flex-col gap-2">
       <span id="ww-team-label" className={label}>Team</span>
       <button
         id="ww-team"
@@ -263,34 +263,34 @@ function Picker({ s }: { s: WithWithoutState }) {
 function Setup({ s }: { s: WithWithoutState }) {
   return (
     <section className={`${card} flex flex-col gap-4 p-5`}>
-      <div className="flex flex-wrap items-end gap-6">
+      <div className="flex flex-wrap items-start gap-x-5 gap-y-3">
         <TeamMenu s={s} />
 
         {s.season && (
-          <div className="flex min-w-[280px] flex-1 flex-col gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             <span className={label}>Sitting out · up to 3</span>
-            <div className="flex min-h-[44px] flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {s.picked.map(p => (
-                <span key={p.player_id} className={`${chip} ${chipOn}`}>
+                <span key={p.player_id} className={`${chip} !min-h-[44px] ${chipOn}`}>
                   {p.name}
                   {p.out_today && <OutBadge />}
                   <button type="button" aria-label={`Remove ${p.name}`} onClick={() => s.removePick(p.player_id)} className="ml-0.5 text-base leading-none text-white/80 hover:text-white">×</button>
                 </span>
               ))}
               {s.picked.length > 0 && s.canAdd && (
-                <button type="button" aria-expanded={s.pickerOpen} onClick={() => s.setPickerOpen(!s.pickerOpen)} className={`${chip} ${chipOff} border-dashed`}>
+                <button type="button" aria-expanded={s.pickerOpen} onClick={() => s.setPickerOpen(!s.pickerOpen)} className={`${chip} !min-h-[44px] ${chipOff} border-dashed`}>
                   {s.pickerOpen ? 'Close' : '+ Add player'}
                 </button>
               )}
-              {s.picked.length === 0 && <span className="text-sm text-gray-500 dark:text-gray-400">None yet</span>}
+              {s.picked.length === 0 && <span className="flex min-h-[44px] items-center text-sm text-gray-500 dark:text-gray-400">None yet</span>}
             </div>
           </div>
         )}
 
         {s.picked.length > 1 && (
-          <div className="flex flex-col gap-2">
+          <div className="flex shrink-0 flex-col gap-2">
             <span className={label}>Without = when</span>
-            <Seg ariaLabel="Which games count as without" value={s.mode} onChange={s.setMode} options={[['all', s.picked.length > 2 ? 'All sat' : 'Both sat'], ['any', s.picked.length > 2 ? 'Any sat' : 'Either sat']]} />
+            <Seg tall ariaLabel="Which games count as without" value={s.mode} onChange={s.setMode} options={[['all', s.picked.length > 2 ? 'All sat' : 'Both sat'], ['any', s.picked.length > 2 ? 'Any sat' : 'Either sat']]} />
           </div>
         )}
       </div>
