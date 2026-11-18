@@ -623,6 +623,8 @@ export interface PlayerGameLogGame {
   team_pts: number | null;
   opp_pts: number | null;
   minutes: number;
+  /** This game's usage rate. Null when he did not play or the team totals are missing. */
+  usg?: number | null;
   pts: number;
   reb: number;
   ast: number;

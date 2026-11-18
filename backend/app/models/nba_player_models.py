@@ -49,6 +49,9 @@ class PlayerGameLogGame(BaseModel):
     team_pts: Optional[int] = None
     opp_pts: Optional[int] = None
     minutes: float
+    # This game's USG%, the same per-game rate as the box score. None when he
+    # did not play or the team totals for that game are missing.
+    usg: Optional[float] = None
     pts: float
     reb: float
     ast: float
