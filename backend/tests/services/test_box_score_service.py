@@ -7,6 +7,11 @@ from app.services.box_score_service import (
     parse_boxscore,
     parse_scoreboard,
 )
+from app.services.with_without_service import usage_pct
+
+
+def _usg(p_fga, p_fta, p_tov, p_min, t_fga, t_fta, t_tov, t_min) -> str:
+    return f"{usage_pct(p_fga, p_fta, p_tov, p_min, t_fga, t_fta, t_tov, t_min):.1f}%"
 
 
 def _team(team_id, abbr, name, short, home_away, score="0", winner=False, color="002B5C"):
@@ -176,9 +181,36 @@ def test_boxscore_splits_lineup_and_labels_overtime():
     assert box["away"]["totals"]["fg"] == "48-90"
     assert box["away"]["totals"]["pts"] == "129"
     assert box["away"]["totals"]["min"] == "52"
+    # Same Dean Oliver rate as Trends. Team minutes are the players who played (34 + 18).
+    assert box["away"]["starters"][0]["usg"] == _usg(16, 4, 2, 34, 90, 24, 12, 52)
+    assert box["away"]["bench"][0]["usg"] == _usg(7, 2, 1, 18, 90, 24, 12, 52)
+    assert box["away"]["totals"]["usg"] == ""
+    assert "usg" not in box["away"]["did_not_play"][0]
+    # No team totals on this side, so possessions are this one player's line and usage is 20%.
+    assert box["home"]["starters"][0]["usg"] == "20.0%"
     assert box["away"]["shooting"]["points_in_paint"] == "52"
     assert box["home"]["totals"]["fg"] == ""
     assert box["home"]["totals"]["reb"] == "8"
+
+
+def test_usage_follows_a_live_box_and_stays_blank_before_tip():
+    live = _summary()
+    live["header"]["competitions"][0]["status"] = {"type": {"state": "in", "shortDetail": "Q1 8:00"}}
+    athletes = live["boxscore"]["players"][0]["statistics"][0]["athletes"]
+    athletes[0]["stats"][0] = "12:30"
+    athletes.append(_athlete("4", "Just Checked In", ["0", "0", "0-0", "0-0", "0-0", "0", "0", "0", "0", "0", "0", "0", "0", "0"]))
+    box = parse_boxscore(live, "100")
+    # 12:30 is 12.5 minutes, and team minutes include that fraction plus the bench's 18.
+    assert box["away"]["starters"][0]["usg"] == _usg(16, 4, 2, 12.5, 90, 24, 12, 30.5)
+    assert box["away"]["bench"][0]["usg"] == _usg(7, 2, 1, 18, 90, 24, 12, 30.5)
+    assert box["away"]["bench"][1]["usg"] == ""
+
+    scheduled = _summary()
+    scheduled["header"]["competitions"][0]["status"] = {"type": {"state": "pre", "shortDetail": "7:00 PM EDT"}}
+    before = parse_boxscore(scheduled, "100")
+    assert before["status"] == "scheduled"
+    assert before["away"]["starters"][0]["usg"] == ""
+    assert before["away"]["bench"][0]["usg"] == ""
 
 
 def test_live_box_records_who_is_on_the_court():

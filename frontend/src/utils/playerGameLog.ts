@@ -39,6 +39,19 @@ export function shotPct(made: number, att: number): string {
   return `${((made / att) * 100).toFixed(1)}%`
 }
 
+/** This game's usage, one decimal. Blank when the game has no rate. */
+export function usageText(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return `${value.toFixed(1)}%`
+}
+
+/** Unweighted mean of the games that have a usage rate, matching Trends. */
+export function meanUsage(games: PlayerGameLogGame[]): string {
+  const known = games.map((game) => game.usg).filter((value): value is number => value != null)
+  if (known.length === 0) return '—'
+  return usageText(known.reduce((sum, value) => sum + value, 0) / known.length)
+}
+
 export function mean(games: PlayerGameLogGame[], key: (typeof COUNT_COLS)[number]['key']): string {
   if (games.length === 0) return '—'
   const value = games.reduce((sum, game) => sum + game[key], 0) / games.length
@@ -117,7 +130,7 @@ export function averageZ(games: { game_id: string }[], zs: Map<string, number>):
   return known.reduce((sum, z) => sum + z, 0) / known.length
 }
 
-export type GameLogSortKey = 'date' | 'opp' | 'z' | 'team' | (typeof COUNT_COLS)[number]['key'] | (typeof SHOT_COLS)[number]['label']
+export type GameLogSortKey = 'date' | 'opp' | 'z' | 'usg' | 'team' | (typeof COUNT_COLS)[number]['key'] | (typeof SHOT_COLS)[number]['label']
 
 export interface GameLogSort {
   key: GameLogSortKey
@@ -147,6 +160,7 @@ function sortValue(game: PlayerGameLogGame, key: GameLogSortKey, zs: Map<string,
   if (key === 'opp') return game.opponent
   if (key === 'team') return game.fantasy?.fantasy_team_name || game.fantasy?.fantasy_team || null
   if (key === 'z') return zs.get(game.game_id) ?? null
+  if (key === 'usg') return game.usg ?? null
   if (key === 'FG' || key === '3P' || key === 'FT') return shotRate(game, key)
   if (countKey(key)) return game[key]
   return null

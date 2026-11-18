@@ -24,6 +24,7 @@ function player(name: string, extra: Partial<BoxPlayerLine> = {}): BoxPlayerLine
     dreb: '1',
     pf: '2',
     plus_minus: '0',
+    usg: '',
     ...extra,
   }
 }

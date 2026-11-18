@@ -1313,10 +1313,20 @@ class DBService:
                         p.pts, p.reb, p.ast, p.stl, p.blk, p.tov,
                         p.fg3m, p.fg3a, p.fgm, p.fga, p.ftm, p.fta, p.plus_minus,
                         t.pts AS team_pts,
+                        t.fga AS t_fga,
+                        t.fta AS t_fta,
+                        t.tov AS t_tov,
+                        tm.team_min AS t_min,
                         opp.pts AS opp_pts
                     FROM fs_player_games p
                     LEFT JOIN fs_team_games t
                         ON t.game_id = p.game_id AND t.team_id = p.team_id
+                    LEFT JOIN (
+                        SELECT team_id, game_id, SUM(min) AS team_min
+                        FROM fs_player_games
+                        WHERE season = $2
+                        GROUP BY team_id, game_id
+                    ) tm ON tm.team_id = p.team_id AND tm.game_id = p.game_id
                     LEFT JOIN LATERAL (
                         SELECT o.pts
                         FROM fs_team_games o

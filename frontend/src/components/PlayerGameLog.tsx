@@ -12,12 +12,14 @@ import {
   averageZ,
   logDate,
   mean,
+  meanUsage,
   record,
   shotLine,
   shotPct,
   signed,
   sortGameLog,
   toggleGameLogSort,
+  usageText,
   whole,
   zByGame,
   type GameLogSort,
@@ -112,8 +114,10 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
   const [sort, setSort] = useState<GameLogSort>(GAME_LOG_SORT_DEFAULT)
   const ordered = useMemo(() => sortGameLog(shown, zs, sort), [shown, zs, sort])
   const onSort = (column: GameLogSortKey) => setSort((current) => toggleGameLogSort(current, column))
-  const statHeads: { key: GameLogSortKey; label: string }[] = [
-    ...COUNT_COLS.slice(0, 6).map((col) => ({ key: col.key, label: col.label })),
+  const statHeads: { key: GameLogSortKey; label: string; title?: string }[] = [
+    ...COUNT_COLS.slice(0, 1).map((col) => ({ key: col.key, label: col.label })),
+    { key: 'usg', label: 'USG%', title: "Share of the team's possessions used while he was on the floor" },
+    ...COUNT_COLS.slice(1, 6).map((col) => ({ key: col.key, label: col.label })),
     ...SHOT_COLS.map((col) => ({ key: col.label, label: col.label })),
     ...COUNT_COLS.slice(6).map((col) => ({ key: col.key, label: col.label })),
   ]
@@ -151,7 +155,7 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
                 <SortHead label="Opp" column="opp" sort={sort} onSort={onSort} align="left" className={`${head} ${stickyHead} ${pinnedEdge} left-[4.75rem] top-0 text-left min-w-[7.25rem]`} />
                 <SortHead label="Z" column="z" sort={sort} onSort={onSort} title="Z-score for this night, same as the box score" className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
                 {statHeads.map((col) => (
-                  <SortHead key={col.label} label={col.label} column={col.key} sort={sort} onSort={onSort} className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
+                  <SortHead key={col.label} label={col.label} column={col.key} sort={sort} onSort={onSort} title={col.title} className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
                 ))}
                 <SortHead label="Fantasy" column="team" sort={sort} onSort={onSort} title="Fantasy team that rostered him on the night of the game" className={`${head} sticky top-0 z-20 bg-gray-50 dark:bg-gray-800`} />
               </tr>
@@ -163,7 +167,15 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
                 <th className={`${head} sticky top-[33px] z-20 bg-gray-100 dark:bg-gray-800/95 normal-case tracking-normal`}>
                   {avgZ == null ? '—' : <ZValue z={avgZ} />}
                 </th>
-                {COUNT_COLS.slice(0, 6).map((col) => (
+                {COUNT_COLS.slice(0, 1).map((col) => (
+                  <th key={col.label} className={`${head} sticky top-[33px] z-20 bg-gray-100 dark:bg-gray-800/95 normal-case tracking-normal text-gray-700 dark:text-gray-200`}>
+                    {mean(shown, col.key)}
+                  </th>
+                ))}
+                <th className={`${head} sticky top-[33px] z-20 bg-gray-100 dark:bg-gray-800/95 normal-case tracking-normal text-gray-700 dark:text-gray-200`}>
+                  {meanUsage(shown)}
+                </th>
+                {COUNT_COLS.slice(1, 6).map((col) => (
                   <th key={col.label} className={`${head} sticky top-[33px] z-20 bg-gray-100 dark:bg-gray-800/95 normal-case tracking-normal text-gray-700 dark:text-gray-200`}>
                     {mean(shown, col.key)}
                   </th>
@@ -212,7 +224,15 @@ export default function PlayerGameLog({ playerId }: { playerId: string }) {
                     <td className={`${cell} border-t border-gray-100 dark:border-gray-800`}>
                       <GameZ z={zs.get(game.game_id)} />
                     </td>
-                    {COUNT_COLS.slice(0, 6).map((col) => (
+                    {COUNT_COLS.slice(0, 1).map((col) => (
+                      <td key={col.label} className={`${cell} border-t border-gray-100 dark:border-gray-800 ${col.strong ? 'font-semibold text-gray-900 dark:text-white' : ''}`}>
+                        {whole(game[col.key])}
+                      </td>
+                    ))}
+                    <td className={`${cell} border-t border-gray-100 dark:border-gray-800`}>
+                      {usageText(game.usg)}
+                    </td>
+                    {COUNT_COLS.slice(1, 6).map((col) => (
                       <td key={col.label} className={`${cell} border-t border-gray-100 dark:border-gray-800 ${col.strong ? 'font-semibold text-gray-900 dark:text-white' : ''}`}>
                         {whole(game[col.key])}
                       </td>

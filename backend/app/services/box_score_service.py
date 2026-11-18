@@ -409,6 +409,7 @@ def _team_box(competitor: dict, status: str, player_blocks: dict, team_blocks: d
     identity = _identity(competitor, block.get("team") or {})
     starters, bench, dnp = _players(block, live=status == "live")
     totals = _totals(team_blocks.get(identity["team_id"]) or {}, starters + bench, _score(competitor, status))
+    _attach_usage(starters, bench, totals, started=status != "scheduled")
     return {
         **identity,
         "score": _score(competitor, status),
@@ -621,6 +622,95 @@ def _shooting(block: dict) -> dict[str, str]:
         "turnover_points": _first(stats, "turnoverPoints"),
         "largest_lead": _first(stats, "largestLead"),
     }
+
+
+def _attach_usage(starters: list[dict], bench: list[dict], totals: dict, *, started: bool) -> None:
+    """USG% for each player who played, same per-game rate as Trends and With / Without.
+
+    A live box and a final box both run through here on every parse, so the
+    number refreshes with the ESPN poll and is present on past games too.
+    A game that has not tipped off is left blank: ESPN fills those rows with
+    season averages, not a box.
+    """
+    players = [*starters, *bench]
+    totals["usg"] = ""
+    if not started:
+        for player in players:
+            player["usg"] = ""
+        return
+    # The team block is the official possessions. Without its field-goal line
+    # (a partial or missing box), sum the players who have a line.
+    if "-" in str(totals.get("fg") or ""):
+        t_fga = _attempts(totals.get("fg"))
+        t_fta = _attempts(totals.get("ft"))
+        t_tov = _number(totals.get("tov"))
+    else:
+        t_fga = sum(_attempts(player.get("fg")) for player in players)
+        t_fta = sum(_attempts(player.get("ft")) for player in players)
+        t_tov = sum(_number(player.get("tov")) for player in players)
+    minutes = [_minutes(player.get("min")) for player in players]
+    team_min = sum(minutes)
+    possessions = t_fga + 0.44 * t_fta + t_tov
+    for player, played in zip(players, minutes):
+        if played <= 0 or possessions == 0:
+            player["usg"] = ""
+            continue
+        rate = _usage_pct(
+            _attempts(player.get("fg")),
+            _attempts(player.get("ft")),
+            _number(player.get("tov")),
+            played,
+            t_fga,
+            t_fta,
+            t_tov,
+            team_min,
+        )
+        player["usg"] = f"{rate:.1f}%"
+
+
+def _usage_pct(p_fga: float, p_fta: float, p_tov: float, p_min: float, t_fga: float, t_fta: float, t_tov: float, t_min: float) -> float:
+    """Dean Oliver: 100 * (FGA + 0.44*FTA + TOV) * (team minutes / 5) / (minutes * team possessions)."""
+    denom = p_min * (t_fga + 0.44 * t_fta + t_tov)
+    if denom == 0:
+        return 0.0
+    return 100 * (p_fga + 0.44 * p_fta + p_tov) * (t_min / 5) / denom
+
+
+def _attempts(made_attempted) -> float:
+    text = str(made_attempted or "")
+    if "-" not in text:
+        return 0.0
+    try:
+        return float(text.split("-", 1)[1].strip())
+    except ValueError:
+        return 0.0
+
+
+def _number(raw) -> float:
+    text = str(raw or "").strip().lstrip("+")
+    if not text:
+        return 0.0
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0
+
+
+def _minutes(raw) -> float:
+    """Whole minutes, or minutes:seconds while a game is live."""
+    text = str(raw or "").strip()
+    if not text:
+        return 0.0
+    if ":" in text:
+        head, _, tail = text.partition(":")
+        try:
+            return float(head) + float(tail) / 60.0
+        except ValueError:
+            return 0.0
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0
 
 
 def _sum_numbers(players: list[dict], key: str) -> str:
