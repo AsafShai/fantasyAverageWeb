@@ -15,6 +15,7 @@ export type PlayerValues = Map<string, SlatePlayerValue>
 
 export const BOX_LINE_COLUMNS: { key: keyof BoxTeamTotals; label: string }[] = [
   { key: 'min', label: 'MIN' },
+  { key: 'usg', label: 'USG%' },
   { key: 'pts', label: 'PTS' },
   { key: 'fg', label: 'FG' },
   { key: 'fg3', label: '3PT' },
@@ -262,7 +263,13 @@ function PlayerTable({ team, hideScores, values, fantasyPlayers, mineIds, live }
                   </>
                 )}
                 {BOX_LINE_COLUMNS.map(column => (
-                  <th key={column.key} className="px-2 py-2 text-right font-semibold">{column.label}</th>
+                  <th
+                    key={column.key}
+                    className="px-2 py-2 text-right font-semibold"
+                    title={column.key === 'usg' ? "Share of the team's possessions used while he was on the floor" : undefined}
+                  >
+                    {column.label}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -300,7 +307,7 @@ function PlayerTable({ team, hideScores, values, fantasyPlayers, mineIds, live }
                 {values && <td colSpan={2} />}
                 {BOX_LINE_COLUMNS.map(column => (
                   <td key={column.key} className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-gray-800 dark:text-gray-100">
-                    <StatCell value={team.totals[column.key]} hide={false} />
+                    {column.key === 'usg' ? null : <StatCell value={team.totals[column.key]} hide={false} />}
                   </td>
                 ))}
               </tr>

@@ -42,6 +42,8 @@ export interface BoxPlayerLine {
   /** True only while the game is live and this player is on the floor. */
   on_court: boolean
   min: string
+  /** This game's usage rate, e.g. "24.6%". Blank when he did not play or the game has not tipped. */
+  usg: string
   pts: string
   fg: string
   fg3: string
@@ -67,6 +69,8 @@ export interface BoxDidNotPlay {
 
 export interface BoxTeamTotals {
   min: string
+  /** Unused on the team total. Present so the column shares the line's keys. */
+  usg: string
   pts: string
   fg: string
   fg3: string
