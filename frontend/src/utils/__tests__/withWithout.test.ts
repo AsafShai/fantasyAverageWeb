@@ -3,7 +3,7 @@ import type { Player } from '../../types/api'
 import type { WithWithoutEntry, WithWithoutPlayer, WithWithoutTeamSeason } from '../../types/withWithout'
 import { scoreAgainstPool } from '../playerRankings'
 import {
-  buildZContext, formatDelta, formatGameStat, groupAsPlayer, groupLine, joinNames, missedGames, perGame, splitGames, teammateRows,
+  buildZContext, formatDelta, formatGameStat, formatStat, groupAsPlayer, groupLine, joinNames, missedGames, perGame, splitGames, teammateRows,
 } from '../withWithout'
 
 const FIELDS = ['MIN', 'PTS', 'REB', 'AST', 'STL', 'BLK', '3PM', 'FGM', 'FGA', 'FTM', 'FTA', 'TO', '3PA', 'OREB', 'DREB', 'PF']
@@ -129,6 +129,15 @@ describe('helpers', () => {
   it('shows one game as whole numbers', () => {
     expect(formatGameStat('PTS', 18)).toBe('18')
     expect(formatGameStat('FG%', 0.6)).toBe('60.0%')
+  })
+
+  it('averages each game’s usage and shows it as a percent', () => {
+    const fields = [...FIELDS, 'USG%']
+    const group = groupLine([[...g(20), 30], [...g(10), 10]], fields)
+    expect(perGame(group, 'USG%')).toBe(20)
+    expect(formatStat('USG%', 24.56)).toBe('24.6%')
+    expect(formatDelta('USG%', 2.3)).toEqual({ text: '+2.3', dir: 'up' })
+    expect(formatGameStat('USG%', 24.5)).toBe('24.5%')
   })
 
   it('joins last names', () => {

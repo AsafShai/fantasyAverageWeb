@@ -1,6 +1,8 @@
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.models.injury_models import InjuryRecord
 from app.services import injury_service
 from app.services import with_without_service as svc
@@ -37,6 +39,22 @@ def build(rows, stints, owners=None, outs=None):
 
 def by_id(payload):
     return {p["player_id"]: p for p in payload["players"]}
+
+
+def test_usage_matches_the_trends_per_game_formula():
+    # 100 * (14 + 0.44*2 + 2) * (240/5) / (30 * (88 + 0.44*20 + 13))
+    assert svc.usage_pct(14, 2, 2, 30, 88, 20, 13, 240) == pytest.approx(
+        100 * (14 + 0.44 * 2 + 2.0) * (240.0 / 5) / (30.0 * (88.0 + 0.44 * 20.0 + 13.0))
+    )
+    assert svc.usage_pct(1, 1, 1, 0, 10, 10, 10, 240) == 0.0
+
+
+def test_a_played_game_carries_that_games_usage():
+    row = line(1, "g1", mins=30, pts=20)
+    row.update(fga=14, fta=2, tov=2, t_fga=88, t_fta=20, t_tov=13)
+    p = by_id(build([row], [stint(1, "2026-10-20")]))[1]
+    assert p["lines"][0][-1] == round(svc.usage_pct(14, 2, 2, 30, 88, 20, 13, 30), 1)
+    assert build([row], [stint(1, "2026-10-20")])["line_fields"][-1] == "USG%"
 
 
 def test_played_sat_and_not_on_team_are_encoded_separately():
