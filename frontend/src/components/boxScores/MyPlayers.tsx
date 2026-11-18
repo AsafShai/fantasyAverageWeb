@@ -67,7 +67,7 @@ function StatLabels({ hideOnWide = false }: { hideOnWide?: boolean }) {
 function StatStrip({ line, hideLabelsOnWide = false }: { line: BoxPlayerLine; hideLabelsOnWide?: boolean }) {
   return (
     <div className="w-full overflow-x-auto lg:overflow-visible">
-      <table className="w-full min-w-[34rem] table-fixed text-[11px] lg:min-w-full">
+      <table className="w-full min-w-[36rem] table-fixed text-[11px] lg:min-w-full">
         <caption className="sr-only">{line.name} line</caption>
         <thead>
           <StatLabels hideOnWide={hideLabelsOnWide} />
