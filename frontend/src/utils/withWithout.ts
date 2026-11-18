@@ -52,9 +52,15 @@ export function groupLine(entries: number[][], fields: string[]): GroupLine {
 
 const PCT: Record<string, [string, string]> = { 'FG%': ['FGM', 'FGA'], 'FT%': ['FTM', 'FTA'], '3P%': ['3PM', '3PA'] }
 const ALIASES: Record<string, string> = { PPG: 'PTS', RPG: 'REB', APG: 'AST', BPG: 'BLK', SPG: 'STL', TOPG: 'TO', '3PG': '3PM' }
+/** Already a 0–100 rate per game (USG%), so it is averaged, not recomputed from totals, and shown with a %. */
+const RATES = new Set(['USG%'])
 
 export function isPct(cat: string): boolean {
   return cat in PCT
+}
+
+export function isRate(cat: string): boolean {
+  return RATES.has(cat)
 }
 
 /** Per-game value of a stat or category over the group. Percentages are total
@@ -192,12 +198,14 @@ export function entryValue(entry: number[], fields: string[], cat: string): numb
 
 export function formatStat(cat: string, v: number | null): string {
   if (v === null || Number.isNaN(v)) return '—'
+  if (isRate(cat)) return `${v.toFixed(1)}%`
   return isPct(cat) ? `${(v * 100).toFixed(1)}%` : v.toFixed(1)
 }
 
 /** One game's value: whole numbers for counting stats, one decimal for %. */
 export function formatGameStat(cat: string, v: number | null): string {
   if (v === null || Number.isNaN(v)) return '—'
+  if (isRate(cat)) return `${v.toFixed(1)}%`
   return isPct(cat) ? `${(v * 100).toFixed(1)}%` : String(Math.round(v))
 }
 
@@ -205,7 +213,7 @@ export function formatGameStat(cat: string, v: number | null): string {
 export function formatDelta(cat: string, d: number): { text: string; dir: 'up' | 'down' | 'flat' } {
   if (Number.isNaN(d)) return { text: '—', dir: 'flat' }
   const x = isPct(cat) ? d * 100 : d
-  const flat = Math.abs(x) < (isPct(cat) ? 0.3 : 0.05)
+  const flat = Math.abs(x) < (isPct(cat) || isRate(cat) ? 0.3 : 0.05)
   if (flat) return { text: '±0', dir: 'flat' }
   return { text: `${x > 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`, dir: x > 0 ? 'up' : 'down' }
 }
