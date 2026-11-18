@@ -97,6 +97,11 @@ describe('With / Without page', () => {
     expect(tabs.getByRole('button', { name: 'All games · 4' })).toBeInTheDocument()
     await user.click(tabs.getByRole('button', { name: 'Without · 2' }))
     expect(screen.getAllByText('Without', { selector: 'span' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'Box score for Oct 24 @ BOS' })).toHaveAttribute('href', '/box-scores?date=2026-10-24&game=g1')
+    expect(screen.queryByRole('link', { name: 'Box score for Oct 22 vs BOS' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'See the games ›' }))
+    expect(screen.getByRole('link', { name: 'Box score for Oct 22 vs BOS' })).toHaveAttribute('href', '/box-scores?date=2026-10-22&game=g0')
 
     await user.click(screen.getByRole('button', { name: 'Open in Trade Analyzer' }))
     await waitFor(() => expect(screen.getByTestId('trade-state')).toHaveTextContent('/trade?side=B'))

@@ -132,7 +132,11 @@ export function useWithWithout() {
     ? `Opened on ${season.name}: you have players here and someone is out today.`
     : null
 
-  const columns = useMemo(() => (season ? ['MIN', ...orderCategories(season.categories)] : []), [season])
+  const columns = useMemo(() => {
+    if (!season) return []
+    const usage = season.line_fields.includes('USG%') ? ['USG%'] : []
+    return ['MIN', ...usage, ...orderCategories(season.categories)]
+  }, [season])
   const reverse = useMemo(() => new Set(season?.reverse_categories ?? []), [season])
 
   const picked = useMemo(

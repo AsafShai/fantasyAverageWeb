@@ -329,6 +329,14 @@ function GameList({ s, season }: { s: WithWithoutState; season: WithWithoutTeamS
                 ))}
               </span>
               <Tok kind={kind}>{KIND_LABEL[kind]}</Tok>
+              <Link
+                to={`/box-scores?date=${g.date}&game=${g.game_id}`}
+                state={{ from: '/with-without' }}
+                aria-label={`Box score for ${shortDay(g.date)} ${g.home ? 'vs' : '@'} ${g.opp}`}
+                className="inline-flex shrink-0 items-center rounded-md border border-gray-300 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-gray-100 dark:border-gray-600 dark:text-blue-300 dark:hover:bg-gray-700"
+              >
+                Box score
+              </Link>
             </li>
           )
         })}
@@ -388,6 +396,14 @@ function GameLogTable({ s, row }: { s: WithWithoutState; row: TeammateRow }) {
                   {g.dnp ? <span className="text-[11px] font-semibold text-gray-500">Didn’t play</span> : <Tok kind={g.kind}>{KIND_LABEL[g.kind]}</Tok>}
                 </span>
                 <span className="text-xs text-gray-500 dark:text-gray-400">{g.game.home ? 'vs' : '@'} {g.game.opp} · <span className={g.game.result.startsWith('W') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{g.game.result}</span></span>
+                <Link
+                  to={`/box-scores?date=${g.game.date}&game=${g.game.game_id}`}
+                  state={{ from: '/with-without' }}
+                  aria-label={`Box score for ${shortDay(g.game.date)} ${g.game.home ? 'vs' : '@'} ${g.game.opp}`}
+                  className="mt-0.5 inline-flex w-fit items-center rounded-md border border-gray-300 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-gray-100 dark:border-gray-600 dark:text-blue-300 dark:hover:bg-gray-700"
+                >
+                  Box score
+                </Link>
               </span>
               {g.cells.map((v, i) => <span key={i} className="pr-3 text-right text-gray-800 dark:text-gray-100">{v}</span>)}
             </div>

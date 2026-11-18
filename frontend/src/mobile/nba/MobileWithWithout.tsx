@@ -177,6 +177,14 @@ function GameLog({ s, r }: { s: WithWithoutState; r: TeammateRow }) {
               <span className="mr-ww-lg-first">
                 <span className="mr-ww-lg-date"><b>{shortDate(g.game.date)}</b><span className={`mr-ww-tok ${g.dnp ? 'unused' : g.kind}`}>{g.dnp ? 'DNP' : KIND_LABEL[g.kind]}</span></span>
                 <span className="mr-meta">{g.game.home ? 'vs' : '@'} {g.game.opp} · <span className={g.game.result.startsWith('W') ? 'mr-ww-win' : 'mr-ww-loss'}>{g.game.result.split(' ')[0]}</span></span>
+                <Link
+                  to={`/box-scores?date=${g.game.date}&game=${g.game.game_id}`}
+                  state={{ from: '/with-without' }}
+                  className="mr-ww-box"
+                  aria-label={`Box score for ${shortDate(g.game.date)} ${g.game.home ? 'vs' : '@'} ${g.game.opp}`}
+                >
+                  Box score
+                </Link>
               </span>
               {g.cells.map((v, i) => <span key={i} className="mr-ww-lg-c mr-num">{v}</span>)}
             </div>
@@ -453,6 +461,14 @@ function PhoneGames({ s, season }: { s: WithWithoutState; season: WithWithoutTea
                 {attendanceShort(s.picked.map(p => p.lines[i]))}
               </button>
               <span className={`mr-ww-tok ${k}`}>{KIND_LABEL[k]}</span>
+              <Link
+                to={`/box-scores?date=${g.date}&game=${g.game_id}`}
+                state={{ from: '/with-without' }}
+                className="mr-ww-box"
+                aria-label={`Box score for ${shortDate(g.date)} ${g.home ? 'vs' : '@'} ${g.opp}`}
+              >
+                Box score
+              </Link>
             </li>
           )
         })}
