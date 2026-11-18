@@ -23,6 +23,7 @@ from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.nba_player_catalog import get_player_bio, parse_espn_athlete_id
 from app.services.player_service import espn_season_string, get_season_anchor_date
+from app.services.with_without_service import usage_pct
 from app.utils.name_matching import resolve_join_key
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,30 @@ def apply_fantasy(games: list[PlayerGameLogGame], contexts: dict[date, dict | No
     return attached
 
 
+def game_usage(row: dict) -> Optional[float]:
+    """One game's USG%, or None when he sat or the team box is missing."""
+    minutes = float(row.get("min") or 0)
+    team_min = row.get("t_min")
+    team_fga = row.get("t_fga")
+    if minutes <= 0 or team_min is None or team_fga is None:
+        return None
+    team_fta = float(row.get("t_fta") or 0)
+    team_tov = float(row.get("t_tov") or 0)
+    if float(team_min) <= 0 or float(team_fga) + 0.44 * team_fta + team_tov == 0:
+        return None
+    rate = usage_pct(
+        float(row.get("fga") or 0),
+        float(row.get("fta") or 0),
+        float(row.get("tov") or 0),
+        minutes,
+        float(team_fga),
+        team_fta,
+        team_tov,
+        float(team_min),
+    )
+    return round(rate, 1)
+
+
 def game_from_row(row: dict) -> PlayerGameLogGame:
     """One fs_player_games row, plus the two team scores, as a log line."""
     matchup = str(row.get("matchup") or "").strip()
@@ -98,6 +123,7 @@ def game_from_row(row: dict) -> PlayerGameLogGame:
         team_pts=_score(row.get("team_pts")),
         opp_pts=_score(row.get("opp_pts")),
         minutes=float(row.get("min") or 0),
+        usg=game_usage(row),
         pts=float(row.get("pts") or 0),
         reb=float(row.get("reb") or 0),
         ast=float(row.get("ast") or 0),

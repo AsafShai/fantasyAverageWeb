@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from app.services.nba_player_service import apply_fantasy, game_from_row, night_line, nights_from_rows
+from app.services.with_without_service import usage_pct
 
 
 def _row(**overrides):
@@ -65,6 +66,14 @@ def test_apply_fantasy_keeps_a_night_blank_when_its_roster_was_not_read():
     assert attached[0].fantasy.lineup_slot == "BE"
     assert attached[0].fantasy.started is False
     assert attached[1].fantasy is None
+
+
+def test_usage_is_that_games_rate_and_blank_when_he_sat():
+    played = game_from_row(_row(min=30, fga=14, fta=2, tov=2, t_fga=88, t_fta=20, t_tov=13, t_min=240))
+    assert played.usg == round(usage_pct(14, 2, 2, 30, 88, 20, 13, 240), 1)
+    sat = game_from_row(_row(min=0, t_fga=88, t_fta=20, t_tov=13, t_min=240))
+    assert sat.usg is None
+    assert game_from_row(_row()).usg is None
 
 
 def test_missing_scores_stay_empty():
