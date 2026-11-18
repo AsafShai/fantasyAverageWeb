@@ -30,8 +30,9 @@ from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR, TEAM_ID_TO_NAME, T
 
 logger = logging.getLogger(__name__)
 
-# Order of the numbers in a played game's entry.
-LINE_FIELDS = ["MIN", "PTS", "REB", "AST", "STL", "BLK", "3PM", "FGM", "FGA", "FTM", "FTA", "TO", "3PA", "OREB", "DREB", "PF"]
+# Order of the numbers in a played game's entry. USG% is Dean Oliver's usage
+# rate for that game, the same formula Trends averages (never from summed totals).
+LINE_FIELDS = ["MIN", "PTS", "REB", "AST", "STL", "BLK", "3PM", "FGM", "FGA", "FTM", "FTA", "TO", "3PA", "OREB", "DREB", "PF", "USG%"]
 _COLUMNS = ["min", "pts", "reb", "ast", "stl", "blk", "fg3m", "fgm", "fga", "ftm", "fta", "tov", "fg3a", "oreb", "dreb", "pf"]
 _APPROX_SOURCES = {"box", "box_only"}
 CACHE_TTL = 30 * 60
@@ -80,6 +81,14 @@ def _covers(stint: dict, d: date) -> bool:
     return stint["start_date"] <= d and (stint["end_date"] is None or d <= stint["end_date"])
 
 
+def usage_pct(p_fga: float, p_fta: float, p_tov: float, p_min: float, t_fga: float, t_fta: float, t_tov: float, t_min: float) -> float:
+    """One game's USG%, matching Trends: 100 * (FGA + 0.44*FTA + TOV) * (team minutes / 5) / (minutes * team possessions)."""
+    denom = p_min * (t_fga + 0.44 * t_fta + t_tov)
+    if denom == 0:
+        return 0.0
+    return 100 * (p_fga + 0.44 * p_fta + p_tov) * (t_min / 5) / denom
+
+
 def build_team_payload(
     team_id: int,
     season: str,
@@ -97,10 +106,12 @@ def build_team_payload(
         by_player_stints[int(s["player_id"])].append(s)
     lines: dict[int, dict[str, dict]] = defaultdict(dict)
     meta: dict[int, dict] = {}
+    team_min: dict[str, float] = defaultdict(float)
     for r in rows:
         pid = int(r["player_id"])
         lines[pid][r["game_id"]] = r
         meta[pid] = {"name": r["player_name"], "pos": r["position"]}
+        team_min[r["game_id"]] += float(r["min"] or 0)
     for pid, ss in by_player_stints.items():
         if pid not in meta or not meta[pid]["name"]:
             meta[pid] = {"name": ss[0].get("player_name") or str(pid), "pos": ss[0].get("position") or ""}
@@ -112,7 +123,12 @@ def build_team_payload(
         for g in games:
             r = lines[pid].get(g["game_id"])
             if r is not None and (r["min"] or 0) > 0:
-                entries.append([round(float(r[c] or 0), 1) for c in _COLUMNS])
+                usg = usage_pct(
+                    float(r.get("fga") or 0), float(r.get("fta") or 0), float(r.get("tov") or 0), float(r["min"] or 0),
+                    float(r.get("t_fga") or 0), float(r.get("t_fta") or 0), float(r.get("t_tov") or 0),
+                    team_min[g["game_id"]],
+                )
+                entries.append([round(float(r[c] or 0), 1) for c in _COLUMNS] + [round(usg, 1)])
             elif r is not None or any(_covers(s, g["date_obj"]) for s in ss):
                 entries.append(0)
             else:
@@ -162,9 +178,11 @@ async def _query(team_id: int, season: str) -> tuple[list[dict], list[dict]]:
         )
         rows = await conn.fetch(
             f"""
-            SELECT player_id, player_name, position, game_id, {', '.join(_COLUMNS)}
-            FROM fs_player_games
-            WHERE season = $1 AND team_id = $2
+            SELECT p.player_id, p.player_name, p.position, p.game_id, {', '.join(f'p.{c}' for c in _COLUMNS)},
+                   t.fga AS t_fga, t.fta AS t_fta, t.tov AS t_tov
+            FROM fs_player_games p
+            LEFT JOIN fs_team_games t ON t.team_id = p.team_id AND t.game_id = p.game_id
+            WHERE p.season = $1 AND p.team_id = $2
             """,
             season, team_id,
         )
