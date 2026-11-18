@@ -27,6 +27,7 @@ function game(overrides: Partial<PlayerGameLogGame>): PlayerGameLogGame {
     ftm: 4,
     fta: 4,
     plus_minus: 12,
+    usg: 24.6,
     ...overrides,
   }
 }
@@ -95,6 +96,8 @@ describe('PlayerGameLog', () => {
     expect(screen.getByText('W')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /@ BOS/ })).not.toBeInTheDocument()
     expect(screen.getByText(/2026-27 · 1 game/)).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'USG%' })).toBeInTheDocument()
+    expect(screen.getAllByText('24.6%').length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: '2025-26' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
   })

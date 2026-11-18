@@ -41,13 +41,13 @@ const box = {
     starters: [{
       player_id: '1', name: 'Austin Reaves', jersey: '15', position: 'G', ejected: false, on_court: false,
       min: '34', pts: '28', fg: '10-18', fg3: '3-7', ft: '5-5', reb: '4', ast: '6',
-      tov: '2', stl: '1', blk: '0', oreb: '1', dreb: '3', pf: '2', plus_minus: '+12',
+      tov: '2', stl: '1', blk: '0', oreb: '1', dreb: '3', pf: '2', plus_minus: '+12', usg: '24.6%',
     }],
     bench: [],
     did_not_play: [{ player_id: '9', name: 'Sit Out', jersey: '0', position: 'F', reason: "Coach's Decision" }],
     totals: {
       min: '240', pts: '129', fg: '48-90', fg3: '12-30', ft: '21-24', reb: '45', ast: '28',
-      tov: '12', stl: '8', blk: '4', oreb: '10', dreb: '35', pf: '18', plus_minus: '',
+      tov: '12', stl: '8', blk: '4', oreb: '10', dreb: '35', pf: '18', plus_minus: '', usg: '',
     },
     shooting: {
       fg_pct: '53.3', fg3_pct: '40.0', ft_pct: '87.5',
@@ -62,7 +62,7 @@ const box = {
     did_not_play: [],
     totals: {
       min: '', pts: '117', fg: '', fg3: '', ft: '', reb: '', ast: '',
-      tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '',
+      tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '', usg: '',
     },
     shooting: {
       fg_pct: '', fg3_pct: '', ft_pct: '',
@@ -290,6 +290,8 @@ describe('BoxScores', () => {
     const table = await screen.findByRole('table', { name: /box score/ })
     expect(within(table).getByRole('link', { name: 'Austin Reaves' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Starters' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'USG%' })).toBeInTheDocument()
+    expect(within(table).getByText('24.6%')).toBeInTheDocument()
     expect(within(table).queryByText('Started')).not.toBeInTheDocument()
     expect(within(table).queryByText('On court')).not.toBeInTheDocument()
     expect((await screen.findAllByText("Sit Out (Coach's Decision)")).length).toBeGreaterThan(0)
@@ -307,6 +309,7 @@ describe('BoxScores', () => {
     await waitFor(() => {
       expect(screen.queryByText('129')).not.toBeInTheDocument()
       expect(screen.queryByText('+12')).not.toBeInTheDocument()
+      expect(screen.queryByText('24.6%')).not.toBeInTheDocument()
       expect(screen.queryByText('10-18')).not.toBeInTheDocument()
       expect(screen.queryByText('53.3')).not.toBeInTheDocument()
       expect(screen.queryByText("Coach's Decision")).not.toBeInTheDocument()
@@ -518,7 +521,7 @@ describe('BoxScores', () => {
     }
     const blank = {
       linescores: [], starters: [], bench: [], did_not_play: [],
-      totals: { min: '', pts: '', fg: '', fg3: '', ft: '', reb: '', ast: '', tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '' },
+      totals: { min: '', pts: '', fg: '', fg3: '', ft: '', reb: '', ast: '', tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '', usg: '' },
       shooting: { fg_pct: '', fg3_pct: '', ft_pct: '', points_in_paint: '', fast_break_points: '', turnover_points: '', largest_lead: '' },
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
@@ -595,7 +598,7 @@ describe('BoxScores', () => {
     }
     const blank = {
       linescores: [], starters: [], bench: [], did_not_play: [],
-      totals: { min: '', pts: '', fg: '', fg3: '', ft: '', reb: '', ast: '', tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '' },
+      totals: { min: '', pts: '', fg: '', fg3: '', ft: '', reb: '', ast: '', tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '', usg: '' },
       shooting: { fg_pct: '', fg3_pct: '', ft_pct: '', points_in_paint: '', fast_break_points: '', turnover_points: '', largest_lead: '' },
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
@@ -662,7 +665,7 @@ describe('BoxScores', () => {
     }
     const blank = {
       linescores: [], starters: [], bench: [], did_not_play: [],
-      totals: { min: '', pts: '', fg: '', fg3: '', ft: '', reb: '', ast: '', tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '' },
+      totals: { min: '', pts: '', fg: '', fg3: '', ft: '', reb: '', ast: '', tov: '', stl: '', blk: '', oreb: '', dreb: '', pf: '', plus_minus: '', usg: '' },
       shooting: { fg_pct: '', fg3_pct: '', ft_pct: '', points_in_paint: '', fast_break_points: '', turnover_points: '', largest_lead: '' },
     }
     const roster = [

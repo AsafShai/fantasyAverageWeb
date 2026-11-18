@@ -101,7 +101,7 @@ export async function mockProfileApis(page: Page, opts: { gameDate?: string } = 
           player_id: PROFILE_ID, current_season: '2026-27',
           games: GAMES.map((g, i) => ({
             game_id: `40${i}`, season: '2026-27', game_date: g[0], opponent: g[1], is_home: g[2], team_pts: g[3], opp_pts: g[4],
-            minutes: g[5], pts: g[6], reb: g[7], ast: g[8], stl: g[9], blk: g[10], tov: g[11],
+            minutes: g[5], usg: 25.4, pts: g[6], reb: g[7], ast: g[8], stl: g[9], blk: g[10], tov: g[11],
             fgm: g[12], fga: g[13], fg3m: g[14], fg3a: g[15], ftm: g[16], fta: g[17], plus_minus: g[18],
           })),
         },
