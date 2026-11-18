@@ -344,8 +344,8 @@ function PhoneTable({ s }: { s: WithWithoutState }) {
                     <span className="mr-meta"> {r.player.pos}</span>
                     {mine && <span className="mr-ww-tok with">You</span>}
                     {!r.player.owner && <span className="mr-ww-fa">FA</span>}
-                    {r.small && <span className="mr-ww-small">Small sample</span>}
                     <div className="mr-meta">{r.player.owner ? r.player.owner.name : 'Free agent'}</div>
+                    {r.small && <div className="mr-ww-small">Small sample</div>}
                   </td>
                   <td className={`mr-num${s.sort === 'gpw' ? ' on' : ''}`}>{r.withGroup.games}</td>
                   <td className={`mr-num${s.sort === 'gpwo' ? ' on' : ''}`}>{r.withoutGroup.games}</td>

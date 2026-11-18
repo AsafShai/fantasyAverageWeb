@@ -166,7 +166,8 @@
 .mr-ww-table th[aria-sort="descending"] button { color: var(--mr-primary-2); }
 .mr-ww-table td.on, .mr-ww-table th.on { background: var(--mr-primary-soft); }
 .mr-ww-table tr.mine td:first-child { box-shadow: inset 3px 0 0 0 var(--mr-primary), 1px 0 0 0 var(--mr-divider); }
-.mr-ww-table .mr-ww-tok, .mr-ww-table .mr-ww-fa, .mr-ww-table .mr-ww-small { margin-left: 6px; }
+.mr-ww-table .mr-ww-tok, .mr-ww-table .mr-ww-fa { margin-left: 6px; }
+.mr-ww-table .mr-ww-small { display: block; width: fit-content; margin: 3px 0 0; }
 .mr-ww-table td.mr-ww-detailcell {
   position: static; text-align: left; white-space: normal; background: var(--mr-sunken); box-shadow: none; padding: 0;
 }
