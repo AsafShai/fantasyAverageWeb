@@ -20,10 +20,15 @@ class RankingService:
 
     async def get_league_rankings(self, sort_by: Optional[str] = None, order: str = "asc",
                                    start_date: Optional[date] = None,
-                                   end_date: Optional[date] = None) -> LeagueRankings:
-        """Get league rankings. If dates provided, compute from DB snapshot deltas."""
+                                   end_date: Optional[date] = None,
+                                   settled: bool = False) -> LeagueRankings:
+        """Get league rankings. If dates provided, compute from DB snapshot deltas.
+
+        ``settled`` keeps a date range on stored snapshots. The daily recap uses
+        it so a live slate cannot replace the night the nightly job finished.
+        """
         if start_date is not None and end_date is not None:
-            return await self._get_rankings_for_range(start_date, end_date, sort_by, order)
+            return await self._get_rankings_for_range(start_date, end_date, sort_by, order, settled=settled)
         # None while LIVE_STANDINGS_ENABLED is off: the response is then built
         # exactly as before and carries no ``live`` block. The block is attached
         # after the memo because it changes with the clock, not with the frames.
@@ -65,7 +70,7 @@ class RankingService:
             categories=categories,
         )
 
-    async def range_deltas(self, start_date: date, end_date: date):
+    async def range_deltas(self, start_date: date, end_date: date, settled: bool = False):
         """What a date range covers: (actual_start, actual_end, settled delta,
         in-progress delta, live state).
 
@@ -74,7 +79,7 @@ class RankingService:
         through last night plus tonight, finished games only for averages and
         every started game for totals. The state is None unless the range
         reaches tonight with LIVE_STANDINGS_ENABLED on; otherwise the range is
-        exactly as before."""
+        exactly as before. ``settled`` never takes that live end."""
         actual_end_date, actual_start_date, rows_end, rows_start = \
             await self.data_provider.db_service.get_snapshots_for_date_range(
                 start_date, end_date, settings.league_id, settings.season_id
@@ -84,15 +89,17 @@ class RankingService:
             raise ResourceNotFoundError("No data available for the requested date range")
 
         start_df = pd.DataFrame(rows_start) if rows_start else None
-        state = await self.data_provider.get_live_state(include_finals=True)
-        if not tonight_changes.range_reaches_tonight(state, end_date):
-            state = None
+        state = None
+        if not settled:
+            state = await self.data_provider.get_live_state(include_finals=True)
+            if not tonight_changes.range_reaches_tonight(state, end_date):
+                state = None
         if state is not None and state.active:
             try:
-                settled = tonight_changes.as_snapshot(await self.data_provider.get_totals_df(live=True, settled=True))
+                settled_frame = tonight_changes.as_snapshot(await self.data_provider.get_totals_df(live=True, settled=True))
                 progress = tonight_changes.as_snapshot(await self.data_provider.get_totals_df(live=True))
                 return (actual_start_date, tonight_changes.slate_date(state.period),
-                        self._compute_delta(settled, start_df), self._compute_delta(progress, start_df), state)
+                        self._compute_delta(settled_frame, start_df), self._compute_delta(progress, start_df), state)
             except Exception as e:
                 self.logger.error(f"Live range end failed, serving stored days: {type(e).__name__}: {e}", exc_info=True)
                 state = None
@@ -100,9 +107,10 @@ class RankingService:
         return actual_start_date, actual_end_date, delta_df, delta_df, state
 
     async def _get_rankings_for_range(self, start_date: date, end_date: date,
-                                       sort_by: Optional[str], order: str) -> LeagueRankings:
+                                       sort_by: Optional[str], order: str,
+                                       settled: bool = False) -> LeagueRankings:
         actual_start_date, actual_end_date, settled_delta, progress_delta, live_state = \
-            await self.range_deltas(start_date, end_date)
+            await self.range_deltas(start_date, end_date, settled=settled)
 
         categories = await self.data_provider.get_ranking_categories()
         reverse_categories = await self.data_provider.get_reverse_categories()

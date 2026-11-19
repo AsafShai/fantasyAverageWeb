@@ -21,6 +21,7 @@ async def get_rankings(
     order: SortOrder = Query(SortOrder.ASC, description="Sort order: asc or desc"),
     start_date: Optional[date] = Query(None, description="Start date for date range filter"),
     end_date: Optional[date] = Query(None, description="End date for date range filter"),
+    settled: bool = Query(False, description="Date range stays on stored snapshots, ignoring a live slate"),
 ):
     """Get league rankings with optional sorting and date range filtering"""
     try:
@@ -39,6 +40,7 @@ async def get_rankings(
             order=order.value,
             start_date=start_date,
             end_date=end_date,
+            settled=settled,
         )
     except HTTPException:
         raise

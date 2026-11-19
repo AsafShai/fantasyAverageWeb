@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 import pandas as pd
 import pytest
@@ -200,6 +201,18 @@ class TestRankChanges:
         )
         await service.get_rank_changes(mode)
         assert service.db_service.get_latest_two_periods_rankings.await_args.args[2] == table
+
+    @pytest.mark.asyncio
+    async def test_settled_changes_ignore_a_live_slate(self):
+        from unittest.mock import AsyncMock, patch
+
+        service = TodayService()
+        stored = object()
+        service._stored_rank_changes = AsyncMock(return_value=stored)
+        with patch('app.services.today_service.DataProvider') as provider:
+            result = await service.get_rank_changes('averages', settled=True)
+        provider.assert_not_called()
+        assert result is stored
 
 
 class TestClassifyStatus:
@@ -532,3 +545,18 @@ class TestInjuryReportRefreshesCachedHub:
     def test_refresh_without_a_cached_hub_is_a_no_op(self):
         today_module.refresh_roster_health()
         assert today_module._hub_cache['value'] is None
+
+
+@pytest.mark.asyncio
+async def test_last_nightly_reports_a_no_games_night():
+    service = TodayService()
+
+    async def run():
+        return {'game_date': date(2026, 11, 19), 'num_rows': 0, 'status': 'no_games'}
+
+    service.db_service.get_latest_model_nightly_run = run
+    nightly = await service._get_last_nightly()
+    assert nightly is not None
+    assert nightly.game_date == date(2026, 11, 19)
+    assert nightly.rows == 0
+    assert nightly.status == 'no_games'

@@ -15,6 +15,7 @@ import LiveBadge from '../components/live/LiveBadge'
 import { useLiveQuery } from '../hooks/useLiveQuery'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileToday from '../mobile/today/MobileToday'
+import { DailyRecapShare } from '../components/today/DailyRecapShare'
 
 function formatSlate(slateDate: string | null): string {
   if (!slateDate) return 'No games scheduled'
@@ -49,7 +50,10 @@ const DesktopToday = () => {
 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex flex-col">
-          <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-50">Today</h1>
+            <DailyRecapShare seasonStart={summary?.season_start} />
+          </div>
           <LiveBadge live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} align="left" />
         </div>
         <span className="text-[11px] text-gray-400 sm:text-xs dark:text-gray-500">

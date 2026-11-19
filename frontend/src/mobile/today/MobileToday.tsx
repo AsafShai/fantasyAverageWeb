@@ -22,6 +22,7 @@ import { RankMoversCard } from './RankMoversCard'
 import { RosterHealthCard } from './RosterHealthCard'
 import { LatestMovesCard } from './LatestMovesCard'
 import { arrowDelta } from './groupMovers'
+import { DailyRecapShare } from '../../components/today/DailyRecapShare'
 import './today.css'
 
 const DEADLINE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
@@ -200,7 +201,12 @@ export default function MobileToday() {
 
       <div className="mr-today-pt">
         <div className="mr-today-ptl">
-          <h1 className="mr-h1">Today</h1>
+          <div className="mr-today-title">
+            <h1 className="mr-h1">Today</h1>
+            <span className="mr-today-share">
+              <DailyRecapShare sheet seasonStart={summary?.season_start} />
+            </span>
+          </div>
           <LiveBadgeMobile live={summary?.live} espnUpdatedAt={summary?.espn_updated_at} note={averagesNote(summary?.live, 'averages', true)} noteClassName="mr-today-espn" />
         </div>
         {hub ? (
