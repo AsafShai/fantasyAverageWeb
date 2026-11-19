@@ -10,6 +10,7 @@ import {
   pickNightTeams,
   pickStartBench,
   pickSurprises,
+  RECAP_SURPRISE_BAR,
   recapNightLabel,
 } from '../dailyRecap'
 
@@ -146,6 +147,11 @@ describe('pickLines', () => {
     expect(lines.map(line => line.lineup)).toEqual(['started', 'bench', null])
     expect(freeAgents.map(line => line.name)).toEqual(['Agent', 'Fourth'])
   })
+
+  it('gives the box line without turnovers, which the league does not score', () => {
+    const { lines } = pickLines([player({ name: 'Star', z: 4 })])
+    expect(lines[0].stats.map(stat => stat.label)).toEqual(['MIN', 'FG', '3PT', 'FT', 'REB', 'AST', 'STL', 'BLK', 'PTS'])
+  })
 })
 
 describe('pickStartBench', () => {
@@ -166,7 +172,15 @@ describe('pickStartBench', () => {
 })
 
 describe('pickSurprises', () => {
-  it('uses the default bars and keeps the first five', () => {
+  it("counts from the poster's own bar of 2, a little under the page's", () => {
+    const good = [2.4, 2.0, 1.99].map((score, i) => surprise(`Boom ${i}`, score))
+    const bad = [-2.7, -2.1, -2.0, -1.99].map((score, i) => surprise(`Bust ${i}`, score))
+    const { boom, bust } = pickSurprises(good, bad, RECAP_SURPRISE_BAR)
+    expect(boom.shown.map(row => row.score)).toEqual([2.4, 2.0])
+    expect(bust.shown.map(row => row.score)).toEqual([-2.7, -2.1, -2.0])
+  })
+
+  it('uses the bars it is given and keeps the first five', () => {
     const good = [3.4, 2.8, 2.6, 2.4, 2.2, 2.1, 1.2].map((score, i) => surprise(`Boom ${i}`, score))
     const bad = [-4, -2.2, -2.1, -1].map((score, i) => surprise(`Bust ${i}`, score))
     const { boom, bust } = pickSurprises(good, bad, { good: 2.1, bad: 2.2 })

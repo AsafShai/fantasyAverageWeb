@@ -11,7 +11,7 @@ import { slatePlayerValues } from '../boxScores/slateValues'
 import { ShareCardButton, type ShareCardOptions } from '../share/ShareCardButton'
 import { DailyRecapLoadingCard, DailyRecapShareCard } from '../share/DailyRecapShareCard'
 import { toLocalIso } from '../../utils/dateRange'
-import { buildDailyRecap, dailyRecapMessage, isOffNight, recapNightLabel } from '../../utils/dailyRecap'
+import { buildDailyRecap, dailyRecapMessage, isOffNight, recapNightLabel, RECAP_SURPRISE_BAR } from '../../utils/dailyRecap'
 
 interface QueryState {
   data?: unknown
@@ -68,7 +68,7 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
     players: [],
     good: [],
     bad: [],
-    thresholds: { good: 2.1, bad: 2.2 },
+    thresholds: RECAP_SURPRISE_BAR,
   } : {
     rankings: rankings.data?.averages_rankings ?? [],
     categories: rankings.data?.categories ?? [],
@@ -76,10 +76,25 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
     players,
     good: surprises.data?.good ?? [],
     bad: surprises.data?.bad ?? [],
-    thresholds: surprises.data?.thresholds ?? { good: 2.1, bad: 2.2 },
+    thresholds: RECAP_SURPRISE_BAR,
   }), [offNight, rankings.data, moves.data, players, surprises.data])
 
+  // The poster's typefaces ride inside the card (see recapFonts.ts). Loaded
+  // here so they cost nothing until someone opens Share; if the chunk fails
+  // the poster still goes out, in the system's condensed faces.
+  const [fontCss, setFontCss] = useState<string | null>(null)
+  const [fontsSettled, setFontsSettled] = useState(false)
+  useEffect(() => {
+    let live = true
+    import('../share/recapFonts')
+      .then(fonts => { if (live) setFontCss(fonts.RECAP_FONT_CSS) })
+      .catch(() => undefined)
+      .finally(() => { if (live) setFontsSettled(true) })
+    return () => { live = false }
+  }, [])
+
   const waiting = hubWaiting
+    || !fontsSettled
     || pending(rankings, rangeOk)
     || pending(moves, !hubWaiting)
     || pending(surprises, !!night && !hubWaiting)
@@ -108,7 +123,7 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
 
   useEffect(() => { onReady(key, text) }, [key, text, onReady])
 
-  if (waiting) return <DailyRecapLoadingCard dark={dark} />
+  if (waiting) return <DailyRecapLoadingCard dark={dark} fontCss={fontCss ?? undefined} />
   return (
     <DailyRecapShareCard
       dark={dark}
@@ -116,6 +131,7 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
       recap={recap}
       highlight={highlightMyTeam}
       myTeam={myTeam}
+      fontCss={fontCss ?? undefined}
     />
   )
 }

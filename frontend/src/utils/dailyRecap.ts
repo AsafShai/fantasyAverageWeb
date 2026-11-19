@@ -7,6 +7,9 @@ import { orderCategories } from './statOrder'
 export const RECAP_LINES = 3
 /** Boom and bust rows on the poster. The page's own share card uses the same cap. */
 export const RECAP_SURPRISE_ROWS = 5
+/** The poster's own bar, either way: a round 2, a little under the page's
+ * default sliders, so a quiet night still has names on it. */
+export const RECAP_SURPRISE_BAR = { good: 2, bad: 2 }
 
 export interface RecapStat {
   label: string
@@ -49,7 +52,8 @@ export interface RecapPlayer {
   fantasyTeamName: string | null
   /** Fantasy lineup that night. Null for a free agent or an unknown slot. */
   lineup: 'started' | 'bench' | 'ir' | null
-  /** Full box line. Every column is present, including zeros. */
+  /** Box line without turnovers, which the league does not score. Every
+   * column is present, including zeros. */
   stats: RecapStat[]
   z: number
 }
@@ -203,7 +207,6 @@ function boxStats(player: SlatePlayerValue): RecapStat[] {
     { label: 'AST', value: cell(player.ast, '0') },
     { label: 'STL', value: cell(player.stl, '0') },
     { label: 'BLK', value: cell(player.blk, '0') },
-    { label: 'TO', value: cell(player.tov, '0') },
     { label: 'PTS', value: cell(player.pts, '0') },
   ]
 }
@@ -288,7 +291,7 @@ function asSurprise(row: SurpriseRow): RecapSurprise {
   }
 }
 
-/** Default last-night bars. Rows arrive best-first and worst-first. */
+/** Everyone past the bars. Rows arrive best-first and worst-first. */
 export function pickSurprises(
   good: SurpriseRow[],
   bad: SurpriseRow[],
@@ -364,10 +367,4 @@ export function placesMoved(delta: number | null): string {
 export function dailyRecapMessage(headline: string, best: RecapTeam | null, url: string): string {
   const night = best ? `Best night: *${best.name}* (${formatPoints(best.total)})` : 'Best night: —'
   return [`*Fantasy Daily Recap* · ${headline}`, night, `🔗 ${url}`].join('\n')
-}
-
-export function surpriseCount(side: RecapSurpriseSide): string {
-  if (side.total === 0) return 'none'
-  if (side.total > side.shown.length) return `top ${side.shown.length} of ${side.total}`
-  return `${side.total}`
 }
