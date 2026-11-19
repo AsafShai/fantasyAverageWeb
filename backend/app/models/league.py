@@ -155,6 +155,8 @@ class TeamRosterHealth(BaseModel):
 class NightlyRun(BaseModel):
     game_date: date
     rows: int
+    # Ledger status for that night: processed, no_games, store_already_ingested, ...
+    status: str = ''
 
 
 class TodayHub(LiveAware):

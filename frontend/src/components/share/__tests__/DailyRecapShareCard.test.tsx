@@ -121,4 +121,24 @@ describe('DailyRecapShareCard', () => {
     expect(grid?.children[5].querySelector('.drc-dot')).toBeNull()
     expect(grid?.children[6].querySelector('.drc-dot')).toBeNull()
   })
+
+  it('leaves every section empty when the night had no games', () => {
+    const empty: DailyRecap = {
+      best: null, worst: null, rise: null, fall: null,
+      lines: [], freeAgents: [], started: null, benched: null,
+      boom: { shown: [], total: 0, threshold: 2.1 },
+      bust: { shown: [], total: 0, threshold: 2.2 },
+    }
+    render(
+      <DailyRecapShareCard dark={false} subtitle="Nov 19, 2026" recap={empty} highlight={false} myTeam={null} />,
+    )
+    expect(screen.getAllByText('No standings for this night')).toHaveLength(2)
+    expect(screen.getByText('No team gained points')).toBeInTheDocument()
+    expect(screen.getByText('No team lost points')).toBeInTheDocument()
+    expect(screen.getByText('No lines yet')).toBeInTheDocument()
+    expect(screen.getByText('No free agents')).toBeInTheDocument()
+    expect(screen.getByText('No starter with a line')).toBeInTheDocument()
+    expect(screen.getByText('No bench player with a line')).toBeInTheDocument()
+    expect(screen.getAllByText('None cleared the bar')).toHaveLength(2)
+  })
 })

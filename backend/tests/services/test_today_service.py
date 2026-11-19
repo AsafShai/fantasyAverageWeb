@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 import pandas as pd
 import pytest
@@ -544,3 +545,18 @@ class TestInjuryReportRefreshesCachedHub:
     def test_refresh_without_a_cached_hub_is_a_no_op(self):
         today_module.refresh_roster_health()
         assert today_module._hub_cache['value'] is None
+
+
+@pytest.mark.asyncio
+async def test_last_nightly_reports_a_no_games_night():
+    service = TodayService()
+
+    async def run():
+        return {'game_date': date(2026, 11, 19), 'num_rows': 0, 'status': 'no_games'}
+
+    service.db_service.get_latest_model_nightly_run = run
+    nightly = await service._get_last_nightly()
+    assert nightly is not None
+    assert nightly.game_date == date(2026, 11, 19)
+    assert nightly.rows == 0
+    assert nightly.status == 'no_games'
