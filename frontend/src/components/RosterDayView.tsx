@@ -7,7 +7,7 @@ import LoadingSpinner from './LoadingSpinner'
 import { MatchupCell, MatchupExpandPanel, MatchupExpandRow } from './MatchupDisplay'
 import { nameCellWrapClass, wrapFriendlyName } from '../utils/wrapName'
 import { addDays } from '../utils/slateWindow'
-import { dayLabel, gameLabel, startersDayLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayPlayerPlayed, starterTotals, type StarterTotals } from '../utils/rosterDay'
+import { dayLabel, gameLabel, rosterDayMatchup, startersDayLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayPlayerPlayed, starterTotals, type StarterTotals } from '../utils/rosterDay'
 import './MatchupDisplay.css'
 
 /** The Slot cell's content: IR pill, active-slot pill, or plain BE. */
@@ -623,7 +623,7 @@ export function RosterDayContent({
     const lit = activeHighlight === player.player_id
     const tone = hasLine(player) && !bench ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
     const onCourt = !noSpoilers && player.status === 'live' && !bench && (player.stats?.minutes ?? 0) > 0
-    const matchup = day.is_today ? matchups?.get(player.player_name) : undefined
+    const matchup = rosterDayMatchup(day, player, matchups)
     const isExpanded = expandedMatchupNames.has(player.player_name)
     const stickyBg = lit ? 'bg-blue-50 dark:bg-blue-950/30' : onCourt ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-white dark:bg-gray-800'
     const cells = showStatColumns ? statCells(player) : []
@@ -708,7 +708,7 @@ export function RosterDayContent({
               <ul className="space-y-2">
                 {mobileGroups.starters.map(player => {
                   const lit = activeHighlight === player.player_id
-                  const matchup = day.is_today ? matchups?.get(player.player_name) : undefined
+                  const matchup = rosterDayMatchup(day, player, matchups)
                   const isExpanded = expandedMatchupNames.has(player.player_name)
                   return (
                     <li key={player.player_id}>
@@ -735,7 +735,7 @@ export function RosterDayContent({
               <ul className="space-y-2">
                 {mobileGroups.bench.map(player => {
                   const lit = activeHighlight === player.player_id
-                  const matchup = day.is_today ? matchups?.get(player.player_name) : undefined
+                  const matchup = rosterDayMatchup(day, player, matchups)
                   const isExpanded = expandedMatchupNames.has(player.player_name)
                   return (
                     <li key={player.player_id}>
