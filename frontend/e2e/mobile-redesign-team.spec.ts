@@ -95,7 +95,7 @@ test.describe('phone Teams + Team page', () => {
     const today = { ...day, is_today: true, date: '2026-10-19', last_date: '2026-10-19' }
     await page.route(`${API_BASE_URL}/teams/1/roster-day*`, (route) => route.fulfill({ json: today }))
     const first = day.players.find((p) => p.opponent) as { player_name: string; opponent: string }
-    const matchups = fixture<Array<Record<string, unknown>>>('matchups').map((m, i) => (i === 0 ? { ...m, player_name: first.player_name, opponent: first.opponent } : m))
+    const matchups = fixture<Array<Record<string, unknown>>>('matchups').map((m, i) => (i === 0 ? { ...m, player_name: first.player_name, opponent: first.opponent, game_date: today.date } : m))
     await page.route(`${API_BASE_URL}/matchups/today*`, (route) => route.fulfill({ json: matchups }))
 
     await page.goto('/team/1?tab=roster')
