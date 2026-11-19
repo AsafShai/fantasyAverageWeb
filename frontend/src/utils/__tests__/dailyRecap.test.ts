@@ -142,6 +142,7 @@ describe('pickLines', () => {
       player({ name: 'Third', z: 2 }),
     ])
     expect(lines.map(line => line.name)).toEqual(['Star', 'Second', 'Agent'])
+    expect(lines.map(line => line.started)).toEqual([true, true, false])
     expect(freeAgents.map(line => line.name)).toEqual(['Agent', 'Fourth'])
   })
 })
@@ -172,6 +173,7 @@ describe('pickSurprises', () => {
     expect(boom.shown.map(row => row.name)).toEqual(['Boom 0', 'Boom 1', 'Boom 2', 'Boom 3', 'Boom 4'])
     expect(bust.total).toBe(2)
     expect(bust.shown.map(row => row.score)).toEqual([-4, -2.2])
+    expect(boom.shown[0].started).toBe(true)
     expect(boom.shown[0].stats).toEqual([
       { label: 'MIN', value: '30' },
       { label: 'FG', value: '8-16' },
