@@ -23,10 +23,16 @@ export const fantasyApi = createApi({
   }),
   tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'MinigameLeaderboard'],
   endpoints: (builder) => ({
-    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string }>({
-      query: ({ sortBy, order = 'asc', startDate, endDate } = {}) => ({
+    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string; settled?: boolean }>({
+      query: ({ sortBy, order = 'asc', startDate, endDate, settled } = {}) => ({
         url: '/rankings',
-        params: { sort_by: sortBy, order, ...(startDate ? { start_date: startDate } : {}), ...(endDate ? { end_date: endDate } : {}) },
+        params: {
+          sort_by: sortBy,
+          order,
+          ...(startDate ? { start_date: startDate } : {}),
+          ...(endDate ? { end_date: endDate } : {}),
+          ...(settled ? { settled: true } : {}),
+        },
       }),
       providesTags: ['Rankings'],
       keepUnusedDataFor: 300,
@@ -67,8 +73,12 @@ export const fantasyApi = createApi({
       providesTags: ['League'],
       keepUnusedDataFor: 300,
     }),
-    getRankChanges: builder.query<RankChanges, 'averages' | 'totals'>({
-      query: (mode) => `/league/rank-changes?mode=${mode}`,
+    getRankChanges: builder.query<RankChanges, 'averages' | 'totals' | { mode?: 'averages' | 'totals'; settled?: boolean }>({
+      query: (arg) => {
+        const mode = typeof arg === 'string' ? arg : (arg.mode ?? 'averages')
+        const settled = typeof arg === 'string' ? false : !!arg.settled
+        return { url: '/league/rank-changes', params: { mode, ...(settled ? { settled: true } : {}) } }
+      },
       providesTags: ['Rankings'],
       keepUnusedDataFor: 300,
     }),

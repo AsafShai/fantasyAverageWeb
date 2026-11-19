@@ -31,11 +31,12 @@ async def get_today_hub() -> TodayHub:
 @router.get("/rank-changes", response_model=RankChanges)
 async def get_rank_changes(
     mode: Annotated[str, Query(pattern="^(averages|totals)$")] = "averages",
+    settled: bool = Query(False, description="Stored periods only, ignoring a live slate"),
 ) -> RankChanges:
     """Each team's move since the previous stored scoring period: places,
     roto points per category and in total, and games played."""
     try:
-        return await _today_service.get_rank_changes(mode)
+        return await _today_service.get_rank_changes(mode, settled=settled)
     except Exception as e:
         logger.exception(f"Error building rank changes: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve rank changes") from e
