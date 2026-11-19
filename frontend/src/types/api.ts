@@ -1087,6 +1087,8 @@ export interface TeamRosterHealth {
 export interface NightlyRun {
   game_date: string;
   rows: number;
+  /** Ledger status for that night: processed, no_games, store_already_ingested, ... */
+  status?: string;
 }
 
 export interface TodayHub {

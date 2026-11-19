@@ -302,6 +302,11 @@ export function pickSurprises(
   }
 }
 
+/** A night the nightly job sealed because the scoreboard had no games. */
+export function isOffNight(status: string | null | undefined): boolean {
+  return status === 'no_games'
+}
+
 export function buildDailyRecap(input: {
   rankings: RankingStats[]
   categories: string[]

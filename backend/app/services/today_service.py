@@ -353,4 +353,8 @@ class TodayService:
         run = await self.db_service.get_latest_model_nightly_run()
         if not run or run.get('game_date') is None:
             return None
-        return NightlyRun(game_date=run['game_date'], rows=int(run.get('num_rows') or 0))
+        return NightlyRun(
+            game_date=run['game_date'],
+            rows=int(run.get('num_rows') or 0),
+            status=str(run.get('status') or ''),
+        )

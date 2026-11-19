@@ -4,6 +4,7 @@ import type { SlatePlayerValue } from '../../types/boxScore'
 import {
   buildDailyRecap,
   dailyRecapMessage,
+  isOffNight,
   pickLines,
   pickMoves,
   pickNightTeams,
@@ -222,6 +223,30 @@ describe('buildDailyRecap', () => {
     expect(recap.started?.name).toBe('Cold')
     expect(recap.boom.shown[0].name).toBe('Boom')
     expect(recap.bust.shown[0].name).toBe('Bust')
+  })
+
+  it('leaves every section empty on a night with no games', () => {
+    expect(isOffNight('no_games')).toBe(true)
+    expect(isOffNight('processed')).toBe(false)
+    const recap = buildDailyRecap({
+      rankings: [],
+      categories: [],
+      moves: [],
+      players: [],
+      good: [],
+      bad: [],
+      thresholds: { good: 2.1, bad: 2.2 },
+    })
+    expect(recap.best).toBeNull()
+    expect(recap.worst).toBeNull()
+    expect(recap.rise).toBeNull()
+    expect(recap.fall).toBeNull()
+    expect(recap.lines).toEqual([])
+    expect(recap.freeAgents).toEqual([])
+    expect(recap.started).toBeNull()
+    expect(recap.benched).toBeNull()
+    expect(recap.boom.shown).toEqual([])
+    expect(recap.bust.shown).toEqual([])
   })
 })
 

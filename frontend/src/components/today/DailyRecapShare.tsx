@@ -11,7 +11,7 @@ import { slatePlayerValues } from '../boxScores/slateValues'
 import { ShareCardButton, type ShareCardOptions } from '../share/ShareCardButton'
 import { DailyRecapLoadingCard, DailyRecapShareCard } from '../share/DailyRecapShareCard'
 import { toLocalIso } from '../../utils/dateRange'
-import { buildDailyRecap, dailyRecapMessage, recapNightLabel } from '../../utils/dailyRecap'
+import { buildDailyRecap, dailyRecapMessage, isOffNight, recapNightLabel } from '../../utils/dailyRecap'
 
 interface QueryState {
   data?: unknown
@@ -44,20 +44,32 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
   // has finished, not a slate that has only just tipped.
   const hub = useGetTodayHubQuery(undefined, { refetchOnMountOrArgChange: true })
   const hubWaiting = !hub.isError && (hub.isUninitialized || hub.isLoading || hub.isFetching || hub.data == null)
-  const night = hub.data?.last_nightly?.game_date ?? null
+  const nightly = hub.data?.last_nightly
+  const night = nightly?.game_date ?? null
+  // An off night has no slate and no new standings. Rank changes would
+  // otherwise repeat the previous scoring period on this poster.
+  const offNight = isOffNight(nightly?.status)
   const start = night == null ? '' : (seasonStart && night < seasonStart ? seasonStart : night)
   const end = night == null ? '' : dayAfter(night)
-  const rangeOk = !hubWaiting && start !== '' && start < end
+  const rangeOk = !hubWaiting && !offNight && start !== '' && start < end
   const rankings = useGetRankingsQuery({ startDate: start, endDate: end, settled: true }, { skip: !rangeOk })
-  const moves = useGetRankChangesQuery({ mode: 'averages', settled: true }, { skip: hubWaiting })
-  const surprises = useGetSurprisesForDateQuery(night ?? '', { skip: !night || hubWaiting })
-  const slate = useGetBoxSlateValuesQuery(night ?? '', { skip: !night || hubWaiting })
+  const moves = useGetRankChangesQuery({ mode: 'averages', settled: true }, { skip: hubWaiting || offNight })
+  const surprises = useGetSurprisesForDateQuery(night ?? '', { skip: !night || hubWaiting || offNight })
+  const slate = useGetBoxSlateValuesQuery(night ?? '', { skip: !night || hubWaiting || offNight })
 
   const players = useMemo(
     () => (slate.data?.categories != null ? slatePlayerValues(slate.data) : []),
     [slate.data],
   )
-  const recap = useMemo(() => buildDailyRecap({
+  const recap = useMemo(() => buildDailyRecap(offNight ? {
+    rankings: [],
+    categories: [],
+    moves: [],
+    players: [],
+    good: [],
+    bad: [],
+    thresholds: { good: 2.1, bad: 2.2 },
+  } : {
     rankings: rankings.data?.averages_rankings ?? [],
     categories: rankings.data?.categories ?? [],
     moves: moves.data?.teams ?? [],
@@ -65,7 +77,7 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
     good: surprises.data?.good ?? [],
     bad: surprises.data?.bad ?? [],
     thresholds: surprises.data?.thresholds ?? { good: 2.1, bad: 2.2 },
-  }), [rankings.data, moves.data, players, surprises.data])
+  }), [offNight, rankings.data, moves.data, players, surprises.data])
 
   const waiting = hubWaiting
     || pending(rankings, rangeOk)
@@ -73,8 +85,8 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
     || pending(surprises, !!night && !hubWaiting)
     || pending(slate, !!night && !hubWaiting)
   const label = recapNightLabel(
-    rankings.data?.actual_start_date,
-    rankings.data?.actual_end_date,
+    offNight ? null : rankings.data?.actual_start_date,
+    offNight ? null : rankings.data?.actual_end_date,
     night,
   )
   const subtitle = label.linesNote ? `${label.headline} · lines ${label.linesNote}` : label.headline
