@@ -16,32 +16,35 @@ const recap: DailyRecap = {
   fall: { teamId: 3, name: 'Sliding', totalDelta: -3.5, rankDelta: -1, categories: [{ category: 'AST', delta: -2 }] },
   lines: [{
     id: '1', name: 'Donovan Mitchell', nbaTeam: 'CLE', opponent: 'CHI', home: true,
-    fantasyTeam: 'ABC', fantasyTeamName: 'Beta Squad', started: true, stats: line, z: 2.41,
+    fantasyTeam: 'ABC', fantasyTeamName: 'Beta Squad', lineup: 'started', stats: line, z: 2.41,
+  }, {
+    id: '7', name: 'Bench Line', nbaTeam: 'DAL', opponent: 'SAS', home: false,
+    fantasyTeam: 'XYZ', fantasyTeamName: 'Sliding', lineup: 'bench', stats: line, z: 1.8,
   }],
   freeAgents: [{
     id: '2', name: 'Nickeil Alexander-Walker', nbaTeam: 'ATL', opponent: 'IND', home: false,
-    fantasyTeam: null, fantasyTeamName: null, started: false, stats: line, z: 1.2,
+    fantasyTeam: null, fantasyTeamName: null, lineup: null, stats: line, z: 1.2,
   }],
   started: {
     id: '3', name: 'Cold Starter', nbaTeam: 'LAL', opponent: 'BOS', home: true,
-    fantasyTeam: 'ABC', fantasyTeamName: 'Beta Squad', started: true, stats: line, z: -1.84,
+    fantasyTeam: 'ABC', fantasyTeamName: 'Beta Squad', lineup: 'started', stats: line, z: -1.84,
   },
   benched: {
     id: '4', name: 'Sat Star', nbaTeam: 'NYK', opponent: 'MIA', home: false,
-    fantasyTeam: 'XYZ', fantasyTeamName: 'Sliding', started: false, stats: line, z: 3.1,
+    fantasyTeam: 'XYZ', fantasyTeamName: 'Sliding', lineup: 'bench', stats: line, z: 3.1,
   },
   boom: {
     shown: [{
       id: 5, name: 'Boom Guy', opponent: 'PHI', home: true, fantasyTeam: 'ABC', fantasyTeamName: 'Beta Squad',
-      started: true, stats: [{ label: 'FG', value: '14-22' }, { label: 'PTS', value: '38' }], score: 3.4,
+      lineup: 'started', stats: [{ label: 'FG', value: '14-22' }, { label: 'PTS', value: '38' }], score: 3.4,
     }],
     total: 6,
     threshold: 2.1,
   },
   bust: {
     shown: [{
-      id: 6, name: 'Bust Guy', opponent: 'DEN', home: false, fantasyTeam: null, fantasyTeamName: null,
-      started: false, stats: [{ label: 'PTS', value: '2' }], score: -2.8,
+      id: 6, name: 'Bust Guy', opponent: 'DEN', home: false, fantasyTeam: 'XYZ', fantasyTeamName: 'Sliding',
+      lineup: 'bench', stats: [{ label: 'PTS', value: '2' }], score: -2.8,
     }],
     total: 1,
     threshold: 2.2,
@@ -110,10 +113,12 @@ describe('DailyRecapShareCard', () => {
     const bust = grid?.children[9]
     expect(boom?.querySelector('img.drc-avatar')?.getAttribute('src')).toContain('/5.png')
     expect(bust?.querySelector('img.drc-avatar')?.getAttribute('src')).toContain('/6.png')
-    expect(grid?.children[4].querySelectorAll('.drc-start')).toHaveLength(1)
-    expect(grid?.children[4].querySelector('.drc-start')).toHaveAttribute('title', 'Started')
-    expect(boom?.querySelectorAll('.drc-start')).toHaveLength(1)
-    expect(bust?.querySelector('.drc-start')).toBeNull()
-    expect(grid?.children[6].querySelector('.drc-start')).toBeNull()
+    const linesTile = grid?.children[4]
+    expect(linesTile?.querySelector('.drc-dot--start')).toHaveAttribute('title', 'Started')
+    expect(linesTile?.querySelector('.drc-dot--bench')).toHaveAttribute('title', 'Bench')
+    expect(boom?.querySelector('.drc-dot--start')).toBeInTheDocument()
+    expect(bust?.querySelector('.drc-dot--bench')).toBeInTheDocument()
+    expect(grid?.children[5].querySelector('.drc-dot')).toBeNull()
+    expect(grid?.children[6].querySelector('.drc-dot')).toBeNull()
   })
 })

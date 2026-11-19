@@ -47,8 +47,8 @@ export interface RecapPlayer {
   home: boolean
   fantasyTeam: string | null
   fantasyTeamName: string | null
-  /** Started in his fantasy lineup that night. */
-  started: boolean
+  /** Fantasy lineup that night. Null for a free agent or an unknown slot. */
+  lineup: 'started' | 'bench' | 'ir' | null
   /** Full box line. Every column is present, including zeros. */
   stats: RecapStat[]
   z: number
@@ -61,8 +61,8 @@ export interface RecapSurprise {
   home: boolean
   fantasyTeam: string | null
   fantasyTeamName: string | null
-  /** Started in his fantasy lineup that night. */
-  started: boolean
+  /** Fantasy lineup that night. Null for a free agent or an unknown slot. */
+  lineup: 'started' | 'bench' | 'ir' | null
   /** Full surprise line: minutes, shooting, and every counting stat. */
   stats: RecapStat[]
   score: number
@@ -217,7 +217,7 @@ function asPlayer(player: SlatePlayerValue): RecapPlayer {
     home: player.is_home,
     fantasyTeam: player.fantasy_team,
     fantasyTeamName: player.fantasy_team_name,
-    started: lineup(player) === 'started',
+    lineup: lineup(player),
     stats: boxStats(player),
     z: player.z,
   }
@@ -267,6 +267,13 @@ function surpriseStats(row: SurpriseRow): RecapStat[] {
   ]
 }
 
+function surpriseLineup(row: SurpriseRow): 'started' | 'bench' | 'ir' | null {
+  if (row.fantasy_team == null || row.started == null) return null
+  if (row.started) return 'started'
+  if (row.lineup_slot === 'IR') return 'ir'
+  return 'bench'
+}
+
 function asSurprise(row: SurpriseRow): RecapSurprise {
   return {
     id: row.player_id,
@@ -275,7 +282,7 @@ function asSurprise(row: SurpriseRow): RecapSurprise {
     home: row.is_home,
     fantasyTeam: row.fantasy_team,
     fantasyTeamName: row.fantasy_team_name ?? null,
-    started: row.fantasy_team != null && row.started === true,
+    lineup: surpriseLineup(row),
     stats: surpriseStats(row),
     score: row.score,
   }

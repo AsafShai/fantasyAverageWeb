@@ -138,11 +138,11 @@ describe('pickLines', () => {
       player({ name: 'Fourth', z: 1, fantasy_team: null, fantasy_team_name: null }),
       player({ name: 'Star', z: 4 }),
       player({ name: 'Agent', z: 2.5, fantasy_team: null, fantasy_team_name: null }),
-      player({ name: 'Second', z: 3 }),
+      player({ name: 'Second', z: 3, started: false, lineup_slot: 'BN' }),
       player({ name: 'Third', z: 2 }),
     ])
     expect(lines.map(line => line.name)).toEqual(['Star', 'Second', 'Agent'])
-    expect(lines.map(line => line.started)).toEqual([true, true, false])
+    expect(lines.map(line => line.lineup)).toEqual(['started', 'bench', null])
     expect(freeAgents.map(line => line.name)).toEqual(['Agent', 'Fourth'])
   })
 })
@@ -173,7 +173,11 @@ describe('pickSurprises', () => {
     expect(boom.shown.map(row => row.name)).toEqual(['Boom 0', 'Boom 1', 'Boom 2', 'Boom 3', 'Boom 4'])
     expect(bust.total).toBe(2)
     expect(bust.shown.map(row => row.score)).toEqual([-4, -2.2])
-    expect(boom.shown[0].started).toBe(true)
+    expect(boom.shown[0].lineup).toBe('started')
+    const benched = surprise('Sat', -4)
+    benched.started = false
+    benched.lineup_slot = 'BN'
+    expect(pickSurprises([], [benched], { good: 2.1, bad: 2.2 }).bust.shown[0].lineup).toBe('bench')
     expect(boom.shown[0].stats).toEqual([
       { label: 'MIN', value: '30' },
       { label: 'FG', value: '8-16' },

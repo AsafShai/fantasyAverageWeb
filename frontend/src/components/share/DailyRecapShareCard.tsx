@@ -128,11 +128,19 @@ function MoveTile({ kicker, mark, move, empty, highlight }: {
   )
 }
 
-function StartDot() {
-  return <span className="drc-start" title="Started" aria-label="Started" />
+const LINEUP_DOT: Record<'started' | 'bench' | 'ir', { tone: string; label: string }> = {
+  started: { tone: 'drc-dot--start', label: 'Started' },
+  bench: { tone: 'drc-dot--bench', label: 'Bench' },
+  ir: { tone: 'drc-dot--ir', label: 'IR' },
 }
 
-function PlayerBlock({ player, rank, mineRow, markStart = false }: { player: RecapPlayer; rank?: number; mineRow: boolean; markStart?: boolean }) {
+function LineupDot({ state }: { state: RecapPlayer['lineup'] }) {
+  if (!state) return null
+  const mark = LINEUP_DOT[state]
+  return <span className={`drc-dot ${mark.tone}`} title={mark.label} aria-label={mark.label} />
+}
+
+function PlayerBlock({ player, rank, mineRow, markLineup = false }: { player: RecapPlayer; rank?: number; mineRow: boolean; markLineup?: boolean }) {
   return (
     <li className={`drc-player${mineRow ? ' drc-player--mine' : ''}`}>
       <div className="drc-top">
@@ -144,7 +152,7 @@ function PlayerBlock({ player, rank, mineRow, markStart = false }: { player: Rec
             {player.nbaTeam} {player.home ? 'vs' : '@'} {player.opponent}
             {' · '}
             {player.fantasyTeamName ?? player.fantasyTeam ?? 'FA'}
-            {markStart && player.started && <StartDot />}
+            {markLineup && <LineupDot state={player.lineup} />}
           </span>
         </span>
         <span className={`drc-z ${toneClass(player.z)}`}>{signedZ(player.z)}</span>
@@ -154,12 +162,12 @@ function PlayerBlock({ player, rank, mineRow, markStart = false }: { player: Rec
   )
 }
 
-function PlayerRows({ players, mineOf, empty, markStart = false }: { players: RecapPlayer[]; mineOf: (player: RecapPlayer) => boolean; empty: string; markStart?: boolean }) {
+function PlayerRows({ players, mineOf, empty, markLineup = false }: { players: RecapPlayer[]; mineOf: (player: RecapPlayer) => boolean; empty: string; markLineup?: boolean }) {
   if (players.length === 0) return <p className="drc-empty">{empty}</p>
   return (
     <ol className="drc-players">
       {players.map((player, index) => (
-        <PlayerBlock key={player.id} player={player} rank={index + 1} mineRow={mineOf(player)} markStart={markStart} />
+        <PlayerBlock key={player.id} player={player} rank={index + 1} mineRow={mineOf(player)} markLineup={markLineup} />
       ))}
     </ol>
   )
@@ -186,7 +194,7 @@ function SurpriseTile({ kicker, mark, side, rule, mineOf }: {
                   <span className="drc-meta">
                     {row.home ? 'vs' : '@'} {row.opponent}
                     {row.fantasyTeamName || row.fantasyTeam ? ` · ${row.fantasyTeamName ?? row.fantasyTeam}` : ' · FA'}
-                    {row.started && <StartDot />}
+                    <LineupDot state={row.lineup} />
                   </span>
                 </span>
                 <span className={`drc-score ${toneClass(row.score)}`}>{signedPoints(row.score)}</span>
@@ -228,7 +236,7 @@ export const DailyRecapShareCard = ({ dark, subtitle, recap, highlight, myTeam }
         <MoveTile kicker="Biggest rise" mark="📈" move={recap.rise} empty="No team gained points" highlight={teamMine(recap.rise?.teamId ?? null)} />
         <MoveTile kicker="Biggest fall" mark="📉" move={recap.fall} empty="No team lost points" highlight={teamMine(recap.fall?.teamId ?? null)} />
         <Tile kicker="Lines of the night" mark="🔥">
-          <PlayerRows players={recap.lines} mineOf={playerMine} empty="No lines yet" markStart />
+          <PlayerRows players={recap.lines} mineOf={playerMine} empty="No lines yet" markLineup />
         </Tile>
         <Tile kicker="FA of the night" mark="🆓">
           <PlayerRows players={recap.freeAgents} mineOf={playerMine} empty="No free agents" />

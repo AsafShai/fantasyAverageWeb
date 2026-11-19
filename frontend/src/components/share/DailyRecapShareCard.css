@@ -87,10 +87,13 @@
 .drc-who { min-width: 0; flex: 1; }
 .drc-name { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .drc-meta { display: block; margin-top: 1px; font-size: 11px; line-height: 1.3; color: var(--sc-muted); overflow-wrap: anywhere; }
-.drc-start {
+.drc-dot {
   display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%;
-  background: #10b981; vertical-align: 1px;
+  vertical-align: 1px;
 }
+.drc-dot--start { background: #10b981; }
+.drc-dot--bench { background: #9ca3af; }
+.drc-dot--ir { background: #fbbf24; }
 .drc-z, .drc-score { flex-shrink: 0; font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .drc-z--up, .drc-score--up { color: var(--sc-good-fg); }
 .drc-z--down, .drc-score--down { color: var(--sc-bad-fg); }
