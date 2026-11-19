@@ -8,7 +8,7 @@ import { SCHEDULE_HORIZONS, type ScheduleHorizon } from '../../components/Player
 import { getErrorMessage } from '../../utils/errorMessage'
 import { addDays } from '../../utils/slateWindow'
 import { RosterDayOnlyPlayedToggle } from '../../components/RosterDayView'
-import { dayLabel, gameLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayCanFilterPlayed, rosterDayNote, rosterDayPlayerPlayed, startersDayLabel, starterTotals } from '../../utils/rosterDay'
+import { dayLabel, gameLabel, isBench, lineupSlotOrder, liveRosterMoment, moveNote, moveTime, pct, rosterDayCanFilterPlayed, rosterDayNote, rosterDayMatchup, rosterDayPlayerPlayed, startersDayLabel, starterTotals } from '../../utils/rosterDay'
 import { BottomSheet, Button, Card, Chip, ChipRow, InjuryMark, Segmented, SlotPill, useSheetHistory } from '../ui'
 import type { MobileTeamDetailProps } from './types'
 
@@ -177,7 +177,7 @@ function DailyRoster(p: MobileTeamDetailProps) {
   const showStats = !day.is_today || liveRosterMoment(day, noSpoilers) !== null
 
   const renderDailyRow = (pl: (typeof players)[number]) => {
-    const matchup = day.is_today ? p.matchups.get(pl.player_name) : undefined
+    const matchup = rosterDayMatchup(day, pl, p.matchups)
     const muted = showStats && (isBench(pl.lineup_slot) || !hasLine(pl))
     const onCourt = !noSpoilers && pl.status === 'live' && !isBench(pl.lineup_slot) && (pl.stats?.minutes ?? 0) > 0
     const cls = [litId === pl.player_id && 'mr-lit', muted && 'mr-muted', onCourt && 'mr-on-court'].filter(Boolean).join(' ')

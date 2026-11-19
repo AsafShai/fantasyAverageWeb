@@ -1,4 +1,4 @@
-import type { RosterDay, RosterDayGame, RosterDayMove, RosterDayPlayer, RosterDayStats } from '../types/api'
+import type { PlayerMatchup, RosterDay, RosterDayGame, RosterDayMove, RosterDayPlayer, RosterDayStats } from '../types/api'
 import { liveMoment, type LiveMoment } from './live'
 import { addDays, formatSlateDate } from './slateWindow'
 
@@ -137,4 +137,22 @@ export function gameLabel(game: RosterDayGame, opts: { timeZone?: string } = {})
 export function startersDayLabel(day: RosterDay, noSpoilers = false): string {
   if (!day.is_today) return dayLabel(day.date)
   return liveRosterMoment(day, noSpoilers) === 'live' ? 'Today, so far' : 'Today'
+}
+
+/**
+ * Today's matchup for a roster row, or undefined. The matchups feed is the
+ * upcoming slate, which moves to the next game day once today's games are all
+ * final — while the roster day can still be the finished one. A matchup for a
+ * different date would put tomorrow's opponent next to tonight's result.
+ */
+export function rosterDayMatchup(
+  day: Pick<RosterDay, 'date' | 'is_today'>,
+  player: Pick<RosterDayPlayer, 'player_name' | 'opponent'>,
+  matchups: Map<string, PlayerMatchup> | undefined,
+): PlayerMatchup | undefined {
+  if (!day.is_today) return undefined
+  const matchup = matchups?.get(player.player_name)
+  if (!matchup) return undefined
+  if (matchup.game_date) return matchup.game_date === day.date ? matchup : undefined
+  return matchup.opponent === player.opponent ? matchup : undefined
 }
