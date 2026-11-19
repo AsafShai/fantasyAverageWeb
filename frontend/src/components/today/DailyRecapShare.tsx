@@ -150,6 +150,7 @@ export function DailyRecapShare({ sheet = false, seasonStart }: { sheet?: boolea
     <ShareCardButton
       title="Fantasy Daily Recap"
       contentKey={contentKey}
+      pending={contentKey === 'loading'}
       shareText={shareText}
       highlightOption
       sheet={sheet}
