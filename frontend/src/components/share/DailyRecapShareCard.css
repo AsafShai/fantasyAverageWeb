@@ -51,12 +51,6 @@
 
 .drc-kicker { display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; }
 .drc-icon { flex-shrink: 0; }
-.drc-mine {
-  align-self: flex-start; flex-shrink: 0;
-  background: var(--drc-paper); color: var(--drc-ink);
-  font-size: 14px; line-height: 16px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  padding: 2px 8px; white-space: nowrap;
-}
 .drc-empty { margin: 0; font-size: 23px; font-weight: 600; color: var(--drc-mute); }
 
 /* Best against worst: one band, split on a diagonal */
@@ -72,7 +66,6 @@
 .drc-half-id { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .drc-half--worst .drc-half-id { align-items: flex-end; }
 .drc-half--worst .drc-kicker { color: var(--drc-down); }
-.drc-half--worst .drc-mine { align-self: flex-end; }
 .drc-team { font-family: var(--drc-display); font-size: 44px; line-height: 1.05; text-transform: uppercase; overflow-wrap: anywhere; }
 .drc-place { font-family: var(--drc-display); font-size: 48px; line-height: 1; }
 .drc-figure { display: flex; align-items: flex-end; gap: 12px; }
@@ -107,7 +100,6 @@
 .drc-move--down .drc-kicker { color: var(--drc-down); }
 .drc-move .drc-team { margin-top: 8px; font-size: 36px; line-height: 1.08; }
 .drc-places { margin-top: 4px; font-size: 23px; line-height: 28px; font-weight: 700; }
-.drc-move .drc-mine { margin-top: 6px; }
 .drc-move .drc-empty { margin-top: 10px; }
 .drc-delta { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .drc-delta strong { font-family: var(--drc-display); font-weight: 400; font-size: 150px; line-height: 1; color: var(--drc-up); }
@@ -133,9 +125,8 @@
 .drc-name { font-size: 28px; font-weight: 700; line-height: 1.05; overflow-wrap: anywhere; }
 .drc-name--display { font-family: var(--drc-display); font-weight: 400; text-transform: uppercase; }
 .drc-meta { font-size: 17px; line-height: 20px; color: var(--drc-mute); overflow-wrap: anywhere; }
-.drc-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .drc-pill {
-  display: inline-flex; align-items: center; gap: 6px;
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
   font-size: 14px; line-height: 16px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
   border: 1.5px solid #6b7280; border-radius: 999px; padding: 1px 9px 1px 6px; color: #9ca3af;
 }

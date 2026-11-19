@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Team } from '../../types/api'
-import type { DailyRecap, RecapMove, RecapPlayer, RecapStat, RecapSurprise, RecapSurpriseSide, RecapTeam } from '../../utils/dailyRecap'
+import type { DailyRecap, RecapMove, RecapPlayer, RecapStat, RecapSurpriseSide, RecapTeam } from '../../utils/dailyRecap'
 import { placesMoved, signedPoints } from '../../utils/dailyRecap'
 import { signedZ } from '../boxScores/linesOfTheNightFormat'
 import { formatPoints } from './shareCardFormat'
@@ -12,19 +11,9 @@ interface DailyRecapShareCardProps {
   dark: boolean
   subtitle: string
   recap: DailyRecap
-  /** Mark the viewer's team wherever it shows up. */
-  highlight: boolean
-  myTeam: Team | null
   /** `@font-face` rules for the poster's typefaces (recapFonts.ts). Without
    * them the card falls back to the system's condensed faces. */
   fontCss?: string
-}
-
-function mine(on: boolean, my: Team | null, teamId: number | null, fantasy: string | null, fantasyName: string | null): boolean {
-  if (!on || !my) return false
-  if (teamId != null && teamId === my.team_id) return true
-  if (fantasy && my.abbrev && fantasy === my.abbrev) return true
-  return fantasyName != null && (fantasyName === my.team_name || fantasyName === my.abbrev)
 }
 
 /** ESPN's resizer, at twice the largest tile (120px) for the 2x export. */
@@ -83,8 +72,6 @@ function Kicker({ icon, children, iconLast = false }: { icon: IconName; children
   )
 }
 
-const MineTag = () => <span className="drc-mine">My team</span>
-
 function Strip({ stats, variant, signed = false }: { stats: RecapStat[]; variant: string; signed?: boolean }) {
   if (stats.length === 0) return null
   return (
@@ -99,7 +86,7 @@ function Strip({ stats, variant, signed = false }: { stats: RecapStat[]; variant
   )
 }
 
-function TeamHalf({ side, team, highlight }: { side: 'best' | 'worst'; team: RecapTeam | null; highlight: boolean }) {
+function TeamHalf({ side, team }: { side: 'best' | 'worst'; team: RecapTeam | null }) {
   const best = side === 'best'
   const id = (
     <div className="drc-half-id">
@@ -108,7 +95,6 @@ function TeamHalf({ side, team, highlight }: { side: 'best' | 'worst'; team: Rec
         <>
           <div className="drc-team">{team.name}</div>
           <div className="drc-place">#{team.rank}</div>
-          {highlight && <MineTag />}
         </>
       ) : <p className="drc-empty">No standings for this night</p>}
     </div>
@@ -134,7 +120,7 @@ function TeamHalf({ side, team, highlight }: { side: 'best' | 'worst'; team: Rec
   )
 }
 
-function MoveCard({ dir, move, empty, highlight }: { dir: 'up' | 'down'; move: RecapMove | null; empty: string; highlight: boolean }) {
+function MoveCard({ dir, move, empty }: { dir: 'up' | 'down'; move: RecapMove | null; empty: string }) {
   const places = move ? placesMoved(move.rankDelta) : ''
   return (
     <div className={`drc-move drc-move--${dir}`}>
@@ -144,7 +130,6 @@ function MoveCard({ dir, move, empty, highlight }: { dir: 'up' | 'down'; move: R
           <>
             <div className="drc-team">{move.name}</div>
             {places && <div className="drc-places">{places}</div>}
-            {highlight && <MineTag />}
             <Strip
               signed
               variant="drc-strip--deltas"
@@ -171,28 +156,22 @@ const LINEUP: Record<'started' | 'bench' | 'ir', { tone: string; label: string }
 
 /** The lineup light: a dot and the word, so it does not rest on color alone.
  * Always on its own line under the team, the same place on every row. */
-function Tags({ lineup, mineRow }: { lineup: RecapPlayer['lineup']; mineRow: boolean }) {
-  if (!lineup && !mineRow) return null
-  return (
-    <div className="drc-tags">
-      {lineup && <span className={`drc-pill ${LINEUP[lineup].tone}`}><i />{LINEUP[lineup].label}</span>}
-      {mineRow && <MineTag />}
-    </div>
-  )
+function LineupPill({ lineup }: { lineup: RecapPlayer['lineup'] }) {
+  if (!lineup) return null
+  return <span className={`drc-pill ${LINEUP[lineup].tone}`}><i />{LINEUP[lineup].label}</span>
 }
 
-function Who({ name, meta, lineup, mineRow, display = false }: {
+function Who({ name, meta, lineup, display = false }: {
   name: string
   meta: string
   lineup: RecapPlayer['lineup']
-  mineRow: boolean
   display?: boolean
 }) {
   return (
     <div className="drc-who">
       <div className={`drc-name${display ? ' drc-name--display' : ''}`}>{name}</div>
       <div className="drc-meta">{meta}</div>
-      <Tags lineup={lineup} mineRow={mineRow} />
+      <LineupPill lineup={lineup} />
     </div>
   )
 }
@@ -211,12 +190,11 @@ function playerMeta(player: RecapPlayer): string {
   return `${player.nbaTeam} ${player.home ? 'vs' : '@'} ${player.opponent} · ${player.fantasyTeamName ?? player.fantasyTeam ?? 'FA'}`
 }
 
-function LinesPanel({ title, icon, players, empty, mineOf, paper = false, markLineup = false }: {
+function LinesPanel({ title, icon, players, empty, paper = false, markLineup = false }: {
   title: string
   icon: IconName
   players: RecapPlayer[]
   empty: string
-  mineOf: (player: RecapPlayer) => boolean
   paper?: boolean
   markLineup?: boolean
 }) {
@@ -235,7 +213,7 @@ function LinesPanel({ title, icon, players, empty, mineOf, paper = false, markLi
               <img src={headshot(first.id)} alt="" />
               <div className="drc-hero-n">1</div>
             </div>
-            <Who display name={first.name} meta={playerMeta(first)} lineup={markLineup ? first.lineup : null} mineRow={mineOf(first)} />
+            <Who display name={first.name} meta={playerMeta(first)} lineup={markLineup ? first.lineup : null} />
             <Score label="Night Z" value={first.z} text={signedNight(first.z)} />
           </div>
           <Strip variant="drc-strip--line drc-strip--hero" stats={first.stats} />
@@ -244,7 +222,7 @@ function LinesPanel({ title, icon, players, empty, mineOf, paper = false, markLi
               <div className="drc-row-top">
                 <div className="drc-n">{index + 2}</div>
                 <img className="drc-avatar" src={headshot(player.id)} alt="" />
-                <Who name={player.name} meta={playerMeta(player)} lineup={markLineup ? player.lineup : null} mineRow={mineOf(player)} />
+                <Who name={player.name} meta={playerMeta(player)} lineup={markLineup ? player.lineup : null} />
                 <Score label="Night Z" value={player.z} text={signedNight(player.z)} />
               </div>
               <Strip variant="drc-strip--line" stats={player.stats} />
@@ -256,13 +234,12 @@ function LinesPanel({ title, icon, players, empty, mineOf, paper = false, markLi
   )
 }
 
-function SoloCard({ dir, title, icon, player, empty, mineRow }: {
+function SoloCard({ dir, title, icon, player, empty }: {
   dir: 'up' | 'down'
   title: string
   icon: IconName
   player: RecapPlayer | null
   empty: string
-  mineRow: boolean
 }) {
   return (
     <div className={`drc-solo drc-solo--${dir}`}>
@@ -272,7 +249,7 @@ function SoloCard({ dir, title, icon, player, empty, mineRow }: {
           <>
             <div className="drc-solo-top">
               <img className="drc-solo-face" src={headshot(player.id)} alt="" />
-              <Who display name={player.name} meta={playerMeta(player)} lineup={null} mineRow={mineRow} />
+              <Who display name={player.name} meta={playerMeta(player)} lineup={null} />
               <Score label="Night Z" value={player.z} text={signedNight(player.z)} />
             </div>
             <Strip variant="drc-strip--line drc-strip--solo" stats={player.stats} />
@@ -283,7 +260,7 @@ function SoloCard({ dir, title, icon, player, empty, mineRow }: {
   )
 }
 
-function SurprisePanel({ dir, side, mineOf }: { dir: 'up' | 'down'; side: RecapSurpriseSide; mineOf: (row: RecapSurprise) => boolean }) {
+function SurprisePanel({ dir, side }: { dir: 'up' | 'down'; side: RecapSurpriseSide }) {
   const capped = side.total > side.shown.length
   return (
     <div className={`drc-boom drc-boom--${dir}`}>
@@ -303,7 +280,6 @@ function SurprisePanel({ dir, side, mineOf }: { dir: 'up' | 'down'; side: RecapS
               name={row.name}
               meta={`${row.home ? 'vs' : '@'} ${row.opponent} · ${row.fantasyTeamName ?? row.fantasyTeam ?? 'FA'}`}
               lineup={row.lineup}
-              mineRow={mineOf(row)}
             />
             <Score label="Surprise" value={row.score} text={signedPoints(row.score)} />
           </div>
@@ -331,34 +307,30 @@ function ReportHead({ subtitle }: { subtitle: string }) {
 }
 
 /** One poster: five rows, two sections each. */
-export const DailyRecapShareCard = ({ subtitle, recap, highlight, myTeam, fontCss }: DailyRecapShareCardProps) => {
-  const teamMine = (teamId: number | null) => mine(highlight, myTeam, teamId, null, null)
-  const playerMine = (player: { fantasyTeam: string | null; fantasyTeamName: string | null } | null) =>
-    player != null && mine(highlight, myTeam, null, player.fantasyTeam, player.fantasyTeamName)
-
+export const DailyRecapShareCard = ({ subtitle, recap, fontCss }: DailyRecapShareCardProps) => {
   return (
     <div className="share-card share-card--recap">
       {fontCss && <style>{fontCss}</style>}
       <ReportHead subtitle={subtitle} />
       <section className="drc-duel">
-        <TeamHalf side="best" team={recap.best} highlight={teamMine(recap.best?.teamId ?? null)} />
-        <TeamHalf side="worst" team={recap.worst} highlight={teamMine(recap.worst?.teamId ?? null)} />
+        <TeamHalf side="best" team={recap.best} />
+        <TeamHalf side="worst" team={recap.worst} />
       </section>
       <section className="drc-pair">
-        <MoveCard dir="up" move={recap.rise} empty="No team gained points" highlight={teamMine(recap.rise?.teamId ?? null)} />
-        <MoveCard dir="down" move={recap.fall} empty="No team lost points" highlight={teamMine(recap.fall?.teamId ?? null)} />
+        <MoveCard dir="up" move={recap.rise} empty="No team gained points" />
+        <MoveCard dir="down" move={recap.fall} empty="No team lost points" />
       </section>
       <section className="drc-pair">
-        <LinesPanel title="Lines of the night" icon="flame" players={recap.lines} empty="No lines yet" mineOf={playerMine} markLineup />
-        <LinesPanel title="FA of the night" icon="tag" players={recap.freeAgents} empty="No free agents" mineOf={playerMine} paper />
+        <LinesPanel title="Lines of the night" icon="flame" players={recap.lines} empty="No lines yet" markLineup />
+        <LinesPanel title="FA of the night" icon="tag" players={recap.freeAgents} empty="No free agents" paper />
       </section>
       <section className="drc-pair">
-        <SoloCard dir="down" title="Worst starter performance" icon="down" player={recap.started} empty="No starter with a line" mineRow={playerMine(recap.started)} />
-        <SoloCard dir="up" title="Best bench performance" icon="bench" player={recap.benched} empty="No bench player with a line" mineRow={playerMine(recap.benched)} />
+        <SoloCard dir="down" title="Worst starter performance" icon="down" player={recap.started} empty="No starter with a line" />
+        <SoloCard dir="up" title="Best bench performance" icon="bench" player={recap.benched} empty="No bench player with a line" />
       </section>
       <section className="drc-pair">
-        <SurprisePanel dir="up" side={recap.boom} mineOf={playerMine} />
-        <SurprisePanel dir="down" side={recap.bust} mineOf={playerMine} />
+        <SurprisePanel dir="up" side={recap.boom} />
+        <SurprisePanel dir="down" side={recap.bust} />
       </section>
       <footer className="drc-foot">
         <span>Averages, rankings, last 1 day</span>

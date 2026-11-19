@@ -64,8 +64,6 @@ describe('DailyRecapShareCard', () => {
         dark={false}
         subtitle="Nov 18, 2026"
         recap={recap}
-        highlight
-        myTeam={{ team_id: 1, team_name: 'Beta Squad', abbrev: 'ABC' }}
       />,
     )
 
@@ -131,30 +129,17 @@ describe('DailyRecapShareCard', () => {
     expect(bust.querySelector('img')?.getAttribute('src')).toContain('/6.png')
 
     // The lineup light: a dot and a word, in its own row under the team.
-    expect(lines.querySelector('.drc-hero .drc-tags .drc-pill--start')).toHaveTextContent('Started')
-    expect(lines.querySelector('.drc-row .drc-tags .drc-pill--bench')).toHaveTextContent('Bench')
-    expect(boom.querySelector('.drc-tags .drc-pill--start')).toBeInTheDocument()
-    expect(bust.querySelector('.drc-tags .drc-pill--bench')).toBeInTheDocument()
+    expect(lines.querySelector('.drc-hero .drc-who > .drc-pill--start')).toHaveTextContent('Started')
+    expect(lines.querySelector('.drc-row .drc-who > .drc-pill--bench')).toHaveTextContent('Bench')
+    expect(boom.querySelector('.drc-who > .drc-pill--start')).toBeInTheDocument()
+    expect(bust.querySelector('.drc-who > .drc-pill--bench')).toBeInTheDocument()
     expect(freeAgents.querySelector('.drc-pill')).toBeNull()
     expect(started.querySelector('.drc-pill')).toBeNull()
     expect(benched.querySelector('.drc-pill')).toBeNull()
-
-    // "My team" wherever team 1 / ABC shows up, and nowhere else.
-    const marked = tiles.map(tile => tile.querySelectorAll('.drc-mine').length)
-    expect(marked).toEqual([1, 0, 1, 0, 1, 0, 1, 0, 1, 0])
   })
 
-  it('marks nothing when highlighting is off, and shrinks a long date', () => {
-    render(
-      <DailyRecapShareCard
-        dark
-        subtitle="Nov 17, 2026 · lines Nov 18, 2026"
-        recap={recap}
-        highlight={false}
-        myTeam={{ team_id: 1, team_name: 'Beta Squad', abbrev: 'ABC' }}
-      />,
-    )
-    expect(document.querySelector('.drc-mine')).toBeNull()
+  it('shrinks a date that carries a second night', () => {
+    render(<DailyRecapShareCard dark subtitle="Nov 17, 2026 · lines Nov 18, 2026" recap={recap} />)
     expect(screen.getByText('Nov 17, 2026 · lines Nov 18, 2026')).toHaveClass('drc-date--long')
   })
 
@@ -166,7 +151,7 @@ describe('DailyRecapShareCard', () => {
       bust: { shown: [], total: 0, threshold: 2 },
     }
     render(
-      <DailyRecapShareCard dark={false} subtitle="Nov 19, 2026" recap={empty} highlight={false} myTeam={null} />,
+      <DailyRecapShareCard dark={false} subtitle="Nov 19, 2026" recap={empty} />,
     )
     expect(sections()).toHaveLength(10)
     expect(screen.getAllByText('No standings for this night')).toHaveLength(2)

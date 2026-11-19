@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useMyTeam } from '../../context/MyTeamContext'
 import {
   useGetBoxSlateValuesQuery,
   useGetRankChangesQuery,
@@ -35,11 +34,10 @@ function dayAfter(iso: string): string {
   return toLocalIso(date)
 }
 
-function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: ShareCardOptions & {
+function DailyRecapLoader({ dark, seasonStart, onReady }: ShareCardOptions & {
   seasonStart?: string
   onReady: (key: string, text: string | undefined) => void
 }) {
-  const { myTeam } = useMyTeam()
   // Opening Share refetches the hub, so the night is the one the nightly job
   // has finished, not a slate that has only just tipped.
   const hub = useGetTodayHubQuery(undefined, { refetchOnMountOrArgChange: true })
@@ -129,8 +127,6 @@ function DailyRecapLoader({ dark, highlightMyTeam, seasonStart, onReady }: Share
       dark={dark}
       subtitle={subtitle}
       recap={recap}
-      highlight={highlightMyTeam}
-      myTeam={myTeam}
       fontCss={fontCss ?? undefined}
     />
   )
@@ -152,7 +148,6 @@ export function DailyRecapShare({ sheet = false, seasonStart }: { sheet?: boolea
       contentKey={contentKey}
       pending={contentKey === 'loading'}
       shareText={shareText}
-      highlightOption
       sheet={sheet}
       variant="neutral"
       renderCard={options => (
