@@ -27,6 +27,29 @@ def ranking_service(sample_rankings_df, sample_totals_df):
 
 
 @pytest.mark.asyncio
+async def test_settled_range_stays_on_stored_snapshots(ranking_service):
+    """A settled range is the daily recap's night: a live slate must not replace it."""
+    from datetime import date
+
+    ranking_service.data_provider.db_service.get_snapshots_for_date_range = AsyncMock(return_value=(
+        date(2026, 11, 18), date(2026, 11, 18),
+        [{'team_id': 1, 'team_name': 'A', 'gp': 1, 'PTS': 10}],
+        [{'team_id': 1, 'team_name': 'A', 'gp': 1, 'PTS': 4}],
+    ))
+    ranking_service.data_provider.get_live_state = AsyncMock(side_effect=AssertionError('live'))
+    stored = pd.DataFrame({'team_id': [1]})
+    ranking_service._compute_delta = Mock(return_value=stored)
+
+    actual_start, actual_end, settled_delta, progress_delta, state = await ranking_service.range_deltas(
+        date(2026, 11, 18), date(2026, 11, 19), settled=True,
+    )
+
+    assert (actual_start, actual_end, state) == (date(2026, 11, 18), date(2026, 11, 18), None)
+    assert settled_delta is stored and progress_delta is stored
+    ranking_service.data_provider.get_live_state.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_get_league_rankings_success(ranking_service, sample_rankings_df):
     """Test successful league rankings retrieval"""
     expected_rankings = Mock(spec=LeagueRankings)

@@ -16,6 +16,9 @@
 .mr-today-same { color: var(--mr-same); }
 
 /* title row */
+.mr-today-title { display: flex; align-items: center; gap: 8px; }
+/* The unlayered `.mr-root button { color: inherit }` beats the share button's text color. */
+.mr-today-share > div > button { color: var(--mr-primary); }
 .mr-today-pt { display: flex; align-items: flex-start; gap: 8px; }
 .mr-today-ptl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mr-today .mr-today-espn { color: var(--mr-muted); font-size: 12px; }

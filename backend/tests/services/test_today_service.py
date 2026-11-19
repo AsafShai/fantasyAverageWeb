@@ -201,6 +201,18 @@ class TestRankChanges:
         await service.get_rank_changes(mode)
         assert service.db_service.get_latest_two_periods_rankings.await_args.args[2] == table
 
+    @pytest.mark.asyncio
+    async def test_settled_changes_ignore_a_live_slate(self):
+        from unittest.mock import AsyncMock, patch
+
+        service = TodayService()
+        stored = object()
+        service._stored_rank_changes = AsyncMock(return_value=stored)
+        with patch('app.services.today_service.DataProvider') as provider:
+            result = await service.get_rank_changes('averages', settled=True)
+        provider.assert_not_called()
+        assert result is stored
+
 
 class TestClassifyStatus:
     @pytest.mark.parametrize('raw, expected', [

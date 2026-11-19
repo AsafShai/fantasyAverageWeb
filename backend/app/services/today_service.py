@@ -184,12 +184,15 @@ class TodayService:
 
         return movers_between(by_period[previous_period], by_period[latest_period], names)
 
-    async def get_rank_changes(self, mode: str = 'averages') -> RankChanges:
+    async def get_rank_changes(self, mode: str = 'averages', settled: bool = False) -> RankChanges:
         """Each team's move in places, roto points and games played, for the
         Rankings table: between the two latest stored scoring periods, or,
         while tonight is live, tonight against this morning's official
         standings (plan decision 7). With LIVE_STANDINGS_ENABLED off the
-        response is exactly as before."""
+        response is exactly as before. ``settled`` always uses the stored
+        periods, which is what the daily recap wants after the nightly run."""
+        if settled:
+            return await self._stored_rank_changes(mode)
         provider = DataProvider()
         state = await provider.get_live_state(include_finals=True)
         if state is not None and state.active:
