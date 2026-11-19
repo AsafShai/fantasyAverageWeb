@@ -26,6 +26,9 @@ interface ShareCardButtonProps {
   /** Changes when the card's data changes after the menu opened (e.g. stats
    * that were still loading), so the image is made again. */
   contentKey?: string
+  /** The card's data is still loading, so what it shows is a placeholder:
+   * nothing can be shared, copied or downloaded until this turns false. */
+  pending?: boolean
   /** Keep the menu as the fixed sheet used on a phone. A dropdown is cut off
    * inside a horizontal scroller, such as the With / Without table. */
   sheet?: boolean
@@ -62,7 +65,7 @@ const ShareIcon = () => (
 export const ShareCardButton = (props: ShareCardButtonProps) =>
   FF_SHARE_CARDS ? <ShareCardMenu {...props} /> : null
 
-export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral', shareText, contentKey, sheet = false }: ShareCardButtonProps) => {
+export const ShareCardMenu = ({ title, renderCard, highlightOption = false, variant = 'neutral', shareText, contentKey, pending = false, sheet = false }: ShareCardButtonProps) => {
   const [open, setOpen] = useState(false)
   const [dark, setDark] = useState(false)
   const [highlightMyTeam, setHighlightMyTeam] = usePersistedState('share.highlightMyTeam', false)
@@ -74,9 +77,16 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
   const highlight = highlightOption && highlightMyTeam
 
   // Re-render the PNG whenever the menu opens or an option changes, so the
-  // image is ready by the time an action is tapped.
+  // image is ready by the time an action is tapped. `renderedFor` is the
+  // content the image in hand was made from: when the data lands, the old
+  // image (the placeholder) must not stay shareable for the frame it takes
+  // the new render to start.
+  const [renderedFor, setRenderedFor] = useState<string | undefined>(undefined)
   useEffect(() => {
-    if (open) void render()
+    if (!open) return
+    let current = true
+    void render().then(() => { if (current) setRenderedFor(contentKey) })
+    return () => { current = false }
   }, [open, dark, highlight, render, contentKey])
 
   const previewUrl = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob])
@@ -161,7 +171,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
     }
   }
 
-  const ready = status === 'ready'
+  const ready = status === 'ready' && !pending && renderedFor === contentKey
   const showCopyText = !!shareText && typeof navigator.clipboard?.writeText === 'function'
   const showShare = typeof navigator.canShare === 'function' && (file ? canShareFile(file) : true)
   const showCopy = canCopyImage()
@@ -193,7 +203,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
 
           {/* Compact preview: a thumbnail to confirm the card, full size on tap. */}
           <div className="mb-3 flex items-center gap-3">
-            {previewUrl ? (
+            {previewUrl && !pending ? (
               <button
                 type="button"
                 onClick={() => setZoomed(true)}
@@ -209,7 +219,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
               {status === 'error' ? (
                 <p className="text-xs text-red-600 dark:text-red-400">Couldn't create the image: {error}</p>
               ) : (
-                <p className="text-xs text-gray-500 dark:text-gray-400">{ready ? <><span className="sm:hidden">Tap</span><span className="hidden sm:inline">Click</span> the image to see it full size</> : 'Preparing image…'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{ready ? <><span className="sm:hidden">Tap</span><span className="hidden sm:inline">Click</span> the image to see it full size</> : pending ? 'Loading the data…' : 'Preparing image…'}</p>
               )}
               {highlightOption && (
                 <label className="mt-1 flex min-h-11 sm:min-h-8 items-center gap-2 text-sm cursor-pointer select-none">
@@ -269,7 +279,7 @@ export const ShareCardMenu = ({ title, renderCard, highlightOption = false, vari
         </div>
       )}
 
-      {open && zoomed && previewUrl && (
+      {open && zoomed && previewUrl && !pending && (
         <button
           type="button"
           onClick={() => setZoomed(false)}

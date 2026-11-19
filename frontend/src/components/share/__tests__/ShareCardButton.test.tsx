@@ -166,4 +166,34 @@ describe('ShareCardMenu with a message', () => {
     expect(screen.queryByRole('button', { name: 'Send on WhatsApp' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy message' })).not.toBeInTheDocument();
   });
+
+  it('offers nothing to share, copy or save while the card is still loading its data', async () => {
+    vi.stubGlobal('ClipboardItem', class { constructor(public items: Record<string, Blob>) {} });
+    Object.defineProperty(navigator, 'clipboard', { value: { write: vi.fn(), writeText: vi.fn() }, configurable: true });
+    const { rerender } = render(
+      <ShareCardMenu title="Daily Recap" renderCard={renderCard} contentKey="loading" pending />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+    // The placeholder is rendered to a PNG like any card, and must go nowhere.
+    await waitFor(() => expect(toBlob).toHaveBeenCalled());
+    expect(await screen.findByText('Loading the data…')).toBeInTheDocument();
+    expect(screen.queryByAltText('Daily Recap preview')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy image' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Download PNG' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull();
+
+    // The data lands: the image in hand is still the placeholder until the
+    // new render finishes, so the actions stay off across that gap.
+    let finish: (blob: Blob) => void = () => undefined;
+    vi.mocked(toBlob).mockImplementationOnce(() => new Promise<Blob>(resolve => { finish = resolve; }));
+    rerender(<ShareCardMenu title="Daily Recap" renderCard={renderCard} contentKey="nov-18" shareText="Best night" />);
+    expect(screen.getByRole('button', { name: 'Download PNG' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send on WhatsApp' })).toBeDisabled();
+    await waitFor(() => expect(toBlob).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'Download PNG' })).toBeDisabled();
+    await act(async () => { finish(new Blob(['real'], { type: 'image/png' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download PNG' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'Copy image' })).toBeEnabled();
+    expect(screen.getByAltText('Daily Recap preview')).toBeInTheDocument();
+  });
 });
