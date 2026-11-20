@@ -184,19 +184,38 @@ _EMPTY_PLAYER_VECTORS = {
 _FS_TEXT_COLS = {"GAME_ID", "SEASON", "PLAYER_NAME", "TEAM_NAME", "MATCHUP", "POSITION"}
 
 
+def _stat(v) -> float:
+    """A box-score stat as a float; null (and NaN) as 0, as diff_night reads it."""
+    if v is None:
+        return 0.0
+    v = float(v)
+    return 0.0 if v != v else v
+
+
+def _zero_null_stats(df: pl.DataFrame) -> pl.DataFrame:
+    """``df`` (conformed) with null/NaN stats as 0."""
+    stats = [c for c, t in df.schema.items() if t == pl.Float64]
+    return df.with_columns([pl.col(c).fill_null(0.0).fill_nan(0.0) for c in stats]) if stats else df
+
+
 def _conform(df: Optional[pl.DataFrame], cols: list[str]) -> pl.DataFrame:
     """``df`` reduced to ``cols`` with the stored types (ids Int64, text,
     GAME_DATE pl.Date, stats Float64), so DB rows and ESPN rows concatenate.
-    A missing or column-less frame (what the DB returns for no rows) becomes
-    an empty frame with those columns."""
+    A missing, empty or column-less frame (what the DB returns for no rows)
+    becomes an empty frame with those columns. A frame WITH rows but missing
+    a column raises: read as "no rows" it would skip corrections and drop
+    every player's vector."""
     def dtype(c):
         if c in ("PLAYER_ID", "TEAM_ID"):
             return pl.Int64
         if c == "GAME_DATE":
             return pl.Date
         return pl.String if c in _FS_TEXT_COLS else pl.Float64
-    if df is None or df.is_empty() or not set(cols) <= set(df.columns):
+    if df is None or df.is_empty():
         return pl.DataFrame(schema={c: dtype(c) for c in cols})
+    missing = [c for c in cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"frame of {df.height} rows is missing column(s) {missing}")
     return df.select([pl.col(c).cast(dtype(c)) for c in cols])
 
 
@@ -389,20 +408,28 @@ class ModelNightlyService:
             run = await db.get_model_nightly_run(d)
             if not run or run.get("status") not in ("processed", "store_already_ingested"):
                 continue
-            fresh = await asyncio.to_thread(nightly.fetch_night, d)
-            if not fresh.complete or fresh.expected_games == 0:
-                logger.warning(f"Correction sweep {d}: ESPN does not serve the night complete now; left as stored")
+            # One night's failure (ESPN down for that date, an unexpected
+            # value) costs that night only, not the rest of the window or the
+            # Boom or Bust rescore below; it is retried next morning.
+            try:
+                fresh = await asyncio.to_thread(nightly.fetch_night, d)
+                if not fresh.complete or fresh.expected_games == 0:
+                    logger.warning(f"Correction sweep {d}: ESPN does not serve the night complete now; left as stored")
+                    continue
+                stored_players, stored_teams = await db.get_fs_rows_on(d)
+                if stored_players is None:
+                    return "; ".join(notes + ["db_unavailable"])
+                c = nightly.diff_night(stored_players, stored_teams, fresh.player_games, fresh.team_games)
+                vanished += len(c.vanished_players)
+                if c.empty:
+                    continue
+                # One night per transaction: the memory a commit needs is bounded
+                # by one night's games, like the nightly's own incremental path.
+                note, ok = await self._commit_corrections(d, c, stored_players, fresh)
+            except Exception as e:
+                logger.error(f"Correction sweep {d} failed: {type(e).__name__}: {e}", exc_info=True)
+                notes.append(f"{d}: failed ({type(e).__name__}): retried next morning")
                 continue
-            stored_players, stored_teams = await db.get_fs_rows_on(d)
-            if stored_players is None:
-                return "; ".join(notes + ["db_unavailable"])
-            c = nightly.diff_night(stored_players, stored_teams, fresh.player_games, fresh.team_games)
-            vanished += len(c.vanished_players)
-            if c.empty:
-                continue
-            # One night per transaction: the memory a commit needs is bounded
-            # by one night's games, like the nightly's own incremental path.
-            note, ok = await self._commit_corrections(d, c, stored_players, fresh)
             notes.append(note)
             if ok:
                 committed.append(d)
@@ -435,11 +462,14 @@ class ModelNightlyService:
             changed = (_conform(changed, _FS_PLAYER_COLS).join(stored_pos, on=pk, how="left")
                        .with_columns(pl.coalesce("_stored_pos", "POSITION").alias("POSITION")).drop("_stored_pos"))
         eval_actuals = [
-            (str(r["GAME_ID"]), int(r["PLAYER_ID"]), *[float(r[s]) for s in _EVAL_STATS])
+            (str(r["GAME_ID"]), int(r["PLAYER_ID"]), *[_stat(r[s]) for s in _EVAL_STATS])
             for r in changed.iter_rows(named=True)
         ]
-        lines = pl.concat([_conform(changed, _FS_PLAYER_COLS), _conform(c.new_players, _FS_PLAYER_COLS)])
-        teams = _conform(c.changed_teams, _FS_TEAM_COLS)
+        # A null stat reads as 0, as diff_night compared it: the rows, the
+        # vectors and the actuals all see the same value.
+        lines = _zero_null_stats(pl.concat([_conform(changed, _FS_PLAYER_COLS),
+                                            _conform(c.new_players, _FS_PLAYER_COLS)]))
+        teams = _zero_null_stats(_conform(c.changed_teams, _FS_TEAM_COLS))
 
         player_ids = set(c.player_ids())
         if not teams.is_empty():
@@ -459,14 +489,24 @@ class ModelNightlyService:
         pv, tav, tov = await db.load_feature_vectors(player_ids=ids)
         lines = _resolve_positions(lines, history, pv)
 
+        summary = (f"{night}: {len(c.changed_players)} changed, {len(c.new_players)} new player line(s), "
+                   f"{len(c.changed_teams)} team row(s)")
+        # This night is stored, so the store and its vectors are not empty: an
+        # empty read here is a DB error. Writing the rows without their vectors
+        # would leave the vectors stale for good (the next sweep sees no
+        # difference), so write nothing and retry next morning.
+        if vectors_as_of is None or latest is None or team_games.is_empty() or not tav or not tov:
+            logger.warning(f"Correction sweep {night}: history or vectors unreadable; nothing written")
+            return f"{summary}; history or vectors unreadable, nothing written: retried next morning", False
+
         vectors, dropped, vec_note = None, [], "left_to_rebuild"
-        if vectors_as_of is None or latest is None or vectors_as_of != latest:
+        if vectors_as_of != latest:
+            # The next nightly sees the same mismatch and rebuilds in full,
+            # from the corrected rows.
             logger.warning(
                 f"Correction sweep: vectors are through {vectors_as_of}, the store through {latest}; "
                 f"left to the next full rebuild"
             )
-        elif team_games.is_empty() or not tav or not tov:
-            vec_note = "skipped (store empty)"
         else:
             vectors, dropped = await asyncio.to_thread(
                 self._recompute_sync, pv, tav, tov,
@@ -477,8 +517,6 @@ class ModelNightlyService:
             vec_note = "refreshed"
         del history, team_games, pv, tav, tov
 
-        summary = (f"{night}: {len(c.changed_players)} changed, {len(c.new_players)} new player line(s), "
-                   f"{len(c.changed_teams)} team row(s)")
         if not await db.apply_corrections(
             _frame_to_tuples(lines, _FS_PLAYER_COLS) if not lines.is_empty() else [],
             _frame_to_tuples(teams, _FS_TEAM_COLS) if not teams.is_empty() else [],

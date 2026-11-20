@@ -137,7 +137,7 @@ class StatsCalculator:
 
         for category in categories_with_gp:
             if category in averages_df.columns:
-                col_data = averages_df[category].to_list()
+                col_data = pdcompat.as_float(averages_df[category]).tolist()   # nulls as NaN, as pandas gave
                 mean_val = pdcompat.nanmean(averages_df[category])
                 min_val, max_val = pdcompat.nanmin(averages_df[category]), pdcompat.nanmax(averages_df[category])
 

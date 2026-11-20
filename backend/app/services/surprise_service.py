@@ -311,7 +311,7 @@ class SurpriseService:
             return "no_players"
         n_rostered = sum(1 for pid in night["PLAYER_ID"].to_list() if int(pid) in roster)
         logger.info(f"Surprises {game_date}: writing {len(rows)} rows ({n_rostered} on a fantasy roster)")
-        written = await db.insert_model_surprise_rows(rows)
+        written = await db.insert_model_surprise_rows(rows, night=game_date)
         clear_surprise_read_cache()
         elapsed = time.monotonic() - started
         if not written:

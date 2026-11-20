@@ -72,6 +72,23 @@ def test_returns_only_players_with_games(mock_services):
     assert data[0]['player_name'] == 'Anthony Davis'
 
 
+@pytest.mark.parametrize('chart, sent', [
+    ({'LAL': {'anthonydavis'}}, ['Anthony Davis']),            # a retired listing is dropped
+    ({'LAL': set()}, ['Anthony Davis', 'Retired Listing']),    # an empty chart (failed fetch) proves nothing
+])
+def test_retired_listings_dropped_only_against_a_real_depth_chart(mock_services, monkeypatch, chart, sent):
+    _, provider = mock_services
+    provider.get_players_df = AsyncMock(return_value=pl.DataFrame([
+        {'Name': 'Anthony Davis', 'Pro Team': 'LAL', 'Positions': 'C', 'status': 'ONTEAM', 'team_id': 1, 'GP': 0},
+        {'Name': 'Retired Listing', 'Pro Team': 'LAL', 'Positions': 'PG', 'status': 'FREEAGENT', 'team_id': 0, 'GP': 0},
+    ]))
+    depth_chart_svc = MagicMock()
+    depth_chart_svc.get_on_depth_chart_names = AsyncMock(return_value=chart)
+    monkeypatch.setattr('app.routes.matchups._depth_chart_service', depth_chart_svc)
+    data = TestClient(app).get('/api/matchups/today').json()
+    assert [p['player_name'] for p in data] == sent
+
+
 def test_response_shape(mock_services):
     client = TestClient(app)
     data = client.get('/api/matchups/today').json()

@@ -270,3 +270,9 @@ def test_read_last_tip_reports_an_unreadable_scoreboard(monkeypatch):
     assert sched._read_last_tip(NIGHT) == (None, False)
     monkeypatch.setattr(sched.espn_client, "scoreboard", lambda dates: {"events": []})
     assert sched._read_last_tip(NIGHT) == (None, True)
+
+
+def test_read_last_tip_survives_a_malformed_event(monkeypatch):
+    """Parsing is guarded like the fetch: a bad event must not end the loop."""
+    monkeypatch.setattr(sched.espn_client, "scoreboard", lambda dates: {"events": [{"id": "1", "season": {"type": 2}}]})   # no competitions
+    assert sched._read_last_tip(NIGHT) == (None, False)
