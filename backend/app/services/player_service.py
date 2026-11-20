@@ -3,7 +3,9 @@ import hashlib
 import logging
 from datetime import date, datetime, timedelta
 from typing import Optional, Tuple
-import pandas as pd
+
+import numpy as np
+import polars as pl
 from app.models import PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
@@ -13,6 +15,7 @@ from app.utils.name_matching import resolve_join_key
 from app.utils.constants import RATIO_CATEGORIES
 from app.config import settings
 from app.utils.log_once import warn_on_change
+from app.utils import background_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +73,16 @@ _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 # so is its ETag: 'ts' is when the inputs were last checked, 'built_ts' when
 # the list was last built.
 _WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
+# Past the TTL, up to this age the cached list is still served while a rebuild
+# runs in the background (stale-while-revalidate): the rebuild downloads and
+# parses ~2.8 MB from ESPN, ~1-1.5 s at Render's 0.15 CPU, which the visitor
+# who happened to arrive after expiry used to wait for. Older than this (an
+# idle stretch), the request rebuilds in the foreground as before.
+_WINDOWED_PLAYERS_STALE = timedelta(minutes=30)
 _windowed_players_cache: dict = {}
+# Bumped by clear_night_caches: a build that started before the nightly
+# recorded a night must not store what it read.
+_cache_generation = 0
 
 
 def clear_night_caches() -> None:
@@ -78,14 +90,18 @@ def clear_night_caches() -> None:
     Called when the nightly records a night, so last night / last 7 / 15 / 30
     move to it at once rather than when the caches expire (anchor 1 h).
     The trends clear their own caches when they see the anchor move."""
+    global _cache_generation
+    _cache_generation += 1
     _season_anchor_cache.update({'season': None, 'date': None, 'ts': None})
     _windowed_players_cache.clear()
 
 
 def players_etag(time_period: StatTimePeriod, page: int, limit: int) -> Optional[str]:
-    """Weak ETag for a /players page, or None when nothing is cached yet."""
+    """Weak ETag for a /players page, or None when nothing servable is cached.
+    A list past its TTL but within the stale window keeps its ETag while it is
+    served (the route starts its refresh, see players_stale)."""
     entry = _windowed_players_cache.get(time_period)
-    if entry is None or datetime.now() - entry['ts'] >= _WINDOWED_PLAYERS_TTL:
+    if entry is None or datetime.now() - entry['ts'] >= _WINDOWED_PLAYERS_STALE:
         return None
     raw = f"{time_period.value}|{page}|{limit}|{entry['built_ts'].isoformat()}"
     return f'W/"{hashlib.sha1(raw.encode()).hexdigest()[:8]}"'
@@ -116,7 +132,7 @@ async def compute_windowed_agg(
     db_service: DBService,
     start: Optional[date] = None,
     end: Optional[date] = None,
-) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
+) -> Tuple[pl.DataFrame, Optional[date], Optional[date]]:
     """DB-only half of build_windowed_players_df: resolves the date window and
     aggregates fs_player_games over it. Independent of the ESPN players
     DataFrame, so callers that fetch ESPN data too can run this concurrently
@@ -131,9 +147,9 @@ async def compute_windowed_agg(
 
 def merge_windowed_players_df(
     time_period: StatTimePeriod,
-    espn_players_df: pd.DataFrame,
-    agg_df: pd.DataFrame,
-) -> pd.DataFrame:
+    espn_players_df: pl.DataFrame,
+    agg_df: pl.DataFrame,
+) -> pl.DataFrame:
     """Overlay fs_player_games-aggregated stats (from compute_windowed_agg) onto
     an ESPN players DataFrame.
 
@@ -155,33 +171,37 @@ def merge_windowed_players_df(
     except a player who did not play is has_data=False so a ranking of that
     night is the players who played, not a league of zeros.
     """
-    merged = espn_players_df.copy()
+    merged = espn_players_df
     window_only = time_period in (StatTimePeriod.CUSTOM, StatTimePeriod.LAST_NIGHT)
-    merged['_join_key'] = merged['Name'].map(resolve_join_key)
+    merged = merged.with_columns(pl.Series('_join_key', [resolve_join_key(n) for n in merged['Name'].to_list()],
+                                           dtype=pl.String))
     stat_cols = {
         **_DB_STAT_COLS,
         **{c: db for c, db in _DB_EXTRA_STAT_COLS.items() if c in merged.columns},
     }
 
-    if agg_df.empty:
-        windowed = pd.Series(False, index=merged.index)
+    n = merged.height
+    if agg_df.is_empty():
+        windowed = np.zeros(n, dtype=bool)
     else:
-        agg_df = agg_df.copy()
-        agg_df['_join_key'] = agg_df['player_name'].map(resolve_join_key)
-        agg_df = agg_df.drop_duplicates('_join_key', keep='first')
+        agg_df = agg_df.with_columns(pl.Series(
+            '_join_key', [resolve_join_key(x) for x in agg_df['player_name'].to_list()], dtype=pl.String))
+        agg_df = agg_df.unique(subset=['_join_key'], keep='first', maintain_order=True)
         stat_cols = {c: db for c, db in stat_cols.items() if db in agg_df.columns}
         db_cols = ['_join_key'] + list(stat_cols.values())
-        merged = merged.merge(agg_df[db_cols], on='_join_key', how='left', suffixes=('', '_db'))
-        windowed = merged['gp'].notna()
-        for espn_col, db_col in stat_cols.items():
-            merged.loc[windowed, espn_col] = merged.loc[windowed, db_col]
+        merged = merged.join(agg_df.select(db_cols), on='_join_key', how='left', maintain_order='left')
+        gp_db = merged['gp']
+        windowed = (gp_db.is_not_null() & ~gp_db.cast(pl.Float64).is_nan()).to_numpy()
+        merged = merged.with_columns([
+            _overlay(merged, espn_col, db_col, windowed) for espn_col, db_col in stat_cols.items()
+        ])
 
     if window_only:
-        known = pd.Series(True, index=merged.index)
+        known = np.ones(n, dtype=bool)
     else:
-        known = (merged['Pro Team'] != 'FA') | windowed
+        known = (merged['Pro Team'] != 'FA').to_numpy() | windowed
 
-    merged['has_data'] = True
+    has_data = np.ones(n, dtype=bool)
 
     # Custom ranges and last night force-zero players with no games in the
     # window — they have no ESPN split to fall back to. Other presets leave
@@ -191,10 +211,15 @@ def merge_windowed_players_df(
         zero_matched = ~windowed
         overwritten = windowed | zero_matched
         if zero_matched.any():
-            for espn_col in stat_cols:
-                merged.loc[zero_matched, espn_col] = 0 if espn_col == 'GP' else 0.0
+            mask = pl.Series(zero_matched)
+            merged = merged.with_columns([
+                pl.when(mask).then(pl.lit(0 if espn_col == 'GP' else 0.0)).otherwise(pl.col(espn_col))
+                .cast(merged.schema[espn_col] if espn_col == 'GP' else pl.Float64).alias(espn_col)
+                for espn_col in stat_cols
+            ])
         if time_period == StatTimePeriod.LAST_NIGHT:
-            merged.loc[zero_matched, 'has_data'] = False
+            has_data = np.where(zero_matched, False, has_data)
+    merged = merged.with_columns(pl.Series('has_data', has_data, dtype=pl.Boolean))
 
     # Ratio categories other than FG%/FT% (which the aggregate computes itself)
     # still hold ESPN's value for its split; rebuild them from the window's
@@ -204,38 +229,79 @@ def merge_windowed_players_df(
             continue
         if numerator not in stat_cols or denominator not in stat_cols:
             continue
-        num = merged.loc[overwritten, numerator].astype(float)
-        den = merged.loc[overwritten, denominator].astype(float)
-        merged.loc[overwritten, category] = (num / den.where(den != 0)).fillna(0.0)
+        num = merged[numerator].cast(pl.Float64).to_numpy()
+        den = merged[denominator].cast(pl.Float64).to_numpy()
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ratio = num / np.where(den != 0, den, np.nan)
+        ratio = np.where(np.isnan(ratio), 0.0, ratio)
+        current = merged[category].cast(pl.Float64).to_numpy()
+        merged = merged.with_columns(pl.Series(category, np.where(overwritten, ratio, current), dtype=pl.Float64))
 
     unmatched = ~known
     if unmatched.any():
-        missed = merged.loc[unmatched, 'Name'].tolist()
+        missed = [name for name, miss in zip(merged['Name'].to_list(), unmatched) if miss]
         warn_on_change(
             logger, f"players-unresolved:{time_period.value}", missed,
             f"{len(missed)} players did not resolve to a current-season NBA player "
             f"(time_period={time_period.value}): {missed[:20]}",
         )
 
-    merged['GP'] = merged['GP'].astype(int)
+    merged = merged.with_columns(pl.col('GP').cast(pl.Float64).cast(pl.Int64))
     drop_cols = ['_join_key'] + list(_DB_STAT_COLS.values()) + list(_DB_EXTRA_STAT_COLS.values())
-    merged = merged.drop(columns=[c for c in drop_cols if c in merged.columns])
-    return merged
+    return merged.drop([c for c in drop_cols if c in merged.columns])
+
+
+def _overlay(merged: pl.DataFrame, espn_col: str, db_col: str, windowed: np.ndarray) -> pl.Series:
+    """merged.loc[windowed, espn_col] = merged.loc[windowed, db_col]."""
+    espn = merged[espn_col]
+    db = merged[db_col].cast(pl.Float64)
+    values = np.where(windowed, db.fill_null(float('nan')).to_numpy(), espn.cast(pl.Float64).to_numpy())
+    out = pl.Series(espn_col, values, dtype=pl.Float64)
+    if espn.dtype.is_integer() and np.all(np.mod(values, 1) == 0):
+        out = out.cast(espn.dtype)   # pandas keeps an int column int when the values fit
+    return out
 
 
 async def build_windowed_players_df(
     time_period: StatTimePeriod,
-    espn_players_df: pd.DataFrame,
+    espn_players_df: pl.DataFrame,
     db_service: DBService,
     start: Optional[date] = None,
     end: Optional[date] = None,
-) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
+) -> Tuple[pl.DataFrame, Optional[date], Optional[date]]:
     """compute_windowed_agg + merge_windowed_players_df run back-to-back.
     Callers that can fetch espn_players_df concurrently with the DB
     aggregation should call the two halves separately instead."""
     agg_df, actual_start, actual_end = await compute_windowed_agg(time_period, db_service, start, end)
     merged = merge_windowed_players_df(time_period, espn_players_df, agg_df)
     return merged, actual_start, actual_end
+
+
+_refreshing: set[StatTimePeriod] = set()
+
+
+def players_stale(time_period: StatTimePeriod) -> bool:
+    """Past the TTL but still served (see _WINDOWED_PLAYERS_STALE)."""
+    entry = _windowed_players_cache.get(time_period)
+    return entry is not None and _WINDOWED_PLAYERS_TTL <= datetime.now() - entry['ts'] < _WINDOWED_PLAYERS_STALE
+
+
+def refresh_players_in_background(time_period: StatTimePeriod, service: "PlayerService") -> None:
+    """Rebuild a preset list past its TTL without making a visitor wait for
+    ESPN and the DB: the stale list is served meanwhile (see _WINDOWED_PLAYERS_STALE).
+    At most one refresh per period runs at a time."""
+    if time_period in _refreshing or time_period == StatTimePeriod.CUSTOM:
+        return
+    _refreshing.add(time_period)
+
+    async def run() -> None:
+        try:
+            categories = await service.data_provider.get_ranking_categories()
+            await service._build_players(time_period, categories)
+        finally:
+            _refreshing.discard(time_period)
+
+    background_tasks.spawn(run(), name=f"players-refresh-{time_period.value}")
 
 
 class PlayerService:
@@ -268,55 +334,23 @@ class PlayerService:
         reverse_categories = await self.data_provider.get_reverse_categories()
 
         cached = _windowed_players_cache.get(time_period) if is_preset else None
-        if cached is not None and (
-            datetime.now() - cached['ts'] >= _WINDOWED_PLAYERS_TTL
-            or cached['categories'] != categories
-        ):
+        if cached is not None and cached['categories'] != categories:
             cached = None
+        if cached is not None:
+            age = datetime.now() - cached['ts']
+            if age >= _WINDOWED_PLAYERS_STALE:
+                cached = None
+            elif age >= _WINDOWED_PLAYERS_TTL:
+                refresh_players_in_background(time_period, self)
 
         if cached is not None:
             all_players = cached['players']
             total_count = cached['total_count']
             actual_start, actual_end = cached['start'], cached['end']
         else:
-            stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
-            # The two inputs are independent; fetching them together overlaps
-            # the ESPN download with the DB round trips.
-            espn_players_df, (agg_df, actual_start, actual_end) = await asyncio.gather(
-                self.data_provider.get_players_df(stat_split_id),
-                compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
+            all_players, total_count, actual_start, actual_end = await self._build_players(
+                time_period, categories, start, end
             )
-
-            if espn_players_df is None or espn_players_df.empty:
-                raise ResourceNotFoundError("No players found")
-
-            previous = _windowed_players_cache.get(time_period) if is_preset else None
-            if (
-                previous is not None
-                and previous['espn_df'] is espn_players_df
-                and previous['categories'] == categories
-                and (previous['start'], previous['end']) == (actual_start, actual_end)
-                and previous['agg_df'].equals(agg_df)
-            ):
-                all_players = previous['players']
-                total_count = previous['total_count']
-                built_ts = previous['built_ts']
-            else:
-                players_df = merge_windowed_players_df(time_period, espn_players_df, agg_df)
-                all_players = self.response_builder.build_all_players_response(players_df, categories)
-                total_count = len(players_df)
-                built_ts = datetime.now()
-                logger.info(
-                    f"Players list built: time_period={time_period.value}, {total_count} players, "
-                    f"window {actual_start}..{actual_end}"
-                )
-            if is_preset:
-                _windowed_players_cache[time_period] = {
-                    'players': all_players, 'total_count': total_count,
-                    'start': actual_start, 'end': actual_end,
-                    'categories': categories, 'ts': datetime.now(), 'built_ts': built_ts,
-                    'espn_df': espn_players_df, 'agg_df': agg_df,
-                }
 
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
@@ -332,3 +366,54 @@ class PlayerService:
             categories=categories,
             reverse_categories=[c for c in categories if c in reverse_categories],
         )
+
+    async def _build_players(
+        self,
+        time_period: StatTimePeriod,
+        categories: list[str],
+        start: Optional[date] = None,
+        end: Optional[date] = None,
+    ):
+        """Fetch both inputs and build the full list; a preset is stored in
+        _windowed_players_cache. Returns (players, total_count, start, end)."""
+        is_preset = time_period != StatTimePeriod.CUSTOM
+        generation = _cache_generation
+        stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
+        # The two inputs are independent; fetching them together overlaps
+        # the ESPN download with the DB round trips.
+        espn_players_df, (agg_df, actual_start, actual_end) = await asyncio.gather(
+            self.data_provider.get_players_df(stat_split_id),
+            compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
+        )
+
+        if espn_players_df is None or espn_players_df.is_empty():
+            raise ResourceNotFoundError("No players found")
+
+        previous = _windowed_players_cache.get(time_period) if is_preset else None
+        if (
+            previous is not None
+            and previous['espn_df'] is espn_players_df
+            and previous['categories'] == categories
+            and (previous['start'], previous['end']) == (actual_start, actual_end)
+            and previous['agg_df'].equals(agg_df)
+        ):
+            all_players = previous['players']
+            total_count = previous['total_count']
+            built_ts = previous['built_ts']
+        else:
+            players_df = merge_windowed_players_df(time_period, espn_players_df, agg_df)
+            all_players = self.response_builder.build_all_players_response(players_df, categories)
+            total_count = len(players_df)
+            built_ts = datetime.now()
+            logger.info(
+                f"Players list built: time_period={time_period.value}, {total_count} players, "
+                f"window {actual_start}..{actual_end}"
+            )
+        if is_preset and generation == _cache_generation:
+            _windowed_players_cache[time_period] = {
+                'players': all_players, 'total_count': total_count,
+                'start': actual_start, 'end': actual_end,
+                'categories': categories, 'ts': datetime.now(), 'built_ts': built_ts,
+                'espn_df': espn_players_df, 'agg_df': agg_df,
+            }
+        return all_players, total_count, actual_start, actual_end

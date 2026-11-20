@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 from app.fantsy_estimator import FantasyEstimator
@@ -7,7 +8,7 @@ from app.fantsy_estimator.estimation import WindowEstimator
 from app.fantsy_estimator.output_tables.column_names import OutputColumnNames
 from app.fantsy_estimator.preprocess.preprocess_columns import PreprocessColumns
 
-from tests.services.test_fantasy_estimator_fallback import make_snapshot
+from tests.services.test_fantasy_estimator_fallback import make_snapshot, run_estimate
 
 GP = PreprocessColumns.GP_IN_PERIOD
 
@@ -42,8 +43,8 @@ class TestMeanWeights:
         for col in WindowEstimator.stat_columns():
             df[col] = rng.normal(10, 2, len(df))
         est = WindowEstimator(window_size=10, decay=0.93)
-        mean, _ = est.fit(df)
-        omega = est.mean_weights(df)
+        mean, _ = est.fit(pl.from_pandas(df))
+        omega = est.mean_weights(pl.from_pandas(df))
         y = df[list(WindowEstimator.stat_columns())].to_numpy()
         assert omega @ y == pytest.approx(mean)
 
@@ -56,7 +57,7 @@ class TestMeanUncertaintyInVariance:
         est.fantasy_configuration.mean_uncertainty_scale = scale
         est.fantasy_configuration.num_monte_carlo = 10
         df = pd.concat([make_snapshot(1, days), make_snapshot(2, days)], ignore_index=True)
-        pred, _, _ = est.estimate(df, nba_avg_pace=days / 2, slot_proj_df=None)
+        pred, _, _ = run_estimate(est, df, nba_avg_pace=days / 2, slot_proj_df=None)
         return float(pred[OutputColumnNames.Variance.for_stat('pts')].iloc[0])
 
     def test_early_season_variance_is_much_wider(self):

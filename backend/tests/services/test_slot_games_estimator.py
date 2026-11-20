@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import polars as pl
 from app.services.slot_games_estimator import (
     MAX_WEIGHT_AT_SEASON_END, SlotGamesEstimator, SLOT_CAPS, SLOTS, max_weight,
 )
@@ -50,7 +51,7 @@ class TestSlotGamesEstimatorEarlySeason:
         gp = 5
 
         df = make_df(avg_pace, days_remaining, {s: gp for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         w1 = 1 - avg_pace / 82
         w2 = avg_pace / 82
@@ -62,7 +63,7 @@ class TestSlotGamesEstimatorEarlySeason:
 
     def test_early_season_w1_dominates(self, estimator):
         df = make_df(avg_pace=5.0, days_remaining=120, slot_values={s: 5 for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         w2 = 5.0 / 82
         assert w2 < 0.1
@@ -78,7 +79,7 @@ class TestSlotGamesEstimatorLateSeason:
         gp = 78
 
         df = make_df(avg_pace, days_remaining, {s: gp for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         w1 = 1 - avg_pace / 82
         w2 = avg_pace / 82
@@ -90,7 +91,7 @@ class TestSlotGamesEstimatorLateSeason:
 
     def test_late_season_w2_dominates(self, estimator):
         df = make_df(avg_pace=80.0, days_remaining=3, slot_values={s: 80 for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         w2 = 80.0 / 82
         assert w2 > 0.9
@@ -102,20 +103,20 @@ class TestSlotGamesEstimatorLateSeason:
 class TestSlotGamesEstimatorCapEnforcement:
     def test_no_slot_exceeds_cap(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=60, slot_values={s: SLOT_CAPS[s] for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         for slot in SLOTS:
             assert result[f'proj_{slot}'].iloc[0] <= SLOT_CAPS[slot] + 1e-9
 
     def test_util_cap_is_248(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=60, slot_values={s: SLOT_CAPS[s] for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         assert result['proj_UTIL'].iloc[0] <= 248 + 1e-9
 
     def test_slot_at_cap_projects_to_cap(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=50, slot_values={**{s: 0 for s in SLOTS}, 'PG': 82})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         assert result['proj_PG'].iloc[0] == pytest.approx(82.0, rel=1e-6)
 
@@ -127,7 +128,7 @@ class TestSlotGamesEstimatorCapEnforcement:
 class TestSlotGamesEstimatorProjTotal:
     def test_proj_total_equals_sum_of_slots(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=40)
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         slot_sum = sum(result[f'proj_{s}'].iloc[0] for s in SLOTS)
         assert result['proj_total'].iloc[0] == pytest.approx(slot_sum, rel=1e-9)
@@ -137,7 +138,7 @@ class TestSlotGamesEstimatorProjTotal:
             {'team_id': 1, 'team_name': 'Team A', **{s: 40 for s in SLOTS}},
             {'team_id': 2, 'team_name': 'Team B', **{s: 35 for s in SLOTS}},
         ])
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         for _, row in result.iterrows():
             slot_sum = sum(row[f'proj_{s}'] for s in SLOTS)
@@ -147,7 +148,7 @@ class TestSlotGamesEstimatorProjTotal:
 class TestSlotGamesEstimatorEdgeCases:
     def test_zero_avg_pace_returns_zeros(self, estimator):
         df = make_df(avg_pace=0.0, days_remaining=82, slot_values={s: 10 for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         for slot in SLOTS:
             assert result[f'proj_{slot}'].iloc[0] == 0.0
@@ -155,20 +156,20 @@ class TestSlotGamesEstimatorEdgeCases:
 
     def test_zero_slot_games_and_no_days_left_projects_zero(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=0, slot_values={s: 0 for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         for slot in SLOTS:
             assert result[f'proj_{slot}'].iloc[0] == pytest.approx(0.0, abs=1e-9)
 
     def test_empty_dataframe_returns_empty(self, estimator):
-        result = estimator.estimate(pd.DataFrame())
+        result = estimator.estimate(pl.from_pandas(pd.DataFrame())).to_pandas()
 
         assert result.empty
         assert 'proj_total' in result.columns
 
     def test_output_columns_present(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=40)
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         assert 'team_id' in result.columns
         assert 'team_name' in result.columns
@@ -180,7 +181,7 @@ class TestSlotGamesEstimatorEdgeCases:
         avg_pace = 41.0
         gp = 40
         df = make_df(avg_pace=avg_pace, days_remaining=0, slot_values={s: gp for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         w1 = 1 - avg_pace / 82
         w2 = avg_pace / 82
@@ -197,7 +198,7 @@ class TestSlotGamesEstimatorMethod2Rate:
         games, not the 21.4 a per-team-game rate (60 / 70) would add."""
         df = make_df(avg_pace=70.0, days_remaining=25, days_elapsed=140,
                      slot_values={s: 60 for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         w2 = 70.0 / 82
         m1 = 60 * (82 / 70.0)
@@ -207,7 +208,7 @@ class TestSlotGamesEstimatorMethod2Rate:
     def test_util_rate_covers_all_three_slots(self, estimator):
         df = make_df(avg_pace=70.0, days_remaining=25, days_elapsed=140,
                      slot_values={**{s: 60 for s in SLOTS}, 'UTIL': 180})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         # 180 used + 3 slots * 25 days = 255, over the 248 cap; PG's max is 60 + 25 = 82 (×3 = 246)
         w2 = 70.0 / 82
@@ -218,20 +219,20 @@ class TestSlotGamesEstimatorMethod2Rate:
     def test_falls_back_to_method1_without_elapsed_days(self, estimator, days_elapsed):
         df = make_df(avg_pace=41.0, days_remaining=40, slot_values={s: 30 for s in SLOTS})
         df['nba_game_days_elapsed'] = days_elapsed
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         assert result['proj_PG'].iloc[0] == pytest.approx(30 * (82 / 41.0), rel=1e-6)
 
     def test_falls_back_to_method1_without_remaining_days(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=40, slot_values={s: 30 for s in SLOTS})
         df['nba_game_days_remaining'] = None
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         assert result['proj_PG'].iloc[0] == pytest.approx(30 * (82 / 41.0), rel=1e-6)
 
     def test_missing_elapsed_column_falls_back_to_method1(self, estimator):
         df = make_df(avg_pace=41.0, days_remaining=40, slot_values={s: 30 for s in SLOTS})
-        result = estimator.estimate(df.drop(columns=['nba_game_days_elapsed']))
+        result = estimator.estimate(pl.from_pandas(df.drop(columns=['nba_game_days_elapsed']))).to_pandas()
 
         assert result['proj_PG'].iloc[0] == pytest.approx(30 * (82 / 41.0), rel=1e-6)
 
@@ -256,7 +257,7 @@ class TestSlotGamesEstimatorMaxWeight:
         """A week in, a slot that has used 3 of 7 possible games is not lost: the
         projection stays close to the 82 it can still reach."""
         df = make_df(avg_pace=7.0, days_remaining=150, slot_values={s: 3 for s in SLOTS})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         assert result['proj_PG'].iloc[0] > 78
         assert result['proj_PG'].iloc[0] < 82
@@ -265,7 +266,7 @@ class TestSlotGamesEstimatorMaxWeight:
         """Late in the season the max binds: 70 used with 5 days left cannot pass 75."""
         df = make_df(avg_pace=75.0, days_remaining=5, days_elapsed=150,
                      slot_values={**{s: 70 for s in SLOTS}, 'UTIL': 210})
-        result = estimator.estimate(df)
+        result = estimator.estimate(pl.from_pandas(df)).to_pandas()
 
         w2 = 75.0 / 82
         rate_pg = (1 - w2) * min(70 * 82 / 75.0, 82) + w2 * (70 + (70 / 150) * 5)

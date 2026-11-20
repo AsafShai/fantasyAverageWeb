@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.services.db_service import DBService
@@ -77,7 +79,7 @@ async def test_aggregate_player_games_no_pool_returns_empty(db_service, monkeypa
         date(2026, 1, 1), date(2026, 1, 10), "2025-26"
     )
 
-    assert df.empty
+    assert df.is_empty()
     assert actual_start is None
     assert actual_end is None
 
@@ -104,7 +106,7 @@ async def test_aggregate_player_games_success(db_service, monkeypatch):
     assert actual_start == date(2026, 1, 2)
     assert actual_end == date(2026, 1, 9)
     assert len(df) == 1
-    row = df.iloc[0]
+    row = df.row(0, named=True)
     assert row["gp"] == 3
     assert row["pts"] == 60.0
     assert row["fg_pct"] == pytest.approx(21.0 / 45.0)
@@ -127,7 +129,7 @@ async def test_aggregate_player_games_empty_window_returns_no_coverage(db_servic
         date(2026, 1, 1), date(2026, 1, 10), "2025-26"
     )
 
-    assert df.empty
+    assert df.is_empty()
     assert actual_start is None
     assert actual_end is None
 
@@ -141,7 +143,7 @@ async def test_aggregate_player_games_db_error_returns_empty(db_service, monkeyp
         date(2026, 1, 1), date(2026, 1, 10), "2025-26"
     )
 
-    assert df.empty
+    assert df.is_empty()
     assert actual_start is None
     assert actual_end is None
 
@@ -222,11 +224,11 @@ async def test_fetch_frame_chunked_concatenates_chunks_in_order(db_service, monk
     ]
     df = await _fetch_frame_chunked(conn, "SELECT 1")
     assert list(df.columns) == ["PLAYER_ID", "GAME_DATE", "PTS"]
-    assert df["PLAYER_ID"].tolist() == [1, 2, 3]
-    assert str(df["GAME_DATE"].dtype).startswith("datetime64")
+    assert df["PLAYER_ID"].to_list() == [1, 2, 3]
+    assert df["GAME_DATE"].dtype == pl.Date   # dates stay dates (pl.Date)
 
     conn.cursor_chunks = []
-    assert (await _fetch_frame_chunked(conn, "SELECT 1")).empty
+    assert (await _fetch_frame_chunked(conn, "SELECT 1")).is_empty()
 
 
 @pytest.mark.asyncio
@@ -235,7 +237,7 @@ async def test_get_fs_rows_before_no_pool_returns_empty_frames(db_service, monke
 
     players, teams = await db_service.get_fs_rows_before(date(2026, 1, 10))
 
-    assert players.empty and teams.empty
+    assert players.is_empty() and teams.is_empty()
 
 
 @pytest.mark.asyncio
@@ -244,7 +246,7 @@ async def test_aggregate_shooting_by_player_no_pool_returns_empty_df(db_service,
 
     df = await db_service.aggregate_shooting_by_player(["2025-26"])
 
-    assert df.empty
+    assert df.is_empty()
 
 
 @pytest.mark.asyncio
@@ -264,7 +266,7 @@ async def test_aggregate_shooting_by_player_success(db_service, monkeypatch):
     df = await db_service.aggregate_shooting_by_player(["2025-26"])
 
     assert len(df) == 1
-    row = df.iloc[0]
+    row = df.row(0, named=True)
     assert row["player_id"] == 1
     assert row["fg3a"] == 420.0
     assert row["fg3_pct"] == pytest.approx(140.0 / 420.0)
@@ -299,7 +301,7 @@ async def test_aggregate_shooting_by_player_db_error_returns_empty_df(db_service
 
     df = await db_service.aggregate_shooting_by_player(["2025-26"])
 
-    assert df.empty
+    assert df.is_empty()
 
 
 @pytest.mark.asyncio
@@ -340,7 +342,7 @@ async def test_get_usage_components_no_pool_returns_empty_df(db_service, monkeyp
 
     df = await db_service.get_usage_components("2025-26", date(2025, 10, 22), date(2026, 6, 1))
 
-    assert df.empty
+    assert df.is_empty()
 
 
 @pytest.mark.asyncio
@@ -356,7 +358,7 @@ async def test_get_usage_components_success(db_service, monkeypatch):
     df = await db_service.get_usage_components("2025-26", date(2025, 10, 22), date(2026, 6, 1))
 
     assert len(df) == 1
-    row = df.iloc[0]
+    row = df.row(0, named=True)
     assert row["player_id"] == 1
     assert row["t_min"] == 240.0
     query_args = conn.fetch.call_args[0]
@@ -370,7 +372,7 @@ async def test_get_usage_components_db_error_returns_empty_df(db_service, monkey
 
     df = await db_service.get_usage_components("2025-26", date(2025, 10, 22), date(2026, 6, 1))
 
-    assert df.empty
+    assert df.is_empty()
 
 
 @pytest.mark.asyncio
@@ -407,7 +409,7 @@ async def test_get_rankings_over_time_with_team_ids_joins_gp(db_service, monkeyp
 async def test_upsert_rankings_averages_preserves_tie_fraction(db_service, monkeypatch):
     conn = FakeConn()
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
-    df = pd.DataFrame([{
+    df = pl.DataFrame([{
         "team_id": 1, "team_name": "A",
         "FG%": 6.5, "FT%": 6.5, "3PM": 6.5, "REB": 6.5,
         "AST": 6.5, "STL": 6.5, "BLK": 6.5, "PTS": 6.5,
@@ -447,14 +449,14 @@ def test_fs_records_to_frame_reads_asyncpg_rows_without_dicts():
     ])
 
     assert list(df.columns) == ["PLAYER_ID", "GAME_DATE", "MIN"]   # uppercased
-    assert str(df["GAME_DATE"].dtype).startswith("datetime64")     # date -> Timestamp
-    assert df["MIN"].tolist() == [31.5, 8.0]
+    assert df["GAME_DATE"].dtype == pl.Date                         # dates stay dates
+    assert df["MIN"].to_list() == [31.5, 8.0]
 
 
 def test_fs_records_to_frame_handles_no_rows():
     from app.services.db_service import fs_records_to_frame
 
-    assert fs_records_to_frame([]).empty
+    assert fs_records_to_frame([]).is_empty()
 
 
 class TestRankingsRowToPoint:
@@ -562,7 +564,7 @@ async def test_upsert_omits_extras_column_when_migration_not_applied(db_service,
     stop snapshots being written."""
     conn = FakeConn(dynamic_columns=False)
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
-    df = pd.DataFrame([{
+    df = pl.DataFrame([{
         "team_id": 1, "team_name": "A",
         "FG%": 1.0, "FT%": 2.0, "3PM": 3.0, "REB": 4.0,
         "AST": 5.0, "STL": 6.0, "BLK": 7.0, "PTS": 8.0,
@@ -580,7 +582,7 @@ async def test_upsert_omits_extras_column_when_migration_not_applied(db_service,
 async def test_upsert_writes_extras_column_when_migration_applied(db_service, monkeypatch):
     conn = FakeConn(dynamic_columns=True)
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
-    df = pd.DataFrame([{
+    df = pl.DataFrame([{
         "team_id": 1, "team_name": "A",
         "FG%": 1.0, "FT%": 2.0, "3PM": 3.0, "REB": 4.0,
         "AST": 5.0, "STL": 6.0, "BLK": 7.0, "PTS": 8.0,
@@ -601,7 +603,7 @@ async def test_upsert_writes_null_extras_for_a_fixed_category_league(db_service,
     """The cost argument: nothing is stored when there is nothing extra."""
     conn = FakeConn(dynamic_columns=True)
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
-    df = pd.DataFrame([{
+    df = pl.DataFrame([{
         "team_id": 1, "team_name": "A",
         "FG%": 1.0, "FT%": 2.0, "3PM": 3.0, "REB": 4.0,
         "AST": 5.0, "STL": 6.0, "BLK": 7.0, "PTS": 8.0,

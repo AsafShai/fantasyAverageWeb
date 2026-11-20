@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Mapping, Optional
 from zoneinfo import ZoneInfo
 
-import pandas as pd
+import polars as pl
 
 from app.config import settings
 from app.services import live_overlay as lo
@@ -152,8 +152,8 @@ class LiveOverlayService:
     def observe(
         self,
         raw: dict,
-        previous: Optional[pd.DataFrame],
-        current: pd.DataFrame,
+        previous: Optional[pl.DataFrame],
+        current: pl.DataFrame,
         previous_from_espn: bool,
         schedule: Optional[Mapping[int, Mapping[str, int]]] = None,
     ) -> None:
@@ -179,7 +179,7 @@ class LiveOverlayService:
         except Exception as e:
             logger.error(f"live shadow run failed: {type(e).__name__}: {e}", exc_info=True)
 
-    def _reconcile(self, previous: pd.DataFrame, current: pd.DataFrame, period: int,
+    def _reconcile(self, previous: pl.DataFrame, current: pl.DataFrame, period: int,
                    schedule: Mapping[int, Mapping[str, int]]) -> None:
         closed = self._baseline_period
         reference = self._captured.get(closed)

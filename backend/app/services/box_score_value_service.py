@@ -19,6 +19,7 @@ from app.exceptions import DataSourceError
 from app.services.box_score_service import _eastern_today, boxscore_for, scoreboard_for
 from app.services.data_provider import get_data_provider
 from app.services.surprise_service import NOT_STARTED_SLOTS, fantasy_roster_for
+from app.utils import ttl_dict
 from app.utils.constants import RANKING_CATEGORIES
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,12 @@ _PERCENTAGES = {"FG%": ("FGM", "FGA"), "FT%": ("FTM", "FTA"), "3P%": ("3PM", "3P
 
 _cache: dict[str, tuple[float, dict]] = {}
 _roster_cache: dict[str, tuple[float, dict]] = {}
+# Slate payloads hold every player row of a night: keep the few nights in use.
+_MAX_SLATES = 8
+# Rosters are small (~200 owners a night) and a player's game log asks for every
+# night of his season at once, so this holds a whole season; the sweep of expired
+# nights on each write is what keeps it from growing.
+_MAX_ROSTER_NIGHTS = 200
 
 
 def clear_box_score_value_cache() -> None:
@@ -111,7 +118,7 @@ async def _roster_on(day: date) -> dict[int, dict]:
         return hit[1]
     roster = await fantasy_roster_for(day)
     ttl = 6 * 60 * 60 if day < _eastern_today() and roster else 5 * 60
-    _roster_cache[key] = (time.monotonic() + ttl, roster)
+    ttl_dict.store(_roster_cache, key, time.monotonic() + ttl, roster, _MAX_ROSTER_NIGHTS)
     return roster
 
 
@@ -223,7 +230,7 @@ async def slate_values(day: date) -> dict:
         "players": rows,
         "fantasy_players": fantasy_players,
     }
-    _cache[key] = (time.monotonic() + _ttl(games, day, complete), payload)
+    ttl_dict.store(_cache, key, time.monotonic() + _ttl(games, day, complete), payload, _MAX_SLATES)
     return payload
 
 

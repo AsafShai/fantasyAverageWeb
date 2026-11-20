@@ -19,9 +19,8 @@ import asyncio
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
-
-import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -52,9 +51,11 @@ async def main() -> None:
     if store is None:
         raise SystemExit("model store is empty; seed it first")
     inference = await asyncio.to_thread(LiveInference, store)
-    players = store.player_vectors["PLAYER_ID"].tolist()[:270]
-    teams = store.team_allowed_vectors["TEAM_ID"].tolist()
-    today = pd.Timestamp.now().normalize()
+    # list(...) works on a pandas or a Polars column, so the same script
+    # benchmarks the code before and after the move off pandas.
+    players = list(store.player_vectors["PLAYER_ID"])[:270]
+    teams = list(store.team_allowed_vectors["TEAM_ID"])
+    today = datetime.now().date()
     reqs = [
         PredictionRequest(int(p), int(teams[i % len(teams)]), bool(i % 2), today, 30.0)
         for i, p in enumerate(players)

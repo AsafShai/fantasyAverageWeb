@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import pandas as pd
+import polars as pl
 from datetime import date
 from typing import Dict, List, Optional
 from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats, RankingStats, with_live
@@ -8,9 +8,17 @@ from app.services.data_provider import DataProvider
 from app.services.stats_calculator import StatsCalculator
 from app.services.nba_stats_service import NBAStatsService
 from app.services import tonight_changes
-from app.builders.response_builder import ResponseBuilder
+from app.builders.response_builder import ResponseBuilder, sort_frame
 from app.exceptions import ResourceNotFoundError
 from app.config import settings
+
+
+def _reorder_by_team(df: pl.DataFrame, team_ids: list) -> pl.DataFrame:
+    """df.set_index('team_id').loc[team_ids].reset_index(): rows in ``team_ids``
+    order, team_id as the first column."""
+    pos = {tid: i for i, tid in enumerate(df['team_id'].to_list())}
+    out = df[[pos[t] for t in team_ids]]
+    return out.select(['team_id'] + [c for c in out.columns if c != 'team_id'])
 
 class LeagueService:
     """Service for league-wide statistics and analytics operations"""
@@ -61,7 +69,7 @@ class LeagueService:
 
         response = self.response_builder.build_league_summary_response(
             total_teams=len(averages_df),
-            total_games_played=int(averages_df['GP'].sum()),
+            total_games_played=int(averages_df['GP'].sum()),  # integer GP: exact in any order
             category_leaders=category_leaders,
             league_averages=league_averages,
             nba_avg_pace=nba_avg_pace,
@@ -108,9 +116,9 @@ class LeagueService:
         if rankings_df is None:
             raise ResourceNotFoundError("Unable to fetch rankings data from ESPN API")
 
-        rankings_df = rankings_df.sort_values(by='TOTAL_POINTS', ascending=False)
+        rankings_df = sort_frame(rankings_df, 'TOTAL_POINTS', ascending=False)
 
-        sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
+        sorted_averages_df = _reorder_by_team(averages_df, rankings_df['team_id'].to_list())
 
         categories = await self.data_provider.get_ranking_categories()
         reverse_categories = await self.data_provider.get_reverse_categories()
@@ -148,9 +156,9 @@ class LeagueService:
         averages_df, averages_rankings_df = ranking_service._build_averages_rankings_df(
             delta_df, categories, reverse_categories
         )
-        rankings_df = averages_rankings_df.sort_values(by='TOTAL_POINTS', ascending=False)
+        rankings_df = sort_frame(averages_rankings_df, 'TOTAL_POINTS', ascending=False)
 
-        sorted_averages_df = averages_df.set_index('team_id').loc[rankings_df['team_id']].reset_index()
+        sorted_averages_df = _reorder_by_team(averages_df, rankings_df['team_id'].to_list())
 
         # Same narrowing as the live path: a resolved category can be missing
         # from rows written before it was added to the league, and the labels,
@@ -210,7 +218,7 @@ class LeagueService:
         category_leaders = {}
 
         for category, data in leaders_data.items():
-            team_row = averages_df[averages_df['team_id'] == data['team_id']].iloc[0]
+            team_row = averages_df.filter(pl.col('team_id') == data['team_id']).row(0, named=True)
             category_leaders[category] = self.response_builder.create_ranking_stats_from_averages(team_row, categories)
 
         return category_leaders
@@ -223,13 +231,14 @@ class LeagueService:
     def _extract_teams_data(self, averages_df) -> List:
         """Extract teams data for heatmap"""
         return [{'team_id': int(row['team_id']), 'team_name': str(row['team_name'])} 
-                for _, row in averages_df.iterrows()]
+                for row in averages_df.iter_rows(named=True)]
     
     def _extract_categories_data(self, averages_df, categories: Optional[List[str]] = None) -> List:
         """Extract categories data for heatmap. categories defaults to RANKING_CATEGORIES."""
         from app.utils.constants import RANKING_CATEGORIES
         categories_with_gp = (categories or RANKING_CATEGORIES) + ['GP']
-        return averages_df[categories_with_gp].values.tolist()
+        # One common dtype like pandas' .values (int GP next to float stats -> float)
+        return averages_df.select(categories_with_gp).to_numpy().tolist()
 
     def _extract_ranks_data(self, rankings_df, averages_df, categories: Optional[List[str]] = None) -> List[List[int]]:
         """Extract rank data for each team and category. categories defaults to RANKING_CATEGORIES."""
@@ -237,7 +246,7 @@ class LeagueService:
         categories = categories or RANKING_CATEGORIES
 
         team_id_to_ranks = {}
-        for _, row in rankings_df.iterrows():
+        for row in rankings_df.iter_rows(named=True):
             team_id = int(row['team_id'])
             ranks = [int(row[cat]) for cat in categories]
             ranks.append(0)
@@ -245,7 +254,7 @@ class LeagueService:
 
         default_ranks = [0] * (len(categories) + 1)
         ranks_data = []
-        for _, team_row in averages_df.iterrows():
+        for team_row in averages_df.iter_rows(named=True):
             team_id = int(team_row['team_id'])
             ranks_data.append(team_id_to_ranks.get(team_id, default_ranks))
 
@@ -254,7 +263,7 @@ class LeagueService:
     def _extract_shots_data(self, totals_df) -> List:
         """Extract shots data for league shots"""
         shots_data = []
-        for _, row in totals_df.iterrows():
+        for row in totals_df.iter_rows(named=True):
             shots_data.append({
                 'team_id': int(row['team_id']),
                 'team_name': str(row['team_name']),

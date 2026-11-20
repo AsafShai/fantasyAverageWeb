@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 
-import pandas as pd
-
 import numpy as np
+import polars as pl
+
+from app.utils import pdcompat
+from app.utils.frames import dicts_frame
 
 from .configuration import FantasyConfiguration
 from .columns import TeamDailySnapshotColumns
@@ -33,7 +35,7 @@ class FantasyEstimator:
             decay=self.fantasy_configuration.window_decay,
         )
 
-    def _validate_team_daily_snapshot_columns(self, df: pd.DataFrame) -> None:
+    def _validate_team_daily_snapshot_columns(self, df: pl.DataFrame) -> None:
         """
         Check that df has all columns required for team_daily_snapshot.
         Raises ValueError with the list of missing columns if any are missing.
@@ -46,7 +48,7 @@ class FantasyEstimator:
                 f"DataFrame is missing required team_daily_snapshot columns: {sorted(missing)}"
             )
 
-    def _preprocess_team(self, df_team: pd.DataFrame) -> pd.DataFrame:
+    def _preprocess_team(self, df_team: pl.DataFrame) -> pl.DataFrame:
         """
         Per-team preprocess: remove NaN rows and period_id 0, assign period_index.
         Call this inside the team loop after slicing by team_id.
@@ -59,29 +61,29 @@ class FantasyEstimator:
         league is estimated: more than minimum_period_id."""
         return self.fantasy_configuration.minimum_period_id + 1
 
-    def _teams(self, preprocess_df: pd.DataFrame) -> dict:
+    def _teams(self, preprocess_df: pl.DataFrame) -> dict:
         """team_id -> that team's rows after the per-team preprocess (the
         period_index column numbers its game days)."""
         c = self.columns
         return {
-            team_id: self._preprocess_team(preprocess_df[preprocess_df[c.TEAM_ID] == team_id])
-            for team_id in preprocess_df[c.TEAM_ID].unique()
+            team_id: self._preprocess_team(preprocess_df.filter(pl.col(c.TEAM_ID) == team_id))
+            for team_id in preprocess_df[c.TEAM_ID].unique(maintain_order=True).to_list()
         }
 
     @staticmethod
     def _fewest_periods(teams: dict) -> int:
         return min((len(df_team) for df_team in teams.values()), default=0)
 
-    def periods_played(self, df: pd.DataFrame) -> int:
+    def periods_played(self, df: pl.DataFrame) -> int:
         """The fewest game days any team has, counted exactly as ``estimate``
         counts them before it runs (0 when a team hasn't played)."""
         return self._fewest_periods(self._teams(self.preprocess.transform(df)))
 
     def _compute_final_and_variance(
         self,
-        mean_vector: pd.DataFrame,
-        covariance_matrix: pd.DataFrame,
-        last_row: pd.Series,
+        mean_vector: dict,
+        covariance_matrix: np.ndarray,
+        last_row: dict,
         nba_avg_pace: float,
         mean_gp_per_period: float,
         projected_total_gp: float,
@@ -99,11 +101,11 @@ class FantasyEstimator:
         current_state = {}
         for av in stat_cols:
             snap = _AVG_TO_SNAPSHOT.get(av)
-            current_state[av] = float(last_row[snap]) if snap in last_row.index else 0.0
+            current_state[av] = float(last_row[snap]) if snap in last_row else 0.0
 
         estimated_final_component = {}
         for av in stat_cols:
-            estimated_final_component[av] = current_state[av] + mean_vector.loc[av, "mean"] * remaining_games
+            estimated_final_component[av] = current_state[av] + mean_vector[av] * remaining_games
 
         # Σ̂ = cov of per-game averages. Var(total of n games) = n * G̃ * Σ̂
         # where G̃ = mean_gp_per_period (avg player-games per period) — the luck of
@@ -119,7 +121,8 @@ class FantasyEstimator:
             if mean_gp_per_period > 0 else 0.0
         )
         full_cov_remaining = covariance_matrix * remaining_games * mean_gp_per_period * (config.luck_scale + mean_error)
-        variance_component = {av: full_cov_remaining.loc[av, av] for av in stat_cols}
+        pos = {av: i for i, av in enumerate(stat_cols)}
+        variance_component = {av: full_cov_remaining[pos[av], pos[av]] for av in stat_cols}
 
         # Percentage stats: ratio + delta method with correlation
         def ratio_mean(mu_x: float, mu_y: float) -> float:
@@ -140,8 +143,8 @@ class FantasyEstimator:
         var_fga = variance_component[PreprocessColumns.AVG_FGA_IN_PERIOD]
         var_ftm = variance_component[PreprocessColumns.AVG_FTM_IN_PERIOD]
         var_fta = variance_component[PreprocessColumns.AVG_FTA_IN_PERIOD]
-        cov_fgm_fga = full_cov_remaining.loc[PreprocessColumns.AVG_FGM_IN_PERIOD, PreprocessColumns.AVG_FGA_IN_PERIOD]
-        cov_ftm_fta = full_cov_remaining.loc[PreprocessColumns.AVG_FTM_IN_PERIOD, PreprocessColumns.AVG_FTA_IN_PERIOD]
+        cov_fgm_fga = full_cov_remaining[pos[PreprocessColumns.AVG_FGM_IN_PERIOD], pos[PreprocessColumns.AVG_FGA_IN_PERIOD]]
+        cov_ftm_fta = full_cov_remaining[pos[PreprocessColumns.AVG_FTM_IN_PERIOD], pos[PreprocessColumns.AVG_FTA_IN_PERIOD]]
 
         estimated_final_fg_pct = ratio_mean(est_fgm, est_fga)
         variance_fg_pct = ratio_var(est_fgm, est_fga, var_fgm, var_fga, cov_fgm_fga)
@@ -162,7 +165,7 @@ class FantasyEstimator:
             out[OutputColumnNames.Variance.for_stat(stat)] = variance_component[av]
         # For Monte Carlo: 10-dim mean and 10x10 cov of season totals (same order as stat_cols)
         mean_10 = np.array([estimated_final_component[av] for av in stat_cols], dtype=float)
-        cov_10 = full_cov_remaining.loc[stat_cols, stat_cols].values.astype(float)
+        cov_10 = np.asarray(full_cov_remaining, dtype=float)
         return out, mean_10, cov_10
 
     @staticmethod
@@ -179,9 +182,9 @@ class FantasyEstimator:
 
     def _estimate_per_team(
         self,
-        df_team: pd.DataFrame,
+        df_team: pl.DataFrame,
         nba_avg_pace: float,
-        slot_proj_df: pd.DataFrame | None = None,
+        slot_proj_df: pl.DataFrame | None = None,
     ) -> tuple[dict, np.ndarray, np.ndarray]:
         """
         Run estimation for a single team: window mean/cov, then compute estimated_final and variance
@@ -189,32 +192,23 @@ class FantasyEstimator:
         """
         from app.services.slot_games_estimator import SLOT_CAPS
         c = self.columns
-        team_id = df_team[c.TEAM_ID].iloc[0]
-        team_name = df_team[c.TEAM_NAME].iloc[0]
+        team_id = df_team[c.TEAM_ID][0]
+        team_name = df_team[c.TEAM_NAME][0]
         mean_arr, cov_arr = self.window_estimator.fit(df_team)
         stat_cols = list(WindowEstimator.stat_columns())
-        mean_vector = pd.DataFrame(
-            mean_arr.reshape(-1, 1),
-            index=stat_cols,
-            columns=["mean"],
-        )
-        covariance_matrix = pd.DataFrame(
-            cov_arr,
-            index=stat_cols,
-            columns=stat_cols,
-        )
-        last_row = (
-            df_team.sort_values([PreprocessColumns.PERIOD_INDEX, c.DATE]).iloc[-1]
-        )
-        mean_gp_per_period = float(df_team[PreprocessColumns.GP_IN_PERIOD].mean())
+        mean_vector = dict(zip(stat_cols, mean_arr))
+        covariance_matrix = np.asarray(cov_arr, dtype=float)
+        order = pdcompat.lexsort([df_team[PreprocessColumns.PERIOD_INDEX].to_numpy(), df_team[c.DATE].to_list()])
+        last_row = df_team.row(int(order[-1]), named=True)
+        mean_gp_per_period = float(pdcompat.nanmean(df_team[PreprocessColumns.GP_IN_PERIOD]))
 
         team_row = (
-            slot_proj_df[slot_proj_df['team_id'] == team_id]
-            if slot_proj_df is not None and not slot_proj_df.empty
+            slot_proj_df.filter(pl.col('team_id') == team_id)
+            if slot_proj_df is not None and not slot_proj_df.is_empty()
             else None
         )
-        if team_row is not None and not team_row.empty:
-            projected_total_gp = float(team_row['proj_total'].iloc[0])
+        if team_row is not None and not team_row.is_empty():
+            projected_total_gp = float(team_row['proj_total'][0])
         else:
             projected_total_gp = self._fallback_total_gp(
                 float(last_row[c.GP]), nba_avg_pace, float(sum(SLOT_CAPS.values()))
@@ -234,7 +228,7 @@ class FantasyEstimator:
     def _run_monte_carlo_ranking(
         self,
         mc_data: list[tuple[int, str, np.ndarray, np.ndarray, float]],
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pl.DataFrame, pl.DataFrame]:
         """
         Run Monte Carlo: sample each team's season totals from N(mean_10, cov_10);
         derive 8 stats; rank per stat (1st=N pts, ..., last=1); average points over runs.
@@ -246,7 +240,7 @@ class FantasyEstimator:
         rank_prob_df : long table: team_id, team_name, rank, prob (one row per team per rank; dynamic n_teams).
         """
         if not mc_data:
-            return pd.DataFrame(), pd.DataFrame()
+            return pl.DataFrame(), pl.DataFrame()
         n_teams = len(mc_data)
         n_runs = self.fantasy_configuration.num_monte_carlo
         # Order of 8 stats for ranking: fg_pct, ft_pct, three_pm, reb, ast, stl, blk, pts
@@ -276,12 +270,12 @@ class FantasyEstimator:
             # Points per stat this run
             run_pts = np.zeros((n_teams, 8))
             for j in range(8):
-                ranks = pd.Series(stats_8[:, j]).rank(ascending=False, method="average").values
+                ranks = pdcompat.rank(stats_8[:, j], ascending=False, method="average")
                 run_pts[:, j] = n_teams + 1 - ranks
             pts_accum += run_pts
             # Total points this run → final rank (1 = 1st place)
             total_pts = run_pts.sum(axis=1)
-            finish_rank = pd.Series(total_pts).rank(ascending=False, method="first").astype(int).values
+            finish_rank = pdcompat.rank(total_pts, ascending=False, method="first").astype(int)
             for i in range(n_teams):
                 r = int(finish_rank[i])  # 1..n_teams
                 rank_count[i, r - 1] += 1
@@ -303,11 +297,10 @@ class FantasyEstimator:
             + list(OutputColumnNames.RankingExpectedPts.all())
             + [OutputColumnNames.RankingExpectedPts.TOTAL]
         )
-        df_out = pd.DataFrame(rows, columns=out_cols)
-        df_out = df_out.sort_values(
-            OutputColumnNames.RankingExpectedPts.TOTAL, ascending=False
-        ).reset_index(drop=True)
-        df_out.insert(0, "rank", range(1, len(df_out) + 1))
+        df_out = dicts_frame(rows, out_cols)
+        df_out = df_out[pdcompat.argsort(
+            df_out[OutputColumnNames.RankingExpectedPts.TOTAL].to_numpy(), ascending=False)]
+        df_out = df_out.select(pl.Series("rank", range(1, df_out.height + 1), dtype=pl.Int64), pl.all())
 
         # Long format: one row per (team, rank) with prob
         rank_prob = rank_count / n_runs
@@ -320,19 +313,19 @@ class FantasyEstimator:
                     "rank": r,
                     "prob": rank_prob[i, r - 1],
                 })
-        rank_prob_df = pd.DataFrame(
+        rank_prob_df = dicts_frame(
             rank_prob_rows,
-            columns=[self.columns.TEAM_ID, self.columns.TEAM_NAME, "rank", "prob"],
+            [self.columns.TEAM_ID, self.columns.TEAM_NAME, "rank", "prob"],
         )
         return df_out, rank_prob_df
 
-    def _log_input_stats(self, df: pd.DataFrame) -> None:
+    def _log_input_stats(self, df: pl.DataFrame) -> None:
         """Log summary stats for the input team_daily_snapshot DataFrame."""
         c = self.columns
         n_rows = len(df)
-        n_teams = df[c.TEAM_ID].nunique()
-        n_periods = df[c.SCORING_PERIOD_ID].nunique()
-        n_dates = df[c.DATE].nunique()
+        n_teams = df[c.TEAM_ID].n_unique()
+        n_periods = df[c.SCORING_PERIOD_ID].n_unique()
+        n_dates = df[c.DATE].n_unique()
         date_min, date_max = df[c.DATE].min(), df[c.DATE].max()
         total_gp = int(df[c.GP].sum())
         self.logger.info(
@@ -342,17 +335,17 @@ class FantasyEstimator:
 
     def estimate(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         nba_avg_pace: float,
-        slot_proj_df: pd.DataFrame | None = None,
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        slot_proj_df: pl.DataFrame | None = None,
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
         """
         Run estimation: for each eligible team, compute estimated_final and variance per stat,
         then run Monte Carlo to get expected ranking points per stat. Returns two DataFrames.
 
         Parameters
         ----------
-        df : pandas DataFrame
+        df : Polars DataFrame
             team_daily_snapshot data (columns per TeamDailySnapshotColumns).
         nba_avg_pace : float
             NBA games played so far (average pace) at time of run.
@@ -377,7 +370,7 @@ class FantasyEstimator:
                 "Not estimating yet: the fewest game days of any team is %s, every team needs %s",
                 fewest, self.periods_needed,
             )
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+            return pl.DataFrame(), pl.DataFrame(), pl.DataFrame()
         results: list[dict] = []
         mc_data: list[tuple[int, str, np.ndarray, np.ndarray, float]] = []
         for team_id, df_team in teams.items():
@@ -391,6 +384,6 @@ class FantasyEstimator:
             + list(OutputColumnNames.Variance.all())
             + [OutputColumnNames.Metadata.NBA_AVG_PACE]
         )
-        predictions_df = pd.DataFrame(results, columns=out_cols)
+        predictions_df = dicts_frame(results, out_cols)
         ranking_df, rank_prob_df = self._run_monte_carlo_ranking(mc_data)
         return predictions_df, ranking_df, rank_prob_df

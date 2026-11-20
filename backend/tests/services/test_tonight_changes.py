@@ -4,6 +4,8 @@ changed, date ranges that end today and the live point on Rankings Over Time."""
 from datetime import date, timedelta
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.config import settings
@@ -13,7 +15,7 @@ from app.services.live_overlay_service import LiveState
 
 def ranks(rows):
     """A rankings frame: (team_id, name, {cat: points}, total, gp)."""
-    return pd.DataFrame([
+    return pl.DataFrame([
         {'team_id': tid, 'team_name': name, **cats, 'TOTAL_POINTS': total, 'GP': gp}
         for tid, name, cats, total, gp in rows
     ])
@@ -51,8 +53,8 @@ class TestRankChanges:
         assert all(t.total_delta == 0 and t.gp_delta == 0 and t.rank_delta == 0 for t in changes.teams)
 
     def test_raw_totals_give_the_counting_stats_added_tonight(self):
-        official = pd.DataFrame([{'team_id': 1, 'team_name': 'Alpha', 'GP': 100, 'PTS': 4700.0, 'REB': 1200.0, 'FG%': 0.47}])
-        live = pd.DataFrame([{'team_id': 1, 'team_name': 'Alpha', 'GP': 102, 'PTS': 4761.0, 'REB': 1222.0, 'FG%': 0.48}])
+        official = pl.DataFrame([{'team_id': 1, 'team_name': 'Alpha', 'GP': 100, 'PTS': 4700.0, 'REB': 1200.0, 'FG%': 0.47}])
+        live = pl.DataFrame([{'team_id': 1, 'team_name': 'Alpha', 'GP': 102, 'PTS': 4761.0, 'REB': 1222.0, 'FG%': 0.48}])
         changes = tc.rank_changes_between(OFFICIAL, LIVE, CATS + ['FG%'], 24, official, live)
         alpha = next(t for t in changes.teams if t.team_id == 1)
         assert alpha.stat_deltas == {'PTS': 61.0, 'REB': 22.0}
@@ -62,7 +64,7 @@ class TestRankChanges:
         assert all(t.stat_deltas == {} for t in changes.teams)
 
     def test_a_category_missing_from_one_frame_is_skipped(self):
-        changes = tc.rank_changes_between(OFFICIAL, LIVE.drop(columns=['REB']), CATS, period=24)
+        changes = tc.rank_changes_between(OFFICIAL, LIVE.drop(['REB']), CATS, period=24)
         assert all('REB' not in t.categories for t in changes.teams)
 
 
@@ -116,7 +118,7 @@ class TestLivePoints:
         assert point['ranks'] is None
 
     def test_stat_point_rebuilds_ratios_and_divides_per_game(self):
-        totals = pd.DataFrame([{
+        totals = pl.DataFrame([{
             'team_id': 1, 'team_name': 'Alpha', 'GP': 10, 'FGM': 45, 'FGA': 100, 'FG%': 99.0,
             'FTM': 8, 'FTA': 10, 'FT%': 99.0, '3PM': 20, 'REB': 50, 'AST': 30, 'STL': 10,
             'BLK': 5, 'PTS': 120,
@@ -133,10 +135,11 @@ def test_range_frames_use_the_live_frame_as_the_end_snapshot():
     totals through last night plus tonight, never the DB's latest row plus an
     overlay (which would miss a day whenever the DB sync lags)."""
     from app.services.ranking_service import RankingService
-    end_live = pd.DataFrame([{'team_id': 1, 'team_name': 'A', 'GP': 12, 'FGM': 50, 'FGA': 100, 'PTS': 130}])
-    start = pd.DataFrame([{'team_id': 1, 'team_name': 'A', 'GP': 10, 'FGM': 40, 'FGA': 80, 'PTS': 100}])
+    end_live = pl.DataFrame([{'team_id': 1, 'team_name': 'A', 'GP': 12, 'FGM': 50, 'FGA': 100, 'PTS': 130}])
+    start = pl.DataFrame([{'team_id': 1, 'team_name': 'A', 'GP': 10, 'FGM': 40, 'FGA': 80, 'PTS': 100}])
     delta = RankingService()._compute_delta(tc.as_snapshot(end_live), start)
-    assert delta.loc[0, 'GP'] == 2 and delta.loc[0, 'PTS'] == 30 and delta.loc[0, 'FGM'] == 10
+    row = delta.row(0, named=True)
+    assert row['GP'] == 2 and row['PTS'] == 30 and row['FGM'] == 10
 
 
 class TestFinishedNight:

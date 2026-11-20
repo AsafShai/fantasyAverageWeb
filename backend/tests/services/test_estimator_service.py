@@ -1,3 +1,4 @@
+import polars as pl
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
@@ -66,14 +67,15 @@ async def test_get_nba_avg_pace_falls_back_on_exception(estimator_service, monke
 def _stub_run_inputs(svc, monkeypatch, estimate):
     """Everything around the Monte Carlo stubbed; `estimate` stands in for it."""
     import pandas as pd
+    import polars as pl
     svc.db_service = MagicMock()
     svc.db_service.get_latest_snapshot_date = AsyncMock(return_value=date(2026, 1, 1))
     svc.db_service.get_estimator_as_of = AsyncMock(return_value=None)
     for name in ("upsert_estimator_prediction", "upsert_estimator_ranking", "upsert_estimator_rank_probability"):
         setattr(svc.db_service, name, AsyncMock())
-    monkeypatch.setattr(svc, "_get_snapshot_df", AsyncMock(return_value=pd.DataFrame({"x": [1]})))
+    monkeypatch.setattr(svc, "_get_snapshot_df", AsyncMock(return_value=pl.DataFrame({"x": [1]})))
     monkeypatch.setattr(svc, "_get_nba_avg_pace", AsyncMock(return_value=60.0))
-    monkeypatch.setattr(estimator_service_module, "get_team_slot_pace_df", AsyncMock(return_value=pd.DataFrame()))
+    monkeypatch.setattr(estimator_service_module, "get_team_slot_pace_df", AsyncMock(return_value=pl.DataFrame()))
     fake_est = MagicMock()
     fake_est.return_value.estimate.side_effect = estimate
     monkeypatch.setattr("app.fantsy_estimator.FantasyEstimator", fake_est)
@@ -84,7 +86,7 @@ def _estimate_result(*_args):
     import pandas as pd
     import time
     time.sleep(0.05)  # long enough for concurrent callers to overlap
-    frame = pd.DataFrame({"team_id": [1]})
+    frame = pl.DataFrame({"team_id": [1]})
     return frame, frame, frame
 
 
@@ -247,7 +249,7 @@ async def test_warmup_status_counts_the_slowest_teams_game_days(estimator_servic
     needed = FantasyEstimator().periods_needed
 
     import pandas as pd
-    one_ready_one_not = pd.concat([make_snapshot(1, 30), make_snapshot(2, 6)], ignore_index=True)
+    one_ready_one_not = pl.from_pandas(pd.concat([make_snapshot(1, 30), make_snapshot(2, 6)], ignore_index=True))
     monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=one_ready_one_not))
     played, need = await estimator_service.warmup_status()
     assert need == needed and 0 < played < needed                   # the slowest team, not the furthest

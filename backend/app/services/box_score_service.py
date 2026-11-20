@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from app.utils import ttl_dict
 from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,10 @@ _cache: dict[str, tuple[float, dict]] = {}
 _failures: dict[str, tuple[float, Exception]] = {}
 _inflight: dict[str, asyncio.Task] = {}
 _NEGATIVE_TTL = 45.0
+# A slate is ~10-15 boxes plus its scoreboard, ~0.4 MB each in memory: room for
+# today, last night and a few nights someone browsed. Expired entries go first.
+_MAX_ENTRIES = 64
+_MAX_FAILURES = 64
 # Live games change often, but ESPN starts returning unusable payloads when
 # the same scoreboard and every box are fetched every few seconds.
 _LIVE_TTL = 60.0
@@ -81,7 +86,7 @@ def _http() -> httpx.AsyncClient:
 
 
 def _store(key: str, payload: dict, ttl: float) -> dict:
-    _cache[key] = (time.monotonic() + ttl, payload)
+    ttl_dict.store(_cache, key, time.monotonic() + ttl, payload, _MAX_ENTRIES)
     return payload
 
 
@@ -108,7 +113,7 @@ def _recent_failure(key: str) -> Exception | None:
 
 
 def _remember_failure(key: str, exc: Exception) -> None:
-    _failures[key] = (time.monotonic() + _NEGATIVE_TTL, exc)
+    ttl_dict.store(_failures, key, time.monotonic() + _NEGATIVE_TTL, exc, _MAX_FAILURES)
 
 
 async def _single_flight(key: str, fetch):

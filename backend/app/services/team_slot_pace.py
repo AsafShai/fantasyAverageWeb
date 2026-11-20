@@ -1,10 +1,11 @@
 import asyncio
 import logging
-import pandas as pd
+import polars as pl
 
 from app.config import settings
 from app.services.data_provider import DataProvider
 from app.services.nba_stats_service import NBAStatsService
+from app.utils.frames import dicts_frame
 from app.utils.roster_slots import SLOT_NAMES as _SLOT_NAMES
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 _NBA_AVG_PACE_FALLBACK = 65.9
 
 
-async def get_team_slot_pace_df() -> pd.DataFrame:
+async def get_team_slot_pace_df() -> pl.DataFrame:
     """
     Returns a DataFrame with one row per fantasy team:
       team_id, team_name,
@@ -37,7 +38,7 @@ async def get_team_slot_pace_df() -> pd.DataFrame:
         nba_service.get_nba_game_days_remaining(settings.season_id),
     )
 
-    team_name_map = dict(zip(totals_df['team_id'], totals_df['team_name']))
+    team_name_map = dict(zip(totals_df['team_id'].to_list(), totals_df['team_name'].to_list()))
     resolved_pace = nba_avg_pace if nba_avg_pace is not None else _NBA_AVG_PACE_FALLBACK
 
     rows = [
@@ -52,4 +53,4 @@ async def get_team_slot_pace_df() -> pd.DataFrame:
         for team_id, slots in slot_usage.items()
     ]
 
-    return pd.DataFrame(rows)
+    return dicts_frame(rows)

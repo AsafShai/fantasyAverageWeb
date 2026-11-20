@@ -9,69 +9,68 @@ synthetic dataset (no network, no models).
 
 from __future__ import annotations
 
-import pandas as pd
-from pandas.testing import assert_frame_equal
+import numpy as np
+import polars as pl
 
-from model_stats_inference.research import data as rdata
+from model_stats_inference.serving import featurize
+from model_stats_inference.serving.conftest import to_pl
 from model_stats_inference.serving.feature_store import FeatureStore, _PLAYER_META
 
 
-def _vector_frames(store: FeatureStore):
-    """The three vector frames as the DB round-trip hands them back: plain
-    RangeIndex, meta + float features."""
-    pv = store.player_vectors.reset_index(drop=True)
-    tav = store.team_allowed_vectors.reset_index(drop=True)
-    tov = store.team_own_vectors.reset_index(drop=True)
-    return pv, tav, tov
+def _rows(frame: pl.DataFrame, key: str, ids, cols):
+    sub = frame.filter(pl.col(key).is_in(list(ids))).sort(key)
+    return sub.select(cols)
+
+
+def _assert_same(got: pl.DataFrame, want: pl.DataFrame):
+    assert got.columns == want.columns or sorted(got.columns) == sorted(want.columns)
+    for c in want.columns:
+        a = got[c].to_numpy().astype(float)
+        b = want[c].to_numpy().astype(float)
+        np.testing.assert_array_equal(a.view(np.int64), b.view(np.int64), err_msg=c)
 
 
 def test_incremental_fold_matches_full_rebuild(raw_players, team_logs):
-    raw_players = rdata._to_datetime(raw_players)
-    team_logs = rdata._to_datetime(team_logs)
+    raw_players = to_pl(raw_players)
+    team_logs = to_pl(team_logs)
     last_date = raw_players["GAME_DATE"].max()
-    before_p = raw_players[raw_players["GAME_DATE"] < last_date]
-    before_t = team_logs[team_logs["GAME_DATE"] < last_date]
-    night_p = raw_players[raw_players["GAME_DATE"] == last_date]
-    night_t = team_logs[team_logs["GAME_DATE"] == last_date]
-    assert not night_p.empty and night_p["PLAYER_ID"].nunique() < raw_players["PLAYER_ID"].nunique()
+    before_p = raw_players.filter(pl.col("GAME_DATE") < last_date)
+    before_t = team_logs.filter(pl.col("GAME_DATE") < last_date)
+    night_p = raw_players.filter(pl.col("GAME_DATE") == last_date)
+    night_t = team_logs.filter(pl.col("GAME_DATE") == last_date)
+    assert not night_p.is_empty() and night_p["PLAYER_ID"].n_unique() < raw_players["PLAYER_ID"].n_unique()
 
     # Reference: one-shot build over everything.
     full = FeatureStore.build(
-        raw_players, rdata.build_team_allowed(team_logs), rdata.build_team_own(team_logs)
+        raw_players, featurize.build_team_allowed(team_logs), featurize.build_team_own(team_logs)
     )
 
     # Incremental: pre-night store from "stored" vectors, tonight's players' history only.
     pre = FeatureStore.build(
-        before_p, rdata.build_team_allowed(before_t), rdata.build_team_own(before_t)
+        before_p, featurize.build_team_allowed(before_t), featurize.build_team_own(before_t)
     )
-    pv, tav, tov = _vector_frames(pre)
-    inc = FeatureStore.from_vectors(pv, tav, tov)
-    tonight_ids = night_p["PLAYER_ID"].unique()
-    inc.players = before_p[before_p["PLAYER_ID"].isin(tonight_ids)].reset_index(drop=True)
-    inc.team_allowed = rdata.build_team_allowed(before_t)
-    inc.team_own = rdata.build_team_own(before_t)
+    inc = FeatureStore.from_vectors(pre.player_vectors, pre.team_allowed_vectors, pre.team_own_vectors)
+    tonight_ids = night_p["PLAYER_ID"].unique(maintain_order=True).to_list()
+    inc.players = before_p.filter(pl.col("PLAYER_ID").is_in(tonight_ids))
+    inc.team_allowed = featurize.build_team_allowed(before_t)
+    inc.team_own = featurize.build_team_own(before_t)
     inc.update_with_nightly_results(night_p, night_t)
 
     feature_cols = [c for c in full.player_vectors.columns if c not in _PLAYER_META]
-    for pid in tonight_ids:
-        got = inc.player_vectors.loc[[pid], feature_cols].reset_index(drop=True)
-        want = full.player_vectors.loc[[pid], feature_cols].reset_index(drop=True)
-        assert_frame_equal(got, want, check_like=True)
-        assert int(inc.player_vectors.at[pid, "games_count"]) == int(full.player_vectors.at[pid, "games_count"])
-        assert inc.player_vectors.at[pid, "last_game_date"] == full.player_vectors.at[pid, "last_game_date"]
+    _assert_same(_rows(inc.player_vectors, "PLAYER_ID", tonight_ids, feature_cols),
+                 _rows(full.player_vectors, "PLAYER_ID", tonight_ids, feature_cols))
+    meta = ["PLAYER_ID", "games_count", "last_game_date"]
+    assert (_rows(inc.player_vectors, "PLAYER_ID", tonight_ids, meta).to_dicts()
+            == _rows(full.player_vectors, "PLAYER_ID", tonight_ids, meta).to_dicts())
 
     # Players who did not play keep their stored (pre-night) vector, which the
     # full rebuild also leaves unchanged.
-    idle = [p for p in full.player_vectors.index if p not in set(tonight_ids)]
+    idle = [p for p in full.player_vectors["PLAYER_ID"].to_list() if p not in set(tonight_ids)]
     assert idle
-    assert_frame_equal(
-        inc.player_vectors.loc[idle, feature_cols].reset_index(drop=True),
-        full.player_vectors.loc[idle, feature_cols].reset_index(drop=True),
-        check_like=True,
-    )
+    _assert_same(_rows(inc.player_vectors, "PLAYER_ID", idle, feature_cols),
+                 _rows(full.player_vectors, "PLAYER_ID", idle, feature_cols))
 
     # Team vectors are rebuilt whole either way.
     for name in ("team_allowed_vectors", "team_own_vectors"):
-        got = getattr(inc, name).sort_index().reset_index(drop=True)
-        want = getattr(full, name).sort_index().reset_index(drop=True)
-        assert_frame_equal(got, want, check_like=True)
+        got, want = getattr(inc, name).sort("TEAM_ID"), getattr(full, name).sort("TEAM_ID")
+        _assert_same(got.select(want.columns), want)

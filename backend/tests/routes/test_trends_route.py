@@ -1,6 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
+
+import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
@@ -19,7 +21,7 @@ from app.models.trend_models import (
     UsageRoleItem,
 )
 
-_MOCK_PLAYERS = pd.DataFrame([
+_MOCK_PLAYERS = pl.DataFrame([
     {'Name': 'Klay Thompson', 'Pro Team': 'DAL', 'Positions': 'SG', 'status': 'FREEAGENT', 'fantasy_team_name': None},
 ])
 

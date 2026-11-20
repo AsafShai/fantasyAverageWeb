@@ -2,6 +2,7 @@ import pytest
 import pytest_asyncio
 from app.services.ranking_service import RankingService
 import pandas as pd
+import polars as pl
 from app.models.league import LeagueRankings
 from app.models.stats import RankingStats
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
@@ -37,7 +38,7 @@ async def test_settled_range_stays_on_stored_snapshots(ranking_service):
         [{'team_id': 1, 'team_name': 'A', 'gp': 1, 'PTS': 4}],
     ))
     ranking_service.data_provider.get_live_state = AsyncMock(side_effect=AssertionError('live'))
-    stored = pd.DataFrame({'team_id': [1]})
+    stored = pl.DataFrame({'team_id': [1]})
     ranking_service._compute_delta = Mock(return_value=stored)
 
     actual_start, actual_end, settled_delta, progress_delta, state = await ranking_service.range_deltas(
@@ -82,13 +83,13 @@ class TestSettledRangeBeforeTheRollover:
         ranking_service.data_provider.db_service.get_snapshots_for_date_range = AsyncMock(side_effect=reads)
         ranking_service.data_provider.get_live_state = AsyncMock(return_value=state)
         ranking_service.data_provider.sync_db_now = AsyncMock(return_value=synced)
-        live_frame = pd.DataFrame({'team_id': [1], 'live': [1]})
+        live_frame = pl.DataFrame({'team_id': [1], 'live': [1]})
         ranking_service.data_provider.get_totals_df = AsyncMock(return_value=live_frame)
         deltas = {}
 
         def delta(end_df, start_df):
             key = 'live' if 'live' in end_df.columns else 'stored'
-            deltas.setdefault(key, pd.DataFrame({'team_id': [1], 'kind': [key]}))
+            deltas.setdefault(key, pl.DataFrame({'team_id': [1], 'kind': [key]}))
             return deltas[key]
         ranking_service._compute_delta = Mock(side_effect=delta)
         return deltas
@@ -632,16 +633,16 @@ class TestDynamicCategoriesDateRange:
         rows_start = [self._snapshot(1, "Alpha", 400, 60, 20, 160, 340),
                       self._snapshot(2, "Beta", 300, 20, 20, 150, 320)]
         delta = real_ranking_service._compute_delta(
-            pd.DataFrame(rows_end), pd.DataFrame(rows_start)
+            pl.DataFrame(rows_end), pl.DataFrame(rows_start)
         )
 
-        alpha = delta.set_index('team_id').loc[1]
+        alpha = delta.to_pandas().set_index('team_id').loc[1]
         assert alpha['FG%'] == pytest.approx((400 - 160) / (850 - 340))
         assert alpha['TO'] == 60.0
 
     @pytest.mark.asyncio
     async def test_missing_start_snapshot_treats_window_as_everything_so_far(self, real_ranking_service):
         rows_end = [self._snapshot(1, "Alpha", 1000, 120, 40, 400, 850)]
-        delta = real_ranking_service._compute_delta(pd.DataFrame(rows_end), None)
+        delta = real_ranking_service._compute_delta(pl.DataFrame(rows_end), None)
 
-        assert delta.set_index('team_id').loc[1]['TO'] == 120.0
+        assert delta.to_pandas().set_index('team_id').loc[1]['TO'] == 120.0

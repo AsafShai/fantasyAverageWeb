@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.services import live_overlay as lo
@@ -179,12 +181,12 @@ def test_apply_adds_counting_stats_and_rebuilds_ratios_from_sources():
     live = lo.apply_overlay(official, lo.build_overlay(raw).per_team())
 
     assert live is not official
-    row = live.set_index("team_id").loc[1]
+    row = live.to_pandas().set_index("team_id").loc[1]
     assert row["PTS"] == 1010 and row["GP"] == 91 and row["REB"] == 405
     assert row["FG%"] == pytest.approx(404 / 909)
     assert row["FT%"] == pytest.approx(152 / 202)
     # The official frame is never touched.
-    assert official.set_index("team_id").loc[1, "PTS"] == 1000
+    assert official.to_pandas().set_index("team_id").loc[1, "PTS"] == 1000
 
 
 def test_apply_leaves_teams_without_games_byte_identical():
@@ -192,7 +194,7 @@ def test_apply_leaves_teams_without_games_byte_identical():
     official = _official(raw)
     live = lo.apply_overlay(official, lo.build_overlay(raw).per_team())
     pd.testing.assert_series_equal(
-        live.set_index("team_id").loc[2], official.set_index("team_id").loc[2]
+        live.to_pandas().set_index("team_id").loc[2], official.to_pandas().set_index("team_id").loc[2]
     )
 
 
@@ -300,8 +302,10 @@ def test_reconcile_reports_each_team_and_stat_that_differs():
     old = _official(raw)
     overlay = lo.build_overlay(raw)
     new = lo.apply_overlay(old, overlay.per_team())
-    new.loc[new["team_id"] == 1, "PTS"] += 2   # an ESPN stat correction
-    new.loc[new["team_id"] == 2, "REB"] += 1   # a line we never saw
+    new = new.with_columns(
+        pl.when(pl.col("team_id") == 1).then(pl.col("PTS") + 2).otherwise(pl.col("PTS")).alias("PTS"),   # an ESPN stat correction
+        pl.when(pl.col("team_id") == 2).then(pl.col("REB") + 1).otherwise(pl.col("REB")).alias("REB"),   # a line we never saw
+    )
     diffs = lo.reconcile(old, new, overlay)
     assert {(d["team_id"], d["stat"], d["official"], d["overlay"]) for d in diffs} == {
         (1, "PTS", 12, 10), (2, "REB", 1, 0),
@@ -344,8 +348,8 @@ def test_real_hand_over_reconciles_exactly(real_period_24, real_period_25):
     assert lo.reconcile(before, after, overlay) == []
 
     # Live at 07:00 was already this morning's official standings.
-    live = lo.apply_overlay(before, overlay.per_team()).set_index("team_id")
-    official = after.set_index("team_id")
+    live = lo.apply_overlay(before, overlay.per_team()).to_pandas().set_index("team_id")
+    official = after.to_pandas().set_index("team_id")
     for col in [c for c in official.columns if c != "team_name"]:
         # ESPN rounds FG%/FT% to 8 decimals; everything else is exact.
         assert live[col].to_numpy() == pytest.approx(official[col].to_numpy(), abs=1e-7), col

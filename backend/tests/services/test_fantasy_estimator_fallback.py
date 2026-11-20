@@ -2,12 +2,19 @@ from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 from app.fantsy_estimator import FantasyEstimator
 from app.utils.roster_slots import SLOT_CAPS
 
 SEASON_CAP = float(sum(SLOT_CAPS.values()))
+
+
+def run_estimate(est, df, nba_avg_pace, slot_proj_df=None):
+    """FantasyEstimator.estimate on pandas-built test frames; results back as pandas."""
+    as_pl = lambda f: pl.from_pandas(f) if isinstance(f, pd.DataFrame) else f  # noqa: E731
+    return tuple(x.to_pandas() for x in est.estimate(as_pl(df), nba_avg_pace, as_pl(slot_proj_df)))
 
 
 def make_snapshot(team_id: int, days: int, games_per_day: int = 6) -> pd.DataFrame:
@@ -56,7 +63,7 @@ class TestEstimateWithoutSlotData:
         df = pd.concat([make_snapshot(1, 30), make_snapshot(2, 30)], ignore_index=True)
         nba_avg_pace = 30.0
 
-        predictions, ranking, _ = FantasyEstimator().estimate(df, nba_avg_pace, slot_proj_df)
+        predictions, ranking, _ = run_estimate(FantasyEstimator(), df, nba_avg_pace, slot_proj_df)
 
         gp_now = 30 * 6
         expected_total = gp_now * 82 / nba_avg_pace  # 492, under the 822 cap
@@ -71,7 +78,7 @@ class TestEstimateWithoutSlotData:
         df = pd.concat([make_snapshot(1, 30), make_snapshot(2, 30)], ignore_index=True)
         slot_proj_df = pd.DataFrame([{'team_id': 1, 'team_name': 'Team 1', 'proj_total': 700.0}])
 
-        predictions, _, _ = FantasyEstimator().estimate(df, 30.0, slot_proj_df)
+        predictions, _, _ = run_estimate(FantasyEstimator(), df, 30.0, slot_proj_df)
 
         by_team = predictions.set_index('team_id')['projected_total_gp']
         assert by_team[1] == pytest.approx(700.0)
@@ -85,9 +92,9 @@ class TestPeriodsPlayed:
         so the two can't disagree."""
         df = pd.concat([make_snapshot(1, days + 5), make_snapshot(2, days)], ignore_index=True)
         estimator = FantasyEstimator()
-        fewest = estimator.periods_played(df)
-        assert fewest == estimator.periods_played(make_snapshot(2, days))    # the slowest team counts
-        predictions, _, _ = estimator.estimate(df, 30.0, None)
+        fewest = estimator.periods_played(pl.from_pandas(df))
+        assert fewest == estimator.periods_played(pl.from_pandas(make_snapshot(2, days)))    # the slowest team counts
+        predictions, _, _ = run_estimate(estimator, df, 30.0, None)
         assert (fewest >= estimator.periods_needed) == (not predictions.empty)
 
     def test_all_teams_or_none(self):
@@ -96,8 +103,8 @@ class TestPeriodsPlayed:
         estimator = FantasyEstimator()
         needed_days = estimator.periods_needed + 1      # the first snapshot day has no period before it
         short = pd.concat([make_snapshot(1, 30), make_snapshot(2, needed_days - 1)], ignore_index=True)
-        predictions, ranking, probabilities = estimator.estimate(short, 30.0, None)
+        predictions, ranking, probabilities = run_estimate(estimator, short, 30.0, None)
         assert predictions.empty and ranking.empty and probabilities.empty
         ready = pd.concat([make_snapshot(1, 30), make_snapshot(2, needed_days)], ignore_index=True)
-        predictions, ranking, _ = estimator.estimate(ready, 30.0, None)
+        predictions, ranking, _ = run_estimate(estimator, ready, 30.0, None)
         assert sorted(predictions['team_id']) == [1, 2] and len(ranking) == 2

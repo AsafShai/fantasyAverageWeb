@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 import pytest_asyncio
 import pandas as pd
+import polars as pl
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.team_service import TeamService
 from app.models import Team, TeamDetail, TeamPlayers, Player, ShotChartStats, AverageStats, RankingStats, PlayerStats, StatTimePeriod
@@ -29,7 +30,7 @@ def team_service():
         service.data_provider.get_live_state = AsyncMock(return_value=None)  # flag off
         service.data_provider.get_data_date = MagicMock(return_value=None)
         service.data_provider.db_service.aggregate_player_games = AsyncMock(
-            return_value=(pd.DataFrame(), None, None)
+            return_value=(pl.DataFrame(), None, None)
         )
         service.response_builder = mock_response_builder.return_value
         return service
@@ -40,7 +41,7 @@ def team_service():
 @pytest.fixture
 def team_service_players_df():
     """Sample players DataFrame specific to team service tests - 5 players with different structure"""
-    return pd.DataFrame({
+    return pl.DataFrame({
         'Name': ['Player A', 'Player B', 'Player C', 'Player D', 'Player E'],
         'team_id': [1, 1, 2, 2, 3],
         'Pro Team': ['LAL', 'LAL', 'GSW', 'GSW', 'BOS'],
@@ -111,7 +112,7 @@ class TestTeamService:
         team_service.data_provider.get_players_df.return_value = team_service_players_df
         team_service.data_provider.get_slot_usage.return_value = {}
         team_service.data_provider.get_lineup_slots.return_value = {}
-        agg_df = pd.DataFrame([{
+        agg_df = pl.DataFrame([{
             'player_id': 1, 'player_name': 'Player A', 'gp': 2,
             'pts': 50.0, 'reb': 10.0, 'ast': 6.0, 'stl': 2.0, 'blk': 1.0,
             'fgm': 18.0, 'fga': 36.0, 'ftm': 8.0, 'fta': 10.0,
@@ -133,7 +134,7 @@ class TestTeamService:
             team_id, time_period=StatTimePeriod.CUSTOM, start=date(2026, 1, 1), end=date(2026, 1, 10)
         )
 
-        row = captured['df'][captured['df']['Name'] == 'Player A'].iloc[0]
+        row = captured['df'].filter(pl.col('Name') == 'Player A').row(0, named=True)
         assert row['GP'] == 2
         assert row['PTS'] == 50.0
 
@@ -213,7 +214,7 @@ class TestTeamService:
     @pytest.mark.asyncio
     async def test_get_teams_list_empty_data(self, team_service):
         """Test get_teams_list with empty DataFrame"""
-        empty_df = pd.DataFrame({'team_id': [], 'team_name': []})
+        empty_df = pl.DataFrame({'team_id': [], 'team_name': []})
         team_service.data_provider.get_totals_df.return_value = empty_df
         
         with pytest.raises(ResourceNotFoundError, match="No teams found in the data"):
@@ -274,7 +275,7 @@ class TestTeamServiceResponseBuilding:
             service.data_provider.get_lineup_slots.return_value = {}
             service.data_provider.get_data_date = MagicMock(return_value=None)
             service.data_provider.db_service.aggregate_player_games = AsyncMock(
-                return_value=(pd.DataFrame(), None, None)
+                return_value=(pl.DataFrame(), None, None)
             )
             return service
     
@@ -311,7 +312,7 @@ class TestTeamServiceResponseBuilding:
     @pytest.mark.asyncio
     async def test_get_team_detail_sets_lineup_slot(self, response_building_team_service, team_service_players_df):
         """Each roster player carries the slot ESPN has them in."""
-        players_df = team_service_players_df.assign(player_id=[101, 102, 103, 104, 105])
+        players_df = team_service_players_df.with_columns(pl.Series('player_id', [101, 102, 103, 104, 105]))
         response_building_team_service.data_provider.get_players_df.return_value = players_df
         response_building_team_service.data_provider.get_lineup_slots.return_value = {101: 'PG', 105: 'BE'}
 
@@ -422,7 +423,7 @@ class TestDynamicCategoriesTeamDetail:
         service = TeamService()
         service.data_provider = DataProvider()
         service.data_provider.db_service = AsyncMock()
-        service.data_provider.db_service.aggregate_player_games = AsyncMock(return_value=(pd.DataFrame(), None, None))
+        service.data_provider.db_service.aggregate_player_games = AsyncMock(return_value=(pl.DataFrame(), None, None))
 
         resp = MagicMock()
         resp.status_code = 200

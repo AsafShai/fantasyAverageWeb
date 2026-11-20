@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import polars as pl
 from unittest.mock import patch, AsyncMock
 from app.services.draft_report_service import DraftReportService
 from app.exceptions import ResourceNotFoundError
@@ -15,7 +16,7 @@ def draft_report_service():
 
 @pytest.fixture
 def sample_totals_df():
-    return pd.DataFrame({'team_id': [1, 2], 'team_name': ['Team Alpha', 'Team Beta']})
+    return pl.DataFrame({'team_id': [1, 2], 'team_name': ['Team Alpha', 'Team Beta']})
 
 
 class TestDraftReportService:

@@ -1,4 +1,5 @@
-"""Tests for the surprise scoring (synthetic frames, synthetic calibration)."""
+"""Tests for the surprise scoring math (the pandas original, research/surprise_pandas.py;
+serving/surprise.py is held to it bit for bit by serving/test_surprise_parity.py)."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from model_stats_inference.serving import surprise
+from model_stats_inference.research import surprise_pandas as surprise
 
 
 def _history(pid: int, n: int, pts: float, season: str = "2025-26", seed: int = 0) -> pd.DataFrame:

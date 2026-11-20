@@ -4,6 +4,8 @@ from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.config import settings
@@ -26,7 +28,7 @@ from app.services.trend_service import (
 
 
 def _empty_players_df() -> pd.DataFrame:
-    return pd.DataFrame({'Name': [], 'Pro Team': [], 'Positions': [], 'fantasy_team_name': []})
+    return pl.DataFrame({'Name': [], 'Pro Team': [], 'Positions': [], 'fantasy_team_name': []})
 
 
 def _current_row(player_id, player_name, gp, fg3m=0, fg3a=0, ftm=0, fta=0, fgm=0, fga=0):
@@ -39,14 +41,14 @@ def _current_row(player_id, player_name, gp, fg3m=0, fg3a=0, ftm=0, fta=0, fgm=0
 
 
 def _players_df(rows):
-    return pd.DataFrame(rows)
+    return pl.DataFrame(rows)
 
 
 def test_qualifying_stat_computes_dev_and_drift():
     # Cold 3P%: current 33.1% on 8.4 att/g (420 attempts over 50 games),
     # baseline 41.2% on heavy volume — large volume, large dev, should qualify.
-    current = pd.DataFrame([_current_row(1, "Klay Thompson", 50, fg3m=139, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 100, fg3m=350, fg3a=850)])
+    current = pl.DataFrame([_current_row(1, "Klay Thompson", 50, fg3m=139, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(1, "Klay Thompson", 100, fg3m=350, fg3a=850)])
     players_df = _players_df([{
         "Name": "Klay Thompson", "Pro Team": "DAL", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -74,8 +76,8 @@ def test_qualifying_stat_computes_dev_and_drift():
 
 def test_volume_gate_excludes_low_current_attempts():
     # Only 20 current 3PA (< 40 gate) despite a real baseline — excluded.
-    current = pd.DataFrame([_current_row(1, "Player One", 50, fg3m=5, fg3a=20)])
-    baseline = pd.DataFrame([_current_row(1, "Player One", 100, fg3m=300, fg3a=800)])
+    current = pl.DataFrame([_current_row(1, "Player One", 50, fg3m=5, fg3a=20)])
+    baseline = pl.DataFrame([_current_row(1, "Player One", 100, fg3m=300, fg3a=800)])
     players_df = _players_df([{
         "Name": "Player One", "Pro Team": "LAL", "Positions": "PG",
         "status": "ONTEAM", "fantasy_team_name": "Team Rocket",
@@ -88,8 +90,8 @@ def test_volume_gate_excludes_low_current_attempts():
 
 def test_volume_gate_excludes_low_baseline_attempts():
     # Heavy current volume but thin baseline (<150 3PA) — excluded, baseline unreliable.
-    current = pd.DataFrame([_current_row(1, "Player Two", 50, fg3m=140, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(1, "Player Two", 20, fg3m=30, fg3a=100)])
+    current = pl.DataFrame([_current_row(1, "Player Two", 50, fg3m=140, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(1, "Player Two", 20, fg3m=30, fg3a=100)])
     players_df = _players_df([{
         "Name": "Player Two", "Pro Team": "BOS", "Positions": "SF",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -102,8 +104,8 @@ def test_volume_gate_excludes_low_baseline_attempts():
 
 def test_drift_threshold_excludes_big_pp_swing_on_low_volume():
     # -14pp FT% dev, but only ~2.1 FTA/g -> drift_score well under 0.35 -> excluded.
-    current = pd.DataFrame([_current_row(1, "Low Volume FT", 50, ftm=82, fta=105)])
-    baseline = pd.DataFrame([_current_row(1, "Low Volume FT", 100, ftm=350, fta=380)])
+    current = pl.DataFrame([_current_row(1, "Low Volume FT", 50, ftm=82, fta=105)])
+    baseline = pl.DataFrame([_current_row(1, "Low Volume FT", 100, ftm=350, fta=380)])
     players_df = _players_df([{
         "Name": "Low Volume FT", "Pro Team": "DAL", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -120,8 +122,8 @@ def test_drift_threshold_includes_modest_pp_swing_on_high_volume():
     fga_per_g = 14.2
     gp = 50
     fga = fga_per_g * gp
-    current = pd.DataFrame([_current_row(1, "High Volume FG", gp, fgm=fga * 0.548, fga=fga)])
-    baseline = pd.DataFrame([_current_row(1, "High Volume FG", 100, fgm=580 * 0.58, fga=1000)])
+    current = pl.DataFrame([_current_row(1, "High Volume FG", gp, fgm=fga * 0.548, fga=fga)])
+    baseline = pl.DataFrame([_current_row(1, "High Volume FG", 100, fgm=580 * 0.58, fga=1000)])
     players_df = _players_df([{
         "Name": "High Volume FG", "Pro Team": "CHI", "Positions": "C",
         "status": "ONTEAM", "fantasy_team_name": "Hoop Dreams",
@@ -136,10 +138,10 @@ def test_drift_threshold_includes_modest_pp_swing_on_high_volume():
 def test_multi_stat_player_grouped_and_sorted_by_abs_dev_desc():
     # Two independently qualifying stats for the same player: 3P% has the
     # bigger |dev| (~8.1pp) than FG% (~3.2pp) -> 3P% must sort first.
-    current = pd.DataFrame([_current_row(
+    current = pl.DataFrame([_current_row(
         1, "Two Stat Player", 50, fg3m=139, fg3a=420, fgm=389.08, fga=710,
     )])
-    baseline = pd.DataFrame([_current_row(
+    baseline = pl.DataFrame([_current_row(
         1, "Two Stat Player", 100, fg3m=350, fg3a=850, fgm=580, fga=1000,
     )])
     players_df = _players_df([{
@@ -156,8 +158,8 @@ def test_multi_stat_player_grouped_and_sorted_by_abs_dev_desc():
 
 
 def test_player_missing_from_baseline_is_excluded():
-    current = pd.DataFrame([_current_row(1, "Rookie Player", 50, fg3m=139, fg3a=420)])
-    baseline = pd.DataFrame(columns=[
+    current = pl.DataFrame([_current_row(1, "Rookie Player", 50, fg3m=139, fg3a=420)])
+    baseline = pl.DataFrame(schema=[
         "player_id", "player_name", "gp", "fg3m", "fg3a", "fg3_pct",
         "ftm", "fta", "ft_pct", "fgm", "fga", "fg_pct",
     ])
@@ -172,8 +174,8 @@ def test_player_missing_from_baseline_is_excluded():
 
 
 def test_player_without_espn_match_is_skipped():
-    current = pd.DataFrame([_current_row(1, "Unknown To ESPN", 50, fg3m=139, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(1, "Unknown To ESPN", 100, fg3m=350, fg3a=850)])
+    current = pl.DataFrame([_current_row(1, "Unknown To ESPN", 50, fg3m=139, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(1, "Unknown To ESPN", 100, fg3m=350, fg3a=850)])
     players_df = _players_df([{
         "Name": "Someone Else Entirely", "Pro Team": "MIA", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -185,8 +187,8 @@ def test_player_without_espn_match_is_skipped():
 
 
 def test_fantasy_status_uses_team_name_when_rostered():
-    current = pd.DataFrame([_current_row(1, "Rostered Player", 50, fg3m=139, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(1, "Rostered Player", 100, fg3m=350, fg3a=850)])
+    current = pl.DataFrame([_current_row(1, "Rostered Player", 50, fg3m=139, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(1, "Rostered Player", 100, fg3m=350, fg3a=850)])
     players_df = _players_df([{
         "Name": "Rostered Player", "Pro Team": "NYK", "Positions": "SF",
         "status": "ONTEAM", "fantasy_team_name": "Splash Zone",
@@ -198,8 +200,8 @@ def test_fantasy_status_uses_team_name_when_rostered():
 
 
 def test_missing_games_last_15d_defaults_to_zero():
-    current = pd.DataFrame([_current_row(1, "No Recency Data", 50, fg3m=139, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(1, "No Recency Data", 100, fg3m=350, fg3a=850)])
+    current = pl.DataFrame([_current_row(1, "No Recency Data", 50, fg3m=139, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(1, "No Recency Data", 100, fg3m=350, fg3a=850)])
     players_df = _players_df([{
         "Name": "No Recency Data", "Pro Team": "PHX", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -217,8 +219,8 @@ def service():
 
 @pytest.mark.asyncio
 async def test_get_shooting_regression_wires_db_calls_and_returns_response(service):
-    empty_df = pd.DataFrame()
-    players_df = pd.DataFrame([{
+    empty_df = pl.DataFrame()
+    players_df = pl.DataFrame([{
         "Name": "Klay Thompson", "Pro Team": "DAL", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -243,7 +245,7 @@ async def test_get_shooting_regression_wires_db_calls_and_returns_response(servi
 
 @pytest.mark.asyncio
 async def test_get_shooting_regression_uses_cache_within_ttl(service):
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Klay Thompson", "Pro Team": "DAL", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -251,7 +253,7 @@ async def test_get_shooting_regression_uses_cache_within_ttl(service):
     with patch.object(service, "_db") as mock_db, \
          patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
         mock_anchor.return_value = date(2026, 6, 1)
-        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pd.DataFrame())
+        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pl.DataFrame())
         mock_db.get_games_since = AsyncMock(return_value={})
 
         await service.get_shooting_regression(players_df)
@@ -262,7 +264,7 @@ async def test_get_shooting_regression_uses_cache_within_ttl(service):
 
 @pytest.mark.asyncio
 async def test_get_shooting_regression_recomputes_after_ttl_expires(service):
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Klay Thompson", "Pro Team": "DAL", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -270,7 +272,7 @@ async def test_get_shooting_regression_recomputes_after_ttl_expires(service):
     with patch.object(service, "_db") as mock_db, \
          patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
         mock_anchor.return_value = date(2026, 6, 1)
-        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pd.DataFrame())
+        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pl.DataFrame())
         mock_db.get_games_since = AsyncMock(return_value={})
 
         await service.get_shooting_regression(players_df)
@@ -292,9 +294,9 @@ def _window_row(player_id, window_gp, window_avg_min):
 
 
 def test_minutes_qualifying_player_computes_mpg_and_delta():
-    season_df = pd.DataFrame([_season_row(1, "Ayo Dosunmu", 48, 48 * 24.1)])
-    window_df = pd.DataFrame([_window_row(1, 5, 31.8)])
-    players_df = pd.DataFrame([{
+    season_df = pl.DataFrame([_season_row(1, "Ayo Dosunmu", 48, 48 * 24.1)])
+    window_df = pl.DataFrame([_window_row(1, 5, 31.8)])
+    players_df = pl.DataFrame([{
         "Name": "Ayo Dosunmu", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -315,9 +317,9 @@ def test_minutes_qualifying_player_computes_mpg_and_delta():
 
 
 def test_minutes_excludes_below_season_gp_gate():
-    season_df = pd.DataFrame([_season_row(1, "Rookie", 8, 8 * 20.0)])  # < 10 gate
-    window_df = pd.DataFrame([_window_row(1, 5, 25.0)])
-    players_df = pd.DataFrame([{
+    season_df = pl.DataFrame([_season_row(1, "Rookie", 8, 8 * 20.0)])  # < 10 gate
+    window_df = pl.DataFrame([_window_row(1, 5, 25.0)])
+    players_df = pl.DataFrame([{
         "Name": "Rookie", "Pro Team": "SAC", "Positions": "SF",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -328,9 +330,9 @@ def test_minutes_excludes_below_season_gp_gate():
 
 
 def test_minutes_excludes_below_window_gp_gate():
-    season_df = pd.DataFrame([_season_row(1, "Just Back", 40, 40 * 20.0)])
-    window_df = pd.DataFrame([_window_row(1, 1, 25.0)])  # < 2 gate
-    players_df = pd.DataFrame([{
+    season_df = pl.DataFrame([_season_row(1, "Just Back", 40, 40 * 20.0)])
+    window_df = pl.DataFrame([_window_row(1, 1, 25.0)])  # < 2 gate
+    players_df = pl.DataFrame([{
         "Name": "Just Back", "Pro Team": "SAC", "Positions": "SF",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -341,9 +343,9 @@ def test_minutes_excludes_below_window_gp_gate():
 
 
 def test_minutes_low_sample_badge_when_window_partial():
-    season_df = pd.DataFrame([_season_row(1, "Partial Window", 40, 40 * 20.0)])
-    window_df = pd.DataFrame([_window_row(1, 2, 25.0)])  # eligible (>=2) but partial (<5)
-    players_df = pd.DataFrame([{
+    season_df = pl.DataFrame([_season_row(1, "Partial Window", 40, 40 * 20.0)])
+    window_df = pl.DataFrame([_window_row(1, 2, 25.0)])  # eligible (>=2) but partial (<5)
+    players_df = pl.DataFrame([{
         "Name": "Partial Window", "Pro Team": "SAC", "Positions": "SF",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -354,9 +356,9 @@ def test_minutes_low_sample_badge_when_window_partial():
 
 
 def test_minutes_player_without_window_row_is_skipped():
-    season_df = pd.DataFrame([_season_row(1, "No Window Data", 40, 40 * 20.0)])
-    window_df = pd.DataFrame(columns=["player_id", "gp", "min"])
-    players_df = pd.DataFrame([{
+    season_df = pl.DataFrame([_season_row(1, "No Window Data", 40, 40 * 20.0)])
+    window_df = pl.DataFrame(schema=["player_id", "gp", "min"])
+    players_df = pl.DataFrame([{
         "Name": "No Window Data", "Pro Team": "SAC", "Positions": "SF",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -367,9 +369,9 @@ def test_minutes_player_without_window_row_is_skipped():
 
 
 def test_minutes_player_without_espn_match_is_skipped():
-    season_df = pd.DataFrame([_season_row(1, "Unknown To ESPN", 40, 40 * 20.0)])
-    window_df = pd.DataFrame([_window_row(1, 5, 25.0)])
-    players_df = pd.DataFrame([{
+    season_df = pl.DataFrame([_season_row(1, "Unknown To ESPN", 40, 40 * 20.0)])
+    window_df = pl.DataFrame([_window_row(1, 5, 25.0)])
+    players_df = pl.DataFrame([{
         "Name": "Someone Else", "Pro Team": "SAC", "Positions": "SF",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -380,9 +382,9 @@ def test_minutes_player_without_espn_match_is_skipped():
 
 
 def test_minutes_fantasy_status_uses_team_name_when_rostered():
-    season_df = pd.DataFrame([_season_row(1, "Rostered Player", 40, 40 * 20.0)])
-    window_df = pd.DataFrame([_window_row(1, 5, 25.0)])
-    players_df = pd.DataFrame([{
+    season_df = pl.DataFrame([_season_row(1, "Rostered Player", 40, 40 * 20.0)])
+    window_df = pl.DataFrame([_window_row(1, 5, 25.0)])
+    players_df = pl.DataFrame([{
         "Name": "Rostered Player", "Pro Team": "NYK", "Positions": "SF",
         "status": "ONTEAM", "fantasy_team_name": "Splash Zone",
     }])
@@ -393,15 +395,15 @@ def test_minutes_fantasy_status_uses_team_name_when_rostered():
 
 
 def test_minutes_sorted_by_abs_delta_desc():
-    season_df = pd.DataFrame([
+    season_df = pl.DataFrame([
         _season_row(1, "Small Mover", 40, 40 * 20.0),
         _season_row(2, "Big Mover", 40, 40 * 20.0),
     ])
-    window_df = pd.DataFrame([
+    window_df = pl.DataFrame([
         _window_row(1, 5, 21.0),  # delta +1
         _window_row(2, 5, 30.0),  # delta +10
     ])
-    players_df = pd.DataFrame([
+    players_df = pl.DataFrame([
         {"Name": "Small Mover", "Pro Team": "SAC", "Positions": "SF", "status": "FREEAGENT", "fantasy_team_name": None},
         {"Name": "Big Mover", "Pro Team": "SAC", "Positions": "SF", "status": "FREEAGENT", "fantasy_team_name": None},
     ])
@@ -413,7 +415,7 @@ def test_minutes_sorted_by_abs_delta_desc():
 
 @pytest.mark.asyncio
 async def test_get_minutes_movers_wires_db_calls_and_returns_response(service):
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Ayo Dosunmu", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -421,7 +423,7 @@ async def test_get_minutes_movers_wires_db_calls_and_returns_response(service):
     with patch.object(service, "_db") as mock_db, \
          patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
         mock_anchor.return_value = date(2026, 6, 1)
-        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pd.DataFrame())
+        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pl.DataFrame())
         mock_db.get_games_since = AsyncMock(return_value={})
 
         response = await service.get_minutes_movers(players_df)
@@ -439,7 +441,7 @@ async def test_get_minutes_movers_wires_db_calls_and_returns_response(service):
 
 @pytest.mark.asyncio
 async def test_get_minutes_movers_uses_cache_within_ttl(service):
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Ayo Dosunmu", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -447,7 +449,7 @@ async def test_get_minutes_movers_uses_cache_within_ttl(service):
     with patch.object(service, "_db") as mock_db, \
          patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
         mock_anchor.return_value = date(2026, 6, 1)
-        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pd.DataFrame())
+        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pl.DataFrame())
         mock_db.get_games_since = AsyncMock(return_value={})
 
         await service.get_minutes_movers(players_df)
@@ -495,7 +497,7 @@ def _usage_games_df(player_id, player_name, older_five, recent_five):
         _usage_row(player_id, player_name, base + timedelta(days=20 + i), fga, min_)
         for i, (fga, min_) in enumerate(recent_five)
     ]
-    return pd.DataFrame(rows)
+    return pl.DataFrame(rows)
 
 
 def test_usage_qualifying_player_computes_correct_averages():
@@ -504,7 +506,7 @@ def test_usage_qualifying_player_computes_correct_averages():
         older_five=[(10, 30)] * 5,   # usg = 48*10/30 = 16.0, min=30
         recent_five=[(15, 32)] * 5,  # usg = 48*15/32 = 22.5, min=32
     )
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Ayo Dosunmu", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -529,7 +531,7 @@ def test_usage_excludes_below_season_gp_gate():
         1, "Too Few Games",
         older_five=[(10, 30)] * 3, recent_five=[(15, 32)] * 3,
     )  # only 6 total games, < 10 gate
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Too Few Games", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -541,7 +543,7 @@ def test_usage_excludes_below_season_gp_gate():
 
 def test_usage_skips_player_without_espn_match():
     games_df = _usage_games_df(1, "Unknown To ESPN", [(10, 30)] * 5, [(15, 32)] * 5)
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Someone Else", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -553,7 +555,7 @@ def test_usage_skips_player_without_espn_match():
 
 def test_usage_fantasy_status_uses_team_name_when_rostered():
     games_df = _usage_games_df(1, "Rostered Player", [(10, 30)] * 5, [(15, 32)] * 5)
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Rostered Player", "Pro Team": "NYK", "Positions": "SF",
         "status": "ONTEAM", "fantasy_team_name": "Splash Zone",
     }])
@@ -565,7 +567,7 @@ def test_usage_fantasy_status_uses_team_name_when_rostered():
 
 def test_usage_missing_games_last_15d_defaults_to_zero():
     games_df = _usage_games_df(1, "No Recency Data", [(10, 30)] * 5, [(15, 32)] * 5)
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "No Recency Data", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -578,8 +580,8 @@ def test_usage_missing_games_last_15d_defaults_to_zero():
 def test_usage_sorted_by_abs_delta_usg_desc():
     small_mover = _usage_games_df(1, "Small Mover", [(10, 30)] * 5, [(10, 30)] * 5)  # delta_usg = 0
     big_mover = _usage_games_df(2, "Big Mover", [(10, 30)] * 5, [(20, 30)] * 5)  # big delta_usg
-    games_df = pd.concat([small_mover, big_mover], ignore_index=True)
-    players_df = pd.DataFrame([
+    games_df = pl.concat([small_mover, big_mover], how="diagonal_relaxed")
+    players_df = pl.DataFrame([
         {"Name": "Small Mover", "Pro Team": "CHI", "Positions": "PG", "status": "FREEAGENT", "fantasy_team_name": None},
         {"Name": "Big Mover", "Pro Team": "CHI", "Positions": "PG", "status": "FREEAGENT", "fantasy_team_name": None},
     ])
@@ -590,17 +592,17 @@ def test_usage_sorted_by_abs_delta_usg_desc():
 
 
 def test_usage_empty_games_df_returns_empty_list():
-    empty = pd.DataFrame(columns=[
+    empty = pl.DataFrame(schema=[
         "player_id", "player_name", "game_id", "game_date",
         "p_min", "p_fga", "p_fta", "p_tov", "t_fga", "t_fta", "t_tov", "t_min",
     ])
-    items = compute_usage_role(empty, {}, pd.DataFrame(), date(2026, 1, 16))
+    items = compute_usage_role(empty, {}, pl.DataFrame(), date(2026, 1, 16))
     assert items == []
 
 
 @pytest.mark.asyncio
 async def test_get_usage_role_wires_db_calls_and_returns_response(service):
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Ayo Dosunmu", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -608,7 +610,7 @@ async def test_get_usage_role_wires_db_calls_and_returns_response(service):
     with patch.object(service, "_db") as mock_db, \
          patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
         mock_anchor.return_value = date(2026, 6, 1)
-        mock_db.get_usage_components = AsyncMock(return_value=pd.DataFrame())
+        mock_db.get_usage_components = AsyncMock(return_value=pl.DataFrame())
         mock_db.get_games_since = AsyncMock(return_value={})
 
         response = await service.get_usage_role(players_df)
@@ -620,7 +622,7 @@ async def test_get_usage_role_wires_db_calls_and_returns_response(service):
 
 @pytest.mark.asyncio
 async def test_get_usage_role_uses_cache_within_ttl(service):
-    players_df = pd.DataFrame([{
+    players_df = pl.DataFrame([{
         "Name": "Ayo Dosunmu", "Pro Team": "CHI", "Positions": "PG",
         "status": "FREEAGENT", "fantasy_team_name": None,
     }])
@@ -628,7 +630,7 @@ async def test_get_usage_role_uses_cache_within_ttl(service):
     with patch.object(service, "_db") as mock_db, \
          patch("app.services.trend_service.get_season_anchor_date", new_callable=AsyncMock) as mock_anchor:
         mock_anchor.return_value = date(2026, 6, 1)
-        mock_db.get_usage_components = AsyncMock(return_value=pd.DataFrame())
+        mock_db.get_usage_components = AsyncMock(return_value=pl.DataFrame())
         mock_db.get_games_since = AsyncMock(return_value={})
 
         await service.get_usage_role(players_df)
@@ -639,8 +641,8 @@ async def test_get_usage_role_uses_cache_within_ttl(service):
 
 def _one_season_baseline_case():
     """~90 baseline 3PA: passes the 1-season gate (75), fails the 2-season one (150)."""
-    current = pd.DataFrame([_current_row(1, "Thin Baseline", 50, fg3m=120, fg3a=400)])
-    baseline = pd.DataFrame([_current_row(1, "Thin Baseline", 30, fg3m=36, fg3a=90)])
+    current = pl.DataFrame([_current_row(1, "Thin Baseline", 50, fg3m=120, fg3a=400)])
+    baseline = pl.DataFrame([_current_row(1, "Thin Baseline", 30, fg3m=36, fg3a=90)])
     players_df = _players_df([{
         "Name": "Thin Baseline", "Pro Team": "PHX", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -665,8 +667,8 @@ def test_prior_season_strings_length_follows_baseline_seasons():
 
 
 def test_regression_items_carry_player_id():
-    current = pd.DataFrame([_current_row(77, "Id Carrier", 50, fg3m=140, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(77, "Id Carrier", 100, fg3m=320, fg3a=800)])
+    current = pl.DataFrame([_current_row(77, "Id Carrier", 50, fg3m=140, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(77, "Id Carrier", 100, fg3m=320, fg3a=800)])
     players_df = _players_df([{
         "Name": "Id Carrier", "Pro Team": "MIA", "Positions": "SF",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -678,8 +680,8 @@ def test_regression_items_carry_player_id():
 
 
 def test_rostered_players_are_no_longer_filtered_out():
-    current = pd.DataFrame([_current_row(1, "Rostered Guy", 50, fg3m=140, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(1, "Rostered Guy", 100, fg3m=320, fg3a=800)])
+    current = pl.DataFrame([_current_row(1, "Rostered Guy", 50, fg3m=140, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(1, "Rostered Guy", 100, fg3m=320, fg3a=800)])
     players_df = _players_df([{
         "Name": "Rostered Guy", "Pro Team": "BOS", "Positions": "SF",
         "status": "ONTEAM", "fantasy_team_name": "Team Rocket",
@@ -701,7 +703,7 @@ def _game_log_row(game_date, p_min, fgm, fga, ftm, fta, fg3m, fg3a, tov=2.0):
 
 
 def test_build_game_log_aggregates_season_percentages_from_totals():
-    games_df = pd.DataFrame([
+    games_df = pl.DataFrame([
         _game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5),
         _game_log_row(date(2026, 6, 3), 26.0, 5, 12, 4, 6, 1, 3),
     ])
@@ -720,7 +722,7 @@ def test_build_game_log_aggregates_season_percentages_from_totals():
 
 
 def test_build_game_log_usg_matches_usage_role_formula():
-    games_df = pd.DataFrame([_game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5)])
+    games_df = pl.DataFrame([_game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5)])
 
     log = build_game_log(games_df, 42, "2025-26", 15, date(2026, 5, 20), {}, 2)
 
@@ -730,7 +732,7 @@ def test_build_game_log_usg_matches_usage_role_formula():
 
 
 def test_build_game_log_preserves_game_order_and_shot_counts():
-    games_df = pd.DataFrame([
+    games_df = pl.DataFrame([
         _game_log_row(date(2026, 6, 1), 30.0, 7, 14, 2, 2, 2, 5),
         _game_log_row(date(2026, 6, 3), 26.0, 5, 12, 4, 6, 1, 3),
     ])
@@ -742,8 +744,8 @@ def test_build_game_log_preserves_game_order_and_shot_counts():
 
 
 def _regression_case():
-    current = pd.DataFrame([_current_row(9, "Window Guy", 50, fg3m=140, fg3a=420)])
-    baseline = pd.DataFrame([_current_row(9, "Window Guy", 100, fg3m=320, fg3a=800)])
+    current = pl.DataFrame([_current_row(9, "Window Guy", 50, fg3m=140, fg3a=420)])
+    baseline = pl.DataFrame([_current_row(9, "Window Guy", 100, fg3m=320, fg3a=800)])
     players_df = _players_df([{
         "Name": "Window Guy", "Pro Team": "GSW", "Positions": "SG",
         "status": "FREEAGENT", "fantasy_team_name": None,
@@ -753,7 +755,7 @@ def _regression_case():
 
 def test_window_pct_reported_from_window_frame():
     current, baseline, players_df = _regression_case()
-    window = pd.DataFrame([_current_row(9, "Window Guy", 6, fg3m=15, fg3a=30)])
+    window = pl.DataFrame([_current_row(9, "Window Guy", 6, fg3m=15, fg3a=30)])
 
     groups = compute_regression_groups(current, baseline, {9: 6}, players_df, 2, window)
     stat = groups[0].stats[0]
@@ -765,7 +767,7 @@ def test_window_pct_reported_from_window_frame():
 
 def test_window_pct_is_none_when_window_has_no_attempts():
     current, baseline, players_df = _regression_case()
-    window = pd.DataFrame([_current_row(9, "Window Guy", 2, fg3m=0, fg3a=0)])
+    window = pl.DataFrame([_current_row(9, "Window Guy", 2, fg3m=0, fg3a=0)])
 
     groups = compute_regression_groups(current, baseline, {9: 2}, players_df, 2, window)
     stat = groups[0].stats[0]
@@ -776,7 +778,7 @@ def test_window_pct_is_none_when_window_has_no_attempts():
 
 def test_window_pct_is_none_when_player_absent_from_window():
     current, baseline, players_df = _regression_case()
-    window = pd.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
+    window = pl.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
 
     groups = compute_regression_groups(current, baseline, {9: 0}, players_df, 2, window)
 
@@ -802,9 +804,9 @@ def _form_players_df(name="Klay Thompson"):
 
 def test_form_baseline_excludes_the_window():
     # season 100/300, window 30/60 -> pre is 70/240; prior adds 140/400.
-    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
-    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
-    window = pd.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
+    current = pl.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pl.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pl.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
 
     groups = compute_regression_groups(
         current, baseline, {1: 6}, _form_players_df(), 2, window, 'form'
@@ -821,15 +823,15 @@ def test_form_baseline_excludes_the_window():
 
 
 def test_form_mode_ranks_rookie_that_season_mode_drops():
-    current = pd.DataFrame([_current_row(7, "Rookie Guy", 20, fg3m=60, fg3a=200)])
-    window = pd.DataFrame([_current_row(7, "Rookie Guy", 5, fg3m=25, fg3a=50)])
+    current = pl.DataFrame([_current_row(7, "Rookie Guy", 20, fg3m=60, fg3a=200)])
+    window = pl.DataFrame([_current_row(7, "Rookie Guy", 5, fg3m=25, fg3a=50)])
     players_df = _form_players_df("Rookie Guy")
 
     form_groups = compute_regression_groups(
-        current, pd.DataFrame(), {7: 5}, players_df, 2, window, 'form'
+        current, pl.DataFrame(), {7: 5}, players_df, 2, window, 'form'
     )
     season_groups = compute_regression_groups(
-        current, pd.DataFrame(), {7: 5}, players_df, 2, window, 'season'
+        current, pl.DataFrame(), {7: 5}, players_df, 2, window, 'season'
     )
 
     assert [g.player_name for g in form_groups] == ["Rookie Guy"]
@@ -839,13 +841,13 @@ def test_form_mode_ranks_rookie_that_season_mode_drops():
 
 
 def test_form_z_gate_rejects_thin_window_and_keeps_thick_one():
-    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=200, fg3a=500)])
+    baseline = pl.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=200, fg3a=500)])
     players_df = _form_players_df()
 
-    thin_current = pd.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
-    thin_window = pd.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
-    thick_current = pd.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
-    thick_window = pd.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
+    thin_current = pl.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
+    thin_window = pl.DataFrame([_current_row(1, "Klay Thompson", 3, fg3m=6, fg3a=12)])
+    thick_current = pl.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
+    thick_window = pl.DataFrame([_current_row(1, "Klay Thompson", 20, fg3m=45, fg3a=90)])
 
     thin = compute_regression_groups(
         thin_current, baseline, {1: 3}, players_df, 2, thin_window, 'form'
@@ -860,9 +862,9 @@ def test_form_z_gate_rejects_thin_window_and_keeps_thick_one():
 
 
 def test_form_mode_skips_players_with_no_window_games():
-    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
-    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
-    window = pd.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
+    current = pl.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pl.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pl.DataFrame([_current_row(999, "Someone Else", 5, fg3m=10, fg3a=20)])
 
     groups = compute_regression_groups(
         current, baseline, {1: 0}, _form_players_df(), 2, window, 'form'
@@ -873,7 +875,7 @@ def test_form_mode_skips_players_with_no_window_games():
 
 def test_season_mode_output_unchanged_when_mode_is_explicit():
     current, baseline, players_df = _regression_case()
-    window = pd.DataFrame([_current_row(9, "Klay Thompson", 5, fg3m=12, fg3a=30)])
+    window = pl.DataFrame([_current_row(9, "Klay Thompson", 5, fg3m=12, fg3a=30)])
 
     default_groups = compute_regression_groups(current, baseline, {9: 6}, players_df, 2, window)
     explicit_groups = compute_regression_groups(
@@ -887,15 +889,15 @@ def test_season_mode_output_unchanged_when_mode_is_explicit():
 def test_zero_baseline_seasons_judges_form_against_this_season_only():
     # prior seasons exist but must be ignored: baseline is 70/240 from the
     # pre-window games alone, not pooled with the 140/400 prior rows.
-    current = pd.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
-    baseline = pd.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
-    window = pd.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
+    current = pl.DataFrame([_current_row(1, "Klay Thompson", 30, fg3m=100, fg3a=300)])
+    baseline = pl.DataFrame([_current_row(1, "Klay Thompson", 60, fg3m=140, fg3a=400)])
+    window = pl.DataFrame([_current_row(1, "Klay Thompson", 6, fg3m=30, fg3a=60)])
 
     pooled = compute_regression_groups(
         current, baseline, {1: 6}, _form_players_df(), 2, window, 'form'
     )
     this_season = compute_regression_groups(
-        current, pd.DataFrame(), {1: 6}, _form_players_df(), 0, window, 'form'
+        current, pl.DataFrame(), {1: 6}, _form_players_df(), 0, window, 'form'
     )
 
     assert next(s for s in pooled[0].stats if s.stat == "3P%").baseline_pct == pytest.approx(210 / 640 * 100)
@@ -995,7 +997,7 @@ class TestHoistedInputs:
         async def fake_shooting(seasons, start=None, end=None):
             if start == settings.season_start:
                 season_calls.append((start, end))
-            return pd.DataFrame()
+            return pl.DataFrame()
 
         monkeypatch.setattr(svc._db, 'aggregate_shooting_by_player', fake_shooting)
 
@@ -1015,7 +1017,7 @@ class TestHoistedInputs:
 
         async def fake_usage(season, start, end):
             usage_calls.append((season, start, end))
-            return pd.DataFrame()
+            return pl.DataFrame()
 
         monkeypatch.setattr(svc._db, 'get_usage_components', fake_usage)
 
@@ -1042,7 +1044,7 @@ class TestAnchorInvalidation:
         async def fake_shooting(seasons, start=None, end=None):
             if start == settings.season_start:
                 season_calls.append(end)
-            return pd.DataFrame()
+            return pl.DataFrame()
 
         monkeypatch.setattr(svc._db, 'aggregate_shooting_by_player', fake_shooting)
 
@@ -1061,14 +1063,14 @@ class TestAnchorInvalidation:
 
         async def fake_shooting(seasons, start=None, end=None):
             fgm = 10 + (end.day if end else 0)
-            return pd.DataFrame({
+            return pl.DataFrame({
                 'fgm': [fgm], 'fga': [20],
                 'ftm': [5], 'fta': [10],
                 'fg3m': [3], 'fg3a': [9],
             })
 
         monkeypatch.setattr(svc._db, 'aggregate_shooting_by_player', fake_shooting)
-        monkeypatch.setattr(svc._db, 'get_usage_components', AsyncMock(return_value=pd.DataFrame()))
+        monkeypatch.setattr(svc._db, 'get_usage_components', AsyncMock(return_value=pl.DataFrame()))
 
         pct_1, _ = await svc._get_league_refs('2025-26', date(2026, 1, 1))
         pct_2, _ = await svc._get_league_refs('2025-26', date(2026, 1, 10))
@@ -1086,7 +1088,7 @@ class TestInFlightCoalescing:
             nonlocal call_count
             call_count += 1
             await asyncio.sleep(0.05)
-            return pd.DataFrame({'fgm': [1]})
+            return pl.DataFrame({'fgm': [1]})
 
         with patch.object(svc._db, 'aggregate_shooting_by_player', fake_shooting):
             results = await asyncio.gather(*[
@@ -1094,7 +1096,7 @@ class TestInFlightCoalescing:
             ])
 
         assert call_count == 1
-        assert all(r['fgm'].iloc[0] == 1 for r in results)
+        assert all(r['fgm'][0] == 1 for r in results)
 
     async def test_raising_computation_propagates_to_waiters_and_clears_slot(self):
         svc = TrendService()
@@ -1106,7 +1108,7 @@ class TestInFlightCoalescing:
             await asyncio.sleep(0.02)
             if call_count == 1:
                 raise RuntimeError('db exploded')
-            return pd.DataFrame({'fgm': [1]})
+            return pl.DataFrame({'fgm': [1]})
 
         with patch.object(svc._db, 'aggregate_shooting_by_player', flaky_shooting):
             results = await asyncio.gather(
@@ -1121,7 +1123,7 @@ class TestInFlightCoalescing:
             second = await svc._get_season_shooting('2025-26', date(2026, 1, 15))
 
         assert call_count == 2
-        assert second['fgm'].iloc[0] == 1
+        assert second['fgm'][0] == 1
 
 
 # --- Category Movers -------------------------------------------------------
@@ -1140,7 +1142,7 @@ def _cat_games_df(player_id, player_name, older, recent, min_old=30.0, min_new=3
     for i, pts in enumerate(recent):
         rows.append({"player_id": player_id, "player_name": player_name, "game_date": base + timedelta(days=19 + i),
                      "p_min": min_new, "pts": pts, **cols})
-    return pd.DataFrame(rows)
+    return pl.DataFrame(rows)
 
 
 _CAT_WINDOW_START = date(2026, 1, 19)
@@ -1204,7 +1206,7 @@ def test_category_skips_unmatched_and_uses_team_name():
 
 
 def test_category_empty_games_df_returns_empty_list():
-    assert compute_category_movers(pd.DataFrame(), {}, pd.DataFrame(), _CAT_WINDOW_START) == []
+    assert compute_category_movers(pl.DataFrame(), {}, pl.DataFrame(), _CAT_WINDOW_START) == []
 
 
 @pytest.mark.asyncio
@@ -1254,7 +1256,7 @@ async def test_trends_read_min_season_gp_from_settings(service, monkeypatch):
         mock_anchor.return_value = date(2026, 6, 1)
         mock_db.get_usage_components = AsyncMock(return_value=games)
         mock_db.get_games_since = AsyncMock(return_value={})
-        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pd.DataFrame())
+        mock_db.aggregate_shooting_by_player = AsyncMock(return_value=pl.DataFrame())
 
         cats = await service.get_category_movers(_cat_players(), 15)
         usage = await service.get_usage_role(_cat_players(), 15)

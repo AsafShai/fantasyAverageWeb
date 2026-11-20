@@ -290,17 +290,15 @@ class NbaPlayerService:
             logger.error("ESPN players fallback failed for %s: %s", espn_id, e)
             return _empty_response(espn_id)
 
-        if espn_df is None or espn_df.empty or "Name" not in espn_df.columns:
+        if espn_df is None or espn_df.is_empty() or "Name" not in espn_df.columns:
             return _empty_response(espn_id)
 
         key = resolve_join_key(bio.display_name)
-        espn_df = espn_df.copy()
-        espn_df["_join_key"] = espn_df["Name"].map(resolve_join_key)
-        matches = espn_df[espn_df["_join_key"] == key]
-        if matches.empty:
+        match = next((i for i, name in enumerate(espn_df["Name"].to_list()) if resolve_join_key(name) == key), None)
+        if match is None:
             return _empty_response(espn_id)
 
-        totals = _totals_from_espn_row(matches.iloc[0])
+        totals = _totals_from_espn_row(espn_df.row(match, named=True))
         return NbaPlayerStatsResponse(
             player_id=espn_id,
             totals=totals,

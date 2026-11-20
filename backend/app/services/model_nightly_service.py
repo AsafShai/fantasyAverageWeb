@@ -28,16 +28,16 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-import pandas as pd
+import polars as pl
 
 from app.config import settings
 from app.services.db_service import DBService
 from app.services.roster_stints.service import RosterStintsService
+from app.utils.frames import dicts_frame
 from app.utils.memory import log_memory, release_memory
 from model_stats_inference.research import config as rconfig
-from model_stats_inference.research import data as rdata
 from model_stats_inference.serving import config as sconfig
-from model_stats_inference.serving import nightly
+from model_stats_inference.serving import featurize, nightly
 from model_stats_inference.serving.eval_row import EvalRow
 from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
 from model_stats_inference.serving.inference import (
@@ -69,17 +69,21 @@ _FS_TEAM_COLS = [
 ]
 
 
-def _frame_to_tuples(df: pd.DataFrame, cols: list[str]) -> list[tuple]:
+def _is_missing(v) -> bool:
+    return v is None or (isinstance(v, float) and math.isnan(v))
+
+
+def _frame_to_tuples(df: pl.DataFrame, cols: list[str]) -> list[tuple]:
     out = []
-    for row in df[cols].itertuples(index=False):
+    for row in df.select(cols).iter_rows():
         vals = []
         for col, v in zip(cols, row):
             if col in ("PLAYER_ID", "TEAM_ID"):
                 vals.append(int(v))
             elif col == "GAME_DATE":
-                vals.append(pd.Timestamp(v).date())
+                vals.append(v if not isinstance(v, datetime) else v.date())
             elif col in ("GAME_ID", "SEASON", "PLAYER_NAME", "TEAM_NAME", "MATCHUP", "POSITION"):
-                vals.append("" if pd.isna(v) else str(v))
+                vals.append("" if _is_missing(v) else str(v))
             else:
                 vals.append(float(v))
         out.append(tuple(vals))
@@ -97,7 +101,7 @@ def _eval_to_tuple(ev: EvalRow, game_date: date) -> tuple:
 
 # --- feature-vector (de)serialization --------------------------------------
 
-def _features_dict(series: pd.Series, feature_cols: list[str]) -> dict[str, Optional[float]]:
+def _features_dict(row: dict, feature_cols: list[str]) -> dict[str, Optional[float]]:
     """One vector row's features as a dict (NaN -> None).
 
     Returned as a dict, not a JSON string: the pool's jsonb codec already runs
@@ -106,7 +110,7 @@ def _features_dict(series: pd.Series, feature_cols: list[str]) -> dict[str, Opti
     """
     out = {}
     for c in feature_cols:
-        v = series[c]
+        v = row[c]
         out[c] = None if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
     return out
 
@@ -120,55 +124,61 @@ def _serialize_vectors(
     changes the players who played); team rows always come whole."""
     pv = store.player_vectors
     if player_ids is not None:
-        pv = pv[pv["PLAYER_ID"].isin(player_ids)]
+        pv = pv.filter(pl.col("PLAYER_ID").is_in(player_ids))
     pfeat = [c for c in pv.columns if c not in _PLAYER_META]
     player_rows = []
-    for _, row in pv.iterrows():
+    for row in pv.iter_rows(named=True):
         games = int(row["games_count"])
         last = row["last_game_date"]
-        last = pd.Timestamp(last).date() if pd.notna(last) else None
+        last = (last.date() if isinstance(last, datetime) else last) if not _is_missing(last) else None
         player_rows.append((
             int(row["PLAYER_ID"]), str(row.get("PLAYER_NAME", "")), int(row["TEAM_ID"]),
             str(row.get("POSITION", "")), last, games,
             games >= sconfig.MIN_INFERENCE_GAMES, _features_dict(row, pfeat),
         ))
 
-    def team_rows(tv: pd.DataFrame) -> list[tuple]:
+    def team_rows(tv: pl.DataFrame) -> list[tuple]:
         feat = [c for c in tv.columns if c != "TEAM_ID"]
-        return [(int(row["TEAM_ID"]), _features_dict(row, feat)) for _, row in tv.iterrows()]
+        return [(int(row["TEAM_ID"]), _features_dict(row, feat)) for row in tv.iter_rows(named=True)]
 
     return player_rows, team_rows(store.team_allowed_vectors), team_rows(store.team_own_vectors)
 
 
-def _player_vectors_df(records: list[dict]) -> pd.DataFrame:
-    """DB rows -> player_vectors DataFrame (meta cols + expanded features, NaN restored)."""
+def _float_features(df: pl.DataFrame, feat_cols: list[str]) -> pl.DataFrame:
+    """Feature columns as float64 with NULL -> NaN (pandas astype(float))."""
+    return df.with_columns([pl.col(c).cast(pl.Float64).fill_null(float("nan")) for c in feat_cols])
+
+
+def _player_vectors_df(records: list[dict]) -> pl.DataFrame:
+    """DB rows -> player_vectors frame (meta cols + expanded features, NaN restored)."""
     rows = []
     for r in records:
         feats = r["features"] if isinstance(r["features"], dict) else json.loads(r["features"])
         rows.append({
             "PLAYER_ID": r["player_id"], "PLAYER_NAME": r["player_name"],
             "TEAM_ID": r["team_id"], "POSITION": r["position"],
-            "last_game_date": pd.Timestamp(r["last_game_date"]) if r["last_game_date"] else pd.NaT,
+            "last_game_date": r["last_game_date"] if r["last_game_date"] else None,
             "games_count": r["games_count"], **feats,
         })
-    df = pd.DataFrame(rows)
+    df = dicts_frame(rows)
+    df = df.with_columns(pl.col("last_game_date").cast(pl.Date))
     feat_cols = [c for c in df.columns if c not in _PLAYER_META]
-    df[feat_cols] = df[feat_cols].astype(float)  # None -> NaN
-    # Consolidate memory blocks: the per-column astype leaves one block per
-    # feature (~240), making every row lookup at predict time ~9ms instead of
-    # ~0.1ms — the whole batch-predict path pays for it.
-    return df.copy()
+    return _float_features(df, feat_cols)
 
 
-def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
+def _team_vectors_df(records: list[dict]) -> pl.DataFrame:
     rows = []
     for r in records:
         feats = r["features"] if isinstance(r["features"], dict) else json.loads(r["features"])
         rows.append({"TEAM_ID": r["team_id"], **feats})
-    df = pd.DataFrame(rows)
-    feat_cols = [c for c in df.columns if c != "TEAM_ID"]
-    df[feat_cols] = df[feat_cols].astype(float)
-    return df.copy()  # consolidate blocks (see _player_vectors_df)
+    df = dicts_frame(rows)
+    return _float_features(df, [c for c in df.columns if c != "TEAM_ID"])
+
+
+_EMPTY_PLAYER_VECTORS = {
+    "PLAYER_ID": pl.Int64, "PLAYER_NAME": pl.String, "TEAM_ID": pl.Int64,
+    "POSITION": pl.String, "last_game_date": pl.Date, "games_count": pl.Int64,
+}
 
 
 def _clear_night_read_caches() -> None:
@@ -352,13 +362,13 @@ class ModelNightlyService:
             vectors_as_of is not None and latest_fs is not None and vectors_as_of == latest_fs
         )
         if incremental:
-            night_ids = [int(p) for p in night.player_games["PLAYER_ID"].unique()]
+            night_ids = [int(p) for p in night.player_games["PLAYER_ID"].unique(maintain_order=True)]
             log_memory(f"nightly {game_date}: loading history of tonight's players", logger)
             players, team_games = await db.get_fs_rows_before_for_players(game_date, night_ids)
             # Only tonight's players' vectors: predictions read theirs, the fold-in
             # rewrites theirs; nobody else's row is touched.
             pv, tav, tov = await db.load_feature_vectors(player_ids=night_ids)
-            if not tav or not tov or team_games.empty:
+            if not tav or not tov or team_games.is_empty():
                 logger.error("Feature-store tables are empty - run --bootstrap first")
                 return "store_not_bootstrapped"
             logger.info(
@@ -383,7 +393,7 @@ class ModelNightlyService:
                 f"({len(players)} player rows, {len(team_games)} team rows)",
                 logger,
             )
-            if players.empty or team_games.empty:
+            if players.is_empty() or team_games.is_empty():
                 logger.error("Feature-store tables are empty - run --bootstrap first")
                 return "store_not_bootstrapped"
 
@@ -457,7 +467,7 @@ class ModelNightlyService:
         write (no raw rows — the store is not bootstrapped).
         """
         players, team_games = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
-        if players.empty or team_games.empty:
+        if players.is_empty() or team_games.is_empty():
             return None
         vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
         return await self._db.upsert_feature_vectors(*vectors)
@@ -551,17 +561,17 @@ class ModelNightlyService:
 
     @staticmethod
     def _process_sync(
-        players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch
-    ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
-        """Heavy pandas/sklearn work in a thread: build the pre-night store, score
+        players: pl.DataFrame, team_games: pl.DataFrame, night: nightly.NightFetch
+    ) -> tuple[list[EvalRow], pl.DataFrame, tuple[list, list, list]]:
+        """Heavy feature/model work in a thread: build the pre-night store, score
         the night (leakage-safe), then fold the night in to materialize post-night
         vectors."""
-        players = players.sort_values(["PLAYER_ID", "GAME_DATE"])
+        players = players.sort(["PLAYER_ID", "GAME_DATE"], maintain_order=True)
         log_memory("nightly: building feature store", logger)
         store = FeatureStore.build(
-            players.reset_index(drop=True),
-            rdata.build_team_allowed(team_games),
-            rdata.build_team_own(team_games),
+            players,
+            featurize.build_team_allowed(team_games),
+            featurize.build_team_own(team_games),
         )
         log_memory("nightly: built feature store; evaluating night", logger)
         inference = LiveInference(store)
@@ -572,15 +582,15 @@ class ModelNightlyService:
         # Sub-MIN_MINUTES rows are still persisted (storage keeps every played
         # minute) but are DNPs to the feature math — same gate as
         # get_fs_rows_before, so the fold-in matches tomorrow's full rebuild.
-        qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
+        qualifying = night_players.filter(pl.col("MIN") >= rconfig.MIN_MINUTES)
         store.update_with_nightly_results(qualifying, night.team_games)
         return evals, night_players, _serialize_vectors(store)
 
     @staticmethod
     def _process_sync_incremental(
         pv: list[dict], tav: list[dict], tov: list[dict],
-        players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch,
-    ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
+        players: pl.DataFrame, team_games: pl.DataFrame, night: nightly.NightFetch,
+    ) -> tuple[list[EvalRow], pl.DataFrame, tuple[list, list, list]]:
         """Same as ``_process_sync`` with the pre-night store loaded from the
         stored vectors (tonight's players only) instead of rebuilt: predictions
         read the stored vectors;
@@ -590,20 +600,20 @@ class ModelNightlyService:
         Only tonight's players' vectors are returned for the upsert."""
         log_memory("nightly: loading pre-night store from stored vectors", logger)
         store = FeatureStore.from_vectors(
-            _player_vectors_df(pv) if pv else pd.DataFrame(columns=_PLAYER_META[:6]),
+            _player_vectors_df(pv) if pv else pl.DataFrame(schema=_EMPTY_PLAYER_VECTORS),
             _team_vectors_df(tav), _team_vectors_df(tov),
         )
         # The raw rows the fold-in needs: tonight's players' history, all teams.
-        store.players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-        store.team_allowed = rdata.build_team_allowed(team_games)
-        store.team_own = rdata.build_team_own(team_games)
+        store.players = players.sort(["PLAYER_ID", "GAME_DATE"], maintain_order=True)
+        store.team_allowed = featurize.build_team_allowed(team_games)
+        store.team_own = featurize.build_team_own(team_games)
         inference = LiveInference(store)
         evals = nightly.evaluate_night(store, inference, night)
         log_memory("nightly: evaluated; folding night into store", logger)
         night_players = nightly.attach_positions(store, night.player_games)
-        qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
+        qualifying = night_players.filter(pl.col("MIN") >= rconfig.MIN_MINUTES)
         store.update_with_nightly_results(qualifying, night.team_games)
-        changed = [int(p) for p in qualifying["PLAYER_ID"].unique()]
+        changed = [int(p) for p in qualifying["PLAYER_ID"].unique(maintain_order=True)]
         return evals, night_players, _serialize_vectors(store, player_ids=changed)
 
 
@@ -649,7 +659,11 @@ class ModelNightlyService:
         last5_min = await self._db.get_last5_minutes()
         def _build() -> FeatureStore:
             pdf = _player_vectors_df(pv)
-            pdf = pdf.assign(MIN_LAST5_ALL=pdf["PLAYER_ID"].map(last5_min))
+            pdf = pdf.with_columns(pl.Series(
+                "MIN_LAST5_ALL",
+                [float(last5_min[p]) if p in last5_min else float("nan") for p in pdf["PLAYER_ID"].to_list()],
+                dtype=pl.Float64,
+            ))
             return FeatureStore.from_vectors(pdf, _team_vectors_df(tav), _team_vectors_df(tov))
         return await asyncio.to_thread(_build)
 
@@ -725,9 +739,9 @@ class ModelNightlyService:
             return "bootstrapped"
 
     @staticmethod
-    def _vectors_from_frames(players: pd.DataFrame, team_games: pd.DataFrame) -> tuple[list, list, list]:
+    def _vectors_from_frames(players: pl.DataFrame, team_games: pl.DataFrame) -> tuple[list, list, list]:
         store = FeatureStore.build(
-            players, rdata.build_team_allowed(team_games), rdata.build_team_own(team_games)
+            players, featurize.build_team_allowed(team_games), featurize.build_team_own(team_games)
         )
         return _serialize_vectors(store)
 
