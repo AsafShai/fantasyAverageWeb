@@ -151,4 +151,7 @@ def models_dir(feature_matrix, tmp_path_factory):
             oof_true=y.to_numpy(), oof_pred=pred, oof_index=y.index.to_numpy())
 
     joblib.dump(build_reconciler(pseudo), out / "reconciler.joblib")
+    # Serving reads the compiled twins (no scikit-learn in production).
+    from model_stats_inference.serving.compiled_model import compile_models
+    compile_models(out)
     return out

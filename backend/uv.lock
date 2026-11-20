@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -488,6 +488,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "joblib" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pdfplumber" },
@@ -497,7 +498,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "requests" },
-    { name = "scikit-learn" },
     { name = "slowapi" },
     { name = "uvicorn" },
 ]
@@ -513,12 +513,16 @@ test = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
 ]
+training = [
+    { name = "scikit-learn" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "fastapi", specifier = ">=0.115.13" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "joblib", specifier = ">=1.5.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.3.0" },
     { name = "pdfplumber", specifier = ">=0.11.0" },
@@ -528,7 +532,6 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "scikit-learn", specifier = ">=1.9.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "uvicorn", specifier = ">=0.34.3" },
 ]
@@ -544,6 +547,7 @@ test = [
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-cov", specifier = ">=6.2.1" },
 ]
+training = [{ name = "scikit-learn", specifier = ">=1.9.0" }]
 
 [[package]]
 name = "fastapi"
@@ -902,9 +906,9 @@ resolution-markers = [
     "python_full_version < '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "llvmlite", version = "0.36.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "setuptools", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "llvmlite", version = "0.36.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy" },
+    { name = "setuptools" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e3/7d/3d61160836e49f40913741c464f119551c15ed371c1d91ea50308495b93b/numba-0.53.1.tar.gz", hash = "sha256:9cd4e5216acdc66c4e9dab2dfd22ddb5bef151185c070d4a3cd8e78638aff5b0", size = 2213956, upload-time = "2021-03-26T09:15:50.402Z" }
 
@@ -924,8 +928,8 @@ resolution-markers = [
     "(python_full_version < '3.13' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.13' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')",
 ]
 dependencies = [
-    { name = "llvmlite", version = "0.47.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
-    { name = "numpy", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
+    { name = "llvmlite", version = "0.47.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f6/c5/db2ac3685833d626c0dcae6bd2330cd68433e1fd248d15f70998160d3ad7/numba-0.65.1.tar.gz", hash = "sha256:19357146c32fe9ed25059ab915e8465fb13951cf6b0aace3826b76886373ab23", size = 2765600, upload-time = "2026-04-24T02:02:56.551Z" }
 wheels = [

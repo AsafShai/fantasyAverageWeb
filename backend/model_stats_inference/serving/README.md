@@ -20,7 +20,7 @@ from model_stats_inference.serving.feature_store import FeatureStore
 from model_stats_inference.serving.inference import LiveInference, PredictionRequest
 
 store = FeatureStore.load()            # or FeatureStore.from_research_cache()
-inf = LiveInference(store)             # loads ../models/*.joblib
+inf = LiveInference(store)             # loads ../models/*.trees.npz (compiled from *.joblib)
 
 res = inf.predict(PredictionRequest(
     player_id=1628969, opponent_team_id=1610612737,
@@ -58,6 +58,23 @@ recomputing from dated rows — nothing to keep in sync by hand.
 > Note: build the production store from **unfiltered** logs (not the research cache,
 > which drops players with < 20 games) so early-season players exist and the
 > insufficient-history guard applies to them.
+
+## Compiled models (no scikit-learn in production)
+
+The web process serves `../models/<target>.trees.npz`, NumPy twins of the trained
+`<target>.joblib` estimators (`compiled_model.py`), so it never imports scikit-learn
+or SciPy (~78 MB RSS). Predictions are bit-for-bit the estimators' own, and the
+probit in `surprise.py` is `normal.ppf`, a port of `scipy.special.ndtri` that is
+likewise bit-identical.
+
+- `training.train` recompiles after saving. After replacing a `.joblib` any other
+  way, run `python scripts/compile_models.py`, then
+  `python scripts/verify_compiled_models.py` (200k boundary rows a model).
+- Each `.npz` records the SHA-256 of its `.joblib`. A stale or missing one makes
+  `LiveInference` refuse to load (no silently outdated trees), and
+  `test_compiled_model.py` fails in CI.
+- scikit-learn lives in the `training` dependency group: installed locally and
+  in CI, left out of the Docker image.
 
 ## Deploying a model or feature change
 

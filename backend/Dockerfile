@@ -36,7 +36,9 @@ ENV MALLOC_ARENA_MAX=2
 
 # Install dependencies as root, then switch to appuser
 COPY pyproject.toml uv.lock ./
-RUN pip install uv && uv sync --frozen --no-group test --no-group ml-research
+# No "training" group: the app serves NumPy-compiled models and never imports
+# scikit-learn/SciPy (~78 MB RSS measured), see model_stats_inference/serving/compiled_model.py.
+RUN pip install uv && uv sync --frozen --no-group test --no-group ml-research --no-group training
 
 # Copy application code and set ownership
 COPY --chown=appuser:appuser app/ ./app/

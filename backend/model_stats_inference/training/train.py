@@ -211,6 +211,12 @@ def main() -> None:
     # the scoring identity PTS = 2·FGM + FG3M + FTM.
     recon = reconcile.build_reconciler(results)
     joblib.dump(recon, config.MODELS_DIR / "reconciler.joblib")
+    # Serving loads the NumPy twins of these models (no scikit-learn there);
+    # recompile so they are never out of step with the .joblib files.
+    from ..serving.compiled_model import compile_models
+    compiled = compile_models(config.MODELS_DIR)
+    print(f"Compiled {len(compiled)} models for serving (*.trees.npz); "
+          "verify with `python scripts/verify_compiled_models.py`")
     card["_reconciler"] = {
         "targets": recon["targets"],
         "gains": recon["gains"],

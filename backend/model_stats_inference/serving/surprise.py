@@ -53,7 +53,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
+from .normal import ppf as norm_ppf  # == scipy.stats.norm.ppf, bit for bit; no SciPy in production
 
 # --- Frozen research settings -------------------------------------------------
 
@@ -258,7 +258,7 @@ def compute_zscores(
             # rank of tonight within (priors + tonight), average-tie method:
             # rank - 1 == (#priors strictly below) + (#tied priors)/2
             pct = (rank_incl - 1.0 + 0.5) / (n_prior + 1.0)
-            return pd.Series(norm.ppf(pct), index=s.index)
+            return pd.Series(norm_ppf(pct), index=s.index)
 
         bases = {
             "ALL": (gp.expanding().mean().droplevel(0),
@@ -550,7 +550,7 @@ def to_standard_normal_with(final: pd.Series, quantiles: list[float], count: int
     n = float(count or len(q))
     pct = np.interp(final.to_numpy(dtype=float), q, probs)
     pct = np.clip(pct, 0.5 / n, 1.0 - 0.5 / n)
-    return pd.Series(norm.ppf(pct), index=final.index).where(final.notna())
+    return pd.Series(norm_ppf(pct), index=final.index).where(final.notna())
 
 
 def to_standard_normal(final: pd.Series, calibration: dict) -> pd.Series:
@@ -689,6 +689,8 @@ def season_factor(df: pd.DataFrame) -> pd.Series:
 def build_calibration(df: pd.DataFrame, source: str, n_quantiles: int = 1001) -> dict:
     """Reference moments and final-metric quantiles from a season frame that
     carries MIN, the raw z columns and the ERR_ columns (the research parquet)."""
+    from scipy.stats import norm  # offline (scripts/build_surprise_calibration.py) only
+
     norm_moments = {}
     for col in required_columns():
         if col not in df.columns:

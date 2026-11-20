@@ -18,16 +18,20 @@ dependencies = [
     "psycopg[binary]>=3.2.0",
     "asyncpg>=0.30.0",
     "numpy>=1.24.0",
-    "scikit-learn>=1.9.0",
+    "joblib>=1.5.0",
     "pyarrow>=24.0.0",
 ]
 
 [dependency-groups]
 test = ["pytest>=8.4.1", "pytest-asyncio>=0.24.0", "pytest-cov>=6.2.1"]
+# Training, model compilation and offline calibration only. The web process
+# serves the compiled NumPy models (model_stats_inference/serving/compiled_model.py)
+# and never imports scikit-learn or SciPy, so the Docker image leaves this out.
+training = ["scikit-learn>=1.9.0"]
 ml-research = ["shap>=0.52.0", "matplotlib>=3.11.0", "lightgbm>=4.6.0"]
 
 [tool.uv]
-default-groups = ["test"]
+default-groups = ["test", "training"]
 
 [tool.pytest.ini_options]
 addopts = "-m 'not live'"

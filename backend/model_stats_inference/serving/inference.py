@@ -10,12 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 
 from . import config
 from .errors import InsufficientHistoryError, ModelsNotTrainedError, UnknownPlayerError
+from .compiled_model import COMPILED_SUFFIX, load_compiled_payload, stale_compiled_models
 from .feature_store import FeatureStore
 from .reconcile import Reconciler
 
@@ -64,10 +64,16 @@ class LiveInference:
         self._rate_keys: list[tuple[str, str]] | None = None
         self.models: dict[str, dict] = {}
         d = models_dir or config.MODELS_DIR
-        for path in sorted(Path(d).glob("*.joblib")):
-            if path.name == "reconciler.joblib":
-                continue
-            payload = joblib.load(path)
+        # The compiled twins of the trained .joblib models: same predictions bit
+        # for bit, without importing scikit-learn/SciPy (see compiled_model.py).
+        stale = stale_compiled_models(Path(d))
+        if stale:
+            raise ModelsNotTrainedError(
+                f"compiled models missing or out of date for {stale} in {d} — "
+                "run `python scripts/compile_models.py`"
+            )
+        for path in sorted(Path(d).glob(f"*{COMPILED_SUFFIX}")):
+            payload = load_compiled_payload(path)
             self.models[payload["target"]] = payload
         # Learned color scale (spread of the Pearson residual) per target, if present.
         self.resid_sigma: dict[str, float] = {
@@ -131,12 +137,8 @@ class LiveInference:
             # KeyError-ing the whole batch — vectors self-heal on the next
             # nightly re-materialization.
             feats = payload["features"]
-            # Hand sklearn a consolidated float64 block: check_array on the
-            # column-fragmented reindex result costs ~10x the tree traversal.
-            Xm = pd.DataFrame(
-                np.ascontiguousarray(X.reindex(columns=feats).to_numpy(dtype=np.float64)),
-                columns=feats,
-            )
+            # One consolidated float64 block, columns in the model's order.
+            Xm = np.ascontiguousarray(X.reindex(columns=feats).to_numpy(dtype=np.float64))
             vals = payload["model"].predict(Xm)
             if payload.get("clip_at_zero", True):
                 vals = np.clip(vals, 0.0, None)

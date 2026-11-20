@@ -75,6 +75,8 @@ def test_model_with_missing_store_feature_degrades_gracefully(store, models_dir,
     out = tmp_path / "models"
     out.mkdir()
     joblib.dump(payload, out / "BLK.joblib")
+    from model_stats_inference.serving.compiled_model import compile_models
+    compile_models(out)
 
     inf = LiveInference(store, models_dir=out)
     res = inf.predict(_request(FULL_PID, 30, store))
