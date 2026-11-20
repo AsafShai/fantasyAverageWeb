@@ -1593,6 +1593,92 @@ class DBService:
             logger.error(f"Failed to insert fs rows: {type(e).__name__}: {e}")
             return False
 
+    async def get_fs_rows_on(self, game_date: date) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        """Every stored row of one night, player and team, as pipeline frames
+        (no MIN_MINUTES gate: the correction sweep compares what is stored).
+        (None, None) when the DB is unavailable; empty frames for a night with
+        no rows."""
+        pool = await self._get_pool()
+        if pool is None:
+            return None, None
+        try:
+            async with pool.acquire() as conn:
+                players = await conn.fetch("SELECT * FROM fs_player_games WHERE game_date = $1", game_date)
+                teams = await conn.fetch("SELECT * FROM fs_team_games WHERE game_date = $1", game_date)
+                return fs_records_to_frame(players), fs_records_to_frame(teams)
+        except Exception as e:
+            logger.error(f"Failed to fetch fs rows on {game_date}: {type(e).__name__}: {e}")
+            return None, None
+
+    async def apply_fs_corrections(self, player_rows: list[tuple], team_rows: list[tuple]) -> bool:
+        """Write ESPN's later corrections to stored game rows, in one transaction.
+
+        Same tuple order as insert_fs_rows. A row already stored gets its stat
+        columns replaced and keeps everything else (its position above all:
+        ESPN's box score sometimes leaves it empty, and the stored one was
+        filled from the player's history). A row not stored yet is inserted.
+        Only the nightly's correction sweep calls this, and only for nights
+        already processed: the leakage guard is about predicting a night, and
+        those predictions were made before its rows existed."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        player_cols = [
+            "player_id", "game_id", "season", "game_date", "player_name", "team_id", "matchup", "position",
+            "min", "pts", "reb", "oreb", "dreb", "ast", "fg3m", "fg3a", "stl", "blk", "tov",
+            "fgm", "fga", "ftm", "fta", "pf", "plus_minus",
+        ]
+        team_cols = [
+            "team_id", "game_id", "season", "game_date", "team_name", "matchup",
+            "pts", "reb", "ast", "stl", "blk", "fg3m", "fg_pct", "fga", "fta", "tov",
+        ]
+
+        def upsert(table: str, cols: list[str], keys: tuple[str, str], stats: list[str]) -> str:
+            return (
+                f"INSERT INTO {table} ({', '.join(cols)}) VALUES "
+                f"({', '.join(f'${i + 1}' for i in range(len(cols)))}) "
+                f"ON CONFLICT ({', '.join(keys)}) DO UPDATE SET "
+                + ", ".join(f"{c} = EXCLUDED.{c}" for c in stats)
+            )
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    if player_rows:
+                        await conn.executemany(
+                            upsert("fs_player_games", player_cols, ("player_id", "game_id"), player_cols[8:]),
+                            player_rows,
+                        )
+                    if team_rows:
+                        await conn.executemany(
+                            upsert("fs_team_games", team_cols, ("team_id", "game_id"), team_cols[6:]),
+                            team_rows,
+                        )
+            logger.info(f"Applied corrections to {len(player_rows)} player / {len(team_rows)} team fs rows")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to apply fs corrections: {type(e).__name__}: {e}")
+            return False
+
+    async def update_model_eval_actuals(self, rows: list[tuple]) -> bool:
+        """Replace the actual_* stats of stored eval rows; the predictions stay
+        as they were made. Tuple: (game_id, player_id, pts, reb, ast, fg3m,
+        stl, blk, fgm, fga, ftm, fta). A row that doesn't exist is skipped."""
+        pool = await self._get_pool()
+        if pool is None:
+            return False
+        stats = ["pts", "reb", "ast", "fg3m", "stl", "blk", "fgm", "fga", "ftm", "fta"]
+        sets = ", ".join(f"actual_{s} = ${i + 3}" for i, s in enumerate(stats))
+        try:
+            async with pool.acquire() as conn:
+                await conn.executemany(
+                    f"UPDATE model_eval_results SET {sets} WHERE game_id = $1 AND player_id = $2",
+                    rows,
+                )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update model eval actuals: {type(e).__name__}: {e}")
+            return False
+
     async def _copy_fs_rows(
         self, pool, player_rows: list[tuple], team_rows: list[tuple],
         player_cols: str, team_cols: str,

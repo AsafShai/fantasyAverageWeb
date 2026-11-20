@@ -307,3 +307,77 @@ def test_attach_positions(store):
     out = nightly.attach_positions(store, rows)
     assert out.loc[out["PLAYER_ID"] == FULL_PID, "POSITION"].iloc[0] == "G"
     assert out.loc[out["PLAYER_ID"] == UNKNOWN_PID, "POSITION"].iloc[0] == ""
+
+
+# --- diff_night: ESPN's later corrections -------------------------------------
+
+def _p(pid, gid="401", **stats):
+    row = {c: 0.0 for c in nightly.PLAYER_STAT_COLUMNS}
+    row.update({"PLAYER_ID": pid, "GAME_ID": gid, "PLAYER_NAME": f"P{pid}", "POSITION": "G", "MIN": 30.0})
+    row.update(stats)
+    return row
+
+
+def _t(tid, gid="401", **stats):
+    row = {c: 0.0 for c in nightly.TEAM_STAT_COLUMNS}
+    row.update({"TEAM_ID": tid, "GAME_ID": gid, "FG_PCT": 0.47})
+    row.update(stats)
+    return row
+
+
+def _frames(players, teams):
+    return pd.DataFrame(players), pd.DataFrame(teams)
+
+
+def test_diff_night_identical_is_empty():
+    sp, st = _frames([_p(1, REB=5), _p(2, AST=3)], [_t(10), _t(20)])
+    c = nightly.diff_night(sp, st, sp.copy(), st.copy())
+    assert c.empty and c.vanished_players == [] and c.player_ids() == []
+
+
+def test_diff_night_finds_a_moved_rebound_with_espns_values():
+    sp, st = _frames([_p(1, REB=6, DREB=6), _p(2, REB=6, DREB=6), _p(3, PTS=10)], [_t(10), _t(20)])
+    fp, ft = _frames([_p(1, REB=5, DREB=5), _p(2, REB=7, DREB=7), _p(3, PTS=10)], [_t(10), _t(20)])
+    c = nightly.diff_night(sp, st, fp, ft)
+    assert sorted(c.changed_players["PLAYER_ID"]) == [1, 2]
+    assert dict(zip(c.changed_players["PLAYER_ID"], c.changed_players["REB"])) == {1: 5.0, 2: 7.0}
+    assert c.new_players.empty and c.changed_teams.empty and c.player_ids() == [1, 2]
+
+
+def test_diff_night_minutes_and_plus_minus_count_as_corrections():
+    sp, st = _frames([_p(1), _p(2)], [_t(10)])
+    fp, ft = _frames([_p(1, MIN=31.0), _p(2, PLUS_MINUS=-3.0)], [_t(10)])
+    assert nightly.diff_night(sp, st, fp, ft).player_ids() == [1, 2]
+
+
+def test_diff_night_new_and_vanished_lines():
+    sp, st = _frames([_p(1), _p(2)], [_t(10)])
+    fp, ft = _frames([_p(1), _p(3, PTS=2)], [_t(10)])
+    c = nightly.diff_night(sp, st, fp, ft)
+    assert list(c.new_players["PLAYER_ID"]) == [3]
+    assert c.vanished_players == [(2, "401")]          # reported, never deleted
+    assert c.changed_players.empty and c.player_ids() == [3]
+
+
+def test_diff_night_team_rows_and_float_noise():
+    sp, st = _frames([_p(1)], [_t(10, REB=44), _t(20, FG_PCT=0.4712)])
+    fp, ft = _frames([_p(1)], [_t(10, REB=45), _t(20, FG_PCT=0.4712 + 1e-9)])
+    c = nightly.diff_night(sp, st, fp, ft)
+    assert list(c.changed_teams["TEAM_ID"]) == [10]
+    assert c.changed_teams.iloc[0]["REB"] == 45
+
+
+def test_diff_night_keys_survive_db_and_espn_dtypes():
+    """Stored ids come back from Postgres as int64 / text; ESPN's as ints / str."""
+    sp, st = _frames([_p(1, gid="401")], [_t(10, gid="401")])
+    sp["PLAYER_ID"] = sp["PLAYER_ID"].astype("int64")
+    fp, ft = _frames([_p(1, gid="401", AST=1)], [_t(10, gid="401")])
+    fp["PLAYER_ID"] = fp["PLAYER_ID"].astype("int32")
+    assert nightly.diff_night(sp, st, fp, ft).player_ids() == [1]
+
+
+def test_diff_night_nothing_stored_is_all_new():
+    fp, ft = _frames([_p(1), _p(2)], [_t(10)])
+    c = nightly.diff_night(pd.DataFrame(), pd.DataFrame(), fp, ft)
+    assert sorted(c.new_players["PLAYER_ID"]) == [1, 2]
+    assert c.changed_teams.empty

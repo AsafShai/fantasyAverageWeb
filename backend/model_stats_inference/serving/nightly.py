@@ -102,6 +102,77 @@ def fetch_night(game_date: date) -> NightFetch:
     return NightFetch(game_date, player_games, team_games, day.expected_games, complete)
 
 
+# --- later corrections -------------------------------------------------------
+
+# The stats a stored row holds; a difference in any of them is a correction.
+PLAYER_STAT_COLUMNS = [
+    "MIN", "PTS", "REB", "OREB", "DREB", "AST", "FG3M", "FG3A", "STL", "BLK",
+    "TOV", "FGM", "FGA", "FTM", "FTA", "PF", "PLUS_MINUS",
+]
+TEAM_STAT_COLUMNS = ["PTS", "REB", "AST", "STL", "BLK", "FG3M", "FG_PCT", "FGA", "FTA", "TOV"]
+_TOLERANCE = 1e-6
+
+
+@dataclass
+class NightCorrections:
+    """What ESPN changed in a stored night: rows as ESPN has them now."""
+    changed_players: pd.DataFrame    # stored lines whose stats differ
+    new_players: pd.DataFrame        # lines ESPN has and the store doesn't
+    changed_teams: pd.DataFrame      # stored team rows whose stats differ
+    vanished_players: list[tuple]    # (PLAYER_ID, GAME_ID) stored but no longer in ESPN's box
+
+    @property
+    def empty(self) -> bool:
+        return self.changed_players.empty and self.new_players.empty and self.changed_teams.empty
+
+    def player_ids(self) -> list[int]:
+        ids = pd.concat([self.changed_players["PLAYER_ID"], self.new_players["PLAYER_ID"]])
+        return sorted({int(p) for p in ids})
+
+
+def _keyed(frame: pd.DataFrame, id_col: str) -> pd.DataFrame:
+    if frame is None or frame.empty or id_col not in frame.columns:
+        return pd.DataFrame(columns=list(frame.columns) if frame is not None else [])
+    out = frame.copy()
+    out["_KEY"] = list(zip(out[id_col].astype("int64"), out["GAME_ID"].astype(str)))
+    return out.set_index("_KEY")
+
+
+def _differs(stored: pd.DataFrame, fresh: pd.DataFrame, cols: list[str]) -> pd.Index:
+    """Keys present in both whose stats differ in any of ``cols``."""
+    common = stored.index.intersection(fresh.index)
+    if common.empty:
+        return common
+    cols = [c for c in cols if c in stored.columns and c in fresh.columns]
+    a = stored.loc[common, cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(float)
+    b = fresh.loc[common, cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(float)
+    return common[(abs(a - b) > _TOLERANCE).any(axis=1)]
+
+
+def diff_night(
+    stored_players: pd.DataFrame, stored_teams: pd.DataFrame,
+    fresh_players: pd.DataFrame, fresh_teams: pd.DataFrame,
+) -> NightCorrections:
+    """Compare a night as stored with the same night as ESPN serves it now.
+
+    ``fresh_*`` are ``fetch_night`` frames (played lines only). Changed and new
+    rows come back as ESPN has them; a line ESPN no longer lists is only
+    reported (a box score losing a player is far likelier a feed hiccup than a
+    correction, so it is never deleted)."""
+    sp, fp = _keyed(stored_players, "PLAYER_ID"), _keyed(fresh_players, "PLAYER_ID")
+    st, ft = _keyed(stored_teams, "TEAM_ID"), _keyed(fresh_teams, "TEAM_ID")
+    changed = _differs(sp, fp, PLAYER_STAT_COLUMNS)
+    new = fp.index.difference(sp.index)
+    vanished = sp.index.difference(fp.index)
+    changed_teams = _differs(st, ft, TEAM_STAT_COLUMNS)
+    return NightCorrections(
+        changed_players=fp.loc[changed].reset_index(drop=True),
+        new_players=fp.loc[new].reset_index(drop=True),
+        changed_teams=ft.loc[changed_teams].reset_index(drop=True),
+        vanished_players=list(vanished),
+    )
+
+
 def evaluate_night(
     store: FeatureStore, inference: LiveInference, night: NightFetch
 ) -> list[EvalRow]:
