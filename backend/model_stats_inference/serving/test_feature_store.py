@@ -101,3 +101,36 @@ def test_save_load_roundtrip(store, tmp_path):
     assert loaded.get_player_state(FULL_PID).games_count == 25
     with pytest.raises(InsufficientHistoryError):
         loaded.get_player_state(LOW_PID)
+
+
+def test_concurrent_first_reads_build_views_once(store, monkeypatch):
+    """Predictions run in worker threads. Before the views were one atomic
+    attribute, a thread could see the features built but the meta still None
+    (TypeError in get_player_state); now every thread gets both, built once."""
+    import threading
+    import time
+
+    calls = []
+    real = store._build_read_views
+
+    def slow_build():
+        calls.append(1)
+        time.sleep(0.05)            # widen the window the race needed
+        return real()
+
+    monkeypatch.setattr(store, "_build_read_views", slow_build)
+    errors, states = [], []
+
+    def read():
+        try:
+            states.append(store.get_player_state(FULL_PID))
+        except Exception as e:      # pragma: no cover - the regression
+            errors.append(e)
+
+    threads = [threading.Thread(target=read) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == [] and len(states) == 8
+    assert len(calls) == 1

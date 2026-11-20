@@ -10,6 +10,8 @@ built by featurize.py, the bit-identical twin of research/features.py.
 
 from __future__ import annotations
 
+import threading
+
 import math
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -85,8 +87,9 @@ class FeatureStore:
     def _invalidate_read_caches(self) -> None:
         """Reset the memoized read views (called whenever vectors change)."""
         self._team_state_cache: dict[int, TeamState] = {}
-        self._player_features: dict[int, dict[str, float]] | None = None
-        self._player_meta: dict[int, dict] | None = None
+        # (features, meta) per player, built on first read. One attribute,
+        # assigned once, so a reader on another thread sees both or neither.
+        self._read_views: tuple[dict[int, dict[str, float]], dict[int, dict]] | None = None
         self._player_ids = (
             set(self.player_vectors.get_column("PLAYER_ID").to_list())
             if "PLAYER_ID" in self.player_vectors.columns else set()
@@ -222,9 +225,8 @@ class FeatureStore:
     def get_player_state(self, player_id: int) -> PlayerState:
         if player_id not in self._player_ids:
             raise UnknownPlayerError(f"player {player_id} is not in the feature store")
-        if self._player_features is None:
-            self._build_read_views()
-        meta = self._player_meta[player_id]
+        features, metas = self._views()
+        meta = metas[player_id]
         games = int(meta["games_count"])
         if games < config.MIN_INFERENCE_GAMES:
             raise InsufficientHistoryError(player_id, games, config.MIN_INFERENCE_GAMES)
@@ -234,38 +236,42 @@ class FeatureStore:
             position=str(meta.get("POSITION", "") or ""),
             last_game_date=meta["last_game_date"],
             games_count=games,
-            features=self._player_features[player_id],
+            features=features[player_id],
         )
 
     def player_features(self, player_id: int) -> dict[str, float] | None:
         """The player's feature dict, or None if unknown. Shared, do not mutate."""
-        if self._player_features is None:
-            self._build_read_views()
-        return self._player_features.get(player_id)
+        return self._views()[0].get(player_id)
 
     def player_meta(self, player_id: int) -> dict | None:
         """The player's non-feature columns, or None if unknown. Shared, do not mutate."""
-        if self._player_meta is None:
-            self._build_read_views()
-        return self._player_meta.get(player_id)
+        return self._views()[1].get(player_id)
 
     def feature_columns(self) -> list[str]:
         return [c for c in self.player_vectors.columns if c not in _PLAYER_META]
 
-    def _build_read_views(self) -> None:
+    def _views(self) -> tuple[dict[int, dict[str, float]], dict[int, dict]]:
+        views = self._read_views
+        if views is None:
+            # Predictions run in worker threads; build once, not once per thread.
+            with _READ_VIEWS_LOCK:
+                views = self._read_views
+                if views is None:
+                    views = self._build_read_views()
+                    self._read_views = views
+        return views
+
+    def _build_read_views(self) -> tuple[dict[int, dict[str, float]], dict[int, dict]]:
         """Materialize every player's row once, as plain dicts (float features,
         NaN for missing; meta columns as Python values)."""
         pv = self.player_vectors
         feature_cols = self.feature_columns()
         ids = pv.get_column("PLAYER_ID").to_list() if "PLAYER_ID" in pv.columns else []
         feats = pv.select([pl.col(c).cast(pl.Float64).fill_null(float("nan")) for c in feature_cols])
-        self._player_features = {
-            pid: dict(zip(feature_cols, row)) for pid, row in zip(ids, feats.iter_rows())
-        }
+        features = {pid: dict(zip(feature_cols, row)) for pid, row in zip(ids, feats.iter_rows())}
         meta_cols = [c for c in _PLAYER_META if c in pv.columns]
-        self._player_meta = {
-            pid: dict(zip(meta_cols, row)) for pid, row in zip(ids, pv.select(meta_cols).iter_rows())
-        }
+        metas = {pid: dict(zip(meta_cols, row)) for pid, row in zip(ids, pv.select(meta_cols).iter_rows())}
+        return features, metas
 
     def get_team_state(self, team_id: int) -> TeamState:
         cached = self._team_state_cache.get(team_id)
@@ -284,6 +290,9 @@ class FeatureStore:
         )
         self._team_state_cache[team_id] = state
         return state
+
+
+_READ_VIEWS_LOCK = threading.Lock()
 
 
 # --- helpers ---------------------------------------------------------------
