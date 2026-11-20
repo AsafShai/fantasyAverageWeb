@@ -26,6 +26,13 @@ ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 # keeps freed memory mapped. The system allocator hands it back like the rest of
 # the process (measured: ~20 MB less held after the nightly, ~20 MB lower peak).
 ENV ARROW_DEFAULT_MEMORY_POOL=system
+# Heavy pandas/sklearn work runs in asyncio.to_thread workers, and glibc gives
+# each worker thread its own malloc arena (up to 8 per *host* core, which a
+# 0.15 CPU slice cannot use). Each arena keeps its own freed-but-fragmented
+# pages, so retained memory climbs step by step through the day. Two arenas is
+# plenty for a fraction of a core (measured, threaded pandas jobs + malloc_trim:
+# held 228-249 MB -> 155-167 MB, peak ~50 MB lower, same run time).
+ENV MALLOC_ARENA_MAX=2
 
 # Install dependencies as root, then switch to appuser
 COPY pyproject.toml uv.lock ./
