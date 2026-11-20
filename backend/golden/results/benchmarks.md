@@ -19,12 +19,11 @@ Two things short of "better everywhere":
    ≈1.26 s, 11); the collections land on different requests. In-process with GC accounted for, those endpoints
    are equal or faster (e.g. `/api/teams/8` 76 vs 112 ms, `/api/players/?…season` 154 vs 166 ms). Sum of first-hit
    latency over all 201 variants: −30%; server CPU for the run: −37%.
-2. **The soak (`bench_soak.py`) was not run** — deferred at the owner's request. Steady-state RSS after
-   sustained traffic is therefore measured only over the 6-round / 3-round API runs (lower after: 221 vs 246 MB,
-   283 vs 295 MB), not over minutes of cache-missing traffic.
+2. **The soak is short**: one 3-minute run per side (owner's time budget). Steady-state RSS 223 vs 253 MB, flat on
+   both, 20% more requests served for the same CPU. It cannot rule out drift over a full day.
 
-Recommendation: mergeable on the evidence above, **after** the 5-minute soak (3 runs per side; ~36 min) confirms
-RSS stays flat. If the owner reads rule 1 literally (every single-endpoint first-hit median), do not merge.
+Recommendation: mergeable. If the owner reads rule 1 literally (every single-endpoint first-hit median), do not
+merge. After deploying, compare Render's memory graph over a day with today's ~340 → 480 MB.
 
 ## Golden comparison
 
@@ -58,7 +57,7 @@ would fix it; left out of this change because it changes output.
 
 ## Not covered
 
-- `bench_soak.py` (deferred, see verdict). No 0.15-CPU / 512 MB cgroup or Docker run (not available here):
+- A long soak (only 3 min × 1 run per side). No 0.15-CPU / 512 MB cgroup or Docker run (not available here):
   CPU is measured as process CPU time, which the CPU cap scales, not changes.
 - Live ESPN/NBA traffic (everything ran from the recorded tape), and the in-production schedulers'
   timing (schedulers disabled; their jobs were run directly).
@@ -83,9 +82,21 @@ would fix it; left out of this change because it changes output.
 | bench_background_jobs (48 cycles): max RSS MB (n=4/4) | 237.8 | 195.9 | -17.6% | ✅ |
 | bench_background_jobs (48 cycles): end RSS MB (n=4/4) | 237.2 | 195.9 | -17.4% | ✅ |
 
-## bench_soak
+## bench_soak (3 min, 6 clients, cache-missing traffic; 1 run per side, after the merge of dev)
 
-Not run (deferred by the owner).
+| metric | pandas (before) | Polars (after) | Δ | |
+|---|---:|---:|---:|:-:|
+| requests served | 15742 | 18931 | +20.3% | ✅ |
+| errors | 0 | 0 | | ✅ |
+| RSS at load start MB | 194.5 | 148.7 | -23.5% | ✅ |
+| steady-state RSS (end) MB | 252.5 | 222.9 | -11.7% | ✅ |
+| max RSS MB | 255.2 | 223.1 | -12.6% | ✅ |
+| server CPU s (whole run; CPU-bound) | 180.9 | 180.6 | -0.2% | ✅ |
+| server CPU ms per request | 11.49 | 9.54 | -17.0% | ✅ |
+
+RSS every 15 s — pandas: 194.5, 255.2, 255.2, 255.2, 255.2, 250.6, 250.6, 250.6, 250.5, 252.5, 252.5, 252.5, 252.5;
+Polars: 148.7, 220.7, 220.6, 220.6, 220.8, 223.1, 222.9, 222.8, 222.8, 222.8, 222.8, 222.6, 222.9. Both flat after
+the first minute. One short run per side (owner's time budget): it shows no drift over 3 minutes, not over a day.
 
 ## API: the 20 production-traffic endpoints of scripts/bench_api.py (6 rounds per start) (n=5/5 server starts)
 
