@@ -171,6 +171,38 @@ def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
     return df.copy()  # consolidate blocks (see _player_vectors_df)
 
 
+def _corrected(base: pd.DataFrame, fixes: pd.DataFrame, keys: list[str], gate: bool = False) -> pd.DataFrame:
+    """``base`` (rows as stored) with ``fixes`` (rows as ESPN has them now) in
+    place of the rows with the same keys, and the new ones added. With
+    ``gate`` the fixes go through the model's MIN_MINUTES read gate, as the
+    stored rows did (get_fs_rows_before): a line corrected below it drops out."""
+    if fixes is None or fixes.empty:
+        return base
+    if base is None or base.empty or not set(keys) <= set(base.columns):
+        base = pd.DataFrame(columns=list(fixes.columns))
+    fix_keys = set(zip(fixes[keys[0]].astype("int64"), fixes[keys[1]].astype(str)))
+    kept = base[[k not in fix_keys for k in zip(base[keys[0]].astype("int64"), base[keys[1]].astype(str))]]
+    add = fixes[fixes["MIN"] >= rconfig.MIN_MINUTES] if gate else fixes
+    return pd.concat([kept, add], ignore_index=True)
+
+
+def _resolve_positions(lines: pd.DataFrame, history: pd.DataFrame, pv: list[dict]) -> pd.DataFrame:
+    """Fill an empty POSITION (ESPN's box score sometimes leaves it out) from
+    the player's last known one: his latest stored game with a position, else
+    his stored vector. As the nightly does (nightly.attach_positions), so a
+    corrected or added line never blanks his position."""
+    if lines.empty:
+        return lines
+    known = {int(r["player_id"]): r["position"] for r in pv if r.get("position")}
+    if history is not None and not history.empty and "POSITION" in history.columns:
+        h = history[history["POSITION"].fillna("") != ""].sort_values("GAME_DATE")
+        known.update({int(p): pos for p, pos in h.groupby("PLAYER_ID")["POSITION"].last().items()})
+    pos = lines["POSITION"].fillna("").astype(str)
+    return lines.assign(POSITION=[
+        p if p else known.get(int(pid), "") for p, pid in zip(pos, lines["PLAYER_ID"])
+    ])
+
+
 def _clear_night_read_caches() -> None:
     """Drop the read caches that hold "the latest night", so the night just
     recorded shows at once instead of when they expire: the season's latest
@@ -300,10 +332,14 @@ class ModelNightlyService:
         player, a turnover taken back: ~2% of lines, almost all +-1, arriving
         a day or more after the night). None when nothing changed.
 
-        A corrected night gets its changed rows written, its predicted-vs-
-        actual rows' actuals updated (the predictions stay as made), the
-        affected players' vectors recomputed from their own rows (the light
-        per-player path, not the full rebuild) and its Boom or Bust rescored.
+        Everything a correction changes is computed first and written in one
+        transaction (_commit_corrections): the rows, the predicted-vs-actual
+        actuals (the predictions stay as made) and the vectors of every player
+        and team it touches - a team row reaches every player of that game
+        through the usage rate. A failure writes nothing, so the next morning
+        sees the same differences and tries again. Then Boom or Bust is
+        rescored wherever it disagrees with the stored box scores, which also
+        catches a rescore that failed on an earlier morning.
         Nights not processed, or that ESPN no longer serves complete, are left
         alone. Never raises: a failure here must not cost the morning's run."""
         try:
@@ -315,9 +351,8 @@ class ModelNightlyService:
 
     async def _sweep_corrections(self, newest: date) -> Optional[str]:
         db = self._db
-        corrected: dict[date, nightly.NightCorrections] = {}
-        teams_by_night: dict[date, pd.DataFrame] = {}
-        notes: list[str] = []
+        oldest = newest - timedelta(days=CATCHUP_DAYS - 1)
+        nights: dict[date, tuple[nightly.NightCorrections, pd.DataFrame, nightly.NightFetch]] = {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = newest - timedelta(days=offset)
             run = await db.get_model_nightly_run(d)
@@ -336,91 +371,133 @@ class ModelNightlyService:
                     f"Correction sweep {d}: {len(c.vanished_players)} stored line(s) no longer in ESPN's "
                     f"box scores, left as stored: {c.vanished_players[:5]}"
                 )
-            if c.empty:
-                continue
-            # Positions: a stored line keeps its own (the upsert never touches
-            # it); a new line gets the player's last known one when ESPN's is empty.
-            new = c.new_players
-            if not new.empty:
-                known = stored_players.dropna(subset=["POSITION"]).groupby("PLAYER_ID")["POSITION"].last() \
-                    if "POSITION" in stored_players.columns and not stored_players.empty else pd.Series(dtype=str)
-                pos = new["POSITION"].fillna("") if "POSITION" in new.columns else pd.Series("", index=new.index)
-                new = new.assign(POSITION=pos.where(pos != "", new["PLAYER_ID"].map(known).fillna("")))
-            lines = pd.concat([c.changed_players, new], ignore_index=True)
-            if not await db.apply_fs_corrections(
-                _frame_to_tuples(lines, _FS_PLAYER_COLS) if not lines.empty else [],
-                _frame_to_tuples(c.changed_teams, _FS_TEAM_COLS) if not c.changed_teams.empty else [],
-            ):
-                notes.append(f"{d}: write failed")
-                continue
-            if not c.changed_players.empty:
-                actuals = [
+            if not c.empty:
+                nights[d] = (c, stored_players, fresh)
+
+        notes: list[str] = []
+        committed: list[date] = []
+        if nights:
+            note, ok = await self._commit_corrections(nights)
+            notes.append(note)
+            if ok:
+                committed = list(nights)
+                if "vectors: refreshed" in note:
+                    self._invalidate_inference_store()
+                _clear_night_read_caches()
+        if settings.surprise_nightly_enabled:
+            notes.extend(await self._rescore_stale_surprises(oldest, committed))
+        if not notes:
+            logger.info(f"Correction sweep through {newest}: stored nights match ESPN")
+            return None
+        return "; ".join(notes)
+
+    async def _commit_corrections(
+        self, nights: dict[date, tuple["nightly.NightCorrections", pd.DataFrame, "nightly.NightFetch"]],
+    ) -> tuple[str, bool]:
+        """Compute everything the corrections change, then write it in one
+        transaction (DBService.apply_corrections). Nothing is written before
+        everything is computed, and a failed write writes nothing, so the next
+        morning sees the same differences and tries again."""
+        db = self._db
+        lines_parts, team_parts, eval_actuals = [], [], []
+        player_ids: set[int] = set()
+        team_ids: set[int] = set()
+        summary = []
+        for d, (c, stored_players, fresh) in nights.items():
+            changed = c.changed_players
+            if not changed.empty:
+                # A stored line keeps its stored position (the write never
+                # touches it); carry it here too so the vectors see the same.
+                stored_pos = {
+                    (int(p), str(g)): pos for p, g, pos in zip(
+                        stored_players["PLAYER_ID"], stored_players["GAME_ID"], stored_players["POSITION"])
+                } if "POSITION" in stored_players.columns else {}
+                changed = changed.assign(POSITION=[
+                    stored_pos.get((int(p), str(g)), pos)
+                    for p, g, pos in zip(changed["PLAYER_ID"], changed["GAME_ID"], changed["POSITION"])
+                ])
+                eval_actuals.extend(
                     (str(r["GAME_ID"]), int(r["PLAYER_ID"]), *[float(r[s]) for s in _EVAL_STATS])
-                    for _, r in c.changed_players.iterrows()
-                ]
-                if not await db.update_model_eval_actuals(actuals):
-                    logger.error(f"Correction sweep {d}: rows corrected but the eval actuals were not updated")
-            corrected[d] = c
-            teams_by_night[d] = fresh.team_games
-            notes.append(
+                    for _, r in changed.iterrows()
+                )
+            lines_parts.extend([changed, c.new_players])
+            team_parts.append(c.changed_teams)
+            player_ids.update(c.player_ids())
+            # A team row feeds the usage (USG) of every player of that game:
+            # it divides by the team's possessions. Recompute them all.
+            games = set(c.changed_teams["GAME_ID"].astype(str)) if not c.changed_teams.empty else set()
+            if games:
+                in_games = fresh.player_games[fresh.player_games["GAME_ID"].astype(str).isin(games)]
+                player_ids.update(int(p) for p in in_games["PLAYER_ID"])
+            team_ids.update(int(t) for t in fresh.team_games["TEAM_ID"])
+            summary.append(
                 f"{d}: {len(c.changed_players)} changed, {len(c.new_players)} new player line(s), "
                 f"{len(c.changed_teams)} team row(s)"
             )
-            logger.info(f"Correction sweep {d}: applied ESPN's corrections ({notes[-1].split(': ', 1)[1]})")
-            for _, r in c.changed_players.head(10).iterrows():
-                logger.info(f"Correction sweep {d}: {r.get('PLAYER_NAME', r['PLAYER_ID'])} ({r['GAME_ID']})")
+        lines = pd.concat([f[_FS_PLAYER_COLS] for f in lines_parts if not f.empty], ignore_index=True) \
+            if any(not f.empty for f in lines_parts) else pd.DataFrame(columns=_FS_PLAYER_COLS)
+        teams = pd.concat([f[_FS_TEAM_COLS] for f in team_parts if not f.empty], ignore_index=True) \
+            if any(not f.empty for f in team_parts) else pd.DataFrame(columns=_FS_TEAM_COLS)
+        ids = sorted(player_ids)
 
-        if not corrected:
-            if notes:
-                return "; ".join(notes)
-            logger.info(f"Correction sweep through {newest}: stored nights match ESPN")
-            return None
-
-        player_ids = sorted({p for c in corrected.values() for p in c.player_ids()})
-        team_ids = sorted({int(t) for tg in teams_by_night.values() for t in tg["TEAM_ID"].unique()})
-        vectors = await self._recompute_vectors(player_ids, team_ids)
-        notes.append(f"vectors: {vectors}")
-        if vectors == "refreshed":
-            self._invalidate_inference_store()
-        _clear_night_read_caches()
-        if settings.surprise_nightly_enabled:
-            from app.services.surprise_service import SurpriseService
-            for d in corrected:
-                try:
-                    status = await SurpriseService(db=db).compute_and_store(d, require_roster=True)
-                except Exception as e:
-                    status = f"failed ({type(e).__name__})"
-                    logger.error(f"Correction sweep {d}: Boom or Bust rescore failed: {e}", exc_info=True)
-                notes.append(f"{d} boom or bust: {status}")
-            release_memory("correction sweep: surprises rescored", logger)
-        return "; ".join(notes)
-
-    async def _recompute_vectors(self, player_ids: list[int], team_ids: list[int]) -> str:
-        """Recompute the given players' and teams' vectors from the stored rows.
-
-        Only when the stored vectors are current (they hold every stored night):
-        otherwise the next night's full rebuild recomputes everyone from the
-        corrected rows anyway, and a partial write now would mix the two."""
-        db = self._db
         vectors_as_of, latest = await asyncio.gather(
             db.get_vectors_as_of(), db.get_latest_fs_date_before(date.max)
         )
+        bound = max(d for d in (latest, max(nights)) if d is not None) + timedelta(days=1)
+        history, team_games = await db.get_fs_rows_before_for_players(bound, ids)
+        pv, tav, tov = await db.load_feature_vectors(player_ids=ids)
+        lines = _resolve_positions(lines, history, pv)
+
+        vectors, vec_note = None, "left_to_rebuild"
         if vectors_as_of is None or latest is None or vectors_as_of != latest:
             logger.warning(
                 f"Correction sweep: vectors are through {vectors_as_of}, the store through {latest}; "
                 f"left to the next full rebuild"
             )
-            return "left_to_rebuild"
-        players, team_games = await db.get_fs_rows_before_for_players(latest + timedelta(days=1), player_ids)
-        pv, tav, tov = await db.load_feature_vectors(player_ids=player_ids)
-        if team_games.empty or not tav or not tov:
-            return "skipped (store empty)"
-        vectors = await asyncio.to_thread(
-            self._recompute_sync, pv, tav, tov, players, team_games, player_ids, team_ids
-        )
-        if not await db.upsert_feature_vectors(*vectors):
-            return "write_failed"
-        return "refreshed"
+        elif team_games.empty or not tav or not tov:
+            vec_note = "skipped (store empty)"
+        else:
+            vectors = await asyncio.to_thread(
+                self._recompute_sync, pv, tav, tov,
+                _corrected(history, lines, ["PLAYER_ID", "GAME_ID"], gate=True),
+                _corrected(team_games, teams, ["TEAM_ID", "GAME_ID"]),
+                ids, sorted(team_ids),
+            )
+            vec_note = "refreshed"
+        del history, team_games, pv, tav, tov
+
+        if not await db.apply_corrections(
+            _frame_to_tuples(lines, _FS_PLAYER_COLS) if not lines.empty else [],
+            _frame_to_tuples(teams, _FS_TEAM_COLS) if not teams.empty else [],
+            eval_actuals, vectors,
+        ):
+            return ("; ".join(summary) + "; write failed, nothing written: retried next morning"), False
+        for line in summary:
+            logger.info(f"Correction sweep {line}")
+        for _, r in lines.head(10).iterrows():
+            logger.info(f"Correction sweep: {r['PLAYER_NAME']} ({r['GAME_DATE']:%Y-%m-%d}, {r['GAME_ID']})")
+        return "; ".join(summary) + f"; vectors: {vec_note}", True
+
+    async def _rescore_stale_surprises(self, oldest: date, committed: list[date]) -> list[str]:
+        """Rescore Boom or Bust where it no longer agrees with the box scores:
+        the nights corrected now, and any night whose rows still disagree
+        (a rescore that failed on an earlier morning, ESPN's rosters
+        unavailable then). Owners are kept: a rescore needs the rosters."""
+        from app.services.surprise_service import SurpriseService
+
+        stale = await self._db.get_nights_with_stale_surprises(oldest, settings.surprise_min_minutes)
+        todo = sorted(set(committed) | set(stale or []))
+        notes = []
+        for d in todo:
+            try:
+                status = await SurpriseService(db=self._db).compute_and_store(d, require_roster=True)
+            except Exception as e:
+                status = f"failed ({type(e).__name__})"
+                logger.error(f"Correction sweep {d}: Boom or Bust rescore failed: {e}", exc_info=True)
+            notes.append(f"{d} boom or bust: {status}")
+        if todo:
+            release_memory("correction sweep: surprises rescored", logger)
+        return notes
 
     @staticmethod
     def _recompute_sync(
@@ -430,16 +507,25 @@ class ModelNightlyService:
     ) -> tuple[list, list, list]:
         """The incremental fold-in's recompute, with nothing new to fold in:
         the given players from their own (corrected) history, the given teams
-        from the team rows; exactly what a full rebuild computes for them."""
+        from the (corrected) team rows; exactly what a full rebuild computes
+        for them. ``players`` may come back from the DB with no columns at all
+        (no player of the corrections has a qualifying game): the teams are
+        still recomputed."""
+        if players is None or players.empty or "PLAYER_ID" not in players.columns:
+            players = pd.DataFrame({c: pd.Series(dtype="datetime64[ns]" if c == "GAME_DATE" else object)
+                                    for c in _FS_PLAYER_COLS})
+            for c in _FS_PLAYER_COLS:
+                if c not in ("GAME_ID", "SEASON", "GAME_DATE", "PLAYER_NAME", "MATCHUP", "POSITION"):
+                    players[c] = players[c].astype("int64" if c in ("PLAYER_ID", "TEAM_ID") else float)
         store = FeatureStore.from_vectors(
             _player_vectors_df(pv) if pv else pd.DataFrame(columns=_PLAYER_META[:6]),
             _team_vectors_df(tav), _team_vectors_df(tov),
         )
-        store.players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True) \
-            if not players.empty else players
+        store.players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
         store.team_allowed = rdata.build_team_allowed(team_games)
         store.team_own = rdata.build_team_own(team_games)
-        with_rows = [p for p in player_ids if not players.empty and p in set(players["PLAYER_ID"].astype(int))]
+        present = set(store.players["PLAYER_ID"].astype(int))
+        with_rows = [p for p in player_ids if p in present]
         store._recompute(with_rows, team_ids)
         return _serialize_vectors(store, player_ids=with_rows)
 

@@ -768,233 +768,7 @@ async def test_a_failing_cache_clear_never_fails_the_run(monkeypatch):
     assert hub == [1]                                    # the other cache is still cleared
 
 
-# --- ESPN's later corrections (sweep_corrections) -------------------------------
-
-SWEEP_NIGHT = GAME_DATE
-
-
-def _fs_player(pid, reb=5.0, position="G", gid="0021409900", **extra):
-    row = {c: 1.0 for c in _FS_PLAYER_COLS}
-    row.update({"PLAYER_ID": pid, "GAME_ID": gid, "SEASON": "2025-26", "GAME_DATE": pd.Timestamp(SWEEP_NIGHT),
-                "PLAYER_NAME": f"P{pid}", "TEAM_ID": 10, "MATCHUP": "A vs. B", "POSITION": position,
-                "MIN": 30.0, "REB": reb, "DREB": reb})
-    row.update(extra)
-    return row
-
-
-def _fs_team(tid, reb=44.0):
-    return {"TEAM_ID": tid, "GAME_ID": "0021409900", "SEASON": "2025-26", "GAME_DATE": pd.Timestamp(SWEEP_NIGHT),
-            "TEAM_NAME": "T", "MATCHUP": "A vs. B", "PTS": 110.0, "REB": reb, "AST": 25.0, "STL": 7.0,
-            "BLK": 5.0, "FG3M": 12.0, "FG_PCT": 0.47, "FGA": 88.0, "FTA": 20.0, "TOV": 14.0}
-
-
-class SweepDB(FakeDB):
-    def __init__(self, stored_players, stored_teams, processed=(SWEEP_NIGHT,)):
-        super().__init__()
-        self.stored = (pd.DataFrame(stored_players), pd.DataFrame(stored_teams))
-        self.processed = set(processed)
-        self.applied, self.actuals = [], []
-        self.apply_ok = True
-        self.vectors_as_of = self.latest_fs_date = SWEEP_NIGHT
-
-    async def get_model_nightly_run(self, d):
-        return {"status": "processed"} if d in self.processed else None
-
-    async def get_fs_rows_on(self, d):
-        return self.stored
-
-    async def apply_fs_corrections(self, player_rows, team_rows):
-        self.applied.append((player_rows, team_rows))
-        return self.apply_ok
-
-    async def update_model_eval_actuals(self, rows):
-        self.actuals.extend(rows)
-        return True
-
-
-def _espn_night(players, teams, complete=True):
-    return NightFetch(SWEEP_NIGHT, pd.DataFrame(players), pd.DataFrame(teams), 1, complete)
-
-
-@pytest.fixture
-def sweep(service, monkeypatch):
-    """The service with the recompute and the Boom or Bust rescore recorded."""
-    calls = {"recompute": [], "rescore": []}
-
-    def recompute(pv, tav, tov, players, team_games, player_ids, team_ids):
-        calls["recompute"].append((sorted(player_ids), sorted(team_ids)))
-        return ([("p",)], [("ta",)], [("to",)])
-    monkeypatch.setattr(ModelNightlyService, "_recompute_sync", staticmethod(recompute))
-
-    from app.services.surprise_service import SurpriseService
-
-    async def rescore(self, d, require_roster=False):
-        calls["rescore"].append((d, require_roster))
-        return "processed"
-    monkeypatch.setattr(SurpriseService, "compute_and_store", rescore)
-    monkeypatch.setattr(mns.settings, "surprise_nightly_enabled", True)
-    cleared = []
-    monkeypatch.setattr(mns, "_clear_night_read_caches", lambda: cleared.append(1))
-    calls["cleared"] = cleared
-    return service, calls
-
-
-@pytest.mark.asyncio
-async def test_sweep_applies_a_corrected_rebound_everywhere_it_lands(sweep, monkeypatch):
-    service, calls = sweep
-    service._db = SweepDB([_fs_player(1, reb=6), _fs_player(2, reb=6)], [_fs_team(10), _fs_team(20)])
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1, reb=5, position=""), _fs_player(2, reb=6)],
-                                         [_fs_team(10), _fs_team(20)]))
-    result = await service.sweep_corrections(SWEEP_NIGHT)
-
-    (players, teams), = service._db.applied
-    assert [r[0] for r in players] == [1] and teams == []
-    assert players[0][_FS_PLAYER_COLS.index("REB")] == 5.0
-    (actual,) = service._db.actuals                       # predictions untouched, actuals updated
-    assert actual[:2] == ("0021409900", 1) and actual[2 + mns._EVAL_STATS.index("REB")] == 5.0
-    assert calls["recompute"] == [([1], [10, 20])]
-    assert service._db.vectors_written == ([("p",)], [("ta",)], [("to",)])
-    assert calls["rescore"] == [(SWEEP_NIGHT, True)]      # owners kept: rescore requires the rosters
-    assert calls["cleared"]
-    assert "1 changed" in result and "vectors: refreshed" in result
-
-
-@pytest.mark.asyncio
-async def test_sweep_with_nothing_changed_writes_nothing(sweep, monkeypatch):
-    service, calls = sweep
-    rows, teams = [_fs_player(1)], [_fs_team(10), _fs_team(20)]
-    service._db = SweepDB(rows, teams)
-    _allow_fetch(monkeypatch, _espn_night(rows, teams))
-    assert await service.sweep_corrections(SWEEP_NIGHT) is None
-    assert service._db.applied == [] and calls["recompute"] == [] and calls["rescore"] == []
-    assert service._db.vectors_written is None and not calls["cleared"]
-
-
-@pytest.mark.asyncio
-async def test_sweep_reads_only_processed_nights_in_the_window(sweep, monkeypatch):
-    service, _ = sweep
-    window = [SWEEP_NIGHT - timedelta(days=o) for o in range(mns.CATCHUP_DAYS)]
-    service._db = SweepDB([_fs_player(1)], [_fs_team(10)], processed=window[::2] + [SWEEP_NIGHT - timedelta(days=9)])
-    fetched = []
-    monkeypatch.setattr(mns.nightly, "fetch_night",
-                        lambda d: fetched.append(d) or _espn_night([_fs_player(1)], [_fs_team(10)]))
-    await service.sweep_corrections(SWEEP_NIGHT)
-    assert sorted(fetched) == sorted(window[::2])          # never older than the window, never unprocessed
-
-
-@pytest.mark.asyncio
-async def test_sweep_leaves_a_night_espn_no_longer_serves_complete(sweep, monkeypatch):
-    service, calls = sweep
-    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1, reb=5)], [_fs_team(10)], complete=False))
-    assert await service.sweep_corrections(SWEEP_NIGHT) is None
-    assert service._db.applied == []
-
-
-@pytest.mark.asyncio
-async def test_sweep_never_deletes_a_line_espn_dropped(sweep, monkeypatch):
-    service, calls = sweep
-    service._db = SweepDB([_fs_player(1), _fs_player(2)], [_fs_team(10)])
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1)], [_fs_team(10)]))
-    assert await service.sweep_corrections(SWEEP_NIGHT) is None
-    assert service._db.applied == []
-
-
-@pytest.mark.asyncio
-async def test_sweep_new_line_takes_the_players_stored_position_when_espns_is_empty(sweep, monkeypatch):
-    service, _ = sweep
-    service._db = SweepDB([_fs_player(1, position="C", gid="0021409899")], [_fs_team(10)])
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1, position="", gid="0021409899"),
-                                           _fs_player(1, position="", gid="0021409900")], [_fs_team(10)]))
-    await service.sweep_corrections(SWEEP_NIGHT)
-    (players, _), = service._db.applied
-    assert [(r[1], r[_FS_PLAYER_COLS.index("POSITION")]) for r in players] == [("0021409900", "C")]
-
-
-@pytest.mark.asyncio
-async def test_sweep_team_only_correction_recomputes_teams(sweep, monkeypatch):
-    service, calls = sweep
-    service._db = SweepDB([_fs_player(1)], [_fs_team(10, reb=44), _fs_team(20)])
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1)], [_fs_team(10, reb=45), _fs_team(20)]))
-    await service.sweep_corrections(SWEEP_NIGHT)
-    (_, teams), = service._db.applied
-    assert [t[0] for t in teams] == [10]
-    assert calls["recompute"] == [([], [10, 20])]
-
-
-@pytest.mark.asyncio
-async def test_sweep_failed_write_touches_nothing_else(sweep, monkeypatch):
-    service, calls = sweep
-    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
-    service._db.apply_ok = False
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1, reb=5)], [_fs_team(10)]))
-    result = await service.sweep_corrections(SWEEP_NIGHT)
-    assert "write failed" in result
-    assert service._db.actuals == [] and calls["recompute"] == [] and calls["rescore"] == []
-
-
-@pytest.mark.asyncio
-async def test_sweep_leaves_stale_vectors_to_the_full_rebuild(sweep, monkeypatch):
-    service, calls = sweep
-    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
-    service._db.vectors_as_of = SWEEP_NIGHT - timedelta(days=1)
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1, reb=5)], [_fs_team(10)]))
-    result = await service.sweep_corrections(SWEEP_NIGHT)
-    assert "left_to_rebuild" in result
-    assert calls["recompute"] == [] and service._db.vectors_written is None
-    assert len(service._db.applied) == 1 and calls["rescore"]      # rows still corrected
-
-
-@pytest.mark.asyncio
-async def test_sweep_db_unavailable_and_errors_never_raise(sweep, monkeypatch):
-    service, _ = sweep
-    service._db = SweepDB([_fs_player(1)], [_fs_team(10)])
-
-    async def down(d):
-        return None, None
-    service._db.get_fs_rows_on = down
-    _allow_fetch(monkeypatch, _espn_night([_fs_player(1)], [_fs_team(10)]))
-    assert await service.sweep_corrections(SWEEP_NIGHT) == "db_unavailable"
-
-    def boom(d):
-        raise RuntimeError("espn down")
-    monkeypatch.setattr(mns.nightly, "fetch_night", boom)
-    assert await service.sweep_corrections(SWEEP_NIGHT) == "failed"
-
-
-@pytest.mark.asyncio
-async def test_catchup_sweeps_on_the_final_attempt_only(service, monkeypatch):
-    service._db.vector_feature_keys, _ = _real_stored_keys()
-    service._db.run = {"status": "processed"}
-    swept = []
-
-    async def fake_sweep(self, newest):
-        swept.append(newest)
-        return "2026-01-15: 1 changed; vectors: refreshed"
-    monkeypatch.setattr(ModelNightlyService, "sweep_corrections", fake_sweep)
-    prewarmed = []
-
-    async def prewarm(self):
-        prewarmed.append(1)
-    monkeypatch.setattr(ModelNightlyService, "_prewarm_inference_store", prewarm)
-
-    statuses = await service.run_catchup(through=GAME_DATE)
-    assert swept == [] and "corrections" not in statuses
-    statuses = await service.run_catchup(through=GAME_DATE, final=True)
-    assert swept == [GAME_DATE]
-    assert statuses["corrections"].endswith("vectors: refreshed")
-    assert prewarmed == [1]                                # fresh vectors reach the resident store
-
-
-@pytest.mark.asyncio
-async def test_catchup_survives_a_failing_sweep(service, monkeypatch):
-    service._db.vector_feature_keys, _ = _real_stored_keys()
-    service._db.run = {"status": "processed"}
-    rebuild = _stints_rebuild(monkeypatch)
-    monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: (_ for _ in ()).throw(RuntimeError("down")))
-    statuses = await service.run_catchup(through=GAME_DATE, final=True)
-    assert statuses["corrections"] == "failed"
-    rebuild.assert_awaited_once()                          # the rest of the morning still ran
+# --- ESPN's later corrections (sweep_corrections): see the end of the file ------
 
 
 def _records(serialized):
@@ -1067,3 +841,431 @@ def test_recompute_with_only_team_corrections_equals_a_full_rebuild():
         assert {t: f for t, f in g}.keys() == {t: f for t, f in e}.keys()
         for (tg, fg), (te, fe) in zip(sorted(g, key=lambda r: r[0]), sorted(e, key=lambda r: r[0])):
             assert fg == pytest.approx(fe, nan_ok=True)
+
+
+def test_recompute_with_a_columnless_players_frame_still_recomputes_the_teams():
+    """What the DB returns for zero matching player rows: pd.DataFrame() with
+    no columns at all (bug: KeyError 'PLAYER_ID', the sweep failed after the
+    team row was written)."""
+    import numpy as np
+    from model_stats_inference.research import data as rdata
+    from model_stats_inference.serving import conftest as synth
+    from model_stats_inference.serving.feature_store import FeatureStore
+
+    players = synth._make_players(np.random.default_rng(0))
+    teams = synth._make_team_logs(np.random.default_rng(1))
+    stored = _records(_serialize_vectors(
+        FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams))))
+    corrected_teams = teams.copy()
+    corrected_teams.loc[corrected_teams.index[-1], "TOV"] += 2
+    team_ids = sorted(int(t) for t in corrected_teams["TEAM_ID"].unique())
+    full = FeatureStore.build(players, rdata.build_team_allowed(corrected_teams), rdata.build_team_own(corrected_teams))
+    expected = _serialize_vectors(full, player_ids=[])
+
+    got = ModelNightlyService._recompute_sync(*stored, pd.DataFrame(), corrected_teams, [], team_ids)
+    assert got[0] == []
+    for g, e in ((got[1], expected[1]), (got[2], expected[2])):
+        for (tg, fg), (te, fe) in zip(sorted(g, key=lambda r: r[0]), sorted(e, key=lambda r: r[0])):
+            assert tg == te and fg == pytest.approx(fe, nan_ok=True)
+
+
+# --- the sweep, end to end on the real feature engine ----------------------------
+
+class StoreDB(FakeDB):
+    """A FakeDB backed by real frames: the stored rows and vectors of a
+    synthetic season, and the writes the sweep commits."""
+
+    def __init__(self, players, teams, vectors):
+        super().__init__()
+        self.players, self.teams = players, teams
+        self.pv, self.tav, self.tov = vectors
+        self.committed = []
+        self.apply_ok = True
+        self.vectors_as_of = self.latest_fs_date = players["GAME_DATE"].max().date()
+
+    async def get_fs_rows_before_for_players(self, d, player_ids):
+        from model_stats_inference.research import config as rconfig
+        p = self.players[(self.players["GAME_DATE"] < pd.Timestamp(d))
+                         & self.players["PLAYER_ID"].isin(player_ids)
+                         & (self.players["MIN"] >= rconfig.MIN_MINUTES)]
+        return (p.reset_index(drop=True) if not p.empty else pd.DataFrame()), self.teams
+
+    async def load_feature_vectors(self, player_ids=None):
+        pv = [r for r in self.pv if player_ids is None or r["player_id"] in set(player_ids)]
+        return pv, self.tav, self.tov
+
+    async def apply_corrections(self, player_rows, team_rows, eval_actuals, vectors=None):
+        self.committed.append((player_rows, team_rows, eval_actuals, vectors))
+        return self.apply_ok
+
+
+def _synthetic_season():
+    import numpy as np
+    from model_stats_inference.research import data as rdata
+    from model_stats_inference.serving import conftest as synth
+    from model_stats_inference.serving.feature_store import FeatureStore
+    players = synth._make_players(np.random.default_rng(0))
+    teams = synth._make_team_logs(np.random.default_rng(1))
+    for col in ("OREB", "DREB", "PF"):
+        if col not in players.columns:
+            players[col] = 0.0
+    teams["TEAM_NAME"] = "T" + teams["TEAM_ID"].astype(str)          # ESPN's rows carry both
+    teams["MATCHUP"] = "A vs. B"
+    store = FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams))
+    return players, teams, _records(_serialize_vectors(store))
+
+
+def _full_rebuild(players, teams):
+    from model_stats_inference.research import data as rdata
+    from model_stats_inference.serving.feature_store import FeatureStore
+    return _serialize_vectors(FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams)))
+
+
+async def _commit(service, stored_players, stored_teams, players, teams, night):
+    """Run the sweep's commit for one night: stored = before, players/teams = ESPN now."""
+    ts = pd.Timestamp(night)
+    fresh = NightFetch(night, players[players["GAME_DATE"] == ts].reset_index(drop=True),
+                       teams[teams["GAME_DATE"] == ts].reset_index(drop=True), 1, True)
+    sp = stored_players[stored_players["GAME_DATE"] == ts].reset_index(drop=True)
+    st = stored_teams[stored_teams["GAME_DATE"] == ts].reset_index(drop=True)
+    c = mns.nightly.diff_night(sp, st, fresh.player_games, fresh.team_games)
+    assert not c.empty
+    return await service._commit_corrections({night: (c, sp, fresh)})
+
+
+def _assert_vectors_match_a_full_rebuild(stored_vectors, written, players, teams):
+    """Stored vectors overwritten by what the sweep wrote == a full rebuild
+    from the corrected rows, for EVERY player and team."""
+    pv, tav, tov = stored_vectors
+    after = {r["player_id"]: r["features"] for r in pv}
+    after.update({r[0]: r[7] for r in written[0]})
+    exp_p, exp_ta, exp_to = _full_rebuild(players, teams)
+    wrong = [r[0] for r in exp_p if after[r[0]] != pytest.approx(r[7], nan_ok=True)]
+    assert wrong == [], f"players left stale: {wrong}"
+    for got, exp in ((written[1], exp_ta), (written[2], exp_to)):
+        got = dict(got)
+        for tid, feats in exp:
+            assert got[tid] == pytest.approx(feats, nan_ok=True)
+
+
+@pytest.mark.asyncio
+async def test_turnover_taken_back_from_player_and_team_heals_every_teammate(service):
+    """The case the PR describes: one player's TOV and his team's TOV both
+    change. Every player of that game divides by the team's possessions
+    (USG), so all of them must be recomputed, not only the corrected one."""
+    players, teams, vectors = _synthetic_season()
+    service._db = StoreDB(players, teams, vectors)
+    hit = players.index[-1]
+    night, gid, team = players.loc[hit, "GAME_DATE"].date(), players.loc[hit, "GAME_ID"], players.loc[hit, "TEAM_ID"]
+    now_p, now_t = players.copy(), teams.copy()
+    now_p.loc[hit, "TOV"] -= 1
+    now_t.loc[now_t.index[(now_t["GAME_ID"] == gid) & (now_t["TEAM_ID"] == team)][0], "TOV"] -= 1
+
+    note, ok = await _commit(service, players, teams, now_p, now_t, night)
+    assert ok and "vectors: refreshed" in note
+    (prow, trow, actuals, written), = service._db.committed
+    assert len(prow) == 1 and len(trow) == 1 and len(actuals) == 1
+    in_game = set(players.loc[players["GAME_ID"] == gid, "PLAYER_ID"])
+    assert in_game <= {r[0] for r in written[0]}             # the whole game, not one player
+    _assert_vectors_match_a_full_rebuild(vectors, written, now_p, now_t)
+
+
+@pytest.mark.asyncio
+async def test_team_only_correction_heals_the_games_players_and_teams(service):
+    players, teams, vectors = _synthetic_season()
+    service._db = StoreDB(players, teams, vectors)
+    gid = teams["GAME_ID"].iloc[-1]
+    night = teams["GAME_DATE"].iloc[-1].date()
+    now_t = teams.copy()
+    now_t.loc[now_t.index[-1], "TOV"] += 2
+    note, ok = await _commit(service, players, teams, players, now_t, night)
+    assert ok
+    (prow, trow, actuals, written), = service._db.committed
+    assert prow == [] and len(trow) == 1 and actuals == []
+    _assert_vectors_match_a_full_rebuild(vectors, written, players, now_t)
+
+
+@pytest.mark.asyncio
+async def test_team_only_correction_with_no_qualifying_player_rows_does_not_fail(service):
+    """Bug 1 end to end: the DB hands back a frame with no columns."""
+    players, teams, vectors = _synthetic_season()
+    db = StoreDB(players, teams, vectors)
+
+    async def nobody(d, ids):
+        return pd.DataFrame(), db.teams
+    db.get_fs_rows_before_for_players = nobody
+    service._db = db
+    now_t = teams.copy()
+    now_t.loc[now_t.index[-1], "TOV"] += 2
+    note, ok = await _commit(service, players, teams, players, now_t, teams["GAME_DATE"].iloc[-1].date())
+    assert ok and "vectors: refreshed" in note
+    (_, trow, _, written), = db.committed
+    exp = dict(_full_rebuild(players, now_t)[2])
+    got = dict(written[2])
+    assert got.keys() == exp.keys()
+    for tid in exp:
+        assert got[tid] == pytest.approx(exp[tid], nan_ok=True)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_commit_writes_nothing_and_the_next_morning_retries(service, monkeypatch):
+    """Bug 3: everything is one transaction, so a failure leaves the rows as
+    they were and the next sweep sees the same difference again."""
+    players, teams, vectors = _synthetic_season()
+    db = StoreDB(players, teams, vectors)
+    db.apply_ok = False
+    service._db = db
+    hit = players.index[-1]
+    now_p = players.copy()
+    now_p.loc[hit, "REB"] += 1
+    note, ok = await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    assert not ok and "nothing written" in note
+    # the stored rows are untouched, so the same diff is still there to retry
+    note, ok = await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    assert len(db.committed) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_failure_while_computing_writes_nothing(service, monkeypatch):
+    players, teams, vectors = _synthetic_season()
+    db = StoreDB(players, teams, vectors)
+    service._db = db
+
+    def boom(*a):
+        raise RuntimeError("feature engine")
+    monkeypatch.setattr(ModelNightlyService, "_recompute_sync", staticmethod(boom))
+    hit = players.index[-1]
+    now_p = players.copy()
+    now_p.loc[hit, "REB"] += 1
+    with pytest.raises(RuntimeError):
+        await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    assert db.committed == []
+
+
+@pytest.mark.asyncio
+async def test_new_line_with_empty_position_takes_the_players_position_from_his_history(service):
+    """Bug 5: the position comes from the player's other games, not only the same night."""
+    players, teams, vectors = _synthetic_season()
+    db = StoreDB(players, teams, vectors)
+    service._db = db
+    hit = players.index[-1]
+    pid, night = int(players.loc[hit, "PLAYER_ID"]), players.loc[hit, "GAME_DATE"].date()
+    known = players.loc[(players["PLAYER_ID"] == pid) & (players.index != hit), "POSITION"].iloc[-1]
+    stored = players.drop(index=hit)                       # ESPN added this line later
+    now_p = players.copy()
+    now_p.loc[hit, "POSITION"] = ""
+    db.players = stored
+    note, ok = await _commit(service, stored, teams, now_p, teams, night)
+    (prow, _, actuals, written), = db.committed
+    assert [r[_FS_PLAYER_COLS.index("POSITION")] for r in prow] == [known]
+    assert actuals == []                                    # a new line has no prediction to update
+    assert {r[0]: r[3] for r in written[0]}[pid] == known   # nor does his vector lose it
+
+
+@pytest.mark.asyncio
+async def test_a_corrected_line_keeps_its_stored_position(service):
+    players, teams, vectors = _synthetic_season()
+    db = StoreDB(players, teams, vectors)
+    service._db = db
+    hit = players.index[-1]
+    now_p = players.copy()
+    now_p.loc[hit, "REB"] += 1
+    now_p.loc[hit, "POSITION"] = ""
+    await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    (prow, _, _, _), = db.committed
+    assert prow[0][_FS_PLAYER_COLS.index("POSITION")] == players.loc[hit, "POSITION"]
+
+
+@pytest.mark.asyncio
+async def test_stale_vectors_are_left_to_the_full_rebuild_but_rows_still_commit(service):
+    players, teams, vectors = _synthetic_season()
+    db = StoreDB(players, teams, vectors)
+    db.vectors_as_of = db.latest_fs_date - timedelta(days=1)
+    service._db = db
+    hit = players.index[-1]
+    now_p = players.copy()
+    now_p.loc[hit, "REB"] += 1
+    note, ok = await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    assert ok and "left_to_rebuild" in note
+    (prow, _, actuals, written), = db.committed
+    assert len(prow) == 1 and len(actuals) == 1 and written is None
+
+
+# --- the sweep's orchestration (fake ESPN, fake DB) --------------------------------
+
+def _fs_player(pid, reb=5.0, position="G", gid="0021409900"):
+    row = {c: 1.0 for c in _FS_PLAYER_COLS}
+    row.update({"PLAYER_ID": pid, "GAME_ID": gid, "SEASON": "2025-26", "GAME_DATE": pd.Timestamp(GAME_DATE),
+                "PLAYER_NAME": f"P{pid}", "TEAM_ID": 10, "MATCHUP": "A vs. B", "POSITION": position,
+                "MIN": 30.0, "REB": reb, "DREB": reb})
+    return row
+
+
+def _fs_team(tid):
+    return {"TEAM_ID": tid, "GAME_ID": "0021409900", "SEASON": "2025-26", "GAME_DATE": pd.Timestamp(GAME_DATE),
+            "TEAM_NAME": "T", "MATCHUP": "A vs. B", "PTS": 110.0, "REB": 44.0, "AST": 25.0, "STL": 7.0,
+            "BLK": 5.0, "FG3M": 12.0, "FG_PCT": 0.47, "FGA": 88.0, "FTA": 20.0, "TOV": 14.0}
+
+
+class SweepDB(FakeDB):
+    def __init__(self, stored_players, stored_teams, processed=(GAME_DATE,), stale=()):
+        super().__init__()
+        self.stored = (pd.DataFrame(stored_players), pd.DataFrame(stored_teams))
+        self.processed, self.stale = set(processed), list(stale)
+        self.committed, self.apply_ok = [], True
+        self.stale_since = []
+
+    async def get_model_nightly_run(self, d):
+        return {"status": "processed"} if d in self.processed else None
+
+    async def get_fs_rows_on(self, d):
+        return self.stored
+
+    async def apply_corrections(self, player_rows, team_rows, eval_actuals, vectors=None):
+        self.committed.append((player_rows, team_rows, eval_actuals, vectors))
+        return self.apply_ok
+
+    async def get_nights_with_stale_surprises(self, since, min_minutes):
+        self.stale_since.append(since)
+        return self.stale
+
+
+def _espn(players, teams, complete=True):
+    return NightFetch(GAME_DATE, pd.DataFrame(players), pd.DataFrame(teams), 1, complete)
+
+
+@pytest.fixture
+def sweep(service, monkeypatch):
+    calls = {"rescore": [], "cleared": []}
+    monkeypatch.setattr(ModelNightlyService, "_recompute_sync",
+                        staticmethod(lambda *a: ([("p",)], [("ta",)], [("to",)])))
+    from app.services.surprise_service import SurpriseService
+
+    async def rescore(self, d, require_roster=False):
+        calls["rescore"].append((d, require_roster))
+        return "processed"
+    monkeypatch.setattr(SurpriseService, "compute_and_store", rescore)
+    monkeypatch.setattr(mns.settings, "surprise_nightly_enabled", True)
+    monkeypatch.setattr(mns, "_clear_night_read_caches", lambda: calls["cleared"].append(1))
+    return service, calls
+
+
+@pytest.mark.asyncio
+async def test_sweep_commits_a_correction_and_rescores_its_night(sweep, monkeypatch):
+    service, calls = sweep
+    service._db = SweepDB([_fs_player(1, reb=6), _fs_player(2)], [_fs_team(10), _fs_team(20)])
+    service._db.vectors_as_of = service._db.latest_fs_date = GAME_DATE
+    _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5), _fs_player(2)], [_fs_team(10), _fs_team(20)]))
+    result = await service.sweep_corrections(GAME_DATE)
+    (prow, trow, actuals, vectors), = service._db.committed
+    assert [r[0] for r in prow] == [1] and prow[0][_FS_PLAYER_COLS.index("REB")] == 5.0 and trow == []
+    assert actuals[0][:2] == ("0021409900", 1) and actuals[0][2 + mns._EVAL_STATS.index("REB")] == 5.0
+    assert vectors == ([("p",)], [("ta",)], [("to",)])
+    assert calls["rescore"] == [(GAME_DATE, True)] and calls["cleared"]
+    assert "1 changed" in result and "vectors: refreshed" in result
+
+
+@pytest.mark.asyncio
+async def test_sweep_with_nothing_changed_writes_nothing(sweep, monkeypatch):
+    service, calls = sweep
+    rows, teams = [_fs_player(1)], [_fs_team(10), _fs_team(20)]
+    service._db = SweepDB(rows, teams)
+    _allow_fetch(monkeypatch, _espn(rows, teams))
+    assert await service.sweep_corrections(GAME_DATE) is None
+    assert service._db.committed == [] and calls["rescore"] == [] and not calls["cleared"]
+
+
+@pytest.mark.asyncio
+async def test_sweep_rescores_a_night_whose_boom_or_bust_still_disagrees(sweep, monkeypatch):
+    """Bug 3, Boom or Bust: a rescore that failed on an earlier morning is
+    found again from the stored rows themselves, with no ESPN difference left."""
+    service, calls = sweep
+    rows, teams = [_fs_player(1)], [_fs_team(10)]
+    earlier = GAME_DATE - timedelta(days=2)
+    service._db = SweepDB(rows, teams, stale=[earlier])
+    _allow_fetch(monkeypatch, _espn(rows, teams))
+    result = await service.sweep_corrections(GAME_DATE)
+    assert service._db.committed == []
+    assert calls["rescore"] == [(earlier, True)] and "boom or bust" in result
+    assert service._db.stale_since == [GAME_DATE - timedelta(days=mns.CATCHUP_DAYS - 1)]
+
+
+@pytest.mark.asyncio
+async def test_sweep_failed_commit_rescores_nothing_new_and_clears_nothing(sweep, monkeypatch):
+    service, calls = sweep
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
+    service._db.apply_ok = False
+    _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5)], [_fs_team(10)]))
+    result = await service.sweep_corrections(GAME_DATE)
+    assert "nothing written" in result
+    assert calls["rescore"] == [] and not calls["cleared"]
+
+
+@pytest.mark.asyncio
+async def test_sweep_reads_only_processed_nights_in_the_window(sweep, monkeypatch):
+    service, _ = sweep
+    window = [GAME_DATE - timedelta(days=o) for o in range(mns.CATCHUP_DAYS)]
+    service._db = SweepDB([_fs_player(1)], [_fs_team(10)], processed=window[::2] + [GAME_DATE - timedelta(days=9)])
+    fetched = []
+    monkeypatch.setattr(mns.nightly, "fetch_night",
+                        lambda d: fetched.append(d) or _espn([_fs_player(1)], [_fs_team(10)]))
+    await service.sweep_corrections(GAME_DATE)
+    assert sorted(fetched) == sorted(window[::2])
+
+
+@pytest.mark.asyncio
+async def test_sweep_leaves_incomplete_nights_and_never_deletes_dropped_lines(sweep, monkeypatch):
+    service, _ = sweep
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
+    _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5)], [_fs_team(10)], complete=False))
+    assert await service.sweep_corrections(GAME_DATE) is None
+    service._db = SweepDB([_fs_player(1), _fs_player(2)], [_fs_team(10)])
+    _allow_fetch(monkeypatch, _espn([_fs_player(1)], [_fs_team(10)]))
+    assert await service.sweep_corrections(GAME_DATE) is None
+    assert service._db.committed == []
+
+
+@pytest.mark.asyncio
+async def test_sweep_db_unavailable_and_errors_never_raise(sweep, monkeypatch):
+    service, _ = sweep
+    service._db = SweepDB([_fs_player(1)], [_fs_team(10)])
+
+    async def down(d):
+        return None, None
+    service._db.get_fs_rows_on = down
+    _allow_fetch(monkeypatch, _espn([_fs_player(1)], [_fs_team(10)]))
+    assert await service.sweep_corrections(GAME_DATE) == "db_unavailable"
+    monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: (_ for _ in ()).throw(RuntimeError("espn down")))
+    assert await service.sweep_corrections(GAME_DATE) == "failed"
+
+
+@pytest.mark.asyncio
+async def test_catchup_sweeps_on_the_final_attempt_only(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"status": "processed"}
+    swept, prewarmed = [], []
+
+    async def fake_sweep(self, newest):
+        swept.append(newest)
+        return "2026-01-15: 1 changed; vectors: refreshed"
+
+    async def prewarm(self):
+        prewarmed.append(1)
+    monkeypatch.setattr(ModelNightlyService, "sweep_corrections", fake_sweep)
+    monkeypatch.setattr(ModelNightlyService, "_prewarm_inference_store", prewarm)
+    statuses = await service.run_catchup(through=GAME_DATE)
+    assert swept == [] and "corrections" not in statuses
+    statuses = await service.run_catchup(through=GAME_DATE, final=True)
+    assert swept == [GAME_DATE] and statuses["corrections"].endswith("vectors: refreshed")
+    assert prewarmed == [1]
+
+
+@pytest.mark.asyncio
+async def test_catchup_survives_a_failing_sweep(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"status": "processed"}
+    rebuild = _stints_rebuild(monkeypatch)
+    monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: (_ for _ in ()).throw(RuntimeError("down")))
+    statuses = await service.run_catchup(through=GAME_DATE, final=True)
+    assert statuses["corrections"] == "failed"
+    rebuild.assert_awaited_once()

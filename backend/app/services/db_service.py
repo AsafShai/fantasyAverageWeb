@@ -105,6 +105,45 @@ async def _fetch_frame_chunked(conn: asyncpg.Connection, query: str, *args) -> p
     return pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0]
 
 
+async def _upsert_vectors(conn, player_rows: list[tuple], team_allowed_rows: list[tuple],
+                          team_own_rows: list[tuple]) -> None:
+    """The vector upsert on an open connection (inside the caller's transaction)."""
+    if player_rows:
+        await conn.executemany(
+            """
+            INSERT INTO fs_player_vectors
+                (player_id, player_name, team_id, position,
+                 last_game_date, games_count, eligible, features, updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb, NOW())
+            ON CONFLICT (player_id) DO UPDATE SET
+                player_name    = EXCLUDED.player_name,
+                team_id        = EXCLUDED.team_id,
+                position       = EXCLUDED.position,
+                last_game_date = EXCLUDED.last_game_date,
+                games_count    = EXCLUDED.games_count,
+                eligible       = EXCLUDED.eligible,
+                features       = EXCLUDED.features,
+                updated_at     = NOW()
+            """,
+            player_rows,
+        )
+    for table, rows in (
+        ("fs_team_allowed_vectors", team_allowed_rows),
+        ("fs_team_own_vectors", team_own_rows),
+    ):
+        if rows:
+            await conn.executemany(
+                f"""
+                INSERT INTO {table} (team_id, features, updated_at)
+                VALUES ($1, $2::jsonb, NOW())
+                ON CONFLICT (team_id) DO UPDATE SET
+                    features   = EXCLUDED.features,
+                    updated_at = NOW()
+                """,
+                rows,
+            )
+
+
 async def _init_connection(conn: asyncpg.Connection) -> None:
     """asyncpg hands back jsonb as str without this, so every read site would
     have to json.loads by hand."""
@@ -1610,16 +1649,26 @@ class DBService:
             logger.error(f"Failed to fetch fs rows on {game_date}: {type(e).__name__}: {e}")
             return None, None
 
-    async def apply_fs_corrections(self, player_rows: list[tuple], team_rows: list[tuple]) -> bool:
-        """Write ESPN's later corrections to stored game rows, in one transaction.
+    async def apply_corrections(
+        self, player_rows: list[tuple], team_rows: list[tuple], eval_actuals: list[tuple],
+        vectors: Optional[tuple[list, list, list]] = None,
+    ) -> bool:
+        """Write ESPN's later corrections and everything derived from them in
+        ONE transaction: all of it lands, or none of it does. A partial write
+        would leave the rows matching ESPN with stale actuals or vectors next
+        to them, and the next sweep, comparing rows only, would never see it.
 
-        Same tuple order as insert_fs_rows. A row already stored gets its stat
-        columns replaced and keeps everything else (its position above all:
-        ESPN's box score sometimes leaves it empty, and the stored one was
-        filled from the player's history). A row not stored yet is inserted.
-        Only the nightly's correction sweep calls this, and only for nights
-        already processed: the leakage guard is about predicting a night, and
-        those predictions were made before its rows existed."""
+        ``player_rows`` / ``team_rows``: insert_fs_rows' tuple order. A row
+        already stored gets its stat columns replaced and keeps the rest (its
+        position above all); a row not stored yet is inserted.
+        ``eval_actuals``: (game_id, player_id, pts, reb, ast, fg3m, stl, blk,
+        fgm, fga, ftm, fta) for model_eval_results; only actual_* change: the
+        predictions, and the minutes they were made with, stay as they were.
+        ``vectors``: upsert_feature_vectors' rows, or None to leave them.
+
+        Only the nightly's correction sweep calls this, for nights already
+        processed: the leakage guard is about predicting a night, and those
+        predictions were made before its rows existed."""
         pool = await self._get_pool()
         if pool is None:
             return False
@@ -1632,13 +1681,14 @@ class DBService:
             "team_id", "game_id", "season", "game_date", "team_name", "matchup",
             "pts", "reb", "ast", "stl", "blk", "fg3m", "fg_pct", "fga", "fta", "tov",
         ]
+        stats = ["pts", "reb", "ast", "fg3m", "stl", "blk", "fgm", "fga", "ftm", "fta"]
 
-        def upsert(table: str, cols: list[str], keys: tuple[str, str], stats: list[str]) -> str:
+        def upsert(table: str, cols: list[str], keys: tuple[str, str], replaced: list[str]) -> str:
             return (
                 f"INSERT INTO {table} ({', '.join(cols)}) VALUES "
                 f"({', '.join(f'${i + 1}' for i in range(len(cols)))}) "
                 f"ON CONFLICT ({', '.join(keys)}) DO UPDATE SET "
-                + ", ".join(f"{c} = EXCLUDED.{c}" for c in stats)
+                + ", ".join(f"{c} = EXCLUDED.{c}" for c in replaced)
             )
         try:
             async with pool.acquire() as conn:
@@ -1653,31 +1703,54 @@ class DBService:
                             upsert("fs_team_games", team_cols, ("team_id", "game_id"), team_cols[6:]),
                             team_rows,
                         )
-            logger.info(f"Applied corrections to {len(player_rows)} player / {len(team_rows)} team fs rows")
+                    if eval_actuals:
+                        sets = ", ".join(f"actual_{s} = ${i + 3}" for i, s in enumerate(stats))
+                        await conn.executemany(
+                            f"UPDATE model_eval_results SET {sets} WHERE game_id = $1 AND player_id = $2",
+                            eval_actuals,
+                        )
+                    if vectors is not None:
+                        await _upsert_vectors(conn, *vectors)
+            logger.info(
+                f"Applied corrections: {len(player_rows)} player / {len(team_rows)} team rows, "
+                f"{len(eval_actuals)} eval rows, "
+                f"{'no' if vectors is None else len(vectors[0])} player vectors"
+            )
             return True
         except Exception as e:
-            logger.error(f"Failed to apply fs corrections: {type(e).__name__}: {e}")
+            logger.error(f"Failed to apply corrections (nothing written): {type(e).__name__}: {e}")
             return False
 
-    async def update_model_eval_actuals(self, rows: list[tuple]) -> bool:
-        """Replace the actual_* stats of stored eval rows; the predictions stay
-        as they were made. Tuple: (game_id, player_id, pts, reb, ast, fg3m,
-        stl, blk, fgm, fga, ftm, fta). A row that doesn't exist is skipped."""
+    async def get_nights_with_stale_surprises(self, since: date, min_minutes: float) -> Optional[list[date]]:
+        """Nights from ``since`` whose Boom or Bust rows no longer agree with
+        the stored box scores: a scored line whose minutes or stats differ, or
+        a line of a scored night that is long enough to be scored and isn't.
+        A rescore that failed after a correction is found here again the next
+        morning. None when the DB is unavailable."""
         pool = await self._get_pool()
         if pool is None:
-            return False
+            return None
         stats = ["pts", "reb", "ast", "fg3m", "stl", "blk", "fgm", "fga", "ftm", "fta"]
-        sets = ", ".join(f"actual_{s} = ${i + 3}" for i, s in enumerate(stats))
+        differs = " OR ".join([f"s.{c} IS DISTINCT FROM f.{c}" for c in stats] + ["s.minutes IS DISTINCT FROM f.min"])
         try:
             async with pool.acquire() as conn:
-                await conn.executemany(
-                    f"UPDATE model_eval_results SET {sets} WHERE game_id = $1 AND player_id = $2",
-                    rows,
+                rows = await conn.fetch(
+                    f"""
+                    SELECT DISTINCT f.game_date
+                    FROM fs_player_games f
+                    LEFT JOIN model_surprise_results s USING (game_id, player_id)
+                    WHERE f.game_date >= $1
+                      AND f.game_date IN (SELECT DISTINCT game_date FROM model_surprise_results WHERE game_date >= $1)
+                      AND ((s.player_id IS NOT NULL AND ({differs}))
+                           OR (s.player_id IS NULL AND f.min >= $2))
+                    ORDER BY f.game_date
+                    """,
+                    since, float(min_minutes),
                 )
-            return True
+                return [r["game_date"] for r in rows]
         except Exception as e:
-            logger.error(f"Failed to update model eval actuals: {type(e).__name__}: {e}")
-            return False
+            logger.error(f"Failed to check Boom or Bust against the box scores: {type(e).__name__}: {e}")
+            return None
 
     async def _copy_fs_rows(
         self, pool, player_rows: list[tuple], team_rows: list[tuple],
@@ -1737,40 +1810,7 @@ class DBService:
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    if player_rows:
-                        await conn.executemany(
-                            """
-                            INSERT INTO fs_player_vectors
-                                (player_id, player_name, team_id, position,
-                                 last_game_date, games_count, eligible, features, updated_at)
-                            VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb, NOW())
-                            ON CONFLICT (player_id) DO UPDATE SET
-                                player_name    = EXCLUDED.player_name,
-                                team_id        = EXCLUDED.team_id,
-                                position       = EXCLUDED.position,
-                                last_game_date = EXCLUDED.last_game_date,
-                                games_count    = EXCLUDED.games_count,
-                                eligible       = EXCLUDED.eligible,
-                                features       = EXCLUDED.features,
-                                updated_at     = NOW()
-                            """,
-                            player_rows,
-                        )
-                    for table, rows in (
-                        ("fs_team_allowed_vectors", team_allowed_rows),
-                        ("fs_team_own_vectors", team_own_rows),
-                    ):
-                        if rows:
-                            await conn.executemany(
-                                f"""
-                                INSERT INTO {table} (team_id, features, updated_at)
-                                VALUES ($1, $2::jsonb, NOW())
-                                ON CONFLICT (team_id) DO UPDATE SET
-                                    features   = EXCLUDED.features,
-                                    updated_at = NOW()
-                                """,
-                                rows,
-                            )
+                    await _upsert_vectors(conn, player_rows, team_allowed_rows, team_own_rows)
             logger.info(
                 f"Upserted {len(player_rows)} player + {len(team_allowed_rows)} team feature vectors"
             )
