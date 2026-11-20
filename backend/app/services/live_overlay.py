@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Collection, Mapping, Optional
 
-import pandas as pd
+import numpy as np
+import polars as pl
 
 from app.utils.constants import ESPN_COLUMN_MAP, LINEUP_SLOT_MAP, RATIO_CATEGORIES, DERIVED_CATEGORIES
 from app.utils.espn_stat_map import UNSUPPORTED_CATEGORIES
@@ -164,7 +165,7 @@ def build_overlay(raw: dict, as_of: Optional[datetime] = None) -> LiveOverlay:
     )
 
 
-def apply_overlay(official: pd.DataFrame, per_team: Mapping[int, Mapping[str, float]]) -> pd.DataFrame:
+def apply_overlay(official: pl.DataFrame, per_team: Mapping[int, Mapping[str, float]]) -> pl.DataFrame:
     """Official totals plus ``per_team``, as a new frame.
 
     Returns ``official`` itself when there is nothing to add, so off-hours
@@ -177,25 +178,34 @@ def apply_overlay(official: pd.DataFrame, per_team: Mapping[int, Mapping[str, fl
     if official is None or not per_team or 'team_id' not in official.columns:
         return official
     addable = [c for c in official.columns if c not in _ID_COLUMNS and _summable(c)]
-    team_ids = official['team_id']
-    touched = team_ids.isin([t for t, stats in per_team.items() if any(stats.get(c) for c in addable)])
+    team_ids = official['team_id'].to_list()
+    gets = {t for t, stats in per_team.items() if any(stats.get(c) for c in addable)}
+    touched = np.array([t in gets for t in team_ids], dtype=bool)
     if not touched.any():
         return official
 
-    live = official.copy()
+    live = official
     for col in addable:
-        add = team_ids.map(lambda t, c=col: (per_team.get(t) or {}).get(c, 0)).fillna(0)
+        add = np.array([(per_team.get(t) or {}).get(c, 0) for t in team_ids for c in (col,)], dtype=float)
+        add = np.where(np.isnan(add), 0.0, add)
         if not add.any():
             continue
-        if pd.api.types.is_integer_dtype(live[col].dtype):
-            live[col] = live[col] + add.round().astype(live[col].dtype)
+        dtype = live.schema[col]
+        if dtype.is_integer():
+            values = live[col].to_numpy() + np.round(add).astype(np.int64)
+            live = live.with_columns(pl.Series(col, values).cast(dtype))
         else:
-            live[col] = live[col] + add
+            live = live.with_columns(pl.Series(col, live[col].cast(pl.Float64).to_numpy() + add, dtype=pl.Float64))
     for category, (numerator, denominator) in RATIO_CATEGORIES.items():
         if category not in live.columns or numerator not in live.columns or denominator not in live.columns:
             continue
-        den = live.loc[touched, denominator].astype(float)
-        live.loc[touched, category] = (live.loc[touched, numerator].astype(float) / den.where(den != 0)).fillna(0.0)
+        num = live[numerator].cast(pl.Float64).to_numpy()
+        den = live[denominator].cast(pl.Float64).to_numpy()
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ratio = num / np.where(den != 0, den, np.nan)
+        ratio = np.where(np.isnan(ratio), 0.0, ratio)
+        current = live[category].cast(pl.Float64).to_numpy()
+        live = live.with_columns(pl.Series(category, np.where(touched, ratio, current), dtype=pl.Float64))
     return live
 
 
@@ -276,22 +286,23 @@ def games_due_for_final_check(games: Mapping[str, int], known_final: Collection[
 
 # --- reconciliation (G2) ------------------------------------------------------
 
-def reconcile(old: pd.DataFrame, new: pd.DataFrame, overlay: LiveOverlay) -> list[dict]:
+def reconcile(old: pl.DataFrame, new: pl.DataFrame, overlay: LiveOverlay) -> list[dict]:
     """Guard G2: when ESPN's official totals move, ``new - old`` must equal
     the last overlay of the closed period, per team and counting stat.
     Returns the differences (empty when clean). Small ones are legitimate ESPN
     stat corrections; anything else is a bug signal."""
     expected = overlay.per_team()
-    old_by_team = old.set_index('team_id')
-    new_by_team = new.set_index('team_id')
-    stats = [c for c in new_by_team.columns
-             if c in old_by_team.columns and c not in _ID_COLUMNS and _summable(c)]
+    old_by_team = {r['team_id']: r for r in old.iter_rows(named=True)}
+    new_rows = list(new.iter_rows(named=True))
+    stats = [c for c in new.columns
+             if c != 'team_id' and c in old.columns and c not in _ID_COLUMNS and _summable(c)]
     diffs: list[dict] = []
-    for team_id in new_by_team.index:
-        if team_id not in old_by_team.index:
+    for row in new_rows:
+        team_id = row['team_id']
+        if team_id not in old_by_team:
             continue
         for stat in stats:
-            got = float(new_by_team.at[team_id, stat]) - float(old_by_team.at[team_id, stat])
+            got = float(row[stat]) - float(old_by_team[team_id][stat])
             want = float((expected.get(int(team_id)) or {}).get(stat, 0))
             if abs(got - want) > 1e-6:
                 diffs.append({

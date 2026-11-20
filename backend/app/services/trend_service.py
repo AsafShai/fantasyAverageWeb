@@ -5,7 +5,8 @@ from collections import OrderedDict
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-import pandas as pd
+import numpy as np
+import polars as pl
 
 from app.config import settings
 from app.models.trend_models import (
@@ -25,9 +26,28 @@ from app.models.trend_models import (
 )
 from app.services.db_service import DBService
 from app.services.player_service import espn_season_string, get_season_anchor_date
+from app.utils import pdcompat
 from app.utils.name_matching import resolve_join_key
 
 logger = logging.getLogger(__name__)
+
+
+def _rows(df: Optional[pl.DataFrame]):
+    """Row dicts (what iterrows' Series were used for: ``row[col]`` / ``row.get``)."""
+    return [] if df is None else df.iter_rows(named=True)
+
+
+def _groups(df: pl.DataFrame, key: str):
+    """``df.groupby(key)`` iteration: (key, sub-frame) by ascending key, each
+    sub-frame in the frame's row order."""
+    parts = df.partition_by(key, maintain_order=True, as_dict=True)
+    for k in sorted(parts):
+        yield (k[0] if isinstance(k, tuple) else k), parts[k]
+
+
+def _usg_values(df: pl.DataFrame) -> np.ndarray:
+    """df.apply(_usg_per_game, axis=1)."""
+    return np.array([_usg_per_game(r) for r in df.iter_rows(named=True)], dtype=np.float64)
 
 DRIFT_THRESHOLD = 0.35  # makes/g-equivalent, provisional — see trends_page_plan.md
 DEFAULT_RECENCY_WINDOW_DAYS = 15
@@ -148,37 +168,37 @@ def _form_stat(
 
 
 def compute_regression_groups(
-    current_df: pd.DataFrame,
-    baseline_df: pd.DataFrame,
+    current_df: pl.DataFrame,
+    baseline_df: pl.DataFrame,
     games_last_15d: dict[int, int],
-    players_df: pd.DataFrame,
+    players_df: pl.DataFrame,
     baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
-    window_df: Optional[pd.DataFrame] = None,
+    window_df: Optional[pl.DataFrame] = None,
     mode: RegressionMode = DEFAULT_REGRESSION_MODE,
 ) -> list[RegressionPlayerGroup]:
     """Pure calc: shooting deviation -> gated, player-grouped items. No DB/network
     access. mode='season' ranks season-vs-history outliers; mode='form' ranks
     significant hot/cold stretches inside the recency window."""
-    if current_df.empty:
+    if current_df.is_empty():
         return []
-    if mode == 'season' and baseline_df.empty:
+    if mode == 'season' and baseline_df.is_empty():
         return []
 
     espn_by_name = {
         resolve_join_key(str(row.get('Name', ''))): row
-        for _, row in players_df.iterrows()
+        for row in _rows(players_df)
     }
     baseline_by_id = (
-        {int(r['player_id']): r for _, r in baseline_df.iterrows()}
-        if not baseline_df.empty else {}
+        {int(r['player_id']): r for r in _rows(baseline_df)}
+        if not baseline_df.is_empty() else {}
     )
     window_by_id = (
-        {int(r['player_id']): r for _, r in window_df.iterrows()}
-        if window_df is not None and not window_df.empty else {}
+        {int(r['player_id']): r for r in _rows(window_df)}
+        if window_df is not None and not window_df.is_empty() else {}
     )
 
     groups: list[RegressionPlayerGroup] = []
-    for _, current_row in current_df.iterrows():
+    for current_row in _rows(current_df):
         player_id = int(current_row['player_id'])
         baseline_row = baseline_by_id.get(player_id)
         window_row = window_by_id.get(player_id)
@@ -236,26 +256,26 @@ LOW_SAMPLE_GP = 3  # window_gp below this -> "partial" badge, regardless of wind
 
 
 def compute_minutes_movers(
-    season_df: pd.DataFrame,
-    window_df: pd.DataFrame,
+    season_df: pl.DataFrame,
+    window_df: pl.DataFrame,
     games_last_15d: dict[int, int],
-    players_df: pd.DataFrame,
+    players_df: pl.DataFrame,
     min_season_gp: int = MIN_SEASON_GP,
 ) -> list[MinutesMoverItem]:
     """Pure calc: season MPG vs MPG within the recency window (window_df is
     already date-bounded by the caller) -> eligibility-gated, player-level
     minutes movers. No DB/network access."""
-    if season_df.empty or window_df.empty:
+    if season_df.is_empty() or window_df.is_empty():
         return []
 
     espn_by_name = {
         resolve_join_key(str(row.get('Name', ''))): row
-        for _, row in players_df.iterrows()
+        for row in _rows(players_df)
     }
-    window_by_id = {int(r['player_id']): r for _, r in window_df.iterrows()}
+    window_by_id = {int(r['player_id']): r for r in _rows(window_df)}
 
     items: list[MinutesMoverItem] = []
-    for _, season_row in season_df.iterrows():
+    for season_row in _rows(season_df):
         player_id = int(season_row['player_id'])
         window_row = window_by_id.get(player_id)
         if window_row is None:
@@ -328,9 +348,9 @@ def _usg_per_game(row) -> float:
 
 
 def compute_usage_role(
-    games_df: pd.DataFrame,
+    games_df: pl.DataFrame,
     games_last_15d: dict[int, int],
-    players_df: pd.DataFrame,
+    players_df: pl.DataFrame,
     window_start,
     min_season_gp: int = MIN_SEASON_GP,
 ) -> list[UsageRoleItem]:
@@ -338,40 +358,40 @@ def compute_usage_role(
     season vs the recency window (games with game_date >= window_start),
     combined with the same minutes delta as Minutes Movers, to classify role
     changes. No DB/network access."""
-    if games_df.empty:
+    if games_df.is_empty():
         return []
 
     espn_by_name = {
         resolve_join_key(str(row.get('Name', ''))): row
-        for _, row in players_df.iterrows()
+        for row in _rows(players_df)
     }
 
     items: list[UsageRoleItem] = []
-    for player_id, group in games_df.groupby('player_id'):
+    for player_id, group in _groups(games_df, 'player_id'):
         season_gp = len(group)
         if season_gp < min_season_gp:
             continue
 
-        window_group = group[group['game_date'] >= window_start]
+        window_group = group.filter(pl.col('game_date') >= window_start)
         window_gp = len(window_group)
         if window_gp < MIN_WINDOW_GP:
             continue
 
-        player_name = str(group.iloc[0]['player_name'])
+        player_name = str(group['player_name'][0])
         espn_row = espn_by_name.get(resolve_join_key(player_name))
         if espn_row is None:
             logger.warning(f"No ESPN roster match for '{player_name}' - skipped from Usage & Role")
             continue
 
-        usg_series = group.apply(_usg_per_game, axis=1)
+        usg_series = _usg_values(group)
         min_series = group['p_min']
-        window_usg_series = window_group.apply(_usg_per_game, axis=1)
+        window_usg_series = _usg_values(window_group)
         window_min_series = window_group['p_min']
 
-        season_usg = float(usg_series.mean())
-        l5_usg = float(window_usg_series.mean())
-        season_mpg = float(min_series.mean())
-        l5_mpg = float(window_min_series.mean())
+        season_usg = float(pdcompat.nanmean(usg_series))
+        l5_usg = float(pdcompat.nanmean(window_usg_series))
+        season_mpg = float(pdcompat.nanmean(min_series))
+        l5_mpg = float(pdcompat.nanmean(window_min_series))
         delta_usg = l5_usg - season_usg
         delta_mpg = l5_mpg - season_mpg
 
@@ -423,15 +443,15 @@ CATEGORY_MIN_DELTA = {
 }
 
 
-def _category_stat(cat: str, values: pd.Series, window_mask: pd.Series) -> CategoryStatItem:
+def _category_stat(cat: str, values: np.ndarray, window_mask: np.ndarray) -> CategoryStatItem:
     """Window per-game mean vs season per-game mean (window included), like
     Minutes Movers. Flagged when the change, up or down, reaches the
     category's minimum."""
     n_season = len(values)
     n_window = int(window_mask.sum())
     window_values = values[window_mask]
-    season_avg = float(values.mean())
-    window_avg = float(window_values.mean()) if n_window else 0.0
+    season_avg = float(pdcompat.nanmean(values))
+    window_avg = float(pdcompat.nanmean(window_values)) if n_window else 0.0
     delta = window_avg - season_avg
     flagged = n_window > 0 and abs(delta) >= CATEGORY_MIN_DELTA[cat]
     return CategoryStatItem(
@@ -444,9 +464,9 @@ def _category_stat(cat: str, values: pd.Series, window_mask: pd.Series) -> Categ
 
 
 def compute_category_movers(
-    games_df: pd.DataFrame,
+    games_df: pl.DataFrame,
     games_last_15d: dict[int, int],
-    players_df: pd.DataFrame,
+    players_df: pl.DataFrame,
     window_start,
     min_season_gp: int = MIN_SEASON_GP,
 ) -> list[CategoryMoverItem]:
@@ -454,33 +474,33 @@ def compute_category_movers(
     the recency window, same games gates as Minutes Movers / Usage & Role. Only
     players with at least one flagged category are returned; each carries every
     category so the page can show the full line. No DB/network access."""
-    if games_df.empty:
+    if games_df.is_empty():
         return []
 
     espn_by_name = {
         resolve_join_key(str(row.get('Name', ''))): row
-        for _, row in players_df.iterrows()
+        for row in _rows(players_df)
     }
 
     items: list[CategoryMoverItem] = []
-    for player_id, group in games_df.groupby('player_id'):
+    for player_id, group in _groups(games_df, 'player_id'):
         season_gp = len(group)
         if season_gp < min_season_gp:
             continue
-        window_mask = group['game_date'] >= window_start
+        window_mask = (group['game_date'] >= window_start).to_numpy()
         window_gp = int(window_mask.sum())
         if window_gp < MIN_WINDOW_GP:
             continue
 
-        minutes = group['p_min'].astype(float)
+        minutes = pdcompat.as_float(group['p_min'])
         stats = [
-            _category_stat(cat, group[col].astype(float), window_mask)
+            _category_stat(cat, pdcompat.as_float(group[col]), window_mask)
             for cat, col in _CATEGORY_COLUMNS.items()
         ]
         if not any(s.flagged for s in stats):
             continue
 
-        player_name = str(group.iloc[0]['player_name'])
+        player_name = str(group['player_name'][0])
         espn_row = espn_by_name.get(resolve_join_key(player_name))
         if espn_row is None:
             logger.warning(f"No ESPN roster match for '{player_name}' - skipped from Category Movers")
@@ -497,8 +517,8 @@ def compute_category_movers(
             games_last_15d=games_last_15d.get(int(player_id), 0),
             season_gp=season_gp,
             window_gp=window_gp,
-            season_mpg=float(minutes.mean()),
-            window_mpg=float(minutes[window_mask].mean()),
+            season_mpg=float(pdcompat.nanmean(minutes)),
+            window_mpg=float(pdcompat.nanmean(minutes[window_mask])),
             low_sample=window_gp < LOW_SAMPLE_GP,
             stats=stats,
         ))
@@ -511,50 +531,50 @@ def _pct(makes, attempts) -> float:
     return float(makes) / float(attempts) * 100 if attempts else 0.0
 
 
-def _player_pct_map(df: pd.DataFrame, player_id: int) -> dict[str, float]:
+def _player_pct_map(df: pl.DataFrame, player_id: int) -> dict[str, float]:
     """Attempt-weighted 3P%/FT%/FG% for one player out of an
     aggregate_shooting_by_player frame. Empty dict if the player isn't in it
     (rookie, or no prior-season rows)."""
-    if df.empty:
+    if df.is_empty():
         return {}
-    rows = df[df['player_id'] == player_id]
-    if rows.empty:
+    rows = df.filter(pl.col('player_id') == player_id)
+    if rows.is_empty():
         return {}
-    row = rows.iloc[0]
+    row = rows.row(0, named=True)
     return {name: float(row[spec['pct']]) * 100 for name, spec in _STAT_SPECS.items()}
 
 
-def _league_pct_map(df: pd.DataFrame) -> dict[str, float]:
+def _league_pct_map(df: pl.DataFrame) -> dict[str, float]:
     """League-wide 3P%/FT%/FG% from an aggregate_shooting_by_player frame:
     every player's makes over every player's attempts. Answers 'is this player
     hurting the category', which his own history cannot."""
-    if df.empty:
+    if df.is_empty():
         return {}
     out: dict[str, float] = {}
     for name, spec in _STAT_SPECS.items():
-        att = int(df[spec['att']].sum())
+        att = int(pdcompat.nansum(df[spec['att']]))
         if att:
-            out[name] = int(df[spec['mk']].sum()) / att * 100
+            out[name] = int(pdcompat.nansum(df[spec['mk']])) / att * 100
     return out
 
 
 def _form_baseline_pct(
-    baseline_df: pd.DataFrame,
-    games_df: pd.DataFrame,
+    baseline_df: pl.DataFrame,
+    games_df: pl.DataFrame,
     player_id: int,
     window_start,
 ) -> dict[str, float]:
     """mode='form' baseline for the chart's reference line: prior seasons pooled
     with this season's games before the window. Excludes the window itself so the
     line the chart draws is the one the table's z-score was computed against."""
-    prior = baseline_df[baseline_df['player_id'] == player_id] if not baseline_df.empty else baseline_df
-    prior_row = prior.iloc[0] if not prior.empty else None
-    pre = games_df[games_df['game_date'] < window_start]
+    prior = baseline_df.filter(pl.col('player_id') == player_id) if not baseline_df.is_empty() else baseline_df
+    prior_row = prior.row(0, named=True) if not prior.is_empty() else None
+    pre = games_df.filter(pl.col('game_date') < window_start)
 
     out: dict[str, float] = {}
     for name, spec in _STAT_SPECS.items():
-        mk = int(pre[spec['mk']].sum())
-        att = int(pre[spec['att']].sum())
+        mk = int(pdcompat.nansum(pre[spec['mk']]))
+        att = int(pdcompat.nansum(pre[spec['att']]))
         if prior_row is not None:
             mk += int(prior_row[spec['mk']])
             att += int(prior_row[spec['att']])
@@ -564,7 +584,7 @@ def _form_baseline_pct(
 
 
 def build_game_log(
-    games_df: pd.DataFrame,
+    games_df: pl.DataFrame,
     player_id: int,
     season: str,
     window_days: int,
@@ -577,13 +597,13 @@ def build_game_log(
     """Pure calc: per-game rows -> chart-ready game log. USG% per game uses the
     same _usg_per_game as Usage & Role, so the chart's window mean equals the
     table's l5_usg by construction. No DB/network access."""
-    usg_series = games_df.apply(_usg_per_game, axis=1)
+    usg_series = _usg_values(games_df)
     entries = [
         GameLogEntry(
             game_date=str(row['game_date']),
             matchup=str(row['matchup'] or ''),
             min=float(row['p_min']),
-            usg=float(usg_series.iloc[i]),
+            usg=float(usg_series[i]),
             fgm=int(row['fgm']), fga=int(row['fga']),
             ftm=int(row['ftm']), fta=int(row['fta']),
             fg3m=int(row['fg3m']), fg3a=int(row['fg3a']),
@@ -591,21 +611,21 @@ def build_game_log(
             ast=int(row.get('ast', 0) or 0), stl=int(row.get('stl', 0) or 0),
             blk=int(row.get('blk', 0) or 0), tov=int(row.get('p_tov', 0) or 0),
         )
-        for i, (_, row) in enumerate(games_df.iterrows())
+        for i, row in enumerate(games_df.iter_rows(named=True))
     ]
     return GameLogResponse(
         player_id=player_id,
-        player_name=str(games_df.iloc[0]['player_name']),
+        player_name=str(games_df['player_name'][0]),
         season=season,
         window_days=window_days,
         window_start=str(window_start),
         season_gp=len(entries),
-        season_mpg=float(games_df['p_min'].mean()),
-        season_usg=float(usg_series.mean()),
+        season_mpg=float(pdcompat.nanmean(games_df['p_min'])),
+        season_usg=float(pdcompat.nanmean(usg_series)),
         season_pct={
-            '3P%': _pct(games_df['fg3m'].sum(), games_df['fg3a'].sum()),
-            'FT%': _pct(games_df['ftm'].sum(), games_df['fta'].sum()),
-            'FG%': _pct(games_df['fgm'].sum(), games_df['fga'].sum()),
+            '3P%': _pct(pdcompat.nansum(games_df['fg3m']), pdcompat.nansum(games_df['fg3a'])),
+            'FT%': _pct(pdcompat.nansum(games_df['ftm']), pdcompat.nansum(games_df['fta'])),
+            'FG%': _pct(pdcompat.nansum(games_df['fgm']), pdcompat.nansum(games_df['fga'])),
         },
         baseline_pct=baseline_pct,
         league_pct=league_pct or {},
@@ -687,11 +707,11 @@ class TrendService:
         self._game_log_inflight: dict[tuple, asyncio.Future] = {}
         self._league_cache: dict[str, dict] = {}
         self._league_inflight: dict[str, asyncio.Future] = {}
-        self._season_shooting_cache: dict[str, pd.DataFrame] = {}
+        self._season_shooting_cache: dict[str, pl.DataFrame] = {}
         self._season_shooting_inflight: dict[str, asyncio.Future] = {}
-        self._season_usage_cache: dict[str, pd.DataFrame] = {}
+        self._season_usage_cache: dict[str, pl.DataFrame] = {}
         self._season_usage_inflight: dict[str, asyncio.Future] = {}
-        self._baseline_cache: dict[int, pd.DataFrame] = {}
+        self._baseline_cache: dict[int, pl.DataFrame] = {}
         self._baseline_inflight: dict[int, asyncio.Future] = {}
 
     @staticmethod
@@ -751,7 +771,7 @@ class TrendService:
         self._game_log_cache.clear()
         self._anchor = anchor
 
-    async def _get_season_shooting(self, season: str, anchor: date) -> pd.DataFrame:
+    async def _get_season_shooting(self, season: str, anchor: date) -> pl.DataFrame:
         if season in self._season_shooting_cache:
             return self._season_shooting_cache[season]
 
@@ -764,7 +784,7 @@ class TrendService:
 
         return await self._coalesced(self._season_shooting_inflight, season, _compute)
 
-    async def _get_season_usage(self, season: str, anchor: date) -> pd.DataFrame:
+    async def _get_season_usage(self, season: str, anchor: date) -> pl.DataFrame:
         if season in self._season_usage_cache:
             return self._season_usage_cache[season]
 
@@ -777,7 +797,7 @@ class TrendService:
 
     async def get_shooting_regression(
         self,
-        players_df: pd.DataFrame,
+        players_df: pl.DataFrame,
         window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
         baseline_seasons: int = DEFAULT_BASELINE_SEASONS,
         mode: RegressionMode = DEFAULT_REGRESSION_MODE,
@@ -820,7 +840,7 @@ class TrendService:
 
         return await self._coalesced(self._regression_inflight, cache_key, _compute)
 
-    async def get_minutes_movers(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> MinutesResponse:
+    async def get_minutes_movers(self, players_df: pl.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> MinutesResponse:
         window_days = _normalize_window_days(window_days)
 
         current_season = espn_season_string(settings.season_id)
@@ -853,7 +873,7 @@ class TrendService:
 
         return await self._coalesced(self._minutes_inflight, window_days, _compute)
 
-    async def get_usage_role(self, players_df: pd.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> UsageResponse:
+    async def get_usage_role(self, players_df: pl.DataFrame, window_days: int = DEFAULT_RECENCY_WINDOW_DAYS) -> UsageResponse:
         window_days = _normalize_window_days(window_days)
 
         current_season = espn_season_string(settings.season_id)
@@ -885,7 +905,7 @@ class TrendService:
 
     async def get_category_movers(
         self,
-        players_df: pd.DataFrame,
+        players_df: pl.DataFrame,
         window_days: int = DEFAULT_RECENCY_WINDOW_DAYS,
         league_categories: Optional[list[str]] = None,
         reverse_categories: Optional[list[str]] = None,
@@ -928,13 +948,13 @@ class TrendService:
             min_delta=dict(CATEGORY_MIN_DELTA),
         )
 
-    async def _prior_shooting(self, baseline_seasons: int) -> pd.DataFrame:
+    async def _prior_shooting(self, baseline_seasons: int) -> pl.DataFrame:
         if baseline_seasons in self._baseline_cache:
             return self._baseline_cache[baseline_seasons]
 
         async def _compute():
             seasons = prior_season_strings(baseline_seasons)
-            df = await self._db.aggregate_shooting_by_player(seasons) if seasons else pd.DataFrame()
+            df = await self._db.aggregate_shooting_by_player(seasons) if seasons else pl.DataFrame()
             self._baseline_cache[baseline_seasons] = df
             return df
 
@@ -957,11 +977,12 @@ class TrendService:
             shooting_df = await self._get_season_shooting(season, end)
             usage_df = await self._get_season_usage(season, end)
             league_usg = None
-            if not usage_df.empty:
-                usg = usage_df.apply(_usg_per_game, axis=1)
-                total_min = usage_df['p_min'].sum()
+            if not usage_df.is_empty():
+                usg = _usg_values(usage_df)
+                p_min = pdcompat.as_float(usage_df['p_min'])
+                total_min = pdcompat.nansum(p_min)
                 if total_min:
-                    league_usg = float((usg * usage_df['p_min']).sum() / total_min)
+                    league_usg = float(pdcompat.nansum(usg * p_min) / total_min)
 
             data = {'pct': _league_pct_map(shooting_df), 'usg': league_usg}
             self._league_cache[season] = data
@@ -995,7 +1016,7 @@ class TrendService:
             games_df = await self._db.get_player_game_log(
                 player_id, current_season, settings.season_start, anchor_date
             )
-            if games_df.empty:
+            if games_df.is_empty():
                 return None
 
             baseline_df = await self._prior_shooting(baseline_seasons)

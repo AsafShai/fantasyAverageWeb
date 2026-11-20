@@ -46,14 +46,14 @@ def series(name: str, values: list) -> pl.Series:
 
 
 def records_frame(records: Sequence, columns: list[str] | None = None) -> pl.DataFrame:
-    """asyncpg Records (or tuples with ``columns``) -> DataFrame, column-wise."""
+    """asyncpg Records (or dicts) -> DataFrame, column-wise, columns looked up by name."""
     if not records:
         return pl.DataFrame()
     if columns is None:
         columns = list(records[0].keys())
     cols = []
     for i, name in enumerate(columns):
-        cols.append(series(name, [r[i] for r in records]))
+        cols.append(series(name, [r[name] if isinstance(r, dict) else r[i] for r in records]))
     return pl.DataFrame(cols)
 
 

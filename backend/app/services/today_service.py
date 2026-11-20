@@ -345,11 +345,11 @@ class TodayService:
         vanishing. Counts themselves are still only over rostered players who
         have a game tonight; a player whose NBA team is idle is in no column
         at all, so the five counts sum to games_tonight."""
-        if players_df is None or players_df.empty:
+        if players_df is None or players_df.is_empty():
             return []
 
         accumulators: dict[int, dict] = {}
-        for _, row in players_df.iterrows():
+        for row in players_df.iter_rows(named=True):
             fantasy_name = row.get('fantasy_team_name')
             team_id = row.get('team_id')
             if not fantasy_name or team_id is None or int(team_id) <= 0:

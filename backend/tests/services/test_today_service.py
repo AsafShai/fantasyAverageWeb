@@ -2,6 +2,8 @@ import logging
 from datetime import date
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.models.injury_models import InjuryRecord
@@ -23,7 +25,7 @@ def rankings_row(period, team_id, name, **cats):
 
 
 def players_df(rows):
-    return pd.DataFrame(rows)
+    return pl.DataFrame(rows)
 
 
 def injury(player, status, team='LAL'):
@@ -454,7 +456,7 @@ class TestRosterHealth:
         assert team.games_tonight == 5
 
     def test_empty_frame_is_no_rows(self):
-        assert TodayService.build_roster_health(pd.DataFrame(), {'LAL'}, {}) == []
+        assert TodayService.build_roster_health(pl.DataFrame(), {'LAL'}, {}) == []
 
     def test_injury_lookup_maps_every_record_to_one_of_the_five(self, monkeypatch):
         store = {

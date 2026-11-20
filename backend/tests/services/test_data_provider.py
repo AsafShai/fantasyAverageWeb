@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
 
+import polars as pl
+from polars.testing import assert_frame_equal as assert_pl_frame_equal
+
 import app.services.data_provider as data_provider_module
 from app.services.data_provider import DataProvider
 
@@ -54,12 +57,12 @@ def provider():
     p._client = AsyncMock()
     p.db_service = AsyncMock()
     p.data_transformer = MagicMock()
-    p.data_transformer.raw_standings_to_totals_df.return_value = pd.DataFrame(
+    p.data_transformer.raw_standings_to_totals_df.return_value = pl.DataFrame(
         {"team_id": [1], "team_name": ["A"], "PTS": [10]}
     )
-    p.data_transformer.raw_all_players_to_df.return_value = pd.DataFrame({"Name": ["P"], "team_id": [1]})
-    p.data_transformer.totals_to_averages_df.return_value = pd.DataFrame({"team_id": [1]})
-    p.data_transformer.averages_to_rankings_df.return_value = pd.DataFrame({"team_id": [1], "RANK": [1]})
+    p.data_transformer.raw_all_players_to_df.return_value = pl.DataFrame({"Name": ["P"], "team_id": [1]})
+    p.data_transformer.totals_to_averages_df.return_value = pl.DataFrame({"team_id": [1]})
+    p.data_transformer.averages_to_rankings_df.return_value = pl.DataFrame({"team_id": [1], "RANK": [1]})
     yield p
     DataProvider._instance = None
     DataProvider._initialized = False
@@ -76,7 +79,7 @@ async def test_get_totals_200_caches_and_transforms(provider):
     df = await provider.get_totals_df()
 
     provider._client.get.assert_awaited()
-    assert not df.empty
+    assert not df.is_empty()
     assert provider.cache_manager.totals_cache["etag"] == "e1"
     mock_resp.raise_for_status.assert_called_once()
 
@@ -104,7 +107,7 @@ async def test_get_totals_200_spawns_db_sync_as_tracked_background_task(provider
 
 @pytest.mark.asyncio
 async def test_get_totals_304_returns_cached(provider):
-    cached = pd.DataFrame({"team_id": [99]})
+    cached = pl.DataFrame({"team_id": [99]})
     provider.cache_manager.totals_cache = {"etag": "old", "data": cached}
 
     mock_resp = MagicMock()
@@ -112,18 +115,18 @@ async def test_get_totals_304_returns_cached(provider):
     provider._client.get = AsyncMock(return_value=mock_resp)
 
     df = await provider.get_totals_df()
-    pd.testing.assert_frame_equal(df, cached)
+    assert_pl_frame_equal(df, cached)
 
 
 @pytest.mark.asyncio
 async def test_get_totals_failure_uses_memory_cache(provider):
-    cached = pd.DataFrame({"team_id": [7]})
+    cached = pl.DataFrame({"team_id": [7]})
     provider.cache_manager.totals_cache = {"etag": "e", "data": cached}
 
     provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
 
     df = await provider.get_totals_df()
-    pd.testing.assert_frame_equal(df, cached)
+    assert_pl_frame_equal(df, cached)
 
 
 @pytest.mark.asyncio
@@ -153,7 +156,7 @@ async def test_sync_db_now_returns_false_when_snapshot_current(provider):
 
 @pytest.mark.asyncio
 async def test_get_players_df_fetch_error_raises(provider):
-    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["X"]})
+    provider.cache_manager.totals_cache["data"] = pl.DataFrame({"team_id": [1], "team_name": ["X"]})
     provider._client.get = AsyncMock(side_effect=httpx.ConnectError("x"))
 
     with pytest.raises(DataSourceError, match="Error fetching players"):
@@ -162,7 +165,7 @@ async def test_get_players_df_fetch_error_raises(provider):
 
 @pytest.mark.asyncio
 async def test_get_players_df_304_returns_cached(provider):
-    cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
+    cached = pl.DataFrame({"Name": ["Cached"], "team_id": [1]})
     provider.cache_manager.players_0 = {"data": cached, "etag": "e1", "timestamp": datetime.now()}
     # Force the TTL check to be bypassed by expiring the timestamp, so the
     # 304 branch (not the fresh in-memory hit) is what's under test.
@@ -175,14 +178,14 @@ async def test_get_players_df_304_returns_cached(provider):
 
     df = await provider.get_players_df(0)
 
-    pd.testing.assert_frame_equal(df, cached)
+    assert_pl_frame_equal(df, cached)
     provider.data_transformer.raw_all_players_to_df.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_get_players_df_sends_if_none_match(provider):
     from datetime import timedelta
-    cached = pd.DataFrame({"Name": ["Cached"], "team_id": [1]})
+    cached = pl.DataFrame({"Name": ["Cached"], "team_id": [1]})
     provider.cache_manager.players_0 = {
         "data": cached,
         "etag": "e1",
@@ -207,12 +210,12 @@ async def test_get_players_df_keeps_cached_frame_when_new_body_parses_equal(prov
     """Ownership drift changes ESPN's body but not the frame; the cached
     object is kept so the players list built from it is reused."""
     from datetime import timedelta
-    cached = pd.DataFrame({"Name": ["A"], "team_id": [1], "PTS": [10.0]})
-    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    cached = pl.DataFrame({"Name": ["A"], "team_id": [1], "PTS": [10.0]})
+    provider.cache_manager.totals_cache["data"] = pl.DataFrame({"team_id": [1], "team_name": ["A"]})
     provider.cache_manager.players_0 = {
         "data": cached, "etag": "e1", "timestamp": datetime.now() - timedelta(minutes=10),
     }
-    parsed = cached.copy() if same_frame else cached.assign(PTS=[12.0])
+    parsed = cached.clone() if same_frame else cached.with_columns(pl.Series('PTS', [12.0]))
     provider.data_transformer.raw_all_players_to_df.return_value = parsed
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -233,7 +236,7 @@ async def test_get_players_df_keeps_cached_frame_when_new_body_parses_equal(prov
 async def test_get_players_df_asks_espn_for_only_the_split_and_actual_lines_it_reads(provider, split):
     """Unfiltered, kona_player_info carries every per-game split and projection
     for every player (~25 MB); only this split's actual line is ever read."""
-    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.totals_cache["data"] = pl.DataFrame({"team_id": [1], "team_name": ["A"]})
     setattr(provider.cache_manager, f"players_{split}", {"data": None, "timestamp": None, "etag": None})
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -252,7 +255,7 @@ async def test_get_players_df_asks_espn_for_only_the_split_and_actual_lines_it_r
 
 @pytest.mark.asyncio
 async def test_get_players_df_concurrent_calls_coalesce(provider):
-    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.totals_cache["data"] = pl.DataFrame({"team_id": [1], "team_name": ["A"]})
     provider.cache_manager.players_0 = {"data": None, "timestamp": None, "etag": None}
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -271,12 +274,12 @@ async def test_get_players_df_concurrent_calls_coalesce(provider):
     )
 
     assert provider._client.get.await_count == 1
-    pd.testing.assert_frame_equal(results[0], results[1])
+    assert_pl_frame_equal(results[0], results[1])
 
 
 @pytest.mark.asyncio
 async def test_get_players_df_different_splits_do_not_block(provider):
-    provider.cache_manager.totals_cache["data"] = pd.DataFrame({"team_id": [1], "team_name": ["A"]})
+    provider.cache_manager.totals_cache["data"] = pl.DataFrame({"team_id": [1], "team_name": ["A"]})
     provider.cache_manager.players_0 = {"data": None, "timestamp": None, "etag": None}
     provider.cache_manager.players_1 = {"data": None, "timestamp": None, "etag": None}
     mock_resp_0 = MagicMock()
@@ -309,10 +312,10 @@ async def test_get_all_dataframes_tuple(provider):
     mock_resp.json.return_value = _api_teams_payload()
     provider._client.get = AsyncMock(return_value=mock_resp)
 
-    totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
+    totals = pl.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
     provider.data_transformer.raw_standings_to_totals_df.return_value = totals
-    avg = pd.DataFrame({"team_id": [1]})
-    rnk = pd.DataFrame({"team_id": [1], "RANK": [1]})
+    avg = pl.DataFrame({"team_id": [1]})
+    rnk = pl.DataFrame({"team_id": [1], "RANK": [1]})
     provider.data_transformer.totals_to_averages_df.return_value = avg
     provider.data_transformer.averages_to_rankings_df.return_value = rnk
 
@@ -330,11 +333,11 @@ async def test_get_all_dataframes_issues_single_espn_request(provider):
     mock_resp.json.return_value = _api_teams_payload()
     provider._client.get = AsyncMock(return_value=mock_resp)
 
-    totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
+    totals = pl.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
     provider.data_transformer.raw_standings_to_totals_df.return_value = totals
     provider.data_transformer.resolve_ranking_categories.return_value = ["PTS"]
-    provider.data_transformer.totals_to_averages_df.return_value = pd.DataFrame({"team_id": [1]})
-    provider.data_transformer.averages_to_rankings_df.return_value = pd.DataFrame({"team_id": [1], "RANK": [1]})
+    provider.data_transformer.totals_to_averages_df.return_value = pl.DataFrame({"team_id": [1]})
+    provider.data_transformer.averages_to_rankings_df.return_value = pl.DataFrame({"team_id": [1], "RANK": [1]})
 
     await provider.get_all_dataframes()
 
@@ -351,7 +354,7 @@ async def test_get_averages_df_passes_resolved_categories(provider):
 
     # An equal frame left cached by an earlier test would be kept by identity.
     provider.cache_manager.totals_cache = {"etag": None, "data": None, "fetched_at": None}
-    totals = pd.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
+    totals = pl.DataFrame({"team_id": [1], "team_name": ["A"], "GP": [82], "PTS": [100]})
     provider.data_transformer.raw_standings_to_totals_df.return_value = totals
     provider.data_transformer.resolve_ranking_categories.return_value = ["PTS", "TO"]
 
@@ -385,9 +388,9 @@ async def test_fallback_from_db_carries_categories_beyond_the_fixed_columns(prov
 
     df = await provider._fallback_from_db()
 
-    assert df["TO"].iloc[0] == 18.0
+    assert df["TO"][0] == 18.0
     for col in ["FG%", "FT%", "3PM", "REB", "AST", "STL", "BLK", "PTS", "GP", "TO"]:
-        assert df[col].dtype == float, f"{col} should be float, got {df[col].dtype}"
+        assert df[col].dtype == pl.Float64, f"{col} should be float, got {df[col].dtype}"
 
 
 @pytest.mark.asyncio
@@ -525,7 +528,7 @@ class TestExtraRankPayloads:
         if with_turnovers:
             row_a['TO'] = 16.0
             row_b['TO'] = 11.0
-        return pd.DataFrame([row_a, row_b])
+        return pl.DataFrame([row_a, row_b])
 
     def test_none_when_league_scores_only_fixed_categories(self):
         """No extras means the column stays NULL — the whole cost argument."""
@@ -712,7 +715,7 @@ async def test_get_totals_after_ttl_revalidates_with_etag(ttl_provider):
 
 @pytest.mark.asyncio
 async def test_get_totals_304_restarts_ttl(ttl_provider):
-    cached = pd.DataFrame({"team_id": [99]})
+    cached = pl.DataFrame({"team_id": [99]})
     ttl_provider.cache_manager.totals_cache = {"etag": "old", "data": cached, "fetched_at": None}
     ttl_provider._client.get = AsyncMock(return_value=_standings_resp(status=304))
 
@@ -721,7 +724,7 @@ async def test_get_totals_304_restarts_ttl(ttl_provider):
     df = await ttl_provider.get_totals_df()
 
     assert ttl_provider._client.get.await_count == 1
-    pd.testing.assert_frame_equal(df, cached)
+    assert_pl_frame_equal(df, cached)
 
 
 @pytest.mark.asyncio
@@ -736,12 +739,12 @@ async def test_get_totals_concurrent_callers_share_one_request(ttl_provider):
 
 @pytest.mark.asyncio
 async def test_get_totals_espn_failure_does_not_start_ttl(ttl_provider):
-    cached = pd.DataFrame({"team_id": [7]})
+    cached = pl.DataFrame({"team_id": [7]})
     ttl_provider.cache_manager.totals_cache = {"etag": "e", "data": cached, "fetched_at": None}
     ttl_provider._client.get = AsyncMock(side_effect=RuntimeError("network"))
 
-    pd.testing.assert_frame_equal(await ttl_provider.get_totals_df(), cached)
-    pd.testing.assert_frame_equal(await ttl_provider.get_totals_df(), cached)
+    assert_pl_frame_equal(await ttl_provider.get_totals_df(), cached)
+    assert_pl_frame_equal(await ttl_provider.get_totals_df(), cached)
 
     # ESPN is retried on every call while it's failing, same as before
     assert ttl_provider._client.get.await_count == 2
@@ -814,7 +817,7 @@ async def test_sync_db_now_304_still_syncs_a_behind_snapshot(ttl_provider):
 
 @pytest.mark.asyncio
 async def test_sync_db_now_fetches_unconditionally_after_db_fallback(ttl_provider):
-    ttl_provider.cache_manager.totals_cache = {"etag": None, "data": pd.DataFrame({"team_id": [1]}), "fetched_at": None}
+    ttl_provider.cache_manager.totals_cache = {"etag": None, "data": pl.DataFrame({"team_id": [1]}), "fetched_at": None}
     ttl_provider._client.get = AsyncMock(return_value=_standings_resp())
     ttl_provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=99)
     await ttl_provider.sync_db_now()
@@ -924,7 +927,7 @@ class _Built:
 
 @pytest.mark.asyncio
 async def test_memo_response_reuses_until_standings_change(provider):
-    totals = [pd.DataFrame({"team_id": [1]})]
+    totals = [pl.DataFrame({"team_id": [1]})]
     provider.get_totals_df = AsyncMock(side_effect=lambda: totals[0])
     provider.get_ranking_categories = AsyncMock(return_value=["PTS"])
     provider.get_reverse_categories = AsyncMock(return_value=set())
@@ -941,7 +944,7 @@ async def test_memo_response_reuses_until_standings_change(provider):
     await provider.memo_response("rankings", (None, "desc"), build)  # other params: own entry
     assert len(builds) == 2
 
-    totals[0] = pd.DataFrame({"team_id": [1]})  # ESPN returned new standings
+    totals[0] = pl.DataFrame({"team_id": [1]})  # ESPN returned new standings
     assert (await provider.memo_response("rankings", ("PTS", "asc"), build)).n == 3
 
     provider.get_ranking_categories = AsyncMock(return_value=["PTS", "TO"])

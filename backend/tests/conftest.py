@@ -1,3 +1,4 @@
+import polars as pl
 import os
 import pytest
 import pytest_asyncio
@@ -37,7 +38,8 @@ class MockDBService:
 
     async def aggregate_player_games(self, start, end, season):
         import pandas as pd
-        return pd.DataFrame(), None, None
+        import polars as pl
+        return pl.DataFrame(), None, None
 
     async def get_latest_game_date(self, season):
         return None
@@ -56,7 +58,7 @@ class MockDataProvider:
         self.live_calls = []
 
         # Sample DataFrames that match the expected structure
-        self.sample_totals_df = pd.DataFrame({
+        self.sample_totals_df = pl.DataFrame({
             'team_id': [1, 2, 3],
             'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
             'FGM': [3842, 3756, 3699],
@@ -74,7 +76,7 @@ class MockDataProvider:
             'GP': [82, 82, 82]
         })
         
-        self.sample_averages_df = pd.DataFrame({
+        self.sample_averages_df = pl.DataFrame({
             'team_id': [1, 2, 3],
             'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
             'FG%': [46.7, 44.4, 45.5],
@@ -88,7 +90,7 @@ class MockDataProvider:
             'GP': [82, 82, 82]
         })
         
-        self.sample_rankings_df = pd.DataFrame({
+        self.sample_rankings_df = pl.DataFrame({
             'team_id': [1, 2, 3],
             'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
             'FG%': [2, 3, 1],
@@ -104,7 +106,7 @@ class MockDataProvider:
             'GP': [82, 82, 82]
         })
         
-        self.sample_players_df = pd.DataFrame({
+        self.sample_players_df = pl.DataFrame({
             'team_id': [1, 1, 2, 2, 3, 3],
             'player_id': [101, 102, 201, 202, 301, 302],
             'Name': ['Player A1', 'Player A2', 'Player B1', 'Player B2', 'Player C1', 'Player C2'],
@@ -311,7 +313,7 @@ async def async_client():
 def sample_totals_df():
     """Sample totals DataFrame for testing - matches ESPN data structure"""
     import pandas as pd
-    return pd.DataFrame({
+    return pl.DataFrame({
         'team_id': [1, 2, 3],
         'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
         'FGM': [3842, 3756, 3699],
@@ -333,7 +335,7 @@ def sample_totals_df():
 def sample_averages_df():
     """Sample averages DataFrame for testing - matches per-game structure"""
     import pandas as pd
-    return pd.DataFrame({
+    return pl.DataFrame({
         'team_id': [1, 2, 3],
         'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
         'FG%': [46.7, 44.4, 45.5],
@@ -351,7 +353,7 @@ def sample_averages_df():
 def sample_rankings_df():
     """Sample rankings DataFrame for testing - matches ranking structure"""
     import pandas as pd
-    return pd.DataFrame({
+    return pl.DataFrame({
         'team_id': [1, 2, 3],
         'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
         'FG%': [2, 3, 1],
@@ -371,7 +373,7 @@ def sample_rankings_df():
 def sample_stats_calculator_averages_df():
     """Sample averages DataFrame for stats calculator testing - values create distinct rankings"""
     import pandas as pd
-    return pd.DataFrame({
+    return pl.DataFrame({
         'team_id': [1, 2, 3],
         'team_name': ['Team Alpha', 'Team Beta', 'Team Gamma'],
         'FG%': [48.0, 44.0, 46.0],   

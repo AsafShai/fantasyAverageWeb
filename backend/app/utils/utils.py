@@ -1,8 +1,8 @@
 from datetime import date, datetime, timedelta, timezone
-import pandas as pd
+import polars as pl
 
-def is_team_exists(team_id: int, totals_df: pd.DataFrame) -> bool:
-    return team_id in totals_df['team_id'].unique()
+def is_team_exists(team_id: int, totals_df: pl.DataFrame) -> bool:
+    return team_id in set(totals_df['team_id'].to_list())
     
 
 def latest_client_date() -> date:

@@ -243,7 +243,7 @@ async def _build_matchups(
 
     results: list[PlayerMatchupResponse] = []
     skipped_inactive = 0
-    for row in players_df.to_dict('records'):
+    for row in players_df.to_dicts():
         pro_team: str = str(row.get('Pro Team', ''))
         game = games_today.get(pro_team)
         if game is None:

@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.services import model_nightly_service as mns
@@ -28,8 +30,8 @@ class FakeDB:
     def __init__(self):
         self.run = None
         self.has_date = False
-        self.player_recs = pd.DataFrame([{"PLAYER_ID": 1}])
-        self.team_recs = pd.DataFrame([{"TEAM_ID": 10}])
+        self.player_recs = pl.DataFrame([{"PLAYER_ID": 1}])
+        self.team_recs = pl.DataFrame([{"TEAM_ID": 10}])
         self.eval_insert_ok = True
         self.fs_insert_ok = True
         self.vec_insert_ok = True
@@ -93,13 +95,13 @@ class FakeDB:
 
 
 def _night(expected_games=2, complete=True):
-    team_games = pd.DataFrame([{
+    team_games = pl.DataFrame([{
         "TEAM_ID": 10, "GAME_ID": "0021409900", "SEASON": "2025-26",
         "GAME_DATE": pd.Timestamp(GAME_DATE), "TEAM_NAME": "T", "MATCHUP": "A vs. B",
         "PTS": 110.0, "REB": 44.0, "AST": 25.0, "STL": 7.0, "BLK": 5.0,
         "FG3M": 12.0, "FG_PCT": 0.47, "FGA": 88.0, "FTA": 20.0, "TOV": 14.0,
     }])
-    return NightFetch(GAME_DATE, pd.DataFrame(), team_games, expected_games, complete)
+    return NightFetch(GAME_DATE, pl.DataFrame(), team_games, expected_games, complete)
 
 
 def _eval_row(eligible=True):
@@ -113,7 +115,7 @@ def _eval_row(eligible=True):
 
 
 def _night_players_frame():
-    return pd.DataFrame([{c: ("0021409900" if c == "GAME_ID" else
+    return pl.DataFrame([{c: ("0021409900" if c == "GAME_ID" else
                               "2025-26" if c == "SEASON" else
                               pd.Timestamp(GAME_DATE) if c == "GAME_DATE" else
                               "x" if c in ("PLAYER_NAME", "MATCHUP", "POSITION") else
@@ -223,7 +225,7 @@ async def test_empty_scoreboard_incomplete_is_retried_not_sealed(service, monkey
 @pytest.mark.asyncio
 async def test_empty_store_requires_bootstrap(service, monkeypatch):
     _allow_fetch(monkeypatch, _night())
-    service._db.player_recs = pd.DataFrame()
+    service._db.player_recs = pl.DataFrame()
     assert await service.run_for_date(GAME_DATE) == "store_not_bootstrapped"
 
 
@@ -306,12 +308,12 @@ async def test_incremental_path_without_vector_rows_requires_bootstrap(service, 
 
 
 def test_serialize_vectors_can_limit_to_given_players():
-    pv = pd.DataFrame({
+    pv = pl.DataFrame({
         "PLAYER_ID": [1, 2, 3], "PLAYER_NAME": ["a", "b", "c"], "TEAM_ID": [10, 10, 20],
         "POSITION": ["G", "F", "C"], "last_game_date": [pd.Timestamp(GAME_DATE)] * 3,
         "games_count": [12, 3, 40], "F1": [0.1, 0.2, 0.3],
     })
-    teams = pd.DataFrame({"TEAM_ID": [10, 20], "T1": [1.0, 2.0]})
+    teams = pl.DataFrame({"TEAM_ID": [10, 20], "T1": [1.0, 2.0]})
     store = SimpleNamespace(player_vectors=pv, team_allowed_vectors=teams, team_own_vectors=teams)
     all_rows, _, _ = _serialize_vectors(store)
     some_rows, tav, tov = _serialize_vectors(store, player_ids=[3, 1])
@@ -342,15 +344,15 @@ def test_eval_to_tuple_shapes():
 def test_vector_serialize_roundtrip():
     """Serialize vectors -> (simulate DB read) -> reconstruct; values, NaN, and the
     eligible flag must survive intact."""
-    pv = pd.DataFrame({
+    pv = pl.DataFrame({
         "PLAYER_ID": [1, 2], "PLAYER_NAME": ["A", "B"], "TEAM_ID": [10, 20],
         "POSITION": ["G", "F"],
         "last_game_date": [pd.Timestamp("2026-01-01"), pd.Timestamp("2026-01-02")],
         "games_count": [15, 5],
         "PTS_global_mean": [20.0, float("nan")], "REB_w5_mean": [5.0, 3.0],
     })
-    tav = pd.DataFrame({"TEAM_ID": [10, 20], "OPP_ALLOWED_PTS_global_mean": [110.0, 108.0]})
-    tov = pd.DataFrame({"TEAM_ID": [10, 20], "TEAM_PTS_global_mean": [112.0, 109.0]})
+    tav = pl.DataFrame({"TEAM_ID": [10, 20], "OPP_ALLOWED_PTS_global_mean": [110.0, 108.0]})
+    tov = pl.DataFrame({"TEAM_ID": [10, 20], "TEAM_PTS_global_mean": [112.0, 109.0]})
     store = SimpleNamespace(player_vectors=pv, team_allowed_vectors=tav, team_own_vectors=tov)
 
     prows, tarows, torows = _serialize_vectors(store)
@@ -369,11 +371,11 @@ def test_vector_serialize_roundtrip():
               "features": p[7]} for p in prows]
     tacs = [{"team_id": t[0], "features": t[1]} for t in tarows]
 
-    pv2 = _player_vectors_df(precs).set_index("PLAYER_ID")
+    pv2 = _player_vectors_df(precs).to_pandas().set_index("PLAYER_ID")
     assert pv2.loc[1, "PTS_global_mean"] == 20.0
     assert pd.isna(pv2.loc[2, "PTS_global_mean"])      # NaN survived the JSON round-trip
     assert pv2.loc[1, "REB_w5_mean"] == 5.0
-    tav2 = _team_vectors_df(tacs).set_index("TEAM_ID")
+    tav2 = _team_vectors_df(tacs).to_pandas().set_index("TEAM_ID")
     assert tav2.loc[10, "OPP_ALLOWED_PTS_global_mean"] == 110.0
     # NaN is serialized as None (null in jsonb)
     assert prows[1][7]["PTS_global_mean"] is None
@@ -381,7 +383,7 @@ def test_vector_serialize_roundtrip():
     # Rows written before the fix were double-encoded: the codec decodes them to
     # a JSON *string*. They must still load until the next run rewrites them.
     legacy = [{**r, "features": json.dumps(r["features"])} for r in precs]
-    pv3 = _player_vectors_df(legacy).set_index("PLAYER_ID")
+    pv3 = _player_vectors_df(legacy).to_pandas().set_index("PLAYER_ID")
     assert pv3.loc[1, "PTS_global_mean"] == 20.0
     assert pd.isna(pv3.loc[2, "PTS_global_mean"])
 
@@ -399,14 +401,14 @@ def _real_stored_keys() -> tuple[set[str], set[str]]:
     """
     import numpy as np
 
-    from model_stats_inference.research import data as rdata
     from model_stats_inference.serving import conftest as synth
+    from model_stats_inference.serving import featurize
     from model_stats_inference.serving.feature_store import FeatureStore
 
-    players = synth._make_players(np.random.default_rng(0))
-    team_logs = synth._make_team_logs(np.random.default_rng(1))
+    players = synth.to_pl(synth._make_players(np.random.default_rng(0)))
+    team_logs = synth.to_pl(synth._make_team_logs(np.random.default_rng(1)))
     store = FeatureStore.build(
-        players, rdata.build_team_allowed(team_logs), rdata.build_team_own(team_logs)
+        players, featurize.build_team_allowed(team_logs), featurize.build_team_own(team_logs)
     )
     prows, tarows, torows = _serialize_vectors(store)
     player = set(prows[0][7])
@@ -548,7 +550,7 @@ async def test_rebuild_without_raw_rows_is_skipped_not_failed(service, monkeypat
     _auto_heal(monkeypatch)
     union, _ = _real_stored_keys()
     service._db.vector_feature_keys = union - {"USG_w10_mean"}
-    service._db.player_recs = pd.DataFrame()    # store not bootstrapped
+    service._db.player_recs = pl.DataFrame()    # store not bootstrapped
     _allow_fetch(monkeypatch, _night(expected_games=0))
 
     statuses = await service.run_catchup()

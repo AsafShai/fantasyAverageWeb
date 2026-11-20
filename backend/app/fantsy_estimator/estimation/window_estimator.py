@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
+import polars as pl
+
+from app.utils import pdcompat
 
 from ..preprocess.preprocess_columns import PreprocessColumns
 
@@ -11,6 +13,14 @@ from ..preprocess.preprocess_columns import PreprocessColumns
 _STAT_AVG_COLUMNS: tuple[str, ...] = tuple(
     PreprocessColumns.STAT_TO_AVG_COLUMN[s] for s in PreprocessColumns.SUM_STAT_COLUMNS
 )
+
+
+def _valid_rows(df_team: pl.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """df_team[stat_cols].dropna(): the stat matrix of complete rows and the row mask."""
+    cols = [pdcompat.as_float(df_team[c]) for c in _STAT_AVG_COLUMNS]
+    Y = np.column_stack(cols) if cols else np.zeros((df_team.height, 0))
+    valid = ~np.isnan(Y).any(axis=1)
+    return Y[valid], valid
 
 
 class WindowEstimator:
@@ -37,13 +47,13 @@ class WindowEstimator:
         self.decay = decay
         self.step_size = step_size
 
-    def fit(self, df_team: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    def fit(self, df_team: pl.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         """
         Estimate mean vector and covariance matrix for one team.
 
         Parameters
         ----------
-        df_team : pd.DataFrame
+        df_team : pl.DataFrame
             Preprocessed rows for one team (includes avg_*_in_period columns),
             ordered by scoring_period_id. May include NaN rows (first period).
 
@@ -54,14 +64,12 @@ class WindowEstimator:
         covariance_matrix : np.ndarray, shape (d, d)
             Recency-weighted covariance matrix across windows.
         """
-        stat_cols = list(_STAT_AVG_COLUMNS)
-        valid = df_team[stat_cols].dropna()
-        Y = valid.to_numpy(dtype=float)
+        Y, valid = _valid_rows(df_team)
         n_rows, d = Y.shape
         # Row weights: periods with more games played affect more
         gp_col = PreprocessColumns.GP_IN_PERIOD
         if gp_col in df_team.columns:
-            W = df_team.loc[valid.index, gp_col].to_numpy(dtype=float)
+            W = pdcompat.as_float(df_team[gp_col])[valid]
             W = np.maximum(W, 0.0)
         else:
             W = np.ones(n_rows, dtype=float)
@@ -111,7 +119,7 @@ class WindowEstimator:
 
         return np.asarray(mean_vec), np.asarray(cov_mat)
 
-    def mean_weights(self, df_team: pd.DataFrame) -> np.ndarray:
+    def mean_weights(self, df_team: pl.DataFrame) -> np.ndarray:
         """
         The weight each period row ends up with in the mean ``fit`` returns,
         normalised to sum to 1 (one per row with all stats present). The mean
@@ -119,13 +127,13 @@ class WindowEstimator:
         Var(mean) = Σ · Σ ω_i²: few rows, or weight piled on the latest
         windows, mean an uncertain mean.
         """
-        valid = df_team[list(_STAT_AVG_COLUMNS)].dropna()
-        n_rows = len(valid)
+        Y, valid = _valid_rows(df_team)
+        n_rows = len(Y)
         if n_rows == 0:
             return np.zeros(0)
         gp_col = PreprocessColumns.GP_IN_PERIOD
         if gp_col in df_team.columns:
-            W = np.maximum(df_team.loc[valid.index, gp_col].to_numpy(dtype=float), 0.0)
+            W = np.maximum(pdcompat.as_float(df_team[gp_col])[valid], 0.0)
         else:
             W = np.ones(n_rows, dtype=float)
 

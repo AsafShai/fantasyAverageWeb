@@ -3,7 +3,9 @@ import hashlib
 import logging
 from datetime import date, datetime, timedelta
 from typing import Optional, Tuple
-import pandas as pd
+
+import numpy as np
+import polars as pl
 from app.models import PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError
 from app.services.data_provider import DataProvider
@@ -130,7 +132,7 @@ async def compute_windowed_agg(
     db_service: DBService,
     start: Optional[date] = None,
     end: Optional[date] = None,
-) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
+) -> Tuple[pl.DataFrame, Optional[date], Optional[date]]:
     """DB-only half of build_windowed_players_df: resolves the date window and
     aggregates fs_player_games over it. Independent of the ESPN players
     DataFrame, so callers that fetch ESPN data too can run this concurrently
@@ -145,9 +147,9 @@ async def compute_windowed_agg(
 
 def merge_windowed_players_df(
     time_period: StatTimePeriod,
-    espn_players_df: pd.DataFrame,
-    agg_df: pd.DataFrame,
-) -> pd.DataFrame:
+    espn_players_df: pl.DataFrame,
+    agg_df: pl.DataFrame,
+) -> pl.DataFrame:
     """Overlay fs_player_games-aggregated stats (from compute_windowed_agg) onto
     an ESPN players DataFrame.
 
@@ -169,33 +171,37 @@ def merge_windowed_players_df(
     except a player who did not play is has_data=False so a ranking of that
     night is the players who played, not a league of zeros.
     """
-    merged = espn_players_df.copy()
+    merged = espn_players_df
     window_only = time_period in (StatTimePeriod.CUSTOM, StatTimePeriod.LAST_NIGHT)
-    merged['_join_key'] = merged['Name'].map(resolve_join_key)
+    merged = merged.with_columns(pl.Series('_join_key', [resolve_join_key(n) for n in merged['Name'].to_list()],
+                                           dtype=pl.String))
     stat_cols = {
         **_DB_STAT_COLS,
         **{c: db for c, db in _DB_EXTRA_STAT_COLS.items() if c in merged.columns},
     }
 
-    if agg_df.empty:
-        windowed = pd.Series(False, index=merged.index)
+    n = merged.height
+    if agg_df.is_empty():
+        windowed = np.zeros(n, dtype=bool)
     else:
-        agg_df = agg_df.copy()
-        agg_df['_join_key'] = agg_df['player_name'].map(resolve_join_key)
-        agg_df = agg_df.drop_duplicates('_join_key', keep='first')
+        agg_df = agg_df.with_columns(pl.Series(
+            '_join_key', [resolve_join_key(x) for x in agg_df['player_name'].to_list()], dtype=pl.String))
+        agg_df = agg_df.unique(subset=['_join_key'], keep='first', maintain_order=True)
         stat_cols = {c: db for c, db in stat_cols.items() if db in agg_df.columns}
         db_cols = ['_join_key'] + list(stat_cols.values())
-        merged = merged.merge(agg_df[db_cols], on='_join_key', how='left', suffixes=('', '_db'))
-        windowed = merged['gp'].notna()
-        for espn_col, db_col in stat_cols.items():
-            merged.loc[windowed, espn_col] = merged.loc[windowed, db_col]
+        merged = merged.join(agg_df.select(db_cols), on='_join_key', how='left', maintain_order='left')
+        gp_db = merged['gp']
+        windowed = (gp_db.is_not_null() & ~gp_db.cast(pl.Float64).is_nan()).to_numpy()
+        merged = merged.with_columns([
+            _overlay(merged, espn_col, db_col, windowed) for espn_col, db_col in stat_cols.items()
+        ])
 
     if window_only:
-        known = pd.Series(True, index=merged.index)
+        known = np.ones(n, dtype=bool)
     else:
-        known = (merged['Pro Team'] != 'FA') | windowed
+        known = (merged['Pro Team'] != 'FA').to_numpy() | windowed
 
-    merged['has_data'] = True
+    has_data = np.ones(n, dtype=bool)
 
     # Custom ranges and last night force-zero players with no games in the
     # window — they have no ESPN split to fall back to. Other presets leave
@@ -205,10 +211,15 @@ def merge_windowed_players_df(
         zero_matched = ~windowed
         overwritten = windowed | zero_matched
         if zero_matched.any():
-            for espn_col in stat_cols:
-                merged.loc[zero_matched, espn_col] = 0 if espn_col == 'GP' else 0.0
+            mask = pl.Series(zero_matched)
+            merged = merged.with_columns([
+                pl.when(mask).then(pl.lit(0 if espn_col == 'GP' else 0.0)).otherwise(pl.col(espn_col))
+                .cast(merged.schema[espn_col] if espn_col == 'GP' else pl.Float64).alias(espn_col)
+                for espn_col in stat_cols
+            ])
         if time_period == StatTimePeriod.LAST_NIGHT:
-            merged.loc[zero_matched, 'has_data'] = False
+            has_data = np.where(zero_matched, False, has_data)
+    merged = merged.with_columns(pl.Series('has_data', has_data, dtype=pl.Boolean))
 
     # Ratio categories other than FG%/FT% (which the aggregate computes itself)
     # still hold ESPN's value for its split; rebuild them from the window's
@@ -218,32 +229,46 @@ def merge_windowed_players_df(
             continue
         if numerator not in stat_cols or denominator not in stat_cols:
             continue
-        num = merged.loc[overwritten, numerator].astype(float)
-        den = merged.loc[overwritten, denominator].astype(float)
-        merged.loc[overwritten, category] = (num / den.where(den != 0)).fillna(0.0)
+        num = merged[numerator].cast(pl.Float64).to_numpy()
+        den = merged[denominator].cast(pl.Float64).to_numpy()
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ratio = num / np.where(den != 0, den, np.nan)
+        ratio = np.where(np.isnan(ratio), 0.0, ratio)
+        current = merged[category].cast(pl.Float64).to_numpy()
+        merged = merged.with_columns(pl.Series(category, np.where(overwritten, ratio, current), dtype=pl.Float64))
 
     unmatched = ~known
     if unmatched.any():
-        missed = merged.loc[unmatched, 'Name'].tolist()
+        missed = [name for name, miss in zip(merged['Name'].to_list(), unmatched) if miss]
         warn_on_change(
             logger, f"players-unresolved:{time_period.value}", missed,
             f"{len(missed)} players did not resolve to a current-season NBA player "
             f"(time_period={time_period.value}): {missed[:20]}",
         )
 
-    merged['GP'] = merged['GP'].astype(int)
+    merged = merged.with_columns(pl.col('GP').cast(pl.Float64).cast(pl.Int64))
     drop_cols = ['_join_key'] + list(_DB_STAT_COLS.values()) + list(_DB_EXTRA_STAT_COLS.values())
-    merged = merged.drop(columns=[c for c in drop_cols if c in merged.columns])
-    return merged
+    return merged.drop([c for c in drop_cols if c in merged.columns])
+
+
+def _overlay(merged: pl.DataFrame, espn_col: str, db_col: str, windowed: np.ndarray) -> pl.Series:
+    """merged.loc[windowed, espn_col] = merged.loc[windowed, db_col]."""
+    espn = merged[espn_col]
+    db = merged[db_col].cast(pl.Float64)
+    values = np.where(windowed, db.fill_null(float('nan')).to_numpy(), espn.cast(pl.Float64).to_numpy())
+    out = pl.Series(espn_col, values, dtype=pl.Float64)
+    if espn.dtype.is_integer() and np.all(np.mod(values, 1) == 0):
+        out = out.cast(espn.dtype)   # pandas keeps an int column int when the values fit
+    return out
 
 
 async def build_windowed_players_df(
     time_period: StatTimePeriod,
-    espn_players_df: pd.DataFrame,
+    espn_players_df: pl.DataFrame,
     db_service: DBService,
     start: Optional[date] = None,
     end: Optional[date] = None,
-) -> Tuple[pd.DataFrame, Optional[date], Optional[date]]:
+) -> Tuple[pl.DataFrame, Optional[date], Optional[date]]:
     """compute_windowed_agg + merge_windowed_players_df run back-to-back.
     Callers that can fetch espn_players_df concurrently with the DB
     aggregation should call the two halves separately instead."""
@@ -361,7 +386,7 @@ class PlayerService:
             compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
         )
 
-        if espn_players_df is None or espn_players_df.empty:
+        if espn_players_df is None or espn_players_df.is_empty():
             raise ResourceNotFoundError("No players found")
 
         previous = _windowed_players_cache.get(time_period) if is_preset else None

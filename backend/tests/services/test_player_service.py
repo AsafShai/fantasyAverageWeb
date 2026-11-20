@@ -3,6 +3,8 @@ import json
 from datetime import date
 
 import pandas as pd
+
+import polars as pl
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
@@ -50,7 +52,7 @@ def player_service():
     svc.data_provider = MagicMock()
     svc.data_provider.db_service = MagicMock()
     svc.data_provider.db_service.aggregate_player_games = AsyncMock(
-        return_value=(pd.DataFrame(), None, None)
+        return_value=(pl.DataFrame(), None, None)
     )
     from app.utils.constants import RANKING_CATEGORIES
     svc.data_provider.get_ranking_categories = AsyncMock(return_value=list(RANKING_CATEGORIES))
@@ -64,7 +66,7 @@ def player_service():
 def sample_window_players_df():
     """ESPN-shaped players DataFrame (has the columns build_windowed_players_df
     actually reads/writes), unlike the team-stats fixtures reused elsewhere."""
-    return pd.DataFrame({
+    return pl.DataFrame({
         'Name': ['Player X', 'Player Y', 'Player Z'],
         'team_id': [1, 2, 3],
         'Pro Team': ['LAL', 'BOS', 'GSW'],
@@ -139,7 +141,7 @@ class TestGetAllPlayers:
 
     @pytest.mark.asyncio
     async def test_empty_df_raises(self, player_service):
-        player_service.data_provider.get_players_df = AsyncMock(return_value=pd.DataFrame())
+        player_service.data_provider.get_players_df = AsyncMock(return_value=pl.DataFrame())
         with pytest.raises(ResourceNotFoundError, match="No players found"):
             await player_service.get_all_players()
 
@@ -147,7 +149,7 @@ class TestGetAllPlayers:
     async def test_custom_period_passes_actual_dates_through(self, player_service, sample_window_players_df):
         player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
         player_service.data_provider.db_service.aggregate_player_games = AsyncMock(
-            return_value=(pd.DataFrame(), date(2026, 1, 2), date(2026, 1, 9))
+            return_value=(pl.DataFrame(), date(2026, 1, 2), date(2026, 1, 9))
         )
         player_service.response_builder.build_all_players_response.return_value = []
 
@@ -164,6 +166,20 @@ def test_espn_season_string():
     assert espn_season_string(2031) == "2030-31"
 
 
+@pytest.fixture
+def sample_window_players_pd(sample_window_players_df):
+    """The ESPN frame as pandas, for tests that edit it in place before the call."""
+    return sample_window_players_df.to_pandas()
+
+
+async def _build_windowed(period, espn_df, db, *args, **kwargs):
+    """build_windowed_players_df on a pandas-built input; the merged frame back as pandas."""
+    if isinstance(espn_df, pd.DataFrame):
+        espn_df = pl.from_pandas(espn_df)
+    merged, start, end = await build_windowed_players_df(period, espn_df, db, *args, **kwargs)
+    return merged.to_pandas(), start, end
+
+
 class TestBuildWindowedPlayersDf:
     """The core join/fallback logic: known-with-games, known-zero-games
     (including season-long-injury), unknown-preset-fallback, custom-always-known."""
@@ -171,13 +187,13 @@ class TestBuildWindowedPlayersDf:
     def _db_service(self, agg_df=None):
         db = MagicMock()
         db.aggregate_player_games = AsyncMock(
-            return_value=(agg_df if agg_df is not None else pd.DataFrame(), date(2026, 1, 2), date(2026, 1, 9))
+            return_value=(agg_df if agg_df is not None else pl.DataFrame(), date(2026, 1, 2), date(2026, 1, 9))
         )
         return db
 
     @pytest.mark.asyncio
-    async def test_known_player_uses_db_totals(self, sample_window_players_df):
-        agg_df = pd.DataFrame([{
+    async def test_known_player_uses_db_totals(self, sample_window_players_pd):
+        agg_df = pl.DataFrame([{
             'player_id': 1, 'player_name': 'Player X', 'gp': 4,
             'pts': 100.0, 'reb': 20.0, 'ast': 16.0, 'stl': 4.0, 'blk': 2.0,
             'fgm': 28.0, 'fga': 60.0, 'ftm': 12.0, 'fta': 16.0,
@@ -186,8 +202,8 @@ class TestBuildWindowedPlayersDf:
         }])
         db = self._db_service(agg_df)
 
-        merged, actual_start, actual_end = await build_windowed_players_df(
-            StatTimePeriod.LAST_7, sample_window_players_df, db
+        merged, actual_start, actual_end = await _build_windowed(
+            StatTimePeriod.LAST_7, sample_window_players_pd, db
         )
 
         row = merged[merged['Name'] == 'Player X'].iloc[0]
@@ -200,12 +216,12 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_custom_window_overlays_extra_counting_and_ratio_categories(
-        self, sample_window_players_df
+        self, sample_window_players_pd
     ):
         """A league scoring TO and A/TO: a custom window must not show the
         window's AST next to ESPN's season TO, nor keep ESPN's season A/TO."""
-        espn = sample_window_players_df.assign(TO=[90.0, 80.0, 70.0], **{'A/TO': [9.9, 9.9, 9.9]})
-        agg_df = pd.DataFrame([{
+        espn = sample_window_players_pd.assign(TO=[90.0, 80.0, 70.0], **{'A/TO': [9.9, 9.9, 9.9]})
+        agg_df = pl.DataFrame([{
             'player_id': 1, 'player_name': 'Player X', 'gp': 4,
             'pts': 100.0, 'reb': 20.0, 'ast': 16.0, 'stl': 4.0, 'blk': 2.0,
             'fgm': 28.0, 'fga': 60.0, 'ftm': 12.0, 'fta': 16.0,
@@ -213,7 +229,7 @@ class TestBuildWindowedPlayersDf:
             'min': 120.0, 'fg_pct': 28.0 / 60.0, 'ft_pct': 12.0 / 16.0,
         }])
 
-        merged, _, _ = await build_windowed_players_df(
+        merged, _, _ = await _build_windowed(
             StatTimePeriod.CUSTOM, espn, self._db_service(agg_df), date(2026, 1, 2), date(2026, 1, 9)
         )
 
@@ -228,9 +244,9 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_last_night_is_one_date_and_drops_players_who_sat(
-        self, sample_window_players_df
+        self, sample_window_players_pd
     ):
-        agg_df = pd.DataFrame([{
+        agg_df = pl.DataFrame([{
             'player_id': 1, 'player_name': 'Player X', 'gp': 1,
             'pts': 28.0, 'reb': 6.0, 'ast': 4.0, 'stl': 1.0, 'blk': 0.0,
             'fgm': 10.0, 'fga': 18.0, 'ftm': 6.0, 'fta': 7.0,
@@ -239,8 +255,8 @@ class TestBuildWindowedPlayersDf:
         }])
         db = self._db_service(agg_df)
 
-        merged, _, _ = await build_windowed_players_df(
-            StatTimePeriod.LAST_NIGHT, sample_window_players_df, db
+        merged, _, _ = await _build_windowed(
+            StatTimePeriod.LAST_NIGHT, sample_window_players_pd, db
         )
 
         start, end, _season = db.aggregate_player_games.await_args.args
@@ -256,13 +272,13 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_known_player_zero_games_in_window_keeps_espn_value(
-        self, sample_window_players_df
+        self, sample_window_players_pd
     ):
         """Player Y is on an ESPN roster (Pro Team != 'FA') but has no rows in
         this window — this is indistinguishable from a DB ingest gap for just
         this player, so the preset keeps ESPN's own split value instead of
         forcing a zero (unlike custom ranges, which have no ESPN fallback)."""
-        agg_df = pd.DataFrame([{
+        agg_df = pl.DataFrame([{
             'player_id': 1, 'player_name': 'Player X', 'gp': 2,
             'pts': 40.0, 'reb': 10.0, 'ast': 8.0, 'stl': 2.0, 'blk': 1.0,
             'fgm': 14.0, 'fga': 30.0, 'ftm': 6.0, 'fta': 8.0,
@@ -271,8 +287,8 @@ class TestBuildWindowedPlayersDf:
         }])
         db = self._db_service(agg_df)
 
-        merged, _, _ = await build_windowed_players_df(
-            StatTimePeriod.LAST_7, sample_window_players_df, db
+        merged, _, _ = await _build_windowed(
+            StatTimePeriod.LAST_7, sample_window_players_pd, db
         )
 
         row = merged[merged['Name'] == 'Player Y'].iloc[0]
@@ -282,16 +298,16 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_known_player_out_all_season_is_zero_row_not_no_data(
-        self, sample_window_players_df
+        self, sample_window_players_pd
     ):
         """Regression: a real, identifiable player out all season (e.g. a
         season-ending injury) must NOT collapse into 'no data' just because
         fs_player_games has zero rows for them all year — custom ranges treat
         every player as known regardless of the aggregation window."""
-        db = self._db_service(pd.DataFrame())  # nobody has any games in fs_player_games at all
+        db = self._db_service(pl.DataFrame())  # nobody has any games in fs_player_games at all
 
-        merged, _, _ = await build_windowed_players_df(
-            StatTimePeriod.CUSTOM, sample_window_players_df, db,
+        merged, _, _ = await _build_windowed(
+            StatTimePeriod.CUSTOM, sample_window_players_pd, db,
             start=date(2026, 1, 1), end=date(2026, 1, 10),
         )
 
@@ -302,7 +318,7 @@ class TestBuildWindowedPlayersDf:
 
     @pytest.mark.asyncio
     async def test_known_player_preset_with_fully_empty_window_keeps_espn_value(
-        self, sample_window_players_df
+        self, sample_window_players_pd
     ):
         """Regression: if the DB has zero rows for the ENTIRE window (e.g. the
         anchor-date resolution still lands somewhere with no games at all),
@@ -310,11 +326,11 @@ class TestBuildWindowedPlayersDf:
         empty window is a property of the window, not evidence this specific
         player had no games. Custom ranges still zero (test above), since
         they have no ESPN value to fall back to."""
-        db = self._db_service(pd.DataFrame())
+        db = self._db_service(pl.DataFrame())
 
-        original_pts = sample_window_players_df.set_index('Name')['PTS'].to_dict()
-        merged, _, _ = await build_windowed_players_df(
-            StatTimePeriod.LAST_30, sample_window_players_df, db
+        original_pts = sample_window_players_pd.set_index('Name')['PTS'].to_dict()
+        merged, _, _ = await _build_windowed(
+            StatTimePeriod.LAST_30, sample_window_players_pd, db
         )
 
         for name, pts in original_pts.items():
@@ -323,14 +339,14 @@ class TestBuildWindowedPlayersDf:
             assert bool(row['has_data']) is True
 
     @pytest.mark.asyncio
-    async def test_unknown_preset_falls_back_to_espn_value(self, sample_window_players_df):
+    async def test_unknown_preset_falls_back_to_espn_value(self, sample_window_players_pd):
         # ESPN free agents ('FA'), no fs_player_games rows -> preset periods keep the ESPN row untouched.
-        sample_window_players_df['Pro Team'] = 'FA'
-        db = self._db_service(pd.DataFrame())
+        sample_window_players_pd['Pro Team'] = 'FA'
+        db = self._db_service(pl.DataFrame())
 
-        original_pts = sample_window_players_df.set_index('Name')['PTS'].to_dict()
-        merged, _, _ = await build_windowed_players_df(
-            StatTimePeriod.SEASON, sample_window_players_df, db
+        original_pts = sample_window_players_pd.set_index('Name')['PTS'].to_dict()
+        merged, _, _ = await _build_windowed(
+            StatTimePeriod.SEASON, sample_window_players_pd, db
         )
 
         for name, pts in original_pts.items():
@@ -339,15 +355,15 @@ class TestBuildWindowedPlayersDf:
             assert bool(row['has_data']) is True
 
     @pytest.mark.asyncio
-    async def test_custom_range_zeroes_regardless_of_espn_roster_status(self, sample_window_players_df):
+    async def test_custom_range_zeroes_regardless_of_espn_roster_status(self, sample_window_players_pd):
         """Custom ranges skip the roster gate entirely: even an ESPN free
         agent with no fs_player_games rows is treated as known and just
         zeroed, never dropped to has_data=False."""
-        sample_window_players_df['Pro Team'] = 'FA'
-        db = self._db_service(pd.DataFrame())
+        sample_window_players_pd['Pro Team'] = 'FA'
+        db = self._db_service(pl.DataFrame())
 
-        merged, _, _ = await build_windowed_players_df(
-            StatTimePeriod.CUSTOM, sample_window_players_df, db,
+        merged, _, _ = await _build_windowed(
+            StatTimePeriod.CUSTOM, sample_window_players_pd, db,
             start=date(2026, 1, 1), end=date(2026, 1, 10),
         )
 
@@ -357,8 +373,8 @@ class TestBuildWindowedPlayersDf:
             assert row['GP'] == 0
 
     @pytest.mark.asyncio
-    async def test_name_override_resolves_mismatch(self, sample_window_players_df):
-        agg_df = pd.DataFrame([{
+    async def test_name_override_resolves_mismatch(self, sample_window_players_pd):
+        agg_df = pl.DataFrame([{
             'player_id': 9, 'player_name': 'X. Player', 'gp': 1,
             'pts': 25.0, 'reb': 5.0, 'ast': 4.0, 'stl': 1.0, 'blk': 1.0,
             'fgm': 9.0, 'fga': 18.0, 'ftm': 4.0, 'fta': 5.0,
@@ -372,8 +388,8 @@ class TestBuildWindowedPlayersDf:
         db_key = name_matching.normalize_player_name('X. Player')
         name_matching.NAME_OVERRIDES[espn_key] = db_key
         try:
-            merged, _, _ = await build_windowed_players_df(
-                StatTimePeriod.LAST_7, sample_window_players_df, db
+            merged, _, _ = await _build_windowed(
+                StatTimePeriod.LAST_7, sample_window_players_pd, db
             )
         finally:
             name_matching.NAME_OVERRIDES.pop(espn_key, None)
@@ -486,7 +502,7 @@ class TestDynamicCategoriesPlayers:
         service.data_provider = DataProvider()
         service.data_provider.db_service = MagicMock()
         service.data_provider.db_service.aggregate_player_games = AsyncMock(
-            return_value=(pd.DataFrame(), None, None)
+            return_value=(pl.DataFrame(), None, None)
         )
 
         standings_resp = MagicMock()
@@ -527,9 +543,8 @@ class TestWindowedPlayersCache:
 
     @pytest.fixture
     def many_players_df(self, sample_window_players_df):
-        df = pd.concat([sample_window_players_df] * 4, ignore_index=True)
-        df['Name'] = [f"Player {i}" for i in range(len(df))]
-        return df
+        df = pl.concat([sample_window_players_df] * 4)
+        return df.with_columns(pl.Series('Name', [f"Player {i}" for i in range(len(df))]))
 
     @staticmethod
     def _build_side_effect(df, categories=None):
@@ -601,7 +616,7 @@ class TestWindowedPlayersCache:
         first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
         entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
-        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df.copy())
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df.clone())
 
         second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
@@ -617,7 +632,7 @@ class TestWindowedPlayersCache:
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
         entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
         player_service.data_provider.db_service.aggregate_player_games = AsyncMock(return_value=(
-            pd.DataFrame({'player_id': [1], 'player_name': ['Player 0'], 'gp': [1], 'pts': [30.0]}),
+            pl.DataFrame({'player_id': [1], 'player_name': ['Player 0'], 'gp': [1], 'pts': [30.0]}),
             date(2026, 7, 9), date(2026, 7, 9),
         ))
 
@@ -658,7 +673,7 @@ class TestWindowedPlayersCache:
         first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
         entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
-        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df.copy())
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df.clone())
 
         served = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
         assert served.players[0] is first.players[0]
@@ -686,7 +701,7 @@ class TestWindowedPlayersCache:
         async def slow_fetch(*_args):
             fetching.set()
             await release.wait()
-            return many_players_df.copy()
+            return many_players_df.clone()
 
         player_service.data_provider.get_players_df = slow_fetch
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
@@ -784,7 +799,7 @@ class TestPlayersEtag:
 
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
         entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
-        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df.copy())
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df.clone())
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
         assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) != before

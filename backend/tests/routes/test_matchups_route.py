@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import polars as pl
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
@@ -22,7 +23,7 @@ _MOCK_GAMES = {
     'LAL': GameInfo(opponent='CHA', is_home=True),
     'CHA': GameInfo(opponent='LAL', is_home=False),
 }
-_MOCK_PLAYERS = pd.DataFrame([
+_MOCK_PLAYERS = pl.DataFrame([
     {'Name': 'Anthony Davis', 'Pro Team': 'LAL', 'Positions': 'C', 'status': 'ONTEAM', 'team_id': 1},
     {'Name': 'Player Off', 'Pro Team': 'BOS', 'Positions': 'PG', 'status': 'ONTEAM', 'team_id': 2},
 ])
