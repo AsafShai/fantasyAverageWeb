@@ -38,6 +38,13 @@ Endpoints that order only by score — `/api/surprises/latest`, `/api/surprises/
 Measured: pandas 3 distinct orders in 4 runs, Polars 2 in 6. A tiebreaker (`ORDER BY score DESC, player_id`)
 would fix it; left out of this change because it changes output.
 
+After merging `dev` (injury PDF parser pdfplumber → pypdfium2) the golden run was repeated: DB (incl.
+`player_injury_status`), model and jobs exact; the endpoints identical to an earlier pre-merge Polars run, which
+is the tie-order variant described above (surprises / feature-store players), so the merge changed no output.
+
+Not covered by the golden run: live-game paths (the recording is at 07:00 ET, no game in progress), other
+leagues and other dates.
+
 ## Tests
 
 - Backend `pytest`: 1618 passed (14 deselected `live`).
