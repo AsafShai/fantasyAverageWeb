@@ -106,3 +106,21 @@ async def test_lifespan_skips_adp_scheduler_when_disabled():
             assert "adp-snapshot-scheduler" not in names
 
     adp_start.assert_not_called()
+
+
+def test_app_import_does_not_load_pdfminer():
+    """The injury report is parsed with pypdfium2; pdfplumber/pdfminer cost
+    ~12 MB RSS and ~0.3 CPU-s per parse on the 512 MB / 0.15 CPU host."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    code = (
+        "import sys, app.main; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] in ('pdfplumber', 'pdfminer')))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).parents[1], capture_output=True, text=True, check=True,
+    ).stdout.strip().splitlines()[-1]
+    assert out == "[]"
