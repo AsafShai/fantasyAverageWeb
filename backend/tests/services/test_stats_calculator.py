@@ -98,6 +98,14 @@ class TestStatsCalculator:
         
         assert result == {}, "Should return empty dict for empty DataFrame"
     
+    def test_normalize_for_heatmap_tolerates_a_null(self, stats_calculator, sample_stats_calculator_averages_df):
+        """A null reads as NaN (as pandas gave), not a TypeError."""
+        df = sample_stats_calculator_averages_df
+        col = next(c for c, t in df.schema.items() if t.is_numeric())
+        df = df.with_columns(pl.when(pl.int_range(pl.len()) == 0).then(None).otherwise(pl.col(col)).alias(col))
+        result = stats_calculator.normalize_for_heatmap(df)
+        assert len(result) == len(df)
+
     def test_normalize_for_heatmap_success(self, stats_calculator, sample_stats_calculator_averages_df):
         """Test successful heatmap normalization using diverging scale"""
         result = stats_calculator.normalize_for_heatmap(sample_stats_calculator_averages_df)

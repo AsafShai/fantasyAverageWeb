@@ -730,3 +730,47 @@ async def test_averages_over_time_skips_counts_when_no_games(db_service, monkeyp
 
     assert "PTS" not in point["values"]
     assert point["pts"] is None
+
+
+class _NamedRecord(_FakeRecord):
+    """Like asyncpg.Record, also indexed by column name."""
+
+    def __getitem__(self, key):
+        return super().__getitem__(self._k.index(key) if isinstance(key, str) else key)
+
+
+def test_records_frame_with_columns_reads_by_name():
+    """A subset or reordered ``columns`` gets each column's own values."""
+    from app.utils.frames import records_frame
+
+    df = records_frame(
+        [_NamedRecord({"player_id": 1, "game_date": date(2026, 1, 5), "min": 31.5})],
+        columns=["game_date", "player_id"],
+    )
+    assert df.row(0) == (date(2026, 1, 5), 1)
+
+
+@pytest.mark.asyncio
+async def test_surprise_write_replaces_the_night(db_service, monkeypatch):
+    """With ``night``, rows of that night the scoring no longer produced are
+    deleted in the same transaction as the upsert."""
+    conn = FakeConn()
+    conn.execute = AsyncMock(return_value="DELETE 1")
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+    night = date(2026, 1, 15)
+    row = ("0021409900", 7, night) + (None,) * 24
+
+    assert await db_service.insert_model_surprise_rows([row], night=night)
+    sql, *args = conn.execute.await_args.args
+    assert sql.strip().startswith("DELETE FROM model_surprise_results")
+    assert args == [night, ["0021409900"], [7]]
+    conn.executemany.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_surprise_write_without_night_only_upserts(db_service, monkeypatch):
+    conn = FakeConn()
+    conn.execute = AsyncMock()
+    monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
+    assert await db_service.insert_model_surprise_rows([("g", 1, date(2026, 1, 15)) + (None,) * 24])
+    conn.execute.assert_not_awaited()

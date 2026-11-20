@@ -2070,8 +2070,13 @@ class DBService:
             logger.error(f"Failed to fetch unscored nights: {type(e).__name__}: {e}")
             return []
 
-    async def insert_model_surprise_rows(self, rows: list[tuple]) -> bool:
-        """Upsert scored player-games. Tuple order must match the columns below."""
+    async def insert_model_surprise_rows(self, rows: list[tuple], night: Optional[date] = None) -> bool:
+        """Upsert scored player-games. Tuple order must match the columns below.
+
+        With ``night``, the write replaces that night: its stored rows not in
+        ``rows`` (a line a correction took below the minutes floor) are
+        deleted in the same transaction, so the stored night is exactly what
+        the scoring produced and the staleness check does not flag it again."""
         pool = await self._get_pool()
         if pool is None:
             return False
@@ -2085,13 +2090,28 @@ class DBService:
         updates = ",\n".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("game_id", "player_id"))
         try:
             async with pool.acquire() as conn:
-                await conn.executemany(
-                    f"INSERT INTO model_surprise_results ({', '.join(cols)}) VALUES "
-                    f"({', '.join(f'${i + 1}' for i in range(len(cols)))}) "
-                    f"ON CONFLICT (game_id, player_id) DO UPDATE SET {updates}, updated_at = NOW()",
-                    rows,
-                )
-            logger.info(f"Upserted {len(rows)} model surprise rows")
+                async with conn.transaction():
+                    removed = 0
+                    if night is not None:
+                        status = await conn.execute(
+                            """
+                            DELETE FROM model_surprise_results s
+                            WHERE s.game_date = $1
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM unnest($2::text[], $3::bigint[]) AS k(game_id, player_id)
+                                  WHERE k.game_id = s.game_id AND k.player_id = s.player_id)
+                            """,
+                            night, [str(r[0]) for r in rows], [int(r[1]) for r in rows],
+                        )
+                        removed = int(status.split()[-1]) if status else 0
+                    await conn.executemany(
+                        f"INSERT INTO model_surprise_results ({', '.join(cols)}) VALUES "
+                        f"({', '.join(f'${i + 1}' for i in range(len(cols)))}) "
+                        f"ON CONFLICT (game_id, player_id) DO UPDATE SET {updates}, updated_at = NOW()",
+                        rows,
+                    )
+            logger.info(f"Upserted {len(rows)} model surprise rows"
+                        + (f", removed {removed} no longer scored" if removed else ""))
             return True
         except Exception as e:
             logger.error(f"Failed to insert model surprise rows: {type(e).__name__}: {e}")

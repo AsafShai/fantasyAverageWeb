@@ -49,11 +49,15 @@ def records_frame(records: Sequence, columns: list[str] | None = None) -> pl.Dat
     """asyncpg Records (or dicts) -> DataFrame, column-wise, columns looked up by name."""
     if not records:
         return pl.DataFrame()
-    if columns is None:
+    by_position = columns is None
+    if by_position:
+        # The record's own keys, in its own order: read by position (cheaper,
+        # and works for Record-likes that only index by int).
         columns = list(records[0].keys())
     cols = []
     for i, name in enumerate(columns):
-        cols.append(series(name, [r[name] if isinstance(r, dict) else r[i] for r in records]))
+        cols.append(series(name, [r[i] if by_position and not isinstance(r, dict) else r[name]
+                                  for r in records]))
     return pl.DataFrame(cols)
 
 

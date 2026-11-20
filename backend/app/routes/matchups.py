@@ -248,8 +248,11 @@ async def _build_matchups(
         game = games_today.get(pro_team)
         if game is None:
             continue
-        on_depth_chart = normalize_player_name(row['Name']) in depth_chart_names.get(pro_team, set())
-        if _inactive_listing(row, on_depth_chart):
+        team_chart = depth_chart_names.get(pro_team, set())
+        on_depth_chart = normalize_player_name(row['Name']) in team_chart
+        # An empty chart is a failed fetch/parse (get_on_depth_chart_names
+        # returns an empty set then): it says nothing about who is retired.
+        if team_chart and _inactive_listing(row, on_depth_chart):
             skipped_inactive += 1
             continue
         opponent = game.opponent

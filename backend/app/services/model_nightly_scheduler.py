@@ -110,12 +110,14 @@ def next_attempt(plan: NightPlan, done: bool, last_attempt: Optional[datetime]) 
 
 def _read_last_tip(night: date) -> tuple[Optional[datetime], bool]:
     """(last tip-off, scoreboard read) for ``night``; blocking, run in a thread."""
+    # Parsing is guarded too: one malformed event must not end the scheduler
+    # loop; an unreadable scoreboard plans like an unavailable one.
     try:
         scoreboard = espn_client.scoreboard(night.strftime("%Y%m%d"))
+        return espn_games.last_tip(scoreboard), True
     except Exception as e:
         logger.warning(f"Model nightly scheduler: scoreboard for {night} unavailable ({type(e).__name__}: {e})")
         return None, False
-    return espn_games.last_tip(scoreboard), True
 
 
 async def _plan(night: date) -> NightPlan:

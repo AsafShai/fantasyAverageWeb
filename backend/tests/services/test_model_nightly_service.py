@@ -1084,6 +1084,8 @@ class SweepDB(FakeDB):
     def __init__(self, stored_players, stored_teams, processed=(GAME_DATE,), stale=()):
         super().__init__()
         self.stored = (pl.DataFrame(stored_players), pl.DataFrame(stored_teams))
+        # The history read covers the stored night: full rows, as the DB has them.
+        self.player_recs, self.team_recs = self.stored
         self.processed, self.stale = set(processed), list(stale)
         self.committed, self.apply_ok = [], True
         self.stale_since = []
@@ -1256,7 +1258,63 @@ async def test_sweep_db_unavailable_and_errors_never_raise(sweep, monkeypatch):
     _allow_fetch(monkeypatch, _espn([_fs_player(1)], [_fs_team(10)]))
     assert await service.sweep_corrections(GAME_DATE) == "db_unavailable"
     monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: (_ for _ in ()).throw(RuntimeError("espn down")))
+    assert await service.sweep_corrections(GAME_DATE) == f"{GAME_DATE}: failed (RuntimeError): retried next morning"
+
+    async def ledger_down(d):
+        raise RuntimeError("ledger down")
+    service._db.get_model_nightly_run = ledger_down
     assert await service.sweep_corrections(GAME_DATE) == "failed"
+
+
+@pytest.mark.asyncio
+async def test_a_failing_night_costs_that_night_only(sweep, monkeypatch):
+    """ESPN down for one night: the other nights are still swept and Boom or
+    Bust is still rescored."""
+    service, calls = sweep
+    older = GAME_DATE - timedelta(days=1)
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)], processed=(older, GAME_DATE))
+
+    def fetch(d):
+        if d == older:
+            raise RuntimeError("espn down")
+        return _espn([_fs_player(1, reb=5)], [_fs_team(10)])
+    monkeypatch.setattr(mns.nightly, "fetch_night", fetch)
+    result = await service.sweep_corrections(GAME_DATE)
+    assert f"{older}: failed (RuntimeError)" in result and "vectors: refreshed" in result
+    assert len(service._db.committed) == 1 and calls["rescore"] == [(GAME_DATE, True)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("unreadable", ["history", "vectors", "as_of"])
+async def test_sweep_writes_nothing_when_history_or_vectors_are_unreadable(sweep, monkeypatch, unreadable):
+    """The DB readers return empty on an error. The night is stored, so empty
+    means an error: writing the rows without their vectors would leave the
+    vectors stale for good, so nothing is written."""
+    service, calls = sweep
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
+    if unreadable == "history":
+        service._db.player_recs, service._db.team_recs = pl.DataFrame(), pl.DataFrame()
+    elif unreadable == "vectors":
+        service._db.vector_rows = ([], [], [])
+    else:
+        service._db.vectors_as_of = None
+    _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5)], [_fs_team(10)]))
+    result = await service.sweep_corrections(GAME_DATE)
+    assert "nothing written" in result and service._db.committed == []
+    assert calls["invalidated"] == [] and calls["cleared"] == []
+
+
+@pytest.mark.asyncio
+async def test_sweep_reads_a_null_stat_as_zero(sweep, monkeypatch):
+    service, _ = sweep
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
+    fresh = _fs_player(1, reb=5)
+    fresh["STL"] = None
+    _allow_fetch(monkeypatch, _espn([fresh], [_fs_team(10)]))
+    result = await service.sweep_corrections(GAME_DATE)
+    assert "vectors: refreshed" in result
+    (_, _, actuals, _, _), = service._db.committed
+    assert actuals[0][2 + mns._EVAL_STATS.index("STL")] == 0.0
 
 
 @pytest.mark.asyncio
@@ -1287,5 +1345,13 @@ async def test_catchup_survives_a_failing_sweep(service, monkeypatch):
     rebuild = _stints_rebuild(monkeypatch)
     monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: (_ for _ in ()).throw(RuntimeError("down")))
     statuses = await service.run_catchup(through=GAME_DATE, final=True)
-    assert statuses["corrections"] == "failed"
+    assert "failed (RuntimeError)" in statuses["corrections"]
     rebuild.assert_awaited_once()
+
+
+def test_conform_raises_on_rows_missing_a_column():
+    """No rows is an empty frame; rows missing a column are an error, not "no rows"."""
+    assert mns._conform(None, _FS_TEAM_COLS).columns == _FS_TEAM_COLS
+    assert mns._conform(pl.DataFrame(), _FS_TEAM_COLS).is_empty()
+    with pytest.raises(ValueError, match="missing column"):
+        mns._conform(pl.DataFrame([{"TEAM_ID": 10}]), _FS_TEAM_COLS)
