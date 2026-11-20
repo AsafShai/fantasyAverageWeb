@@ -248,18 +248,26 @@ def _ewm_asof(players_sorted: pl.DataFrame, starts: np.ndarray, ends: np.ndarray
     ``players_sorted`` is stably sorted by [PLAYER_ID, GAME_DATE], so groups are
     the contiguous [starts, ends) segments.
     """
-    last = ends - 1
     MIN = _to_f64(players_sorted["MIN"])
     col = {c: _to_f64(players_sorted[c]) for c in players_sorted.columns
            if players_sorted.schema[c].is_numeric()}
 
-    def ewm(values: np.ndarray, hl: int) -> np.ndarray:
-        return kernels.ewm_mean(values, starts, ends, hl)[last]
+    # Each feature is queued here, then every column sharing a kernel (and
+    # halflife) runs through it as one (n, k) array: the same per-element
+    # arithmetic, one pass over the games instead of one per feature.
+    jobs: dict[tuple, list[tuple[str, np.ndarray]]] = {}
+    order: list[str] = []
 
-    def expanding(values: np.ndarray) -> np.ndarray:
-        return kernels.expanding_mean(values, starts, ends)[last]
+    def queue(name: str, values: np.ndarray, kind: tuple) -> None:
+        jobs.setdefault(kind, []).append((name, values))
+        order.append(name)
 
-    out: dict[str, np.ndarray] = {}
+    def ewm(name: str, values: np.ndarray, hl: int) -> None:
+        queue(name, values, ("ewm", hl))
+
+    def expanding(name: str, values: np.ndarray) -> None:
+        queue(name, values, ("expanding",))
+
     with np.errstate(divide="ignore", invalid="ignore"):
         for stat in config.EWM_STATS:
             per_game = col[stat]
@@ -267,14 +275,14 @@ def _ewm_asof(players_sorted: pl.DataFrame, starts: np.ndarray, ends: np.ndarray
             per_min = np.where(np.isinf(per_min), np.nan, per_min)
             has_any = (per_game >= config.EWM_SHARE_MIN.get(stat, 1)).astype(float)
             for hl in config.EWM_HALFLIVES:
-                out[f"{stat}_ewm{hl}_mean"] = ewm(per_game, hl)
-                out[f"{stat}_ewm{hl}_rate"] = ewm(per_min, hl)
-            out[f"{stat}_share_ewm{config.EWM_SHARE_HALFLIFE}"] = ewm(has_any, config.EWM_SHARE_HALFLIFE)
-            out[f"{stat}_share_global"] = expanding(has_any)
+                ewm(f"{stat}_ewm{hl}_mean", per_game, hl)
+                ewm(f"{stat}_ewm{hl}_rate", per_min, hl)
+            ewm(f"{stat}_share_ewm{config.EWM_SHARE_HALFLIFE}", has_any, config.EWM_SHARE_HALFLIFE)
+            expanding(f"{stat}_share_global", has_any)
             for thr in config.EWM_SHARE_EXTRA.get(stat, []):
                 ind = (col[stat] >= thr).astype(float)
-                out[f"{stat}_share{thr}_ewm{config.EWM_SHARE_HALFLIFE}"] = ewm(ind, config.EWM_SHARE_HALFLIFE)
-                out[f"{stat}_share{thr}_global"] = expanding(ind)
+                ewm(f"{stat}_share{thr}_ewm{config.EWM_SHARE_HALFLIFE}", ind, config.EWM_SHARE_HALFLIFE)
+                expanding(f"{stat}_share{thr}_global", ind)
 
         hl = config.EWM_COMPOSITE_HALFLIFE
 
@@ -285,12 +293,22 @@ def _ewm_asof(players_sorted: pl.DataFrame, starts: np.ndarray, ends: np.ndarray
         for name, weights in config.EWM_RATE_COMPOSITES.items():
             rate = weighted(weights) / MIN
             rate = np.where(np.isinf(rate), np.nan, rate)
-            out[f"{name}_ewm{hl}_rate"] = ewm(rate, hl)
+            ewm(f"{name}_ewm{hl}_rate", rate, hl)
         for name, (num_w, den_w) in config.EWM_RATIO_COMPOSITES.items():
             den = weighted(den_w)
             ratio = np.where(den > 0, weighted(num_w) / den, np.nan)
-            out[f"{name}_ewm{hl}"] = ewm(ratio, hl)
-    return out
+            ewm(f"{name}_ewm{hl}", ratio, hl)
+
+    results: dict[str, np.ndarray] = {}
+    for kind, items in jobs.items():
+        stacked = np.column_stack([np.asarray(v, dtype=np.float64) for _, v in items])
+        if kind[0] == "ewm":
+            res = kernels.ewm_mean(stacked, starts, ends, kind[1], last_only=True)
+        else:
+            res = kernels.expanding_mean(stacked, starts, ends, last_only=True)
+        for j, (name, _) in enumerate(items):
+            results[name] = res[:, j]
+    return {name: results[name] for name in order}
 
 
 def _bio_block(player_ids: np.ndarray, player_bio: pl.DataFrame | None) -> dict[str, np.ndarray]:

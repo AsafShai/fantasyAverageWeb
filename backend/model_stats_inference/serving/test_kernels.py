@@ -65,6 +65,29 @@ def test_multicolumn_matches_single_column():
         np.testing.assert_array_equal(_bits(both[:, j]), _bits(kernels.expanding_mean(m[:, j], starts, ends)))
 
 
+@pytest.mark.parametrize("seed", range(4))
+def test_last_only_is_each_groups_last_row_of_pandas(seed):
+    """last_only on a multi-column array == pandas' value at each group's last
+    row (featurize asks for exactly that, all columns of a halflife at once)."""
+    rng = np.random.default_rng(100 + seed)
+    keys = _groups(rng, 30, 150)
+    kinds = ("counts", "rates", "signed", "binary")
+    m = np.column_stack([_values(rng, len(keys), k) for k in kinds])
+    starts, ends = kernels.segments_from_sorted_keys(keys)
+    last = ends - 1
+    for hl in (2, 10):
+        got = kernels.ewm_mean(m, starts, ends, hl, last_only=True)
+        for j in range(m.shape[1]):
+            want = pd.Series(m[:, j]).groupby(keys, sort=False).transform(
+                lambda x: x.ewm(halflife=hl, min_periods=1).mean()).to_numpy()[last]
+            np.testing.assert_array_equal(_bits(got[:, j]), _bits(want))
+    got = kernels.expanding_mean(m, starts, ends, last_only=True)
+    for j in range(m.shape[1]):
+        want = pd.Series(m[:, j]).groupby(keys, sort=False).transform(
+            lambda x: x.expanding(min_periods=1).mean()).to_numpy()[last]
+        np.testing.assert_array_equal(_bits(got[:, j]), _bits(want))
+
+
 def test_shift_ffill_median_match_pandas():
     rng = np.random.default_rng(3)
     keys = _groups(rng, 30, 20)

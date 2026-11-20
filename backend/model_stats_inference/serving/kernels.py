@@ -79,9 +79,15 @@ def halflife_com(halflife: float) -> float:
 
 
 def ewm_mean(values: np.ndarray, starts: np.ndarray, ends: np.ndarray,
-             halflife: float, min_periods: int = 1) -> np.ndarray:
+             halflife: float, min_periods: int = 1, last_only: bool = False) -> np.ndarray:
     """Per-segment ``ewm(halflife=..., min_periods=...).mean()`` (adjust=True,
-    ignore_na=False). ``values`` is (n,) or (n, k); the result has its shape."""
+    ignore_na=False). ``values`` is (n,) or (n, k); the result has its shape,
+    or with ``last_only`` one row per segment: the value at its last row.
+
+    Pass all columns that share a halflife as one (n, k) array: the loop
+    then runs once for all of them. A segment's state stops changing once it
+    has no row at step i, so its state after the loop is its state at its
+    last row, which is what ``last_only`` returns."""
     v = _prep(values)
     one_d = v.ndim == 1
     if one_d:
@@ -97,11 +103,12 @@ def ewm_mean(values: np.ndarray, starts: np.ndarray, ends: np.ndarray,
 
     pad, valid, lengths, L = _padded(v, starts, ends)
     G = len(starts)
-    out = np.empty((G, L, k), dtype=np.float64)
+    out = None if last_only else np.empty((G, L, k), dtype=np.float64)
 
     weighted = pad[:, 0, :].copy()
     nobs = (weighted == weighted).astype(np.int64)
-    out[:, 0, :] = np.where(nobs >= minp, weighted, np.nan)
+    if out is not None:
+        out[:, 0, :] = np.where(nobs >= minp, weighted, np.nan)
     old_wt = np.ones((G, k), dtype=np.float64)
 
     for i in range(1, L):
@@ -125,15 +132,20 @@ def ewm_mean(values: np.ndarray, starts: np.ndarray, ends: np.ndarray,
         weighted_new = np.where(first_obs, cur, weighted_new)
         weighted = weighted_new
         old_wt = old_wt_new
-        out[:, i, :] = np.where(nobs >= minp, weighted, np.nan)
+        if out is not None:
+            out[:, i, :] = np.where(nobs >= minp, weighted, np.nan)
 
-    res = _unpad(out, valid, n, starts, k)
+    if last_only:
+        res = np.where(nobs >= minp, weighted, np.nan)
+    else:
+        res = _unpad(out, valid, n, starts, k)
     return res[:, 0] if one_d else res
 
 
 def expanding_mean(values: np.ndarray, starts: np.ndarray, ends: np.ndarray,
-                   min_periods: int = 1) -> np.ndarray:
-    """Per-segment ``expanding(min_periods=...).mean()`` (roll_mean kernel)."""
+                   min_periods: int = 1, last_only: bool = False) -> np.ndarray:
+    """Per-segment ``expanding(min_periods=...).mean()`` (roll_mean kernel).
+    ``values`` is (n,) or (n, k); ``last_only`` as in :func:`ewm_mean`."""
     v = _prep(values)
     one_d = v.ndim == 1
     if one_d:
@@ -145,7 +157,17 @@ def expanding_mean(values: np.ndarray, starts: np.ndarray, ends: np.ndarray,
 
     pad, valid, lengths, L = _padded(v, starts, ends)
     G = len(starts)
-    out = np.empty((G, L, k), dtype=np.float64)
+    out = None if last_only else np.empty((G, L, k), dtype=np.float64)
+
+    def calc_mean(nobs, sum_x, neg_ct, same, prev):
+        with np.errstate(invalid="ignore", divide="ignore"):
+            result = sum_x / nobs.astype(np.float64)
+        have = (nobs >= minp) & (nobs > 0)
+        result = np.where(same >= nobs, prev, result)
+        result = np.where((same < nobs) & (neg_ct == 0) & (result < 0), 0.0, result)
+        result = np.where((same < nobs) & ~((neg_ct == 0) & (result < 0)) & (neg_ct == nobs) & (result > 0),
+                          0.0, result)
+        return np.where(have, result, np.nan)
 
     nobs = np.zeros((G, k), dtype=np.int64)
     neg_ct = np.zeros((G, k), dtype=np.int64)
@@ -166,18 +188,13 @@ def expanding_mean(values: np.ndarray, starts: np.ndarray, ends: np.ndarray,
         neg_ct = np.where(ok & np.signbit(val), neg_ct + 1, neg_ct)
         same = np.where(ok, np.where(val == prev, same + 1, 1), same)
         prev = np.where(ok, val, prev)
+        if out is not None:
+            out[:, i, :] = calc_mean(nobs, sum_x, neg_ct, same, prev)
 
-        # calc_mean
-        with np.errstate(invalid="ignore", divide="ignore"):
-            result = sum_x / nobs.astype(np.float64)
-        have = (nobs >= minp) & (nobs > 0)
-        result = np.where(same >= nobs, prev, result)
-        result = np.where((same < nobs) & (neg_ct == 0) & (result < 0), 0.0, result)
-        result = np.where((same < nobs) & ~((neg_ct == 0) & (result < 0)) & (neg_ct == nobs) & (result > 0),
-                          0.0, result)
-        out[:, i, :] = np.where(have, result, np.nan)
-
-    res = _unpad(out, valid, n, starts, k)
+    if last_only:
+        res = calc_mean(nobs, sum_x, neg_ct, same, prev)
+    else:
+        res = _unpad(out, valid, n, starts, k)
     return res[:, 0] if one_d else res
 
 
