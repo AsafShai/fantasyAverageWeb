@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 from app.config import settings
@@ -52,6 +53,24 @@ def _player(pid: int, name: str, team: int, pts_level: float, tonight: float | N
     })
 
 
+
+def _pl(df):
+    if df is None or not isinstance(df, pd.DataFrame):
+        return df
+    out = pl.from_pandas(df)
+    return out.with_columns(pl.col("GAME_DATE").cast(pl.Date)) if "GAME_DATE" in out.columns else out
+
+
+def _score_night(history, info, evals, night, calibration):
+    """score_night on pandas-built test frames; the scored night back as pandas."""
+    out = score_night(_pl(history), _pl(info), _pl(evals), night, calibration)
+    reasons = out["REASONS"].to_list()
+    df = out.drop("REASONS").to_pandas()
+    df["REASONS"] = reasons
+    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
+    return df
+
+
 @pytest.fixture
 def history() -> pd.DataFrame:
     return pd.concat([
@@ -77,7 +96,7 @@ def _evals(predicted_pts: dict[int, float]) -> pd.DataFrame:
 
 def test_score_night_scores_only_the_night_and_flags_estimates(history):
     calibration = surprise.load_calibration()
-    night = score_night(history, None, _evals({1: 14.0}), NIGHT, calibration)
+    night = _score_night(history, None, _evals({1: 14.0}), NIGHT, calibration)
 
     assert len(night) == 4 and (night["GAME_DATE"].dt.date == NIGHT).all()
     by_name = night.set_index("PLAYER_NAME")
@@ -96,13 +115,13 @@ def test_score_night_scores_only_the_night_and_flags_estimates(history):
 
 
 def test_score_night_without_eval_rows_scores_on_history_alone(history):
-    night = score_night(history, None, pd.DataFrame(), NIGHT, surprise.load_calibration())
+    night = _score_night(history, None, pd.DataFrame(), NIGHT, surprise.load_calibration())
     assert not night["HAS_ESTIMATE"].any()
     assert night["SCORE"].notna().all()
 
 
 def test_to_tuple_matches_insert_columns(history):
-    night = score_night(history, history[["PLAYER_ID", "GAME_ID", "PLAYER_NAME", "TEAM_ID", "MATCHUP"]], _evals({1: 14.0}), NIGHT, surprise.load_calibration())
+    night = _score_night(history, history[["PLAYER_ID", "GAME_ID", "PLAYER_NAME", "TEAM_ID", "MATCHUP"]], _evals({1: 14.0}), NIGHT, surprise.load_calibration())
     row = night[night["PLAYER_NAME"] == "Cold Night"].iloc[0]
     t = surprise_service._to_tuple(row, NIGHT)
     assert len(t) == 27
@@ -252,8 +271,8 @@ async def test_rescore_scores_every_stored_night_since_oldest_first(monkeypatch)
 async def test_rescore_without_rosters_keeps_the_stored_rows(monkeypatch, history):
     """ESPN down during a rescore: nothing is written, so the night keeps its fantasy owners."""
     svc = SurpriseService()
-    monkeypatch.setattr(svc._db, "get_fs_player_rows_through", _async_return(history))
-    monkeypatch.setattr(svc._db, "get_fs_night_rows", _async_return(pd.DataFrame()))
+    monkeypatch.setattr(svc._db, "get_fs_player_rows_through", _async_return(_pl(history)))
+    monkeypatch.setattr(svc._db, "get_fs_night_rows", _async_return(pl.DataFrame()))
     monkeypatch.setattr(svc._db, "get_model_eval_for_date", _async_return([]))
     monkeypatch.setattr(surprise_service, "fantasy_roster_for", _async_return({}))
 

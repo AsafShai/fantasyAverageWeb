@@ -13,7 +13,10 @@ import logging
 from datetime import date, timedelta
 from typing import Iterable, Optional, Sequence
 
-import pandas as pd
+import math
+import numbers
+
+import polars as pl
 
 from app.config import settings
 from app.models import RankChanges, RankMover
@@ -24,6 +27,10 @@ from app.utils.category_storage import (
 from app.utils.constants import DERIVED_CATEGORIES, RATIO_CATEGORIES
 
 logger = logging.getLogger(__name__)
+
+
+def _isna(v) -> bool:
+    return v is None or (isinstance(v, float) and math.isnan(v))
 
 _RANKINGS_COLUMNS = {
     'FG%': 'rk_fg_pct', 'FT%': 'rk_ft_pct', '3PM': 'rk_three_pm', 'REB': 'rk_reb',
@@ -74,35 +81,35 @@ def range_reaches_tonight(state, end_date: date) -> bool:
 
 # --- movers ------------------------------------------------------------------
 
-def _points(frame: pd.DataFrame, categories: Sequence[str]):
+def _points(frame: pl.DataFrame, categories: Sequence[str]):
     """{team_id: {category: points, TOTAL: total}}, names and GP of a rankings frame."""
     cats = [c for c in categories if c in frame.columns]
     points, names, gp = {}, {}, {}
-    for _, row in frame.iterrows():
+    for row in frame.iter_rows(named=True):
         tid = int(row['team_id'])
-        entry = {c: (None if pd.isna(row[c]) else float(row[c])) for c in cats}
+        entry = {c: (None if _isna(row[c]) else float(row[c])) for c in cats}
         entry[TOTAL_KEY] = float(row['TOTAL_POINTS'])
         points[tid] = entry
         names[tid] = str(row['team_name'])
-        if 'GP' in frame.columns and not pd.isna(row['GP']):
+        if 'GP' in frame.columns and not _isna(row['GP']):
             gp[tid] = int(round(float(row['GP'])))
     return points, names, gp
 
 
-def _raw_stats(frame: Optional[pd.DataFrame], categories: Sequence[str]):
+def _raw_stats(frame: Optional[pl.DataFrame], categories: Sequence[str]):
     """{team_id: {category: raw total}} of a totals frame; None without one."""
     if frame is None:
         return None
     cats = [c for c in categories if c in frame.columns]
     return {
-        int(row['team_id']): {c: float(row[c]) for c in cats if not pd.isna(row[c])}
-        for _, row in frame.iterrows()
+        int(row['team_id']): {c: float(row[c]) for c in cats if not _isna(row[c])}
+        for row in frame.iter_rows(named=True)
     }
 
 
-def rank_changes_between(official: pd.DataFrame, live: pd.DataFrame, categories: Sequence[str],
-                         period: int, official_totals: Optional[pd.DataFrame] = None,
-                         live_totals: Optional[pd.DataFrame] = None) -> RankChanges:
+def rank_changes_between(official: pl.DataFrame, live: pl.DataFrame, categories: Sequence[str],
+                         period: int, official_totals: Optional[pl.DataFrame] = None,
+                         live_totals: Optional[pl.DataFrame] = None) -> RankChanges:
     """Each team's move tonight: ``official`` and ``live`` are rankings frames
     (roto points per category, TOTAL_POINTS, GP). With the raw totals frames
     (totals mode) it also says how much of each counting stat a team added."""
@@ -114,39 +121,40 @@ def rank_changes_between(official: pd.DataFrame, live: pd.DataFrame, categories:
                            _raw_stats(official_totals, categories), _raw_stats(live_totals, categories)))
 
 
-def movers_between(official: pd.DataFrame, live: pd.DataFrame, categories: Sequence[str]) -> list[RankMover]:
+def movers_between(official: pl.DataFrame, live: pl.DataFrame, categories: Sequence[str]) -> list[RankMover]:
     before, _, _ = _points(official, categories)
     after, names, _ = _points(live, categories)
     return rank_moves.movers_between(before, after, names)
 
 
-def gp_tonight(official: pd.DataFrame, live: pd.DataFrame, team_ids: Iterable[int]) -> list[int]:
+def gp_tonight(official: pl.DataFrame, live: pl.DataFrame, team_ids: Iterable[int]) -> list[int]:
     """Games counted tonight per team, in ``team_ids`` order (the heatmap's GP "+N")."""
     def gp(frame):
-        return {int(r['team_id']): float(r['GP']) for _, r in frame.iterrows()}
+        return {int(r['team_id']): float(r['GP']) for r in frame.iter_rows(named=True)}
     was, now = gp(official), gp(live)
     return [max(0, int(round(now.get(t, 0) - was.get(t, now.get(t, 0))))) for t in team_ids]
 
 
 # --- date ranges -------------------------------------------------------------
 
-def as_snapshot(frame: pd.DataFrame) -> pd.DataFrame:
+def as_snapshot(frame: pl.DataFrame) -> pl.DataFrame:
     """A live totals frame in the shape a stored snapshot row has (team id,
     name and one column per category code), to stand in as a range's end."""
-    keep = [c for c in frame.columns if c in _ID_COLUMNS or pd.api.types.is_numeric_dtype(frame[c])]
-    return frame[keep].copy()
+    keep = [c for c in frame.columns
+            if c in _ID_COLUMNS or frame.schema[c].is_numeric() or frame.schema[c] == pl.Boolean]
+    return frame.select(keep)
 
 
 # --- Rankings Over Time ------------------------------------------------------
 
-def rankings_points(frame: pd.DataFrame, categories: Sequence[str], period: int) -> list[dict]:
+def rankings_points(frame: pl.DataFrame, categories: Sequence[str], period: int) -> list[dict]:
     """Tonight's point for a rankings source, shaped like a stored rankings row
     after DBService._rankings_row_to_point."""
     cats = [c for c in categories if c in frame.columns]
     extras = any(c not in RANKINGS_FIXED_CATEGORIES for c in cats)
     day = slate_date(period)
     points = []
-    for _, row in frame.iterrows():
+    for row in frame.iter_rows(named=True):
         point = {'date': day, 'team_id': int(row['team_id']), 'team_name': str(row['team_name']),
                  'rk_total': float(row['TOTAL_POINTS']),
                  'gp': None if 'GP' not in frame.columns else int(round(float(row['GP']))),
@@ -158,22 +166,22 @@ def rankings_points(frame: pd.DataFrame, categories: Sequence[str], period: int)
     return points
 
 
-def stat_points(totals: pd.DataFrame, period: int, per_game: bool) -> list[dict]:
+def stat_points(totals: pl.DataFrame, period: int, per_game: bool) -> list[dict]:
     """Tonight's point for a stat source (season totals or per game), shaped
     like DBService._snapshot_row_to_point. Ratios are rebuilt from their
     made/attempted sources, as the stored rows hold them (a fraction)."""
     day = slate_date(period)
     points = []
-    for _, row in totals.iterrows():
+    for row in totals.iter_rows(named=True):
         values: dict[str, float] = {}
-        for cat in row.index:
-            if cat in _ID_COLUMNS or cat == 'GP' or not pd.api.types.is_number(row[cat]) or pd.isna(row[cat]):
+        for cat in row:
+            if cat in _ID_COLUMNS or cat == 'GP' or not isinstance(row[cat], numbers.Number) or _isna(row[cat]):
                 continue
             values[cat] = float(row[cat])
         for cat, (num, den) in RATIO_CATEGORIES.items():
             if cat in values and num in values and den in values:
                 values[cat] = round(values[num] / values[den], 4) if values[den] else 0.0
-        gp = int(round(float(row['GP']))) if 'GP' in row.index else None
+        gp = int(round(float(row['GP']))) if 'GP' in row else None
         if per_game:
             values = {c: (v if c in DERIVED_CATEGORIES else round(v / gp, 4))
                       for c, v in values.items() if c in DERIVED_CATEGORIES or gp}
@@ -198,7 +206,7 @@ async def _totals_frames(provider):
     return official_raw, official, live_raw, live
 
 
-async def rankings_frames(provider, mode: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+async def rankings_frames(provider, mode: str) -> tuple[pl.DataFrame, pl.DataFrame]:
     """(official, live) rankings frames for ``mode``: averages rank the
     settled flavour (finished games only), totals the in-progress one. Built
     exactly as the Rankings page builds its two tables."""

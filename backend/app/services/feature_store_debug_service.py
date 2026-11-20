@@ -4,8 +4,10 @@ no simulator, no replay clock."""
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from app.models.feature_store_models import (
     PlayersListResponse,
@@ -47,7 +49,7 @@ async def list_players() -> PlayersListResponse:
             games_count=int(row['games_count']),
             eligible=int(row['games_count']) >= sconfig.MIN_INFERENCE_GAMES,
         )
-        for pid, row in pv.iterrows()
+        for pid, row in zip(pv['PLAYER_ID'].to_list(), pv.iter_rows(named=True))
     ]
     players.sort(key=lambda p: p.games_count, reverse=True)
     return PlayersListResponse(players=players)
@@ -55,9 +57,9 @@ async def list_players() -> PlayersListResponse:
 
 async def player_state(player_id: int) -> PlayerStoreState:
     store = await _store()
-    if store is None or player_id not in store.player_vectors.index:
+    if store is None or not store.has_player(player_id):
         raise UnknownPlayerError(f'player {player_id} is not in the feature store')
-    row = store.player_vectors.loc[player_id]
+    row = store.player_vectors.filter(pl.col('PLAYER_ID') == player_id).row(0, named=True)
     features = {
         col: _clean(row[col]) for col in store.player_vectors.columns if col not in _PLAYER_META
     }
@@ -68,7 +70,7 @@ async def player_state(player_id: int) -> PlayerStoreState:
         player_name=str(row.get('PLAYER_NAME', player_id)),
         team_abbr=_abbr(int(row['TEAM_ID'])),
         position=str(row.get('POSITION', '')),
-        last_game_date=None if last is None or pd.isna(last) else str(pd.Timestamp(last).date()),
+        last_game_date=None if last is None else str(last.date() if isinstance(last, datetime) else last),
         games_count=games,
         eligible=games >= sconfig.MIN_INFERENCE_GAMES,
         features=features,
@@ -79,7 +81,7 @@ async def list_teams() -> TeamsListResponse:
     store = await _store()
     if store is None:
         return TeamsListResponse(teams=[])
-    ids = sorted(int(t) for t in store.team_own_vectors['TEAM_ID'])
+    ids = sorted(int(t) for t in store.team_own_vectors['TEAM_ID'].to_list())
     teams = [TeamSummary(team_id=tid, team_abbr=_abbr(tid)) for tid in ids]
     return TeamsListResponse(teams=teams)
 

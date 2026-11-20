@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, Request, Response
 from app.models import PaginatedPlayers, StatTimePeriod
 from app.exceptions import ResourceNotFoundError, DataSourceError
-from app.services.player_service import PlayerService, players_etag
+from app.services.player_service import PlayerService, players_etag, players_stale, refresh_players_in_background
 from typing import Annotated, Optional
 from app.utils.utils import latest_client_date
 from datetime import date
@@ -44,6 +44,10 @@ async def get_all_players(
 
         etag = players_etag(time_period, page, limit)
         if etag is not None and request.headers.get("if-none-match") == etag:
+            # A browser revalidating a stale list gets its 304 now; the rebuild
+            # runs behind it, as it would for a full request.
+            if players_stale(time_period):
+                refresh_players_in_background(time_period, player_service)
             return Response(
                 status_code=304,
                 headers={"ETag": etag, "Cache-Control": PLAYERS_CACHE_CONTROL},

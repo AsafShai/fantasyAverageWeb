@@ -22,10 +22,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-import pandas as pd
+import polars as pl
 
 from . import client
 from .teams import TEAM_ID_TO_ABBR, TEAM_ID_TO_NAME, TEAM_IDS
@@ -43,6 +44,20 @@ TEAM_COLUMNS = [
     "TEAM_ID", "GAME_ID", "SEASON", "GAME_DATE", "TEAM_NAME", "MATCHUP",
     "PTS", "REB", "AST", "STL", "BLK", "FG3M", "FG_PCT", "FGA", "FTA", "TOV",
 ]
+_TEXT = {"GAME_ID", "SEASON", "PLAYER_NAME", "TEAM_NAME", "MATCHUP", "POSITION"}
+_IDS = {"PLAYER_ID", "TEAM_ID"}
+
+
+def _schema(columns: list[str]) -> dict:
+    return {
+        c: pl.Int64 if c in _IDS else pl.String if c in _TEXT else pl.Date if c == "GAME_DATE" else pl.Float64
+        for c in columns
+    }
+
+
+PLAYER_SCHEMA = _schema(PLAYER_COLUMNS)
+TEAM_SCHEMA = _schema(TEAM_COLUMNS)
+_EASTERN = ZoneInfo("America/New_York")
 
 # ESPN team-boxscore stat names -> our columns (made-attempted pairs split below).
 _TEAM_STAT_MAP = {
@@ -58,8 +73,8 @@ _TEAM_STAT_MAP = {
 class DayFetch:
     """One scoreboard day: countable regular-season games and their box scores."""
     game_date: date
-    players: pd.DataFrame
-    teams: pd.DataFrame
+    players: pl.DataFrame
+    teams: pl.DataFrame
     expected_games: int   # countable games on the scoreboard
     all_final: bool       # every countable game is final
     total_events: int = 0  # raw scoreboard event count, before the countability filter
@@ -74,7 +89,15 @@ def season_for(d: date) -> str:
 def event_game_date(event: dict) -> date:
     """Game date in US/Eastern (ESPN event dates are UTC; a 10pm ET tip is the
     next day in UTC, and the pipeline's GAME_DATE convention is the US date)."""
-    return pd.Timestamp(event["date"]).tz_convert("America/New_York").date()
+    return _utc(event["date"]).astimezone(_EASTERN).date()
+
+
+def _utc(stamp: str) -> datetime:
+    """ESPN's event time ("2025-11-06T00:30Z") as an aware UTC datetime."""
+    d = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    return d.astimezone(timezone.utc)
 
 
 def is_countable(event: dict) -> bool:
@@ -129,7 +152,7 @@ def last_tip(scoreboard: dict) -> datetime | None:
     tips = []
     for event in expected_events(scoreboard):
         try:
-            tips.append(pd.Timestamp(event["date"]).tz_convert("UTC").to_pydatetime())
+            tips.append(_utc(event["date"]))
         except (KeyError, TypeError, ValueError):
             continue
     return max(tips) if tips else None
@@ -164,8 +187,8 @@ def build_game_rows(event: dict, summary: dict) -> tuple[list[dict], list[dict]]
     caller decides whether that means "retry later" (nightly) or "skip" (bulk).
     """
     game_id = str(event["id"])
-    game_date = pd.Timestamp(event_game_date(event))
-    season = season_for(game_date.date())
+    game_date = event_game_date(event)
+    season = season_for(game_date)
 
     header_competitors = summary["header"]["competitions"][0]["competitors"]
     home_away = {int(c["id"]): c["homeAway"] == "home" for c in header_competitors}
@@ -269,9 +292,9 @@ def _player_sums(player_rows: list[dict]) -> dict[int, dict[str, float]]:
     return out
 
 
-def _frames(player_rows: list[dict], team_rows: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    players = pd.DataFrame(player_rows, columns=PLAYER_COLUMNS)
-    teams = pd.DataFrame(team_rows, columns=TEAM_COLUMNS)
+def _frames(player_rows: list[dict], team_rows: list[dict]) -> tuple[pl.DataFrame, pl.DataFrame]:
+    players = pl.from_dicts(player_rows, schema=PLAYER_SCHEMA) if player_rows else pl.DataFrame(schema=PLAYER_SCHEMA)
+    teams = pl.from_dicts(team_rows, schema=TEAM_SCHEMA) if team_rows else pl.DataFrame(schema=TEAM_SCHEMA)
     return players, teams
 
 
@@ -306,7 +329,7 @@ def fetch_day(game_date: date) -> DayFetch:
     return DayFetch(game_date, players, teams, len(events), all_final, total_events)
 
 
-def fetch_month(yyyymm: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+def fetch_month(yyyymm: str) -> tuple[pl.DataFrame, pl.DataFrame]:
     """All countable, final games of one calendar month (the bulk-pull unit)."""
     sb = client.scoreboard(yyyymm)
     events = [e for e in sb.get("events", []) if is_countable(e) and is_final(e)]
@@ -339,7 +362,7 @@ def season_months(season: str) -> list[str]:
 
 def fetch_seasons(
     seasons: list[str], cache_dir: Path | None = None
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Bulk pull: every countable game of the given seasons, month-cached.
 
     With ``cache_dir`` each month's frames are parquet-cached, so an
@@ -350,8 +373,8 @@ def fetch_seasons(
     silently thinning every later pull.
     """
     current_month = date.today().strftime("%Y%m")
-    player_frames: list[pd.DataFrame] = []
-    team_frames: list[pd.DataFrame] = []
+    player_frames: list[pl.DataFrame] = []
+    team_frames: list[pl.DataFrame] = []
     for season in seasons:
         for month in season_months(season):
             paths = (
@@ -361,21 +384,26 @@ def fetch_seasons(
                 else None
             )
             if paths is not None and paths[0].exists() and paths[1].exists():
-                player_frames.append(pd.read_parquet(paths[0]))
-                team_frames.append(pd.read_parquet(paths[1]))
+                player_frames.append(_conform(pl.read_parquet(paths[0]), PLAYER_SCHEMA))
+                team_frames.append(_conform(pl.read_parquet(paths[1]), TEAM_SCHEMA))
                 continue
             players, teams = fetch_month(month)
             if paths is not None:
                 paths[0].parent.mkdir(parents=True, exist_ok=True)
-                players.to_parquet(paths[0], index=False)
-                teams.to_parquet(paths[1], index=False)
+                players.write_parquet(paths[0])
+                teams.write_parquet(paths[1])
             player_frames.append(players)
             team_frames.append(teams)
 
-    players = pd.concat(player_frames, ignore_index=True)
-    teams = pd.concat(team_frames, ignore_index=True)
+    players = pl.concat(player_frames) if player_frames else pl.DataFrame(schema=PLAYER_SCHEMA)
+    teams = pl.concat(team_frames) if team_frames else pl.DataFrame(schema=TEAM_SCHEMA)
     # A season's own months never overlap, but calendar months at season
     # boundaries can't double-count either (game ids are unique) — dedup anyway.
-    players = players.drop_duplicates(["PLAYER_ID", "GAME_ID"]).reset_index(drop=True)
-    teams = teams.drop_duplicates(["TEAM_ID", "GAME_ID"]).reset_index(drop=True)
+    players = players.unique(subset=["PLAYER_ID", "GAME_ID"], keep="first", maintain_order=True)
+    teams = teams.unique(subset=["TEAM_ID", "GAME_ID"], keep="first", maintain_order=True)
     return players, teams
+
+
+def _conform(df: pl.DataFrame, schema: dict) -> pl.DataFrame:
+    """A month cached by an older (pandas) writer: same columns, our dtypes."""
+    return df.select([pl.col(c).cast(t) for c, t in schema.items()])

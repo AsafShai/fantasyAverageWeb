@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.services import model_nightly_service as mns
@@ -28,8 +30,8 @@ class FakeDB:
     def __init__(self):
         self.run = None
         self.has_date = False
-        self.player_recs = pd.DataFrame([{"PLAYER_ID": 1}])
-        self.team_recs = pd.DataFrame([{"TEAM_ID": 10}])
+        self.player_recs = pl.DataFrame([{"PLAYER_ID": 1}])
+        self.team_recs = pl.DataFrame([{"TEAM_ID": 10}])
         self.eval_insert_ok = True
         self.fs_insert_ok = True
         self.vec_insert_ok = True
@@ -93,13 +95,13 @@ class FakeDB:
 
 
 def _night(expected_games=2, complete=True):
-    team_games = pd.DataFrame([{
+    team_games = pl.DataFrame([{
         "TEAM_ID": 10, "GAME_ID": "0021409900", "SEASON": "2025-26",
         "GAME_DATE": pd.Timestamp(GAME_DATE), "TEAM_NAME": "T", "MATCHUP": "A vs. B",
         "PTS": 110.0, "REB": 44.0, "AST": 25.0, "STL": 7.0, "BLK": 5.0,
         "FG3M": 12.0, "FG_PCT": 0.47, "FGA": 88.0, "FTA": 20.0, "TOV": 14.0,
     }])
-    return NightFetch(GAME_DATE, pd.DataFrame(), team_games, expected_games, complete)
+    return NightFetch(GAME_DATE, pl.DataFrame(), team_games, expected_games, complete)
 
 
 def _eval_row(eligible=True):
@@ -113,7 +115,7 @@ def _eval_row(eligible=True):
 
 
 def _night_players_frame():
-    return pd.DataFrame([{c: ("0021409900" if c == "GAME_ID" else
+    return pl.DataFrame([{c: ("0021409900" if c == "GAME_ID" else
                               "2025-26" if c == "SEASON" else
                               pd.Timestamp(GAME_DATE) if c == "GAME_DATE" else
                               "x" if c in ("PLAYER_NAME", "MATCHUP", "POSITION") else
@@ -223,7 +225,7 @@ async def test_empty_scoreboard_incomplete_is_retried_not_sealed(service, monkey
 @pytest.mark.asyncio
 async def test_empty_store_requires_bootstrap(service, monkeypatch):
     _allow_fetch(monkeypatch, _night())
-    service._db.player_recs = pd.DataFrame()
+    service._db.player_recs = pl.DataFrame()
     assert await service.run_for_date(GAME_DATE) == "store_not_bootstrapped"
 
 
@@ -306,12 +308,12 @@ async def test_incremental_path_without_vector_rows_requires_bootstrap(service, 
 
 
 def test_serialize_vectors_can_limit_to_given_players():
-    pv = pd.DataFrame({
+    pv = pl.DataFrame({
         "PLAYER_ID": [1, 2, 3], "PLAYER_NAME": ["a", "b", "c"], "TEAM_ID": [10, 10, 20],
         "POSITION": ["G", "F", "C"], "last_game_date": [pd.Timestamp(GAME_DATE)] * 3,
         "games_count": [12, 3, 40], "F1": [0.1, 0.2, 0.3],
     })
-    teams = pd.DataFrame({"TEAM_ID": [10, 20], "T1": [1.0, 2.0]})
+    teams = pl.DataFrame({"TEAM_ID": [10, 20], "T1": [1.0, 2.0]})
     store = SimpleNamespace(player_vectors=pv, team_allowed_vectors=teams, team_own_vectors=teams)
     all_rows, _, _ = _serialize_vectors(store)
     some_rows, tav, tov = _serialize_vectors(store, player_ids=[3, 1])
@@ -342,15 +344,15 @@ def test_eval_to_tuple_shapes():
 def test_vector_serialize_roundtrip():
     """Serialize vectors -> (simulate DB read) -> reconstruct; values, NaN, and the
     eligible flag must survive intact."""
-    pv = pd.DataFrame({
+    pv = pl.DataFrame({
         "PLAYER_ID": [1, 2], "PLAYER_NAME": ["A", "B"], "TEAM_ID": [10, 20],
         "POSITION": ["G", "F"],
         "last_game_date": [pd.Timestamp("2026-01-01"), pd.Timestamp("2026-01-02")],
         "games_count": [15, 5],
         "PTS_global_mean": [20.0, float("nan")], "REB_w5_mean": [5.0, 3.0],
     })
-    tav = pd.DataFrame({"TEAM_ID": [10, 20], "OPP_ALLOWED_PTS_global_mean": [110.0, 108.0]})
-    tov = pd.DataFrame({"TEAM_ID": [10, 20], "TEAM_PTS_global_mean": [112.0, 109.0]})
+    tav = pl.DataFrame({"TEAM_ID": [10, 20], "OPP_ALLOWED_PTS_global_mean": [110.0, 108.0]})
+    tov = pl.DataFrame({"TEAM_ID": [10, 20], "TEAM_PTS_global_mean": [112.0, 109.0]})
     store = SimpleNamespace(player_vectors=pv, team_allowed_vectors=tav, team_own_vectors=tov)
 
     prows, tarows, torows = _serialize_vectors(store)
@@ -369,11 +371,11 @@ def test_vector_serialize_roundtrip():
               "features": p[7]} for p in prows]
     tacs = [{"team_id": t[0], "features": t[1]} for t in tarows]
 
-    pv2 = _player_vectors_df(precs).set_index("PLAYER_ID")
+    pv2 = _player_vectors_df(precs).to_pandas().set_index("PLAYER_ID")
     assert pv2.loc[1, "PTS_global_mean"] == 20.0
     assert pd.isna(pv2.loc[2, "PTS_global_mean"])      # NaN survived the JSON round-trip
     assert pv2.loc[1, "REB_w5_mean"] == 5.0
-    tav2 = _team_vectors_df(tacs).set_index("TEAM_ID")
+    tav2 = _team_vectors_df(tacs).to_pandas().set_index("TEAM_ID")
     assert tav2.loc[10, "OPP_ALLOWED_PTS_global_mean"] == 110.0
     # NaN is serialized as None (null in jsonb)
     assert prows[1][7]["PTS_global_mean"] is None
@@ -381,7 +383,7 @@ def test_vector_serialize_roundtrip():
     # Rows written before the fix were double-encoded: the codec decodes them to
     # a JSON *string*. They must still load until the next run rewrites them.
     legacy = [{**r, "features": json.dumps(r["features"])} for r in precs]
-    pv3 = _player_vectors_df(legacy).set_index("PLAYER_ID")
+    pv3 = _player_vectors_df(legacy).to_pandas().set_index("PLAYER_ID")
     assert pv3.loc[1, "PTS_global_mean"] == 20.0
     assert pd.isna(pv3.loc[2, "PTS_global_mean"])
 
@@ -399,14 +401,14 @@ def _real_stored_keys() -> tuple[set[str], set[str]]:
     """
     import numpy as np
 
-    from model_stats_inference.research import data as rdata
     from model_stats_inference.serving import conftest as synth
+    from model_stats_inference.serving import featurize
     from model_stats_inference.serving.feature_store import FeatureStore
 
-    players = synth._make_players(np.random.default_rng(0))
-    team_logs = synth._make_team_logs(np.random.default_rng(1))
+    players = synth.to_pl(synth._make_players(np.random.default_rng(0)))
+    team_logs = synth.to_pl(synth._make_team_logs(np.random.default_rng(1)))
     store = FeatureStore.build(
-        players, rdata.build_team_allowed(team_logs), rdata.build_team_own(team_logs)
+        players, featurize.build_team_allowed(team_logs), featurize.build_team_own(team_logs)
     )
     prows, tarows, torows = _serialize_vectors(store)
     player = set(prows[0][7])
@@ -548,7 +550,7 @@ async def test_rebuild_without_raw_rows_is_skipped_not_failed(service, monkeypat
     _auto_heal(monkeypatch)
     union, _ = _real_stored_keys()
     service._db.vector_feature_keys = union - {"USG_w10_mean"}
-    service._db.player_recs = pd.DataFrame()    # store not bootstrapped
+    service._db.player_recs = pl.DataFrame()    # store not bootstrapped
     _allow_fetch(monkeypatch, _night(expected_games=0))
 
     statuses = await service.run_catchup()
@@ -779,97 +781,78 @@ def _records(serialized):
     return pv, [dict(team_id=t, features=f) for t, f in tarows], [dict(team_id=t, features=f) for t, f in torows]
 
 
+def _synthetic_season(extra_players=None):
+    """A synthetic season as the store holds it (Polars, stored columns) and
+    the vectors a full rebuild of it stores."""
+    import numpy as np
+    from model_stats_inference.serving import conftest as synth
+    p = synth._make_players(np.random.default_rng(0))
+    if extra_players is not None:
+        p = pd.concat([p, extra_players], ignore_index=True)
+    players = synth.to_pl(p).with_columns([pl.lit(0.0).alias(c) for c in ("OREB", "DREB", "PF") if c not in p.columns])
+    teams = synth.to_pl(synth._make_team_logs(np.random.default_rng(1))).with_columns(
+        ("T" + pl.col("TEAM_ID").cast(pl.String)).alias("TEAM_NAME"), pl.lit("A vs. B").alias("MATCHUP"))
+    return players, teams, _records(_full_rebuild(players, teams))
+
+
+def _full_rebuild(players, teams):
+    from model_stats_inference.serving import featurize
+    from model_stats_inference.serving.feature_store import FeatureStore
+    return _serialize_vectors(FeatureStore.build(
+        players, featurize.build_team_allowed(teams), featurize.build_team_own(teams)))
+
+
+def _bump(df, where, col, delta):
+    """``df`` with ``col`` moved by ``delta`` on the rows ``where`` matches."""
+    return df.with_columns(pl.when(where).then(pl.col(col) + delta).otherwise(pl.col(col)).alias(col))
+
+
+def _row(df, i):
+    return df.row(i, named=True)
+
+
 def test_recompute_after_a_correction_equals_a_full_rebuild():
-    """The sweep's light recompute (one player's corrected history, every team)
-    must produce exactly what the full rebuild from the corrected rows does."""
-    import numpy as np
-    from model_stats_inference.research import data as rdata
-    from model_stats_inference.serving import conftest as synth
-    from model_stats_inference.serving.feature_store import FeatureStore
-
-    players = synth._make_players(np.random.default_rng(0))
-    teams = synth._make_team_logs(np.random.default_rng(1))
-    before = FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams))
-    stored = _records(_serialize_vectors(before))
-
-    pid = int(players["PLAYER_ID"].iloc[0])
-    corrected = players.copy()
-    hit = corrected.index[corrected["PLAYER_ID"] == pid][-1]
-    corrected.loc[hit, ["REB", "DREB"]] += 1
-    corrected_teams = teams.copy()
-    t_hit = corrected_teams.index[(corrected_teams["GAME_ID"] == corrected.loc[hit, "GAME_ID"])][0]
-    corrected_teams.loc[t_hit, "REB"] += 1
+    """The sweep's light recompute (one player's corrected history, every
+    team) produces exactly what the full rebuild from the corrected rows does."""
+    players, teams, stored = _synthetic_season()
+    last = _row(players, len(players) - 1)
+    pid, gid = last["PLAYER_ID"], last["GAME_ID"]
+    hit = (pl.col("PLAYER_ID") == pid) & (pl.col("GAME_ID") == gid)
+    corrected = _bump(_bump(players, hit, "REB", 1), hit, "DREB", 1)
+    corrected_teams = _bump(teams, (pl.col("GAME_ID") == gid) & (pl.col("TEAM_ID") == last["TEAM_ID"]), "REB", 1)
     team_ids = sorted(int(t) for t in corrected_teams["TEAM_ID"].unique())
+    expected = _full_rebuild(corrected, corrected_teams)
 
-    full = FeatureStore.build(corrected, rdata.build_team_allowed(corrected_teams), rdata.build_team_own(corrected_teams))
-    expected = _serialize_vectors(full, player_ids=[pid])
-
-    mine = corrected[corrected["PLAYER_ID"] == pid]
-    got = ModelNightlyService._recompute_sync(*stored, mine, corrected_teams, [pid], team_ids)
-
-    def by_id(rows):
-        return {r[0]: r for r in rows}
-    (exp_p,), (got_p,) = expected[0], got[0]
-    assert got_p[:7] == exp_p[:7]
-    assert got_p[7] == pytest.approx(exp_p[7], nan_ok=True)
-    assert got_p[7] != stored[0][[r["player_id"] for r in stored[0]].index(pid)]["features"]   # it moved
+    (got, dropped) = ModelNightlyService._recompute_sync(
+        *stored, corrected.filter(pl.col("PLAYER_ID") == pid), corrected_teams, [pid], team_ids)
+    assert dropped == []
+    (got_p,) = got[0]
+    exp_p = {r[0]: r for r in expected[0]}[pid]
+    assert got_p[:7] == exp_p[:7] and got_p[7] == pytest.approx(exp_p[7], nan_ok=True)
+    assert got_p[7] != {r["player_id"]: r["features"] for r in stored[0]}[pid]      # it moved
     for g, e in ((got[1], expected[1]), (got[2], expected[2])):
-        assert by_id(g).keys() == by_id(e).keys()
-        for tid in by_id(e):
-            assert by_id(g)[tid][1] == pytest.approx(by_id(e)[tid][1], nan_ok=True)
+        assert dict(g).keys() == dict(e).keys()
+        for tid, feats in e:
+            assert dict(g)[tid] == pytest.approx(feats, nan_ok=True)
 
 
-def test_recompute_with_only_team_corrections_equals_a_full_rebuild():
-    import numpy as np
-    from model_stats_inference.research import data as rdata
-    from model_stats_inference.serving import conftest as synth
-    from model_stats_inference.serving.feature_store import FeatureStore
-
-    players = synth._make_players(np.random.default_rng(0))
-    teams = synth._make_team_logs(np.random.default_rng(1))
-    before = FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams))
-    stored = _records(_serialize_vectors(before))
-    corrected_teams = teams.copy()
-    corrected_teams.loc[corrected_teams.index[-1], "TOV"] += 2
+@pytest.mark.parametrize("players_frame", ["empty_with_columns", "columnless"])
+def test_recompute_with_only_team_corrections_equals_a_full_rebuild(players_frame):
+    """A team-only correction, with the players frame as the DB returns it
+    for no rows (no columns at all: the KeyError 'PLAYER_ID' of review #1)."""
+    players, teams, stored = _synthetic_season()
+    corrected_teams = _bump(teams, pl.int_range(pl.len()) == len(teams) - 1, "TOV", 2)
     team_ids = sorted(int(t) for t in corrected_teams["TEAM_ID"].unique())
-    full = FeatureStore.build(players, rdata.build_team_allowed(corrected_teams), rdata.build_team_own(corrected_teams))
-    expected = _serialize_vectors(full, player_ids=[])
-
-    got = ModelNightlyService._recompute_sync(*stored, players.iloc[0:0], corrected_teams, [], team_ids)
-    assert got[0] == []                                      # no player rewritten
+    expected = _full_rebuild(players, corrected_teams)
+    frame = players.clear() if players_frame == "empty_with_columns" else pl.DataFrame()
+    (got, dropped) = ModelNightlyService._recompute_sync(*stored, frame, corrected_teams, [], team_ids)
+    assert got[0] == [] and dropped == []
     for g, e in ((got[1], expected[1]), (got[2], expected[2])):
-        assert {t: f for t, f in g}.keys() == {t: f for t, f in e}.keys()
-        for (tg, fg), (te, fe) in zip(sorted(g, key=lambda r: r[0]), sorted(e, key=lambda r: r[0])):
-            assert fg == pytest.approx(fe, nan_ok=True)
+        for tid, feats in e:
+            assert dict(g)[tid] == pytest.approx(feats, nan_ok=True)
 
 
-def test_recompute_with_a_columnless_players_frame_still_recomputes_the_teams():
-    """What the DB returns for zero matching player rows: pd.DataFrame() with
-    no columns at all (bug: KeyError 'PLAYER_ID', the sweep failed after the
-    team row was written)."""
-    import numpy as np
-    from model_stats_inference.research import data as rdata
-    from model_stats_inference.serving import conftest as synth
-    from model_stats_inference.serving.feature_store import FeatureStore
-
-    players = synth._make_players(np.random.default_rng(0))
-    teams = synth._make_team_logs(np.random.default_rng(1))
-    stored = _records(_serialize_vectors(
-        FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams))))
-    corrected_teams = teams.copy()
-    corrected_teams.loc[corrected_teams.index[-1], "TOV"] += 2
-    team_ids = sorted(int(t) for t in corrected_teams["TEAM_ID"].unique())
-    full = FeatureStore.build(players, rdata.build_team_allowed(corrected_teams), rdata.build_team_own(corrected_teams))
-    expected = _serialize_vectors(full, player_ids=[])
-
-    got = ModelNightlyService._recompute_sync(*stored, pd.DataFrame(), corrected_teams, [], team_ids)
-    assert got[0] == []
-    for g, e in ((got[1], expected[1]), (got[2], expected[2])):
-        for (tg, fg), (te, fe) in zip(sorted(g, key=lambda r: r[0]), sorted(e, key=lambda r: r[0])):
-            assert tg == te and fg == pytest.approx(fe, nan_ok=True)
-
-
-# --- the sweep, end to end on the real feature engine ----------------------------
+# --- the sweep's commit, on the real feature engine -------------------------------
 
 class StoreDB(FakeDB):
     """A FakeDB backed by real frames: the stored rows and vectors of a
@@ -881,147 +864,145 @@ class StoreDB(FakeDB):
         self.pv, self.tav, self.tov = vectors
         self.committed = []
         self.apply_ok = True
-        self.vectors_as_of = self.latest_fs_date = players["GAME_DATE"].max().date()
+        self.vectors_as_of = self.latest_fs_date = players["GAME_DATE"].max()
 
     async def get_fs_rows_before_for_players(self, d, player_ids):
         from model_stats_inference.research import config as rconfig
-        p = self.players[(self.players["GAME_DATE"] < pd.Timestamp(d))
-                         & self.players["PLAYER_ID"].isin(player_ids)
-                         & (self.players["MIN"] >= rconfig.MIN_MINUTES)]
-        return (p.reset_index(drop=True) if not p.empty else pd.DataFrame()), self.teams
+        p = self.players.filter((pl.col("GAME_DATE") < d) & pl.col("PLAYER_ID").is_in(list(player_ids))
+                                & (pl.col("MIN") >= rconfig.MIN_MINUTES))
+        return (p if not p.is_empty() else pl.DataFrame()), self.teams
 
     async def load_feature_vectors(self, player_ids=None):
         pv = [r for r in self.pv if player_ids is None or r["player_id"] in set(player_ids)]
         return pv, self.tav, self.tov
 
-    async def apply_corrections(self, player_rows, team_rows, eval_actuals, vectors=None):
-        self.committed.append((player_rows, team_rows, eval_actuals, vectors))
+    async def apply_corrections(self, player_rows, team_rows, eval_actuals, vectors=None, drop_player_vectors=None):
+        self.committed.append((player_rows, team_rows, eval_actuals, vectors, drop_player_vectors or []))
         return self.apply_ok
 
 
-def _synthetic_season():
-    import numpy as np
-    from model_stats_inference.research import data as rdata
-    from model_stats_inference.serving import conftest as synth
-    from model_stats_inference.serving.feature_store import FeatureStore
-    players = synth._make_players(np.random.default_rng(0))
-    teams = synth._make_team_logs(np.random.default_rng(1))
-    for col in ("OREB", "DREB", "PF"):
-        if col not in players.columns:
-            players[col] = 0.0
-    teams["TEAM_NAME"] = "T" + teams["TEAM_ID"].astype(str)          # ESPN's rows carry both
-    teams["MATCHUP"] = "A vs. B"
-    store = FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams))
-    return players, teams, _records(_serialize_vectors(store))
-
-
-def _full_rebuild(players, teams):
-    from model_stats_inference.research import data as rdata
-    from model_stats_inference.serving.feature_store import FeatureStore
-    return _serialize_vectors(FeatureStore.build(players, rdata.build_team_allowed(teams), rdata.build_team_own(teams)))
-
-
 async def _commit(service, stored_players, stored_teams, players, teams, night):
-    """Run the sweep's commit for one night: stored = before, players/teams = ESPN now."""
-    ts = pd.Timestamp(night)
-    fresh = NightFetch(night, players[players["GAME_DATE"] == ts].reset_index(drop=True),
-                       teams[teams["GAME_DATE"] == ts].reset_index(drop=True), 1, True)
-    sp = stored_players[stored_players["GAME_DATE"] == ts].reset_index(drop=True)
-    st = stored_teams[stored_teams["GAME_DATE"] == ts].reset_index(drop=True)
+    """Run the sweep's commit for one night: stored_* = the store, players/teams = ESPN now."""
+    on = pl.col("GAME_DATE") == night
+    fresh = NightFetch(night, players.filter(on), teams.filter(on), 1, True)
+    sp, st = stored_players.filter(on), stored_teams.filter(on)
     c = mns.nightly.diff_night(sp, st, fresh.player_games, fresh.team_games)
     assert not c.empty
-    return await service._commit_corrections({night: (c, sp, fresh)})
+    return await service._commit_corrections(night, c, sp, fresh)
 
 
-def _assert_vectors_match_a_full_rebuild(stored_vectors, written, players, teams):
-    """Stored vectors overwritten by what the sweep wrote == a full rebuild
-    from the corrected rows, for EVERY player and team."""
-    pv, tav, tov = stored_vectors
+def _assert_vectors_match_a_full_rebuild(stored_vectors, commit, players, teams):
+    """The stored vectors with what the sweep wrote and dropped == a full
+    rebuild from the corrected rows, for EVERY player and team."""
+    _, _, _, written, dropped = commit
+    pv, _, _ = stored_vectors
     after = {r["player_id"]: r["features"] for r in pv}
     after.update({r[0]: r[7] for r in written[0]})
-    exp_p, exp_ta, exp_to = _full_rebuild(players, teams)
+    for p in dropped:
+        after.pop(p)
+    # Production's full rebuild reads through the minutes gate (get_fs_rows_before).
+    from model_stats_inference.research import config as rconfig
+    exp_p, exp_ta, exp_to = _full_rebuild(players.filter(pl.col("MIN") >= rconfig.MIN_MINUTES), teams)
+    assert after.keys() == {r[0] for r in exp_p}
     wrong = [r[0] for r in exp_p if after[r[0]] != pytest.approx(r[7], nan_ok=True)]
     assert wrong == [], f"players left stale: {wrong}"
     for got, exp in ((written[1], exp_ta), (written[2], exp_to)):
-        got = dict(got)
         for tid, feats in exp:
-            assert got[tid] == pytest.approx(feats, nan_ok=True)
+            assert dict(got)[tid] == pytest.approx(feats, nan_ok=True)
+
+
+def _last_line(players):
+    last = _row(players, len(players) - 1)
+    return last, (pl.col("PLAYER_ID") == last["PLAYER_ID"]) & (pl.col("GAME_ID") == last["GAME_ID"])
 
 
 @pytest.mark.asyncio
 async def test_turnover_taken_back_from_player_and_team_heals_every_teammate(service):
-    """The case the PR describes: one player's TOV and his team's TOV both
-    change. Every player of that game divides by the team's possessions
-    (USG), so all of them must be recomputed, not only the corrected one."""
+    """One player's TOV and his team's TOV both change. Every player of that
+    game divides by the team's possessions (USG), so all of them are
+    recomputed, not only the corrected one (review #2)."""
     players, teams, vectors = _synthetic_season()
     service._db = StoreDB(players, teams, vectors)
-    hit = players.index[-1]
-    night, gid, team = players.loc[hit, "GAME_DATE"].date(), players.loc[hit, "GAME_ID"], players.loc[hit, "TEAM_ID"]
-    now_p, now_t = players.copy(), teams.copy()
-    now_p.loc[hit, "TOV"] -= 1
-    now_t.loc[now_t.index[(now_t["GAME_ID"] == gid) & (now_t["TEAM_ID"] == team)][0], "TOV"] -= 1
+    last, hit = _last_line(players)
+    now_p = _bump(players, hit, "TOV", -1)
+    now_t = _bump(teams, (pl.col("GAME_ID") == last["GAME_ID"]) & (pl.col("TEAM_ID") == last["TEAM_ID"]), "TOV", -1)
 
-    note, ok = await _commit(service, players, teams, now_p, now_t, night)
+    note, ok = await _commit(service, players, teams, now_p, now_t, last["GAME_DATE"])
     assert ok and "vectors: refreshed" in note
-    (prow, trow, actuals, written), = service._db.committed
+    (commit,) = service._db.committed
+    prow, trow, actuals, written, _ = commit
     assert len(prow) == 1 and len(trow) == 1 and len(actuals) == 1
-    in_game = set(players.loc[players["GAME_ID"] == gid, "PLAYER_ID"])
+    in_game = set(players.filter(pl.col("GAME_ID") == last["GAME_ID"])["PLAYER_ID"])
     assert in_game <= {r[0] for r in written[0]}             # the whole game, not one player
-    _assert_vectors_match_a_full_rebuild(vectors, written, now_p, now_t)
+    _assert_vectors_match_a_full_rebuild(vectors, commit, now_p, now_t)
 
 
 @pytest.mark.asyncio
 async def test_team_only_correction_heals_the_games_players_and_teams(service):
     players, teams, vectors = _synthetic_season()
     service._db = StoreDB(players, teams, vectors)
-    gid = teams["GAME_ID"].iloc[-1]
-    night = teams["GAME_DATE"].iloc[-1].date()
-    now_t = teams.copy()
-    now_t.loc[now_t.index[-1], "TOV"] += 2
-    note, ok = await _commit(service, players, teams, players, now_t, night)
+    last_team = _row(teams, len(teams) - 1)
+    now_t = _bump(teams, pl.int_range(pl.len()) == len(teams) - 1, "TOV", 2)
+    note, ok = await _commit(service, players, teams, players, now_t, last_team["GAME_DATE"])
     assert ok
-    (prow, trow, actuals, written), = service._db.committed
-    assert prow == [] and len(trow) == 1 and actuals == []
-    _assert_vectors_match_a_full_rebuild(vectors, written, players, now_t)
+    (commit,) = service._db.committed
+    assert commit[0] == [] and len(commit[1]) == 1 and commit[2] == []
+    _assert_vectors_match_a_full_rebuild(vectors, commit, players, now_t)
 
 
 @pytest.mark.asyncio
 async def test_team_only_correction_with_no_qualifying_player_rows_does_not_fail(service):
-    """Bug 1 end to end: the DB hands back a frame with no columns."""
+    """Review #1 end to end: the DB hands back a frame with no columns."""
     players, teams, vectors = _synthetic_season()
     db = StoreDB(players, teams, vectors)
 
     async def nobody(d, ids):
-        return pd.DataFrame(), db.teams
+        return pl.DataFrame(), db.teams
     db.get_fs_rows_before_for_players = nobody
     service._db = db
-    now_t = teams.copy()
-    now_t.loc[now_t.index[-1], "TOV"] += 2
-    note, ok = await _commit(service, players, teams, players, now_t, teams["GAME_DATE"].iloc[-1].date())
+    now_t = _bump(teams, pl.int_range(pl.len()) == len(teams) - 1, "TOV", 2)
+    note, ok = await _commit(service, players, teams, players, now_t, _row(teams, len(teams) - 1)["GAME_DATE"])
     assert ok and "vectors: refreshed" in note
-    (_, trow, _, written), = db.committed
-    exp = dict(_full_rebuild(players, now_t)[2])
-    got = dict(written[2])
-    assert got.keys() == exp.keys()
-    for tid in exp:
-        assert got[tid] == pytest.approx(exp[tid], nan_ok=True)
+    written = db.committed[0][3]
+    for tid, feats in _full_rebuild(players, now_t)[2]:
+        assert dict(written[2])[tid] == pytest.approx(feats, nan_ok=True)
 
 
 @pytest.mark.asyncio
-async def test_a_failed_commit_writes_nothing_and_the_next_morning_retries(service, monkeypatch):
-    """Bug 3: everything is one transaction, so a failure leaves the rows as
-    they were and the next sweep sees the same difference again."""
+async def test_a_line_corrected_below_the_minutes_gate_drops_a_vector_left_without_games(service):
+    """Review #2 (smaller points): a player whose only qualifying game is
+    corrected below MIN_MINUTES has no vector in a full rebuild; the sweep
+    removes his stored one in the same transaction."""
+    from model_stats_inference.research import config as rconfig
+    from model_stats_inference.serving import conftest as synth
+    import numpy as np
+    one = synth._make_players(np.random.default_rng(0)).iloc[[-1]].copy()
+    one["PLAYER_ID"], one["PLAYER_NAME"], one["MIN"] = 999001, "One Game", 25.0
+    players, teams, vectors = _synthetic_season(extra_players=one)
+    assert 999001 in {r["player_id"] for r in vectors[0]}
+    service._db = StoreDB(players, teams, vectors)
+    hit = pl.col("PLAYER_ID") == 999001
+    now_p = players.with_columns(pl.when(hit).then(rconfig.MIN_MINUTES - 1.0).otherwise(pl.col("MIN")).alias("MIN"))
+    note, ok = await _commit(service, players, teams, now_p, teams, _row(players.filter(hit), 0)["GAME_DATE"])
+    assert ok
+    (commit,) = service._db.committed
+    assert commit[4] == [999001]
+    _assert_vectors_match_a_full_rebuild(vectors, commit, now_p, teams)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_commit_writes_nothing_and_the_next_morning_retries(service):
+    """Everything is one transaction: a failure leaves the rows as they were
+    and the next sweep sees the same difference again."""
     players, teams, vectors = _synthetic_season()
     db = StoreDB(players, teams, vectors)
     db.apply_ok = False
     service._db = db
-    hit = players.index[-1]
-    now_p = players.copy()
-    now_p.loc[hit, "REB"] += 1
-    note, ok = await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    last, hit = _last_line(players)
+    now_p = _bump(players, hit, "REB", 1)
+    note, ok = await _commit(service, players, teams, now_p, teams, last["GAME_DATE"])
     assert not ok and "nothing written" in note
-    # the stored rows are untouched, so the same diff is still there to retry
-    note, ok = await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    note, ok = await _commit(service, players, teams, now_p, teams, last["GAME_DATE"])
     assert len(db.committed) == 2
 
 
@@ -1034,32 +1015,28 @@ async def test_a_failure_while_computing_writes_nothing(service, monkeypatch):
     def boom(*a):
         raise RuntimeError("feature engine")
     monkeypatch.setattr(ModelNightlyService, "_recompute_sync", staticmethod(boom))
-    hit = players.index[-1]
-    now_p = players.copy()
-    now_p.loc[hit, "REB"] += 1
+    last, hit = _last_line(players)
     with pytest.raises(RuntimeError):
-        await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+        await _commit(service, players, teams, _bump(players, hit, "REB", 1), teams, last["GAME_DATE"])
     assert db.committed == []
 
 
 @pytest.mark.asyncio
 async def test_new_line_with_empty_position_takes_the_players_position_from_his_history(service):
-    """Bug 5: the position comes from the player's other games, not only the same night."""
+    """The position comes from the player's other games, not only the same night."""
     players, teams, vectors = _synthetic_season()
     db = StoreDB(players, teams, vectors)
     service._db = db
-    hit = players.index[-1]
-    pid, night = int(players.loc[hit, "PLAYER_ID"]), players.loc[hit, "GAME_DATE"].date()
-    known = players.loc[(players["PLAYER_ID"] == pid) & (players.index != hit), "POSITION"].iloc[-1]
-    stored = players.drop(index=hit)                       # ESPN added this line later
-    now_p = players.copy()
-    now_p.loc[hit, "POSITION"] = ""
+    last, hit = _last_line(players)
+    stored = players.filter(~hit)                          # ESPN added this line later
+    known = stored.filter(pl.col("PLAYER_ID") == last["PLAYER_ID"]).sort("GAME_DATE")["POSITION"][-1]
+    now_p = players.with_columns(pl.when(hit).then(pl.lit("")).otherwise(pl.col("POSITION")).alias("POSITION"))
     db.players = stored
-    note, ok = await _commit(service, stored, teams, now_p, teams, night)
-    (prow, _, actuals, written), = db.committed
+    await _commit(service, stored, teams, now_p, teams, last["GAME_DATE"])
+    prow, _, actuals, written, _ = db.committed[0]
     assert [r[_FS_PLAYER_COLS.index("POSITION")] for r in prow] == [known]
     assert actuals == []                                    # a new line has no prediction to update
-    assert {r[0]: r[3] for r in written[0]}[pid] == known   # nor does his vector lose it
+    assert {r[0]: r[3] for r in written[0]}[last["PLAYER_ID"]] == known
 
 
 @pytest.mark.asyncio
@@ -1067,13 +1044,11 @@ async def test_a_corrected_line_keeps_its_stored_position(service):
     players, teams, vectors = _synthetic_season()
     db = StoreDB(players, teams, vectors)
     service._db = db
-    hit = players.index[-1]
-    now_p = players.copy()
-    now_p.loc[hit, "REB"] += 1
-    now_p.loc[hit, "POSITION"] = ""
-    await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
-    (prow, _, _, _), = db.committed
-    assert prow[0][_FS_PLAYER_COLS.index("POSITION")] == players.loc[hit, "POSITION"]
+    last, hit = _last_line(players)
+    now_p = _bump(players, hit, "REB", 1).with_columns(
+        pl.when(hit).then(pl.lit("")).otherwise(pl.col("POSITION")).alias("POSITION"))
+    await _commit(service, players, teams, now_p, teams, last["GAME_DATE"])
+    assert db.committed[0][0][0][_FS_PLAYER_COLS.index("POSITION")] == last["POSITION"]
 
 
 @pytest.mark.asyncio
@@ -1082,27 +1057,25 @@ async def test_stale_vectors_are_left_to_the_full_rebuild_but_rows_still_commit(
     db = StoreDB(players, teams, vectors)
     db.vectors_as_of = db.latest_fs_date - timedelta(days=1)
     service._db = db
-    hit = players.index[-1]
-    now_p = players.copy()
-    now_p.loc[hit, "REB"] += 1
-    note, ok = await _commit(service, players, teams, now_p, teams, players.loc[hit, "GAME_DATE"].date())
+    last, hit = _last_line(players)
+    note, ok = await _commit(service, players, teams, _bump(players, hit, "REB", 1), teams, last["GAME_DATE"])
     assert ok and "left_to_rebuild" in note
-    (prow, _, actuals, written), = db.committed
+    prow, _, actuals, written, _ = db.committed[0]
     assert len(prow) == 1 and len(actuals) == 1 and written is None
 
 
 # --- the sweep's orchestration (fake ESPN, fake DB) --------------------------------
 
-def _fs_player(pid, reb=5.0, position="G", gid="0021409900"):
+def _fs_player(pid, reb=5.0, position="G", gid="0021409900", night=GAME_DATE):
     row = {c: 1.0 for c in _FS_PLAYER_COLS}
-    row.update({"PLAYER_ID": pid, "GAME_ID": gid, "SEASON": "2025-26", "GAME_DATE": pd.Timestamp(GAME_DATE),
+    row.update({"PLAYER_ID": pid, "GAME_ID": gid, "SEASON": "2025-26", "GAME_DATE": night,
                 "PLAYER_NAME": f"P{pid}", "TEAM_ID": 10, "MATCHUP": "A vs. B", "POSITION": position,
                 "MIN": 30.0, "REB": reb, "DREB": reb})
     return row
 
 
-def _fs_team(tid):
-    return {"TEAM_ID": tid, "GAME_ID": "0021409900", "SEASON": "2025-26", "GAME_DATE": pd.Timestamp(GAME_DATE),
+def _fs_team(tid, night=GAME_DATE):
+    return {"TEAM_ID": tid, "GAME_ID": "0021409900", "SEASON": "2025-26", "GAME_DATE": night,
             "TEAM_NAME": "T", "MATCHUP": "A vs. B", "PTS": 110.0, "REB": 44.0, "AST": 25.0, "STL": 7.0,
             "BLK": 5.0, "FG3M": 12.0, "FG_PCT": 0.47, "FGA": 88.0, "FTA": 20.0, "TOV": 14.0}
 
@@ -1110,10 +1083,11 @@ def _fs_team(tid):
 class SweepDB(FakeDB):
     def __init__(self, stored_players, stored_teams, processed=(GAME_DATE,), stale=()):
         super().__init__()
-        self.stored = (pd.DataFrame(stored_players), pd.DataFrame(stored_teams))
+        self.stored = (pl.DataFrame(stored_players), pl.DataFrame(stored_teams))
         self.processed, self.stale = set(processed), list(stale)
         self.committed, self.apply_ok = [], True
         self.stale_since = []
+        self.vectors_as_of = self.latest_fs_date = GAME_DATE
 
     async def get_model_nightly_run(self, d):
         return {"status": "processed"} if d in self.processed else None
@@ -1121,8 +1095,8 @@ class SweepDB(FakeDB):
     async def get_fs_rows_on(self, d):
         return self.stored
 
-    async def apply_corrections(self, player_rows, team_rows, eval_actuals, vectors=None):
-        self.committed.append((player_rows, team_rows, eval_actuals, vectors))
+    async def apply_corrections(self, player_rows, team_rows, eval_actuals, vectors=None, drop_player_vectors=None):
+        self.committed.append((player_rows, team_rows, eval_actuals, vectors, drop_player_vectors))
         return self.apply_ok
 
     async def get_nights_with_stale_surprises(self, since, min_minutes):
@@ -1130,15 +1104,15 @@ class SweepDB(FakeDB):
         return self.stale
 
 
-def _espn(players, teams, complete=True):
-    return NightFetch(GAME_DATE, pd.DataFrame(players), pd.DataFrame(teams), 1, complete)
+def _espn(players, teams, complete=True, night=GAME_DATE):
+    return NightFetch(night, pl.DataFrame(players), pl.DataFrame(teams), 1, complete)
 
 
 @pytest.fixture
 def sweep(service, monkeypatch):
-    calls = {"rescore": [], "cleared": []}
+    calls = {"rescore": [], "cleared": [], "invalidated": []}
     monkeypatch.setattr(ModelNightlyService, "_recompute_sync",
-                        staticmethod(lambda *a: ([("p",)], [("ta",)], [("to",)])))
+                        staticmethod(lambda *a: (([("p",)], [("ta",)], [("to",)]), [])))
     from app.services.surprise_service import SurpriseService
 
     async def rescore(self, d, require_roster=False):
@@ -1147,6 +1121,7 @@ def sweep(service, monkeypatch):
     monkeypatch.setattr(SurpriseService, "compute_and_store", rescore)
     monkeypatch.setattr(mns.settings, "surprise_nightly_enabled", True)
     monkeypatch.setattr(mns, "_clear_night_read_caches", lambda: calls["cleared"].append(1))
+    monkeypatch.setattr(ModelNightlyService, "_invalidate_inference_store", lambda self: calls["invalidated"].append(1))
     return service, calls
 
 
@@ -1154,15 +1129,60 @@ def sweep(service, monkeypatch):
 async def test_sweep_commits_a_correction_and_rescores_its_night(sweep, monkeypatch):
     service, calls = sweep
     service._db = SweepDB([_fs_player(1, reb=6), _fs_player(2)], [_fs_team(10), _fs_team(20)])
-    service._db.vectors_as_of = service._db.latest_fs_date = GAME_DATE
     _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5), _fs_player(2)], [_fs_team(10), _fs_team(20)]))
     result = await service.sweep_corrections(GAME_DATE)
-    (prow, trow, actuals, vectors), = service._db.committed
+    (prow, trow, actuals, vectors, dropped), = service._db.committed
     assert [r[0] for r in prow] == [1] and prow[0][_FS_PLAYER_COLS.index("REB")] == 5.0 and trow == []
     assert actuals[0][:2] == ("0021409900", 1) and actuals[0][2 + mns._EVAL_STATS.index("REB")] == 5.0
-    assert vectors == ([("p",)], [("ta",)], [("to",)])
-    assert calls["rescore"] == [(GAME_DATE, True)] and calls["cleared"]
+    assert vectors == ([("p",)], [("ta",)], [("to",)]) and dropped == []
+    assert calls["rescore"] == [(GAME_DATE, True)] and calls["cleared"] and calls["invalidated"]
     assert "1 changed" in result and "vectors: refreshed" in result
+
+
+@pytest.mark.asyncio
+async def test_sweep_commits_each_night_in_its_own_transaction(sweep, monkeypatch):
+    """Review point 1: memory is bounded by one night's games, not the window's."""
+    service, calls = sweep
+    nights = [GAME_DATE - timedelta(days=1), GAME_DATE]
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)], processed=nights)
+    monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: _espn([_fs_player(1, reb=5)], [_fs_team(10)], night=d))
+    await service.sweep_corrections(GAME_DATE)
+    assert len(service._db.committed) == 2
+    assert sorted(d for d, _ in calls["rescore"]) == nights
+
+
+@pytest.mark.asyncio
+async def test_a_logging_failure_after_the_commit_skips_nothing(sweep, monkeypatch):
+    """Review point 4: once committed, the inference store and the caches are
+    invalidated and Boom or Bust rescored, whatever the logging does."""
+    service, calls = sweep
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
+    _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5)], [_fs_team(10)]))
+    real_info = mns.logger.info
+
+    def flaky(msg, *a, **k):
+        if "vectors" in str(msg) or "(0021409900)" in str(msg):
+            raise ValueError("format")
+        return real_info(msg, *a, **k)
+    monkeypatch.setattr(mns.logger, "info", flaky)
+    result = await service.sweep_corrections(GAME_DATE)
+    assert result != "failed" and "vectors: refreshed" in result
+    assert calls["invalidated"] and calls["cleared"] and calls["rescore"] == [(GAME_DATE, True)]
+
+
+@pytest.mark.asyncio
+async def test_dropped_lines_are_logged_once_a_morning(sweep, monkeypatch, caplog):
+    """Review point 3: never deleted, and one line a morning, not one per night."""
+    import logging
+    service, _ = sweep
+    nights = [GAME_DATE - timedelta(days=o) for o in range(3)]
+    service._db = SweepDB([_fs_player(1), _fs_player(2)], [_fs_team(10)], processed=nights)
+    monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: _espn([_fs_player(1)], [_fs_team(10)], night=d))
+    with caplog.at_level(logging.INFO, logger=mns.logger.name):
+        assert await service.sweep_corrections(GAME_DATE) is None
+    lines = [r for r in caplog.records if "not in ESPN's box scores" in r.getMessage()]
+    assert len(lines) == 1 and "3 stored line(s)" in lines[0].getMessage()
+    assert service._db.committed == []
 
 
 @pytest.mark.asyncio
@@ -1177,8 +1197,8 @@ async def test_sweep_with_nothing_changed_writes_nothing(sweep, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sweep_rescores_a_night_whose_boom_or_bust_still_disagrees(sweep, monkeypatch):
-    """Bug 3, Boom or Bust: a rescore that failed on an earlier morning is
-    found again from the stored rows themselves, with no ESPN difference left."""
+    """A rescore that failed on an earlier morning is found again from the
+    stored rows themselves, with no ESPN difference left."""
     service, calls = sweep
     rows, teams = [_fs_player(1)], [_fs_team(10)]
     earlier = GAME_DATE - timedelta(days=2)
@@ -1198,7 +1218,7 @@ async def test_sweep_failed_commit_rescores_nothing_new_and_clears_nothing(sweep
     _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5)], [_fs_team(10)]))
     result = await service.sweep_corrections(GAME_DATE)
     assert "nothing written" in result
-    assert calls["rescore"] == [] and not calls["cleared"]
+    assert calls["rescore"] == [] and not calls["cleared"] and not calls["invalidated"]
 
 
 @pytest.mark.asyncio

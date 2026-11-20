@@ -5,13 +5,14 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
+import polars as pl
 import pytest
 
 from model_stats_inference.espn import EspnUnavailableError
 from model_stats_inference.serving import nightly
 from model_stats_inference.serving.inference import LiveInference, PredictionRequest
 
-from .conftest import FULL_PID, LOW_PID, TEAM_A, TEAM_B
+from .conftest import FULL_PID, LOW_PID, TEAM_A, TEAM_B, to_pl
 
 NIGHT_DATE = date(2024, 12, 31)  # after the synthetic schedule's last game
 NIGHT_GID = "0021409900"
@@ -36,7 +37,7 @@ def test_season_for_boundaries():
 
 
 def _min_filter_player_rows(game_date: date):
-    return pd.DataFrame({
+    return to_pl(pd.DataFrame({
         "PLAYER_ID": [1, 2, 3, 4],
         "GAME_ID": ["401700001"] * 4,
         "GAME_DATE": [pd.Timestamp(game_date)] * 4,
@@ -44,7 +45,7 @@ def _min_filter_player_rows(game_date: date):
         "TEAM_ID": [10, 20, 10, 20],
         "MATCHUP": ["AAA vs. BBB"] * 4,
         "POSITION": ["G"] * 4,
-    })
+    }))
 
 
 def test_fetch_night_keeps_any_played_minute(monkeypatch):
@@ -54,11 +55,11 @@ def test_fetch_night_keeps_any_played_minute(monkeypatch):
     day = nightly.espn.DayFetch(
         game_date=game_date,
         players=_min_filter_player_rows(game_date),
-        teams=pd.DataFrame({
+        teams=to_pl(pd.DataFrame({
             "TEAM_ID": [10, 20],
             "GAME_ID": ["401700001", "401700001"],
             "GAME_DATE": [pd.Timestamp(game_date)] * 2,
-        }),
+        })),
         expected_games=1,
         all_final=True,
     )
@@ -66,12 +67,12 @@ def test_fetch_night_keeps_any_played_minute(monkeypatch):
 
     night = nightly.fetch_night(game_date)
 
-    assert set(night.player_games["PLAYER_ID"]) == {3, 4}
+    assert set(night.player_games["PLAYER_ID"].to_list()) == {3, 4}
     assert night.complete
 
 
 def _zero_games_day(game_date: date, total_events: int) -> "nightly.espn.DayFetch":
-    empty = pd.DataFrame()
+    empty = pl.DataFrame()
     return nightly.espn.DayFetch(
         game_date=game_date, players=empty, teams=empty,
         expected_games=0, all_final=True, total_events=total_events,
@@ -165,27 +166,27 @@ def test_fetch_night_whitelist_cached_across_calls(monkeypatch):
 
 def test_bootstrap_frames_keeps_any_played_minute(monkeypatch):
     game_date = pd.Timestamp(date.today())
-    players_raw = pd.DataFrame({
+    players_raw = to_pl(pd.DataFrame({
         "PLAYER_ID": [1, 2, 3, 4],
         "GAME_ID": ["401700001"] * 4,
         "GAME_DATE": [game_date] * 4,
         "MIN": [0.0, None, 0.5, 5.0],
         "POSITION": ["G", "G", None, "F"],
-    })
-    team_raw = pd.DataFrame({
+    }))
+    team_raw = to_pl(pd.DataFrame({
         "GAME_ID": ["401700001", "401700001"],
         "GAME_DATE": [game_date] * 2,
         "TEAM_ID": [10, 20],
-    })
+    }))
     monkeypatch.setattr(
-        nightly.rdata, "fetch_game_logs", lambda seasons: (players_raw, team_raw)
+        nightly.espn, "fetch_seasons", lambda seasons, cache_dir=None: (players_raw, team_raw)
     )
 
     players, _ = nightly.bootstrap_frames()
 
-    assert set(players["PLAYER_ID"]) == {3, 4}
+    assert set(players["PLAYER_ID"].to_list()) == {3, 4}
     # missing POSITION values are normalized to "" (multi-hot flags 0)
-    assert players.loc[players["PLAYER_ID"] == 3, "POSITION"].iloc[0] == ""
+    assert players.filter(pl.col("PLAYER_ID") == 3)["POSITION"][0] == ""
 
 
 def _night_player_row(pid, team, game_id, matchup, minutes=30.0):
@@ -211,18 +212,18 @@ def _night_team_row(team, game_id):
 
 
 def _make_night() -> nightly.NightFetch:
-    player_games = pd.DataFrame([
+    player_games = to_pl(pd.DataFrame([
         _night_player_row(FULL_PID, TEAM_A, NIGHT_GID, "AAA vs. BBB"),      # eligible
         _night_player_row(LOW_PID, TEAM_B, NIGHT_GID, "BBB @ AAA"),         # <10 games history
         _night_player_row(UNKNOWN_PID, TEAM_B, NIGHT_GID, "BBB @ AAA"),     # unknown player
         _night_player_row(2, UNKNOWN_TEAM_A, UNKNOWN_GID, "CCC vs. DDD"),   # opponent not in store
-    ])
-    team_games = pd.DataFrame([
+    ]))
+    team_games = to_pl(pd.DataFrame([
         _night_team_row(TEAM_A, NIGHT_GID),
         _night_team_row(TEAM_B, NIGHT_GID),
         _night_team_row(UNKNOWN_TEAM_A, UNKNOWN_GID),
         _night_team_row(UNKNOWN_TEAM_B, UNKNOWN_GID),
-    ])
+    ]))
     return nightly.NightFetch(
         game_date=NIGHT_DATE, player_games=player_games, team_games=team_games,
         expected_games=2, complete=True,
@@ -268,16 +269,16 @@ def test_evaluate_night_is_leakage_safe(store, models_dir):
 
 def test_drop_stale_players_boundary():
     as_of = date(2026, 7, 3)
-    df = pd.DataFrame({
+    df = to_pl(pd.DataFrame({
         "PLAYER_ID": [1, 1, 2, 2, 3],
         "GAME_DATE": pd.to_datetime([
             "2024-01-05", "2026-01-10",  # active: newest game recent -> ALL rows kept
             "2023-11-01", "2024-04-01",  # stale: newest game > 2 years old -> dropped
             "2024-07-03",                # exactly 2 years old -> dropped (>= boundary)
         ]),
-    })
+    }))
     out = nightly.drop_stale_players(df, as_of)
-    assert set(out["PLAYER_ID"]) == {1}
+    assert set(out["PLAYER_ID"].to_list()) == {1}
     assert len(out) == 2  # active player keeps his old rows too
 
 
@@ -300,13 +301,13 @@ def test_from_vectors_matches_original(store, models_dir):
 
 
 def test_attach_positions(store):
-    rows = pd.DataFrame([
+    rows = to_pl(pd.DataFrame([
         _night_player_row(FULL_PID, TEAM_A, NIGHT_GID, "AAA vs. BBB"),
         _night_player_row(UNKNOWN_PID, TEAM_B, NIGHT_GID, "BBB @ AAA"),
-    ])
+    ]))
     out = nightly.attach_positions(store, rows)
-    assert out.loc[out["PLAYER_ID"] == FULL_PID, "POSITION"].iloc[0] == "G"
-    assert out.loc[out["PLAYER_ID"] == UNKNOWN_PID, "POSITION"].iloc[0] == ""
+    assert out.filter(pl.col("PLAYER_ID") == FULL_PID)["POSITION"][0] == "G"
+    assert out.filter(pl.col("PLAYER_ID") == UNKNOWN_PID)["POSITION"][0] == ""
 
 
 # --- diff_night: ESPN's later corrections -------------------------------------
@@ -326,12 +327,12 @@ def _t(tid, gid="401", **stats):
 
 
 def _frames(players, teams):
-    return pd.DataFrame(players), pd.DataFrame(teams)
+    return pl.DataFrame(players), pl.DataFrame(teams)
 
 
 def test_diff_night_identical_is_empty():
     sp, st = _frames([_p(1, REB=5), _p(2, AST=3)], [_t(10), _t(20)])
-    c = nightly.diff_night(sp, st, sp.copy(), st.copy())
+    c = nightly.diff_night(sp, st, sp.clone(), st.clone())
     assert c.empty and c.vanished_players == [] and c.player_ids() == []
 
 
@@ -341,7 +342,7 @@ def test_diff_night_finds_a_moved_rebound_with_espns_values():
     c = nightly.diff_night(sp, st, fp, ft)
     assert sorted(c.changed_players["PLAYER_ID"]) == [1, 2]
     assert dict(zip(c.changed_players["PLAYER_ID"], c.changed_players["REB"])) == {1: 5.0, 2: 7.0}
-    assert c.new_players.empty and c.changed_teams.empty and c.player_ids() == [1, 2]
+    assert c.new_players.is_empty() and c.changed_teams.is_empty() and c.player_ids() == [1, 2]
 
 
 def test_diff_night_minutes_and_plus_minus_count_as_corrections():
@@ -356,7 +357,7 @@ def test_diff_night_new_and_vanished_lines():
     c = nightly.diff_night(sp, st, fp, ft)
     assert list(c.new_players["PLAYER_ID"]) == [3]
     assert c.vanished_players == [(2, "401")]          # reported, never deleted
-    assert c.changed_players.empty and c.player_ids() == [3]
+    assert c.changed_players.is_empty() and c.player_ids() == [3]
 
 
 def test_diff_night_team_rows_and_float_noise():
@@ -364,20 +365,20 @@ def test_diff_night_team_rows_and_float_noise():
     fp, ft = _frames([_p(1)], [_t(10, REB=45), _t(20, FG_PCT=0.4712 + 1e-9)])
     c = nightly.diff_night(sp, st, fp, ft)
     assert list(c.changed_teams["TEAM_ID"]) == [10]
-    assert c.changed_teams.iloc[0]["REB"] == 45
+    assert c.changed_teams["REB"][0] == 45
 
 
 def test_diff_night_keys_survive_db_and_espn_dtypes():
     """Stored ids come back from Postgres as int64 / text; ESPN's as ints / str."""
     sp, st = _frames([_p(1, gid="401")], [_t(10, gid="401")])
-    sp["PLAYER_ID"] = sp["PLAYER_ID"].astype("int64")
+    sp = sp.with_columns(pl.col("PLAYER_ID").cast(pl.Int64))
     fp, ft = _frames([_p(1, gid="401", AST=1)], [_t(10, gid="401")])
-    fp["PLAYER_ID"] = fp["PLAYER_ID"].astype("int32")
+    fp = fp.with_columns(pl.col("PLAYER_ID").cast(pl.Int32))
     assert nightly.diff_night(sp, st, fp, ft).player_ids() == [1]
 
 
 def test_diff_night_nothing_stored_is_all_new():
     fp, ft = _frames([_p(1), _p(2)], [_t(10)])
-    c = nightly.diff_night(pd.DataFrame(), pd.DataFrame(), fp, ft)
+    c = nightly.diff_night(pl.DataFrame(), pl.DataFrame(), fp, ft)     # what the DB returns for no rows
     assert sorted(c.new_players["PLAYER_ID"]) == [1, 2]
-    assert c.changed_teams.empty
+    assert c.changed_teams.is_empty()

@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import polars as pl
 from datetime import datetime
 from app.builders.response_builder import ResponseBuilder
 from app.models import (
@@ -15,7 +16,7 @@ def response_builder():
 @pytest.fixture
 def response_builder_players_df():
     """Sample players DataFrame specific to response builder tests - 2 players for team 1"""
-    return pd.DataFrame({
+    return pl.DataFrame({
         'Name': ['Player A', 'Player B'],
         'team_id': [1, 1],
         'Pro Team': ['LAL', 'LAL'],
@@ -226,7 +227,7 @@ class TestResponseBuilder:
     
     def test_create_ranking_stats_from_averages_success(self, response_builder, sample_averages_df):
         """Test create_ranking_stats_from_averages helper method"""
-        team_data = sample_averages_df.iloc[0]  # Team Alpha
+        team_data = sample_averages_df.row(0, named=True)  # Team Alpha
         
         result = response_builder.create_ranking_stats_from_averages(team_data)
         
@@ -300,7 +301,7 @@ class TestGenericStatsField:
     def test_create_ranking_stats_from_averages_default_stats_matches_fixed_fields(
         self, response_builder, sample_averages_df
     ):
-        team_data = sample_averages_df.iloc[0]
+        team_data = sample_averages_df.row(0, named=True)
         result = response_builder.create_ranking_stats_from_averages(team_data)
         assert result.stats['PTS'] == result.pts
         assert result.stats['FG%'] == result.fg_percentage
@@ -340,8 +341,7 @@ class TestPlayerStatsGenericField:
     def test_build_players_list_extra_category_included_when_present(
         self, response_builder, response_builder_players_df
     ):
-        df = response_builder_players_df.copy()
-        df['TO'] = [12.0, 8.0]
+        df = response_builder_players_df.with_columns(pl.Series('TO', [12.0, 8.0]))
         result = response_builder.build_players_list(df, categories=['PTS', 'TO'])
         assert result[0].stats.stats == {'PTS': result[0].stats.pts, 'TO': 12.0}
 

@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import polars as pl
 from app.services.stats_calculator import StatsCalculator
 
 
@@ -18,7 +19,7 @@ class TestStatsCalculator:
     
     def test_calculate_rankings_success(self, stats_calculator, sample_stats_calculator_averages_df):
         """Test successful rankings calculation"""
-        result = stats_calculator.calculate_rankings(sample_stats_calculator_averages_df)
+        result = stats_calculator.calculate_rankings(sample_stats_calculator_averages_df).to_pandas()
         
         assert isinstance(result, pd.DataFrame), "Should return DataFrame"
         assert 'TOTAL_POINTS' in result.columns, "Should have TOTAL_POINTS column"
@@ -35,7 +36,7 @@ class TestStatsCalculator:
     
     def test_calculate_rankings_empty_dataframe(self, stats_calculator):
         """Test calculate_rankings with empty DataFrame"""
-        empty_df = pd.DataFrame()
+        empty_df = pl.DataFrame()
         
         with pytest.raises(ValueError, match="Cannot calculate rankings for empty DataFrame"):
             stats_calculator.calculate_rankings(empty_df)
@@ -68,7 +69,7 @@ class TestStatsCalculator:
     
     def test_find_category_leaders_empty_dataframe(self, stats_calculator):
         """Test find_category_leaders with empty DataFrame"""
-        empty_df = pd.DataFrame()
+        empty_df = pl.DataFrame()
         result = stats_calculator.find_category_leaders(empty_df)
         
         assert result == {}, "Should return empty dict for empty DataFrame"
@@ -92,7 +93,7 @@ class TestStatsCalculator:
     
     def test_calculate_league_averages_empty_dataframe(self, stats_calculator):
         """Test calculate_league_averages with empty DataFrame"""
-        empty_df = pd.DataFrame()
+        empty_df = pl.DataFrame()
         result = stats_calculator.calculate_league_averages(empty_df)
         
         assert result == {}, "Should return empty dict for empty DataFrame"
@@ -125,7 +126,7 @@ class TestStatsCalculator:
     
     def test_normalize_for_heatmap_empty_dataframe(self, stats_calculator):
         """Test normalize_for_heatmap with empty DataFrame"""
-        empty_df = pd.DataFrame()
+        empty_df = pl.DataFrame()
         result = stats_calculator.normalize_for_heatmap(empty_df)
         
         assert result == [], "Should return empty list for empty DataFrame"
@@ -133,7 +134,7 @@ class TestStatsCalculator:
     def test_normalize_for_heatmap_identical_values(self, stats_calculator):
         """Test normalize_for_heatmap with identical values (edge case)"""
         # Create DataFrame where all teams have same values for a category
-        identical_df = pd.DataFrame({
+        identical_df = pl.DataFrame({
             'team_id': [1, 2, 3],
             'team_name': ['A', 'B', 'C'],
             'FG%': [45.0, 45.0, 45.0],  
@@ -155,7 +156,7 @@ class TestStatsCalculator:
     
     def test_calculate_per_game_averages_success(self, stats_calculator, sample_totals_df):
         """Test successful per-game averages calculation"""
-        result = stats_calculator.calculate_per_game_averages(sample_totals_df)
+        result = stats_calculator.calculate_per_game_averages(sample_totals_df).to_pandas()
         
         assert isinstance(result, pd.DataFrame), "Should return DataFrame"
         assert len(result) == 3, "Should have 3 teams"
@@ -179,7 +180,7 @@ class TestStatsCalculator:
     
     def test_calculate_per_game_averages_empty_dataframe(self, stats_calculator):
         """Test calculate_per_game_averages with empty DataFrame"""
-        empty_df = pd.DataFrame()
+        empty_df = pl.DataFrame()
         
         with pytest.raises(ValueError, match="Cannot calculate averages for empty DataFrame"):
             stats_calculator.calculate_per_game_averages(empty_df)
@@ -188,35 +189,35 @@ class TestDynamicCategories:
     """Category-parameter behavior for leagues scoring something other than the default 8."""
 
     def test_calculate_per_game_averages_default_matches_explicit_ranking_categories(self, stats_calculator):
-        totals = pd.DataFrame({
+        totals = pl.DataFrame({
             "team_id": [1], "team_name": ["A"], "GP": [10],
             "FGM": [40], "FGA": [80], "FTM": [15], "FTA": [20],
             "FG%": [50.0], "FT%": [75.0], "3PM": [20], "AST": [30],
             "REB": [40], "STL": [10], "BLK": [5], "PTS": [100],
         })
-        default_result = stats_calculator.calculate_per_game_averages(totals)
+        default_result = stats_calculator.calculate_per_game_averages(totals).to_pandas()
         from app.utils.constants import RANKING_CATEGORIES
-        explicit_result = stats_calculator.calculate_per_game_averages(totals, RANKING_CATEGORIES)
+        explicit_result = stats_calculator.calculate_per_game_averages(totals, RANKING_CATEGORIES).to_pandas()
         pd.testing.assert_frame_equal(default_result, explicit_result)
 
     def test_calculate_per_game_averages_extra_category_divided_by_gp(self, stats_calculator):
-        totals = pd.DataFrame({
+        totals = pl.DataFrame({
             "team_id": [1], "team_name": ["A"], "GP": [10],
             "PTS": [100], "TO": [50],
         })
-        result = stats_calculator.calculate_per_game_averages(totals, ["PTS", "TO"])
+        result = stats_calculator.calculate_per_game_averages(totals, ["PTS", "TO"]).to_pandas()
         assert result.iloc[0]["TO"] == 5.0
         assert result.iloc[0]["PTS"] == 10.0
 
     def test_calculate_per_game_averages_percentage_category_left_untouched(self, stats_calculator):
-        totals = pd.DataFrame({
+        totals = pl.DataFrame({
             "team_id": [1], "team_name": ["A"], "GP": [10], "FG%": [47.5],
         })
-        result = stats_calculator.calculate_per_game_averages(totals, ["FG%"])
+        result = stats_calculator.calculate_per_game_averages(totals, ["FG%"]).to_pandas()
         assert result.iloc[0]["FG%"] == 47.5
 
     def test_find_category_leaders_respects_custom_categories(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"],
             "PTS": [100.0, 90.0], "TO": [5.0, 8.0],
         })
@@ -225,7 +226,7 @@ class TestDynamicCategories:
         assert leaders["TO_leader"]["team_id"] == 2
 
     def test_calculate_league_averages_respects_custom_categories(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"],
             "GP": [10, 20], "TO": [4.0, 6.0], "PTS": [100.0, 80.0],
         })
@@ -233,7 +234,7 @@ class TestDynamicCategories:
         assert result == {"TO": 5.0, "GP": 15.0}
 
     def test_normalize_for_heatmap_respects_custom_categories(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"],
             "GP": [10, 20], "TO": [4.0, 6.0],
         })
@@ -246,11 +247,11 @@ class TestReverseCategories:
     """Reverse-scored categories (e.g. turnovers): lower raw value = better."""
 
     def test_calculate_rankings_reverse_category_lowest_value_scores_highest(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2, 3], "team_name": ["A", "B", "C"], "GP": [82, 82, 82],
             "TO": [10.0, 5.0, 15.0],
         })
-        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"})
+        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"}).to_pandas()
         by_team = result.set_index("team_id")
         # Team B has fewest TO (best) -> should score highest (3), Team C worst -> lowest (1)
         assert by_team.loc[2, "TO"] == 3
@@ -258,18 +259,18 @@ class TestReverseCategories:
         assert by_team.loc[3, "TO"] == 1
 
     def test_calculate_rankings_normal_category_unaffected_by_reverse_set(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
             "PTS": [100.0, 90.0], "TO": [10.0, 5.0],
         })
-        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"})
+        result = stats_calculator.calculate_rankings(averages, reverse_categories={"TO"}).to_pandas()
         by_team = result.set_index("team_id")
         # PTS is not reverse: higher value (team 1) scores highest
         assert by_team.loc[1, "PTS"] == 2
         assert by_team.loc[2, "PTS"] == 1
 
     def test_find_category_leaders_reverse_category_picks_lowest(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"],
             "TO": [12.0, 8.0],
         })
@@ -278,7 +279,7 @@ class TestReverseCategories:
         assert leaders["TO_leader"]["value"] == 8.0
 
     def test_find_category_leaders_non_reverse_still_picks_highest(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"],
             "PTS": [90.0, 110.0],
         })
@@ -286,7 +287,7 @@ class TestReverseCategories:
         assert leaders["PTS_leader"]["team_id"] == 2
 
     def test_normalize_for_heatmap_reverse_category_inverts_color_direction(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
             "TO": [5.0, 15.0],
         })
@@ -295,7 +296,7 @@ class TestReverseCategories:
         assert result[0][0] > result[1][0]
 
     def test_normalize_for_heatmap_non_reverse_unaffected(self, stats_calculator):
-        averages = pd.DataFrame({
+        averages = pl.DataFrame({
             "team_id": [1, 2], "team_name": ["A", "B"], "GP": [82, 82],
             "PTS": [120.0, 100.0],
         })

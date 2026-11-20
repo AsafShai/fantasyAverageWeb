@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-import pandas as pd
+import polars as pl
 
 from . import client
 from .teams import TEAM_IDS
@@ -17,7 +17,15 @@ from .teams import TEAM_IDS
 logger = logging.getLogger(__name__)
 
 
-def fetch_rosters() -> pd.DataFrame:
+def _number(v) -> float:
+    """pd.to_numeric(v, errors="coerce") for one JSON value."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def fetch_rosters() -> pl.DataFrame:
     """One row per rostered player: PLAYER_ID, PLAYER_NAME, POSITION,
     HEIGHT_IN, WEIGHT_LB (ESPN returns height already in inches)."""
     rows = []
@@ -28,8 +36,11 @@ def fetch_rosters() -> pd.DataFrame:
                 "PLAYER_ID": int(a["id"]),
                 "PLAYER_NAME": str(a.get("displayName", "")),
                 "POSITION": str(a.get("position", {}).get("abbreviation", "")),
-                "HEIGHT_IN": pd.to_numeric(a.get("height"), errors="coerce"),
-                "WEIGHT_LB": pd.to_numeric(a.get("weight"), errors="coerce"),
+                "HEIGHT_IN": _number(a.get("height")),
+                "WEIGHT_LB": _number(a.get("weight")),
             })
     logger.info(f"ESPN rosters: {len(rows)} players across {len(TEAM_IDS)} teams")
-    return pd.DataFrame(rows).drop_duplicates("PLAYER_ID").reset_index(drop=True)
+    schema = {"PLAYER_ID": pl.Int64, "PLAYER_NAME": pl.String, "POSITION": pl.String,
+              "HEIGHT_IN": pl.Float64, "WEIGHT_LB": pl.Float64}
+    frame = pl.from_dicts(rows, schema=schema) if rows else pl.DataFrame(schema=schema)
+    return frame.unique(subset=["PLAYER_ID"], keep="first", maintain_order=True)

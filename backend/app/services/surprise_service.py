@@ -23,8 +23,10 @@ import logging
 import time
 from datetime import date, datetime, timezone
 
+import math
+
 import numpy as np
-import pandas as pd
+import polars as pl
 
 import httpx
 
@@ -34,6 +36,7 @@ from app.services import schedule_service
 from app.services.data_provider import get_data_provider
 from app.services.db_service import DBService
 from app.utils.constants import LINEUP_SLOT_MAP
+from app.utils.frames import dicts_frame
 from app.utils.memory import log_memory, release_memory
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR
 from model_stats_inference.serving import surprise
@@ -138,61 +141,70 @@ def _verdict(score: float) -> str:
     return ""
 
 
+def _missing(v) -> bool:
+    return v is None or (isinstance(v, float) and math.isnan(v))
+
+
 def score_night(
-    history: pd.DataFrame, night_info: pd.DataFrame | None, evals: pd.DataFrame, game_date: date, calibration: dict
-) -> pd.DataFrame:
+    history: pl.DataFrame, night_info: pl.DataFrame | None, evals: pl.DataFrame, game_date: date, calibration: dict
+) -> pl.DataFrame:
     """Pure scoring of one night. ``history`` holds every played row up to and
     including the night, numeric columns only (uppercase, as
     fs_records_to_frame returns); ``night_info`` the night's rows' display
     fields (PLAYER_NAME, TEAM_ID, MATCHUP), which may already sit in
     ``history``; ``evals`` the night's model_eval_results rows (lowercase)."""
-    night_mask = history["GAME_DATE"].dt.date == game_date
-    night_ids = history.loc[night_mask, "PLAYER_ID"].unique()
-    rows = history[history["PLAYER_ID"].isin(night_ids)]
+    on_night = history["GAME_DATE"].cast(pl.Date) == game_date
+    night_ids = history.filter(on_night)["PLAYER_ID"].unique(maintain_order=True)
+    in_night = history["PLAYER_ID"].is_in(night_ids.to_list())
+    rows = history.filter(in_night)
     # Night-only z-scores: the same numbers compute_zscores gives at the last
     # row, without walking every row of the history (memory and time).
     z = surprise.night_zscores(rows, game_date)
-    night = rows[night_mask & history["PLAYER_ID"].isin(night_ids)].merge(z, on=["PLAYER_ID", "GAME_ID"], how="left")
-    if night_info is not None and not night_info.empty:
-        info = night_info[["PLAYER_ID", "GAME_ID", "PLAYER_NAME", "TEAM_ID", "MATCHUP"]].copy()
-        info["GAME_ID"] = info["GAME_ID"].astype(str)
-        night["GAME_ID"] = night["GAME_ID"].astype(str)
-        night = night.drop(columns=[c for c in ("PLAYER_NAME", "TEAM_ID", "MATCHUP") if c in night.columns])
-        night = night.merge(info, on=["PLAYER_ID", "GAME_ID"], how="left")
+    night = history.filter(on_night & in_night).join(
+        z, on=["PLAYER_ID", "GAME_ID"], how="left", maintain_order="left", suffix="_z")
+    if night_info is not None and not night_info.is_empty():
+        info = night_info.select("PLAYER_ID", "GAME_ID", "PLAYER_NAME", "TEAM_ID", "MATCHUP").with_columns(
+            pl.col("GAME_ID").cast(pl.String))
+        night = night.with_columns(pl.col("GAME_ID").cast(pl.String))
+        night = night.drop([c for c in ("PLAYER_NAME", "TEAM_ID", "MATCHUP") if c in night.columns])
+        night = night.join(info, on=["PLAYER_ID", "GAME_ID"], how="left", maintain_order="left")
     for col, default in (("PLAYER_NAME", ""), ("TEAM_ID", -1), ("MATCHUP", "")):
         if col not in night.columns:
-            night[col] = default
+            night = night.with_columns(pl.lit(default).alias(col))
 
-    if not evals.empty:
-        ev = evals.rename(columns={c: c.upper() for c in evals.columns})
-        ev = ev[ev["ELIGIBLE"].astype(bool)]
-        pred_cols = {f"PRED_{s}": f"PRED_{s}" for s in surprise.ERR_TARGETS}
-        ev = ev[["PLAYER_ID", "GAME_ID", "OPPONENT_TEAM_ID", "IS_HOME"] + list(pred_cols)]
-        ev["GAME_ID"] = ev["GAME_ID"].astype(str)
-        night["GAME_ID"] = night["GAME_ID"].astype(str)
-        night = night.merge(ev, on=["PLAYER_ID", "GAME_ID"], how="left")
+    if not evals.is_empty():
+        ev = evals.rename({c: c.upper() for c in evals.columns})
+        ev = ev.filter(pl.col("ELIGIBLE").cast(pl.Boolean))
+        pred_cols = [f"PRED_{s}" for s in surprise.ERR_TARGETS]
+        ev = ev.select(["PLAYER_ID", "GAME_ID", "OPPONENT_TEAM_ID", "IS_HOME"] + pred_cols)
+        ev = ev.with_columns(pl.col("GAME_ID").cast(pl.String),
+                             *[pl.col(c).cast(pl.Float64).fill_null(float("nan")) for c in pred_cols])
+        night = night.with_columns(pl.col("GAME_ID").cast(pl.String))
+        night = night.join(ev, on=["PLAYER_ID", "GAME_ID"], how="left", maintain_order="left")
     for s in surprise.ERR_TARGETS:
         if f"PRED_{s}" not in night.columns:
-            night[f"PRED_{s}"] = np.nan
+            night = night.with_columns(pl.lit(float("nan")).alias(f"PRED_{s}"))
     night = surprise.add_errors(night)
 
     scores = surprise.score_frame(night, calibration)
-    night = pd.concat([night, scores], axis=1)
-    night["REASONS"] = surprise.reasons_for(night, scores, calibration)
-    if night["MIN"].notna().any():
-        night = night[night["MIN"] >= settings.surprise_min_minutes]
-    return night.reset_index(drop=True)
+    night = pl.concat([night, scores], how="horizontal")
+    night = night.with_columns(pl.Series("REASONS", surprise.reasons_for(night, scores, calibration),
+                                         dtype=pl.Object))
+    mins = night["MIN"].cast(pl.Float64).fill_null(float("nan")).to_numpy()
+    if (~np.isnan(mins)).any():
+        night = night.filter(pl.Series(mins >= settings.surprise_min_minutes))
+    return night
 
 
-def _opponent(row: pd.Series) -> tuple[int, bool]:
+def _opponent(row: dict) -> tuple[int, bool]:
     """Opponent team id and home flag: from the eval row when it exists, else
     parsed from the ESPN matchup string ('BOS vs NYK' / 'BOS @ NYK')."""
     opp = row.get("OPPONENT_TEAM_ID")
     is_home = row.get("IS_HOME")
     matchup = str(row.get("MATCHUP", ""))
-    if is_home is None or (isinstance(is_home, float) and np.isnan(is_home)):
+    if _missing(is_home):
         is_home = " vs" in matchup
-    if opp is None or (isinstance(opp, float) and np.isnan(opp)):
+    if _missing(opp):
         abbr = matchup.replace("@", " ").replace("vs", " ").split()
         from model_stats_inference.espn.teams import team_id_for_abbr
         opp = team_id_for_abbr(abbr[-1]) if abbr else None
@@ -200,16 +212,16 @@ def _opponent(row: pd.Series) -> tuple[int, bool]:
     return int(opp), bool(is_home)
 
 
-def _to_tuple(row: pd.Series, game_date: date, roster: dict[int, dict] | None = None) -> tuple:
+def _to_tuple(row: dict, game_date: date, roster: dict[int, dict] | None = None) -> tuple:
     opp, is_home = _opponent(row)
-    score = float(row["SCORE"]) if pd.notna(row["SCORE"]) else float("nan")
+    score = float(row["SCORE"]) if not _missing(row["SCORE"]) else float("nan")
     owner = (roster or {}).get(int(row["PLAYER_ID"]))
     return (
         str(row["GAME_ID"]), int(row["PLAYER_ID"]), game_date, str(row.get("PLAYER_NAME", "")),
         int(row["TEAM_ID"]), opp, is_home, float(row["MIN"]),
         *[float(row[s]) for s in _LINE_STATS],
-        None if pd.isna(row["METRIC_Z"]) else float(row["METRIC_Z"]),
-        None if pd.isna(row["METRIC_ERR"]) else float(row["METRIC_ERR"]),
+        None if _missing(row["METRIC_Z"]) else float(row["METRIC_Z"]),
+        None if _missing(row["METRIC_ERR"]) else float(row["METRIC_ERR"]),
         None if np.isnan(score) else score,
         bool(row["HAS_ESTIMATE"]),
         _verdict(score),
@@ -253,15 +265,17 @@ class SurpriseService:
             db.get_fs_night_rows(game_date),
             db.get_model_eval_for_date(game_date),
         )
-        night_rows = history[history["GAME_DATE"].dt.date == game_date] if not history.empty else history
-        n_games = int(night_info["GAME_ID"].nunique()) if not night_info.empty else 0
+        night_rows = (
+            history.filter(history["GAME_DATE"].cast(pl.Date) == game_date) if not history.is_empty() else history
+        )
+        n_games = int(night_info["GAME_ID"].n_unique()) if not night_info.is_empty() else 0
         n_eligible = sum(1 for e in evals if e.get("eligible"))
         logger.info(
             f"Surprises {game_date}: inputs read: {n_games} games, {len(night_info)} night rows, "
-            f"{len(night_rows)} played rows of {night_rows['PLAYER_ID'].nunique() if len(night_rows) else 0} players, "
+            f"{len(night_rows)} played rows of {night_rows['PLAYER_ID'].n_unique() if len(night_rows) else 0} players, "
             f"{len(history)} history rows, {len(evals)} model estimates ({n_eligible} eligible)"
         )
-        if history.empty or night_rows.empty:
+        if history.is_empty() or night_rows.is_empty():
             # The readers return an empty frame on a DB error too (and log it
             # there): an empty night right after the nightly wrote it is an error.
             logger.error(
@@ -271,14 +285,15 @@ class SurpriseService:
             return "no_rows"
         if not evals:
             logger.warning(f"Surprises {game_date}: no model estimates for that night; every row is scored on history only")
-        evals_df = pd.DataFrame(evals)
+        evals_df = dicts_frame([dict(e) for e in evals])
         night = await asyncio.to_thread(score_night, history, night_info, evals_df, game_date, self.calibration)
         del history, night_info, evals, evals_df, night_rows   # the step runs after the feature-store build; keep its peak low
         gc.collect()
-        n_scored = int(night["SCORE"].notna().sum())
+        score_arr = night["SCORE"].to_numpy()
+        n_scored = int((~np.isnan(score_arr)).sum())
         n_estimate = int(night["HAS_ESTIMATE"].sum())
-        n_good = int((night["SCORE"] >= settings.surprise_good_threshold).sum())
-        n_bad = int((night["SCORE"] <= -settings.surprise_bad_threshold).sum())
+        n_good = int((score_arr >= settings.surprise_good_threshold).sum())
+        n_bad = int((score_arr <= -settings.surprise_bad_threshold).sum())
         log_memory(f"surprises {game_date}: scored", logger)
         logger.info(
             f"Surprises {game_date}: scored {len(night)} players with {settings.surprise_min_minutes}+ minutes: "
@@ -289,12 +304,12 @@ class SurpriseService:
         if require_roster and not roster:
             logger.error(f"Surprises {game_date}: fantasy rosters unavailable; the stored rows are kept, run it again")
             return "roster_unavailable"
-        rows = [_to_tuple(r, game_date, roster) for _, r in night.iterrows()]
+        rows = [_to_tuple(r, game_date, roster) for r in night.iter_rows(named=True)]
         if not rows:
             # Nothing to store, so the night stays without rows: not a success.
             logger.error(f"Surprises {game_date}: no player passed the minutes floor; nothing stored")
             return "no_players"
-        n_rostered = sum(1 for pid in night["PLAYER_ID"] if int(pid) in roster)
+        n_rostered = sum(1 for pid in night["PLAYER_ID"].to_list() if int(pid) in roster)
         logger.info(f"Surprises {game_date}: writing {len(rows)} rows ({n_rostered} on a fantasy roster)")
         written = await db.insert_model_surprise_rows(rows)
         clear_surprise_read_cache()

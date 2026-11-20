@@ -5,7 +5,7 @@ import httpx
 import json
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
-import pandas as pd
+import polars as pl
 import pydantic_core
 from app.services.cache_manager import CacheManager
 from app.services.data_transformer import DataTransformer
@@ -18,6 +18,7 @@ from app.utils import category_storage
 from app.utils.category_storage import RANKINGS_FIXED_CATEGORIES, TOTAL_KEY
 from app.utils.ssl_context import shared_ssl_context
 from app.utils import background_tasks
+from app.utils.frames import dicts_frame
 from app.services import box_score_service
 from app.services import live_overlay as lo
 from app.services import live_overlay_service
@@ -121,7 +122,7 @@ class DataProvider:
             raise DataSourceError("Error fetching pro team schedules from ESPN API")
 
 
-    async def get_totals_df(self, live: bool = False, settled: bool = False) -> pd.DataFrame:
+    async def get_totals_df(self, live: bool = False, settled: bool = False) -> pl.DataFrame:
         """Get totals DataFrame with caching. Falls back to DB snapshot on ESPN failure.
 
         ``live=True`` adds tonight's games in progress (the totals flavour,
@@ -137,7 +138,7 @@ class DataProvider:
             return await self._live_totals(settled=settled)
         return await self._official_totals_df()
 
-    async def _official_totals_df(self) -> pd.DataFrame:
+    async def _official_totals_df(self) -> pl.DataFrame:
         async with self._fetch_lock:
             cache = self.cache_manager.totals_cache
             checked_at = cache.get('espn_checked_at')
@@ -251,7 +252,7 @@ class DataProvider:
 
     # -- live overlay ----------------------------------------------------------
 
-    def _keep_official_identity(self, totals_df: pd.DataFrame) -> pd.DataFrame:
+    def _keep_official_identity(self, totals_df: pl.DataFrame) -> pl.DataFrame:
         """During games the payload changes on every poll while valuesByStat
         does not: keep the cached frame object when the new one is equal, so
         every memo keyed on it (averages, rankings, responses) stays valid."""
@@ -260,14 +261,14 @@ class DataProvider:
         if (
             previous is not None
             and cache.get('data_date') is None
-            and isinstance(previous, pd.DataFrame)
-            and isinstance(totals_df, pd.DataFrame)
+            and isinstance(previous, pl.DataFrame)
+            and isinstance(totals_df, pl.DataFrame)
             and previous.equals(totals_df)
         ):
             return previous
         return totals_df
 
-    def _observe_live(self, api_data: Dict, totals_df: pd.DataFrame) -> None:
+    def _observe_live(self, api_data: Dict, totals_df: pl.DataFrame) -> None:
         """Shadow run, flag on or off: capture tonight's overlay and reconcile
         ESPN's morning update against it (guard G2). Uses the pro-team
         schedule only if it is already cached; never makes a request."""
@@ -312,7 +313,7 @@ class DataProvider:
             return None
         return overlay, dict(schedule.get(overlay.period) or {})
 
-    async def _live_totals(self, settled: bool) -> pd.DataFrame:
+    async def _live_totals(self, settled: bool) -> pl.DataFrame:
         """Official totals plus tonight: every started game (``settled``
         False, the totals flavour) or finished games only (``settled`` True,
         what averages are built from). Any failure serves official: live can
@@ -412,12 +413,12 @@ class DataProvider:
     def live_health(self) -> dict:
         return self.live.status(settings.live_standings_enabled)
 
-    async def _fallback_from_db(self) -> pd.DataFrame:
+    async def _fallback_from_db(self) -> pl.DataFrame:
         """Build a totals DataFrame from the latest DB snapshot. Stores data_date in cache."""
         snap_date, rows = await self.db_service.get_latest_snapshot(settings.league_id, settings.season_id)
         if not rows:
             raise DataSourceError("ESPN unavailable and no DB fallback data found for this league/season")
-        df = pd.DataFrame(rows)
+        df = dicts_frame(rows)
         self.cache_manager.totals_cache['data'] = df
         self.cache_manager.totals_cache['data_date'] = snap_date
         self.cache_manager.totals_cache['etag'] = None
@@ -449,7 +450,7 @@ class DataProvider:
                 raise DataSourceError("Error fetching team names from ESPN API")
         return raw
 
-    async def get_players_df(self, stat_split_type_id: int = 0) -> pd.DataFrame:
+    async def get_players_df(self, stat_split_type_id: int = 0) -> pl.DataFrame:
         """Get ALL players (roster + FA + waivers) DataFrame with caching
 
         Args:
@@ -518,7 +519,7 @@ class DataProvider:
                 fantasy_team_map = {}
                 totals_data = self.cache_manager.totals_cache.get('data')
                 if totals_data is not None:
-                    fantasy_team_map = dict(zip(totals_data['team_id'], totals_data['team_name']))
+                    fantasy_team_map = dict(zip(totals_data['team_id'].to_list(), totals_data['team_name'].to_list()))
 
                 # get_totals_df above already warmed the standings payload the
                 # categories are resolved from, so this costs no extra request.
@@ -755,7 +756,7 @@ class DataProvider:
     def _mode(live: bool) -> str:
         return 'live' if live else 'official'
 
-    def _averages_for(self, totals_df: pd.DataFrame, categories: list, live: bool = False) -> pd.DataFrame:
+    def _averages_for(self, totals_df: pl.DataFrame, categories: list, live: bool = False) -> pl.DataFrame:
         memo = self._averages_memo.get(self._mode(live))
         if memo is None or memo[0] is not totals_df or memo[1] != categories:
             memo = (totals_df, list(categories),
@@ -763,7 +764,7 @@ class DataProvider:
             self._averages_memo[self._mode(live)] = memo
         return memo[2]
 
-    def _rankings_for(self, averages_df: pd.DataFrame, reverse_categories: set, live: bool = False) -> pd.DataFrame:
+    def _rankings_for(self, averages_df: pl.DataFrame, reverse_categories: set, live: bool = False) -> pl.DataFrame:
         memo = self._rankings_memo.get(self._mode(live))
         if memo is None or memo[0] is not averages_df or memo[1] != reverse_categories:
             memo = (averages_df, set(reverse_categories),
@@ -806,23 +807,23 @@ class DataProvider:
         self._response_memo[slot] = (frames, key, result)
         return result
 
-    async def get_averages_df(self, live: bool = False) -> pd.DataFrame:
+    async def get_averages_df(self, live: bool = False) -> pl.DataFrame:
         """Get averages DataFrame with caching. ``live=True`` counts tonight's
         finished games only (plan decision 1)."""
         totals_df = await (self._live_totals(settled=True) if live else self.get_totals_df())
         categories = await self.get_ranking_categories()
-        return self._averages_for(totals_df, categories, live).copy()
+        return self._averages_for(totals_df, categories, live)
 
-    async def get_rankings_df(self, live: bool = False) -> pd.DataFrame:
+    async def get_rankings_df(self, live: bool = False) -> pl.DataFrame:
         """Get rankings DataFrame with caching. ``live=True`` ranks the live
         averages (finished games only)."""
         totals_df = await (self._live_totals(settled=True) if live else self.get_totals_df())
         categories = await self.get_ranking_categories()
         averages_df = self._averages_for(totals_df, categories, live)
         reverse_categories = await self.get_reverse_categories()
-        return self._rankings_for(averages_df, reverse_categories, live).copy()
+        return self._rankings_for(averages_df, reverse_categories, live)
 
-    async def get_all_dataframes(self, live: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    async def get_all_dataframes(self, live: bool = False) -> Tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
         """Get all three main DataFrames at once (optimized for endpoints that need multiple).
 
         ``live=True``: totals include games in progress; averages and
@@ -833,9 +834,10 @@ class DataProvider:
         averages_df = self._averages_for(settled_df, categories, live)
         rankings_df = self._rankings_for(averages_df, reverse_categories, live)
 
-        return totals_df, averages_df.copy(), rankings_df.copy()
+        # Polars frames are immutable, so the memoized frames are handed out as is.
+        return totals_df, averages_df, rankings_df
     
-    def _extra_rank_payloads(self, df: pd.DataFrame, categories: list, reverse_categories: set) -> Optional[dict]:
+    def _extra_rank_payloads(self, df: pl.DataFrame, categories: list, reverse_categories: set) -> Optional[dict]:
         """{team_id: {category: rank, ..., TOTAL: all-category total}} for the
         categories with no rk_* column, or None when the league scores only the
         fixed ones — which is what keeps the JSONB column NULL and free."""
@@ -845,14 +847,14 @@ class DataProvider:
 
         cols = ['team_id', 'team_name'] + [c for c in categories if c in df.columns] + ['GP']
         full = self.data_transformer.averages_to_rankings_df(
-            df[[c for c in cols if c in df.columns]], reverse_categories
+            df.select([c for c in cols if c in df.columns]), reverse_categories
         )
         return {
             int(row['team_id']): {
                 **{cat: category_storage.json_safe(row[cat]) for cat in extra_cats},
                 TOTAL_KEY: category_storage.json_safe(row['TOTAL_POINTS']),
             }
-            for _, row in full.iterrows()
+            for row in full.iter_rows(named=True)
         }
 
     async def _snapshot_guard(self, completed_period: int, standings_updated_ms: Optional[int]) -> lo.GuardResult:
@@ -865,7 +867,7 @@ class DataProvider:
             return lo.GuardResult(True, "schedule unavailable")
         return lo.snapshot_is_safe(standings_updated_ms, completed_period, schedule)
 
-    async def _sync_db_if_needed(self, scoring_period_id: int, totals_df: pd.DataFrame,
+    async def _sync_db_if_needed(self, scoring_period_id: int, totals_df: pl.DataFrame,
                                  standings_updated_ms: Optional[int] = None) -> Optional[bool]:
         """Write day ``scoring_period_id - 1`` the first time a new period is
         seen. Returns False when guard G1 held the write back (ESPN rolled the
@@ -889,17 +891,17 @@ class DataProvider:
                 # categories" for every row ever written. Extra categories are
                 # ranked separately below and stored as JSONB.
                 avg_cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in averages_df.columns] + ['GP']
-                averages_for_ranking = averages_df[[c for c in avg_cols_to_keep if c in averages_df.columns]]
+                averages_for_ranking = averages_df.select([c for c in avg_cols_to_keep if c in averages_df.columns])
                 rankings_avg_df = self.data_transformer.averages_to_rankings_df(averages_for_ranking, reverse_categories)
 
-                totals_for_ranking = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1).copy()
+                totals_for_ranking = totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'])
                 cols_to_keep = ['team_id', 'team_name'] + [c for c in RANKING_CATEGORIES if c in totals_for_ranking.columns] + ['GP']
-                totals_for_ranking = totals_for_ranking[[c for c in cols_to_keep if c in totals_for_ranking.columns]]
+                totals_for_ranking = totals_for_ranking.select([c for c in cols_to_keep if c in totals_for_ranking.columns])
                 rankings_totals_df = self.data_transformer.averages_to_rankings_df(totals_for_ranking, reverse_categories)
 
                 avg_extras = self._extra_rank_payloads(averages_df, categories, reverse_categories)
                 totals_extras = self._extra_rank_payloads(
-                    totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], axis=1, errors='ignore'),
+                    totals_df.drop(['FGM', 'FGA', 'FTM', 'FTA'], strict=False),
                     categories, reverse_categories,
                 )
 

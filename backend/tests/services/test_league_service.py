@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 import pandas as pd
+import polars as pl
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.league_service import LeagueService
 from app.models import LeagueSummary, HeatmapData, LeagueShotsData, AverageStats, RankingStats
@@ -455,7 +456,7 @@ class TestDynamicCategoriesHeatmap:
         await provider.get_totals_df()
 
         cache = provider.cache_manager.totals_cache
-        cache['data'] = cache['data'].drop(columns=['TO'])
+        cache['data'] = cache['data'].drop(['TO'])
         provider._client.get = AsyncMock(side_effect=Exception("ESPN down"))
 
         heatmap = await real_league_service.get_heatmap_data()

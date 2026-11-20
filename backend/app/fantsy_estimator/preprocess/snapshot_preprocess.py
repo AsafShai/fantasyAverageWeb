@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import numpy as np
+import polars as pl
+
+from app.utils import pdcompat
 
 from ..columns import TeamDailySnapshotColumns
 from .preprocess_columns import PreprocessColumns
@@ -18,38 +21,27 @@ class SnapshotPreprocess:
         self.snapshot_columns = TeamDailySnapshotColumns
         self.columns = PreprocessColumns
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+    def transform(self, df: pl.DataFrame) -> pl.DataFrame:
         """
         Add columns: gp_in_period, avg_fgm_in_period, ..., avg_pts_in_period.
         First period per team has no previous row → new columns are NaN.
+        Rows come back sorted by (team_id, scoring_period_id), stable.
         """
         c = self.snapshot_columns
-        out = df.copy()
-        out = out.sort_values([c.TEAM_ID, c.SCORING_PERIOD_ID]).reset_index(drop=True)
-
-        for col_name in self.columns.all_new():
-            out[col_name] = float("nan")
-
-        for team_id in out[c.TEAM_ID].unique():
-            mask = out[c.TEAM_ID] == team_id
-            idx = out.index[mask].tolist()
-            if len(idx) == 0:
+        order = pdcompat.lexsort([df[c.TEAM_ID].to_numpy(), df[c.SCORING_PERIOD_ID].to_numpy()])
+        out = df[order]
+        n = out.height
+        new = {col: np.full(n, np.nan) for col in self.columns.all_new()}
+        teams = out[c.TEAM_ID].to_list()
+        gp = out[c.GP].to_list()
+        stats = {stat: out[stat].to_list() for stat in PreprocessColumns.SUM_STAT_COLUMNS if stat in out.columns}
+        for i in range(1, n):
+            if teams[i] != teams[i - 1]:
                 continue
-            prev_idx = [None] + idx[:-1]
-            for cur_i, prev_i in zip(idx, prev_idx):
-                if prev_i is None:
-                    continue
-                row_cur = out.loc[cur_i]
-                row_prev = out.loc[prev_i]
-                delta_gp = row_cur[c.GP] - row_prev[c.GP]
-                out.loc[cur_i, PreprocessColumns.GP_IN_PERIOD] = delta_gp
-                if delta_gp <= 0:
-                    continue
-                for stat in PreprocessColumns.SUM_STAT_COLUMNS:
-                    if stat not in out.columns:
-                        continue
-                    delta_sum = row_cur[stat] - row_prev[stat]
-                    avg_col_name = PreprocessColumns.STAT_TO_AVG_COLUMN[stat]
-                    out.loc[cur_i, avg_col_name] = delta_sum / delta_gp
-
-        return out
+            delta_gp = gp[i] - gp[i - 1]
+            new[PreprocessColumns.GP_IN_PERIOD][i] = delta_gp
+            if delta_gp <= 0:
+                continue
+            for stat, values in stats.items():
+                new[PreprocessColumns.STAT_TO_AVG_COLUMN[stat]][i] = (values[i] - values[i - 1]) / delta_gp
+        return out.with_columns([pl.Series(col, arr, dtype=pl.Float64) for col, arr in new.items()])

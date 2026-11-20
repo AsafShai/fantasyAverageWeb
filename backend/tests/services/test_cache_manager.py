@@ -1,4 +1,5 @@
 import pandas as pd
+import polars as pl
 import pytest
 
 from app.services.cache_manager import CacheManager
@@ -15,8 +16,8 @@ def reset_cache_manager():
 class TestCacheManager:
     def test_invalidate_clears_both(self):
         cm = CacheManager()
-        cm.totals_cache = {"etag": "t", "data": pd.DataFrame({"a": [1]})}
-        cm.players_cache = {"etag": "p", "data": pd.DataFrame({"b": [2]})}
+        cm.totals_cache = {"etag": "t", "data": pl.DataFrame({"a": [1]})}
+        cm.players_cache = {"etag": "p", "data": pl.DataFrame({"b": [2]})}
         info = cm.get_cache_info()
         assert info["has_totals"] and info["has_players"]
         cm.invalidate_cache()

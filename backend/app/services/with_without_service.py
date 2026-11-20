@@ -26,6 +26,7 @@ from app.services.roster_stints import service as stints_service
 from app.services.roster_stints.matching import name_tokens
 from app.services.roster_stints.service import RosterStintsService, current_season, eastern_today
 from app.services import injury_service
+from app.utils import ttl_dict
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR, TEAM_ID_TO_NAME, TEAM_IDS
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,10 @@ _COLUMNS = ["min", "pts", "reb", "ast", "stl", "blk", "fg3m", "fgm", "fga", "ftm
 _APPROX_SOURCES = {"box", "box_only"}
 CACHE_TTL = 30 * 60
 
+# Keyed by the stints build too, so each rebuild orphaned 30 teams' payloads;
+# expired ones are swept on write and the count stays one per team.
 _cache: dict[tuple, tuple[float, dict]] = {}
+_MAX_ENTRIES = 30
 
 
 class UnknownTeam(Exception):
@@ -233,5 +237,5 @@ async def team_payload(team_id: int) -> dict:
         team_id, season, games, rows, stints, owners, out_today_by_team().get(team_id, {}),
         list(categories), [c for c in categories if c in reverse],
     )
-    _cache[key] = (time.monotonic() + CACHE_TTL, payload)
+    ttl_dict.store(_cache, key, time.monotonic() + CACHE_TTL, payload, _MAX_ENTRIES)
     return payload

@@ -1,3 +1,4 @@
+import polars as pl
 import pytest
 from datetime import datetime, timezone
 
@@ -101,7 +102,7 @@ class TestParseLineupSlots:
 
 class TestRawStandingsToTotals:
     def test_success(self, transformer):
-        df = transformer.raw_standings_to_totals_df(_standings_payload())
+        df = transformer.raw_standings_to_totals_df(_standings_payload()).to_pandas()
         assert len(df) == 2
         assert set(df["team_id"].tolist()) == {1, 2}
         assert "PTS" in df.columns and "GP" in df.columns
@@ -120,7 +121,7 @@ class TestRawStandingsToTotals:
         must be synthesized rather than silently dropped."""
         payload = {"teams": [{"id": 5, "name": " New Team "}]}
 
-        df = transformer.raw_standings_to_totals_df(payload)
+        df = transformer.raw_standings_to_totals_df(payload).to_pandas()
 
         assert len(df) == 1
         row = df.iloc[0]
@@ -135,7 +136,7 @@ class TestRawStandingsToTotals:
         payload = _standings_payload(team_ids=(1,))
         payload["teams"].append({"id": 2, "name": "No Stats Yet"})
 
-        df = transformer.raw_standings_to_totals_df(payload)
+        df = transformer.raw_standings_to_totals_df(payload).to_pandas()
 
         assert set(df["team_id"].tolist()) == {1, 2}
         no_stats_row = df[df["team_id"] == 2].iloc[0]
@@ -189,16 +190,16 @@ class TestRawStandingsToTeamAbbrevs:
 
 class TestTotalsToAverages:
     def test_divides_by_gp(self, transformer, sample_totals_df):
-        avg = transformer.totals_to_averages_df(sample_totals_df)
+        avg = transformer.totals_to_averages_df(sample_totals_df).to_pandas()
         assert len(avg) == len(sample_totals_df)
-        first_pts = sample_totals_df.iloc[0]["PTS"]
-        first_gp = sample_totals_df.iloc[0]["GP"]
+        first_pts = sample_totals_df.row(0, named=True)["PTS"]
+        first_gp = sample_totals_df.row(0, named=True)["GP"]
         assert abs(avg.iloc[0]["PTS"] - first_pts / first_gp) < 0.01
 
 
 class TestAveragesToRankings:
     def test_has_rank_columns(self, transformer, sample_averages_df):
-        rnk = transformer.averages_to_rankings_df(sample_averages_df)
+        rnk = transformer.averages_to_rankings_df(sample_averages_df).to_pandas()
         assert "RANK" in rnk.columns
         assert "TOTAL_POINTS" in rnk.columns
 
@@ -244,7 +245,7 @@ class TestRawAllPlayersToDf:
             "19": 0.5, "20": 0.83, "42": 70, "40": 32.0,
         })]}
 
-        df = transformer.raw_all_players_to_df(payload)
+        df = transformer.raw_all_players_to_df(payload).to_pandas()
 
         assert len(df) == 1
         row = df.iloc[0]
@@ -258,7 +259,7 @@ class TestRawAllPlayersToDf:
         leaves 'stats' empty — that's a real 0 GP row, not a missing player."""
         payload = {"players": [_player_entry(102, "Rookie R", stats={})]}
 
-        df = transformer.raw_all_players_to_df(payload)
+        df = transformer.raw_all_players_to_df(payload).to_pandas()
 
         assert len(df) == 1
         row = df.iloc[0]
@@ -272,7 +273,7 @@ class TestRawAllPlayersToDf:
             _player_entry(102, "Rookie R", stats={}),
         ]}
 
-        df = transformer.raw_all_players_to_df(payload)
+        df = transformer.raw_all_players_to_df(payload).to_pandas()
 
         assert len(df) == 2
         rookie_row = df[df["Name"] == "Rookie R"].iloc[0]
@@ -295,7 +296,7 @@ class TestRawAllPlayersToDf:
         in either order — the stats shown are always the actual ones."""
         payload = self._entry_with_lines([(1, {"0": 2144.0, "42": 74}), (0, {"0": 1799.0, "42": 65})])
 
-        row = transformer.raw_all_players_to_df(payload).iloc[0]
+        row = transformer.raw_all_players_to_df(payload).row(0, named=True)
 
         assert row["PTS"] == 1799.0
         assert row["GP"] == 65
@@ -303,7 +304,7 @@ class TestRawAllPlayersToDf:
     def test_reads_actual_line_when_projection_is_listed_second(self, transformer):
         payload = self._entry_with_lines([(0, {"0": 1799.0, "42": 65}), (1, {"0": 2144.0, "42": 74})])
 
-        row = transformer.raw_all_players_to_df(payload).iloc[0]
+        row = transformer.raw_all_players_to_df(payload).row(0, named=True)
 
         assert row["PTS"] == 1799.0
         assert row["GP"] == 65
@@ -311,7 +312,7 @@ class TestRawAllPlayersToDf:
     def test_actual_line_with_no_games_is_a_zero_row_not_the_projection(self, transformer):
         payload = self._entry_with_lines([(1, {"0": 2375.0, "42": 76}), (0, {})])
 
-        row = transformer.raw_all_players_to_df(payload).iloc[0]
+        row = transformer.raw_all_players_to_df(payload).row(0, named=True)
 
         assert row["GP"] == 0
         assert row["PTS"] == 0
@@ -389,12 +390,12 @@ class TestRawStandingsToTotalsDynamicCategories:
             "id": 1, "name": "A",
             "valuesByStat": {**_minimal_stat_row(), "11": 12},
         }]}
-        df = transformer.raw_standings_to_totals_df(payload, ["PTS", "TO"])
+        df = transformer.raw_standings_to_totals_df(payload, ["PTS", "TO"]).to_pandas()
         assert "TO" in df.columns
         assert df.iloc[0]["TO"] == 12
 
     def test_extra_category_absent_from_espn_payload_is_not_added(self, transformer):
-        df = transformer.raw_standings_to_totals_df(_standings_payload(), ["PTS", "TO"])
+        df = transformer.raw_standings_to_totals_df(_standings_payload(), ["PTS", "TO"]).to_pandas()
         assert "TO" not in df.columns
 
     def test_no_categories_arg_keeps_default_fixed_columns_only(self, transformer):
@@ -402,7 +403,7 @@ class TestRawStandingsToTotalsDynamicCategories:
             "id": 1, "name": "A",
             "valuesByStat": {**_minimal_stat_row(), "11": 12},
         }]}
-        df = transformer.raw_standings_to_totals_df(payload)
+        df = transformer.raw_standings_to_totals_df(payload).to_pandas()
         assert "TO" not in df.columns
 
 
@@ -502,7 +503,8 @@ class TestStatColumnsToKeep:
 
     def test_leaves_non_stat_columns_untouched(self, transformer):
         import pandas as pd
-        df = pd.DataFrame([{
+        import polars as pl
+        df = pl.DataFrame([{
             'Name': 'A', 'player_id': 1, 'status': 'ACTIVE',
             'PTS': 10.0, 'MIN': 30.0, 'PPG': 9.9, 'STR': 'W2',
         }])

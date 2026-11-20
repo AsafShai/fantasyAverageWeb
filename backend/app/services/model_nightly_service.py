@@ -28,16 +28,16 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-import pandas as pd
+import polars as pl
 
 from app.config import settings
 from app.services.db_service import DBService
 from app.services.roster_stints.service import RosterStintsService
+from app.utils.frames import dicts_frame
 from app.utils.memory import log_memory, release_memory
 from model_stats_inference.research import config as rconfig
-from model_stats_inference.research import data as rdata
 from model_stats_inference.serving import config as sconfig
-from model_stats_inference.serving import nightly
+from model_stats_inference.serving import featurize, nightly
 from model_stats_inference.serving.eval_row import EvalRow
 from model_stats_inference.serving.feature_store import _PLAYER_META, FeatureStore
 from model_stats_inference.serving.inference import (
@@ -69,17 +69,21 @@ _FS_TEAM_COLS = [
 ]
 
 
-def _frame_to_tuples(df: pd.DataFrame, cols: list[str]) -> list[tuple]:
+def _is_missing(v) -> bool:
+    return v is None or (isinstance(v, float) and math.isnan(v))
+
+
+def _frame_to_tuples(df: pl.DataFrame, cols: list[str]) -> list[tuple]:
     out = []
-    for row in df[cols].itertuples(index=False):
+    for row in df.select(cols).iter_rows():
         vals = []
         for col, v in zip(cols, row):
             if col in ("PLAYER_ID", "TEAM_ID"):
                 vals.append(int(v))
             elif col == "GAME_DATE":
-                vals.append(pd.Timestamp(v).date())
+                vals.append(v if not isinstance(v, datetime) else v.date())
             elif col in ("GAME_ID", "SEASON", "PLAYER_NAME", "TEAM_NAME", "MATCHUP", "POSITION"):
-                vals.append("" if pd.isna(v) else str(v))
+                vals.append("" if _is_missing(v) else str(v))
             else:
                 vals.append(float(v))
         out.append(tuple(vals))
@@ -97,7 +101,7 @@ def _eval_to_tuple(ev: EvalRow, game_date: date) -> tuple:
 
 # --- feature-vector (de)serialization --------------------------------------
 
-def _features_dict(series: pd.Series, feature_cols: list[str]) -> dict[str, Optional[float]]:
+def _features_dict(row: dict, feature_cols: list[str]) -> dict[str, Optional[float]]:
     """One vector row's features as a dict (NaN -> None).
 
     Returned as a dict, not a JSON string: the pool's jsonb codec already runs
@@ -106,7 +110,7 @@ def _features_dict(series: pd.Series, feature_cols: list[str]) -> dict[str, Opti
     """
     out = {}
     for c in feature_cols:
-        v = series[c]
+        v = row[c]
         out[c] = None if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
     return out
 
@@ -120,87 +124,112 @@ def _serialize_vectors(
     changes the players who played); team rows always come whole."""
     pv = store.player_vectors
     if player_ids is not None:
-        pv = pv[pv["PLAYER_ID"].isin(player_ids)]
+        pv = pv.filter(pl.col("PLAYER_ID").is_in(player_ids))
     pfeat = [c for c in pv.columns if c not in _PLAYER_META]
     player_rows = []
-    for _, row in pv.iterrows():
+    for row in pv.iter_rows(named=True):
         games = int(row["games_count"])
         last = row["last_game_date"]
-        last = pd.Timestamp(last).date() if pd.notna(last) else None
+        last = (last.date() if isinstance(last, datetime) else last) if not _is_missing(last) else None
         player_rows.append((
             int(row["PLAYER_ID"]), str(row.get("PLAYER_NAME", "")), int(row["TEAM_ID"]),
             str(row.get("POSITION", "")), last, games,
             games >= sconfig.MIN_INFERENCE_GAMES, _features_dict(row, pfeat),
         ))
 
-    def team_rows(tv: pd.DataFrame) -> list[tuple]:
+    def team_rows(tv: pl.DataFrame) -> list[tuple]:
         feat = [c for c in tv.columns if c != "TEAM_ID"]
-        return [(int(row["TEAM_ID"]), _features_dict(row, feat)) for _, row in tv.iterrows()]
+        return [(int(row["TEAM_ID"]), _features_dict(row, feat)) for row in tv.iter_rows(named=True)]
 
     return player_rows, team_rows(store.team_allowed_vectors), team_rows(store.team_own_vectors)
 
 
-def _player_vectors_df(records: list[dict]) -> pd.DataFrame:
-    """DB rows -> player_vectors DataFrame (meta cols + expanded features, NaN restored)."""
+def _float_features(df: pl.DataFrame, feat_cols: list[str]) -> pl.DataFrame:
+    """Feature columns as float64 with NULL -> NaN (pandas astype(float))."""
+    return df.with_columns([pl.col(c).cast(pl.Float64).fill_null(float("nan")) for c in feat_cols])
+
+
+def _player_vectors_df(records: list[dict]) -> pl.DataFrame:
+    """DB rows -> player_vectors frame (meta cols + expanded features, NaN restored)."""
     rows = []
     for r in records:
         feats = r["features"] if isinstance(r["features"], dict) else json.loads(r["features"])
         rows.append({
             "PLAYER_ID": r["player_id"], "PLAYER_NAME": r["player_name"],
             "TEAM_ID": r["team_id"], "POSITION": r["position"],
-            "last_game_date": pd.Timestamp(r["last_game_date"]) if r["last_game_date"] else pd.NaT,
+            "last_game_date": r["last_game_date"] if r["last_game_date"] else None,
             "games_count": r["games_count"], **feats,
         })
-    df = pd.DataFrame(rows)
+    df = dicts_frame(rows)
+    df = df.with_columns(pl.col("last_game_date").cast(pl.Date))
     feat_cols = [c for c in df.columns if c not in _PLAYER_META]
-    df[feat_cols] = df[feat_cols].astype(float)  # None -> NaN
-    # Consolidate memory blocks: the per-column astype leaves one block per
-    # feature (~240), making every row lookup at predict time ~9ms instead of
-    # ~0.1ms — the whole batch-predict path pays for it.
-    return df.copy()
+    return _float_features(df, feat_cols)
 
 
-def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
+def _team_vectors_df(records: list[dict]) -> pl.DataFrame:
     rows = []
     for r in records:
         feats = r["features"] if isinstance(r["features"], dict) else json.loads(r["features"])
         rows.append({"TEAM_ID": r["team_id"], **feats})
-    df = pd.DataFrame(rows)
-    feat_cols = [c for c in df.columns if c != "TEAM_ID"]
-    df[feat_cols] = df[feat_cols].astype(float)
-    return df.copy()  # consolidate blocks (see _player_vectors_df)
+    df = dicts_frame(rows)
+    return _float_features(df, [c for c in df.columns if c != "TEAM_ID"])
 
 
-def _corrected(base: pd.DataFrame, fixes: pd.DataFrame, keys: list[str], gate: bool = False) -> pd.DataFrame:
+_EMPTY_PLAYER_VECTORS = {
+    "PLAYER_ID": pl.Int64, "PLAYER_NAME": pl.String, "TEAM_ID": pl.Int64,
+    "POSITION": pl.String, "last_game_date": pl.Date, "games_count": pl.Int64,
+}
+
+
+_FS_TEXT_COLS = {"GAME_ID", "SEASON", "PLAYER_NAME", "TEAM_NAME", "MATCHUP", "POSITION"}
+
+
+def _conform(df: Optional[pl.DataFrame], cols: list[str]) -> pl.DataFrame:
+    """``df`` reduced to ``cols`` with the stored types (ids Int64, text,
+    GAME_DATE pl.Date, stats Float64), so DB rows and ESPN rows concatenate.
+    A missing or column-less frame (what the DB returns for no rows) becomes
+    an empty frame with those columns."""
+    def dtype(c):
+        if c in ("PLAYER_ID", "TEAM_ID"):
+            return pl.Int64
+        if c == "GAME_DATE":
+            return pl.Date
+        return pl.String if c in _FS_TEXT_COLS else pl.Float64
+    if df is None or df.is_empty() or not set(cols) <= set(df.columns):
+        return pl.DataFrame(schema={c: dtype(c) for c in cols})
+    return df.select([pl.col(c).cast(dtype(c)) for c in cols])
+
+
+def _corrected(base: pl.DataFrame, fixes: pl.DataFrame, cols: list[str], keys: list[str],
+               gate: bool = False) -> pl.DataFrame:
     """``base`` (rows as stored) with ``fixes`` (rows as ESPN has them now) in
     place of the rows with the same keys, and the new ones added. With
     ``gate`` the fixes go through the model's MIN_MINUTES read gate, as the
     stored rows did (get_fs_rows_before): a line corrected below it drops out."""
-    if fixes is None or fixes.empty:
+    base, fixes = _conform(base, cols), _conform(fixes, cols)
+    if fixes.is_empty():
         return base
-    if base is None or base.empty or not set(keys) <= set(base.columns):
-        base = pd.DataFrame(columns=list(fixes.columns))
-    fix_keys = set(zip(fixes[keys[0]].astype("int64"), fixes[keys[1]].astype(str)))
-    kept = base[[k not in fix_keys for k in zip(base[keys[0]].astype("int64"), base[keys[1]].astype(str))]]
-    add = fixes[fixes["MIN"] >= rconfig.MIN_MINUTES] if gate else fixes
-    return pd.concat([kept, add], ignore_index=True)
+    kept = base.join(fixes.select(keys), on=keys, how="anti")
+    add = fixes.filter(pl.col("MIN") >= rconfig.MIN_MINUTES) if gate else fixes
+    return pl.concat([kept, add], how="vertical")
 
 
-def _resolve_positions(lines: pd.DataFrame, history: pd.DataFrame, pv: list[dict]) -> pd.DataFrame:
+def _resolve_positions(lines: pl.DataFrame, history: pl.DataFrame, pv: list[dict]) -> pl.DataFrame:
     """Fill an empty POSITION (ESPN's box score sometimes leaves it out) from
     the player's last known one: his latest stored game with a position, else
     his stored vector. As the nightly does (nightly.attach_positions), so a
     corrected or added line never blanks his position."""
-    if lines.empty:
+    if lines.is_empty():
         return lines
     known = {int(r["player_id"]): r["position"] for r in pv if r.get("position")}
-    if history is not None and not history.empty and "POSITION" in history.columns:
-        h = history[history["POSITION"].fillna("") != ""].sort_values("GAME_DATE")
-        known.update({int(p): pos for p, pos in h.groupby("PLAYER_ID")["POSITION"].last().items()})
-    pos = lines["POSITION"].fillna("").astype(str)
-    return lines.assign(POSITION=[
-        p if p else known.get(int(pid), "") for p, pid in zip(pos, lines["PLAYER_ID"])
-    ])
+    if history is not None and not history.is_empty() and "POSITION" in history.columns:
+        last = (history.filter(pl.col("POSITION").fill_null("") != "")
+                .sort("GAME_DATE").group_by("PLAYER_ID").agg(pl.col("POSITION").last()))
+        known.update({int(p): pos for p, pos in last.iter_rows()})
+    return lines.with_columns(pl.Series("POSITION", [
+        pos if pos else known.get(int(pid), "")
+        for pos, pid in zip(lines["POSITION"].fill_null("").to_list(), lines["PLAYER_ID"].to_list())
+    ], dtype=pl.String))
 
 
 def _clear_night_read_caches() -> None:
@@ -352,7 +381,9 @@ class ModelNightlyService:
     async def _sweep_corrections(self, newest: date) -> Optional[str]:
         db = self._db
         oldest = newest - timedelta(days=CATCHUP_DAYS - 1)
-        nights: dict[date, tuple[nightly.NightCorrections, pd.DataFrame, nightly.NightFetch]] = {}
+        notes: list[str] = []
+        committed: list[date] = []
+        vanished = 0
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
             d = newest - timedelta(days=offset)
             run = await db.get_model_nightly_run(d)
@@ -364,26 +395,21 @@ class ModelNightlyService:
                 continue
             stored_players, stored_teams = await db.get_fs_rows_on(d)
             if stored_players is None:
-                return "db_unavailable"
+                return "; ".join(notes + ["db_unavailable"])
             c = nightly.diff_night(stored_players, stored_teams, fresh.player_games, fresh.team_games)
-            if c.vanished_players:
-                logger.warning(
-                    f"Correction sweep {d}: {len(c.vanished_players)} stored line(s) no longer in ESPN's "
-                    f"box scores, left as stored: {c.vanished_players[:5]}"
-                )
-            if not c.empty:
-                nights[d] = (c, stored_players, fresh)
-
-        notes: list[str] = []
-        committed: list[date] = []
-        if nights:
-            note, ok = await self._commit_corrections(nights)
+            vanished += len(c.vanished_players)
+            if c.empty:
+                continue
+            # One night per transaction: the memory a commit needs is bounded
+            # by one night's games, like the nightly's own incremental path.
+            note, ok = await self._commit_corrections(d, c, stored_players, fresh)
             notes.append(note)
             if ok:
-                committed = list(nights)
-                if "vectors: refreshed" in note:
-                    self._invalidate_inference_store()
-                _clear_night_read_caches()
+                committed.append(d)
+        if vanished:
+            # Never deleted (likelier a feed hiccup than a correction); one
+            # line a morning while such a night is in the window.
+            logger.info(f"Correction sweep: {vanished} stored line(s) not in ESPN's box scores now, left as stored")
         if settings.surprise_nightly_enabled:
             notes.extend(await self._rescore_stale_surprises(oldest, committed))
         if not notes:
@@ -392,91 +418,85 @@ class ModelNightlyService:
         return "; ".join(notes)
 
     async def _commit_corrections(
-        self, nights: dict[date, tuple["nightly.NightCorrections", pd.DataFrame, "nightly.NightFetch"]],
+        self, night: date, c: "nightly.NightCorrections", stored_players: pl.DataFrame,
+        fresh: "nightly.NightFetch",
     ) -> tuple[str, bool]:
-        """Compute everything the corrections change, then write it in one
-        transaction (DBService.apply_corrections). Nothing is written before
-        everything is computed, and a failed write writes nothing, so the next
-        morning sees the same differences and tries again."""
+        """Compute everything one night's corrections change, then write it in
+        one transaction (DBService.apply_corrections). Nothing is written
+        before everything is computed, and a failed write writes nothing, so
+        the next morning sees the same differences and tries again."""
         db = self._db
-        lines_parts, team_parts, eval_actuals = [], [], []
-        player_ids: set[int] = set()
-        team_ids: set[int] = set()
-        summary = []
-        for d, (c, stored_players, fresh) in nights.items():
-            changed = c.changed_players
-            if not changed.empty:
-                # A stored line keeps its stored position (the write never
-                # touches it); carry it here too so the vectors see the same.
-                stored_pos = {
-                    (int(p), str(g)): pos for p, g, pos in zip(
-                        stored_players["PLAYER_ID"], stored_players["GAME_ID"], stored_players["POSITION"])
-                } if "POSITION" in stored_players.columns else {}
-                changed = changed.assign(POSITION=[
-                    stored_pos.get((int(p), str(g)), pos)
-                    for p, g, pos in zip(changed["PLAYER_ID"], changed["GAME_ID"], changed["POSITION"])
-                ])
-                eval_actuals.extend(
-                    (str(r["GAME_ID"]), int(r["PLAYER_ID"]), *[float(r[s]) for s in _EVAL_STATS])
-                    for _, r in changed.iterrows()
-                )
-            lines_parts.extend([changed, c.new_players])
-            team_parts.append(c.changed_teams)
-            player_ids.update(c.player_ids())
+        pk, tk = ["PLAYER_ID", "GAME_ID"], ["TEAM_ID", "GAME_ID"]
+        changed = c.changed_players
+        if not changed.is_empty() and "POSITION" in stored_players.columns:
+            # A stored line keeps its stored position (the write never
+            # touches it); carry it here too so the vectors see the same.
+            stored_pos = _conform(stored_players, _FS_PLAYER_COLS).select(pk + [pl.col("POSITION").alias("_stored_pos")])
+            changed = (_conform(changed, _FS_PLAYER_COLS).join(stored_pos, on=pk, how="left")
+                       .with_columns(pl.coalesce("_stored_pos", "POSITION").alias("POSITION")).drop("_stored_pos"))
+        eval_actuals = [
+            (str(r["GAME_ID"]), int(r["PLAYER_ID"]), *[float(r[s]) for s in _EVAL_STATS])
+            for r in changed.iter_rows(named=True)
+        ]
+        lines = pl.concat([_conform(changed, _FS_PLAYER_COLS), _conform(c.new_players, _FS_PLAYER_COLS)])
+        teams = _conform(c.changed_teams, _FS_TEAM_COLS)
+
+        player_ids = set(c.player_ids())
+        if not teams.is_empty():
             # A team row feeds the usage (USG) of every player of that game:
             # it divides by the team's possessions. Recompute them all.
-            games = set(c.changed_teams["GAME_ID"].astype(str)) if not c.changed_teams.empty else set()
-            if games:
-                in_games = fresh.player_games[fresh.player_games["GAME_ID"].astype(str).isin(games)]
-                player_ids.update(int(p) for p in in_games["PLAYER_ID"])
-            team_ids.update(int(t) for t in fresh.team_games["TEAM_ID"])
-            summary.append(
-                f"{d}: {len(c.changed_players)} changed, {len(c.new_players)} new player line(s), "
-                f"{len(c.changed_teams)} team row(s)"
-            )
-        lines = pd.concat([f[_FS_PLAYER_COLS] for f in lines_parts if not f.empty], ignore_index=True) \
-            if any(not f.empty for f in lines_parts) else pd.DataFrame(columns=_FS_PLAYER_COLS)
-        teams = pd.concat([f[_FS_TEAM_COLS] for f in team_parts if not f.empty], ignore_index=True) \
-            if any(not f.empty for f in team_parts) else pd.DataFrame(columns=_FS_TEAM_COLS)
+            games = set(teams["GAME_ID"].to_list())
+            player_ids.update(int(p) for p in fresh.player_games.filter(
+                pl.col("GAME_ID").cast(pl.String).is_in(games))["PLAYER_ID"])
         ids = sorted(player_ids)
+        team_ids = sorted({int(t) for t in fresh.team_games["TEAM_ID"]})
 
         vectors_as_of, latest = await asyncio.gather(
             db.get_vectors_as_of(), db.get_latest_fs_date_before(date.max)
         )
-        bound = max(d for d in (latest, max(nights)) if d is not None) + timedelta(days=1)
+        bound = max(d for d in (latest, night) if d is not None) + timedelta(days=1)
         history, team_games = await db.get_fs_rows_before_for_players(bound, ids)
         pv, tav, tov = await db.load_feature_vectors(player_ids=ids)
         lines = _resolve_positions(lines, history, pv)
 
-        vectors, vec_note = None, "left_to_rebuild"
+        vectors, dropped, vec_note = None, [], "left_to_rebuild"
         if vectors_as_of is None or latest is None or vectors_as_of != latest:
             logger.warning(
                 f"Correction sweep: vectors are through {vectors_as_of}, the store through {latest}; "
                 f"left to the next full rebuild"
             )
-        elif team_games.empty or not tav or not tov:
+        elif team_games.is_empty() or not tav or not tov:
             vec_note = "skipped (store empty)"
         else:
-            vectors = await asyncio.to_thread(
+            vectors, dropped = await asyncio.to_thread(
                 self._recompute_sync, pv, tav, tov,
-                _corrected(history, lines, ["PLAYER_ID", "GAME_ID"], gate=True),
-                _corrected(team_games, teams, ["TEAM_ID", "GAME_ID"]),
-                ids, sorted(team_ids),
+                _corrected(history, lines, _FS_PLAYER_COLS, pk, gate=True),
+                _corrected(team_games, teams, _FS_TEAM_COLS, tk),
+                ids, team_ids,
             )
             vec_note = "refreshed"
         del history, team_games, pv, tav, tov
 
+        summary = (f"{night}: {len(c.changed_players)} changed, {len(c.new_players)} new player line(s), "
+                   f"{len(c.changed_teams)} team row(s)")
         if not await db.apply_corrections(
-            _frame_to_tuples(lines, _FS_PLAYER_COLS) if not lines.empty else [],
-            _frame_to_tuples(teams, _FS_TEAM_COLS) if not teams.empty else [],
-            eval_actuals, vectors,
+            _frame_to_tuples(lines, _FS_PLAYER_COLS) if not lines.is_empty() else [],
+            _frame_to_tuples(teams, _FS_TEAM_COLS) if not teams.is_empty() else [],
+            eval_actuals, vectors, dropped,
         ):
-            return ("; ".join(summary) + "; write failed, nothing written: retried next morning"), False
-        for line in summary:
-            logger.info(f"Correction sweep {line}")
-        for _, r in lines.head(10).iterrows():
-            logger.info(f"Correction sweep: {r['PLAYER_NAME']} ({r['GAME_DATE']:%Y-%m-%d}, {r['GAME_ID']})")
-        return "; ".join(summary) + f"; vectors: {vec_note}", True
+            return f"{summary}; write failed, nothing written: retried next morning", False
+        # Committed: what depends on it first, so nothing below can skip it.
+        if vectors is not None:
+            self._invalidate_inference_store()
+        _clear_night_read_caches()
+        try:
+            logger.info(f"Correction sweep {summary}; vectors {vec_note}"
+                        + (f", {len(dropped)} dropped" if dropped else ""))
+            for r in lines.head(10).iter_rows(named=True):
+                logger.info(f"Correction sweep {night}: {r['PLAYER_NAME']} ({r['GAME_ID']})")
+        except Exception:
+            pass
+        return f"{summary}; vectors: {vec_note}", True
 
     async def _rescore_stale_surprises(self, oldest: date, committed: list[date]) -> list[str]:
         """Rescore Boom or Bust where it no longer agrees with the box scores:
@@ -502,32 +522,29 @@ class ModelNightlyService:
     @staticmethod
     def _recompute_sync(
         pv: list[dict], tav: list[dict], tov: list[dict],
-        players: pd.DataFrame, team_games: pd.DataFrame,
+        players: pl.DataFrame, team_games: pl.DataFrame,
         player_ids: list[int], team_ids: list[int],
-    ) -> tuple[list, list, list]:
+    ) -> tuple[tuple[list, list, list], list[int]]:
         """The incremental fold-in's recompute, with nothing new to fold in:
         the given players from their own (corrected) history, the given teams
         from the (corrected) team rows; exactly what a full rebuild computes
-        for them. ``players`` may come back from the DB with no columns at all
-        (no player of the corrections has a qualifying game): the teams are
-        still recomputed."""
-        if players is None or players.empty or "PLAYER_ID" not in players.columns:
-            players = pd.DataFrame({c: pd.Series(dtype="datetime64[ns]" if c == "GAME_DATE" else object)
-                                    for c in _FS_PLAYER_COLS})
-            for c in _FS_PLAYER_COLS:
-                if c not in ("GAME_ID", "SEASON", "GAME_DATE", "PLAYER_NAME", "MATCHUP", "POSITION"):
-                    players[c] = players[c].astype("int64" if c in ("PLAYER_ID", "TEAM_ID") else float)
+        for them. Returns (vectors, players to drop): a player the
+        corrections left with no game above the minutes gate has no vector in
+        a full rebuild, so his stored one goes."""
+        players = _conform(players, _FS_PLAYER_COLS)
         store = FeatureStore.from_vectors(
-            _player_vectors_df(pv) if pv else pd.DataFrame(columns=_PLAYER_META[:6]),
+            _player_vectors_df(pv) if pv else pl.DataFrame(schema=_EMPTY_PLAYER_VECTORS),
             _team_vectors_df(tav), _team_vectors_df(tov),
         )
-        store.players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-        store.team_allowed = rdata.build_team_allowed(team_games)
-        store.team_own = rdata.build_team_own(team_games)
-        present = set(store.players["PLAYER_ID"].astype(int))
+        store.players = players.sort(["PLAYER_ID", "GAME_DATE"], maintain_order=True)
+        store.team_allowed = featurize.build_team_allowed(_conform(team_games, _FS_TEAM_COLS))
+        store.team_own = featurize.build_team_own(_conform(team_games, _FS_TEAM_COLS))
+        present = set(int(p) for p in store.players["PLAYER_ID"])
         with_rows = [p for p in player_ids if p in present]
         store._recompute(with_rows, team_ids)
-        return _serialize_vectors(store, player_ids=with_rows)
+        stored = {int(r["player_id"]) for r in pv}
+        dropped = [p for p in player_ids if p not in present and p in stored]
+        return _serialize_vectors(store, player_ids=with_rows), dropped
 
     async def run_for_date(self, game_date: date, force: bool = False) -> str:
         async with self._lock:
@@ -601,13 +618,13 @@ class ModelNightlyService:
             vectors_as_of is not None and latest_fs is not None and vectors_as_of == latest_fs
         )
         if incremental:
-            night_ids = [int(p) for p in night.player_games["PLAYER_ID"].unique()]
+            night_ids = [int(p) for p in night.player_games["PLAYER_ID"].unique(maintain_order=True)]
             log_memory(f"nightly {game_date}: loading history of tonight's players", logger)
             players, team_games = await db.get_fs_rows_before_for_players(game_date, night_ids)
             # Only tonight's players' vectors: predictions read theirs, the fold-in
             # rewrites theirs; nobody else's row is touched.
             pv, tav, tov = await db.load_feature_vectors(player_ids=night_ids)
-            if not tav or not tov or team_games.empty:
+            if not tav or not tov or team_games.is_empty():
                 logger.error("Feature-store tables are empty - run --bootstrap first")
                 return "store_not_bootstrapped"
             logger.info(
@@ -632,7 +649,7 @@ class ModelNightlyService:
                 f"({len(players)} player rows, {len(team_games)} team rows)",
                 logger,
             )
-            if players.empty or team_games.empty:
+            if players.is_empty() or team_games.is_empty():
                 logger.error("Feature-store tables are empty - run --bootstrap first")
                 return "store_not_bootstrapped"
 
@@ -706,7 +723,7 @@ class ModelNightlyService:
         write (no raw rows — the store is not bootstrapped).
         """
         players, team_games = await self._db.get_fs_rows_before(game_date + timedelta(days=1))
-        if players.empty or team_games.empty:
+        if players.is_empty() or team_games.is_empty():
             return None
         vectors = await asyncio.to_thread(self._vectors_from_frames, players, team_games)
         return await self._db.upsert_feature_vectors(*vectors)
@@ -800,17 +817,17 @@ class ModelNightlyService:
 
     @staticmethod
     def _process_sync(
-        players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch
-    ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
-        """Heavy pandas/sklearn work in a thread: build the pre-night store, score
+        players: pl.DataFrame, team_games: pl.DataFrame, night: nightly.NightFetch
+    ) -> tuple[list[EvalRow], pl.DataFrame, tuple[list, list, list]]:
+        """Heavy feature/model work in a thread: build the pre-night store, score
         the night (leakage-safe), then fold the night in to materialize post-night
         vectors."""
-        players = players.sort_values(["PLAYER_ID", "GAME_DATE"])
+        players = players.sort(["PLAYER_ID", "GAME_DATE"], maintain_order=True)
         log_memory("nightly: building feature store", logger)
         store = FeatureStore.build(
-            players.reset_index(drop=True),
-            rdata.build_team_allowed(team_games),
-            rdata.build_team_own(team_games),
+            players,
+            featurize.build_team_allowed(team_games),
+            featurize.build_team_own(team_games),
         )
         log_memory("nightly: built feature store; evaluating night", logger)
         inference = LiveInference(store)
@@ -821,15 +838,15 @@ class ModelNightlyService:
         # Sub-MIN_MINUTES rows are still persisted (storage keeps every played
         # minute) but are DNPs to the feature math — same gate as
         # get_fs_rows_before, so the fold-in matches tomorrow's full rebuild.
-        qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
+        qualifying = night_players.filter(pl.col("MIN") >= rconfig.MIN_MINUTES)
         store.update_with_nightly_results(qualifying, night.team_games)
         return evals, night_players, _serialize_vectors(store)
 
     @staticmethod
     def _process_sync_incremental(
         pv: list[dict], tav: list[dict], tov: list[dict],
-        players: pd.DataFrame, team_games: pd.DataFrame, night: nightly.NightFetch,
-    ) -> tuple[list[EvalRow], pd.DataFrame, tuple[list, list, list]]:
+        players: pl.DataFrame, team_games: pl.DataFrame, night: nightly.NightFetch,
+    ) -> tuple[list[EvalRow], pl.DataFrame, tuple[list, list, list]]:
         """Same as ``_process_sync`` with the pre-night store loaded from the
         stored vectors (tonight's players only) instead of rebuilt: predictions
         read the stored vectors;
@@ -839,20 +856,20 @@ class ModelNightlyService:
         Only tonight's players' vectors are returned for the upsert."""
         log_memory("nightly: loading pre-night store from stored vectors", logger)
         store = FeatureStore.from_vectors(
-            _player_vectors_df(pv) if pv else pd.DataFrame(columns=_PLAYER_META[:6]),
+            _player_vectors_df(pv) if pv else pl.DataFrame(schema=_EMPTY_PLAYER_VECTORS),
             _team_vectors_df(tav), _team_vectors_df(tov),
         )
         # The raw rows the fold-in needs: tonight's players' history, all teams.
-        store.players = players.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-        store.team_allowed = rdata.build_team_allowed(team_games)
-        store.team_own = rdata.build_team_own(team_games)
+        store.players = players.sort(["PLAYER_ID", "GAME_DATE"], maintain_order=True)
+        store.team_allowed = featurize.build_team_allowed(team_games)
+        store.team_own = featurize.build_team_own(team_games)
         inference = LiveInference(store)
         evals = nightly.evaluate_night(store, inference, night)
         log_memory("nightly: evaluated; folding night into store", logger)
         night_players = nightly.attach_positions(store, night.player_games)
-        qualifying = night_players[night_players["MIN"] >= rconfig.MIN_MINUTES]
+        qualifying = night_players.filter(pl.col("MIN") >= rconfig.MIN_MINUTES)
         store.update_with_nightly_results(qualifying, night.team_games)
-        changed = [int(p) for p in qualifying["PLAYER_ID"].unique()]
+        changed = [int(p) for p in qualifying["PLAYER_ID"].unique(maintain_order=True)]
         return evals, night_players, _serialize_vectors(store, player_ids=changed)
 
 
@@ -898,7 +915,11 @@ class ModelNightlyService:
         last5_min = await self._db.get_last5_minutes()
         def _build() -> FeatureStore:
             pdf = _player_vectors_df(pv)
-            pdf = pdf.assign(MIN_LAST5_ALL=pdf["PLAYER_ID"].map(last5_min))
+            pdf = pdf.with_columns(pl.Series(
+                "MIN_LAST5_ALL",
+                [float(last5_min[p]) if p in last5_min else float("nan") for p in pdf["PLAYER_ID"].to_list()],
+                dtype=pl.Float64,
+            ))
             return FeatureStore.from_vectors(pdf, _team_vectors_df(tav), _team_vectors_df(tov))
         return await asyncio.to_thread(_build)
 
@@ -974,9 +995,9 @@ class ModelNightlyService:
             return "bootstrapped"
 
     @staticmethod
-    def _vectors_from_frames(players: pd.DataFrame, team_games: pd.DataFrame) -> tuple[list, list, list]:
+    def _vectors_from_frames(players: pl.DataFrame, team_games: pl.DataFrame) -> tuple[list, list, list]:
         store = FeatureStore.build(
-            players, rdata.build_team_allowed(team_games), rdata.build_team_own(team_games)
+            players, featurize.build_team_allowed(team_games), featurize.build_team_own(team_games)
         )
         return _serialize_vectors(store)
 

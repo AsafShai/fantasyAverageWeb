@@ -27,7 +27,10 @@ from . import config
 def fetch_game_logs(seasons: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(player logs, team logs) for the given seasons, month-cached under
     DATA_DIR so an interrupted pull resumes where it stopped."""
-    return espn.fetch_seasons(seasons, cache_dir=config.DATA_DIR / "espn_cache")
+    # The espn package (shared with the web process) returns Polars frames;
+    # research works in pandas.
+    players, teams = espn.fetch_seasons(seasons, cache_dir=config.DATA_DIR / "espn_cache")
+    return players.to_pandas(), teams.to_pandas()
 
 
 # --- Player bio (frozen artifact + roster refresh) ---------------------------
@@ -54,7 +57,7 @@ def refresh_bio_from_rosters(update_existing: bool = False) -> pd.DataFrame:
     Rewrites the artifact in place and returns it.
     """
     bio = load_bio()
-    rosters = espn.fetch_rosters().set_index("PLAYER_ID")
+    rosters = espn.fetch_rosters().to_pandas().set_index("PLAYER_ID")
     known = set() if bio is None else set(bio["PLAYER_ID"])
 
     new = rosters[~rosters.index.isin(known)].reset_index()
