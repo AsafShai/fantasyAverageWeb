@@ -12,7 +12,6 @@ import logging
 import time
 
 import httpx
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +30,11 @@ HEADERS = {
     "Accept": "application/json",
 }
 
-_session = requests.Session()
-_session.headers.update(HEADERS)
+# One synchronous client for the blocking callers (nightly ingest runs this in a
+# worker thread). httpx, not requests: the app already loads httpx for the async
+# path, so this saves importing requests/urllib3 (~6 MB RSS). requests followed
+# redirects by default; httpx does not unless asked, so ask.
+_session = httpx.Client(headers=HEADERS, follow_redirects=True)
 
 
 class EspnUnavailableError(RuntimeError):
@@ -67,7 +69,7 @@ def get_json(path: str, params: dict | None = None) -> dict:
             data = resp.json()
             time.sleep(SLEEP_BETWEEN_CALLS)
             return data
-        except (requests.RequestException, ValueError) as e:
+        except (httpx.HTTPError, ValueError) as e:
             last = e
             status, body = _status_and_body(e)
             logger.warning(
