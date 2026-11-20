@@ -29,20 +29,37 @@ class LocalPostgres:
     def url(self) -> str:
         return f"postgresql://postgres@127.0.0.1:{self.port}/golden"
 
-    def start(self) -> "LocalPostgres":
+    def start(self, snapshot: Path | None = None) -> "LocalPostgres":
+        """A fresh, migrated database, or (``snapshot``) a copy of a stopped
+        cluster saved with :meth:`snapshot`."""
         if os.geteuid() == 0:
             shutil.chown(self.dir, "postgres", "postgres")
-        _run_as_postgres([str(PG_BIN / "initdb"), "-D", str(self.data), "-A", "trust",
-                          "-U", "postgres", "--no-sync", "-E", "UTF8", "--locale=C.UTF-8"])
+        if snapshot is None:
+            _run_as_postgres([str(PG_BIN / "initdb"), "-D", str(self.data), "-A", "trust",
+                              "-U", "postgres", "--no-sync", "-E", "UTF8", "--locale=C.UTF-8"])
+        else:
+            _run_as_postgres(["cp", "-a", str(snapshot), str(self.data)])
+        self._pg_start()
+        if snapshot is None:
+            self.psql("postgres", "CREATE DATABASE golden")
+            self._migrate()
+        return self
+
+    def _pg_start(self) -> None:
         _run_as_postgres([
             str(PG_BIN / "pg_ctl"), "-D", str(self.data), "-l", str(self.dir / "log"),
             "-o", f"-p {self.port} -k {self.dir} -c fsync=off -c synchronous_commit=off "
                   "-c full_page_writes=off -c autovacuum=off -c max_parallel_workers_per_gather=0 -c synchronize_seqscans=off -c listen_addresses=127.0.0.1 -c TimeZone=UTC",
             "-w", "start",
         ])
-        self.psql("postgres", "CREATE DATABASE golden")
-        self._migrate()
-        return self
+
+    def snapshot(self, dest: Path) -> None:
+        """Stop cleanly, copy the cluster to ``dest``, start again."""
+        _run_as_postgres([str(PG_BIN / "pg_ctl"), "-D", str(self.data), "-m", "fast", "-w", "stop"])
+        if dest.exists():
+            shutil.rmtree(dest)
+        _run_as_postgres(["cp", "-a", str(self.data), str(dest)])
+        self._pg_start()
 
     def psql(self, db: str, sql: str) -> str:
         out = subprocess.run(
