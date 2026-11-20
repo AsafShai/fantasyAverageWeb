@@ -9,14 +9,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from model_stats_inference.research import data as rdata
 from model_stats_inference.serving.errors import (
     InsufficientHistoryError,
     UnknownPlayerError,
     UnknownTeamError,
 )
 from model_stats_inference.serving.feature_store import FeatureStore
-from model_stats_inference.serving.conftest import FULL_PID, LOW_PID, TEAM_A, TEAM_B
+from model_stats_inference.serving.conftest import FULL_PID, LOW_PID, TEAM_A, TEAM_B, to_pl
 
 
 def test_full_player_has_state(store):
@@ -48,7 +47,7 @@ def test_player_vector_has_bio_columns(store):
     # Synthetic player ids aren't in the committed bio artifact -> columns exist, NaN.
     vec = store.get_player_state(FULL_PID).vector
     for col in ("HEIGHT_IN", "WEIGHT_LB", "WINGSPAN_IN", "REACH_IN", "WING_MINUS_HEIGHT"):
-        assert col in vec.index
+        assert col in vec
 
 
 def test_unknown_player_raises(store):
@@ -70,8 +69,8 @@ def test_unknown_team_raises(store):
 
 def test_team_state_has_both_views(store):
     ts = store.get_team_state(TEAM_B)
-    assert any(c.startswith("OPP_ALLOWED_") for c in ts.allowed.index)
-    assert any(c.startswith("TEAM_") and c != "TEAM_ID" for c in ts.own.index)
+    assert any(c.startswith("OPP_ALLOWED_") for c in ts.allowed)
+    assert any(c.startswith("TEAM_") and c != "TEAM_ID" for c in ts.own)
 
 
 def test_nightly_update_appends_and_recomputes(store, raw_players, team_logs):
@@ -89,7 +88,7 @@ def test_nightly_update_appends_and_recomputes(store, raw_players, team_logs):
     new_tg["GAME_ID"] = "0021409999"
     new_tg["GAME_DATE"] = dates
 
-    store.update_with_nightly_results(new_pg, new_tg)
+    store.update_with_nightly_results(to_pl(new_pg), to_pl(new_tg))
 
     after = store.get_player_state(FULL_PID)
     assert after.games_count == n_before + 1

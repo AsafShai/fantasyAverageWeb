@@ -6,6 +6,8 @@ Run: uv run pytest model_stats_inference/serving/test_inference.py
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -19,8 +21,7 @@ from model_stats_inference.serving.conftest import FULL_PID, LOW_PID, TEAM_B
 
 
 def _request(pid, minutes, store):
-    state = store.player_vectors.loc[pid]
-    game_date = pd.Timestamp(state["last_game_date"]) + pd.Timedelta(days=2)
+    game_date = store.player_meta(pid)["last_game_date"] + timedelta(days=2)
     return PredictionRequest(
         player_id=pid, opponent_team_id=TEAM_B, is_home=True,
         game_date=game_date, minutes=minutes,

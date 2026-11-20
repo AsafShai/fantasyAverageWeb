@@ -46,10 +46,11 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 
+from ..serving import featurize
 from ..serving.feature_store import FeatureStore
 from ..serving.inference import LiveInference, PredictionRequest
 from ..serving import nightly
-from ..serving import surprise
+from . import surprise_pandas as surprise  # the pandas original (offline); serving/surprise.py is its pandas-free twin
 from ..training import config as tconfig
 from ..training import reconcile
 from . import config, data, features
@@ -150,6 +151,16 @@ def models_ready() -> bool:
 
 # --- 2) Walk-forward replay of the last season -------------------------------
 
+def _pl(df: pd.DataFrame):
+    """A research (pandas) frame as the Polars frame the serving code takes."""
+    import polars as pl
+
+    out = pl.from_pandas(df.reset_index(drop=True))
+    if "GAME_DATE" in out.columns:
+        out = out.with_columns(pl.col("GAME_DATE").cast(pl.Date))
+    return out
+
+
 def replay_season(players_raw: pd.DataFrame, team_logs: pd.DataFrame) -> pd.DataFrame:
     """Predict every evening of EVAL_SEASON with a store that never sees the future.
 
@@ -171,12 +182,12 @@ def replay_season(players_raw: pd.DataFrame, team_logs: pd.DataFrame) -> pd.Data
         & (players_raw["GAME_DATE"] < season_start)
     ].sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
     hist["POSITION"] = hist["POSITION"].fillna("")
-    hist = nightly.drop_stale_players(hist, season_start.date())
+    hist = nightly.drop_stale_players(_pl(hist), season_start.date())
 
-    tl_hist = team_logs[team_logs["GAME_DATE"] < season_start]
+    tl_hist = _pl(team_logs[team_logs["GAME_DATE"] < season_start])
     print(f"Building feature store as of {season_start.date()} "
-          f"({hist['PLAYER_ID'].nunique():,} players)...")
-    store = FeatureStore.build(hist, data.build_team_allowed(tl_hist), data.build_team_own(tl_hist))
+          f"({hist['PLAYER_ID'].n_unique():,} players)...")
+    store = FeatureStore.build(hist, featurize.build_team_allowed(tl_hist), featurize.build_team_own(tl_hist))
     inference = LiveInference(store, models_dir=MODELS_DIR)
 
     season_qual: dict[int, int] = defaultdict(int)
@@ -186,18 +197,16 @@ def replay_season(players_raw: pd.DataFrame, team_logs: pd.DataFrame) -> pd.Data
 
     for i, d in enumerate(dates):
         night_p = eval_players[eval_players["GAME_DATE"] == d]
-        night_t = eval_teams[eval_teams["GAME_DATE"] == d]
-        night_p = nightly.attach_positions(store, night_p)
+        night_t = _pl(eval_teams[eval_teams["GAME_DATE"] == d])
+        night_p = nightly.attach_positions(store, _pl(night_p))
 
-        opp_map = (
-            data.build_team_allowed(night_t)
-            .set_index(["GAME_ID", "TEAM_ID"])["OPP_TEAM_ID"]
-            .to_dict()
-        )
+        allowed = featurize.build_team_allowed(night_t)
+        opp_map = dict(zip(zip(allowed["GAME_ID"].to_list(), allowed["TEAM_ID"].to_list()),
+                           allowed["OPP_TEAM_ID"].to_list()))
 
         reqs: list[PredictionRequest] = []
         metas: list[dict] = []
-        for _, row in night_p.iterrows():
+        for row in night_p.iter_rows(named=True):
             pid = int(row["PLAYER_ID"])
             rec = {
                 "PLAYER_ID": pid,
@@ -211,7 +220,7 @@ def replay_season(players_raw: pd.DataFrame, team_logs: pd.DataFrame) -> pd.Data
             if season_qual[pid] < SEASON_QUAL_GAMES:
                 rec["REASON"] = f"only {season_qual[pid]} qualifying games this season"
                 continue
-            if opp not in store.team_allowed_vectors.index:
+            if not store.has_team(opp):
                 rec["REASON"] = f"opponent team {opp} not in feature store"
                 continue
             reqs.append(PredictionRequest(
@@ -234,10 +243,10 @@ def replay_season(players_raw: pd.DataFrame, team_logs: pd.DataFrame) -> pd.Data
 
         # Fold the night in (qualifying rows only — the same population prod's
         # read boundary get_fs_rows_before exposes to the store).
-        qual = night_p[night_p["MIN"] >= config.MIN_MINUTES]
-        if not qual.empty:
+        qual = night_p.filter(night_p["MIN"] >= config.MIN_MINUTES)
+        if not qual.is_empty():
             store.update_with_nightly_results(qual, night_t)
-            for pid in qual["PLAYER_ID"]:
+            for pid in qual["PLAYER_ID"].to_list():
                 season_qual[int(pid)] += 1
 
         if (i + 1) % 20 == 0 or i == len(dates) - 1:

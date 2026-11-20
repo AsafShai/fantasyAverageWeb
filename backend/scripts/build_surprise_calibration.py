@@ -21,7 +21,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from model_stats_inference.serving import surprise  # noqa: E402
+from model_stats_inference.research import surprise_pandas as surprise  # noqa: E402
 
 DEFAULT_PARQUET = (
     Path(__file__).resolve().parents[1]

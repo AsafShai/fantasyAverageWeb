@@ -9,10 +9,11 @@ custom minutes from the UI slider).
 from __future__ import annotations
 
 import asyncio
+from datetime import date, datetime
 import logging
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from app.services.model_nightly_service import ModelNightlyService
 from app.services.nba_matchup_service import GameInfo
@@ -20,7 +21,7 @@ from app.utils.name_matching import normalize_player_name
 from app.utils.team_abbr_map import team_id_for_abbr
 from app.utils.log_once import warn_on_change
 from model_stats_inference.serving.feature_store import FeatureStore
-from model_stats_inference.serving.inference import LiveInference, PredictionRequest
+from model_stats_inference.serving.inference import LiveInference, PredictionRequest, _as_date
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class LiveProjectionService:
             logger.warning(f"Projection model warm-up failed: {type(e).__name__}: {e}")
 
     async def project_today(
-        self, players_df: pd.DataFrame, games_today: dict[str, GameInfo]
+        self, players_df: pl.DataFrame, games_today: dict[str, GameInfo]
     ) -> dict[str, dict]:
         """player_name -> {default_minutes, status, reason, stats|None} for every
         player with a game today who resolves in the live store."""
@@ -102,8 +103,8 @@ class LiveProjectionService:
         reqs: list[PredictionRequest] = []
         meta: list[tuple[str, int, float]] = []
         unmatched: list[str] = []
-        today = pd.Timestamp.now().normalize()
-        for row in players_df.to_dict('records'):
+        today = _today()
+        for row in players_df.to_dicts():
             name = str(row.get('Name', ''))
             info = games_today.get(str(row.get('Pro Team', '')))
             if info is None:
@@ -171,7 +172,7 @@ class LiveProjectionService:
         opp_id = _opponent_team_id(opponent)
         if opp_id is None:
             return None
-        today = pd.Timestamp.now().normalize()
+        today = _today()
         default_min = _default_minutes(inference.store, pid)
         req = PredictionRequest(
             player_id=pid, opponent_team_id=opp_id, is_home=is_home,
@@ -196,7 +197,7 @@ class LiveProjectionService:
             return None
         req = PredictionRequest(
             player_id=pid, opponent_team_id=opp_id, is_home=is_home,
-            game_date=pd.Timestamp.now().normalize(), minutes=minutes,
+            game_date=_today(), minutes=minutes,
         )
         results, errors = await asyncio.to_thread(inference.predict_many, [req])
         if errors[0] is not None:
@@ -208,7 +209,15 @@ def _build_name_index(store: FeatureStore) -> dict[str, int]:
     pv = store.player_vectors
     if 'PLAYER_NAME' not in pv.columns:
         return {}
-    return {normalize_player_name(str(name)): int(pid) for pid, name in pv['PLAYER_NAME'].items()}
+    return {
+        normalize_player_name(str(name)): int(pid)
+        for pid, name in zip(pv['PLAYER_ID'].to_list(), pv['PLAYER_NAME'].to_list())
+    }
+
+
+def _today() -> date:
+    """Today's date on the process clock (pd.Timestamp.now().normalize())."""
+    return datetime.now().date()
 
 
 def _opponent_team_id(espn_abbr: str) -> int | None:
@@ -264,9 +273,9 @@ def _freshness(store: FeatureStore, player_id: int, game_date) -> tuple[str, str
     is already confirmed by a successful predict."""
     meta = store.player_meta(player_id)
     last = meta.get('last_game_date') if meta is not None else None
-    if last is None or pd.isna(last):
+    if last is None:
         return 'amber', 'no last-game date on record'
-    gap = (pd.Timestamp(game_date) - pd.Timestamp(last)).days
+    gap = (_as_date(game_date) - _as_date(last)).days
     if gap > _STALE_DAYS:
         return 'amber', f'last tracked game {gap} days ago — recent form may be stale'
     return 'green', ''

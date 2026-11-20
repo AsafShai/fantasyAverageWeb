@@ -4,12 +4,13 @@ import time
 from datetime import date, timedelta
 from typing import Optional
 import asyncpg
-import pandas as pd
+import polars as pl
 from app.config import settings
 from app.utils import category_storage
 from app.utils.category_storage import SNAPSHOT_FIXED_CATEGORIES, TOTAL_KEY
 from app.utils.constants import DERIVED_CATEGORIES
 from app.models.injury_models import InjuryRecord
+from app.utils.frames import dicts_frame, records_frame
 from model_stats_inference.research import config as rconfig
 
 logger = logging.getLogger(__name__)
@@ -61,20 +62,18 @@ def _snapshot_row_to_categories(row: dict) -> dict:
     }
 
 
-def fs_records_to_frame(records) -> pd.DataFrame:
-    """asyncpg rows -> pipeline frame (uppercase columns, Timestamp GAME_DATE).
+def fs_records_to_frame(records) -> pl.DataFrame:
+    """asyncpg rows -> pipeline frame (uppercase columns, pl.Date GAME_DATE).
 
-    Built straight from the records. The obvious ``[dict(r) for r in records]``
-    first costs ~80 MB of transient peak on a full ~96k-row history — the records
-    already hold boxed Python values, so the dicts add pure container overhead for
-    nothing.
+    Built column by column straight from the records. The obvious
+    ``[dict(r) for r in records]`` first costs ~80 MB of transient peak on a full
+    ~96k-row history — the records already hold boxed Python values, so the dicts
+    add pure container overhead for nothing.
     """
     if not records:
-        return pd.DataFrame()
-    df = pd.DataFrame.from_records(records, columns=list(records[0].keys()))
-    df.columns = [c.upper() for c in df.columns]
-    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
-    return df
+        return pl.DataFrame()
+    df = records_frame(records)
+    return df.rename({c: c.upper() for c in df.columns})
 
 
 # Rows per cursor fetch when streaming a big table into a frame. Small enough
@@ -83,26 +82,25 @@ def fs_records_to_frame(records) -> pd.DataFrame:
 FS_FETCH_CHUNK_ROWS = 10_000
 
 
-async def _fetch_frame_chunked(conn: asyncpg.Connection, query: str, *args) -> pd.DataFrame:
+async def _fetch_frame_chunked(conn: asyncpg.Connection, query: str, *args) -> pl.DataFrame:
     """Stream a query into a pipeline frame through a server-side cursor.
 
     ``conn.fetch`` materializes every row as a Record before the frame exists,
     so a ~90k-row history peaks at ~160 MB over the 22 MB frame it becomes —
     the spike that pushed the nightly over a 512 MB container. Fetching
     FS_FETCH_CHUNK_ROWS at a time converts each chunk to a frame and frees its
-    records before the next arrives, so the peak is one chunk plus the frame
-    (~57 MB measured on the same history). Same columns, same rows, same order
-    as a single fetch.
+    records before the next arrives, so the peak is one chunk plus the frame.
+    Same columns, same rows, same order as a single fetch.
     """
-    parts: list[pd.DataFrame] = []
+    parts: list[pl.DataFrame] = []
     async with conn.transaction():
         cursor = await conn.cursor(query, *args)
         while chunk := await cursor.fetch(FS_FETCH_CHUNK_ROWS):
             parts.append(fs_records_to_frame(chunk))
             del chunk
     if not parts:
-        return pd.DataFrame()
-    return pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0]
+        return pl.DataFrame()
+    return pl.concat(parts, how="vertical_relaxed") if len(parts) > 1 else parts[0]
 
 
 async def _init_connection(conn: asyncpg.Connection) -> None:
@@ -181,7 +179,7 @@ class DBService:
             return 0
 
     async def upsert_rankings_averages(
-        self, scoring_period_id: int, rankings_df: pd.DataFrame, league_id: int, season_id: int,
+        self, scoring_period_id: int, rankings_df: pl.DataFrame, league_id: int, season_id: int,
         extras_by_team: Optional[dict] = None,
     ) -> None:
         """extras_by_team: {team_id: {category: rank}} for categories with no
@@ -225,7 +223,7 @@ class DBService:
                         ) + ((
                             category_storage.dumps((extras_by_team or {}).get(int(row['team_id']))),
                         ) if dynamic else ())
-                        for _, row in rankings_df.iterrows()
+                        for row in rankings_df.iter_rows(named=True)
                     ],
                 )
             logger.info(
@@ -236,7 +234,7 @@ class DBService:
             logger.error(f"Failed to upsert team_rankings_averages: {type(e).__name__}: {e}")
 
     async def upsert_rankings_totals(
-        self, scoring_period_id: int, rankings_totals_df: pd.DataFrame, league_id: int, season_id: int,
+        self, scoring_period_id: int, rankings_totals_df: pl.DataFrame, league_id: int, season_id: int,
         extras_by_team: Optional[dict] = None,
     ) -> None:
         """extras_by_team: {team_id: {category: rank}} for categories with no
@@ -280,7 +278,7 @@ class DBService:
                         ) + ((
                             category_storage.dumps((extras_by_team or {}).get(int(row['team_id']))),
                         ) if dynamic else ())
-                        for _, row in rankings_totals_df.iterrows()
+                        for row in rankings_totals_df.iter_rows(named=True)
                     ],
                 )
             logger.info(
@@ -291,7 +289,7 @@ class DBService:
             logger.error(f"Failed to upsert team_rankings_totals: {type(e).__name__}: {e}")
 
     async def upsert_daily_snapshot(
-        self, scoring_period_id: int, totals_df: pd.DataFrame, league_id: int, season_id: int
+        self, scoring_period_id: int, totals_df: pl.DataFrame, league_id: int, season_id: int
     ) -> None:
         pool = await self._get_pool()
         if pool is None:
@@ -301,7 +299,7 @@ class DBService:
             async with pool.acquire() as conn:
                 dynamic = await self._supports_dynamic_categories(conn)
                 rows = []
-                for _, row in totals_df.iterrows():
+                for row in totals_df.iter_rows(named=True):
                     fgm = int(row['FGM'])
                     fga = int(row['FGA'])
                     ftm = int(row['FTM'])
@@ -670,7 +668,7 @@ class DBService:
             logger.error(f"Failed to fetch snapshots for date range: {type(e).__name__}: {e}")
             return None, None, [], []
 
-    async def upsert_estimator_prediction(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
+    async def upsert_estimator_prediction(self, df: pl.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
@@ -681,7 +679,7 @@ class DBService:
                         "DELETE FROM estimator_prediction WHERE league_id = $1 AND season_id = $2",
                         league_id, season_id,
                     )
-                    for _, row in df.iterrows():
+                    for row in df.iter_rows(named=True):
                         await conn.execute(
                             """
                             INSERT INTO estimator_prediction (
@@ -743,7 +741,7 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to upsert estimator_prediction: {type(e).__name__}: {e}")
 
-    async def upsert_estimator_ranking(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
+    async def upsert_estimator_ranking(self, df: pl.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
@@ -754,7 +752,7 @@ class DBService:
                         "DELETE FROM estimator_ranking WHERE league_id = $1 AND season_id = $2",
                         league_id, season_id,
                     )
-                    for _, row in df.iterrows():
+                    for row in df.iter_rows(named=True):
                         await conn.execute(
                             """
                             INSERT INTO estimator_ranking (
@@ -797,7 +795,7 @@ class DBService:
         except Exception as e:
             logger.error(f"Failed to upsert estimator_ranking: {type(e).__name__}: {e}")
 
-    async def upsert_estimator_rank_probability(self, df: pd.DataFrame, league_id: int, season_id: int) -> None:
+    async def upsert_estimator_rank_probability(self, df: pl.DataFrame, league_id: int, season_id: int) -> None:
         pool = await self._get_pool()
         if pool is None:
             return
@@ -815,7 +813,7 @@ class DBService:
                         """,
                         [
                             (league_id, season_id, int(row['team_id']), str(row['team_name']), int(row['rank']), float(row['prob']))
-                            for _, row in df.iterrows()
+                            for row in df.iter_rows(named=True)
                         ],
                     )
             logger.debug(f"Upserted estimator_rank_probability for league_id={league_id} season_id={season_id}")
@@ -1100,7 +1098,7 @@ class DBService:
             logger.error(f"Failed to check fs rows for {game_date}: {type(e).__name__}: {e}")
             return None
 
-    async def get_fs_rows_before(self, game_date: date) -> tuple[pd.DataFrame, pd.DataFrame]:
+    async def get_fs_rows_before(self, game_date: date) -> tuple[pl.DataFrame, pl.DataFrame]:
         """The model's only read boundary into fs_player_games. The MIN_MINUTES
         gate is enforced here (not at write time): storage keeps every played
         minute for other consumers, but sub-threshold games are DNPs to the
@@ -1112,7 +1110,7 @@ class DBService:
         (see fs_records_to_frame)."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame(), pd.DataFrame()
+            return pl.DataFrame(), pl.DataFrame()
         try:
             async with pool.acquire() as conn:
                 players = await _fetch_frame_chunked(
@@ -1126,11 +1124,11 @@ class DBService:
                 return players, fs_records_to_frame(teams)
         except Exception as e:
             logger.error(f"Failed to fetch fs rows before {game_date}: {type(e).__name__}: {e}")
-            return pd.DataFrame(), pd.DataFrame()
+            return pl.DataFrame(), pl.DataFrame()
 
     async def get_fs_rows_before_for_players(
         self, game_date: date, player_ids: list[int]
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Same read boundary and MIN_MINUTES gate as ``get_fs_rows_before``, but
         only the given players' history. The nightly recompute needs exactly the
         players who played tonight; everyone else's vector is already stored.
@@ -1138,7 +1136,7 @@ class DBService:
         are small (~10k rows for four seasons)."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame(), pd.DataFrame()
+            return pl.DataFrame(), pl.DataFrame()
         try:
             async with pool.acquire() as conn:
                 players = await _fetch_frame_chunked(
@@ -1153,7 +1151,7 @@ class DBService:
                 return players, fs_records_to_frame(teams)
         except Exception as e:
             logger.error(f"Failed to fetch fs rows for players before {game_date}: {type(e).__name__}: {e}")
-            return pd.DataFrame(), pd.DataFrame()
+            return pl.DataFrame(), pl.DataFrame()
 
     async def get_vectors_as_of(self) -> Optional[date]:
         """The latest game folded into the stored player vectors (max last_game_date),
@@ -1185,7 +1183,7 @@ class DBService:
 
     async def aggregate_player_games(
         self, start: date, end: date, season: str
-    ) -> tuple[pd.DataFrame, Optional[date], Optional[date]]:
+    ) -> tuple[pl.DataFrame, Optional[date], Optional[date]]:
         """Per-player totals over [start, end] inclusive, for the dynamic
         time-range player stats feature. Returns (df, actual_start, actual_end)
         where the actual dates are the real game_date coverage found in the
@@ -1199,7 +1197,7 @@ class DBService:
         of every row in the window (which spills to disk at season length)."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame(), None, None
+            return pl.DataFrame(), None, None
         try:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
@@ -1241,10 +1239,10 @@ class DBService:
                     actual_start = row.pop('_actual_start')
                     actual_end = row.pop('_actual_end')
                     records.append(row)
-                return pd.DataFrame(records), actual_start, actual_end
+                return dicts_frame(records), actual_start, actual_end
         except Exception as e:
             logger.error(f"Failed to aggregate player games for {start}..{end} ({season}): {type(e).__name__}: {e}")
-            return pd.DataFrame(), None, None
+            return pl.DataFrame(), None, None
 
     async def aggregate_single_player_games(
         self, player_id: int, start: date, end: date, season: str
@@ -1391,14 +1389,14 @@ class DBService:
 
     async def aggregate_shooting_by_player(
         self, seasons: list[str], start: Optional[date] = None, end: Optional[date] = None
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Per-player FG/FT/3P makes+attempts summed across `seasons` (a single
         season for a current-season aggregate, two prior seasons for a
         regression baseline), optionally bounded to [start, end]. Percentages
         are SUM(makes)/SUM(attempts), never a mean of per-game ratios."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame()
+            return pl.DataFrame()
         try:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
@@ -1425,12 +1423,12 @@ class DBService:
                     """,
                     seasons, start, end,
                 )
-                return pd.DataFrame([dict(r) for r in rows])
+                return records_frame(rows)
         except Exception as e:
             logger.error(f"Failed to aggregate shooting for seasons {seasons}: {type(e).__name__}: {e}")
-            return pd.DataFrame()
+            return pl.DataFrame()
 
-    async def get_usage_components(self, season: str, start: date, end: date) -> pd.DataFrame:
+    async def get_usage_components(self, season: str, start: date, end: date) -> pl.DataFrame:
         """Per-game rows with everything USG% needs: player FGA/FTA/TOV/MIN plus
         that game's team FGA/FTA/TOV (fs_team_games) and team total MIN
         (fs_team_games has no min column — derived via SUM(fs_player_games.min)
@@ -1440,7 +1438,7 @@ class DBService:
         the player's counting stats, which Category Movers reads from it."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame()
+            return pl.DataFrame()
         try:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
@@ -1472,18 +1470,18 @@ class DBService:
                     """,
                     season, start, end,
                 )
-                return pd.DataFrame([dict(r) for r in rows])
+                return records_frame(rows)
         except Exception as e:
             logger.error(f"Failed to fetch usage components for {start}..{end} ({season}): {type(e).__name__}: {e}")
-            return pd.DataFrame()
+            return pl.DataFrame()
 
-    async def get_player_game_log(self, player_id: int, season: str, start: date, end: date) -> pd.DataFrame:
+    async def get_player_game_log(self, player_id: int, season: str, start: date, end: date) -> pl.DataFrame:
         """Single player's per-game rows with the same team components
         get_usage_components returns, so USG% per game can be computed with the
         identical formula and the chart agrees with the table by construction."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame()
+            return pl.DataFrame()
         try:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
@@ -1517,10 +1515,10 @@ class DBService:
                     """,
                     player_id, season, start, end,
                 )
-                return pd.DataFrame([dict(r) for r in rows])
+                return records_frame(rows)
         except Exception as e:
             logger.error(f"Failed to fetch game log for player {player_id} ({season}): {type(e).__name__}: {e}")
-            return pd.DataFrame()
+            return pl.DataFrame()
 
     async def get_games_since(self, since_date: date) -> dict[int, int]:
         """player_id -> distinct games played with game_date >= since_date
@@ -1850,7 +1848,7 @@ class DBService:
 
     # --- surprises of the night (model_surprise_results) -----------------------
 
-    async def get_fs_player_rows_through(self, game_date: date) -> pd.DataFrame:
+    async def get_fs_player_rows_through(self, game_date: date) -> pl.DataFrame:
         """Every played row up to and including the night, for the players who
         played that night only, with no MIN_MINUTES gate: the surprise z-scores
         rank tonight among ALL of a player's games. Restricting to the night's
@@ -1860,7 +1858,7 @@ class DBService:
         (get_fs_night_rows)."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame()
+            return pl.DataFrame()
         try:
             async with pool.acquire() as conn:
                 return await _fetch_frame_chunked(
@@ -1878,14 +1876,14 @@ class DBService:
                 )
         except Exception as e:
             logger.error(f"Failed to fetch fs rows through {game_date}: {type(e).__name__}: {e}")
-            return pd.DataFrame()
+            return pl.DataFrame()
 
-    async def get_fs_night_rows(self, game_date: date) -> pd.DataFrame:
+    async def get_fs_night_rows(self, game_date: date) -> pl.DataFrame:
         """The night's played rows with the display fields the scored rows carry
         (name, NBA team, matchup); a few hundred rows."""
         pool = await self._get_pool()
         if pool is None:
-            return pd.DataFrame()
+            return pl.DataFrame()
         try:
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
@@ -1896,7 +1894,7 @@ class DBService:
                 return fs_records_to_frame(rows)
         except Exception as e:
             logger.error(f"Failed to fetch fs night rows for {game_date}: {type(e).__name__}: {e}")
-            return pd.DataFrame()
+            return pl.DataFrame()
 
     async def get_latest_surprise_date(self) -> Optional[date]:
         """The newest scored night: MAX over the game_date index, not a scan of

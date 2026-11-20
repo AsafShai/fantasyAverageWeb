@@ -7,6 +7,7 @@ this runs a smaller one on every test run.
 
 import os
 import subprocess
+from datetime import date
 import sys
 from pathlib import Path
 
@@ -71,11 +72,11 @@ def test_live_inference_identical_to_sklearn_serving(store, models_dir):
         model = joblib.load(models_dir / f"{target}.joblib")["model"]
         payload["model"] = _SklearnModel(model, payload["features"])
 
-    team_ids = sorted(int(t) for t in store.team_own_vectors.index.unique())
+    team_ids = sorted(int(t) for t in store.team_own_vectors["TEAM_ID"].unique().to_list())
     reqs = [
         PredictionRequest(player_id=pid, opponent_team_id=team_ids[i % len(team_ids)],
-                          is_home=bool(i % 2), game_date=pd.Timestamp("2026-01-15"), minutes=minutes)
-        for i, pid in enumerate(sorted(int(p) for p in store.players["PLAYER_ID"].unique()))
+                          is_home=bool(i % 2), game_date=date(2026, 1, 15), minutes=minutes)
+        for i, pid in enumerate(sorted(int(p) for p in store.players["PLAYER_ID"].unique().to_list()))
         for minutes in (0.0, 12.5, 30.0, 44.0)
     ]
     got, got_err = compiled.predict_many(reqs)
@@ -99,13 +100,13 @@ def test_production_process_never_imports_sklearn_or_scipy():
     code = (
         "import sys\n"
         "from unittest.mock import MagicMock\n"
-        "import numpy as np, pandas as pd\n"
+        "import numpy as np\n"
         "import app.main\n"
         "from model_stats_inference.serving.inference import LiveInference\n"
         "inf = LiveInference(MagicMock())\n"
         "for p in inf.models.values(): p['model'].predict(np.zeros((2, len(p['features']))))\n"
         "from model_stats_inference.serving import surprise\n"
-        "surprise.to_standard_normal_with(pd.Series([0.5, 1.5]), [0.0, 1.0, 2.0], 3)\n"
+        "surprise.to_standard_normal_with(np.array([0.5, 1.5]), [0.0, 1.0, 2.0], 3)\n"
         "bad = sorted({m.split('.')[0] for m in sys.modules if m.split('.')[0] in ('sklearn', 'scipy')})\n"
         "print('LOADED:' + ','.join(bad))\n"
     )
