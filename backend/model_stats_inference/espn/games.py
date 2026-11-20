@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -106,6 +106,33 @@ def is_countable(event: dict) -> bool:
 
 def is_final(event: dict) -> bool:
     return bool(event.get("status", {}).get("type", {}).get("completed"))
+
+
+# A game ESPN has called off stays on its original date's scoreboard but never
+# completes; its makeup is a separate entry on the new date. Counting it would
+# leave that night incomplete forever, and the nightly catch-up stops at the
+# first incomplete night, so every later night would wait behind it.
+CALLED_OFF_STATUSES = frozenset({"STATUS_POSTPONED", "STATUS_CANCELED", "STATUS_CANCELLED"})
+
+
+def is_called_off(event: dict) -> bool:
+    return event.get("status", {}).get("type", {}).get("name") in CALLED_OFF_STATUSES
+
+
+def expected_events(scoreboard: dict) -> list[dict]:
+    """The night's games the nightly waits for: countable and not called off."""
+    return [e for e in scoreboard.get("events", []) if is_countable(e) and not is_called_off(e)]
+
+
+def last_tip(scoreboard: dict) -> datetime | None:
+    """Start time (UTC) of the night's latest expected game; None without one."""
+    tips = []
+    for event in expected_events(scoreboard):
+        try:
+            tips.append(pd.Timestamp(event["date"]).tz_convert("UTC").to_pydatetime())
+        except (KeyError, TypeError, ValueError):
+            continue
+    return max(tips) if tips else None
 
 
 # --- parsing helpers ---------------------------------------------------------
@@ -254,7 +281,7 @@ def fetch_day(game_date: date) -> DayFetch:
     """One night's countable games with box scores (the nightly-ingest fetch)."""
     sb = client.scoreboard(game_date.strftime("%Y%m%d"))
     total_events = len(sb.get("events", []))
-    events = [e for e in sb.get("events", []) if is_countable(e)]
+    events = expected_events(sb)
     all_final = all(is_final(e) for e in events) if events else True
 
     player_rows: list[dict] = []

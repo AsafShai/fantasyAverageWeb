@@ -737,3 +737,33 @@ class TestPlayersEtag:
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
         assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) == before
+
+
+def test_clear_night_caches_forgets_the_anchor_and_the_built_lists():
+    """Called when the nightly records a night: last night / last 7 must move
+    to it at once, not when the 1 h anchor cache expires."""
+    from datetime import date, datetime
+    from app.services import player_service as ps
+    ps._season_anchor_cache.update({'season': '2026-27', 'date': date(2026, 11, 18), 'ts': datetime.now()})
+    ps._windowed_players_cache['x'] = {'players': []}
+    ps.clear_night_caches()
+    assert ps._season_anchor_cache == {'season': None, 'date': None, 'ts': None}
+    assert ps._windowed_players_cache == {}
+
+
+class TestAnchorAfterClearing:
+    @pytest.fixture(autouse=True)
+    def fixed_anchor_date(self):       # the real get_season_anchor_date (see TestGetSeasonAnchorDate)
+        yield
+
+    @pytest.mark.asyncio
+    async def test_after_clearing_the_anchor_is_read_again_from_the_store(self):
+        from datetime import date, datetime
+        from unittest.mock import AsyncMock, MagicMock
+        from app.services import player_service as ps
+        ps._season_anchor_cache.update({'season': '2026-27', 'date': date(2026, 11, 18), 'ts': datetime.now()})
+        db = MagicMock(get_latest_game_date=AsyncMock(return_value=date(2026, 11, 19)))
+        assert await ps.get_season_anchor_date('2026-27', db) == date(2026, 11, 18)    # cached
+        ps.clear_night_caches()
+        assert await ps.get_season_anchor_date('2026-27', db) == date(2026, 11, 19)
+        ps.clear_night_caches()

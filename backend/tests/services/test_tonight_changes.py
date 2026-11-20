@@ -137,3 +137,34 @@ def test_range_frames_use_the_live_frame_as_the_end_snapshot():
     start = pd.DataFrame([{'team_id': 1, 'team_name': 'A', 'GP': 10, 'FGM': 40, 'FGA': 80, 'PTS': 100}])
     delta = RankingService()._compute_delta(tc.as_snapshot(end_live), start)
     assert delta.loc[0, 'GP'] == 2 and delta.loc[0, 'PTS'] == 30 and delta.loc[0, 'FGM'] == 10
+
+
+class TestFinishedNight:
+    """is_finished_night: the live overlay holds the whole of a given night."""
+
+    NIGHT = date(2026, 11, 19)
+
+    def _state(self, night, final, total, active=True):
+        from app.services.live_overlay_service import LiveState
+        return LiveState(active=active, period=tc.period_of(night), as_of=None, games_total=total,
+                         games_live=total - final, games_final=final, official_updated_at=None)
+
+    def test_period_of_inverts_slate_date(self):
+        for period in (1, 31, 120):
+            assert tc.period_of(tc.slate_date(period)) == period
+
+    def test_all_games_final_on_that_night(self):
+        assert tc.is_finished_night(self._state(self.NIGHT, 4, 4), self.NIGHT)
+
+    def test_not_while_a_game_is_still_on(self):
+        assert not tc.is_finished_night(self._state(self.NIGHT, 3, 4), self.NIGHT)
+
+    def test_not_for_another_night(self):
+        from datetime import timedelta
+        assert not tc.is_finished_night(self._state(self.NIGHT + timedelta(days=1), 4, 4), self.NIGHT)
+        assert not tc.is_finished_night(self._state(self.NIGHT - timedelta(days=1), 4, 4), self.NIGHT)
+
+    def test_not_when_inactive_flag_off_or_empty(self):
+        assert not tc.is_finished_night(None, self.NIGHT)
+        assert not tc.is_finished_night(self._state(self.NIGHT, 4, 4, active=False), self.NIGHT)
+        assert not tc.is_finished_night(self._state(self.NIGHT, 0, 0), self.NIGHT)

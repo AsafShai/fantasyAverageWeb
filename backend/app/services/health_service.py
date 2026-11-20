@@ -96,11 +96,15 @@ async def _collect_live() -> dict:
     return DataProvider().live_health()
 
 
+def _iso(value) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
 async def _collect_schedulers() -> dict:
     return {
         "ok": True,
         "injury_next": injury_service.compute_next_trigger().isoformat(),
-        "nightly_next": model_nightly_scheduler._compute_next_trigger().isoformat(),
+        "nightly_next": _iso(model_nightly_scheduler.next_trigger()),
         "estimator_next": estimator_scheduler._compute_next_trigger().isoformat(),
     }
 

@@ -162,9 +162,51 @@ async def test_skips_without_snapshot(estimator_service, monkeypatch):
     assert fake_est.return_value.estimate.call_count == 0
 
 
-def test_scheduler_and_service_share_one_timezone():
-    from app.services import estimator_scheduler
-    assert estimator_scheduler.ISRAEL_TZ is estimator_service_module.ISRAEL_TZ
+class TestEstimatorSlots:
+    """The estimator follows ESPN's rollover, which runs on New York time
+    (~03:00 ET in the Nov 2026 logs), so its slots are New York times."""
+
+    def _next(self, *args):
+        from datetime import datetime
+        from app.services import estimator_scheduler as es
+        return es._compute_next_trigger(datetime(*args, tzinfo=es.EASTERN))
+
+    def test_slots_are_every_fifteen_minutes_from_0230_to_0500_et(self):
+        from app.services import estimator_scheduler as es
+        assert es.SCHEDULE_TIMES[0] == (2, 30) and es.SCHEDULE_TIMES[-1] == (5, 0)
+        minutes = [h * 60 + m for h, m in es.SCHEDULE_TIMES]
+        assert all(b - a == 15 for a, b in zip(minutes, minutes[1:]))
+
+    def test_next_slot_within_the_window(self):
+        assert self._next(2026, 11, 20, 3, 7).strftime('%H:%M') == '03:15'
+        assert self._next(2026, 11, 20, 3, 15).strftime('%H:%M') == '03:30'   # strictly after
+
+    def test_after_the_window_it_is_tomorrow_morning(self):
+        nxt = self._next(2026, 11, 20, 5, 0)
+        assert (nxt.day, nxt.strftime('%H:%M')) == (21, '02:30')
+        nxt = self._next(2026, 11, 20, 23, 59)
+        assert (nxt.day, nxt.strftime('%H:%M')) == (21, '02:30')
+
+    def test_slots_cover_the_observed_rollovers_in_israel_time(self):
+        """The window spans 09:30-12:00 Israel in winter; ESPN rolled over
+        between ~09:15 and 10:45 Israel on every morning checked."""
+        from app.services import estimator_scheduler as es
+        first = self._next(2026, 11, 20, 0, 0)
+        assert first.astimezone(es.ISRAEL_TZ).strftime('%H:%M') == '09:30'
+
+    def test_slots_follow_new_york_through_its_clock_change(self):
+        from datetime import timezone
+        before = self._next(2026, 10, 31, 12, 0)    # Nov 1 02:30: EDT, clocks go back at 02:00 -> EST
+        assert before.strftime('%H:%M') == '02:30' and before.utcoffset().total_seconds() == -5 * 3600
+        after = self._next(2026, 11, 1, 12, 0)
+        assert after.astimezone(timezone.utc).strftime('%H:%M') == '07:30'
+
+    def test_any_timezone_in_is_read_as_new_york(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from app.services import estimator_scheduler as es
+        israel = datetime(2026, 11, 20, 10, 0, tzinfo=ZoneInfo('Asia/Jerusalem'))   # 03:00 ET
+        assert es._compute_next_trigger(israel).strftime('%H:%M') == '03:15'
 
 
 @pytest.mark.asyncio

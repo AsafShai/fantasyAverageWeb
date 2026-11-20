@@ -49,6 +49,109 @@ async def test_settled_range_stays_on_stored_snapshots(ranking_service):
     ranking_service.data_provider.get_live_state.assert_not_called()
 
 
+def _live_state(night, final, total, active=True):
+    from app.services import tonight_changes
+    from app.services.live_overlay_service import LiveState
+    return LiveState(active=active, period=tonight_changes.period_of(night), as_of=None,
+                     games_total=total, games_live=total - final, games_final=final,
+                     official_updated_at=None)
+
+
+def _stored_through(day, first_day):
+    """A range's stored read: newest snapshot ``day``; the delta covers from
+    ``first_day`` (the day after the baseline snapshot)."""
+    return (day, first_day,
+            [{'team_id': 1, 'team_name': 'A', 'gp': 1, 'PTS': 10}],
+            [{'team_id': 1, 'team_name': 'A', 'gp': 1, 'PTS': 4}])
+
+
+class TestSettledRangeBeforeTheRollover:
+    """The daily recap asks for night..night+1 settled. Before ESPN rolls the
+    night over the stored snapshots end the night before; then the night comes
+    from the live frames, but only when they are that night, all final."""
+
+    from datetime import date as _d
+    NIGHT = _d(2026, 11, 19)
+
+    def _arrange(self, ranking_service, state, synced=False, after_sync=None):
+        from datetime import timedelta
+        night = self.NIGHT
+        reads = [_stored_through(night - timedelta(days=1), night)]
+        if after_sync is not None:
+            reads.append(after_sync)
+        ranking_service.data_provider.db_service.get_snapshots_for_date_range = AsyncMock(side_effect=reads)
+        ranking_service.data_provider.get_live_state = AsyncMock(return_value=state)
+        ranking_service.data_provider.sync_db_now = AsyncMock(return_value=synced)
+        live_frame = pd.DataFrame({'team_id': [1], 'live': [1]})
+        ranking_service.data_provider.get_totals_df = AsyncMock(return_value=live_frame)
+        deltas = {}
+
+        def delta(end_df, start_df):
+            key = 'live' if 'live' in end_df.columns else 'stored'
+            deltas.setdefault(key, pd.DataFrame({'team_id': [1], 'kind': [key]}))
+            return deltas[key]
+        ranking_service._compute_delta = Mock(side_effect=delta)
+        return deltas
+
+    async def _call(self, ranking_service):
+        from datetime import timedelta
+        with patch('app.services.ranking_service.tonight_changes.as_snapshot', side_effect=lambda f: f):
+            return await ranking_service.range_deltas(self.NIGHT, self.NIGHT + timedelta(days=1), settled=True)
+
+    @pytest.mark.asyncio
+    async def test_finished_night_comes_from_the_live_frames(self, ranking_service):
+        state = _live_state(self.NIGHT, final=4, total=4)
+        deltas = self._arrange(ranking_service, state)
+        start, end, settled, progress, got_state = await self._call(ranking_service)
+        assert (start, end) == (self.NIGHT, self.NIGHT)          # the headline matches the night
+        assert settled is deltas['live'] and progress is deltas['live']
+        assert got_state is state
+        ranking_service.data_provider.sync_db_now.assert_not_awaited()
+        calls = ranking_service.data_provider.get_totals_df.await_args_list
+        assert all(c.kwargs.get('live') for c in calls)
+        assert any(c.kwargs.get('settled') for c in calls)    # averages: finished games only
+
+    @pytest.mark.asyncio
+    async def test_a_slate_still_in_progress_stays_stored(self, ranking_service):
+        from datetime import timedelta
+        deltas = self._arrange(ranking_service, _live_state(self.NIGHT, final=3, total=4))
+        start, end, settled, progress, got_state = await self._call(ranking_service)
+        assert end == self.NIGHT - timedelta(days=1) and got_state is None
+        assert settled is deltas['stored']
+        ranking_service.data_provider.get_totals_df.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_another_nights_slate_stays_stored(self, ranking_service):
+        from datetime import timedelta
+        deltas = self._arrange(ranking_service, _live_state(self.NIGHT + timedelta(days=1), final=5, total=5))
+        *_, settled, _, got_state = await self._call(ranking_service)
+        assert settled is deltas['stored'] and got_state is None
+
+    @pytest.mark.asyncio
+    async def test_flag_off_stays_stored(self, ranking_service):
+        deltas = self._arrange(ranking_service, None)
+        *_, settled, _, got_state = await self._call(ranking_service)
+        assert settled is deltas['stored'] and got_state is None
+        ranking_service.data_provider.sync_db_now.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_after_the_rollover_the_snapshot_is_synced_and_reread(self, ranking_service):
+        from datetime import timedelta
+        after = _stored_through(self.NIGHT, self.NIGHT)
+        deltas = self._arrange(ranking_service, _live_state(self.NIGHT + timedelta(days=1), 0, 5, active=False),
+                               synced=True, after_sync=after)
+        start, end, settled, _, got_state = await self._call(ranking_service)
+        assert end == self.NIGHT and got_state is None
+        assert ranking_service.data_provider.db_service.get_snapshots_for_date_range.await_count == 2
+        assert settled is deltas['stored']
+
+    @pytest.mark.asyncio
+    async def test_a_sync_that_wrote_nothing_does_not_reread(self, ranking_service):
+        self._arrange(ranking_service, None, synced=False)
+        await self._call(ranking_service)
+        assert ranking_service.data_provider.db_service.get_snapshots_for_date_range.await_count == 1
+
+
 @pytest.mark.asyncio
 async def test_get_league_rankings_success(ranking_service, sample_rankings_df):
     """Test successful league rankings retrieval"""

@@ -43,6 +43,28 @@ def slate_date(period: int) -> date:
     return settings.season_start + timedelta(days=period - 1)
 
 
+def period_of(night: date) -> int:
+    """The scoring period of a night: the inverse of ``slate_date``."""
+    return (night - settings.season_start).days + 1
+
+
+def is_finished_night(state, night: date) -> bool:
+    """True when the live overlay is ``night``'s and every one of its games is
+    final: official standings through the night before plus all of ``night``,
+    i.e. what ESPN's own standings will show once it rolls the period over.
+    Between the nightly job and that rollover this is the only source with
+    the night in it. False with the flag off (``state`` None), before the
+    games are over, or once ESPN has moved on to the next period."""
+    return (
+        state is not None
+        and state.active
+        and state.period is not None
+        and slate_date(state.period) == night
+        and state.games_total > 0
+        and state.games_final >= state.games_total
+    )
+
+
 def range_reaches_tonight(state, end_date: date) -> bool:
     """A date range ends today when it runs to ESPN's current period's day or
     later (a viewer east of the US is already a day ahead). Never with the

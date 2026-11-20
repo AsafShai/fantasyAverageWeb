@@ -638,3 +638,126 @@ async def test_catchup_retry_off_with_the_surprises_switch(service, monkeypatch)
 
     await service.run_catchup()
     assert calls == []
+
+
+# --- the scheduler's night, roster stints, read caches -------------------------
+
+def _ledger(service, by_date):
+    """Ledger rows per date (others absent)."""
+    async def get_run(d):
+        return by_date.get(d)
+    service._db.get_model_nightly_run = get_run
+
+
+def _stints_rebuild(monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.services.roster_stints.service import RosterStintsService
+    rebuild = AsyncMock()
+    monkeypatch.setattr(RosterStintsService, "rebuild", rebuild)
+    return rebuild
+
+
+@pytest.mark.asyncio
+async def test_catchup_runs_through_the_night_it_is_given(service, monkeypatch):
+    """The scheduler passes the night's US date: an afternoon-only slate is
+    processed while it is still the same day in Israel."""
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    night = date(2026, 11, 19)
+    seen = []
+    monkeypatch.setattr(mns.nightly, "fetch_night", lambda d: seen.append(d) or _night(expected_games=0))
+    statuses = await service.run_catchup(through=night)
+    window = [night - timedelta(days=o) for o in range(mns.CATCHUP_DAYS - 1, -1, -1)]
+    assert seen == window
+    assert [k for k in statuses if k[:4].isdigit()] == [d.isoformat() for d in window]
+
+
+@pytest.mark.asyncio
+async def test_catchup_without_a_night_keeps_yesterday_in_israel(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"status": "processed"}
+    statuses = await service.run_catchup()
+    yesterday = (datetime.now(mns.ISRAEL_TZ) - timedelta(days=1)).date()
+    assert max(k for k in statuses if k[:4].isdigit()) == yesterday.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_stints_are_not_rebuilt_on_a_retry_that_recorded_nothing(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"status": "processed"}            # every night already in the ledger
+    rebuild = _stints_rebuild(monkeypatch)
+    await service.run_catchup(through=GAME_DATE)
+    rebuild.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stints_are_not_rebuilt_while_the_night_is_incomplete(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    _ledger(service, {GAME_DATE - timedelta(days=o): {"status": "processed"} for o in range(1, 7)})
+    _allow_fetch(monkeypatch, _night(complete=False))
+    rebuild = _stints_rebuild(monkeypatch)
+    statuses = await service.run_catchup(through=GAME_DATE)
+    assert statuses[GAME_DATE.isoformat()] == "incomplete_data"
+    rebuild.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stints_are_rebuilt_when_a_night_lands(service, monkeypatch):
+    """Off nights too: transactions happen on days without games."""
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    _ledger(service, {GAME_DATE - timedelta(days=o): {"status": "processed"} for o in range(1, 7)})
+    _allow_fetch(monkeypatch, _night(expected_games=0))
+    rebuild = _stints_rebuild(monkeypatch)
+    statuses = await service.run_catchup(through=GAME_DATE)
+    assert statuses[GAME_DATE.isoformat()] == "no_games"
+    rebuild.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stints_are_rebuilt_on_the_final_attempt_even_with_nothing_new(service, monkeypatch):
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    service._db.run = {"status": "processed"}
+    rebuild = _stints_rebuild(monkeypatch)
+    await service.run_catchup(through=GAME_DATE, final=True)
+    rebuild.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_waiting_on_games_is_logged_as_info_a_failure_as_a_warning(service, monkeypatch, caplog):
+    import logging
+    service._db.vector_feature_keys, _ = _real_stored_keys()
+    _allow_fetch(monkeypatch, _night(complete=False))
+    with caplog.at_level(logging.INFO, logger=mns.logger.name):
+        await service.run_catchup(through=GAME_DATE)
+    stopped = [r for r in caplog.records if "catch-up stopped" in r.getMessage()]
+    assert stopped and all(r.levelno == logging.INFO for r in stopped)
+
+    caplog.clear()
+    service._db.has_date = None                          # db_unavailable
+    with caplog.at_level(logging.INFO, logger=mns.logger.name):
+        await service.run_catchup(through=GAME_DATE)
+    stopped = [r for r in caplog.records if "catch-up stopped" in r.getMessage()]
+    assert stopped and all(r.levelno == logging.WARNING for r in stopped)
+
+
+@pytest.mark.asyncio
+async def test_recording_a_night_clears_the_latest_night_read_caches(monkeypatch):
+    from app.services import player_service, today_service
+    calls = []
+    monkeypatch.setattr(player_service, "clear_night_caches", lambda: calls.append("players"))
+    monkeypatch.setattr(today_service, "clear_today_hub_cache", lambda: calls.append("hub"))
+    db = FakeDB()
+    await ModelNightlyService._record_run(db, GAME_DATE, "processed", 4, 89)
+    assert sorted(calls) == ["hub", "players"]
+
+
+@pytest.mark.asyncio
+async def test_a_failing_cache_clear_never_fails_the_run(monkeypatch):
+    from app.services import player_service, today_service
+
+    def boom():
+        raise RuntimeError("cache")
+    hub = []
+    monkeypatch.setattr(player_service, "clear_night_caches", boom)
+    monkeypatch.setattr(today_service, "clear_today_hub_cache", lambda: hub.append(1))
+    assert await ModelNightlyService._record_run(FakeDB(), GAME_DATE, "processed", 4, 89) is not False
+    assert hub == [1]                                    # the other cache is still cleared

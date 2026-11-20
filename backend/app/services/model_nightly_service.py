@@ -11,7 +11,7 @@ Storage layout in Postgres:
 Predictions for a night are computed from rows strictly before it (leakage-safe
 by construction); the vectors written afterwards include that night, so they are
 current for the *next* game. A model_nightly_runs ledger row per date makes the
-9:00-11:00 scheduler retries no-ops after one success.
+scheduler's retries no-ops after one success (model_nightly_scheduler).
 
 Manual runs:
     uv run python -m app.services.model_nightly_service --bootstrap [--until-date YYYY-MM-DD]
@@ -52,6 +52,8 @@ logger = logging.getLogger(__name__)
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 CATCHUP_DAYS = 7
 _INVALIDATING_STATUSES = {"processed", "store_already_ingested"}
+# A night that reached the ledger in this run (not one found there already).
+_NEWLY_RECORDED_STATUSES = {"processed", "no_games", "store_already_ingested"}
 
 _EVAL_STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK", "FGM", "FGA", "FTM", "FTA"]
 
@@ -169,6 +171,23 @@ def _team_vectors_df(records: list[dict]) -> pd.DataFrame:
     return df.copy()  # consolidate blocks (see _player_vectors_df)
 
 
+def _clear_night_read_caches() -> None:
+    """Drop the read caches that hold "the latest night", so the night just
+    recorded shows at once instead of when they expire: the season's latest
+    game date (Players page, player stats and the trends, which clear their
+    own caches when it moves; was up to 1 h), the players list built on it
+    (5 min) and the Today hub with its last-night block (5 min)."""
+    # Deferred imports: these modules sit above this one in the import graph.
+    from app.services.player_service import clear_night_caches
+    from app.services.today_service import clear_today_hub_cache
+
+    for clear in (clear_night_caches, clear_today_hub_cache):
+        try:
+            clear()
+        except Exception as e:      # a cache must never fail the run that records the night
+            logger.warning(f"Clearing a read cache after the nightly failed: {type(e).__name__}: {e}")
+
+
 class ModelNightlyService:
     _instance = None
 
@@ -186,8 +205,13 @@ class ModelNightlyService:
 
     # --- morning entry point (called by the scheduler) ----------------------
 
-    async def run_catchup(self) -> dict[str, str]:
+    async def run_catchup(self, through: Optional[date] = None, final: bool = False) -> dict[str, str]:
         """Process every unprocessed date in the trailing window, oldest first.
+
+        ``through`` is the newest night to consider: the scheduler passes the
+        night it is working on (its US date, which an afternoon-only slate
+        reaches while it is still that day in Israel). Without it, yesterday
+        in Israel, as the manual runs have always used.
 
         Stops at the first date that isn't in a terminal state (incomplete data,
         DB failure): ingesting later days before an earlier day would leave the
@@ -195,15 +219,19 @@ class ModelNightlyService:
 
         Runs the missing-feature check first, outside the loop, so a deploy that adds
         a feature heals even when no date in the window has games (off-season).
+
+        Roster stints are rebuilt when a night newly lands in the ledger (games
+        or not: transactions happen on off days too) and on the scheduler's
+        ``final`` attempt of the morning, never on the retries in between.
         """
         missing = await self._ensure_vectors_current()
-        yesterday = (datetime.now(ISRAEL_TZ) - timedelta(days=1)).date()
+        newest = through or (datetime.now(ISRAEL_TZ) - timedelta(days=1)).date()
         logger.info(
-            f"Model nightly catch-up: nights {yesterday - timedelta(days=CATCHUP_DAYS - 1)} .. {yesterday}"
+            f"Model nightly catch-up: nights {newest - timedelta(days=CATCHUP_DAYS - 1)} .. {newest}"
         )
         statuses: dict[str, str] = {"missing_features": missing} if missing else {}
         for offset in range(CATCHUP_DAYS - 1, -1, -1):
-            d = yesterday - timedelta(days=offset)
+            d = newest - timedelta(days=offset)
             try:
                 status = await self.run_for_date(d)
             except Exception as e:
@@ -211,15 +239,17 @@ class ModelNightlyService:
                 raise
             statuses[d.isoformat()] = status
             if status not in ("processed", "no_games", "already_processed", "store_already_ingested"):
-                logger.warning(f"Model nightly catch-up stopped at {d}: {status}")
+                # Waiting on the games is the normal state of an early attempt.
+                log = logger.info if status == "incomplete_data" else logger.warning
+                log(f"Model nightly catch-up stopped at {d}: {status}")
                 break
         if settings.surprise_nightly_enabled:
-            await self._retry_unscored_surprises(statuses, oldest=yesterday - timedelta(days=CATCHUP_DAYS - 1))
+            await self._retry_unscored_surprises(statuses, oldest=newest - timedelta(days=CATCHUP_DAYS - 1))
         if missing == "vectors_refreshed" or _INVALIDATING_STATUSES.intersection(statuses.values()):
             await self._prewarm_inference_store()
             release_memory("nightly catch-up: inference store prewarmed", logger)
-        # Every morning, games or not: transactions happen on off days too.
-        await RosterStintsService().rebuild()
+        if final or _NEWLY_RECORDED_STATUSES.intersection(statuses.values()):
+            await RosterStintsService().rebuild()
         return statuses
 
     async def _retry_unscored_surprises(self, statuses: dict[str, str], oldest: date) -> None:
@@ -633,6 +663,7 @@ class ModelNightlyService:
             return await db.upsert_model_nightly_run(game_date, status, num_games, num_rows)
         finally:
             clear_surprise_read_cache()
+            _clear_night_read_caches()
 
     def _invalidate_inference_store(self) -> None:
         """Drop the resident store so the next prediction reloads the fresh vectors.

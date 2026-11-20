@@ -73,6 +73,15 @@ _WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
 _windowed_players_cache: dict = {}
 
 
+def clear_night_caches() -> None:
+    """Forget the latest game date and the windowed players lists built on it.
+    Called when the nightly records a night, so last night / last 7 / 15 / 30
+    move to it at once rather than when the caches expire (anchor 1 h).
+    The trends clear their own caches when they see the anchor move."""
+    _season_anchor_cache.update({'season': None, 'date': None, 'ts': None})
+    _windowed_players_cache.clear()
+
+
 def players_etag(time_period: StatTimePeriod, page: int, limit: int) -> Optional[str]:
     """Weak ETag for a /players page, or None when nothing is cached yet."""
     entry = _windowed_players_cache.get(time_period)

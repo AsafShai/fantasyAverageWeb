@@ -83,3 +83,21 @@ def test_health_verbose_reports_the_live_shadow_run(test_client):
 def test_health_default_response_has_no_live_section(test_client):
     assert "live" not in test_client.get("/health").json()
 
+
+
+def test_health_verbose_reports_the_nightly_schedulers_next_attempt(test_client):
+    """The nightly scheduler plans from the night's tip-offs, so before its
+    first plan there is no next attempt to report; after it, its time."""
+    from datetime import datetime, timezone
+    from unittest.mock import patch
+    from app.services import model_nightly_scheduler
+
+    with patch.object(model_nightly_scheduler, "_next_trigger", None):
+        body = test_client.get("/health?verbose=1").json()
+    assert body["schedulers"]["nightly_next"] is None
+    assert body["schedulers"]["estimator_next"]
+
+    when = datetime(2026, 11, 20, 6, 15, tzinfo=timezone.utc)
+    with patch.object(model_nightly_scheduler, "_next_trigger", when):
+        body = test_client.get("/health?verbose=1").json()
+    assert body["schedulers"]["nightly_next"] == when.isoformat()

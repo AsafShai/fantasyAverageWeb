@@ -1,6 +1,6 @@
 import logging
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 from app.models import LeagueRankings, with_live
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
@@ -79,21 +79,38 @@ class RankingService:
         through last night plus tonight, finished games only for averages and
         every started game for totals. The state is None unless the range
         reaches tonight with LIVE_STANDINGS_ENABLED on; otherwise the range is
-        exactly as before. ``settled`` never takes that live end."""
+        exactly as before.
+
+        ``settled`` (the daily recap: the night the nightly job finished, never
+        a slate in progress) ends at the range's last night. When the stored
+        snapshots don't hold that night yet, it is taken from the live frames
+        if they are that night with every game final (ESPN hasn't rolled the
+        period over yet: tonight_changes.is_finished_night); otherwise the
+        snapshot is synced first, for the minutes after ESPN's rollover before
+        anything wrote it. Failing both it is the stored days, as before."""
+        snapshots = self.data_provider.db_service.get_snapshots_for_date_range
         actual_end_date, actual_start_date, rows_end, rows_start = \
-            await self.data_provider.db_service.get_snapshots_for_date_range(
-                start_date, end_date, settings.league_id, settings.season_id
-            )
+            await snapshots(start_date, end_date, settings.league_id, settings.season_id)
 
         if actual_end_date is None or not rows_end:
             raise ResourceNotFoundError("No data available for the requested date range")
 
-        start_df = pd.DataFrame(rows_start) if rows_start else None
         state = None
         if not settled:
             state = await self.data_provider.get_live_state(include_finals=True)
             if not tonight_changes.range_reaches_tonight(state, end_date):
                 state = None
+        elif actual_end_date < (night := end_date - timedelta(days=1)):
+            state = await self.data_provider.get_live_state(include_finals=True)
+            if not tonight_changes.is_finished_night(state, night):
+                state = None
+                if await self.data_provider.sync_db_now():
+                    actual_end_date, actual_start_date, rows_end, rows_start = \
+                        await snapshots(start_date, end_date, settings.league_id, settings.season_id)
+                    if actual_end_date is None or not rows_end:
+                        raise ResourceNotFoundError("No data available for the requested date range")
+
+        start_df = pd.DataFrame(rows_start) if rows_start else None
         if state is not None and state.active:
             try:
                 settled_frame = tonight_changes.as_snapshot(await self.data_provider.get_totals_df(live=True, settled=True))
