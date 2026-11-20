@@ -22,11 +22,10 @@ ENV UV_COMPILE_BYTECODE=1
 # and per-thread memory. Predictions are identical with one thread (measured at
 # 0.15 CPU: first page visit after a start 18-21 s -> 11-12 s).
 ENV OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
-# pandas 3 stores every text column in Arrow, and Arrow's bundled mimalloc pool
-# keeps freed memory mapped. The system allocator hands it back like the rest of
-# the process (measured: ~20 MB less held after the nightly, ~20 MB lower peak).
-ENV ARROW_DEFAULT_MEMORY_POOL=system
-# Heavy pandas/sklearn work runs in asyncio.to_thread workers, and glibc gives
+# Polars sizes its thread pool by the host's core count too; on 0.15 CPU the
+# extra threads only cost memory and scheduling (benchmarks ran single-threaded).
+ENV POLARS_MAX_THREADS=1
+# Heavy frame/model work runs in asyncio.to_thread workers, and glibc gives
 # each worker thread its own malloc arena (up to 8 per *host* core, which a
 # 0.15 CPU slice cannot use). Each arena keeps its own freed-but-fragmented
 # pages, so retained memory climbs step by step through the day. Two arenas is
@@ -38,7 +37,8 @@ ENV MALLOC_ARENA_MAX=2
 COPY pyproject.toml uv.lock ./
 # No "training" group: the app serves NumPy-compiled models and never imports
 # scikit-learn/SciPy (~78 MB RSS measured), see model_stats_inference/serving/compiled_model.py.
-RUN pip install uv && uv sync --frozen --no-group test --no-group ml-research --no-group training
+# No "offline" group: the app runs on Polars and never imports pandas/pyarrow.
+RUN pip install uv && uv sync --frozen --no-group test --no-group ml-research --no-group training --no-group offline
 
 # Copy application code and set ownership
 COPY --chown=appuser:appuser app/ ./app/

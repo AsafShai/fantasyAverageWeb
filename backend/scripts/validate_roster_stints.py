@@ -37,6 +37,7 @@ def load_season(season: str, cache: Path | None) -> tuple[pd.DataFrame, pd.DataF
         if date(int(ym[:4]), int(ym[4:]), 1) > today:
             break
         p, t = fetch_month(ym)
+        p, t = p.to_pandas(), t.to_pandas()   # espn returns Polars; this offline check works in pandas
         players.append(p)
         teams.append(t)
         print(f"fetched {ym}: {len(t) // 2} games")

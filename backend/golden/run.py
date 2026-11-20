@@ -468,6 +468,9 @@ async def dump_model(out: Path) -> None:
                 v = data[c][i]
                 if isinstance(v, (float, np.floating)):
                     row[c] = float(v).hex()
+                elif c == "last_game_date" and v is not None:
+                    # pandas held a midnight Timestamp, Polars a date: same day
+                    row[c] = str(v)[:10]
                 else:
                     row[c] = _jsonable(v)
             rows.append(row)
@@ -550,6 +553,10 @@ async def amain(args) -> None:
             espn_client.RETRY_DELAYS = []
         from model_stats_inference.research import config as rconfig
         rconfig.SEASONS = args.seasons.split(",")
+        # The bootstrap month-caches parquet under DATA_DIR; a fresh dir per run
+        # keeps runs from reading each other's caches (both sides fetch alike).
+        import tempfile
+        rconfig.DATA_DIR = Path(tempfile.mkdtemp(prefix="golden-espn-"))
 
         t = time.perf_counter()
         timings = await run_jobs(out, pg.url)

@@ -114,3 +114,37 @@ def test_production_process_never_imports_sklearn_or_scipy():
                          env={**os.environ, "PYTHONPATH": str(BACKEND)}, timeout=300)
     assert "LOADED:" in out.stdout, out.stderr[-2000:]
     assert out.stdout.strip().splitlines()[-1] == "LOADED:"
+
+
+def test_production_process_never_imports_pandas_or_pyarrow():
+    """The web process runs on Polars + NumPy: importing the app, loading and
+    using the models, building feature vectors and scoring a night must not
+    pull in pandas or pyarrow (they live in the offline dependency group)."""
+    code = (
+        "import sys\n"
+        "from datetime import date\n"
+        "from unittest.mock import MagicMock\n"
+        "import numpy as np, polars as pl\n"
+        "import app.main\n"
+        "from app.services.data_transformer import DataTransformer\n"
+        "from app.services.stats_calculator import StatsCalculator\n"
+        "from model_stats_inference.serving.inference import LiveInference\n"
+        "inf = LiveInference(MagicMock())\n"
+        "for p in inf.models.values(): p['model'].predict(np.zeros((2, len(p['features']))))\n"
+        "from model_stats_inference.serving import featurize, surprise\n"
+        "featurize.load_bio()\n"
+        "logs = pl.DataFrame({'GAME_ID': ['1', '1'], 'TEAM_ID': [1, 2], 'GAME_DATE': [date(2026, 1, 2)] * 2,\n"
+        "    'SEASON': ['2025-26'] * 2, **{c: [10.0, 12.0] for c in ('PTS','REB','AST','STL','BLK','FG3M',\n"
+        "    'FG_PCT','FGA','FTA','TOV')}})\n"
+        "featurize.build_team_allowed(logs); featurize.build_team_own(logs)\n"
+        "surprise.to_standard_normal_with(np.array([0.5, 1.5]), [0.0, 1.0, 2.0], 3)\n"
+        "t = DataTransformer().raw_standings_to_totals_df({'teams': [{'id': 1, 'name': 'A', 'valuesByStat': {}}]})\n"
+        "StatsCalculator().calculate_rankings(DataTransformer().totals_to_averages_df(t))\n"
+        "bad = sorted({m.split('.')[0] for m in sys.modules if m.split('.')[0] in ('pandas', 'pyarrow')})\n"
+        "print('LOADED:' + ','.join(bad))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=BACKEND, capture_output=True, text=True,
+                         env={**os.environ, "PYTHONPATH": str(BACKEND), "SEASON_ID": "2027", "LEAGUE_ID": "1"},
+                         timeout=300)
+    assert "LOADED:" in out.stdout, out.stderr[-2000:]
+    assert out.stdout.strip().splitlines()[-1] == "LOADED:"
