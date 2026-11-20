@@ -1,0 +1,1870 @@
+{
+ "injury_report_2022-06-01_06PM.pdf": {
+  "records": [],
+  "reported_teams": [
+   "Boston Celtics",
+   "Golden State Warriors"
+  ]
+ },
+ "injury_report_2023-11-10_05AM.pdf": {
+  "records": [
+   {
+    "game": "07:00(ET) CHA@WAS",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Left Knee - Surgery",
+    "last_update": "",
+    "player": "James Bouknight",
+    "status": "Out",
+    "team": "Charlotte Hornets"
+   },
+   {
+    "game": "07:00(ET) CHA@WAS",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "League Suspension",
+    "last_update": "",
+    "player": "Miles Bridges",
+    "status": "Out",
+    "team": "Charlotte Hornets"
+   },
+   {
+    "game": "07:00(ET) CHA@WAS",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Right Hamstring - Strain",
+    "last_update": "",
+    "player": "Gordon Hayward",
+    "status": "Probable",
+    "team": "Charlotte Hornets"
+   },
+   {
+    "game": "07:00(ET) CHA@WAS",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Left Knee - Injury Recovery",
+    "last_update": "",
+    "player": "Cody Martin",
+    "status": "Out",
+    "team": "Charlotte Hornets"
+   },
+   {
+    "game": "07:00(ET) CHA@WAS",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Left Tibia - Non- displaced Fracture",
+    "last_update": "",
+    "player": "Frank Ntilikina",
+    "status": "Out",
+    "team": "Charlotte Hornets"
+   },
+   {
+    "game": "07:00(ET) CHA@WAS",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Left Groin - Strain",
+    "last_update": "",
+    "player": "Terry Rozier",
+    "status": "Out",
+    "team": "Charlotte Hornets"
+   },
+   {
+    "game": "07:00(ET) CHA@WAS",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "John Butler Jr.",
+    "status": "Out",
+    "team": "Washington Wizards"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Right Finger - Sprain",
+    "last_update": "",
+    "player": "Nicolas Batum",
+    "status": "Probable",
+    "team": "Philadelphia 76ers"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Ricky Council IV",
+    "status": "Out",
+    "team": "Philadelphia 76ers"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Javonte Smart",
+    "status": "Out",
+    "team": "Philadelphia 76ers"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Terquavion Smith",
+    "status": "Out",
+    "team": "Philadelphia 76ers"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Right Calf - Strain",
+    "last_update": "",
+    "player": "Bojan Bogdanovic",
+    "status": "Out",
+    "team": "Detroit Pistons"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Left Forearm - Contusion",
+    "last_update": "",
+    "player": "Alec Burks",
+    "status": "Out",
+    "team": "Detroit Pistons"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Right Shoulder - Sprain",
+    "last_update": "",
+    "player": "Joe Harris",
+    "status": "Out",
+    "team": "Detroit Pistons"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "N a - Illness",
+    "last_update": "",
+    "player": "Jaden Ivey",
+    "status": "Out",
+    "team": "Detroit Pistons"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Left Ankle - Sprain",
+    "last_update": "",
+    "player": "Isaiah Livers",
+    "status": "Out",
+    "team": "Detroit Pistons"
+   },
+   {
+    "game": "07:00(ET) PHI@DET",
+    "game_time_utc": "2023-11-11T00:00+00:00",
+    "injury": "Right Quadriceps - Strain",
+    "last_update": "",
+    "player": "Monte Morris",
+    "status": "Out",
+    "team": "Detroit Pistons"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "Left Ankle - Sprain",
+    "last_update": "",
+    "player": "Nic Claxton",
+    "status": "Out",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Noah Clowney",
+    "status": "Out",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "Left Calf - Strain",
+    "last_update": "",
+    "player": "Cameron Johnson",
+    "status": "Probable",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Keon Johnson",
+    "status": "Out",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "Left Hip - Soreness",
+    "last_update": "",
+    "player": "Ben Simmons",
+    "status": "Questionable",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "Left Ankle - Sprain",
+    "last_update": "",
+    "player": "Cam Thomas",
+    "status": "Out",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Dariq Whitehead",
+    "status": "Out",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Jalen Wilson",
+    "status": "Out",
+    "team": "Brooklyn Nets"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "JD Davison",
+    "status": "Out",
+    "team": "Boston Celtics"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Nathan Knight",
+    "status": "Out",
+    "team": "Boston Celtics"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "Right Foot - Injury Management",
+    "last_update": "",
+    "player": "Neemias Queta",
+    "status": "Out",
+    "team": "Boston Celtics"
+   },
+   {
+    "game": "07:30(ET) BKN@BOS",
+    "game_time_utc": "2023-11-11T00:30+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Jordan Walsh",
+    "status": "Out",
+    "team": "Boston Celtics"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Achilles Tendon - Rupture Rehab",
+    "last_update": "",
+    "player": "Jaylen Clark",
+    "status": "Out",
+    "team": "Minnesota Timberwolves"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Luka Garza",
+    "status": "Out",
+    "team": "Minnesota Timberwolves"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Knee Mcl - Sprain",
+    "last_update": "",
+    "player": "Jordan McLaughlin",
+    "status": "Out",
+    "team": "Minnesota Timberwolves"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Leonard Miller",
+    "status": "Out",
+    "team": "Minnesota Timberwolves"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Wendell Moore Jr.",
+    "status": "Out",
+    "team": "Minnesota Timberwolves"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Charles Bediako",
+    "status": "Out",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Sidy Cissoko",
+    "status": "Out",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "08:00(ET) MIN@SAS",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Sir'Jabari Rice",
+    "status": "Out",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Ankle - Sprain",
+    "last_update": "",
+    "player": "Jose Alvarado",
+    "status": "Out",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Fibula - Contusion",
+    "last_update": "",
+    "player": "Herbert Jones",
+    "status": "Questionable",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "E.J. Liddell",
+    "status": "Out",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Knee - Contusion",
+    "last_update": "",
+    "player": "Naji Marshall",
+    "status": "Doubtful",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Lung - Small Pneumothorax",
+    "last_update": "",
+    "player": "CJ McCollum",
+    "status": "Out",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Knee - Partial Meniscectomy",
+    "last_update": "",
+    "player": "Trey Murphy III",
+    "status": "Out",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Personal Reasons",
+    "last_update": "",
+    "player": "Zion Williamson",
+    "status": "Questionable",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Nate Hinton",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Patellar Tendon - Repair",
+    "last_update": "",
+    "player": "Victor Oladipo",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Jermaine Samuels Jr.",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Ankle - Sprain",
+    "last_update": "",
+    "player": "Alperen Sengun",
+    "status": "Questionable",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Ankle - Sprain",
+    "last_update": "",
+    "player": "Amen Thompson",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:00(ET) NOP@HOU",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Cam Whitmore",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Josh Christopher",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Taylor Hendricks",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Johnny Juzang",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Elbow - Sprain",
+    "last_update": "",
+    "player": "Walker Kessler",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Micah Potter",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Brice Sensabaugh",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Knee - PCL Surgery",
+    "last_update": "",
+    "player": "Steven Adams",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Achilles - Tendon Repair",
+    "last_update": "",
+    "player": "Brandon Clarke",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "GG Jackson",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Right Hip - Strain",
+    "last_update": "",
+    "player": "John Konchar",
+    "status": "Questionable",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Great Toe - Contusion",
+    "last_update": "",
+    "player": "Jake LaRavia",
+    "status": "Doubtful",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "League Suspension",
+    "last_update": "",
+    "player": "Ja Morant",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Knee - Injury Recovery",
+    "last_update": "",
+    "player": "Derrick Rose",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Knee - Injury Recovery",
+    "last_update": "",
+    "player": "Xavier Tillman",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) UTA@MEM",
+    "game_time_utc": "2023-11-11T01:00+00:00",
+    "injury": "Left Hip - Strain",
+    "last_update": "",
+    "player": "Ziaire Williams",
+    "status": "Questionable",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:30(ET) LAC@DAL",
+    "game_time_utc": "2023-11-11T01:30+00:00",
+    "injury": "Left Quadriceps - Tendinopathy",
+    "last_update": "",
+    "player": "Brandon Boston Jr.",
+    "status": "Out",
+    "team": "LA Clippers"
+   },
+   {
+    "game": "08:30(ET) LAC@DAL",
+    "game_time_utc": "2023-11-11T01:30+00:00",
+    "injury": "Left MCL - Sprain",
+    "last_update": "",
+    "player": "Mason Plumlee",
+    "status": "Out",
+    "team": "LA Clippers"
+   },
+   {
+    "game": "08:30(ET) LAC@DAL",
+    "game_time_utc": "2023-11-11T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Greg Brown III",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "08:30(ET) LAC@DAL",
+    "game_time_utc": "2023-11-11T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Dexter Dennis",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "08:30(ET) LAC@DAL",
+    "game_time_utc": "2023-11-11T01:30+00:00",
+    "injury": "Right Small Toe - Dislocation",
+    "last_update": "",
+    "player": "Maxi Kleber",
+    "status": "Doubtful",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "08:30(ET) LAC@DAL",
+    "game_time_utc": "2023-11-11T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "A.J. Lawson",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "08:30(ET) LAC@DAL",
+    "game_time_utc": "2023-11-11T01:30+00:00",
+    "injury": "Illness - Non-COVID Illness",
+    "last_update": "",
+    "player": "Dereck Lively II",
+    "status": "Questionable",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Left Adductor - Hip Spasm",
+    "last_update": "",
+    "player": "Anthony Davis",
+    "status": "Questionable",
+    "team": "Los Angeles Lakers"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Left Ankle - Sprain",
+    "last_update": "",
+    "player": "Jaxson Hayes",
+    "status": "Questionable",
+    "team": "Los Angeles Lakers"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Right Patella - Contusion",
+    "last_update": "",
+    "player": "Jalen Hood-Schifino",
+    "status": "Out",
+    "team": "Los Angeles Lakers"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Left Heel - Bursitis",
+    "last_update": "",
+    "player": "Jarred Vanderbilt",
+    "status": "Out",
+    "team": "Los Angeles Lakers"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Left Knee - Effusion",
+    "last_update": "",
+    "player": "Gabe Vincent",
+    "status": "Out",
+    "team": "Los Angeles Lakers"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Low Back - Spasms",
+    "last_update": "",
+    "player": "Bradley Beal",
+    "status": "Probable",
+    "team": "Phoenix Suns"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Right Calf - Strain",
+    "last_update": "",
+    "player": "Devin Booker",
+    "status": "Out",
+    "team": "Phoenix Suns"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Jaw - Contusion",
+    "last_update": "",
+    "player": "Jordan Goodwin",
+    "status": "Available",
+    "team": "Phoenix Suns"
+   },
+   {
+    "game": "10:00(ET) LAL@PHX",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Right Meniscus - Surgery",
+    "last_update": "",
+    "player": "Damion Lee",
+    "status": "Out",
+    "team": "Phoenix Suns"
+   },
+   {
+    "game": "10:00(ET) OKC@SAC",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Keyontae Johnson",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:00(ET) OKC@SAC",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Low Back - Spasms",
+    "last_update": "",
+    "player": "Kenrich Williams",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:00(ET) OKC@SAC",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Right Ankle - Sprain",
+    "last_update": "",
+    "player": "De'Aaron Fox",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) OKC@SAC",
+    "game_time_utc": "2023-11-11T03:00+00:00",
+    "injury": "Left Calf - Strain",
+    "last_update": "",
+    "player": "Trey Lyles",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   }
+  ],
+  "reported_teams": [
+   "Boston Celtics",
+   "Brooklyn Nets",
+   "Charlotte Hornets",
+   "Dallas Mavericks",
+   "Detroit Pistons",
+   "Houston Rockets",
+   "LA Clippers",
+   "Los Angeles Lakers",
+   "Memphis Grizzlies",
+   "Minnesota Timberwolves",
+   "New Orleans Pelicans",
+   "Oklahoma City Thunder",
+   "Philadelphia 76ers",
+   "Phoenix Suns",
+   "Sacramento Kings",
+   "San Antonio Spurs",
+   "Utah Jazz",
+   "Washington Wizards"
+  ]
+ },
+ "injury_report_2024-10-24_08AM.pdf": {
+  "records": [
+   {
+    "game": "07:00(ET) BOS@WAS",
+    "game_time_utc": "2024-10-24T23:00+00:00",
+    "injury": "Low Back - Pain",
+    "last_update": "",
+    "player": "Sam Hauser",
+    "status": "Questionable",
+    "team": "Boston Celtics"
+   },
+   {
+    "game": "07:00(ET) BOS@WAS",
+    "game_time_utc": "2024-10-24T23:00+00:00",
+    "injury": "Left Posteri or Tibialis Tendon - Surgery Rehabilitation",
+    "last_update": "",
+    "player": "Kristaps Porzingis",
+    "status": "Out",
+    "team": "Boston Celtics"
+   },
+   {
+    "game": "07:00(ET) BOS@WAS",
+    "game_time_utc": "2024-10-24T23:00+00:00",
+    "injury": "Left Knee - ACL Surgery",
+    "last_update": "",
+    "player": "Saddiq Bey",
+    "status": "Out",
+    "team": "Washington Wizards"
+   },
+   {
+    "game": "07:00(ET) BOS@WAS",
+    "game_time_utc": "2024-10-24T23:00+00:00",
+    "injury": "Right Hand - Thumb Surgery",
+    "last_update": "",
+    "player": "Malcolm Brogdon",
+    "status": "Out",
+    "team": "Washington Wizards"
+   },
+   {
+    "game": "07:30(ET) SAS@DAL",
+    "game_time_utc": "2024-10-24T23:30+00:00",
+    "injury": "Right Third Metatarsal Head - Stress Reaction Surgery",
+    "last_update": "",
+    "player": "Devin Vassell",
+    "status": "Out",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "07:30(ET) SAS@DAL",
+    "game_time_utc": "2024-10-24T23:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Kessler Edwards",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "07:30(ET) SAS@DAL",
+    "game_time_utc": "2024-10-24T23:30+00:00",
+    "injury": "Right Wrist - Surgery",
+    "last_update": "",
+    "player": "Dante Exum",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "07:30(ET) SAS@DAL",
+    "game_time_utc": "2024-10-24T23:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Brandon Williams",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) MIN@SAC",
+    "game_time_utc": "2024-10-25T02:00+00:00",
+    "injury": "Left Shoulder - Surgery",
+    "last_update": "",
+    "player": "Devin Carter",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) MIN@SAC",
+    "game_time_utc": "2024-10-25T02:00+00:00",
+    "injury": "Left MCL - Sprain",
+    "last_update": "",
+    "player": "Orlando Robinson",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) OKC@DEN",
+    "game_time_utc": "2024-10-25T02:00+00:00",
+    "injury": "Left Hand - Fracture",
+    "last_update": "",
+    "player": "Isaiah Hartenstein",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:00(ET) OKC@DEN",
+    "game_time_utc": "2024-10-25T02:00+00:00",
+    "injury": "Left Knee - Surgery",
+    "last_update": "",
+    "player": "Nikola Topic",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:00(ET) OKC@DEN",
+    "game_time_utc": "2024-10-25T02:00+00:00",
+    "injury": "Right Hamstring - Strain",
+    "last_update": "",
+    "player": "Jaylin Williams",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:00(ET) OKC@DEN",
+    "game_time_utc": "2024-10-25T02:00+00:00",
+    "injury": "Right Knee - Surgery",
+    "last_update": "",
+    "player": "Kenrich Williams",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:00(ET) OKC@DEN",
+    "game_time_utc": "2024-10-25T02:00+00:00",
+    "injury": "Right Achilles Tendon - Repair",
+    "last_update": "",
+    "player": "DaRon Holmes II",
+    "status": "Out",
+    "team": "Denver Nuggets"
+   }
+  ],
+  "reported_teams": [
+   "Boston Celtics",
+   "Dallas Mavericks",
+   "Denver Nuggets",
+   "Minnesota Timberwolves",
+   "Oklahoma City Thunder",
+   "Sacramento Kings",
+   "San Antonio Spurs",
+   "Washington Wizards"
+  ]
+ },
+ "injury_report_2026-02-12_11_30AM.pdf": {
+  "records": [
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Moussa Cisse",
+    "status": "Doubtful",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "Left Midfoot - Sprain",
+    "last_update": "",
+    "player": "Cooper Flagg",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "Left Knee - Surgery",
+    "last_update": "",
+    "player": "Kyrie Irving",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Miles Kelly",
+    "status": "Doubtful",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "Right Foot - Surgery",
+    "last_update": "",
+    "player": "Dereck Lively II",
+    "status": "Out",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "Left Foot - Strain",
+    "last_update": "",
+    "player": "Naji Marshall",
+    "status": "Questionable",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "Left Ankle - Sprain",
+    "last_update": "",
+    "player": "Caleb Martin",
+    "status": "Questionable",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Ryan Nembhard",
+    "status": "Doubtful",
+    "team": "Dallas Mavericks"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "Rightknee - Soreness",
+    "last_update": "",
+    "player": "Deandre Ayton",
+    "status": "Questionable",
+    "team": "Los Angeles Lakers"
+   },
+   {
+    "game": "10:00(ET) DAL@LAL",
+    "game_time_utc": "2026-02-13T03:00+00:00",
+    "injury": "Left Hamstring - Strain",
+    "last_update": "",
+    "player": "Luka Doncic",
+    "status": "Out",
+    "team": "Los Angeles Lakers"
+   }
+  ],
+  "reported_teams": [
+   "Dallas Mavericks",
+   "Los Angeles Lakers"
+  ]
+ },
+ "injury_report_2026-11-13_10_45AM.pdf": {
+  "records": [
+   {
+    "game": "07:00(ET) MIL@ORL",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Right High Ankle Sprain",
+    "last_update": "",
+    "player": "Paolo Banchero",
+    "status": "Out",
+    "team": "Orlando Magic"
+   },
+   {
+    "game": "07:00(ET) MIL@ORL",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Left Shoulder Contusion",
+    "last_update": "",
+    "player": "Jamal Cain",
+    "status": "Questionable",
+    "team": "Orlando Magic"
+   },
+   {
+    "game": "07:00(ET) MIL@ORL",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Left Calf Strain",
+    "last_update": "",
+    "player": "Tristan daSilva",
+    "status": "Questionable",
+    "team": "Orlando Magic"
+   },
+   {
+    "game": "07:00(ET) MIL@ORL",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Left Knee Injury Management",
+    "last_update": "",
+    "player": "Jonathan Isaac",
+    "status": "Out",
+    "team": "Orlando Magic"
+   },
+   {
+    "game": "07:00(ET) MIL@ORL",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Left Ankle Injury Recovery",
+    "last_update": "",
+    "player": "Izaiyah Nelson",
+    "status": "Out",
+    "team": "Orlando Magic"
+   },
+   {
+    "game": "07:00(ET) MIL@ORL",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Right Partially Torn Hamstring",
+    "last_update": "",
+    "player": "Noah Penda",
+    "status": "Out",
+    "team": "Orlando Magic"
+   },
+   {
+    "game": "07:00(ET) MIL@ORL",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Right Knee Contusion  Bone Bruise",
+    "last_update": "",
+    "player": "Jalen Suggs",
+    "status": "Questionable",
+    "team": "Orlando Magic"
+   },
+   {
+    "game": "07:00(ET) NYK@IND",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Right ACL Repair  Surgery",
+    "last_update": "",
+    "player": "Johnny Furphy",
+    "status": "Out",
+    "team": "Indiana Pacers"
+   },
+   {
+    "game": "07:00(ET) NYK@IND",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Left Hamstring Strain",
+    "last_update": "",
+    "player": "Tyrese Haliburton",
+    "status": "Out",
+    "team": "Indiana Pacers"
+   },
+   {
+    "game": "07:00(ET) NYK@IND",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Right Hamstring Strain",
+    "last_update": "",
+    "player": "T.J. McConnell",
+    "status": "Probable",
+    "team": "Indiana Pacers"
+   },
+   {
+    "game": "07:00(ET) NYK@IND",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Right Knee Soreness",
+    "last_update": "",
+    "player": "Aaron Nesmith",
+    "status": "Questionable",
+    "team": "Indiana Pacers"
+   },
+   {
+    "game": "07:00(ET) NYK@IND",
+    "game_time_utc": "2026-11-14T00:00+00:00",
+    "injury": "Left Meniscus Surgery",
+    "last_update": "",
+    "player": "Ben Sheppard",
+    "status": "Out",
+    "team": "Indiana Pacers"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "RayJ Dennis",
+    "status": "Questionable",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Lumbar Spasm",
+    "last_update": "",
+    "player": "Kingston Flemings",
+    "status": "Questionable",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Knee Procedure Inflammation - Non-Surgical",
+    "last_update": "",
+    "player": "Keshon Gilbert",
+    "status": "Out",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Foot Fracture",
+    "last_update": "",
+    "player": "Mouhamed Gueye",
+    "status": "Out",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Face Mask",
+    "last_update": "",
+    "player": "Jock Landale",
+    "status": "Available",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Great Toe Hyperextension",
+    "last_update": "",
+    "player": "Asa Newell",
+    "status": "Out",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right ACL Tear",
+    "last_update": "",
+    "player": "Henri Veesaar",
+    "status": "Out",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Jalen Wilson",
+    "status": "Doubtful",
+    "team": "Atlanta Hawks"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Disc Irritation",
+    "last_update": "",
+    "player": "Tobe Awaka",
+    "status": "Out",
+    "team": "Chicago Bulls"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Low Back Spasms",
+    "last_update": "",
+    "player": "Norman Powell",
+    "status": "Questionable",
+    "team": "Chicago Bulls"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right Disc Irritation",
+    "last_update": "",
+    "player": "Dailyn Swain",
+    "status": "Questionable",
+    "team": "Chicago Bulls"
+   },
+   {
+    "game": "08:00(ET) ATL@CHI",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right Metacarpal Fracture",
+    "last_update": "",
+    "player": "Caleb Wilson",
+    "status": "Out",
+    "team": "Chicago Bulls"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Khalifa Diop",
+    "status": "Out",
+    "team": "Cleveland Cavaliers"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right Elbow Injury Management",
+    "last_update": "",
+    "player": "Sam Merrill",
+    "status": "Out",
+    "team": "Cleveland Cavaliers"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Great Toe-Sprain",
+    "last_update": "",
+    "player": "Evan Mobley",
+    "status": "Out",
+    "team": "Cleveland Cavaliers"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Low Back Stress Reaction",
+    "last_update": "",
+    "player": "Nae'Qwan Tomlin",
+    "status": "Out",
+    "team": "Cleveland Cavaliers"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Jr.,Ernest Udeh",
+    "status": "Out",
+    "team": "Cleveland Cavaliers"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right Wrist Sprain",
+    "last_update": "",
+    "player": "Giannis Antetokounmpo",
+    "status": "Probable",
+    "team": "Miami Heat"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Vladislav Goldin",
+    "status": "Out",
+    "team": "Miami Heat"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Illness",
+    "last_update": "",
+    "player": "Pelle Larsson",
+    "status": "Questionable",
+    "team": "Miami Heat"
+   },
+   {
+    "game": "08:00(ET) CLE@MIA",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Ankle Soreness",
+    "last_update": "",
+    "player": "Klay Thompson",
+    "status": "Questionable",
+    "team": "Miami Heat"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Ankle Injury Management",
+    "last_update": "",
+    "player": "Zach Edey",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Karim Lopez",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Jahmai Mashack",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Lumbar Disc Herniation",
+    "last_update": "",
+    "player": "Scotty Pippen Jr.",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Concussion Protocol",
+    "last_update": "",
+    "player": "Quinten Post",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right Knee Surgery",
+    "last_update": "",
+    "player": "Richie Saunders",
+    "status": "Out",
+    "team": "Memphis Grizzlies"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Malik Dia",
+    "status": "Questionable",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right Thumb Sprain",
+    "last_update": "",
+    "player": "Bennedict Mathurin",
+    "status": "Doubtful",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Elbow Infection",
+    "last_update": "",
+    "player": "Bryce McGowens",
+    "status": "Doubtful",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Left Knee Contusion  Bone Bruise",
+    "last_update": "",
+    "player": "Yves Missi",
+    "status": "Doubtful",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Bilateral Patellar Tendinopathy",
+    "last_update": "",
+    "player": "Trey Murphy III",
+    "status": "Doubtful",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Jaron Pierre Jr.",
+    "status": "Questionable",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:00(ET) MEM@NOP",
+    "game_time_utc": "2026-11-14T01:00+00:00",
+    "injury": "Right Ankle Sprain",
+    "last_update": "",
+    "player": "Trendon Watford",
+    "status": "Out",
+    "team": "New Orleans Pelicans"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Trey Alexander",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Kobe Bufkin",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Harrison Ingram",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "Right MCL Tear",
+    "last_update": "",
+    "player": "Jaren Jackson Jr.",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "Right Hand Fracture",
+    "last_update": "",
+    "player": "Lauri Markkanen",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "Right 2nd Plantar Plate Tear",
+    "last_update": "",
+    "player": "Jusuf Nurkic",
+    "status": "Out",
+    "team": "Utah Jazz"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "Right Soleus Strain",
+    "last_update": "",
+    "player": "Steven Adams",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "Right Ankle Sprain",
+    "last_update": "",
+    "player": "Clint Capela",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Quadir Copeland",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Julian Phillips",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "08:30(ET) UTA@HOU",
+    "game_time_utc": "2026-11-14T01:30+00:00",
+    "injury": "League Suspension",
+    "last_update": "",
+    "player": "Marcus Smart",
+    "status": "Out",
+    "team": "Houston Rockets"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Left Toe Soreness",
+    "last_update": "",
+    "player": "Charles Bassey",
+    "status": "Probable",
+    "team": "Golden State Warriors"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Right ACL Repair  Surgery",
+    "last_update": "",
+    "player": "Jimmy Butler III",
+    "status": "Out",
+    "team": "Golden State Warriors"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Right Oblique Tear",
+    "last_update": "",
+    "player": "Stephen Curry",
+    "status": "Out",
+    "team": "Golden State Warriors"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Left Patellar Tendon Repair Surgery",
+    "last_update": "",
+    "player": "Moses Moody",
+    "status": "Out",
+    "team": "Golden State Warriors"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Not With Team",
+    "last_update": "",
+    "player": "Kristaps Porzingis",
+    "status": "Out",
+    "team": "Golden State Warriors"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Left Hamstring Strain",
+    "last_update": "",
+    "player": "Brandon Williams",
+    "status": "Out",
+    "team": "Golden State Warriors"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Left Hip Soreness",
+    "last_update": "",
+    "player": "De'Aaron Fox",
+    "status": "Questionable",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Left Calf Strain",
+    "last_update": "",
+    "player": "Tobias Harris",
+    "status": "Out",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Right Knee Surgery",
+    "last_update": "",
+    "player": "Jayden Quaintance",
+    "status": "Out",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "09:30(ET) GSW@SAS",
+    "game_time_utc": "2026-11-14T02:30+00:00",
+    "injury": "Left Adductor Tightness",
+    "last_update": "",
+    "player": "Devin Vassell",
+    "status": "Questionable",
+    "team": "San Antonio Spurs"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "Left Ankle Fracture",
+    "last_update": "",
+    "player": "Vit Krejci",
+    "status": "Out",
+    "team": "Portland Trail Blazers"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "Left Hamstring Strain",
+    "last_update": "",
+    "player": "Ja Morant",
+    "status": "Out",
+    "team": "Portland Trail Blazers"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "Right Meniscus Surgery",
+    "last_update": "",
+    "player": "Shaedon Sharpe",
+    "status": "Out",
+    "team": "Portland Trail Blazers"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "Right Bone Bruise",
+    "last_update": "",
+    "player": "Chris Youngblood",
+    "status": "Out",
+    "team": "Portland Trail Blazers"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "Left Ankle Soreness",
+    "last_update": "",
+    "player": "Precious Achiuwa",
+    "status": "Questionable",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "G League-On Assignment",
+    "last_update": "",
+    "player": "Alex Karaban",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Jonathan Mogbo",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Sean Pedulla",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "Right Patella Subluxation",
+    "last_update": "",
+    "player": "Maxime Raynaud",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:00(ET) POR@SAC",
+    "game_time_utc": "2026-11-14T03:00+00:00",
+    "injury": "Right Achilles Tendon Repair Surgery",
+    "last_update": "",
+    "player": "Ben Simmons",
+    "status": "Out",
+    "team": "Sacramento Kings"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Right Knee Injury Recovery",
+    "last_update": "",
+    "player": "Chet Holmgren",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Left Ankle Sprain",
+    "last_update": "",
+    "player": "Ajay Mitchell",
+    "status": "Questionable",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Right Knee Surgery",
+    "last_update": "",
+    "player": "Thomas Sorber",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "",
+    "last_update": "",
+    "player": "Nikola Topic",
+    "status": "Available",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Left Shoulder Surgery",
+    "last_update": "",
+    "player": "Cason Wallace",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Left Ankle Surgery",
+    "last_update": "",
+    "player": "Jalen Williams",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Low Back Spasms",
+    "last_update": "",
+    "player": "Jaylin Williams",
+    "status": "Out",
+    "team": "Oklahoma City Thunder"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Right Knee Injury Management",
+    "last_update": "",
+    "player": "Bradley Beal",
+    "status": "Out",
+    "team": "LA Clippers"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Right Heel Surgery",
+    "last_update": "",
+    "player": "Brandon Ingram",
+    "status": "Out",
+    "team": "LA Clippers"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "G League-Two-Way",
+    "last_update": "",
+    "player": "Nick Martinelli",
+    "status": "Out",
+    "team": "LA Clippers"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Left Rotat or Cuff Surgery",
+    "last_update": "",
+    "player": "Jordan Miller",
+    "status": "Out",
+    "team": "LA Clippers"
+   },
+   {
+    "game": "10:30(ET) OKC@LAC",
+    "game_time_utc": "2026-11-14T03:30+00:00",
+    "injury": "Right Lisfranc Surgery",
+    "last_update": "",
+    "player": "YanicKonan Niederhauser",
+    "status": "Out",
+    "team": "LA Clippers"
+   }
+  ],
+  "reported_teams": [
+   "Atlanta Hawks",
+   "Chicago Bulls",
+   "Cleveland Cavaliers",
+   "Golden State Warriors",
+   "Houston Rockets",
+   "Indiana Pacers",
+   "LA Clippers",
+   "Memphis Grizzlies",
+   "Miami Heat",
+   "Milwaukee Bucks",
+   "New Orleans Pelicans",
+   "New York Knicks",
+   "Oklahoma City Thunder",
+   "Orlando Magic",
+   "Portland Trail Blazers",
+   "Sacramento Kings",
+   "San Antonio Spurs",
+   "Utah Jazz"
+  ]
+ }
+}
