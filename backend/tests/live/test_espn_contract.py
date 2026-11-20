@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import polars as pl
 import pytest
 
 from app.services.model_nightly_service import _FS_PLAYER_COLS, _FS_TEAM_COLS
@@ -59,10 +60,11 @@ def test_frame_schema_matches_db_column_order(night):
 
 def test_no_nulls_in_key_columns(night):
     for col in ["PLAYER_ID", "GAME_ID", "TEAM_ID", "PLAYER_NAME", "MATCHUP", "MIN"]:
-        assert night.players[col].notna().all(), col
-    assert (night.players["PLAYER_NAME"].str.len() > 0).all()
-    assert night.players["TEAM_ID"].isin(games.TEAM_IDS).all()
-    assert night.teams["TEAM_ID"].isin(games.TEAM_IDS).all()
+        assert night.players[col].null_count() == 0, col
+    assert night.players["MIN"].is_nan().sum() == 0
+    assert (night.players["PLAYER_NAME"].str.len_chars() > 0).all()
+    assert night.players["TEAM_ID"].is_in(list(games.TEAM_IDS)).all()
+    assert night.teams["TEAM_ID"].is_in(list(games.TEAM_IDS)).all()
 
 
 def test_stat_labels_parsed_not_zeroed(night):
@@ -84,32 +86,33 @@ def test_player_points_sum_to_the_final_score(night):
     """Catches silently dropped player rows: `build_game_rows` skips athletes
     whose stat list length mismatches, so a schema drift shows up here as a team
     whose player points no longer add up to its box score."""
-    summed = night.players.groupby(["GAME_ID", "TEAM_ID"])["PTS"].sum()
-    actual = night.teams.set_index(["GAME_ID", "TEAM_ID"])["PTS"]
-    assert (summed == actual.reindex(summed.index)).all()
+    summed = night.players.group_by(["GAME_ID", "TEAM_ID"]).agg(pl.col("PTS").sum().alias("SUMMED"))
+    both = summed.join(night.teams.select(["GAME_ID", "TEAM_ID", "PTS"]), on=["GAME_ID", "TEAM_ID"], how="left")
+    assert both["PTS"].null_count() == 0                  # every team with players has a box score
+    assert (both["SUMMED"] == both["PTS"]).all()
 
 
 def test_positions_present_on_rotation_players(night):
-    rotation = night.players[night.players["MIN"] >= 20]
+    rotation = night.players.filter(pl.col("MIN") >= 20)
     assert len(rotation) >= 5 * night.expected_games
-    filled = (rotation["POSITION"].str.len() > 0).mean()
+    filled = (rotation["POSITION"].fill_null("").str.len_chars() > 0).mean()
     assert filled >= 0.95
 
 
 def test_minutes_are_plausible(night):
     assert night.players["MIN"].max() <= 60
-    starters = night.players[night.players["MIN"] >= 25]
+    starters = night.players.filter(pl.col("MIN") >= 25)
     assert len(starters) >= 4 * night.expected_games
 
 
 def test_season_and_date_stamped_correctly(night):
     assert set(night.players["SEASON"]) == {games.season_for(REGULAR_NIGHT)}
-    assert set(night.players["GAME_DATE"].dt.date) == {REGULAR_NIGHT}
-    assert not night.players.duplicated(["PLAYER_ID", "GAME_ID"]).any()
+    assert set(night.players["GAME_DATE"]) == {REGULAR_NIGHT}
+    assert not night.players.select(["PLAYER_ID", "GAME_ID"]).is_duplicated().any()
 
 
 def test_matchup_format(night):
-    assert night.players["MATCHUP"].str.contains(r"^[A-Z]{2,3} (?:vs\.|@) [A-Z]{2,3}$", regex=True).all()
+    assert night.players["MATCHUP"].str.contains(r"^[A-Z]{2,3} (?:vs\.|@) [A-Z]{2,3}$").all()
 
 
 def test_cup_final_is_excluded():
@@ -130,4 +133,4 @@ def test_offseason_night_is_empty():
     day = games.fetch_day(OFFSEASON_NIGHT)
     assert day.expected_games == 0
     assert day.all_final
-    assert day.players.empty
+    assert day.players.is_empty()
