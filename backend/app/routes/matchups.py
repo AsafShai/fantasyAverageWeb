@@ -155,6 +155,20 @@ async def _rebuild_in_background(date: Optional[str], cache_key: str) -> None:
         _rebuilding.discard(cache_key)
 
 
+def _inactive_listing(row: dict, on_depth_chart: bool) -> bool:
+    """ESPN's fantasy player universe keeps retired players under their last
+    NBA team (Zhou Qi on HOU, Paul Zipser on CHI...), ~200 of them. A player
+    no fantasy team owns, with no game this season and not on his team's
+    depth chart is one of those: no projection, no game, hidden by every page
+    (Projections drops anyone off a depth chart), so not sent at all."""
+    if on_depth_chart or row.get('status') == 'ONTEAM':
+        return False
+    try:
+        return float(row.get('GP') or 0) == 0
+    except (TypeError, ValueError):
+        return False
+
+
 async def _build_matchups(
     date: Optional[str], cache_key: str, generation: Optional[int] = None
 ) -> list[PlayerMatchupResponse]:
@@ -228,10 +242,15 @@ async def _build_matchups(
         projections = {}
 
     results: list[PlayerMatchupResponse] = []
+    skipped_inactive = 0
     for row in players_df.to_dict('records'):
         pro_team: str = str(row.get('Pro Team', ''))
         game = games_today.get(pro_team)
         if game is None:
+            continue
+        on_depth_chart = normalize_player_name(row['Name']) in depth_chart_names.get(pro_team, set())
+        if _inactive_listing(row, on_depth_chart):
+            skipped_inactive += 1
             continue
         opponent = game.opponent
 
@@ -285,13 +304,14 @@ async def _build_matchups(
             league_avg_def_values=league_avg_def,
             projection=projection,
             game_date=resolved_date,
-            on_depth_chart=normalize_player_name(row['Name']) in depth_chart_names.get(pro_team, set()),
+            on_depth_chart=on_depth_chart,
             injury_status=injury_lookup.get(normalize_player_name(row['Name'])),
         ))
 
     logger.info(
         f'Matchups built for slate {resolved_date}: {len(games_today)} teams playing, '
-        f'{len(results)} players, {sum(1 for r in results if r.projection is not None)} with projections'
+        f'{len(results)} players, {sum(1 for r in results if r.projection is not None)} with projections, '
+        f'{skipped_inactive} inactive listings skipped'
     )
     if (
         results

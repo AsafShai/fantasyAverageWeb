@@ -13,6 +13,7 @@ from app.utils.name_matching import resolve_join_key
 from app.utils.constants import RATIO_CATEGORIES
 from app.config import settings
 from app.utils.log_once import warn_on_change
+from app.utils import background_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,16 @@ _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 # so is its ETag: 'ts' is when the inputs were last checked, 'built_ts' when
 # the list was last built.
 _WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
+# Past the TTL, up to this age the cached list is still served while a rebuild
+# runs in the background (stale-while-revalidate): the rebuild downloads and
+# parses ~2.8 MB from ESPN, ~1-1.5 s at Render's 0.15 CPU, which the visitor
+# who happened to arrive after expiry used to wait for. Older than this (an
+# idle stretch), the request rebuilds in the foreground as before.
+_WINDOWED_PLAYERS_STALE = timedelta(minutes=30)
 _windowed_players_cache: dict = {}
+# Bumped by clear_night_caches: a build that started before the nightly
+# recorded a night must not store what it read.
+_cache_generation = 0
 
 
 def clear_night_caches() -> None:
@@ -78,14 +88,18 @@ def clear_night_caches() -> None:
     Called when the nightly records a night, so last night / last 7 / 15 / 30
     move to it at once rather than when the caches expire (anchor 1 h).
     The trends clear their own caches when they see the anchor move."""
+    global _cache_generation
+    _cache_generation += 1
     _season_anchor_cache.update({'season': None, 'date': None, 'ts': None})
     _windowed_players_cache.clear()
 
 
 def players_etag(time_period: StatTimePeriod, page: int, limit: int) -> Optional[str]:
-    """Weak ETag for a /players page, or None when nothing is cached yet."""
+    """Weak ETag for a /players page, or None when nothing servable is cached.
+    A list past its TTL but within the stale window keeps its ETag while it is
+    served (the route starts its refresh, see players_stale)."""
     entry = _windowed_players_cache.get(time_period)
-    if entry is None or datetime.now() - entry['ts'] >= _WINDOWED_PLAYERS_TTL:
+    if entry is None or datetime.now() - entry['ts'] >= _WINDOWED_PLAYERS_STALE:
         return None
     raw = f"{time_period.value}|{page}|{limit}|{entry['built_ts'].isoformat()}"
     return f'W/"{hashlib.sha1(raw.encode()).hexdigest()[:8]}"'
@@ -238,6 +252,33 @@ async def build_windowed_players_df(
     return merged, actual_start, actual_end
 
 
+_refreshing: set[StatTimePeriod] = set()
+
+
+def players_stale(time_period: StatTimePeriod) -> bool:
+    """Past the TTL but still served (see _WINDOWED_PLAYERS_STALE)."""
+    entry = _windowed_players_cache.get(time_period)
+    return entry is not None and _WINDOWED_PLAYERS_TTL <= datetime.now() - entry['ts'] < _WINDOWED_PLAYERS_STALE
+
+
+def refresh_players_in_background(time_period: StatTimePeriod, service: "PlayerService") -> None:
+    """Rebuild a preset list past its TTL without making a visitor wait for
+    ESPN and the DB: the stale list is served meanwhile (see _WINDOWED_PLAYERS_STALE).
+    At most one refresh per period runs at a time."""
+    if time_period in _refreshing or time_period == StatTimePeriod.CUSTOM:
+        return
+    _refreshing.add(time_period)
+
+    async def run() -> None:
+        try:
+            categories = await service.data_provider.get_ranking_categories()
+            await service._build_players(time_period, categories)
+        finally:
+            _refreshing.discard(time_period)
+
+    background_tasks.spawn(run(), name=f"players-refresh-{time_period.value}")
+
+
 class PlayerService:
     """Service for player-related operations"""
 
@@ -268,55 +309,23 @@ class PlayerService:
         reverse_categories = await self.data_provider.get_reverse_categories()
 
         cached = _windowed_players_cache.get(time_period) if is_preset else None
-        if cached is not None and (
-            datetime.now() - cached['ts'] >= _WINDOWED_PLAYERS_TTL
-            or cached['categories'] != categories
-        ):
+        if cached is not None and cached['categories'] != categories:
             cached = None
+        if cached is not None:
+            age = datetime.now() - cached['ts']
+            if age >= _WINDOWED_PLAYERS_STALE:
+                cached = None
+            elif age >= _WINDOWED_PLAYERS_TTL:
+                refresh_players_in_background(time_period, self)
 
         if cached is not None:
             all_players = cached['players']
             total_count = cached['total_count']
             actual_start, actual_end = cached['start'], cached['end']
         else:
-            stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
-            # The two inputs are independent; fetching them together overlaps
-            # the ESPN download with the DB round trips.
-            espn_players_df, (agg_df, actual_start, actual_end) = await asyncio.gather(
-                self.data_provider.get_players_df(stat_split_id),
-                compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
+            all_players, total_count, actual_start, actual_end = await self._build_players(
+                time_period, categories, start, end
             )
-
-            if espn_players_df is None or espn_players_df.empty:
-                raise ResourceNotFoundError("No players found")
-
-            previous = _windowed_players_cache.get(time_period) if is_preset else None
-            if (
-                previous is not None
-                and previous['espn_df'] is espn_players_df
-                and previous['categories'] == categories
-                and (previous['start'], previous['end']) == (actual_start, actual_end)
-                and previous['agg_df'].equals(agg_df)
-            ):
-                all_players = previous['players']
-                total_count = previous['total_count']
-                built_ts = previous['built_ts']
-            else:
-                players_df = merge_windowed_players_df(time_period, espn_players_df, agg_df)
-                all_players = self.response_builder.build_all_players_response(players_df, categories)
-                total_count = len(players_df)
-                built_ts = datetime.now()
-                logger.info(
-                    f"Players list built: time_period={time_period.value}, {total_count} players, "
-                    f"window {actual_start}..{actual_end}"
-                )
-            if is_preset:
-                _windowed_players_cache[time_period] = {
-                    'players': all_players, 'total_count': total_count,
-                    'start': actual_start, 'end': actual_end,
-                    'categories': categories, 'ts': datetime.now(), 'built_ts': built_ts,
-                    'espn_df': espn_players_df, 'agg_df': agg_df,
-                }
 
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
@@ -332,3 +341,54 @@ class PlayerService:
             categories=categories,
             reverse_categories=[c for c in categories if c in reverse_categories],
         )
+
+    async def _build_players(
+        self,
+        time_period: StatTimePeriod,
+        categories: list[str],
+        start: Optional[date] = None,
+        end: Optional[date] = None,
+    ):
+        """Fetch both inputs and build the full list; a preset is stored in
+        _windowed_players_cache. Returns (players, total_count, start, end)."""
+        is_preset = time_period != StatTimePeriod.CUSTOM
+        generation = _cache_generation
+        stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
+        # The two inputs are independent; fetching them together overlaps
+        # the ESPN download with the DB round trips.
+        espn_players_df, (agg_df, actual_start, actual_end) = await asyncio.gather(
+            self.data_provider.get_players_df(stat_split_id),
+            compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
+        )
+
+        if espn_players_df is None or espn_players_df.empty:
+            raise ResourceNotFoundError("No players found")
+
+        previous = _windowed_players_cache.get(time_period) if is_preset else None
+        if (
+            previous is not None
+            and previous['espn_df'] is espn_players_df
+            and previous['categories'] == categories
+            and (previous['start'], previous['end']) == (actual_start, actual_end)
+            and previous['agg_df'].equals(agg_df)
+        ):
+            all_players = previous['players']
+            total_count = previous['total_count']
+            built_ts = previous['built_ts']
+        else:
+            players_df = merge_windowed_players_df(time_period, espn_players_df, agg_df)
+            all_players = self.response_builder.build_all_players_response(players_df, categories)
+            total_count = len(players_df)
+            built_ts = datetime.now()
+            logger.info(
+                f"Players list built: time_period={time_period.value}, {total_count} players, "
+                f"window {actual_start}..{actual_end}"
+            )
+        if is_preset and generation == _cache_generation:
+            _windowed_players_cache[time_period] = {
+                'players': all_players, 'total_count': total_count,
+                'start': actual_start, 'end': actual_end,
+                'categories': categories, 'ts': datetime.now(), 'built_ts': built_ts,
+                'espn_df': espn_players_df, 'agg_df': agg_df,
+            }
+        return all_players, total_count, actual_start, actual_end

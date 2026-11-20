@@ -37,6 +37,13 @@ _STALE_DAYS = 10
 _SLATE_PROJECTIONS_MAX = 2
 
 
+def _games_played(row: dict) -> float:
+    try:
+        return float(row.get('GP') or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 class LiveProjectionService:
     """Singleton: holds one warm LiveInference (models loaded once) built from
     ModelNightlyService's resident store, plus a player-name index rebuilt only
@@ -103,7 +110,11 @@ class LiveProjectionService:
                 continue
             pid = self._name_index.get(normalize_player_name(name))
             if pid is None:
-                unmatched.append(name)
+                # No game this season and no history is expected (rookies yet
+                # to debut, retired players ESPN still lists); a player who has
+                # played and is missing is a name-join gap worth a warning.
+                if _games_played(row) > 0:
+                    unmatched.append(name)
                 continue
             opp_id = _opponent_team_id(info.opponent)
             if opp_id is None:

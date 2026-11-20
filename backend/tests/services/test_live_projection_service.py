@@ -12,9 +12,11 @@ from app.services.nba_matchup_service import GameInfo
 async def test_unmatched_players_are_logged_once_per_slate(caplog):
     service = LiveProjectionService()
     players_df = pd.DataFrame([
-        {'Name': 'Aday Mara', 'Pro Team': 'LAL'},
-        {'Name': 'Tacko Fall', 'Pro Team': 'LAL'},
-        {'Name': 'No Game', 'Pro Team': 'BOS'},
+        {'Name': 'Aday Mara', 'Pro Team': 'LAL', 'GP': 4},
+        {'Name': 'Tacko Fall', 'Pro Team': 'LAL', 'GP': 1},
+        # Listed by ESPN, never played (retired / yet to debut): no history expected.
+        {'Name': 'Zhou Qi', 'Pro Team': 'LAL', 'GP': 0},
+        {'Name': 'No Game', 'Pro Team': 'BOS', 'GP': 9},
     ])
     games = {'LAL': GameInfo(opponent='GSW', is_home=True)}
 

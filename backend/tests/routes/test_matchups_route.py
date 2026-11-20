@@ -407,3 +407,20 @@ async def test_foreground_build_started_before_nightly_invalidation_is_not_cache
 
     assert served  # the caller still gets its slate
     assert 'today' not in matchups_route._response_cache
+
+
+class TestInactiveListing:
+    """ESPN keeps retired players under their last NBA team; they are not sent."""
+
+    def test_unowned_never_played_off_depth_chart_is_inactive(self):
+        assert matchups_route._inactive_listing({'status': 'FREEAGENT', 'GP': 0}, on_depth_chart=False)
+
+    def test_depth_chart_player_is_kept_even_without_games(self):
+        # e.g. an injured rookie yet to debut, still listed by his team
+        assert not matchups_route._inactive_listing({'status': 'FREEAGENT', 'GP': 0}, on_depth_chart=True)
+
+    def test_rostered_player_is_kept(self):
+        assert not matchups_route._inactive_listing({'status': 'ONTEAM', 'GP': 0}, on_depth_chart=False)
+
+    def test_free_agent_who_played_is_kept(self):
+        assert not matchups_route._inactive_listing({'status': 'FREEAGENT', 'GP': 3}, on_depth_chart=False)

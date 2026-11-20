@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import date
 
@@ -593,13 +594,13 @@ class TestWindowedPlayersCache:
         assert past_end.total_count == total
 
     @pytest.mark.asyncio
-    async def test_expired_entry_rebuilds_players_when_espn_frame_changed(self, player_service, many_players_df):
+    async def test_entry_past_stale_window_rebuilds_players_when_espn_frame_changed(self, player_service, many_players_df):
         player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
         player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
 
         first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
-        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
         player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df.copy())
 
         second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
@@ -608,13 +609,13 @@ class TestWindowedPlayersCache:
         assert first.players[0] is not second.players[0]
 
     @pytest.mark.asyncio
-    async def test_expired_entry_rebuilds_players_when_db_window_changed(self, player_service, many_players_df):
+    async def test_entry_past_stale_window_rebuilds_players_when_db_window_changed(self, player_service, many_players_df):
         player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
         player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
 
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
-        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
         player_service.data_provider.db_service.aggregate_player_games = AsyncMock(return_value=(
             pd.DataFrame({'player_id': [1], 'player_name': ['Player 0'], 'gp': [1], 'pts': [30.0]}),
             date(2026, 7, 9), date(2026, 7, 9),
@@ -625,7 +626,7 @@ class TestWindowedPlayersCache:
         assert player_service.response_builder.build_all_players_response.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_expired_entry_reuses_players_when_inputs_unchanged(self, player_service, many_players_df):
+    async def test_entry_past_stale_window_reuses_players_when_inputs_unchanged(self, player_service, many_players_df):
         """Past the TTL both inputs are fetched again; the same ESPN frame
         object (a 304, or an equal frame) and an equal DB aggregate give the
         same list, so it is kept instead of rebuilt."""
@@ -634,7 +635,7 @@ class TestWindowedPlayersCache:
 
         first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
-        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
 
         second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
@@ -645,6 +646,56 @@ class TestWindowedPlayersCache:
         assert second.players[0] is first.players[0]
         fresh = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
         assert player_service_module.datetime.now() - fresh['ts'] < player_service_module._WINDOWED_PLAYERS_TTL
+
+    @pytest.mark.asyncio
+    async def test_expired_entry_is_served_while_it_rebuilds_in_background(self, player_service, many_players_df):
+        """Past the TTL (within the stale window) the visitor gets the cached
+        list at once; the ESPN/DB refetch runs behind the response."""
+        from app.utils import background_tasks
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        first = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df.copy())
+
+        served = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        assert served.players[0] is first.players[0]
+        # A second request while the refresh is in flight does not start another.
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        await asyncio.gather(*list(background_tasks._tasks))
+
+        assert player_service.data_provider.get_players_df.await_count == 1
+        assert player_service.response_builder.build_all_players_response.call_count == 2
+        fresh = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        assert fresh.players[0] is not first.players[0]
+
+    @pytest.mark.asyncio
+    async def test_background_refresh_does_not_store_across_a_night_clear(self, player_service, many_players_df):
+        from app.utils import background_tasks
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+
+        release = asyncio.Event()
+        fetching = asyncio.Event()
+
+        async def slow_fetch(*_args):
+            fetching.set()
+            await release.wait()
+            return many_players_df.copy()
+
+        player_service.data_provider.get_players_df = slow_fetch
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        await fetching.wait()  # the refresh is mid-fetch with pre-night inputs
+        player_service_module.clear_night_caches()
+        release.set()
+        await asyncio.gather(*list(background_tasks._tasks))
+
+        assert StatTimePeriod.SEASON not in player_service_module._windowed_players_cache
 
     @pytest.mark.asyncio
     async def test_custom_range_is_never_cached(self, player_service, many_players_df):
@@ -701,13 +752,26 @@ class TestPlayersEtag:
         assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 500) != etag
 
     @pytest.mark.asyncio
-    async def test_none_after_ttl_expiry(self, player_service, sample_window_players_df):
+    async def test_kept_while_a_stale_list_is_served(self, player_service, sample_window_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
+        player_service.response_builder.build_all_players_response.return_value = []
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        before = player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200)
+
+        entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+
+        assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) == before
+        assert player_service_module.players_stale(StatTimePeriod.SEASON)
+
+    @pytest.mark.asyncio
+    async def test_none_past_the_stale_window(self, player_service, sample_window_players_df):
         player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df)
         player_service.response_builder.build_all_players_response.return_value = []
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
-        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
 
         assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) is None
 
@@ -719,7 +783,7 @@ class TestPlayersEtag:
         before = player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200)
 
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
-        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
         player_service.data_provider.get_players_df = AsyncMock(return_value=sample_window_players_df.copy())
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
@@ -733,7 +797,7 @@ class TestPlayersEtag:
         before = player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200)
 
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
-        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_TTL * 2
+        entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
         assert player_service_module.players_etag(StatTimePeriod.SEASON, 1, 1200) == before
