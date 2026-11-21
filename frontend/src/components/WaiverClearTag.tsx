@@ -1,6 +1,6 @@
 import { waiverClear } from '../utils/waiverClear'
 
-/** "Clears Sun 3 AM" pill next to a player on waivers; nothing for anyone else. */
+/** "Clears Sun" pill next to a player on waivers; nothing for anyone else. */
 export default function WaiverClearTag({ clearsAt, large = false }: { clearsAt?: string | null; large?: boolean }) {
   const clear = waiverClear(clearsAt)
   if (!clear) return null
@@ -16,7 +16,7 @@ export default function WaiverClearTag({ clearsAt, large = false }: { clearsAt?:
         <circle cx="8" cy="8" r="6.2" />
         <path d="M8 4.6V8l2.3 1.6" strokeLinecap="round" />
       </svg>
-      Clears {clear.when}{large ? ' ET' : ''}
+      Clears {clear.when}
     </span>
   )
 }
