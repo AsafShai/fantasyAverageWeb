@@ -507,7 +507,7 @@ class DataProvider:
                 response.raise_for_status()
                 # ~2.5 MB of JSON: pydantic_core's parser builds the same dict
                 # in about half the CPU of response.json().
-                api_data = pydantic_core.from_json(response.content)
+                api_data = await asyncio.to_thread(pydantic_core.from_json, response.content)
 
                 if self.cache_manager.totals_cache.get('data') is None:
                     # Best-effort only: fantasy_team_name is optional enrichment
@@ -526,8 +526,9 @@ class DataProvider:
                 # get_totals_df above already warmed the standings payload the
                 # categories are resolved from, so this costs no extra request.
                 categories = await self.get_ranking_categories()
-                players_df = self.data_transformer.raw_all_players_to_df(
-                    api_data, stat_split_type_id, fantasy_team_map, categories
+                players_df = await asyncio.to_thread(
+                    self.data_transformer.raw_all_players_to_df,
+                    api_data, stat_split_type_id, fantasy_team_map, categories,
                 )
 
                 # ESPN's payload changes with ownership drift, which the frame
