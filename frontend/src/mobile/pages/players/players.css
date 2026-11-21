@@ -3,7 +3,7 @@
 .mr-players .mr-pl-link {
   display: block; overflow: hidden; text-overflow: ellipsis; color: var(--mr-text); text-decoration: none;
 }
-.mr-players .mr-pl-status { display: block; margin-top: 2px; line-height: 1; }
+.mr-players .mr-pl-status { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; line-height: 1; }
 .mr-players .mr-pl-status .mr-pill { font-size: 10px; }
 .mr-players .mr-pl-nodata { color: var(--mr-faint); font-style: italic; }
 .mr-players .mr-pl-error { margin: 0; color: var(--mr-down); font-size: 14px; }
@@ -20,5 +20,3 @@
 /* empty table: keep the message in view instead of centred across all columns */
 .mr-players .mr-t td.mr-empty { text-align: left; }
 .mr-players .mr-pl-empty { position: sticky; left: 12px; display: inline-block; }
-.mr-players .mr-pl-waiver { display: block; margin-top: 3px; font-size: 11px; line-height: 1.2; color: var(--mr-muted); white-space: normal; }
-.mr-players .mr-pl-waiver-soon { color: var(--mr-pill-quest-fg); font-weight: 600; }

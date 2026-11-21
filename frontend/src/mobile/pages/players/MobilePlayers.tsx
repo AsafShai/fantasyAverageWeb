@@ -228,14 +228,14 @@ export default function MobilePlayers(p: MobilePlayersProps) {
       return (
         <>
           <PlayerNameLink name={pl.player_name} playerId={pl.player_id} className="mr-pl-link" />
-          {status && (
+          {(status || clear) && (
             <span className="mr-pl-status">
-              <StatusPill status={status} />
-            </span>
-          )}
-          {clear && (
-            <span className={`mr-pl-waiver${clear.soon ? ' mr-pl-waiver-soon' : ''}`} title={clear.full}>
-              Clears {clear.when}
+              {status && <StatusPill status={status} />}
+              {clear && (
+                <span className={`mr-pill ${clear.soon ? 'mr-pill-quest' : 'mr-pill-bench'}`} title={clear.full}>
+                  Clears {clear.when}
+                </span>
+              )}
             </span>
           )}
         </>
