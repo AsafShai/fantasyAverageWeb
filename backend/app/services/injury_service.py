@@ -697,6 +697,37 @@ async def load_injury_status_rows() -> list[dict]:
 LEGACY_TEAM_NAMES = {"Philadelphia76ers": "Philadelphia 76ers"}
 
 
+def _reconcile_table_with_report(
+    db_rows: list[dict], records: list[InjuryRecord], reported_teams: set[str]
+) -> int:
+    """Queue the writes that bring the table in line with the report for the
+    teams it covers. Later reports only queue what changes between two reports,
+    so without this a change lost with a crash before the hourly flush (or made
+    while the process was down) would stay wrong in the table, and in the tags
+    read from it, until the player's status changed again. Returns the number
+    of writes queued."""
+    covered = {r.team for r in records} | set(reported_teams or ())
+    stored = {f"{r['team']}|{r['player']}": r for r in db_rows if r.get("team") in covered}
+    queued = 0
+    listed: set[str] = set()
+    for record in records:
+        key = f"{record.team}|{record.player}"
+        listed.add(key)
+        row = stored.get(key)
+        if record.status == "Available":
+            if row is not None:
+                _queue_delete(record.team, record.player)
+                queued += 1
+        elif row is None or row.get("status") != record.status or row.get("injury_reason") != record.injury:
+            _queue_upsert(record)
+            queued += 1
+    for key, row in stored.items():
+        if key not in listed:
+            _queue_delete(row["team"], row["player"])
+            queued += 1
+    return queued
+
+
 async def initialize() -> None:
     """Fetch and store the latest injury report on startup (no notifications).
 
@@ -728,13 +759,18 @@ async def initialize() -> None:
             db_timestamps[key] = str(ts)
 
     now_il = get_utc_now_str()
-    records = (await asyncio.to_thread(_parse_and_trim, pdf_bytes)).records
+    report = await asyncio.to_thread(_parse_and_trim, pdf_bytes)
+    records = report.records
     for record in records:
         key = f"{record.team}|{record.player}"
         last_update = db_timestamps.get(key, now_il)
         injury_store[key] = record.model_copy(update={"last_update": last_update})
 
-    logger.info(f"Injury store initialized with {len(injury_store)} player(s)")
+    queued = _reconcile_table_with_report(db_rows, records, report.reported_teams)
+    logger.info(
+        f"Injury store initialized with {len(injury_store)} player(s)"
+        + (f"; {queued} table row(s) queued to match the report" if queued else "")
+    )
 
     global last_report_time
     now_ny = datetime.now(NY_TZ)

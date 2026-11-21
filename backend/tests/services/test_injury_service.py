@@ -462,3 +462,62 @@ class TestInjuryStatusRows:
         inj._pending_db_writes["LAL|B"] = _rec(player="B", status="Doubtful")
         inj._load_table_rows([{"team": "LAL", "player": "A", "status": "Out"}])
         assert inj.injury_status_rows() == [{"team": "LAL", "player": "B", "status": "Doubtful"}]
+
+
+class TestStartupReconcile:
+    """initialize() queues the writes that bring the table in line with the
+    report for the teams it covers: a change lost with a crash before the
+    hourly flush is repaired on the next start."""
+
+    async def _init(self, monkeypatch, rows, report):
+        from unittest.mock import AsyncMock, MagicMock
+
+        db = MagicMock(rename_injury_team=AsyncMock(), load_all_injury_statuses=AsyncMock(return_value=rows))
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        monkeypatch.setattr(inj, "injury_store", {})
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: report)
+        await inj.initialize()
+
+    @staticmethod
+    def _row(player, status="Out", team="LAL", reason="Knee"):
+        return {"team": team, "player": player, "status": status, "injury_reason": reason, "last_updated": None}
+
+    @pytest.mark.asyncio
+    async def test_stale_and_missing_rows_are_queued(self, monkeypatch):
+        rows = [
+            self._row("Recovered"),            # not listed any more: delete
+            self._row("Same"),                 # unchanged: nothing
+            self._row("Changed"),              # Out -> Questionable: upsert
+            self._row("Other Team", team="BOS"),   # team not covered: untouched
+        ]
+        report = inj.InjuryReport([
+            _rec(player="Same"),
+            _rec(player="Changed", status="Questionable"),
+            _rec(player="Hurt While Down"),    # no row: upsert
+        ])
+        await self._init(monkeypatch, rows, report)
+
+        assert inj._pending_db_writes["LAL|Recovered"] == ("LAL", "Recovered")
+        assert inj._pending_db_writes["LAL|Changed"].status == "Questionable"
+        assert inj._pending_db_writes["LAL|Hurt While Down"].status == "Out"
+        assert set(inj._pending_db_writes) == {"LAL|Recovered", "LAL|Changed", "LAL|Hurt While Down"}
+        tags = {r["player"]: r["status"] for r in inj.injury_status_rows()}
+        assert tags == {"Same": "Out", "Changed": "Questionable", "Hurt While Down": "Out", "Other Team": "Out"}
+
+    @pytest.mark.asyncio
+    async def test_available_in_report_deletes_the_row(self, monkeypatch):
+        await self._init(monkeypatch, [self._row("Back")],
+                         inj.InjuryReport([_rec(player="Back", status="Available")]))
+        assert inj._pending_db_writes == {"LAL|Back": ("LAL", "Back")}
+
+    @pytest.mark.asyncio
+    async def test_team_covered_with_nobody_listed_is_cleared(self, monkeypatch):
+        await self._init(monkeypatch, [self._row("Old", team="BOS")],
+                         inj.InjuryReport([], {"BOS"}))
+        assert inj._pending_db_writes == {"BOS|Old": ("BOS", "Old")}
+
+    @pytest.mark.asyncio
+    async def test_matching_table_queues_nothing(self, monkeypatch):
+        await self._init(monkeypatch, [self._row("Same")], inj.InjuryReport([_rec(player="Same")]))
+        assert inj._pending_db_writes == {}
