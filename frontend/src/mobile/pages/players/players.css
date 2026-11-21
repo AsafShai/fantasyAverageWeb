@@ -3,7 +3,7 @@
 .mr-players .mr-pl-link {
   display: block; overflow: hidden; text-overflow: ellipsis; color: var(--mr-text); text-decoration: none;
 }
-.mr-players .mr-pl-status { display: block; margin-top: 2px; line-height: 1; }
+.mr-players .mr-pl-status { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; line-height: 1; }
 .mr-players .mr-pl-status .mr-pill { font-size: 10px; }
 .mr-players .mr-pl-nodata { color: var(--mr-faint); font-style: italic; }
 .mr-players .mr-pl-error { margin: 0; color: var(--mr-down); font-size: 14px; }

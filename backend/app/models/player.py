@@ -98,6 +98,8 @@ class Player(BaseModel):
     last7_rating: Optional[float] = None
     last15_rating: Optional[float] = None
     last30_rating: Optional[float] = None
+    # status WAIVERS only: when he clears waivers (UTC ISO), from ESPN's waiverProcessDate.
+    waiver_clears_at: Optional[str] = None
     # False only for a custom-range player unmatched in fs_player_games (no ESPN
     # fallback exists for custom); stats is a zeroed placeholder in that case.
     has_data: bool = True

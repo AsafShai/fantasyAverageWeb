@@ -223,6 +223,13 @@ class DataTransformer:
                 pro_team = PRO_TEAM_MAP.get(pro_team_id, 'Unknown')
                 injured = bool(player.get('injured', False))
                 fantasy_team_name = (fantasy_team_map or {}).get(team_id)
+                # ESPN sets waiverProcessDate (epoch ms) on a player who is on
+                # waivers: the moment he clears and becomes a free agent.
+                waiver_ms = player_entry.get('waiverProcessDate') if status == 'WAIVERS' else None
+                waiver_clears_at = (
+                    datetime.fromtimestamp(waiver_ms / 1000, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
+                    if waiver_ms else None
+                )
 
                 season_rating = ratings.get('0', {}).get('totalRating')
                 last7_rating = ratings.get('1', {}).get('totalRating')
@@ -268,6 +275,7 @@ class DataTransformer:
                         'last7_rating': last7_rating,
                         'last15_rating': last15_rating,
                         'last30_rating': last30_rating,
+                        'waiver_clears_at': waiver_clears_at,
                     })
 
                     all_players.append(mapped_stats)
@@ -455,7 +463,7 @@ class DataTransformer:
     
     def _organize_player_columns(self, df: pl.DataFrame) -> pl.DataFrame:
         """Organize player DataFrame columns in logical order"""
-        info_cols = ['Name', 'player_id', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name', 'season_rating', 'last7_rating', 'last15_rating', 'last30_rating']
+        info_cols = ['Name', 'player_id', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name', 'season_rating', 'last7_rating', 'last15_rating', 'last30_rating', 'waiver_clears_at']
         stat_cols = [col for col in df.columns if col not in info_cols]
         available_info_cols = [col for col in info_cols if col in df.columns]
         return df.select(available_info_cols + stat_cols)

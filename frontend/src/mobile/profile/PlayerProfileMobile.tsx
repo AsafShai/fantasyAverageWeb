@@ -1,3 +1,4 @@
+import { waiverClear } from '../../utils/waiverClear'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useUrlState } from '../../hooks/useUrlState'
@@ -123,7 +124,16 @@ export default function PlayerProfileMobile() {
                 Rostered by {fantasyEntry.fantasy_team_name}
               </Link>
             ) : (
-              <span className="mr-pp-badge mr-pp-free">{fantasyEntry.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}</span>
+              <span
+                className={`mr-pp-badge mr-pp-free${waiverClear(fantasyEntry.waiver_clears_at)?.soon ? ' mr-pp-waiver-soon' : ''}`}
+                title={waiverClear(fantasyEntry.waiver_clears_at)?.full}
+              >
+                {fantasyEntry.status === 'WAIVERS'
+                  ? waiverClear(fantasyEntry.waiver_clears_at)
+                    ? `Waivers · clears ${waiverClear(fantasyEntry.waiver_clears_at)!.when}`
+                    : 'Waivers'
+                  : 'Free Agent'}
+              </span>
             ))}
           {fantasyEntry && (
             <button
